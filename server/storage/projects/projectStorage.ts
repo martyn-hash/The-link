@@ -503,8 +503,15 @@ export class ProjectStorage extends BaseStorage {
             service: true,
           },
         },
-        // Chronology removed for list view performance - only loaded in getProject() detail view
-        // Kanban view can load minimal chronology separately if needed for hover tooltips
+        // Load only most recent chronology entry for kanban stage timing (was loading ALL entries)
+        chronology: {
+          limit: 1,
+          orderBy: desc(projectChronology.timestamp),
+          with: {
+            assignee: true,
+            changedBy: true,
+          },
+        },
       },
     });
     
@@ -518,6 +525,11 @@ export class ProjectStorage extends BaseStorage {
         currentAssignee: project.currentAssignee || undefined,
         projectOwner: project.projectOwner || undefined,
         stageRoleAssignee,
+        chronology: project.chronology.map(c => ({
+          ...c,
+          assignee: c.assignee || undefined,
+          changedBy: c.changedBy || undefined,
+        })),
       };
     }));
     
@@ -693,7 +705,15 @@ export class ProjectStorage extends BaseStorage {
             service: true,
           },
         },
-        // Chronology removed for list view performance
+        // Load only most recent chronology entry for kanban stage timing
+        chronology: {
+          limit: 1,
+          orderBy: desc(projectChronology.timestamp),
+          with: {
+            assignee: true,
+            changedBy: true,
+          },
+        },
       },
     });
     
@@ -707,6 +727,11 @@ export class ProjectStorage extends BaseStorage {
         currentAssignee: project.currentAssignee || undefined,
         projectOwner: project.projectOwner || undefined,
         stageRoleAssignee,
+        chronology: project.chronology.map(c => ({
+          ...c,
+          assignee: c.assignee || undefined,
+          changedBy: c.changedBy || undefined,
+        })),
       };
     }));
     
@@ -846,7 +871,15 @@ export class ProjectStorage extends BaseStorage {
             service: true,
           },
         },
-        // Chronology removed for list view performance
+        // Load only most recent chronology entry for kanban stage timing
+        chronology: {
+          limit: 1,
+          orderBy: desc(projectChronology.timestamp),
+          with: {
+            assignee: true,
+            changedBy: true,
+          },
+        },
       },
     });
     
@@ -860,6 +893,11 @@ export class ProjectStorage extends BaseStorage {
         currentAssignee: project.currentAssignee || undefined,
         projectOwner: project.projectOwner || undefined,
         stageRoleAssignee,
+        chronology: project.chronology.map(c => ({
+          ...c,
+          assignee: c.assignee || undefined,
+          changedBy: c.changedBy || undefined,
+        })),
       };
     }));
     
@@ -899,7 +937,15 @@ export class ProjectStorage extends BaseStorage {
             service: true,
           },
         },
-        // Chronology removed for list view performance
+        // Load only most recent chronology entry for kanban stage timing
+        chronology: {
+          limit: 1,
+          orderBy: desc(projectChronology.timestamp),
+          with: {
+            assignee: true,
+            changedBy: true,
+          },
+        },
       },
       orderBy: [desc(projects.createdAt)],
     });
@@ -914,6 +960,11 @@ export class ProjectStorage extends BaseStorage {
         currentAssignee: project.currentAssignee || undefined,
         projectOwner: project.projectOwner || undefined,
         stageRoleAssignee,
+        chronology: project.chronology.map(c => ({
+          ...c,
+          assignee: c.assignee || undefined,
+          changedBy: c.changedBy || undefined,
+        })),
       };
     }));
 
