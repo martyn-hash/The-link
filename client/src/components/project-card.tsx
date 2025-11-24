@@ -53,14 +53,16 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
     return projectSpecificStage || stageConfig;
   }, [projectStages, project.currentStatus, stageConfig]);
 
-  // Fetch role-based assignee for this project
+  // PERFORMANCE FIX: Disabled role-assignee query for list view to prevent N+1 queries
+  // The list view already has currentAssignee data from the main projects query
+  // Role-assignee API is only needed in project detail view
   const { 
     data: roleAssigneeData, 
     isLoading: isLoadingAssignee, 
     error: roleAssigneeError 
   } = useQuery<RoleAssigneeResponse>({
     queryKey: ['/api/projects', project.id, 'role-assignee'],
-    enabled: !!project.id && isAuthenticated && !!user,
+    enabled: false, // ✅ DISABLED: Prevents 20+ individual API calls on projects list page
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 2, // Retry failed requests up to 2 times
     retryDelay: 1000, // Wait 1 second between retries
