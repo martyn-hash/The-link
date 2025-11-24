@@ -529,34 +529,8 @@ export class DatabaseStorage implements IStorage {
     return this.clientStorage.getClientChronology(clientId);
   }
 
-  // Client Tags
-  async getAllClientTags() {
-    return this.clientStorage.getAllClientTags();
-  }
-
-  async createClientTag(tag: any) {
-    return this.clientStorage.createClientTag(tag);
-  }
-
-  async deleteClientTag(id: string) {
-    return this.clientStorage.deleteClientTag(id);
-  }
-
-  async getAllClientTagAssignments() {
-    return this.clientStorage.getAllClientTagAssignments();
-  }
-
-  async getClientTags(clientId: string) {
-    return this.clientStorage.getClientTags(clientId);
-  }
-
-  async assignClientTag(assignment: any) {
-    return this.clientStorage.assignClientTag(assignment);
-  }
-
-  async unassignClientTag(clientId: string, tagId: string) {
-    return this.clientStorage.unassignClientTag(clientId, tagId);
-  }
+  // NOTE: Client Tags moved to Stage 7 TagStorage (lines 1267+)
+  // Removed duplicate delegations that were previously in clientStorage
 
   // Client Email Aliases
   async getAllClientEmailAliases() {
