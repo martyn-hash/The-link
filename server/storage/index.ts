@@ -48,6 +48,16 @@ import {
   PortalDocumentStorage 
 } from './documents/index.js';
 import { PortalStorage } from './portal/index.js';
+import {
+  MessageThreadStorage,
+  MessageStorage,
+  ProjectMessageThreadStorage,
+  ProjectMessageStorage,
+  ProjectMessageParticipantStorage,
+  StaffMessageThreadStorage,
+  StaffMessageStorage,
+  StaffMessageParticipantStorage
+} from './messages/index.js';
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -89,6 +99,14 @@ export class DatabaseStorage implements IStorage {
   private riskAssessmentStorage: RiskAssessmentStorage;
   private portalDocumentStorage: PortalDocumentStorage;
   private portalStorage: PortalStorage;
+  private messageThreadStorage: MessageThreadStorage;
+  private messageStorage: MessageStorage;
+  private projectMessageThreadStorage: ProjectMessageThreadStorage;
+  private projectMessageStorage: ProjectMessageStorage;
+  private projectMessageParticipantStorage: ProjectMessageParticipantStorage;
+  private staffMessageThreadStorage: StaffMessageThreadStorage;
+  private staffMessageStorage: StaffMessageStorage;
+  private staffMessageParticipantStorage: StaffMessageParticipantStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -137,11 +155,22 @@ export class DatabaseStorage implements IStorage {
     // Initialize portal domain storage (Stage 9)
     this.portalStorage = new PortalStorage();
     
+    // Initialize messages domain storage (Stage 10)
+    this.messageThreadStorage = new MessageThreadStorage();
+    this.messageStorage = new MessageStorage();
+    this.projectMessageThreadStorage = new ProjectMessageThreadStorage();
+    this.projectMessageStorage = new ProjectMessageStorage();
+    this.projectMessageParticipantStorage = new ProjectMessageParticipantStorage();
+    this.staffMessageThreadStorage = new StaffMessageThreadStorage();
+    this.staffMessageStorage = new StaffMessageStorage();
+    this.staffMessageParticipantStorage = new StaffMessageParticipantStorage();
+    
     // Register cross-domain helpers
     this.registerClientHelpers();
     this.registerPeopleHelpers();
     this.registerProjectHelpers();
     this.registerServiceHelpers();
+    this.registerMessageHelpers();
   }
 
   /**
@@ -248,6 +277,17 @@ export class DatabaseStorage implements IStorage {
     this.companiesHouseStorage.registerHelpers({
       createClient: (clientData: any) => this.clientStorage.createClient(clientData),
       updateClient: (id: string, clientData: any) => this.clientStorage.updateClient(id, clientData),
+    });
+  }
+
+  /**
+   * Register helpers for cross-domain dependencies in message storage
+   */
+  private registerMessageHelpers() {
+    // ProjectMessageParticipantStorage needs helpers for user and project lookups
+    this.projectMessageParticipantStorage.registerHelpers({
+      getUser: (userId: string) => this.userStorage.getUser(userId),
+      getProject: (projectId: string) => this.projectStorage.getProject(projectId),
     });
   }
 
@@ -1708,6 +1748,264 @@ export class DatabaseStorage implements IStorage {
   async cleanupExpiredSessions() {
     return this.portalStorage.cleanupExpiredSessions();
   }
+
+  // ============================================================================
+  // MESSAGES DOMAIN - Delegated to Message Storage Modules (Stage 10)
+  // ============================================================================
+
+  // Client Message Thread Operations - MessageThreadStorage (9 methods)
+  async createMessageThread(thread: any) {
+    return this.messageThreadStorage.createMessageThread(thread);
+  }
+
+  async getMessageThreadById(id: string) {
+    return this.messageThreadStorage.getMessageThreadById(id);
+  }
+
+  async getMessageThreadsByClientId(clientId: string, filters?: { status?: string }) {
+    return this.messageThreadStorage.getMessageThreadsByClientId(clientId, filters);
+  }
+
+  async getMessageThreadsWithUnreadCount(clientId: string, status?: string) {
+    return this.messageThreadStorage.getMessageThreadsWithUnreadCount(clientId, status);
+  }
+
+  async getAllMessageThreads(filters?: { status?: string; clientId?: string }) {
+    return this.messageThreadStorage.getAllMessageThreads(filters);
+  }
+
+  async getLastMessageForThread(threadId: string) {
+    return this.messageThreadStorage.getLastMessageForThread(threadId);
+  }
+
+  async hasUnreadMessagesForStaff(threadId: string) {
+    return this.messageThreadStorage.hasUnreadMessagesForStaff(threadId);
+  }
+
+  async updateMessageThread(id: string, thread: any) {
+    return this.messageThreadStorage.updateMessageThread(id, thread);
+  }
+
+  async deleteMessageThread(id: string) {
+    return this.messageThreadStorage.deleteMessageThread(id);
+  }
+
+  // Client Message Operations - MessageStorage (9 methods)
+  async createMessage(message: any) {
+    return this.messageStorage.createMessage(message);
+  }
+
+  async getMessageById(id: string) {
+    return this.messageStorage.getMessageById(id);
+  }
+
+  async getMessagesByThreadId(threadId: string) {
+    return this.messageStorage.getMessagesByThreadId(threadId);
+  }
+
+  async updateMessage(id: string, message: any) {
+    return this.messageStorage.updateMessage(id, message);
+  }
+
+  async deleteMessage(id: string) {
+    return this.messageStorage.deleteMessage(id);
+  }
+
+  async markMessagesAsReadByStaff(threadId: string) {
+    return this.messageStorage.markMessagesAsReadByStaff(threadId);
+  }
+
+  async markMessagesAsReadByClient(threadId: string) {
+    return this.messageStorage.markMessagesAsReadByClient(threadId);
+  }
+
+  async getUnreadMessageCountForClient(clientId: string) {
+    return this.messageStorage.getUnreadMessageCountForClient(clientId);
+  }
+
+  async getUnreadMessageCountForStaff(userId: string, isAdmin?: boolean) {
+    return this.messageStorage.getUnreadMessageCountForStaff(userId, isAdmin);
+  }
+
+  // Project Message Thread Operations - ProjectMessageThreadStorage (8 methods)
+  async createProjectMessageThread(thread: any) {
+    return this.projectMessageThreadStorage.createProjectMessageThread(thread);
+  }
+
+  async getProjectMessageThreadById(id: string) {
+    return this.projectMessageThreadStorage.getProjectMessageThreadById(id);
+  }
+
+  async getProjectMessageThreadsByProjectId(projectId: string) {
+    return this.projectMessageThreadStorage.getProjectMessageThreadsByProjectId(projectId);
+  }
+
+  async getProjectMessageThreadsForUser(userId: string, filters?: { includeArchived?: boolean }) {
+    return this.projectMessageThreadStorage.getProjectMessageThreadsForUser(userId, filters);
+  }
+
+  async updateProjectMessageThread(id: string, thread: any) {
+    return this.projectMessageThreadStorage.updateProjectMessageThread(id, thread);
+  }
+
+  async deleteProjectMessageThread(id: string) {
+    return this.projectMessageThreadStorage.deleteProjectMessageThread(id);
+  }
+
+  async archiveProjectMessageThread(id: string, archivedBy: string) {
+    return this.projectMessageThreadStorage.archiveProjectMessageThread(id, archivedBy);
+  }
+
+  async unarchiveProjectMessageThread(id: string) {
+    return this.projectMessageThreadStorage.unarchiveProjectMessageThread(id);
+  }
+
+  // Project Message Operations - ProjectMessageStorage (5 methods)
+  async createProjectMessage(message: any) {
+    return this.projectMessageStorage.createProjectMessage(message);
+  }
+
+  async getProjectMessageById(id: string) {
+    return this.projectMessageStorage.getProjectMessageById(id);
+  }
+
+  async getProjectMessagesByThreadId(threadId: string) {
+    return this.projectMessageStorage.getProjectMessagesByThreadId(threadId);
+  }
+
+  async updateProjectMessage(id: string, message: any) {
+    return this.projectMessageStorage.updateProjectMessage(id, message);
+  }
+
+  async deleteProjectMessage(id: string) {
+    return this.projectMessageStorage.deleteProjectMessage(id);
+  }
+
+  // Project Message Participant Operations - ProjectMessageParticipantStorage (9 methods)
+  async createProjectMessageParticipant(participant: any) {
+    return this.projectMessageParticipantStorage.createProjectMessageParticipant(participant);
+  }
+
+  async getProjectMessageParticipantsByThreadId(threadId: string) {
+    return this.projectMessageParticipantStorage.getProjectMessageParticipantsByThreadId(threadId);
+  }
+
+  async getProjectMessageParticipantsByUserId(userId: string) {
+    return this.projectMessageParticipantStorage.getProjectMessageParticipantsByUserId(userId);
+  }
+
+  async updateProjectMessageParticipant(id: string, participant: any) {
+    return this.projectMessageParticipantStorage.updateProjectMessageParticipant(id, participant);
+  }
+
+  async deleteProjectMessageParticipant(id: string) {
+    return this.projectMessageParticipantStorage.deleteProjectMessageParticipant(id);
+  }
+
+  async markProjectMessagesAsRead(threadId: string, userId: string, lastReadMessageId: string) {
+    return this.projectMessageParticipantStorage.markProjectMessagesAsRead(threadId, userId, lastReadMessageId);
+  }
+
+  async updateParticipantReminderSent(threadId: string, userId: string) {
+    return this.projectMessageParticipantStorage.updateParticipantReminderSent(threadId, userId);
+  }
+
+  async getUnreadProjectMessagesForUser(userId: string) {
+    return this.projectMessageParticipantStorage.getUnreadProjectMessagesForUser(userId);
+  }
+
+  async getProjectMessageUnreadSummaries(olderThanMinutes: number) {
+    return this.projectMessageParticipantStorage.getProjectMessageUnreadSummaries(olderThanMinutes);
+  }
+
+  // Staff Message Thread Operations - StaffMessageThreadStorage (7 methods)
+  async createStaffMessageThread(thread: any) {
+    return this.staffMessageThreadStorage.createStaffMessageThread(thread);
+  }
+
+  async getStaffMessageThreadById(id: string) {
+    return this.staffMessageThreadStorage.getStaffMessageThreadById(id);
+  }
+
+  async getStaffMessageThreadsForUser(userId: string, filters?: { includeArchived?: boolean }) {
+    return this.staffMessageThreadStorage.getStaffMessageThreadsForUser(userId, filters);
+  }
+
+  async updateStaffMessageThread(id: string, thread: any) {
+    return this.staffMessageThreadStorage.updateStaffMessageThread(id, thread);
+  }
+
+  async deleteStaffMessageThread(id: string) {
+    return this.staffMessageThreadStorage.deleteStaffMessageThread(id);
+  }
+
+  async archiveStaffMessageThread(id: string, archivedBy: string) {
+    return this.staffMessageThreadStorage.archiveStaffMessageThread(id, archivedBy);
+  }
+
+  async unarchiveStaffMessageThread(id: string) {
+    return this.staffMessageThreadStorage.unarchiveStaffMessageThread(id);
+  }
+
+  // Staff Message Operations - StaffMessageStorage (5 methods)
+  async createStaffMessage(message: any) {
+    return this.staffMessageStorage.createStaffMessage(message);
+  }
+
+  async getStaffMessageById(id: string) {
+    return this.staffMessageStorage.getStaffMessageById(id);
+  }
+
+  async getStaffMessagesByThreadId(threadId: string) {
+    return this.staffMessageStorage.getStaffMessagesByThreadId(threadId);
+  }
+
+  async updateStaffMessage(id: string, message: any) {
+    return this.staffMessageStorage.updateStaffMessage(id, message);
+  }
+
+  async deleteStaffMessage(id: string) {
+    return this.staffMessageStorage.deleteStaffMessage(id);
+  }
+
+  // Staff Message Participant Operations - StaffMessageParticipantStorage (7 methods)
+  async createStaffMessageParticipant(participant: any) {
+    return this.staffMessageParticipantStorage.createStaffMessageParticipant(participant);
+  }
+
+  async getStaffMessageParticipantsByThreadId(threadId: string) {
+    return this.staffMessageParticipantStorage.getStaffMessageParticipantsByThreadId(threadId);
+  }
+
+  async getStaffMessageParticipantsByUserId(userId: string) {
+    return this.staffMessageParticipantStorage.getStaffMessageParticipantsByUserId(userId);
+  }
+
+  async updateStaffMessageParticipant(id: string, participant: any) {
+    return this.staffMessageParticipantStorage.updateStaffMessageParticipant(id, participant);
+  }
+
+  async deleteStaffMessageParticipant(id: string) {
+    return this.staffMessageParticipantStorage.deleteStaffMessageParticipant(id);
+  }
+
+  async markStaffMessagesAsRead(threadId: string, userId: string, lastReadMessageId: string) {
+    return this.staffMessageParticipantStorage.markStaffMessagesAsRead(threadId, userId, lastReadMessageId);
+  }
+
+  async getUnreadStaffMessagesForUser(userId: string) {
+    return this.staffMessageParticipantStorage.getUnreadStaffMessagesForUser(userId);
+  }
+
+  // ✅ Stage 10 COMPLETE: All 59 messages domain methods extracted and delegated:
+  // - MessageThreadStorage: 9 methods (client message threads)
+  // - MessageStorage: 9 methods (client messages)
+  // - ProjectMessageThreadStorage: 8 methods (project message threads)
+  // - ProjectMessageStorage: 5 methods (project messages)
+  // - ProjectMessageParticipantStorage: 9 methods (project participants, unread summaries)
+  // - StaffMessageThreadStorage: 7 methods (staff message threads)
+  // - StaffMessageStorage: 5 methods (staff messages)
+  // - StaffMessageParticipantStorage: 7 methods (staff participants, unread counts)
 
   // ✅ Stage 9 COMPLETE: All 32 documents & portal domain methods extracted and delegated:
   // - DocumentStorage: 11 methods (folders, documents, signed URLs)
