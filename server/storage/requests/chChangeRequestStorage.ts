@@ -161,4 +161,42 @@ export class ChChangeRequestStorage {
   async deleteChChangeRequest(id: string): Promise<void> {
     await db.delete(chChangeRequests).where(eq(chChangeRequests.id, id));
   }
+
+  async approveChChangeRequest(id: string, approvedBy: string, notes?: string): Promise<ChChangeRequest> {
+    const [changeRequest] = await db
+      .update(chChangeRequests)
+      .set({
+        status: "approved",
+        approvedBy,
+        approvedAt: sql`now()`,
+        notes,
+      })
+      .where(eq(chChangeRequests.id, id))
+      .returning();
+    
+    return changeRequest;
+  }
+
+  async rejectChChangeRequest(id: string, approvedBy: string, notes?: string): Promise<ChChangeRequest> {
+    const [changeRequest] = await db
+      .update(chChangeRequests)
+      .set({
+        status: "rejected",
+        approvedBy,
+        approvedAt: sql`now()`,
+        notes,
+      })
+      .where(eq(chChangeRequests.id, id))
+      .returning();
+    
+    return changeRequest;
+  }
+
+  async detectChDataChanges(clientId: string, newChData: any): Promise<ChChangeRequest[]> {
+    throw new Error("Method not implemented.");
+  }
+
+  async applyChChangeRequests(requestIds: string[]): Promise<void> {
+    throw new Error("Method not implemented.");
+  }
 }

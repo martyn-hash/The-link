@@ -262,6 +262,36 @@ Before each browser test:
 - **Key Achievement:** Successfully extracted all three message subsystems (client, project, staff) while maintaining proper domain isolation through modular helper injection
 - **Ready for:** Stage 11 (Requests Domain) can now proceed
 
+### Stage 11: Requests Domain (✅ COMPLETED - November 24, 2025)
+- **Extracted:** 53 methods into ChChangeRequestStorage (11), RequestTemplateStorage (24), CustomRequestStorage (18)
+- **Pattern:** Three request subsystems (Companies House change requests, reusable templates, custom one-off requests)
+- **Modules Created:**
+  - `server/storage/requests/chChangeRequestStorage.ts` - CH change request CRUD, approval/rejection workflows (11 methods)
+  - `server/storage/requests/requestTemplateStorage.ts` - Template categories, templates, sections, questions with order management (24 methods)
+  - `server/storage/requests/customRequestStorage.ts` - Custom request CRUD, sections, questions with order management (18 methods)
+- **Key Implementation Details:**
+  - ChChangeRequestStorage includes approve/reject workflows plus placeholder methods for detectChDataChanges and applyChChangeRequests
+  - Template system supports hierarchical structure (categories → templates → sections → questions) with order tracking
+  - Custom requests mirror template structure but are client-specific and one-off
+  - All subsystems include proper CRUD operations and maintain backward compatibility
+- **Testing:**
+  - **Server boot:** All storage modules load successfully, all schema migrations run
+  - **Cron jobs:** All 9 schedulers initialize correctly
+  - **API endpoints:** Verified server responds to requests successfully
+  - No runtime errors, clean delegation through facade
+- **LSP Analysis:**
+  - Total diagnostics: 7 (all pre-existing in facade, none from Stage 11)
+  - Stage 11-specific errors: 0 errors
+  - All 7 facade errors are pre-existing (Projects/Settings domains from earlier stages)
+- **Architect Approval:** Received - PASS rating (after adding 4 missing CH methods)
+  - Initially missed 4 CH methods (approve, reject, detect, apply) - corrected in second iteration
+  - All 53 methods properly extracted and delegated (11 CH + 24 Template + 18 Custom)
+  - No cross-domain dependencies required - domain is self-contained
+  - Backward compatibility maintained through explicit delegations
+  - Server boots cleanly with no Stage 11-related errors
+- **Key Achievement:** Successfully extracted all request subsystems (CH change requests, templates, custom requests) maintaining three distinct workflows while preserving backward compatibility
+- **Ready for:** Stage 12 (Tasks Domain) can now proceed
+
 ## Executive Summary
 
 This document provides a detailed, stage-by-stage plan for refactoring `server/storage.ts` (13,648 lines) into a modular, domain-driven architecture. The refactoring will break down this monolithic file into ~15 focused domain modules, each handling 500-1,000 lines of related functionality.

@@ -2043,6 +2043,22 @@ export class DatabaseStorage implements IStorage {
     return this.chChangeRequestStorage.deleteChChangeRequest(id);
   }
 
+  async approveChChangeRequest(id: string, approvedBy: string, notes?: string) {
+    return this.chChangeRequestStorage.approveChChangeRequest(id, approvedBy, notes);
+  }
+
+  async rejectChChangeRequest(id: string, approvedBy: string, notes?: string) {
+    return this.chChangeRequestStorage.rejectChChangeRequest(id, approvedBy, notes);
+  }
+
+  async detectChDataChanges(clientId: string, newChData: any) {
+    return this.chChangeRequestStorage.detectChDataChanges(clientId, newChData);
+  }
+
+  async applyChChangeRequests(requestIds: string[]) {
+    return this.chChangeRequestStorage.applyChChangeRequests(requestIds);
+  }
+
   // Request Template Categories (5 methods) - RequestTemplateStorage
   async createClientRequestTemplateCategory(category: any) {
     return this.requestTemplateStorage.createClientRequestTemplateCategory(category);
@@ -2218,8 +2234,8 @@ export class DatabaseStorage implements IStorage {
     return this.customRequestStorage.updateCustomRequestQuestionOrders(updates);
   }
 
-  // ✅ Stage 11 COMPLETE: All 49 requests domain methods extracted and delegated:
-  // - ChChangeRequestStorage: 7 methods (CH change requests)
+  // ✅ Stage 11 COMPLETE: All 53 requests domain methods extracted and delegated:
+  // - ChChangeRequestStorage: 11 methods (CH change requests)
   // - RequestTemplateStorage: 24 methods (template categories, templates, sections, questions)
   // - CustomRequestStorage: 18 methods (custom requests, sections, questions)
 
