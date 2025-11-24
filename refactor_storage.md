@@ -677,11 +677,28 @@ Extract all client-related operations including CRUD, Companies House integratio
 3. `server/storage/clients/searchStorage.ts` ✓
 4. `server/storage/clients/index.ts` ✓
 
-#### Detailed Steps:
+#### Implementation Summary: [COMPLETED]
 
-**1. Create `server/storage/clients/clientStorage.ts`:**
+**Extracted 31 methods into 3 domain classes:**
+- **ClientStorage** (27 methods) - All client CRUD, relationships, chronology, tags, email aliases
+- **CompaniesHouseStorage** (2 methods) - Companies House integration
+- **SearchStorage** (1 method) - Super search functionality
 
-Extract these methods:
+**Known Limitation (Technical Debt):**
+- Helper injection pattern doesn't support transaction propagation
+- `convertIndividualToCompanyClient` maintains atomicity but bypasses some helper side effects
+- To be addressed in Stage 15 with comprehensive transaction support
+
+**Test Results:**
+- ✅ All E2E tests pass
+- ✅ Full backward compatibility maintained
+- ✅ Application functions correctly
+
+#### Detailed Steps: [COMPLETED]
+
+**1. Created `server/storage/clients/clientStorage.ts`:**
+
+Extracted these methods:
 - `createClient(client)`
 - `getClientById(id)`
 - `getClientByName(name)`
@@ -1503,6 +1520,25 @@ Extract user preferences, views, and company settings.
 
 #### Objectives:
 Remove the old monolithic `storage.ts` file and finalize the new architecture.
+
+#### CRITICAL TECHNICAL DEBT TO ADDRESS:
+⚠️ **Transaction Support for Helper Injection Pattern**
+
+**Issue Discovered in Stage 2:**
+The helper injection pattern (BaseStorage) doesn't support transaction propagation. This means cross-domain operations like `convertIndividualToCompanyClient` cannot maintain full atomicity while preserving helper side effects.
+
+**Required Actions:**
+1. **Review all cross-domain operations** that use helpers within transactions
+2. **Implement transaction-aware helper signatures** - all helpers should accept optional `tx` parameter
+3. **Update helper registrations** to support transaction propagation
+4. **Specifically fix:**
+   - `convertIndividualToCompanyClient` - ensure it uses helpers with transaction support
+   - Companies House upsert operations - must participate in transactions
+   - Any other cross-domain operations identified during stages 3-14
+5. **Test thoroughly:**
+   - Transaction rollback scenarios
+   - Cross-domain side effects (chronology, notifications, etc.)
+   - Companies House sync flows
 
 #### Detailed Steps:
 
