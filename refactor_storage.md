@@ -72,6 +72,32 @@ Before each browser test:
   - Added stageApprovalResponses with field relation
   - Applied proper null handling and array defaults
   - E2E testing confirmed 7+ chronology entries now display correctly
+
+### Performance Optimization (November 24, 2025) - BEFORE STAGE 6
+- **Critical Issue:** Projects page timing out (>30 seconds) due to excessive database joins
+- **Root Cause:** List queries loading ALL chronology entries WITH fieldResponses join
+  - 40 projects × ~5 chronology entries × ~10+ field responses = 500+ joins
+  - Total query operations: 700-1000+ operations causing timeout
+- **Solution Implemented:**
+  - Removed fieldResponses join from all 4 list query methods:
+    - getAllProjects(), getProjectsByUser(), getProjectsByClient(), getProjectsByClientServiceId()
+  - List queries now load: Full chronology WITHOUT fieldResponses (assignee, changedBy only)
+  - Detail query (getProject) unchanged: Still loads full chronology WITH fieldResponses
+- **Performance Impact:**
+  - Before: 700-1000+ operations, page timeout (>30 seconds)
+  - After: ~120 operations, page loads in ~5 seconds
+  - Removed ~500+ fieldResponse joins while preserving UI/analytics functionality
+- **Database Indexes Added:** 4 new indexes for common filters
+  - currentStatus, dueDate, inactive, projectMonth (complement existing indexes)
+  - Migration pending: Will be applied when database is responsive
+- **Testing:** E2E test verified all functionality preserved
+  - List API returns 40 projects with full chronology arrays (no fieldResponses)
+  - Detail API returns single project with complete chronology (with fieldResponses)
+  - Project drawer shows full timeline with 5+ entries
+  - Analytics and kanban view work correctly
+- **Architect Approval:** Received - PASS rating
+  - Confirmed chronology optimization preserves Stage 5 timeline fix
+  - Verified indexes complement existing ones without regression
 - **Ready for:** Stage 6 (Services domain) can now proceed
 
 ## Executive Summary
