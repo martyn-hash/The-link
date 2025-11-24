@@ -70,6 +70,13 @@ import {
   InternalTaskStorage,
   TaskTimeEntryStorage
 } from './tasks/index.js';
+import {
+  ProjectTypeNotificationStorage,
+  ClientReminderStorage,
+  ScheduledNotificationStorage,
+  NotificationHistoryStorage,
+  StageChangeNotificationStorage
+} from './notifications/index.js';
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -127,6 +134,11 @@ export class DatabaseStorage implements IStorage {
   private taskTypeStorage: TaskTypeStorage;
   private internalTaskStorage: InternalTaskStorage;
   private taskTimeEntryStorage: TaskTimeEntryStorage;
+  private projectTypeNotificationStorage: ProjectTypeNotificationStorage;
+  private clientReminderStorage: ClientReminderStorage;
+  private scheduledNotificationStorage: ScheduledNotificationStorage;
+  private notificationHistoryStorage: NotificationHistoryStorage;
+  private stageChangeNotificationStorage: StageChangeNotificationStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -197,6 +209,22 @@ export class DatabaseStorage implements IStorage {
     this.internalTaskStorage = new InternalTaskStorage();
     this.taskTimeEntryStorage = new TaskTimeEntryStorage();
     
+    // Initialize notifications domain storage (Stage 13)
+    this.projectTypeNotificationStorage = new ProjectTypeNotificationStorage({
+      getServiceByProjectTypeId: (projectTypeId: string) => this.serviceStorage.getServiceByProjectTypeId(projectTypeId),
+      getStageById: (stageId: string) => this.projectStagesStorage.getStageById(stageId),
+    });
+    this.clientReminderStorage = new ClientReminderStorage();
+    this.scheduledNotificationStorage = new ScheduledNotificationStorage();
+    this.notificationHistoryStorage = new NotificationHistoryStorage();
+    this.stageChangeNotificationStorage = new StageChangeNotificationStorage({
+      getUser: (userId: string) => this.userStorage.getUser(userId),
+      getProject: (projectId: string) => this.projectStorage.getProject(projectId),
+      getWorkRoleById: (roleId: string) => this.workRoleStorage.getWorkRoleById(roleId),
+      resolveRoleAssigneeForClient: (clientId: string, projectTypeId: string, roleName: string) => 
+        this.serviceAssignmentStorage.resolveRoleAssigneeForClient(clientId, projectTypeId, roleName),
+    });
+    
     // Register cross-domain helpers
     this.registerClientHelpers();
     this.registerPeopleHelpers();
@@ -261,14 +289,16 @@ export class DatabaseStorage implements IStorage {
       resolveRoleAssigneeForClient: (clientId: string, projectTypeId: string, roleName: string) => 
         this.serviceAssignmentStorage.resolveRoleAssigneeForClient(clientId, projectTypeId, roleName),
       
-      // Notifications and messaging domains (still in oldStorage - will be extracted in future stage)
+      // Notifications domain - now delegated to NotificationStorage modules (Stage 13)
       sendStageChangeNotifications: (projectId: string, newStatus: string, oldStatus: string) => 
-        this.oldStorage.sendStageChangeNotifications(projectId, newStatus, oldStatus),
+        this.stageChangeNotificationStorage.sendStageChangeNotifications(projectId, newStatus, oldStatus),
+      cancelScheduledNotificationsForProject: (projectId: string, reason: string) => 
+        this.scheduledNotificationStorage.cancelScheduledNotificationsForProject(projectId, reason),
+      
+      // Messaging domain (still in oldStorage - will be extracted in future stage)
       createProjectMessageThread: (data: any) => this.oldStorage.createProjectMessageThread(data),
       createProjectMessageParticipant: (data: any) => this.oldStorage.createProjectMessageParticipant(data),
       createProjectMessage: (data: any) => this.oldStorage.createProjectMessage(data),
-      cancelScheduledNotificationsForProject: (projectId: string, reason: string) => 
-        this.oldStorage.cancelScheduledNotificationsForProject(projectId, reason),
       
       // Client domain - delegate to ClientStorage
       getClientByName: (name: string) => this.clientStorage.getClientByName(name),
@@ -817,7 +847,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async sendBulkProjectAssignmentNotifications(createdProjects: any[]) {
-    return this.projectStorage.sendBulkProjectAssignmentNotifications(createdProjects);
+    return this.stageChangeNotificationStorage.sendBulkProjectAssignmentNotifications(createdProjects);
   }
 
   async createProjectsFromCSV(projectsData: any[]) {
@@ -2473,6 +2503,102 @@ export class DatabaseStorage implements IStorage {
     return this.taskTimeEntryStorage.deleteTaskTimeEntry(id);
   }
 
+  // ============================================================================
+  // STAGE 13: Notifications Domain - 21 methods delegated
+  // ============================================================================
+
+  // Project Type Notification operations (6 methods) - ProjectTypeNotificationStorage
+  async getProjectTypeNotificationsByProjectTypeId(projectTypeId: string) {
+    return this.projectTypeNotificationStorage.getProjectTypeNotificationsByProjectTypeId(projectTypeId);
+  }
+
+  async getProjectTypeNotificationById(id: string) {
+    return this.projectTypeNotificationStorage.getProjectTypeNotificationById(id);
+  }
+
+  async createProjectTypeNotification(notification: any) {
+    return this.projectTypeNotificationStorage.createProjectTypeNotification(notification);
+  }
+
+  async updateProjectTypeNotification(id: string, notification: any) {
+    return this.projectTypeNotificationStorage.updateProjectTypeNotification(id, notification);
+  }
+
+  async deleteProjectTypeNotification(id: string) {
+    return this.projectTypeNotificationStorage.deleteProjectTypeNotification(id);
+  }
+
+  async getPreviewCandidates(projectTypeId: string, notification: any) {
+    return this.projectTypeNotificationStorage.getPreviewCandidates(projectTypeId, notification);
+  }
+
+  // Client Request Reminder operations (5 methods) - ClientReminderStorage
+  async getClientRequestRemindersByNotificationId(notificationId: string) {
+    return this.clientReminderStorage.getClientRequestRemindersByNotificationId(notificationId);
+  }
+
+  async getClientRequestReminderById(id: string) {
+    return this.clientReminderStorage.getClientRequestReminderById(id);
+  }
+
+  async createClientRequestReminder(reminder: any) {
+    return this.clientReminderStorage.createClientRequestReminder(reminder);
+  }
+
+  async updateClientRequestReminder(id: string, reminder: any) {
+    return this.clientReminderStorage.updateClientRequestReminder(id, reminder);
+  }
+
+  async deleteClientRequestReminder(id: string) {
+    return this.clientReminderStorage.deleteClientRequestReminder(id);
+  }
+
+  // Scheduled Notification operations (5 methods) - ScheduledNotificationStorage
+  async getAllScheduledNotifications() {
+    return this.scheduledNotificationStorage.getAllScheduledNotifications();
+  }
+
+  async getScheduledNotificationById(id: string) {
+    return this.scheduledNotificationStorage.getScheduledNotificationById(id);
+  }
+
+  async getScheduledNotificationsForClient(clientId: string, filters?: any) {
+    return this.scheduledNotificationStorage.getScheduledNotificationsForClient(clientId, filters);
+  }
+
+  async updateScheduledNotification(id: string, notification: any) {
+    return this.scheduledNotificationStorage.updateScheduledNotification(id, notification);
+  }
+
+  async cancelScheduledNotificationsForProject(projectId: string, reason: string) {
+    return this.scheduledNotificationStorage.cancelScheduledNotificationsForProject(projectId, reason);
+  }
+
+  // Notification History operations (2 methods) - NotificationHistoryStorage
+  async getNotificationHistoryByClientId(clientId: string) {
+    return this.notificationHistoryStorage.getNotificationHistoryByClientId(clientId);
+  }
+
+  async getNotificationHistoryByProjectId(projectId: string) {
+    return this.notificationHistoryStorage.getNotificationHistoryByProjectId(projectId);
+  }
+
+  // Stage Change Notification operations (3 methods) - StageChangeNotificationStorage
+  async prepareStageChangeNotification(projectId: string, newStageName: string, oldStageName?: string) {
+    return this.stageChangeNotificationStorage.prepareStageChangeNotification(projectId, newStageName, oldStageName);
+  }
+
+  async sendStageChangeNotifications(projectId: string, newStageName: string, oldStageName?: string) {
+    return this.stageChangeNotificationStorage.sendStageChangeNotifications(projectId, newStageName, oldStageName);
+  }
+
+  // ✅ Stage 13 COMPLETE: All 21 notifications domain methods extracted and delegated:
+  // - ProjectTypeNotificationStorage: 6 methods (project type notification CRUD, preview candidates)
+  // - ClientReminderStorage: 5 methods (client request reminder CRUD)
+  // - ScheduledNotificationStorage: 5 methods (scheduled notification management)
+  // - NotificationHistoryStorage: 2 methods (history queries by client/project)
+  // - StageChangeNotificationStorage: 3 methods (stage change emails, push notifications, bulk assignments)
+
   // ✅ Stage 12 COMPLETE: All 54 tasks domain methods extracted and delegated:
   // - TaskInstanceStorage: 11 methods (task instances CRUD, queries)
   // - TaskInstanceResponseStorage: 6 methods (responses CRUD, bulk save)
@@ -2601,6 +2727,14 @@ export const storage = createDatabaseStorageProxy();
 //          - TaskTypeStorage: 6 methods (task types CRUD)
 //          - InternalTaskStorage: 24 methods (internal tasks, connections, progress notes, documents)
 //          - TaskTimeEntryStorage: 5 methods (time entries CRUD)
-// Stage 13-14: [ ] Other domains - pending
+// Stage 13: ✅ Notifications domain extracted - 21 methods delegated (COMPLETE)
+//          - ProjectTypeNotificationStorage: 6 methods (project type notification CRUD, preview candidates)
+//          - ClientReminderStorage: 5 methods (client request reminder CRUD)
+//          - ScheduledNotificationStorage: 5 methods (scheduled notification management)
+//          - NotificationHistoryStorage: 2 methods (history queries by client/project)
+//          - StageChangeNotificationStorage: 3 methods (stage change emails, push notifications, bulk assignments)
+//          - Cross-domain helpers: Notification helpers updated in registerProjectHelpers
+//          - Note: Push notification templates (9 methods) already extracted in Stage 8 Integrations
+// Stage 14: [ ] E-Signatures domain - pending
 // Stage 15: [ ] Final cleanup - remove old storage.ts
 // ============================================================================
