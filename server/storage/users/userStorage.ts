@@ -482,4 +482,13 @@ export class UserStorage {
         sql`${magicLinkTokens.expiresAt} > now()`
       ));
   }
+
+  // Get fallback user for role assignments
+  async getFallbackUser(): Promise<User | undefined> {
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(eq(users.isFallbackUser, true));
+    return user;
+  }
 }

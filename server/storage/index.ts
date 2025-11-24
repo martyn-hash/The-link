@@ -216,6 +216,10 @@ export class DatabaseStorage implements IStorage {
     return this.userStorage.getUser(id);
   }
 
+  async getFallbackUser() {
+    return this.userStorage.getFallbackUser();
+  }
+
   async upsertUser(userData: any) {
     return this.userStorage.upsertUser(userData);
   }
