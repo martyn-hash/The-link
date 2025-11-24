@@ -8,6 +8,13 @@
    - Restart the test from the beginning
 3. Always check these notes before starting any browser testing session
 
+**Magic Link Testing Approach:**
+- Since we cannot access emails during testing, verify magic links by:
+  1. Checking database for magic link token creation
+  2. Extracting the token/code directly from the database
+  3. Verifying token expiry and usage tracking
+- For normal authentication testing, always use password-based login with the credentials above
+
 ## Progress Tracking
 
 ### Stage 0: Foundation (✅ COMPLETED)
