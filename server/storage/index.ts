@@ -124,7 +124,7 @@ export class DatabaseStorage implements IStorage {
     this.clientStorage.registerHelpers({
       // Check if client has projects (for deletion)
       checkClientProjects: async (clientId: string) => {
-        const projects = await this.oldStorage.getProjectsByClientId(clientId);
+        const projects = await this.projectStorage.getProjectsByClient(clientId);
         return projects && projects.length > 0;
       },
       // Delete client services and role assignments (for deletion cascade)
@@ -132,7 +132,7 @@ export class DatabaseStorage implements IStorage {
         const services = await this.oldStorage.getClientServicesByClientId(clientId);
         for (const service of services) {
           // Delete role assignments first
-          const assignments = await this.oldStorage.getClientServiceRoleAssignmentsByServiceId(service.id);
+          const assignments = await this.oldStorage.getClientServiceRoleAssignments(service.id);
           for (const assignment of assignments) {
             await this.oldStorage.deleteClientServiceRoleAssignment(assignment.id);
           }
