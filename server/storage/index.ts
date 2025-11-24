@@ -63,6 +63,13 @@ import {
   RequestTemplateStorage,
   CustomRequestStorage
 } from './requests/index.js';
+import {
+  TaskInstanceStorage,
+  TaskInstanceResponseStorage,
+  TaskTypeStorage,
+  InternalTaskStorage,
+  TaskTimeEntryStorage
+} from './tasks/index.js';
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -115,6 +122,11 @@ export class DatabaseStorage implements IStorage {
   private chChangeRequestStorage: ChChangeRequestStorage;
   private requestTemplateStorage: RequestTemplateStorage;
   private customRequestStorage: CustomRequestStorage;
+  private taskInstanceStorage: TaskInstanceStorage;
+  private taskInstanceResponseStorage: TaskInstanceResponseStorage;
+  private taskTypeStorage: TaskTypeStorage;
+  private internalTaskStorage: InternalTaskStorage;
+  private taskTimeEntryStorage: TaskTimeEntryStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -177,6 +189,13 @@ export class DatabaseStorage implements IStorage {
     this.chChangeRequestStorage = new ChChangeRequestStorage();
     this.requestTemplateStorage = new RequestTemplateStorage();
     this.customRequestStorage = new CustomRequestStorage();
+    
+    // Initialize tasks domain storage (Stage 12)
+    this.taskInstanceStorage = new TaskInstanceStorage();
+    this.taskInstanceResponseStorage = new TaskInstanceResponseStorage();
+    this.taskTypeStorage = new TaskTypeStorage();
+    this.internalTaskStorage = new InternalTaskStorage();
+    this.taskTimeEntryStorage = new TaskTimeEntryStorage();
     
     // Register cross-domain helpers
     this.registerClientHelpers();
@@ -2234,6 +2253,233 @@ export class DatabaseStorage implements IStorage {
     return this.customRequestStorage.updateCustomRequestQuestionOrders(updates);
   }
 
+  // ============================================================================
+  // STAGE 12: Tasks Domain - 54 methods delegated
+  // ============================================================================
+
+  // Task Instance operations (11 methods) - TaskInstanceStorage
+  async createTaskInstance(instance: any) {
+    return this.taskInstanceStorage.createTaskInstance(instance);
+  }
+
+  async getTaskInstanceById(id: string) {
+    return this.taskInstanceStorage.getTaskInstanceById(id);
+  }
+
+  async getTaskInstancesByClientId(clientId: string) {
+    return this.taskInstanceStorage.getTaskInstancesByClientId(clientId);
+  }
+
+  async getTaskInstancesByClientPortalUserId(clientPortalUserId: string) {
+    return this.taskInstanceStorage.getTaskInstancesByClientPortalUserId(clientPortalUserId);
+  }
+
+  async getTaskInstancesByPersonId(personId: string) {
+    return this.taskInstanceStorage.getTaskInstancesByPersonId(personId);
+  }
+
+  async getTaskInstancesByPersonIdAndClientId(personId: string, clientId: string) {
+    return this.taskInstanceStorage.getTaskInstancesByPersonIdAndClientId(personId, clientId);
+  }
+
+  async getTaskInstancesByStatus(status: string) {
+    return this.taskInstanceStorage.getTaskInstancesByStatus(status);
+  }
+
+  async getAllTaskInstances(filters?: { status?: string; clientId?: string }) {
+    return this.taskInstanceStorage.getAllTaskInstances(filters);
+  }
+
+  async updateTaskInstance(id: string, instance: any) {
+    return this.taskInstanceStorage.updateTaskInstance(id, instance);
+  }
+
+  async deleteTaskInstance(id: string) {
+    return this.taskInstanceStorage.deleteTaskInstance(id);
+  }
+
+  async getTaskInstanceWithFullData(id: string) {
+    return this.taskInstanceStorage.getTaskInstanceWithFullData(id);
+  }
+
+  // Task Instance Response operations (6 methods) - TaskInstanceResponseStorage
+  async saveTaskInstanceResponse(response: any) {
+    return this.taskInstanceResponseStorage.saveTaskInstanceResponse(response);
+  }
+
+  async getTaskInstanceResponseById(id: string) {
+    return this.taskInstanceResponseStorage.getTaskInstanceResponseById(id);
+  }
+
+  async getTaskInstanceResponsesByTaskInstanceId(taskInstanceId: string) {
+    return this.taskInstanceResponseStorage.getTaskInstanceResponsesByTaskInstanceId(taskInstanceId);
+  }
+
+  async updateTaskInstanceResponse(id: string, response: any) {
+    return this.taskInstanceResponseStorage.updateTaskInstanceResponse(id, response);
+  }
+
+  async deleteTaskInstanceResponse(id: string) {
+    return this.taskInstanceResponseStorage.deleteTaskInstanceResponse(id);
+  }
+
+  async bulkSaveTaskInstanceResponses(taskInstanceId: string, responses: any[]) {
+    return this.taskInstanceResponseStorage.bulkSaveTaskInstanceResponses(taskInstanceId, responses);
+  }
+
+  // Task Type operations (6 methods) - TaskTypeStorage
+  async createTaskType(taskType: any) {
+    return this.taskTypeStorage.createTaskType(taskType);
+  }
+
+  async getTaskTypeById(id: string) {
+    return this.taskTypeStorage.getTaskTypeById(id);
+  }
+
+  async getAllTaskTypes(includeInactive = false) {
+    return this.taskTypeStorage.getAllTaskTypes(includeInactive);
+  }
+
+  async getActiveTaskTypes() {
+    return this.taskTypeStorage.getActiveTaskTypes();
+  }
+
+  async updateTaskType(id: string, taskType: any) {
+    return this.taskTypeStorage.updateTaskType(id, taskType);
+  }
+
+  async deleteTaskType(id: string) {
+    return this.taskTypeStorage.deleteTaskType(id);
+  }
+
+  // Internal Task operations (14 methods) - InternalTaskStorage
+  async createInternalTask(task: any) {
+    return this.internalTaskStorage.createInternalTask(task);
+  }
+
+  async getInternalTaskById(id: string) {
+    return this.internalTaskStorage.getInternalTaskById(id);
+  }
+
+  async getInternalTasksByAssignee(assigneeId: string, filters?: { status?: string; priority?: string }) {
+    return this.internalTaskStorage.getInternalTasksByAssignee(assigneeId, filters);
+  }
+
+  async getInternalTasksByCreator(creatorId: string, filters?: { status?: string; priority?: string }) {
+    return this.internalTaskStorage.getInternalTasksByCreator(creatorId, filters);
+  }
+
+  async getAllInternalTasks(filters?: { status?: string; priority?: string; assigneeId?: string; creatorId?: string }) {
+    return this.internalTaskStorage.getAllInternalTasks(filters);
+  }
+
+  async getInternalTasksByClient(clientId: string) {
+    return this.internalTaskStorage.getInternalTasksByClient(clientId);
+  }
+
+  async getInternalTasksByProject(projectId: string) {
+    return this.internalTaskStorage.getInternalTasksByProject(projectId);
+  }
+
+  async updateInternalTask(id: string, task: any) {
+    return this.internalTaskStorage.updateInternalTask(id, task);
+  }
+
+  async closeInternalTask(id: string, closeData: any, userId: string) {
+    return this.internalTaskStorage.closeInternalTask(id, closeData, userId);
+  }
+
+  async deleteInternalTask(id: string) {
+    return this.internalTaskStorage.deleteInternalTask(id);
+  }
+
+  async archiveInternalTask(id: string, userId: string) {
+    return this.internalTaskStorage.archiveInternalTask(id, userId);
+  }
+
+  async unarchiveInternalTask(id: string) {
+    return this.internalTaskStorage.unarchiveInternalTask(id);
+  }
+
+  async bulkReassignTasks(taskIds: string[], assignedTo: string) {
+    return this.internalTaskStorage.bulkReassignTasks(taskIds, assignedTo);
+  }
+
+  async bulkUpdateTaskStatus(taskIds: string[], status: string) {
+    return this.internalTaskStorage.bulkUpdateTaskStatus(taskIds, status);
+  }
+
+  // Task Connection operations (3 methods) - InternalTaskStorage
+  async createTaskConnection(connection: any) {
+    return this.internalTaskStorage.createTaskConnection(connection);
+  }
+
+  async getTaskConnectionsByTaskId(taskId: string) {
+    return this.internalTaskStorage.getTaskConnectionsByTaskId(taskId);
+  }
+
+  async deleteTaskConnection(id: string) {
+    return this.internalTaskStorage.deleteTaskConnection(id);
+  }
+
+  // Task Progress Notes operations (3 methods) - InternalTaskStorage
+  async createTaskProgressNote(note: any) {
+    return this.internalTaskStorage.createTaskProgressNote(note);
+  }
+
+  async getTaskProgressNotesByTaskId(taskId: string) {
+    return this.internalTaskStorage.getTaskProgressNotesByTaskId(taskId);
+  }
+
+  async deleteTaskProgressNote(id: string) {
+    return this.internalTaskStorage.deleteTaskProgressNote(id);
+  }
+
+  // Task Document operations (4 methods) - InternalTaskStorage
+  async createTaskDocument(document: any) {
+    return this.internalTaskStorage.createTaskDocument(document);
+  }
+
+  async getTaskDocument(id: string) {
+    return this.internalTaskStorage.getTaskDocument(id);
+  }
+
+  async getTaskDocuments(taskId: string) {
+    return this.internalTaskStorage.getTaskDocuments(taskId);
+  }
+
+  async deleteTaskDocument(id: string) {
+    return this.internalTaskStorage.deleteTaskDocument(id);
+  }
+
+  // Task Time Entry operations (5 methods) - TaskTimeEntryStorage
+  async createTaskTimeEntry(entry: any) {
+    return this.taskTimeEntryStorage.createTaskTimeEntry(entry);
+  }
+
+  async getTaskTimeEntriesByTaskId(taskId: string) {
+    return this.taskTimeEntryStorage.getTaskTimeEntriesByTaskId(taskId);
+  }
+
+  async getActiveTaskTimeEntry(taskId: string, userId: string) {
+    return this.taskTimeEntryStorage.getActiveTaskTimeEntry(taskId, userId);
+  }
+
+  async stopTaskTimeEntry(id: string, stopData: any) {
+    return this.taskTimeEntryStorage.stopTaskTimeEntry(id, stopData);
+  }
+
+  async deleteTaskTimeEntry(id: string) {
+    return this.taskTimeEntryStorage.deleteTaskTimeEntry(id);
+  }
+
+  // ✅ Stage 12 COMPLETE: All 54 tasks domain methods extracted and delegated:
+  // - TaskInstanceStorage: 11 methods (task instances CRUD, queries)
+  // - TaskInstanceResponseStorage: 6 methods (responses CRUD, bulk save)
+  // - TaskTypeStorage: 6 methods (task types CRUD)
+  // - InternalTaskStorage: 24 methods (internal tasks, connections, progress notes, documents)
+  // - TaskTimeEntryStorage: 5 methods (time entries CRUD)
+
   // ✅ Stage 11 COMPLETE: All 53 requests domain methods extracted and delegated:
   // - ChChangeRequestStorage: 11 methods (CH change requests)
   // - RequestTemplateStorage: 24 methods (template categories, templates, sections, questions)
@@ -2349,6 +2595,12 @@ export const storage = createDatabaseStorageProxy();
 //            threadId→canonicalConversationId, sentAt→sentDateTime, matchConfidence→clientMatchConfidence,
 //            conversationId→canonicalConversationId, email→emailLowercase)
 //          - Self-contained domain: No cross-domain helpers needed
-// Stage 9-14: [ ] Other domains - pending
+// Stage 12: ✅ Tasks domain extracted - 54 methods delegated (COMPLETE)
+//          - TaskInstanceStorage: 11 methods (task instances CRUD, queries)
+//          - TaskInstanceResponseStorage: 6 methods (responses CRUD, bulk save)
+//          - TaskTypeStorage: 6 methods (task types CRUD)
+//          - InternalTaskStorage: 24 methods (internal tasks, connections, progress notes, documents)
+//          - TaskTimeEntryStorage: 5 methods (time entries CRUD)
+// Stage 13-14: [ ] Other domains - pending
 // Stage 15: [ ] Final cleanup - remove old storage.ts
 // ============================================================================

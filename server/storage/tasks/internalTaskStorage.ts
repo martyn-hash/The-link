@@ -18,7 +18,8 @@ import {
   type InsertTaskDocument,
   type User
 } from "../../../shared/schema.js";
-import { eq, desc, and, inArray, alias } from "drizzle-orm";
+import { eq, desc, and, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 export class InternalTaskStorage {
   async createInternalTask(task: InsertInternalTask): Promise<InternalTask> {
