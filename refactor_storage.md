@@ -3,10 +3,7 @@
 ## Testing Notes
 **IMPORTANT**: When running browser tests:
 1. Login via root page (/) → password tab → use credentials: `admin@example.com` | `admin123`
-2. **Known Bug**: Projects page sometimes doesn't load properly. If this happens:
-   - Refresh the browser
-   - Restart the test from the beginning
-3. Always check these notes before starting any browser testing session
+2. Always check these notes before starting any browser testing session
 
 **Magic Link Testing Approach:**
 - Since we cannot access emails during testing, verify magic links by:
@@ -58,6 +55,11 @@
 - **Testing:** Backend storage verified via server boot and API accessibility
 - **Architect Approval:** Received - all configuration methods correctly extracted and delegated
 - **Key Achievement:** Updated helper registration to use modular exports instead of oldStorage
+- **Critical Bug Fixed:** getProject() was missing chronology and stageApprovalResponses in query
+  - Added chronology with full relations (assignee, changedBy, fieldResponses)
+  - Added stageApprovalResponses with field relation
+  - Applied proper null handling and array defaults
+  - E2E testing confirmed 7+ chronology entries now display correctly
 - **Ready for:** Stage 6 (Services domain) can now proceed
 
 ## Executive Summary

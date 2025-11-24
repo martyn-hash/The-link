@@ -233,6 +233,9 @@ export class ProjectStorage extends BaseStorage {
           orderBy: desc(projectChronology.timestamp),
         },
         stageApprovalResponses: {
+          with: {
+            field: true,
+          },
           orderBy: (stageApprovalResponses, { asc }) => [asc(stageApprovalResponses.createdAt)],
         },
       },
@@ -258,6 +261,10 @@ export class ProjectStorage extends BaseStorage {
         assignee: c.assignee || undefined,
         changedBy: c.changedBy || undefined,
         fieldResponses: c.fieldResponses || [],
+      })),
+      stageApprovalResponses: (project.stageApprovalResponses || []).map(r => ({
+        ...r,
+        field: r.field || undefined,
       })),
       stageRoleAssignee,
     } as ProjectWithRelations;
