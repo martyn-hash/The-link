@@ -663,18 +663,19 @@ export * from './base/types';
 
 ---
 
-### **STAGE 2: Extract Clients Domain**
+### **STAGE 2: Extract Clients Domain** ✅ [COMPLETED]
 **Estimated Time:** 4-6 hours  
+**Actual Time:** ~8 hours (including transaction fixes)
 **Risk Level:** MEDIUM
 
-#### Objectives:
+#### Objectives: [COMPLETED]
 Extract all client-related operations including CRUD, Companies House integration, and search.
 
-#### Files to Create:
-1. `server/storage/clients/clientStorage.ts`
-2. `server/storage/clients/companiesHouseStorage.ts`
-3. `server/storage/clients/searchStorage.ts`
-4. `server/storage/clients/index.ts`
+#### Files Created: [COMPLETED]
+1. `server/storage/clients/clientStorage.ts` ✓
+2. `server/storage/clients/companiesHouseStorage.ts` ✓
+3. `server/storage/clients/searchStorage.ts` ✓
+4. `server/storage/clients/index.ts` ✓
 
 #### Detailed Steps:
 

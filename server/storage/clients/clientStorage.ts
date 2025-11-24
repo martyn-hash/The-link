@@ -41,8 +41,9 @@ import type {
 export class ClientStorage extends BaseStorage {
   // ==================== Client CRUD Operations ====================
   
-  async createClient(clientData: InsertClient): Promise<Client> {
-    const [client] = await db.insert(clients).values(clientData).returning();
+  async createClient(clientData: InsertClient, tx?: any): Promise<Client> {
+    const dbConn = tx || db;
+    const [client] = await dbConn.insert(clients).values(clientData).returning();
     return client;
   }
 
@@ -145,63 +146,93 @@ export class ClientStorage extends BaseStorage {
 
   /**
    * Convert an individual to a company client.
-   * Requires helper to get person data.
+   * Uses transaction to ensure atomicity while preserving helper method side effects.
    */
   async convertIndividualToCompanyClient(
     personId: string, 
     companyData: Partial<InsertClient>, 
     oldIndividualClientId?: string
   ): Promise<{ newCompanyClient: Client; clientPerson: ClientPerson }> {
-    // Validate inputs
-    const personHelper = this.getHelper('getPersonById');
-    if (!personHelper) {
-      throw new Error('Person helper not available');
-    }
-    
-    const person = await personHelper(personId);
-    if (!person) {
-      throw new Error(`Person with ID '${personId}' not found`);
-    }
-
+    // Basic input validation (no DB operations)
     if (!companyData.name) {
       throw new Error('Company name is required');
     }
 
-    // If oldIndividualClientId provided, validate it
-    if (oldIndividualClientId) {
-      const oldClient = await this.getClientById(oldIndividualClientId);
-      if (!oldClient) {
-        throw new Error(`Individual client with ID '${oldIndividualClientId}' not found`);
-      }
-      if (oldClient.clientType !== 'individual') {
-        throw new Error(`Client '${oldClient.name}' is not an individual client`);
-      }
-    }
-
-    // Use transaction to ensure atomicity
+    // For now, we must use direct queries in the transaction since helpers 
+    // don't support transaction propagation. This is a known limitation
+    // that will be addressed in a future refactoring phase.
     return await db.transaction(async (tx) => {
-      // Create the new company client
+      // Validate person exists - use helper if it supports tx, otherwise direct query
+      const personHelper = this.getHelper('getPersonById');
+      let person;
+      
+      if (personHelper) {
+        // Try to use helper, but it doesn't support tx yet
+        person = await personHelper(personId);
+      } else {
+        // Fallback to direct query in transaction
+        const [p] = await tx
+          .select()
+          .from(people)
+          .where(eq(people.id, personId))
+          .limit(1);
+        person = p;
+      }
+      
+      if (!person) {
+        throw new Error(`Person with ID '${personId}' not found`);
+      }
+
+      // If oldIndividualClientId provided, validate it
+      if (oldIndividualClientId) {
+        // Use getClientById if available, but it doesn't support tx yet
+        const [oldClient] = await tx
+          .select()
+          .from(clients)
+          .where(eq(clients.id, oldIndividualClientId))
+          .limit(1);
+        
+        if (!oldClient) {
+          throw new Error(`Individual client with ID '${oldIndividualClientId}' not found`);
+        }
+        if (oldClient.clientType !== 'individual') {
+          throw new Error(`Client '${oldClient.name}' is not an individual client`);
+        }
+      }
+
+      // Create the new company client using transaction-aware helper
+      // This preserves UUID generation and other side effects
       const newCompanyClient = await this.createClient({
         name: companyData.name!,
         ...companyData,
         clientType: 'company'
-      } as InsertClient);
+      } as InsertClient, tx);
 
-      // Link the person to the new company with sensible default role
+      // Link the person to the new company using transaction-aware helper
+      // This preserves relationship handling and any side effects
       const clientPerson = await this.linkPersonToClient(
         newCompanyClient.id,
         personId,
         'Director', // Standard default role for company conversion
-        true // Set as primary contact
+        true,       // Set as primary contact
+        tx          // Pass transaction handle
       );
 
       return { newCompanyClient, clientPerson };
     });
   }
 
-  async linkPersonToClient(clientId: string, personId: string, officerRole?: string, isPrimaryContact?: boolean): Promise<ClientPerson> {
+  async linkPersonToClient(
+    clientId: string, 
+    personId: string, 
+    officerRole?: string, 
+    isPrimaryContact?: boolean,
+    tx?: any
+  ): Promise<ClientPerson> {
+    const dbConn = tx || db;
+    
     // Check if relationship already exists
-    const [existingLink] = await db
+    const [existingLink] = await dbConn
       .select()
       .from(clientPeople)
       .where(
@@ -214,11 +245,12 @@ export class ClientStorage extends BaseStorage {
     
     if (existingLink) {
       // Update existing relationship
-      const [updatedLink] = await db
+      const [updatedLink] = await dbConn
         .update(clientPeople)
         .set({
           officerRole,
-          isPrimaryContact: isPrimaryContact ?? false
+          isPrimaryContact: isPrimaryContact ?? false,
+          updatedAt: new Date()
         })
         .where(eq(clientPeople.id, existingLink.id))
         .returning();
@@ -236,7 +268,7 @@ export class ClientStorage extends BaseStorage {
       isPrimaryContact: isPrimaryContact ?? false
     };
     
-    const [clientPerson] = await db.insert(clientPeople).values(linkData).returning();
+    const [clientPerson] = await dbConn.insert(clientPeople).values(linkData).returning();
     return clientPerson;
   }
 
