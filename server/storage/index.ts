@@ -16,6 +16,7 @@ import {
 import { UserStorage } from './users/userStorage.js';
 import { UserActivityStorage } from './users/userActivityStorage.js';
 import { ClientStorage, CompaniesHouseStorage, SearchStorage } from './clients/index.js';
+import { PeopleStorage, ClientPeopleStorage } from './people/index.js';
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -37,6 +38,8 @@ export class DatabaseStorage implements IStorage {
   private clientStorage: ClientStorage;
   private companiesHouseStorage: CompaniesHouseStorage;
   private searchStorage: SearchStorage;
+  private peopleStorage: PeopleStorage;
+  private clientPeopleStorage: ClientPeopleStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -49,8 +52,21 @@ export class DatabaseStorage implements IStorage {
     this.companiesHouseStorage = new CompaniesHouseStorage();
     this.searchStorage = new SearchStorage();
     
-    // Register cross-domain helpers for client storage
+    // Initialize people domain storages
+    this.peopleStorage = new PeopleStorage();
+    this.clientPeopleStorage = new ClientPeopleStorage();
+    
+    // Register cross-domain helpers
     this.registerClientHelpers();
+    this.registerPeopleHelpers();
+  }
+
+  /**
+   * Register helpers for cross-domain dependencies in people storage
+   */
+  private registerPeopleHelpers() {
+    // No cross-domain helpers needed for Stage 3
+    // People domain operations are self-contained
   }
 
   /**
@@ -77,8 +93,8 @@ export class DatabaseStorage implements IStorage {
           await this.oldStorage.deleteClientService(service.id);
         }
       },
-      // Get person by ID (for conversion operations)
-      getPersonById: (personId: string) => this.oldStorage.getPersonById(personId),
+      // Get person by ID (for conversion operations) - now delegated to PeopleStorage
+      getPersonById: (personId: string) => this.peopleStorage.getPersonById(personId),
     });
     
     // CompaniesHouseStorage needs helpers for client CRUD
@@ -480,8 +496,74 @@ export class DatabaseStorage implements IStorage {
     return this.searchStorage.superSearch(query, limit);
   }
 
+  // ============================================================================
+  // PEOPLE DOMAIN - Delegated to PeopleStorage & ClientPeopleStorage
+  // ============================================================================
+  
+  // People CRUD operations
+  async createPerson(personData: any) {
+    return this.peopleStorage.createPerson(personData);
+  }
+
+  async getPersonById(id: string) {
+    return this.peopleStorage.getPersonById(id);
+  }
+
+  async getPersonByPersonNumber(personNumber: string) {
+    return this.peopleStorage.getPersonByPersonNumber(personNumber);
+  }
+
+  async getAllPeople() {
+    return this.peopleStorage.getAllPeople();
+  }
+
+  async getAllPeopleWithPortalStatus() {
+    return this.peopleStorage.getAllPeopleWithPortalStatus();
+  }
+
+  async getPersonWithDetails(id: string) {
+    return this.peopleStorage.getPersonWithDetails(id);
+  }
+
+  async updatePerson(id: string, personData: any) {
+    return this.peopleStorage.updatePerson(id, personData);
+  }
+
+  async deletePerson(id: string) {
+    return this.peopleStorage.deletePerson(id);
+  }
+
+  async upsertPersonFromCH(personData: any) {
+    return this.peopleStorage.upsertPersonFromCH(personData);
+  }
+
+  async findPeopleByNameAndBirthDate(firstName: string, lastName: string, year: number, month: number) {
+    return this.peopleStorage.findPeopleByNameAndBirthDate(firstName, lastName, year, month);
+  }
+
+  // Client-People relationship operations
+  async createClientPerson(relationship: any) {
+    return this.clientPeopleStorage.createClientPerson(relationship);
+  }
+
+  async getClientPeopleByClientId(clientId: string) {
+    return this.clientPeopleStorage.getClientPeopleByClientId(clientId);
+  }
+
+  async getClientPeopleByPersonId(personId: string) {
+    return this.clientPeopleStorage.getClientPeopleByPersonId(personId);
+  }
+
+  async updateClientPerson(id: string, relationship: any) {
+    return this.clientPeopleStorage.updateClientPerson(id, relationship);
+  }
+
+  async deleteClientPerson(id: string) {
+    return this.clientPeopleStorage.deleteClientPerson(id);
+  }
+
   // Delegate all other methods to old storage
-  // (This is a catch-all for the remaining ~240 methods)
+  // (This is a catch-all for the remaining ~225 methods)
 
   // Add proxy for all other methods using Proxy pattern for complete coverage
   // This ensures any method not explicitly delegated above goes to oldStorage
@@ -525,6 +607,10 @@ export const storage = createDatabaseStorageProxy();
 //          - ClientStorage: 27 methods (CRUD, relationships, chronology, tags, aliases, domains)
 //          - CompaniesHouseStorage: 2 methods (CH integration)
 //          - SearchStorage: 1 method (super search)
-// Stage 3-14: [ ] Other domains - pending
+// Stage 3: ✅ People domain extracted - 15 methods delegated
+//          - PeopleStorage: 10 methods (CRUD, portal status, CH sync, duplicate detection)
+//          - ClientPeopleStorage: 5 methods (relationship CRUD)
+//          Note: linkPersonToClient, unlinkPersonFromClient already in ClientStorage from Stage 2
+// Stage 4-14: [ ] Other domains - pending
 // Stage 15: [ ] Final cleanup - remove old storage.ts
 // ============================================================================

@@ -18,11 +18,12 @@ import type {
  * 
  * Handles:
  * - Creating, reading, updating, and deleting client-person relationships
- * - Linking and unlinking people to/from clients
- * - Managing officer roles and primary contact flags
+ * 
+ * Note: linkPersonToClient, unlinkPersonFromClient, convertIndividualToCompanyClient,
+ * and getClientWithPeople were already extracted to ClientStorage in Stage 2.
  */
 export class ClientPeopleStorage extends BaseStorage {
-  // ==================== Client-People Relationship Operations ====================
+  // ==================== Client-People Relationship CRUD ====================
   
   async createClientPerson(relationship: InsertClientPerson): Promise<ClientPerson> {
     const [clientPerson] = await db.insert(clientPeople).values(relationship).returning();
@@ -84,59 +85,5 @@ export class ClientPeopleStorage extends BaseStorage {
     if (result.length === 0) {
       throw new Error(`Client-person relationship with ID '${id}' not found`);
     }
-  }
-
-  // ==================== Link/Unlink Operations ====================
-
-  async linkPersonToClient(clientId: string, personId: string, officerRole?: string, isPrimaryContact?: boolean): Promise<ClientPerson> {
-    // Check if relationship already exists
-    const [existingLink] = await db
-      .select()
-      .from(clientPeople)
-      .where(
-        and(
-          eq(clientPeople.clientId, clientId),
-          eq(clientPeople.personId, personId)
-        )
-      )
-      .limit(1);
-    
-    if (existingLink) {
-      // Update existing relationship
-      const [updatedLink] = await db
-        .update(clientPeople)
-        .set({
-          officerRole,
-          isPrimaryContact: isPrimaryContact ?? false
-        })
-        .where(eq(clientPeople.id, existingLink.id))
-        .returning();
-      return updatedLink;
-    }
-    
-    // Create new relationship
-    const relationshipId = `cp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
-    const linkData = {
-      id: relationshipId,
-      clientId,
-      personId,
-      officerRole,
-      isPrimaryContact: isPrimaryContact ?? false
-    };
-    
-    const [clientPerson] = await db.insert(clientPeople).values(linkData).returning();
-    return clientPerson;
-  }
-
-  async unlinkPersonFromClient(clientId: string, personId: string): Promise<void> {
-    await db
-      .delete(clientPeople)
-      .where(
-        and(
-          eq(clientPeople.clientId, clientId),
-          eq(clientPeople.personId, personId)
-        )
-      );
   }
 }
