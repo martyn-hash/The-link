@@ -411,6 +411,7 @@ export const projects = pgTable("projects", {
   index("idx_projects_project_type_id").on(table.projectTypeId),
   index("idx_projects_archived").on(table.archived),
   index("idx_projects_client_id").on(table.clientId),
+  // Additional indexes for common filter operations
   index("idx_projects_current_status").on(table.currentStatus),
   index("idx_projects_due_date").on(table.dueDate),
   index("idx_projects_inactive").on(table.inactive),

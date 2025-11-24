@@ -503,13 +503,13 @@ export class ProjectStorage extends BaseStorage {
             service: true,
           },
         },
-        // Load only most recent chronology entry for kanban stage timing (was loading ALL entries)
+        // Load chronology without expensive fieldResponses join (was causing timeout)
         chronology: {
-          limit: 1,
           orderBy: desc(projectChronology.timestamp),
           with: {
             assignee: true,
             changedBy: true,
+            // fieldResponses join removed for performance - only loaded in getProject() detail view
           },
         },
       },
@@ -705,9 +705,8 @@ export class ProjectStorage extends BaseStorage {
             service: true,
           },
         },
-        // Load only most recent chronology entry for kanban stage timing
+        // Load chronology without expensive fieldResponses join
         chronology: {
-          limit: 1,
           orderBy: desc(projectChronology.timestamp),
           with: {
             assignee: true,
@@ -871,9 +870,8 @@ export class ProjectStorage extends BaseStorage {
             service: true,
           },
         },
-        // Load only most recent chronology entry for kanban stage timing
+        // Load chronology without expensive fieldResponses join
         chronology: {
-          limit: 1,
           orderBy: desc(projectChronology.timestamp),
           with: {
             assignee: true,
@@ -937,9 +935,8 @@ export class ProjectStorage extends BaseStorage {
             service: true,
           },
         },
-        // Load only most recent chronology entry for kanban stage timing
+        // Load chronology without expensive fieldResponses join
         chronology: {
-          limit: 1,
           orderBy: desc(projectChronology.timestamp),
           with: {
             assignee: true,
