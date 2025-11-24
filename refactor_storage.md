@@ -109,12 +109,24 @@ Before each browser test:
 - **Helper Injection:**
   - Registered 7 helpers in ServiceAssignmentStorage: getServiceByProjectTypeId, getUser, getFallbackUser, getDefaultStage, getWorkRoleById
   - Updated registerProjectHelpers() to delegate to new modules instead of oldStorage
-- **Testing:** Backend storage verified via server boot, API endpoints respond correctly
+- **Critical Bug Fixed During Testing:**
+  - Initial browser test revealed: `TypeError: this.userStorage.getFallbackUser is not a function`
+  - Root cause: getFallbackUser was never added to UserStorage during Stage 1
+  - Fix: Added getFallbackUser() to UserStorage (lines 490-496) and facade delegation (lines 222-224)
+  - Result: Project creation now works correctly with proper staff assignments
+- **Testing:** 
+  - Backend storage verified via server boot, API endpoints respond correctly
+  - E2E browser test verified project creation workflow:
+    - Projects created successfully via "Create Projects" button on Scheduled Services page
+    - Backend API returns correct data with bookkeeperId, clientManagerId, currentAssigneeId populated
+    - No "getFallbackUser is not a function" errors
+    - Helper delegation works correctly across domains
 - **Architect Approval:** Received - PASS rating
   - All 55 service methods properly extracted and delegated
   - Critical helper delegation fixed (resolveServiceOwner, resolveProjectAssignments)
   - Backward compatibility maintained
   - Server boots cleanly with no runtime errors
+- **Key Learning:** E2E testing is essential - revealed missing method that would have broken production workflows
 - **Ready for:** Stage 7 can now proceed
 
 ## Executive Summary
