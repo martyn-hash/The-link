@@ -17,7 +17,18 @@ import { UserStorage } from './users/userStorage.js';
 import { UserActivityStorage } from './users/userActivityStorage.js';
 import { ClientStorage, CompaniesHouseStorage, SearchStorage } from './clients/index.js';
 import { PeopleStorage, ClientPeopleStorage } from './people/index.js';
-import { ProjectStorage, ProjectChronologyStorage } from './projects/index.js';
+import { 
+  ProjectStorage, 
+  ProjectChronologyStorage, 
+  ProjectTypesStorage, 
+  ProjectStagesStorage, 
+  ProjectApprovalsStorage,
+  getProjectTypeByName,
+  validateStageReasonMapping,
+  validateRequiredFields,
+  getDefaultStage,
+  validateProjectStatus,
+} from './projects/index.js';
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -43,6 +54,9 @@ export class DatabaseStorage implements IStorage {
   private clientPeopleStorage: ClientPeopleStorage;
   private projectStorage: ProjectStorage;
   private projectChronologyStorage: ProjectChronologyStorage;
+  private projectTypesStorage: ProjectTypesStorage;
+  private projectStagesStorage: ProjectStagesStorage;
+  private projectApprovalsStorage: ProjectApprovalsStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -62,6 +76,9 @@ export class DatabaseStorage implements IStorage {
     // Initialize projects domain storages
     this.projectStorage = new ProjectStorage();
     this.projectChronologyStorage = new ProjectChronologyStorage();
+    this.projectTypesStorage = new ProjectTypesStorage();
+    this.projectStagesStorage = new ProjectStagesStorage();
+    this.projectApprovalsStorage = new ProjectApprovalsStorage();
     
     // Register cross-domain helpers
     this.registerClientHelpers();
@@ -83,9 +100,14 @@ export class DatabaseStorage implements IStorage {
   private registerProjectHelpers() {
     // ProjectStorage needs helpers from configuration, services, notifications, and messaging domains
     this.projectStorage.registerHelpers({
-      // Stage 4 Part 1 helpers
-      getDefaultStage: () => this.oldStorage.getDefaultStage(),
-      validateProjectStatus: (status: string) => this.oldStorage.validateProjectStatus(status),
+      // Stage 5 helpers - now from modular ProjectStagesStorage
+      getDefaultStage: getDefaultStage(this.projectStagesStorage),
+      validateProjectStatus: validateProjectStatus(this.projectStagesStorage),
+      validateStageReasonMapping: validateStageReasonMapping(this.projectStagesStorage),
+      validateRequiredFields: validateRequiredFields(this.projectStagesStorage),
+      getProjectTypeByName: getProjectTypeByName(this.projectTypesStorage),
+      
+      // Services domain (still in oldStorage - will be extracted in future stage)
       getServiceByProjectTypeId: (projectTypeId: string) => this.oldStorage.getServiceByProjectTypeId(projectTypeId),
       getClientServiceByClientAndProjectType: (clientId: string, projectTypeId: string) => 
         this.oldStorage.getClientServiceByClientAndProjectType(clientId, projectTypeId),
@@ -94,15 +116,11 @@ export class DatabaseStorage implements IStorage {
       resolveServiceOwner: (clientId: string, projectTypeId: string) => 
         this.oldStorage.resolveServiceOwner(clientId, projectTypeId),
       resolveStageRoleAssignee: (project: any) => this.oldStorage.resolveStageRoleAssignee(project),
-      
-      // Stage 4 Part 2 helpers (for complex methods)
-      validateStageReasonMapping: (stageId: string, reasonId: string) => 
-        this.oldStorage.validateStageReasonMapping(stageId, reasonId),
-      validateRequiredFields: (reasonId: string, fieldResponses: any[]) => 
-        this.oldStorage.validateRequiredFields(reasonId, fieldResponses),
       getWorkRoleById: (workRoleId: string) => this.oldStorage.getWorkRoleById(workRoleId),
       resolveRoleAssigneeForClient: (clientId: string, projectTypeId: string, roleName: string) => 
         this.oldStorage.resolveRoleAssigneeForClient(clientId, projectTypeId, roleName),
+      
+      // Notifications and messaging domains (still in oldStorage - will be extracted in future stage)
       sendStageChangeNotifications: (projectId: string, newStatus: string, oldStatus: string) => 
         this.oldStorage.sendStageChangeNotifications(projectId, newStatus, oldStatus),
       createProjectMessageThread: (data: any) => this.oldStorage.createProjectMessageThread(data),
@@ -110,9 +128,11 @@ export class DatabaseStorage implements IStorage {
       createProjectMessage: (data: any) => this.oldStorage.createProjectMessage(data),
       cancelScheduledNotificationsForProject: (projectId: string, reason: string) => 
         this.oldStorage.cancelScheduledNotificationsForProject(projectId, reason),
-      getProjectTypeByName: (name: string) => this.oldStorage.getProjectTypeByName(name),
-      getClientByName: (name: string) => this.oldStorage.getClientByName(name),
-      getUserByEmail: (email: string) => this.userStorage.getUserByEmail(email), // Delegate to UserStorage
+      
+      // Client domain - delegate to ClientStorage
+      getClientByName: (name: string) => this.clientStorage.getClientByName(name),
+      // User domain - delegate to UserStorage
+      getUserByEmail: (email: string) => this.userStorage.getUserByEmail(email),
     });
   }
 
@@ -692,6 +712,247 @@ export class DatabaseStorage implements IStorage {
 
   // NOTE: createClientChronologyEntry and getClientChronology are part of Stage 2 (Clients domain)
   // and are already delegated to clientStorage above (lines 431-436)
+
+  // ============================================
+  // STAGE 5: PROJECT CONFIGURATION (51 methods)
+  // ============================================
+
+  // ProjectTypesStorage methods (9 methods)
+  async getAllProjectTypes() {
+    return this.projectTypesStorage.getAllProjectTypes();
+  }
+
+  async getProjectTypeById(id: string) {
+    return this.projectTypesStorage.getProjectTypeById(id);
+  }
+
+  async createProjectType(projectType: any) {
+    return this.projectTypesStorage.createProjectType(projectType);
+  }
+
+  async updateProjectType(id: string, projectType: any) {
+    return this.projectTypesStorage.updateProjectType(id, projectType);
+  }
+
+  async deleteProjectType(id: string) {
+    return this.projectTypesStorage.deleteProjectType(id);
+  }
+
+  async getProjectTypeByName(name: string) {
+    return this.projectTypesStorage.getProjectTypeByName(name);
+  }
+
+  async countActiveProjectsUsingProjectType(projectTypeId: string) {
+    return this.projectTypesStorage.countActiveProjectsUsingProjectType(projectTypeId);
+  }
+
+  async getProjectTypeDependencySummary(projectTypeId: string) {
+    return this.projectTypesStorage.getProjectTypeDependencySummary(projectTypeId);
+  }
+
+  async forceDeleteProjectType(projectTypeId: string, confirmName: string) {
+    return this.projectTypesStorage.forceDeleteProjectType(projectTypeId, confirmName);
+  }
+
+  // ProjectStagesStorage methods (28 methods)
+  // Kanban stages (6 methods)
+  async getAllKanbanStages() {
+    return this.projectStagesStorage.getAllKanbanStages();
+  }
+
+  async getKanbanStagesByProjectTypeId(projectTypeId: string) {
+    return this.projectStagesStorage.getKanbanStagesByProjectTypeId(projectTypeId);
+  }
+
+  async getKanbanStagesByServiceId(serviceId: string) {
+    return this.projectStagesStorage.getKanbanStagesByServiceId(serviceId);
+  }
+
+  async createKanbanStage(stage: any) {
+    return this.projectStagesStorage.createKanbanStage(stage);
+  }
+
+  async updateKanbanStage(id: string, stage: any) {
+    return this.projectStagesStorage.updateKanbanStage(id, stage);
+  }
+
+  async deleteKanbanStage(id: string) {
+    return this.projectStagesStorage.deleteKanbanStage(id);
+  }
+
+  // Stage validation (7 methods)
+  async isStageNameInUse(stageName: string) {
+    return this.projectStagesStorage.isStageNameInUse(stageName);
+  }
+
+  async validateProjectStatus(status: string) {
+    return this.projectStagesStorage.validateProjectStatus(status);
+  }
+
+  async getStageById(id: string) {
+    return this.projectStagesStorage.getStageById(id);
+  }
+
+  async validateStageCanBeDeleted(id: string) {
+    return this.projectStagesStorage.validateStageCanBeDeleted(id);
+  }
+
+  async validateStageCanBeRenamed(id: string, newName: string) {
+    return this.projectStagesStorage.validateStageCanBeRenamed(id, newName);
+  }
+
+  async getDefaultStage() {
+    return this.projectStagesStorage.getDefaultStage();
+  }
+
+  // Change reasons (5 methods)
+  async getAllChangeReasons() {
+    return this.projectStagesStorage.getAllChangeReasons();
+  }
+
+  async getChangeReasonsByProjectTypeId(projectTypeId: string) {
+    return this.projectStagesStorage.getChangeReasonsByProjectTypeId(projectTypeId);
+  }
+
+  async createChangeReason(reason: any) {
+    return this.projectStagesStorage.createChangeReason(reason);
+  }
+
+  async updateChangeReason(id: string, reason: any) {
+    return this.projectStagesStorage.updateChangeReason(id, reason);
+  }
+
+  async deleteChangeReason(id: string) {
+    return this.projectStagesStorage.deleteChangeReason(id);
+  }
+
+  // Stage-reason mappings (6 methods)
+  async getAllStageReasonMaps() {
+    return this.projectStagesStorage.getAllStageReasonMaps();
+  }
+
+  async createStageReasonMap(mapping: any) {
+    return this.projectStagesStorage.createStageReasonMap(mapping);
+  }
+
+  async getStageReasonMapsByStageId(stageId: string) {
+    return this.projectStagesStorage.getStageReasonMapsByStageId(stageId);
+  }
+
+  async deleteStageReasonMap(id: string) {
+    return this.projectStagesStorage.deleteStageReasonMap(id);
+  }
+
+  async validateStageReasonMapping(stageId: string, reasonId: string) {
+    return this.projectStagesStorage.validateStageReasonMapping(stageId, reasonId);
+  }
+
+  async getValidChangeReasonsForStage(stageId: string) {
+    return this.projectStagesStorage.getValidChangeReasonsForStage(stageId);
+  }
+
+  // Custom fields (6 methods)
+  async getAllReasonCustomFields() {
+    return this.projectStagesStorage.getAllReasonCustomFields();
+  }
+
+  async getReasonCustomFieldsByReasonId(reasonId: string) {
+    return this.projectStagesStorage.getReasonCustomFieldsByReasonId(reasonId);
+  }
+
+  async createReasonCustomField(field: any) {
+    return this.projectStagesStorage.createReasonCustomField(field);
+  }
+
+  async updateReasonCustomField(id: string, field: any) {
+    return this.projectStagesStorage.updateReasonCustomField(id, field);
+  }
+
+  async deleteReasonCustomField(id: string) {
+    return this.projectStagesStorage.deleteReasonCustomField(id);
+  }
+
+  async validateRequiredFields(reasonId: string, fieldResponses?: any[]) {
+    return this.projectStagesStorage.validateRequiredFields(reasonId, fieldResponses);
+  }
+
+  // Field responses (2 methods)
+  async createReasonFieldResponse(response: any) {
+    return this.projectStagesStorage.createReasonFieldResponse(response);
+  }
+
+  async getReasonFieldResponsesByChronologyId(chronologyId: string) {
+    return this.projectStagesStorage.getReasonFieldResponsesByChronologyId(chronologyId);
+  }
+
+  // ProjectApprovalsStorage methods (14 methods)
+  // Stage approvals (6 methods)
+  async getAllStageApprovals() {
+    return this.projectApprovalsStorage.getAllStageApprovals();
+  }
+
+  async getStageApprovalsByProjectTypeId(projectTypeId: string) {
+    return this.projectApprovalsStorage.getStageApprovalsByProjectTypeId(projectTypeId);
+  }
+
+  async createStageApproval(approval: any) {
+    return this.projectApprovalsStorage.createStageApproval(approval);
+  }
+
+  async updateStageApproval(id: string, approval: any) {
+    return this.projectApprovalsStorage.updateStageApproval(id, approval);
+  }
+
+  async deleteStageApproval(id: string) {
+    return this.projectApprovalsStorage.deleteStageApproval(id);
+  }
+
+  async getStageApprovalById(id: string) {
+    return this.projectApprovalsStorage.getStageApprovalById(id);
+  }
+
+  // Stage approval fields (5 methods)
+  async getAllStageApprovalFields() {
+    return this.projectApprovalsStorage.getAllStageApprovalFields();
+  }
+
+  async getStageApprovalFieldsByApprovalId(approvalId: string) {
+    return this.projectApprovalsStorage.getStageApprovalFieldsByApprovalId(approvalId);
+  }
+
+  async createStageApprovalField(field: any) {
+    return this.projectApprovalsStorage.createStageApprovalField(field);
+  }
+
+  async updateStageApprovalField(id: string, field: any) {
+    return this.projectApprovalsStorage.updateStageApprovalField(id, field);
+  }
+
+  async deleteStageApprovalField(id: string) {
+    return this.projectApprovalsStorage.deleteStageApprovalField(id);
+  }
+
+  // Stage approval responses (3 methods)
+  async createStageApprovalResponse(response: any) {
+    return this.projectApprovalsStorage.createStageApprovalResponse(response);
+  }
+
+  async upsertStageApprovalResponse(response: any) {
+    return this.projectApprovalsStorage.upsertStageApprovalResponse(response);
+  }
+
+  async getStageApprovalResponsesByProjectId(projectId: string) {
+    return this.projectApprovalsStorage.getStageApprovalResponsesByProjectId(projectId);
+  }
+
+  async validateStageApprovalResponses(approvalId: string, responses: any[]) {
+    return this.projectApprovalsStorage.validateStageApprovalResponses(approvalId, responses);
+  }
+
+  // ✅ Stage 5 COMPLETE: All 51 project configuration methods extracted and delegated:
+  // - ProjectTypesStorage: 9 methods (project type CRUD, dependencies, force delete)
+  // - ProjectStagesStorage: 28 methods (kanban stages, validation, change reasons, mappings, custom fields)
+  // - ProjectApprovalsStorage: 14 methods (stage approvals, fields, responses, validation)
 
   // ✅ Stage 4 Part 2 COMPLETE: All 8 complex project methods extracted and delegated:
   // - getAllProjects (~200 lines with complex filtering)
