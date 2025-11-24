@@ -1,4 +1,4 @@
-import { storage } from '../storage';
+import { storage } from '../storage/index';
 import { downloadEmailAttachment } from '../utils/userOutlookClient';
 import { Storage } from '@google-cloud/storage';
 import crypto from 'crypto';

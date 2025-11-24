@@ -11,7 +11,7 @@
  * - Cleans up resolved emails from quarantine
  */
 
-import { storage } from '../storage';
+import { storage } from '../storage/index';
 import type { UnmatchedEmail, ClientDomainAllowlist } from '@shared/schema';
 
 export class EmailResolverService {

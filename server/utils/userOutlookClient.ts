@@ -1,5 +1,5 @@
 import { Client } from '@microsoft/microsoft-graph-client';
-import { storage } from '../storage';
+import { storage } from '../storage/index';
 import { decryptTokenFromStorage, encryptTokenForStorage } from './tokenEncryption';
 import { nanoid } from 'nanoid';
 

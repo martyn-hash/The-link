@@ -11,7 +11,7 @@
 
 import { Client } from '@microsoft/microsoft-graph-client';
 import { getUserOutlookClient } from '../utils/userOutlookClient';
-import { storage } from '../storage';
+import { storage } from '../storage/index';
 import { nanoid } from 'nanoid';
 import type { EmailMessage, EmailThread, ClientDomainAllowlist, InsertEmailMessage } from '@shared/schema';
 import { emailAttachmentService } from './emailAttachmentService';

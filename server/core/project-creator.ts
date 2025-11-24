@@ -12,7 +12,7 @@
  * ==========================================
  */
 
-import { storage } from "../storage";
+import { storage } from "../storage/index";
 import { normalizeProjectMonth } from "@shared/schema";
 import { scheduleProjectDueDateNotifications } from "../notification-scheduler";
 import type {

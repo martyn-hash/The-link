@@ -1,5 +1,5 @@
 import { SDK } from '@ringcentral/sdk';
-import { storage } from '../storage';
+import { storage } from '../storage/index';
 import { decryptTokenFromStorage, encryptTokenForStorage } from './tokenEncryption';
 import { nanoid } from 'nanoid';
 

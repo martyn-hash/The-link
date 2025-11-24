@@ -8,7 +8,7 @@ import { db } from '../db';
 import { messages, messageThreads, documents } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 import { verifyJWT } from '../portalAuth';
-import { storage } from '../storage';
+import { storage } from '../storage/index';
 
 /**
  * Verifies if a user has access to a specific message thread
