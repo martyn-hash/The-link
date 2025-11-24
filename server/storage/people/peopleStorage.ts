@@ -33,12 +33,12 @@ export class PeopleStorage extends BaseStorage {
   
   async createPerson(personData: InsertPerson): Promise<Person> {
     // Generate ID if not provided (for database compatibility)
-    const personWithId = personData.id 
+    const personWithId = (personData as any).id 
       ? personData 
       : { 
           ...personData, 
           id: `person_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` 
-        } as InsertPerson;
+        };
     
     const [person] = await db.insert(people).values(personWithId).returning();
     return person;
