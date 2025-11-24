@@ -249,6 +249,10 @@ export class ProjectStorage extends BaseStorage {
 
     return {
       ...project,
+      currentAssignee: project.currentAssignee || undefined,
+      bookkeeper: project.bookkeeper || undefined,
+      clientManager: project.clientManager || undefined,
+      projectOwner: project.projectOwner || undefined,
       chronology: project.chronology.map(c => ({
         ...c,
         assignee: c.assignee || undefined,
