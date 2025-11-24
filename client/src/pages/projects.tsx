@@ -87,7 +87,7 @@ export default function Projects() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [serviceFilter, setServiceFilter] = useState("all");
@@ -378,22 +378,22 @@ export default function Projects() {
     setTaskAssigneeFilter("all");
     setServiceOwnerFilter("all");
     setUserFilter("all");
-    setShowArchived(false);
+    setShowArchived(true); // Show archived/completed projects when viewing "all" projects
     setDynamicDateFilter("all");
     setCustomDateRange({ from: undefined, to: undefined });
     setBehindScheduleOnly(false);
     setServiceDueDateFilter("all");
     
-    // Clear URL parameters to prevent them from being reapplied by useEffect
-    const newUrl = window.location.pathname;
-    window.history.replaceState({}, '', newUrl);
-    
     // Switch to list view (default view mode)
     setViewMode("list");
     
+    // Use wouter's setLocation to navigate to clean URL
+    // This triggers the useEffect hook properly and clears any URL parameters
+    setLocation('/projects');
+    
     toast({
       title: "Filters Reset",
-      description: "Showing all projects",
+      description: "Showing all projects (including archived)",
     });
   };
 
