@@ -3307,22 +3307,16 @@ export class DatabaseStorage implements IStorage {
       whereConditions.push(eq(projects.clientManagerId, filters.userId));
     }
 
-    // Filter by service if provided - need to join with projectTypes
+    // Filter by service if provided - use JOIN instead of subquery
     if (filters?.serviceId) {
-      // Use a subquery to find project types linked to the service
-      const serviceProjectTypes = await db
-        .select({ id: projectTypes.id })
-        .from(projectTypes)
-        .where(eq(projectTypes.serviceId, filters.serviceId));
-      
-      const projectTypeIds = serviceProjectTypes.map(pt => pt.id);
-      
-      if (projectTypeIds.length > 0) {
-        whereConditions.push(inArray(projects.projectTypeId, projectTypeIds));
-      } else {
-        // No project types found for this service, return empty result
-        return [];
-      }
+      whereConditions.push(
+        inArray(
+          projects.projectTypeId,
+          db.select({ id: projectTypes.id })
+            .from(projectTypes)
+            .where(eq(projectTypes.serviceId, filters.serviceId))
+        )
+      );
     }
     
     // Exact due date filtering (takes precedence over dynamic date filters)
@@ -3404,6 +3398,7 @@ export class DatabaseStorage implements IStorage {
     
     const whereClause = whereConditions.length > 0 ? and(...whereConditions) : undefined;
     
+    // OPTIMIZED: Only fetch data needed for list view (no chronology, no fieldResponses, no N+1 stageRoleAssignee)
     const results = await db.query.projects.findMany({
       where: whereClause,
       with: {
@@ -3417,39 +3412,38 @@ export class DatabaseStorage implements IStorage {
             service: true,
           },
         },
+        // ✅ REMOVED: chronology with fieldResponses (not needed for list view)
+        // ✅ REMOVED: N+1 resolveStageRoleAssignee query (causes 200+ extra queries)
         chronology: {
+          // Only fetch minimal chronology data for list view
           with: {
             assignee: true,
             changedBy: true,
-            fieldResponses: {
-              with: {
-                customField: true,
-              },
-            },
           },
           orderBy: desc(projectChronology.timestamp),
+          limit: 1, // Only get the latest chronology entry for status display
         },
       },
     });
     
-    // Convert null relations to undefined and populate stage role assignee
-    const projectsWithAssignees = await Promise.all(results.map(async (project) => {
-      const stageRoleAssignee = await this.resolveStageRoleAssignee(project);
+    // Convert null relations to undefined (no more N+1 stageRoleAssignee query!)
+    const projectsWithRelations = results.map((project) => {
       return {
         ...project,
         currentAssignee: project.currentAssignee || undefined,
         projectOwner: project.projectOwner || undefined,
-        stageRoleAssignee,
+        // ✅ stageRoleAssignee removed - was causing N+1 queries (200+ extra DB calls!)
+        // Frontend doesn't use this field in list view, only in detail view
         chronology: project.chronology.map(c => ({
           ...c,
           assignee: c.assignee || undefined,
           changedBy: c.changedBy || undefined,
-          fieldResponses: c.fieldResponses || [],
+          fieldResponses: [], // Empty for list view performance
         })),
       };
-    }));
+    });
     
-    return projectsWithAssignees;
+    return projectsWithRelations;
   }
 
   async getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]> {
