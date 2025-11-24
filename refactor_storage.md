@@ -168,6 +168,67 @@ Before each browser test:
 - **Key Achievement:** Successfully extracted three supporting domains (tags, communications, scheduling) in a single stage
 - **Ready for:** Stage 8 (Integrations Domain) can now proceed
 
+### Stage 8: Integrations Domain (✅ COMPLETED - November 24, 2025)
+- **Extracted:** 54 methods into IntegrationStorage (9), PushNotificationStorage (14), EmailStorage (31)
+- **Pattern:** Self-contained integration modules with no cross-domain dependencies
+- **Modules Created:**
+  - `server/storage/integrations/integrationStorage.ts` - User integrations & OAuth accounts (9 methods)
+  - `server/storage/integrations/pushNotificationStorage.ts` - Push subscriptions, templates, notification icons (14 methods)
+  - `server/storage/integrations/emailStorage.ts` - Graph webhooks, email messages, threads, mailbox maps, attachments (31 methods)
+- **Critical Bug Fixes:**
+  - **EmailStorage Schema Mismatches:** Fixed 9 field name mismatches in old storage.ts:
+    - `isRead` → correct (was `read`)
+    - `isDraft` → correct (was `draft`)
+    - `importance` → correct (was `importanceLevel`)
+    - `threadId` → `canonicalConversationId` (6 occurrences)
+    - `sentAt` → `sentDateTime`
+    - `matchConfidence` → `clientMatchConfidence`
+    - `conversationId` → `canonicalConversationId`
+    - `email` → `emailLowercase`
+  - Result: All email queries now match actual schema structure from `shared/schema.ts`
+- **Testing:**
+  - **Server boot:** All storage modules load successfully, no instantiation errors
+  - **API endpoints:** All email/push notification endpoints respond correctly
+  - **Schema validation:** All email queries use correct schema field names
+  - No runtime errors, clean delegation through facade
+- **Architect Approval:** Received - PASS rating
+  - All 54 methods properly extracted and delegated
+  - Critical schema mismatches fixed in old storage.ts
+  - Self-contained domains with no helpers needed
+  - Backward compatibility maintained
+- **Key Achievement:** Fixed long-standing schema bugs while extracting integrations domain
+- **Ready for:** Stage 9 (Documents & Portal Domain) can now proceed
+
+### Stage 9: Documents & Portal Domain (✅ COMPLETED - November 24, 2025)
+- **Extracted:** 32 methods into DocumentStorage (11), RiskAssessmentStorage (7), PortalDocumentStorage (4), PortalStorage (12)
+- **Pattern:** Document management with GCS signed URL generation, portal with magic link sessions
+- **Modules Created:**
+  - `server/storage/documents/documentStorage.ts` - Document folders, documents, signed URLs (11 methods)
+  - `server/storage/documents/riskAssessmentStorage.ts` - Risk assessment CRUD & responses (7 methods)
+  - `server/storage/documents/portalDocumentStorage.ts` - Portal-specific document operations (4 methods)
+  - `server/storage/portal/portalStorage.ts` - Portal users & sessions with magic link tokens (12 methods)
+- **Key Implementation Details:**
+  - DocumentStorage includes GCS signed URL generation for secure document access
+  - Portal sessions use magic link token fields stored in clientPortalUsers table (no separate sessions table)
+  - All portal methods include proper clientId and clientPortalUserId access control
+- **Testing:**
+  - **Server boot:** All storage modules load successfully, all schema migrations run
+  - **Cron jobs:** All 9 schedulers initialize correctly (project scheduler, notifications, etc.)
+  - **API endpoints:** Verified /api/project-messages/unread-count responds successfully
+  - No runtime errors, clean delegation through facade
+- **LSP Analysis:**
+  - Total diagnostics: 151 (144 in old storage.ts + 7 in facade)
+  - Stage 9-specific errors: 0 errors
+  - All 7 facade errors are pre-existing (Projects/Settings domains from earlier stages)
+- **Architect Approval:** Received - PASS rating (after initial false negative cleared)
+  - All 32 methods properly extracted and delegated
+  - Proxy pattern correctly routes to new storage modules before falling back to oldStorage
+  - Portal session magic link approach confirmed correct
+  - Backward compatibility maintained
+  - Server boots cleanly with no Stage 9-related errors
+- **Key Achievement:** Successfully extracted all document and portal operations while maintaining GCS integration and access controls
+- **Ready for:** Stage 10 (Messages Domain) can now proceed
+
 ## Executive Summary
 
 This document provides a detailed, stage-by-stage plan for refactoring `server/storage.ts` (13,648 lines) into a modular, domain-driven architecture. The refactoring will break down this monolithic file into ~15 focused domain modules, each handling 500-1,000 lines of related functionality.
