@@ -23,6 +23,7 @@ import {
   ProjectTypesStorage, 
   ProjectStagesStorage, 
   ProjectApprovalsStorage,
+  ProjectSchedulingStorage,
   getProjectTypeByName,
   validateStageReasonMapping,
   validateRequiredFields,
@@ -34,6 +35,8 @@ import {
   WorkRoleStorage, 
   ServiceAssignmentStorage 
 } from './services/index.js';
+import { TagStorage } from './tags/index.js';
+import { CommunicationStorage } from './communications/index.js';
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -62,9 +65,12 @@ export class DatabaseStorage implements IStorage {
   private projectTypesStorage: ProjectTypesStorage;
   private projectStagesStorage: ProjectStagesStorage;
   private projectApprovalsStorage: ProjectApprovalsStorage;
+  private projectSchedulingStorage: ProjectSchedulingStorage;
   private serviceStorage: ServiceStorage;
   private workRoleStorage: WorkRoleStorage;
   private serviceAssignmentStorage: ServiceAssignmentStorage;
+  private tagStorage: TagStorage;
+  private communicationStorage: CommunicationStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -87,11 +93,18 @@ export class DatabaseStorage implements IStorage {
     this.projectTypesStorage = new ProjectTypesStorage();
     this.projectStagesStorage = new ProjectStagesStorage();
     this.projectApprovalsStorage = new ProjectApprovalsStorage();
+    this.projectSchedulingStorage = new ProjectSchedulingStorage();
     
     // Initialize services domain storages
     this.serviceStorage = new ServiceStorage();
     this.workRoleStorage = new WorkRoleStorage();
     this.serviceAssignmentStorage = new ServiceAssignmentStorage();
+    
+    // Initialize tags domain storage (Stage 7)
+    this.tagStorage = new TagStorage();
+    
+    // Initialize communications domain storage (Stage 7)
+    this.communicationStorage = new CommunicationStorage();
     
     // Register cross-domain helpers
     this.registerClientHelpers();
@@ -1247,6 +1260,136 @@ export class DatabaseStorage implements IStorage {
   // - WorkRoleStorage: 10 methods (work roles CRUD, service-role mappings)
   // - ServiceAssignmentStorage: 30 methods (client services, role assignments, people services, validation)
 
+  // ============================================================================
+  // TAGS DOMAIN - Delegated to TagStorage (Stage 7)
+  // ============================================================================
+
+  // Client Tags CRUD
+  async getAllClientTags() {
+    return this.tagStorage.getAllClientTags();
+  }
+
+  async createClientTag(tag: any) {
+    return this.tagStorage.createClientTag(tag);
+  }
+
+  async deleteClientTag(id: string) {
+    return this.tagStorage.deleteClientTag(id);
+  }
+
+  // People Tags CRUD
+  async getAllPeopleTags() {
+    return this.tagStorage.getAllPeopleTags();
+  }
+
+  async createPeopleTag(tag: any) {
+    return this.tagStorage.createPeopleTag(tag);
+  }
+
+  async deletePeopleTag(id: string) {
+    return this.tagStorage.deletePeopleTag(id);
+  }
+
+  // Client Tag Assignments
+  async getAllClientTagAssignments() {
+    return this.tagStorage.getAllClientTagAssignments();
+  }
+
+  async getClientTags(clientId: string) {
+    return this.tagStorage.getClientTags(clientId);
+  }
+
+  async assignClientTag(assignment: any) {
+    return this.tagStorage.assignClientTag(assignment);
+  }
+
+  async unassignClientTag(clientId: string, tagId: string) {
+    return this.tagStorage.unassignClientTag(clientId, tagId);
+  }
+
+  // People Tag Assignments
+  async getPersonTags(personId: string) {
+    return this.tagStorage.getPersonTags(personId);
+  }
+
+  async assignPersonTag(assignment: any) {
+    return this.tagStorage.assignPersonTag(assignment);
+  }
+
+  async unassignPersonTag(personId: string, tagId: string) {
+    return this.tagStorage.unassignPersonTag(personId, tagId);
+  }
+
+  // ============================================================================
+  // COMMUNICATIONS DOMAIN - Delegated to CommunicationStorage (Stage 7)
+  // ============================================================================
+
+  async getAllCommunications() {
+    return this.communicationStorage.getAllCommunications();
+  }
+
+  async getCommunicationsByClientId(clientId: string) {
+    return this.communicationStorage.getCommunicationsByClientId(clientId);
+  }
+
+  async getCommunicationsByPersonId(personId: string) {
+    return this.communicationStorage.getCommunicationsByPersonId(personId);
+  }
+
+  async getCommunicationsByProjectId(projectId: string) {
+    return this.communicationStorage.getCommunicationsByProjectId(projectId);
+  }
+
+  async getCommunicationById(id: string) {
+    return this.communicationStorage.getCommunicationById(id);
+  }
+
+  async createCommunication(communication: any) {
+    return this.communicationStorage.createCommunication(communication);
+  }
+
+  async updateCommunication(id: string, communication: any) {
+    return this.communicationStorage.updateCommunication(id, communication);
+  }
+
+  async deleteCommunication(id: string) {
+    return this.communicationStorage.deleteCommunication(id);
+  }
+
+  // ============================================================================
+  // PROJECT SCHEDULING DOMAIN - Delegated to ProjectSchedulingStorage (Stage 7)
+  // ============================================================================
+
+  async createProjectSchedulingHistory(data: any) {
+    return this.projectSchedulingStorage.createProjectSchedulingHistory(data);
+  }
+
+  async getProjectSchedulingHistoryByServiceId(serviceId: string, serviceType: 'client' | 'people') {
+    return this.projectSchedulingStorage.getProjectSchedulingHistoryByServiceId(serviceId, serviceType);
+  }
+
+  async createSchedulingRunLog(data: any) {
+    return this.projectSchedulingStorage.createSchedulingRunLog(data);
+  }
+
+  async getSchedulingRunLogs(limit?: number) {
+    return this.projectSchedulingStorage.getSchedulingRunLogs(limit);
+  }
+
+  async getLatestSchedulingRunLog() {
+    return this.projectSchedulingStorage.getLatestSchedulingRunLog();
+  }
+
+  // ✅ Stage 7 COMPLETE: All 28 supporting domain methods extracted and delegated:
+  // - TagStorage: 13 methods (client tags, people tags, tag assignments)
+  // - CommunicationStorage: 8 methods (communications query and CRUD)
+  // - ProjectSchedulingStorage: 5 methods (scheduling history, run logs)
+
+  // ✅ STAGE 6 SUMMARY (for reference):
+  // - ServiceStorage: 13 methods (services CRUD, scheduled services, service owner resolution)
+  // - WorkRoleStorage: 10 methods (work roles CRUD, service-role mappings)
+  // - ServiceAssignmentStorage: 30 methods (client services, role assignments, people services, validation)
+
   // Delegate all other methods to old storage
   // (This is a catch-all for the remaining methods)
 
@@ -1312,6 +1455,11 @@ export const storage = createDatabaseStorageProxy();
 //          - WorkRoleStorage: 10 methods (work roles CRUD, service-role mappings)
 //          - ServiceAssignmentStorage: 30 methods (client services, role assignments, people services, validation)
 //          - Helper updates: registerClientHelpers updated to use serviceAssignmentStorage instead of oldStorage
-// Stage 7-14: [ ] Other domains - pending
+// Stage 7: ✅ Tags, Communications, & Scheduling extracted - 28 methods delegated (COMPLETE)
+//          - TagStorage: 13 methods (client tags, people tags, tag assignments)
+//          - CommunicationStorage: 8 methods (communications query and CRUD)
+//          - ProjectSchedulingStorage: 5 methods (scheduling history, run logs)
+//          - Self-contained domains: No cross-domain helpers needed
+// Stage 8-14: [ ] Other domains - pending
 // Stage 15: [ ] Final cleanup - remove old storage.ts
 // ============================================================================
