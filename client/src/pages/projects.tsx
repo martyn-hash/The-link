@@ -382,6 +382,11 @@ export default function Projects() {
     setDynamicDateFilter("all");
     setCustomDateRange({ from: undefined, to: undefined });
     setBehindScheduleOnly(false);
+    setServiceDueDateFilter("all");
+    
+    // Clear URL parameters to prevent them from being reapplied by useEffect
+    const newUrl = window.location.pathname;
+    window.history.replaceState({}, '', newUrl);
     
     // Switch to list view (default view mode)
     setViewMode("list");

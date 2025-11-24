@@ -935,12 +935,118 @@ Extract core project operations and chronology tracking.
 - ✅ 9 methods successfully extracted
 
 #### Next Steps:
-- **Stage 4 Part 2:** Extract remaining 8 complex project methods (getAllProjects, getProjectsByUser, etc.)
+- ✅ **Stage 4 Part 2:** Extract remaining 8 complex project methods (getAllProjects, getProjectsByUser, etc.) - **COMPLETED**
 - **Stage 5:** Extract Projects Domain (Part 2 - Configuration) - project types, stages, approvals
 
 ---
 
-### **STAGE 5: Extract Projects Domain (Part 2 - Configuration)**
+### **STAGE 4 PART 2: Extract Projects Domain - Complex Methods** ✅ **COMPLETED**
+**Estimated Time:** 4-6 hours  
+**Risk Level:** HIGH (complex business logic with 100-300+ line methods)
+**Status:** ✅ **COMPLETED** (November 24, 2025)
+
+#### Objectives:
+Extract the remaining 8 complex project methods that involve sophisticated filtering, aggregation, bulk operations, and status workflow management.
+
+#### Files Modified:
+1. ✅ `server/storage/projects/projectStorage.ts` (grew from ~280 lines to 2029 lines)
+2. ✅ `server/storage/index.ts` (facade updated with 8 new delegations + 11 new helpers)
+
+#### Completed Actions:
+
+**1. Extended `server/storage/projects/projectStorage.ts`:**
+
+✅ Extracted these 8 complex methods (~1620 lines total):
+- `getAllProjects(filters)` - ~200 lines with complex filtering, pagination, role-based access
+- `getProjectsByUser(userId, roleFilter, statusFilter)` - ~200 lines, delegates to getAllProjects with user context
+- `getProjectsByClient(clientId)` - ~160 lines, client-specific filtering
+- `getProjectsByClientServiceId(clientServiceId)` - ~70 lines, uses scheduling history
+- `updateProjectStatus(update, userId)` - ~300 lines (MOST COMPLEX) with validation, chronology, notifications, thread creation
+- `getProjectAnalytics(filters, groupBy, metric)` - ~230 lines, complex aggregation and grouping
+- `sendBulkProjectAssignmentNotifications(createdProjects)` - ~160 lines, bulk notification sending
+- `createProjectsFromCSV(projectsData)` - ~300 lines, bulk import with validation
+
+**2. Fixed Critical Import Paths:**
+- ✅ `calculateBusinessHours` from `@shared/businessTime` (was incorrectly from schedule-calculator)
+- ✅ `normalizeProjectMonth` from `@shared/schema`
+- ✅ `sendBulkProjectAssignmentSummaryEmail` from `server/emailService`
+
+**3. Updated `server/storage/index.ts`:**
+- ✅ Added 8 method delegations to ProjectStorage
+- ✅ Registered 11 additional helpers for cross-domain dependencies:
+  - `validateStageReasonMapping` (configuration domain)
+  - `validateRequiredFields` (configuration domain)
+  - `getWorkRoleById` (services domain)
+  - `resolveRoleAssigneeForClient` (services domain)
+  - `sendStageChangeNotifications` (notifications domain)
+  - `createProjectMessageThread` (messaging domain)
+  - `createProjectMessageParticipant` (messaging domain)
+  - `createProjectMessage` (messaging domain)
+  - `cancelScheduledNotificationsForProject` (notifications domain)
+  - `getProjectTypeByName` (configuration domain)
+  - `getClientByName` (clients domain)
+- ✅ Fixed pre-existing bugs in Client helpers:
+  - Changed `getProjectsByClientId` → `getProjectsByClient`
+  - Changed `getClientServiceRoleAssignmentsByServiceId` → `getClientServiceRoleAssignments`
+
+**4. Helper Injection Pattern:**
+Total 18 helpers registered for ProjectStorage (7 from Part 1 + 11 from Part 2), enabling:
+- Configuration domain access (stages, reasons, validations)
+- Services domain access (work roles, role assignments)
+- Notifications domain access (stage change notifications, scheduled notifications)
+- Messaging domain access (project message threads, participants, messages)
+
+#### Critical Lessons Learned:
+1. **Import path resolution** - Shared utilities must be imported from correct locations (@shared/businessTime, not internal modules)
+2. **Large method extraction** - Breaking 1620 lines into digestible chunks required careful helper registration
+3. **Pre-existing bugs** - Facade audit revealed incorrect method names in Client helpers from Stage 2
+4. **Temporary helper access** - Some helpers call private methods (e.g., resolveStageRoleAssignee) which is acceptable during migration phase
+
+#### Testing Completed:
+- ✅ Workflow restarted successfully after all changes
+- ✅ Server logs show clean boot with all migrations and schedulers initialized
+- ✅ No LSP errors in TypeScript compilation
+- ✅ Architect review passed
+- ✅ E2E testing manually skipped by user (ready when needed)
+
+#### Architect Approval:
+✅ **APPROVED** (November 24, 2025)
+- All 8 complex methods correctly extracted with proper typing
+- Imports reconciled and verified
+- All 18 helpers properly registered and functional
+- Facade delegations maintain backward compatibility
+- Pre-existing Client helper bugs fixed
+- Server runs cleanly with no errors
+
+#### Success Criteria Met:
+- ✅ All 8 complex project methods extracted (~1620 lines)
+- ✅ ProjectStorage now handles 13 total methods (5 from Part 1 + 8 from Part 2)
+- ✅ Backward compatibility preserved
+- ✅ No breaking changes to external API
+- ✅ Clean TypeScript compilation
+- ✅ Server runs successfully
+
+#### Total Stage 4 Summary:
+**Files Created:** 3 new storage modules
+- `server/storage/projects/projectStorage.ts` (2029 lines - 13 methods)
+- `server/storage/projects/projectChronologyStorage.ts` (4 methods)
+- `server/storage/projects/index.ts` (barrel export)
+
+**Methods Extracted:** 17 total
+- ProjectStorage: 13 methods (5 core + 8 complex)
+- ProjectChronologyStorage: 4 methods
+
+**Helpers Registered:** 18 cross-domain helpers for configuration, services, notifications, and messaging
+
+**Lines Extracted:** ~2300+ lines from oldStorage to Projects domain
+
+#### Next Steps:
+- **Stage 5:** Extract Projects Domain (Part 3 - Configuration) - project types, stages, approvals
+- Note: Stage 5 will extract the configuration methods currently used as helpers by ProjectStorage
+
+---
+
+### **STAGE 5: Extract Projects Domain (Part 3 - Configuration)**
 **Estimated Time:** 6-8 hours  
 **Risk Level:** HIGH
 
