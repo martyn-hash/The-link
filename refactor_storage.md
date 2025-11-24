@@ -354,7 +354,33 @@ Before each browser test:
   - Stage 13-specific errors: 0 errors
   - All 7 facade errors are pre-existing (Projects/Settings domains from earlier stages)
 - **Key Achievement:** Successfully extracted all notification subsystems with proper cross-domain helper injection maintaining email and push notification delivery
-- **Ready for:** Stage 14 (E-Signatures Domain) can now proceed
+- **Ready for:** Stage 14 (Settings Domain) can now proceed
+
+### Stage 14: Settings & Preferences Domain (✅ COMPLETED - November 24, 2025)
+- **Extracted:** 27 methods into 6 modules (UserNotificationPreferencesStorage 4, ViewsStorage 6, ColumnPreferencesStorage 3, DashboardStorage 8, UserPreferencesStorage 4, CompanySettingsStorage 2)
+- **Pattern:** Self-contained domain with simple CRUD operations, no cross-domain helpers needed
+- **Modules Created:**
+  - `server/storage/settings/userNotificationPreferencesStorage.ts` - User notification preferences CRUD (4 methods)
+  - `server/storage/settings/viewsStorage.ts` - Project and company saved views (6 methods)
+  - `server/storage/settings/columnPreferencesStorage.ts` - User column visibility/ordering preferences (3 methods)
+  - `server/storage/settings/dashboardStorage.ts` - Dashboard CRUD, shared dashboards, homescreen management (8 methods)
+  - `server/storage/settings/userPreferencesStorage.ts` - User project preferences and defaults (4 methods)
+  - `server/storage/settings/companySettingsStorage.ts` - Global company settings get/update (2 methods)
+- **Key Implementation Details:**
+  - No cross-domain helper injection required - domain is self-contained
+  - Simple CRUD operations with no complex business logic
+  - All 27 delegations added to facade with proper method signatures
+  - Upsert patterns used for conflict handling (column preferences, project preferences)
+- **Testing:**
+  - **Server boot:** All storage modules load successfully, all schema migrations run
+  - **API endpoints:** Verified server responds to requests successfully
+  - No runtime errors, clean delegation through facade
+- **LSP Analysis:**
+  - Total diagnostics: 7 (all pre-existing in facade, none from Stage 14)
+  - Stage 14-specific errors: 0 errors
+  - All 7 facade errors are pre-existing (Projects/Settings domains from earlier stages)
+- **Key Achievement:** Successfully extracted all settings and preferences subsystems as a self-contained domain with no cross-domain dependencies
+- **Ready for:** Stage 15 (Final Cleanup - remove old storage.ts)
 
 ## Executive Summary
 

@@ -77,6 +77,14 @@ import {
   NotificationHistoryStorage,
   StageChangeNotificationStorage
 } from './notifications/index.js';
+import {
+  UserNotificationPreferencesStorage,
+  ViewsStorage,
+  ColumnPreferencesStorage,
+  DashboardStorage,
+  UserPreferencesStorage,
+  CompanySettingsStorage
+} from './settings/index.js';
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -139,6 +147,12 @@ export class DatabaseStorage implements IStorage {
   private scheduledNotificationStorage: ScheduledNotificationStorage;
   private notificationHistoryStorage: NotificationHistoryStorage;
   private stageChangeNotificationStorage: StageChangeNotificationStorage;
+  private userNotificationPreferencesStorage: UserNotificationPreferencesStorage;
+  private viewsStorage: ViewsStorage;
+  private columnPreferencesStorage: ColumnPreferencesStorage;
+  private dashboardStorage: DashboardStorage;
+  private userPreferencesStorage: UserPreferencesStorage;
+  private companySettingsStorage: CompanySettingsStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -224,6 +238,14 @@ export class DatabaseStorage implements IStorage {
       resolveRoleAssigneeForClient: (clientId: string, projectTypeId: string, roleName: string) => 
         this.serviceAssignmentStorage.resolveRoleAssigneeForClient(clientId, projectTypeId, roleName),
     });
+    
+    // Initialize settings domain storage (Stage 14)
+    this.userNotificationPreferencesStorage = new UserNotificationPreferencesStorage();
+    this.viewsStorage = new ViewsStorage();
+    this.columnPreferencesStorage = new ColumnPreferencesStorage();
+    this.dashboardStorage = new DashboardStorage();
+    this.userPreferencesStorage = new UserPreferencesStorage();
+    this.companySettingsStorage = new CompanySettingsStorage();
     
     // Register cross-domain helpers
     this.registerClientHelpers();
@@ -2592,6 +2614,132 @@ export class DatabaseStorage implements IStorage {
     return this.stageChangeNotificationStorage.sendStageChangeNotifications(projectId, newStageName, oldStageName);
   }
 
+  // ============================================================================
+  // STAGE 14: Settings Domain (27 methods)
+  // ============================================================================
+
+  // User Notification Preferences operations (4 methods) - UserNotificationPreferencesStorage
+  async getUserNotificationPreferences(userId: string) {
+    return this.userNotificationPreferencesStorage.getUserNotificationPreferences(userId);
+  }
+
+  async createUserNotificationPreferences(preferences: any) {
+    return this.userNotificationPreferencesStorage.createUserNotificationPreferences(preferences);
+  }
+
+  async updateUserNotificationPreferences(userId: string, preferences: any) {
+    return this.userNotificationPreferencesStorage.updateUserNotificationPreferences(userId, preferences);
+  }
+
+  async getOrCreateDefaultNotificationPreferences(userId: string) {
+    return this.userNotificationPreferencesStorage.getOrCreateDefaultNotificationPreferences(userId);
+  }
+
+  // Project/Company Views operations (6 methods) - ViewsStorage
+  async createProjectView(view: any) {
+    return this.viewsStorage.createProjectView(view);
+  }
+
+  async getProjectViewsByUserId(userId: string) {
+    return this.viewsStorage.getProjectViewsByUserId(userId);
+  }
+
+  async deleteProjectView(id: string) {
+    return this.viewsStorage.deleteProjectView(id);
+  }
+
+  async createCompanyView(view: any) {
+    return this.viewsStorage.createCompanyView(view);
+  }
+
+  async getCompanyViewsByUserId(userId: string) {
+    return this.viewsStorage.getCompanyViewsByUserId(userId);
+  }
+
+  async deleteCompanyView(id: string) {
+    return this.viewsStorage.deleteCompanyView(id);
+  }
+
+  // Column Preferences operations (3 methods) - ColumnPreferencesStorage
+  async getUserColumnPreferences(userId: string, viewType?: string) {
+    return this.columnPreferencesStorage.getUserColumnPreferences(userId, viewType);
+  }
+
+  async upsertUserColumnPreferences(preferences: any) {
+    return this.columnPreferencesStorage.upsertUserColumnPreferences(preferences);
+  }
+
+  async updateUserColumnPreferences(userId: string, viewType: string, preferences: any) {
+    return this.columnPreferencesStorage.updateUserColumnPreferences(userId, viewType, preferences);
+  }
+
+  // Dashboard operations (8 methods) - DashboardStorage
+  async createDashboard(dashboard: any) {
+    return this.dashboardStorage.createDashboard(dashboard);
+  }
+
+  async getDashboardsByUserId(userId: string) {
+    return this.dashboardStorage.getDashboardsByUserId(userId);
+  }
+
+  async getSharedDashboards() {
+    return this.dashboardStorage.getSharedDashboards();
+  }
+
+  async getDashboardById(id: string) {
+    return this.dashboardStorage.getDashboardById(id);
+  }
+
+  async updateDashboard(id: string, dashboard: any) {
+    return this.dashboardStorage.updateDashboard(id, dashboard);
+  }
+
+  async deleteDashboard(id: string) {
+    return this.dashboardStorage.deleteDashboard(id);
+  }
+
+  async getHomescreenDashboard(userId: string) {
+    return this.dashboardStorage.getHomescreenDashboard(userId);
+  }
+
+  async clearHomescreenDashboards(userId: string) {
+    return this.dashboardStorage.clearHomescreenDashboards(userId);
+  }
+
+  // User Project Preferences operations (4 methods) - UserPreferencesStorage
+  async getUserProjectPreferences(userId: string) {
+    return this.userPreferencesStorage.getUserProjectPreferences(userId);
+  }
+
+  async upsertUserProjectPreferences(preferences: any) {
+    return this.userPreferencesStorage.upsertUserProjectPreferences(preferences);
+  }
+
+  async deleteUserProjectPreferences(userId: string) {
+    return this.userPreferencesStorage.deleteUserProjectPreferences(userId);
+  }
+
+  async clearDefaultView(userId: string) {
+    return this.userPreferencesStorage.clearDefaultView(userId);
+  }
+
+  // Company Settings operations (2 methods) - CompanySettingsStorage
+  async getCompanySettings() {
+    return this.companySettingsStorage.getCompanySettings();
+  }
+
+  async updateCompanySettings(settings: any) {
+    return this.companySettingsStorage.updateCompanySettings(settings);
+  }
+
+  // ✅ Stage 14 COMPLETE: All 27 settings domain methods extracted and delegated:
+  // - UserNotificationPreferencesStorage: 4 methods (notification preferences CRUD)
+  // - ViewsStorage: 6 methods (project and company views CRUD)
+  // - ColumnPreferencesStorage: 3 methods (column preferences upsert/update)
+  // - DashboardStorage: 8 methods (dashboard CRUD, homescreen management)
+  // - UserPreferencesStorage: 4 methods (user project preferences)
+  // - CompanySettingsStorage: 2 methods (company settings get/update)
+
   // ✅ Stage 13 COMPLETE: All 21 notifications domain methods extracted and delegated:
   // - ProjectTypeNotificationStorage: 6 methods (project type notification CRUD, preview candidates)
   // - ClientReminderStorage: 5 methods (client request reminder CRUD)
@@ -2735,6 +2883,12 @@ export const storage = createDatabaseStorageProxy();
 //          - StageChangeNotificationStorage: 3 methods (stage change emails, push notifications, bulk assignments)
 //          - Cross-domain helpers: Notification helpers updated in registerProjectHelpers
 //          - Note: Push notification templates (9 methods) already extracted in Stage 8 Integrations
-// Stage 14: [ ] E-Signatures domain - pending
+// Stage 14: ✅ Settings domain extracted - 27 methods delegated (COMPLETE)
+//          - UserNotificationPreferencesStorage: 4 methods (notification preferences CRUD)
+//          - ViewsStorage: 6 methods (project and company views CRUD)
+//          - ColumnPreferencesStorage: 3 methods (column preferences upsert/update)
+//          - DashboardStorage: 8 methods (dashboard CRUD, homescreen management)
+//          - UserPreferencesStorage: 4 methods (user project preferences)
+//          - CompanySettingsStorage: 2 methods (company settings get/update)
 // Stage 15: [ ] Final cleanup - remove old storage.ts
 // ============================================================================
