@@ -292,6 +292,36 @@ Before each browser test:
 - **Key Achievement:** Successfully extracted all request subsystems (CH change requests, templates, custom requests) maintaining three distinct workflows while preserving backward compatibility
 - **Ready for:** Stage 12 (Tasks Domain) can now proceed
 
+### Stage 12: Tasks Domain (✅ COMPLETED - November 24, 2025)
+- **Extracted:** 54 methods into 5 modules (TaskInstanceStorage 11, TaskInstanceResponseStorage 6, TaskTypeStorage 6, InternalTaskStorage 24, TaskTimeEntryStorage 5)
+- **Pattern:** Two subsystems - client-facing task instances (forms/questionnaires) and staff-facing internal tasks (with time tracking, connections, notes, documents)
+- **Modules Created:**
+  - `server/storage/tasks/taskInstanceStorage.ts` - Task instances CRUD, queries by client/person/status, full data retrieval (11 methods)
+  - `server/storage/tasks/taskInstanceResponseStorage.ts` - Responses CRUD, bulk save operations (6 methods)
+  - `server/storage/tasks/taskTypeStorage.ts` - Task types CRUD with active/inactive filtering (6 methods)
+  - `server/storage/tasks/internalTaskStorage.ts` - Internal tasks CRUD, connections, progress notes, documents, bulk operations (24 methods)
+  - `server/storage/tasks/taskTimeEntryStorage.ts` - Time entries CRUD with active entry tracking (5 methods)
+- **Key Implementation Details:**
+  - InternalTaskStorage consolidates related functionality: tasks, connections, progress notes, and documents
+  - User enrichment for progress notes and time entries via direct joins (no cross-domain helper needed)
+  - Fixed alias import issue (drizzle-orm/pg-core instead of drizzle-orm)
+  - All 54 delegations added to facade with proper method signatures
+- **Testing:**
+  - **Server boot:** All storage modules load successfully, all schema migrations run
+  - **API endpoints:** Verified server responds to requests successfully
+  - No runtime errors, clean delegation through facade
+- **LSP Analysis:**
+  - Total diagnostics: 7 (all pre-existing in facade, none from Stage 12)
+  - Stage 12-specific errors: 0 errors
+  - All 7 facade errors are pre-existing (Projects/Settings domains from earlier stages)
+- **Architect Approval:** Received - PASS rating
+  - All 54 methods properly extracted and delegated (11+6+6+24+5)
+  - No cross-domain dependencies required - domain is self-contained
+  - Backward compatibility maintained through explicit delegations
+  - Server boots cleanly with no Stage 12-related errors
+- **Key Achievement:** Successfully extracted all task subsystems (instances, responses, types, internal tasks, time entries) with proper consolidation of related functionality
+- **Ready for:** Stage 13 (Notifications Domain) can now proceed
+
 ## Executive Summary
 
 This document provides a detailed, stage-by-stage plan for refactoring `server/storage.ts` (13,648 lines) into a modular, domain-driven architecture. The refactoring will break down this monolithic file into ~15 focused domain modules, each handling 500-1,000 lines of related functionality.
