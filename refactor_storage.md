@@ -100,6 +100,23 @@ Before each browser test:
   - Verified indexes complement existing ones without regression
 - **Ready for:** Stage 6 (Services domain) can now proceed
 
+### Stage 6: Services Domain (✅ COMPLETED - November 24, 2025)
+- **Extracted:** 55 methods into ServiceStorage (13), WorkRoleStorage (10), ServiceAssignmentStorage (32)
+- **Pattern:** Domain-focused modules with cross-domain helper injection for project assignment resolution
+- **Critical Methods Added:**
+  - `resolveServiceOwner(clientId, projectTypeId)` - Resolves service owner from client-service mapping
+  - `resolveProjectAssignments(clientId, projectTypeId)` - Resolves all project role assignments (bookkeeper, client manager, current assignee)
+- **Helper Injection:**
+  - Registered 7 helpers in ServiceAssignmentStorage: getServiceByProjectTypeId, getUser, getFallbackUser, getDefaultStage, getWorkRoleById
+  - Updated registerProjectHelpers() to delegate to new modules instead of oldStorage
+- **Testing:** Backend storage verified via server boot, API endpoints respond correctly
+- **Architect Approval:** Received - PASS rating
+  - All 55 service methods properly extracted and delegated
+  - Critical helper delegation fixed (resolveServiceOwner, resolveProjectAssignments)
+  - Backward compatibility maintained
+  - Server boots cleanly with no runtime errors
+- **Ready for:** Stage 7 can now proceed
+
 ## Executive Summary
 
 This document provides a detailed, stage-by-stage plan for refactoring `server/storage.ts` (13,648 lines) into a modular, domain-driven architecture. The refactoring will break down this monolithic file into ~15 focused domain modules, each handling 500-1,000 lines of related functionality.
