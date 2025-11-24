@@ -42,6 +42,12 @@ import {
   PushNotificationStorage, 
   EmailStorage 
 } from './integrations/index.js';
+import { 
+  DocumentStorage, 
+  RiskAssessmentStorage, 
+  PortalDocumentStorage 
+} from './documents/index.js';
+import { PortalStorage } from './portal/index.js';
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -79,6 +85,10 @@ export class DatabaseStorage implements IStorage {
   private integrationStorage: IntegrationStorage;
   private pushNotificationStorage: PushNotificationStorage;
   private emailStorage: EmailStorage;
+  private documentStorage: DocumentStorage;
+  private riskAssessmentStorage: RiskAssessmentStorage;
+  private portalDocumentStorage: PortalDocumentStorage;
+  private portalStorage: PortalStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -118,6 +128,14 @@ export class DatabaseStorage implements IStorage {
     this.integrationStorage = new IntegrationStorage();
     this.pushNotificationStorage = new PushNotificationStorage();
     this.emailStorage = new EmailStorage();
+    
+    // Initialize documents domain storage (Stage 9)
+    this.documentStorage = new DocumentStorage();
+    this.riskAssessmentStorage = new RiskAssessmentStorage();
+    this.portalDocumentStorage = new PortalDocumentStorage();
+    
+    // Initialize portal domain storage (Stage 9)
+    this.portalStorage = new PortalStorage();
     
     // Register cross-domain helpers
     this.registerClientHelpers();
@@ -1548,6 +1566,154 @@ export class DatabaseStorage implements IStorage {
 
   // Note: Client email alias and domain allowlist methods are already delegated in Stage 2 (ClientStorage)
   // They are not re-implemented here to avoid duplication.
+
+  // ============================================================================
+  // DOCUMENTS & PORTAL DOMAIN - Delegated to Document & Portal Storage Modules (Stage 9)
+  // ============================================================================
+
+  // Document Folder Operations - DocumentStorage
+  async createDocumentFolder(folder: any) {
+    return this.documentStorage.createDocumentFolder(folder);
+  }
+
+  async getDocumentFolderById(id: string) {
+    return this.documentStorage.getDocumentFolderById(id);
+  }
+
+  async getDocumentFoldersByClientId(clientId: string) {
+    return this.documentStorage.getDocumentFoldersByClientId(clientId);
+  }
+
+  async deleteDocumentFolder(id: string) {
+    return this.documentStorage.deleteDocumentFolder(id);
+  }
+
+  // Document Operations - DocumentStorage
+  async createDocument(document: any) {
+    return this.documentStorage.createDocument(document);
+  }
+
+  async getDocumentById(id: string) {
+    return this.documentStorage.getDocumentById(id);
+  }
+
+  async getDocumentsByClientId(clientId: string) {
+    return this.documentStorage.getDocumentsByClientId(clientId);
+  }
+
+  async getDocumentsByFolderId(folderId: string) {
+    return this.documentStorage.getDocumentsByFolderId(folderId);
+  }
+
+  async deleteDocument(id: string) {
+    return this.documentStorage.deleteDocument(id);
+  }
+
+  async getSignedUrl(objectPath: string) {
+    return this.documentStorage.getSignedUrl(objectPath);
+  }
+
+  // Portal Document Operations - PortalDocumentStorage
+  async listPortalDocuments(clientId: string, clientPortalUserId: string) {
+    return this.portalDocumentStorage.listPortalDocuments(clientId, clientPortalUserId);
+  }
+
+  async createPortalDocument(document: any) {
+    return this.portalDocumentStorage.createPortalDocument(document);
+  }
+
+  async deletePortalDocument(id: string, clientId: string, clientPortalUserId: string) {
+    return this.portalDocumentStorage.deletePortalDocument(id, clientId, clientPortalUserId);
+  }
+
+  async getPortalDocumentById(id: string, clientId: string, clientPortalUserId: string) {
+    return this.portalDocumentStorage.getPortalDocumentById(id, clientId, clientPortalUserId);
+  }
+
+  // Risk Assessment Operations - RiskAssessmentStorage
+  async createRiskAssessment(assessment: any) {
+    return this.riskAssessmentStorage.createRiskAssessment(assessment);
+  }
+
+  async getRiskAssessmentById(id: string) {
+    return this.riskAssessmentStorage.getRiskAssessmentById(id);
+  }
+
+  async getRiskAssessmentsByClientId(clientId: string) {
+    return this.riskAssessmentStorage.getRiskAssessmentsByClientId(clientId);
+  }
+
+  async updateRiskAssessment(id: string, assessment: any) {
+    return this.riskAssessmentStorage.updateRiskAssessment(id, assessment);
+  }
+
+  async deleteRiskAssessment(id: string) {
+    return this.riskAssessmentStorage.deleteRiskAssessment(id);
+  }
+
+  async saveRiskAssessmentResponses(assessmentId: string, responses: any[]) {
+    return this.riskAssessmentStorage.saveRiskAssessmentResponses(assessmentId, responses);
+  }
+
+  async getRiskAssessmentResponses(assessmentId: string) {
+    return this.riskAssessmentStorage.getRiskAssessmentResponses(assessmentId);
+  }
+
+  // Client Portal User Operations - PortalStorage
+  async createClientPortalUser(user: any) {
+    return this.portalStorage.createClientPortalUser(user);
+  }
+
+  async getClientPortalUserById(id: string) {
+    return this.portalStorage.getClientPortalUserById(id);
+  }
+
+  async getClientPortalUserByEmail(email: string) {
+    return this.portalStorage.getClientPortalUserByEmail(email);
+  }
+
+  async getClientPortalUserByMagicLinkToken(token: string) {
+    return this.portalStorage.getClientPortalUserByMagicLinkToken(token);
+  }
+
+  async getClientPortalUsersByClientId(clientId: string) {
+    return this.portalStorage.getClientPortalUsersByClientId(clientId);
+  }
+
+  async getClientPortalUserByPersonId(personId: string) {
+    return this.portalStorage.getClientPortalUserByPersonId(personId);
+  }
+
+  async updateClientPortalUser(id: string, user: any) {
+    return this.portalStorage.updateClientPortalUser(id, user);
+  }
+
+  async deleteClientPortalUser(id: string) {
+    return this.portalStorage.deleteClientPortalUser(id);
+  }
+
+  // Client Portal Session Operations - PortalStorage
+  async createClientPortalSession(data: any) {
+    return this.portalStorage.createClientPortalSession(data);
+  }
+
+  async getClientPortalSessionByToken(token: string) {
+    return this.portalStorage.getClientPortalSessionByToken(token);
+  }
+
+  async deleteClientPortalSession(id: string) {
+    return this.portalStorage.deleteClientPortalSession(id);
+  }
+
+  async cleanupExpiredSessions() {
+    return this.portalStorage.cleanupExpiredSessions();
+  }
+
+  // ✅ Stage 9 COMPLETE: All 32 documents & portal domain methods extracted and delegated:
+  // - DocumentStorage: 11 methods (folders, documents, signed URLs)
+  // - RiskAssessmentStorage: 7 methods (risk assessments, responses)
+  // - PortalDocumentStorage: 4 methods (portal documents)
+  // - PortalStorage: 12 methods (portal users, sessions)
 
   // ✅ Stage 8 COMPLETE: All 54 integration domain methods extracted and delegated:
   // - IntegrationStorage: 9 methods (user integrations, OAuth accounts)
