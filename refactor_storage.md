@@ -1,9 +1,21 @@
 # Storage.ts Refactoring Plan - Stage by Stage
 
 ## Testing Notes
-**IMPORTANT**: When running browser tests:
-1. Login via root page (/) → password tab → use credentials: `admin@example.com` | `admin123`
-2. Always check these notes before starting any browser testing session
+**IMPORTANT**: Read these notes BEFORE every browser testing session:
+
+### Login Credentials
+- **Root page (/)** → **Password tab** → Use: `admin@example.com` | `admin123`
+
+### Known Issues
+- **Projects Loading Bug**: Sometimes the projects page doesn't load properly
+  - **Solution**: Refresh the browser and restart your test from the beginning
+  - Always be prepared to refresh and retry if projects fail to load
+
+### Testing Checklist
+Before each browser test:
+- [ ] Review login credentials above
+- [ ] Remember the projects loading bug and refresh workaround
+- [ ] Check if this test requires projects page (plan for potential refresh)
 
 **Magic Link Testing Approach:**
 - Since we cannot access emails during testing, verify magic links by:
