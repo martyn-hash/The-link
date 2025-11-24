@@ -1,6 +1,7 @@
-const STATIC_CACHE = 'the-link-static-v8';
-const API_CACHE = 'the-link-api-v8';
-const NETWORK_TIMEOUT = 3000; // 3 seconds
+const STATIC_CACHE = 'the-link-static-v9';
+const API_CACHE = 'the-link-api-v9';
+const NETWORK_TIMEOUT = 10000; // 10 seconds (increased from 3s)
+const LONG_NETWORK_TIMEOUT = 20000; // 20 seconds for data-heavy endpoints
 
 // Don't precache index.html - always fetch fresh to get latest bundle references
 const staticAssets = [];
@@ -76,6 +77,14 @@ function shouldBypassCache(request) {
   }
 
   return false;
+}
+
+// Helper: Check if request needs longer timeout for data-heavy operations
+function needsLongTimeout(request) {
+  return request.url.includes('/api/projects') ||
+         request.url.includes('/api/clients') ||
+         request.url.includes('/api/people') ||
+         request.url.includes('/api/dashboard/');
 }
 
 // Helper: Check if response should be cached
@@ -195,8 +204,10 @@ self.addEventListener('fetch', (event) => {
   }
   
   // API requests: network-first with offline fallback
+  // Use longer timeout for data-heavy endpoints
   if (isApiRequest(url)) {
-    event.respondWith(networkFirstWithTimeout(event.request));
+    const timeout = needsLongTimeout(event.request) ? LONG_NETWORK_TIMEOUT : NETWORK_TIMEOUT;
+    event.respondWith(networkFirstWithTimeout(event.request, timeout));
     return;
   }
   
