@@ -1373,4 +1373,123 @@ export class ServiceAssignmentStorage extends BaseStorage {
       allowedRoles: allowedRoleNames,
     };
   }
+
+  // ==================== Service Owner & Assignment Resolution ====================
+
+  /**
+   * Resolve service owner from client-service mapping
+   */
+  async resolveServiceOwner(clientId: string, projectTypeId: string): Promise<User | undefined> {
+    // Get service owner from client-service mapping
+    const clientService = await this.getClientServiceByClientAndProjectType(clientId, projectTypeId);
+    if (clientService && clientService.serviceOwnerId) {
+      // Use helper to get user
+      const getUser = this.getHelper('getUser') as ((userId: string) => Promise<User | undefined>) | undefined;
+      if (getUser) {
+        return await getUser(clientService.serviceOwnerId);
+      }
+    }
+    
+    return undefined;
+  }
+
+  /**
+   * Resolve all project role assignments for a client-service combination
+   * Returns bookkeeper, client manager, and current assignee IDs
+   */
+  async resolveProjectAssignments(clientId: string, projectTypeId: string): Promise<{
+    bookkeeperId: string;
+    clientManagerId: string;
+    currentAssigneeId: string;
+    usedFallback: boolean;
+    fallbackRoles: string[];
+  }> {
+    let usedFallback = false;
+    const fallbackRoles: string[] = [];
+
+    // Get helpers
+    const getServiceByProjectTypeId = this.getHelper('getServiceByProjectTypeId') as ((projectTypeId: string) => Promise<any>) | undefined;
+    const getFallbackUser = this.getHelper('getFallbackUser') as (() => Promise<User | undefined>) | undefined;
+    const getDefaultStage = this.getHelper('getDefaultStage') as (() => Promise<any>) | undefined;
+    const getUser = this.getHelper('getUser') as ((userId: string) => Promise<User | undefined>) | undefined;
+    const getWorkRoleById = this.getHelper('getWorkRoleById') as ((roleId: string) => Promise<any>) | undefined;
+
+    // Check if project type is mapped to a service
+    const service = getServiceByProjectTypeId ? await getServiceByProjectTypeId(projectTypeId) : undefined;
+    if (!service) {
+      throw new Error('Project type is not mapped to a service - cannot use role-based assignments');
+    }
+
+    // Get client service mapping
+    const clientService = await this.getClientServiceByClientAndProjectType(clientId, projectTypeId);
+    if (!clientService) {
+      throw new Error(`Client does not have service mapping for this project type`);
+    }
+
+    // Get fallback user for when role assignments are missing
+    const fallbackUser = getFallbackUser ? await getFallbackUser() : undefined;
+    if (!fallbackUser) {
+      throw new Error('No fallback user configured - please set a fallback user for role-based assignments');
+    }
+
+    // Resolve bookkeeper role
+    let bookkeeper = await this.resolveRoleAssigneeForClient(clientId, projectTypeId, 'bookkeeper');
+    if (!bookkeeper) {
+      console.warn(`No bookkeeper assignment found for client ${clientId}, using fallback user`);
+      bookkeeper = fallbackUser;
+      usedFallback = true;
+      fallbackRoles.push('bookkeeper');
+    }
+
+    // Resolve client manager role
+    let clientManager = await this.resolveRoleAssigneeForClient(clientId, projectTypeId, 'client_manager');
+    if (!clientManager) {
+      console.warn(`No client_manager assignment found for client ${clientId}, using fallback user`);
+      clientManager = fallbackUser;
+      usedFallback = true;
+      fallbackRoles.push('client_manager');
+    }
+
+    // Get the default stage to determine initial current assignee
+    const defaultStage = getDefaultStage ? await getDefaultStage() : undefined;
+    let currentAssignee = clientManager; // Default to client manager
+
+    if (defaultStage?.assignedUserId && getUser) {
+      // Direct user assignment
+      const assignedUser = await getUser(defaultStage.assignedUserId);
+      if (assignedUser) {
+        currentAssignee = assignedUser;
+      } else {
+        console.warn(`Assigned user ${defaultStage.assignedUserId} not found, using client manager`);
+        currentAssignee = clientManager;
+      }
+    } else if (defaultStage?.assignedWorkRoleId && getWorkRoleById) {
+      // Work role assignment - resolve through client service role assignments
+      const workRole = await getWorkRoleById(defaultStage.assignedWorkRoleId);
+      if (workRole) {
+        const roleAssignment = await this.resolveRoleAssigneeForClient(clientId, projectTypeId, workRole.name);
+        if (roleAssignment) {
+          currentAssignee = roleAssignment;
+        } else {
+          console.warn(`No ${workRole.name} assignment found for client ${clientId}, using client manager`);
+          currentAssignee = clientManager;
+        }
+      } else {
+        console.warn(`Work role ${defaultStage.assignedWorkRoleId} not found, using client manager`);
+        currentAssignee = clientManager;
+      }
+    }
+
+    if (usedFallback) {
+      console.log(`Used fallback user for roles: ${fallbackRoles.join(', ')} when creating project for client ${clientId}`);
+    }
+
+    return {
+      bookkeeperId: bookkeeper.id,
+      clientManagerId: clientManager.id,
+      currentAssigneeId: currentAssignee.id,
+      usedFallback,
+      fallbackRoles,
+    };
+  }
 }

@@ -118,11 +118,15 @@ export class DatabaseStorage implements IStorage {
       getWorkRoleById: (roleId: string) => this.workRoleStorage.getWorkRoleById(roleId),
     });
     
-    // ServiceAssignmentStorage needs helpers for role validation
+    // ServiceAssignmentStorage needs helpers for role validation and project assignments
     this.serviceAssignmentStorage.registerHelpers({
       getServiceById: (serviceId: string) => this.serviceStorage.getServiceById(serviceId),
       getWorkRoleById: (roleId: string) => this.workRoleStorage.getWorkRoleById(roleId),
       getWorkRolesByServiceId: (serviceId: string) => this.workRoleStorage.getWorkRolesByServiceId(serviceId),
+      getServiceByProjectTypeId: (projectTypeId: string) => this.serviceStorage.getServiceByProjectTypeId(projectTypeId),
+      getUser: (userId: string) => this.userStorage.getUser(userId),
+      getFallbackUser: () => this.userStorage.getFallbackUser(),
+      getDefaultStage: getDefaultStage(this.projectStagesStorage),
     });
   }
 
@@ -144,9 +148,9 @@ export class DatabaseStorage implements IStorage {
       getClientServiceByClientAndProjectType: (clientId: string, projectTypeId: string) => 
         this.serviceAssignmentStorage.getClientServiceByClientAndProjectType(clientId, projectTypeId),
       resolveProjectAssignments: (clientId: string, projectTypeId: string) => 
-        this.oldStorage.resolveProjectAssignments(clientId, projectTypeId),
+        this.serviceAssignmentStorage.resolveProjectAssignments(clientId, projectTypeId),
       resolveServiceOwner: (clientId: string, projectTypeId: string) => 
-        this.oldStorage.resolveServiceOwner(clientId, projectTypeId),
+        this.serviceAssignmentStorage.resolveServiceOwner(clientId, projectTypeId),
       resolveStageRoleAssignee: (project: any) => this.oldStorage.resolveStageRoleAssignee(project),
       getWorkRoleById: (workRoleId: string) => this.workRoleStorage.getWorkRoleById(workRoleId),
       resolveRoleAssigneeForClient: (clientId: string, projectTypeId: string, roleName: string) => 
@@ -1053,11 +1057,12 @@ export class DatabaseStorage implements IStorage {
 
   // Service Owner Resolution (cross-domain method using serviceAssignmentStorage and userStorage)
   async resolveServiceOwner(clientId: string, projectTypeId: string) {
-    const clientService = await this.serviceAssignmentStorage.getClientServiceByClientAndProjectType(clientId, projectTypeId);
-    if (clientService && clientService.serviceOwnerId) {
-      return await this.userStorage.getUser(clientService.serviceOwnerId);
-    }
-    return undefined;
+    return this.serviceAssignmentStorage.resolveServiceOwner(clientId, projectTypeId);
+  }
+
+  // Project Assignments Resolution (delegates to serviceAssignmentStorage)
+  async resolveProjectAssignments(clientId: string, projectTypeId: string) {
+    return this.serviceAssignmentStorage.resolveProjectAssignments(clientId, projectTypeId);
   }
 
   // WorkRoleStorage methods (10 methods)
