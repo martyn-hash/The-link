@@ -519,118 +519,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ============================================================================
-  // ALL OTHER METHODS - Delegated to OldDatabaseStorage
-  // ============================================================================
-  // This section delegates all remaining methods to the old storage implementation
-  // These will be migrated in stages 2-14
-
-  // User notification preferences (not migrated yet - stays in old storage)
-  async getUserNotificationPreferences(userId: string) {
-    return this.oldStorage.getUserNotificationPreferences(userId);
-  }
-
-  async createUserNotificationPreferences(preferences: any) {
-    return this.oldStorage.createUserNotificationPreferences(preferences);
-  }
-
-  async updateUserNotificationPreferences(userId: string, preferences: any) {
-    return this.oldStorage.updateUserNotificationPreferences(userId, preferences);
-  }
-
-  async getOrCreateDefaultNotificationPreferences(userId: string) {
-    return this.oldStorage.getOrCreateDefaultNotificationPreferences(userId);
-  }
-
-  async getUsersWithSchedulingNotifications() {
-    return this.oldStorage.getUsersWithSchedulingNotifications();
-  }
-
-  // Project views operations
-  async createProjectView(view: any) {
-    return this.oldStorage.createProjectView(view);
-  }
-
-  async getProjectViewsByUserId(userId: string) {
-    return this.oldStorage.getProjectViewsByUserId(userId);
-  }
-
-  async deleteProjectView(id: string) {
-    return this.oldStorage.deleteProjectView(id);
-  }
-
-  // Company views operations
-  async createCompanyView(view: any) {
-    return this.oldStorage.createCompanyView(view);
-  }
-
-  async getCompanyViewsByUserId(userId: string) {
-    return this.oldStorage.getCompanyViewsByUserId(userId);
-  }
-
-  async deleteCompanyView(id: string) {
-    return this.oldStorage.deleteCompanyView(id);
-  }
-
-  // User column preferences operations
-  async getUserColumnPreferences(userId: string, viewType?: string) {
-    return this.oldStorage.getUserColumnPreferences(userId, viewType);
-  }
-
-  async upsertUserColumnPreferences(preferences: any) {
-    return this.oldStorage.upsertUserColumnPreferences(preferences);
-  }
-
-  async updateUserColumnPreferences(userId: string, viewType: string, preferences: any) {
-    return this.oldStorage.updateUserColumnPreferences(userId, viewType, preferences);
-  }
-
-  // Dashboard operations
-  async createDashboard(dashboard: any) {
-    return this.oldStorage.createDashboard(dashboard);
-  }
-
-  async getDashboardsByUserId(userId: string) {
-    return this.oldStorage.getDashboardsByUserId(userId);
-  }
-
-  async getSharedDashboards() {
-    return this.oldStorage.getSharedDashboards();
-  }
-
-  async getDashboardById(id: string) {
-    return this.oldStorage.getDashboardById(id);
-  }
-
-  async updateDashboard(id: string, dashboard: any) {
-    return this.oldStorage.updateDashboard(id, dashboard);
-  }
-
-  async deleteDashboard(id: string) {
-    return this.oldStorage.deleteDashboard(id);
-  }
-
-  async getHomescreenDashboard(userId: string) {
-    return this.oldStorage.getHomescreenDashboard(userId);
-  }
-
-  async clearHomescreenDashboards(userId: string) {
-    return this.oldStorage.clearHomescreenDashboards(userId);
-  }
-
-  // User project preferences operations
-  async getUserProjectPreferences(userId: string, projectId: string) {
-    return this.oldStorage.getUserProjectPreferences(userId, projectId);
-  }
-
-  async upsertUserProjectPreferences(preferences: any) {
-    return this.oldStorage.upsertUserProjectPreferences(preferences);
-  }
-
-  async updateUserProjectPreferences(userId: string, projectId: string, preferences: any) {
-    return this.oldStorage.updateUserProjectPreferences(userId, projectId, preferences);
-  }
-
-  // ============================================================================
   // CLIENT DOMAIN - Delegated to ClientStorage
   // ============================================================================
   
@@ -2633,6 +2521,10 @@ export class DatabaseStorage implements IStorage {
 
   async getOrCreateDefaultNotificationPreferences(userId: string) {
     return this.userNotificationPreferencesStorage.getOrCreateDefaultNotificationPreferences(userId);
+  }
+
+  async getUsersWithSchedulingNotifications() {
+    return this.userNotificationPreferencesStorage.getUsersWithSchedulingNotifications();
   }
 
   // Project/Company Views operations (6 methods) - ViewsStorage

@@ -1,7 +1,9 @@
-import { eq } from 'drizzle-orm';
+import { eq, and, not, isNull } from 'drizzle-orm';
 import { db } from '../../db';
 import {
   userNotificationPreferences,
+  users,
+  type User,
   type UserNotificationPreferences,
   type InsertUserNotificationPreferences,
   type UpdateUserNotificationPreferences,
@@ -54,5 +56,33 @@ export class UserNotificationPreferencesStorage {
     };
 
     return await this.createUserNotificationPreferences(defaultPreferences);
+  }
+
+  async getUsersWithSchedulingNotifications(): Promise<User[]> {
+    const usersWithNotifications = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        profileImageUrl: users.profileImageUrl,
+        isAdmin: users.isAdmin,
+        canSeeAdminMenu: users.canSeeAdminMenu,
+        passwordHash: users.passwordHash,
+        isFallbackUser: users.isFallbackUser,
+        createdAt: users.createdAt,
+        updatedAt: users.updatedAt,
+      })
+      .from(users)
+      .innerJoin(userNotificationPreferences, eq(users.id, userNotificationPreferences.userId))
+      .where(
+        and(
+          eq(userNotificationPreferences.notifySchedulingSummary, true),
+          eq(users.isAdmin, true),
+          not(isNull(users.email))
+        )
+      );
+    
+    return usersWithNotifications as User[];
   }
 }
