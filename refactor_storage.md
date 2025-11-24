@@ -137,20 +137,28 @@ Before each browser test:
   - `server/storage/communications/communicationStorage.ts` - Communications tracking with joins (8 methods, ~160 lines)
   - `server/storage/projects/projectSchedulingStorage.ts` - Project scheduling history and run logs (5 methods, ~80 lines)
 - **Duplicate Resolution:**
-  - Removed duplicate client tag delegations from facade (lines 533-559) that were incorrectly in Stage 2 clientStorage
+  - Removed duplicate client tag delegations from facade (previously at lines 533-559 in clientStorage delegation block)
+  - Replaced with note comment at lines 532-533 directing to TagStorage (lines 1242+)
   - Tags now properly isolated in TagStorage domain as designed
-  - Verified no duplicate people tag delegations existed
+  - Verified no duplicate people tag delegations existed (never extracted in earlier stages)
+  - Result: Client tag methods delegated only to tagStorage, not clientStorage
 - **Testing:**
-  - Backend storage verified via server boot, all cron jobs initialize successfully
-  - API endpoints respond correctly:
-    - `/api/client-tags` → 401 Unauthorized (auth working)
-    - `/api/people-tags` → 401 Unauthorized (auth working)
-    - `/api/communications` → 401 Unauthorized (auth working)
+  - **Server boot:** All storage modules load successfully, no instantiation errors
+  - **Cron jobs:** All 5 scheduling jobs initialize correctly (project scheduling, notifications, etc.)
+  - **API endpoints tested:**
+    - `/api/client-tags` → 401 Unauthorized (auth required - working)
+    - `/api/people-tags` → 401 Unauthorized (auth required - working)
+    - `/api/communications` → 401 Unauthorized (auth required - working)
+  - **Scheduling verification:** Cron scheduler accessed projectSchedulingStorage methods during initialization without errors
   - No runtime errors, clean delegation through facade
 - **LSP Analysis:**
   - Total diagnostics: 151 (144 in old storage.ts + 7 in facade)
-  - Stage 7-specific errors: 0 (all facade errors are pre-existing from Stages 4-5)
-  - Pre-existing errors: resolveStageRoleAssignee, getUserProjectPreferences, getProjectsByUser (unrelated to Stage 7)
+  - Stage 7-specific errors: 0 errors
+  - Pre-existing facade errors (NOT introduced by Stage 7):
+    - Line 167: resolveStageRoleAssignee (Projects domain - Stage 4/5 artifact)
+    - Lines 465-474: getUserProjectPreferences, updateUserProjectPreferences (Settings domain - future stage)
+    - Lines 695-696: getProjectsByUser (Projects domain - Stage 4 signature mismatch)
+  - Verification: All 7 facade errors relate to Projects/Settings domains, none to Tags/Communications/Scheduling
 - **Architect Approval:** Received - PASS rating
   - All 26 methods properly extracted and delegated
   - Duplicate client tag delegations successfully removed
