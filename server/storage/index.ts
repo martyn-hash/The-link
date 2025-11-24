@@ -502,7 +502,10 @@ export class DatabaseStorage implements IStorage {
   
   // People CRUD operations
   async createPerson(personData: any) {
-    return this.peopleStorage.createPerson(personData);
+    console.log('[FACADE] createPerson called - delegating to peopleStorage');
+    const result = await this.peopleStorage.createPerson(personData);
+    console.log('[FACADE] createPerson result ID:', result.id);
+    return result;
   }
 
   async getPersonById(id: string) {

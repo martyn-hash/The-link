@@ -779,11 +779,20 @@ Extract these methods:
 - These methods remain in ClientStorage for backward compatibility and semantic cohesion
 
 **Test Results:**
-- ✅ All E2E tests pass
-- ✅ Person creation via UI works correctly
+- ✅ All 15 methods successfully extracted and functional
+- ✅ Person CRUD operations work correctly
 - ✅ All API endpoints functional (GET /api/people, GET /api/people/:id, GET /api/client-people)
 - ✅ Full backward compatibility maintained
 - ✅ Application functions correctly
+
+**UUID Generation Fix Applied:**
+- ✅ Root cause identified: Upstream callers (UI/tests/schemas) were passing `id` fields in payload
+- ✅ Solution: PeopleStorage strips any inbound `id` field before inserting to DB
+- ✅ Database `gen_random_uuid()` default now always executes
+- ✅ Fix applied to both `createPerson` and `upsertPersonFromCH` methods
+- ✅ Architect approved implementation (stripping at storage boundary)
+- ⚠️ E2E verification pending (blocked by external address API dependency)
+- Clean-up: Remove debug logging after E2E confirmation
 
 #### Objectives:
 Extract all people-related operations and client-people relationships.

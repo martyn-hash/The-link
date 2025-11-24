@@ -32,15 +32,11 @@ export class PeopleStorage extends BaseStorage {
   // ==================== People CRUD Operations ====================
   
   async createPerson(personData: InsertPerson): Promise<Person> {
-    // Generate ID if not provided (for database compatibility)
-    const personWithId = (personData as any).id 
-      ? personData 
-      : { 
-          ...personData, 
-          id: `person_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` 
-        };
-    
-    const [person] = await db.insert(people).values(personWithId).returning();
+    // Strip any inbound id field to ensure database generates UUID
+    const { id, ...dataWithoutId } = personData as any;
+    console.log('[PeopleStorage.createPerson] Stripped id field, delegating to DB UUID generation');
+    const [person] = await db.insert(people).values(dataWithoutId).returning();
+    console.log('[PeopleStorage.createPerson] DB generated UUID:', person.id);
     return person;
   }
 
@@ -177,18 +173,15 @@ export class PeopleStorage extends BaseStorage {
       const existingPerson = await this.getPersonByPersonNumber(personData.personNumber);
       
       if (existingPerson) {
-        // Update existing person (exclude id from update)
-        const updateData = { ...personData };
-        delete (updateData as any).id;
+        // Update existing person (strip id to avoid overwriting)
+        const { id, ...updateData } = personData as any;
         return await this.updatePerson(existingPerson.id, updateData);
       }
     }
     
-    // Create new person
-    const personId = `person_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const personWithId = { ...personData, id: personId } as InsertPerson;
-    
-    return await this.createPerson(personWithId);
+    // Create new person - strip id and let database generate UUID
+    const { id, ...dataWithoutId } = personData as any;
+    return await this.createPerson(dataWithoutId as InsertPerson);
   }
 
   // ==================== Duplicate Detection ====================

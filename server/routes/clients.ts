@@ -519,9 +519,8 @@ export function registerClientRoutes(
 
       const client = await storage.createClient(clientData);
 
-      const personId = `person_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      // Let database generate UUID for person
       const personData = {
-        id: personId,
         fullName: `${firstName} ${lastName}`,
         firstName: firstName,
         lastName: lastName,
@@ -704,10 +703,8 @@ export function registerClientRoutes(
 
       const personData = validationResult.data;
 
-      const personId = `person_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      const personWithId = { ...personData, id: personId };
-
-      const newPerson = await storage.createPerson(personWithId);
+      // Let database generate UUID for person
+      const newPerson = await storage.createPerson(personData);
 
       const relationshipId = `cp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const clientPersonData = {

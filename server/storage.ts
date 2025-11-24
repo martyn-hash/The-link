@@ -2692,15 +2692,8 @@ export class DatabaseStorage implements IStorage {
 
   // People operations
   async createPerson(personData: InsertPerson): Promise<Person> {
-    // Generate ID if not provided (for database compatibility)
-    const personWithId = personData.id 
-      ? personData 
-      : { 
-          ...personData, 
-          id: `person_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` 
-        } as InsertPerson;
-    
-    const [person] = await db.insert(people).values(personWithId).returning();
+    // Let database generate UUID via gen_random_uuid() default
+    const [person] = await db.insert(people).values(personData).returning();
     return person;
   }
 
@@ -2935,18 +2928,13 @@ export class DatabaseStorage implements IStorage {
       const existingPerson = await this.getPersonByPersonNumber(personData.personNumber);
       
       if (existingPerson) {
-        // Update existing person (exclude id from update)
-        const updateData = { ...personData };
-        delete (updateData as any).id;
-        return await this.updatePerson(existingPerson.id, updateData);
+        // Update existing person
+        return await this.updatePerson(existingPerson.id, personData);
       }
     }
     
-    // Create new person
-    const personId = `person_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const personWithId = { ...personData, id: personId } as InsertPerson;
-    
-    return await this.createPerson(personWithId);
+    // Create new person - let database generate UUID
+    return await this.createPerson(personData as InsertPerson);
   }
 
   async linkPersonToClient(clientId: string, personId: string, officerRole?: string, isPrimaryContact?: boolean): Promise<ClientPerson> {
