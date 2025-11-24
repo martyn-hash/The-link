@@ -29,6 +29,11 @@ import {
   getDefaultStage,
   validateProjectStatus,
 } from './projects/index.js';
+import { 
+  ServiceStorage, 
+  WorkRoleStorage, 
+  ServiceAssignmentStorage 
+} from './services/index.js';
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -57,6 +62,9 @@ export class DatabaseStorage implements IStorage {
   private projectTypesStorage: ProjectTypesStorage;
   private projectStagesStorage: ProjectStagesStorage;
   private projectApprovalsStorage: ProjectApprovalsStorage;
+  private serviceStorage: ServiceStorage;
+  private workRoleStorage: WorkRoleStorage;
+  private serviceAssignmentStorage: ServiceAssignmentStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -80,10 +88,16 @@ export class DatabaseStorage implements IStorage {
     this.projectStagesStorage = new ProjectStagesStorage();
     this.projectApprovalsStorage = new ProjectApprovalsStorage();
     
+    // Initialize services domain storages
+    this.serviceStorage = new ServiceStorage();
+    this.workRoleStorage = new WorkRoleStorage();
+    this.serviceAssignmentStorage = new ServiceAssignmentStorage();
+    
     // Register cross-domain helpers
     this.registerClientHelpers();
     this.registerPeopleHelpers();
     this.registerProjectHelpers();
+    this.registerServiceHelpers();
   }
 
   /**
@@ -92,6 +106,24 @@ export class DatabaseStorage implements IStorage {
   private registerPeopleHelpers() {
     // No cross-domain helpers needed for Stage 3
     // People domain operations are self-contained
+  }
+
+  /**
+   * Register helpers for cross-domain dependencies in service storage
+   */
+  private registerServiceHelpers() {
+    // ServiceStorage needs helpers for validation
+    this.serviceStorage.registerHelpers({
+      getServiceById: (serviceId: string) => this.serviceStorage.getServiceById(serviceId),
+      getWorkRoleById: (roleId: string) => this.workRoleStorage.getWorkRoleById(roleId),
+    });
+    
+    // ServiceAssignmentStorage needs helpers for role validation
+    this.serviceAssignmentStorage.registerHelpers({
+      getServiceById: (serviceId: string) => this.serviceStorage.getServiceById(serviceId),
+      getWorkRoleById: (roleId: string) => this.workRoleStorage.getWorkRoleById(roleId),
+      getWorkRolesByServiceId: (serviceId: string) => this.workRoleStorage.getWorkRolesByServiceId(serviceId),
+    });
   }
 
   /**
@@ -107,18 +139,18 @@ export class DatabaseStorage implements IStorage {
       validateRequiredFields: validateRequiredFields(this.projectStagesStorage),
       getProjectTypeByName: getProjectTypeByName(this.projectTypesStorage),
       
-      // Services domain (still in oldStorage - will be extracted in future stage)
-      getServiceByProjectTypeId: (projectTypeId: string) => this.oldStorage.getServiceByProjectTypeId(projectTypeId),
+      // Services domain - now delegated to ServiceStorage and ServiceAssignmentStorage (Stage 6)
+      getServiceByProjectTypeId: (projectTypeId: string) => this.serviceStorage.getServiceByProjectTypeId(projectTypeId),
       getClientServiceByClientAndProjectType: (clientId: string, projectTypeId: string) => 
-        this.oldStorage.getClientServiceByClientAndProjectType(clientId, projectTypeId),
+        this.serviceAssignmentStorage.getClientServiceByClientAndProjectType(clientId, projectTypeId),
       resolveProjectAssignments: (clientId: string, projectTypeId: string) => 
         this.oldStorage.resolveProjectAssignments(clientId, projectTypeId),
       resolveServiceOwner: (clientId: string, projectTypeId: string) => 
         this.oldStorage.resolveServiceOwner(clientId, projectTypeId),
       resolveStageRoleAssignee: (project: any) => this.oldStorage.resolveStageRoleAssignee(project),
-      getWorkRoleById: (workRoleId: string) => this.oldStorage.getWorkRoleById(workRoleId),
+      getWorkRoleById: (workRoleId: string) => this.workRoleStorage.getWorkRoleById(workRoleId),
       resolveRoleAssigneeForClient: (clientId: string, projectTypeId: string, roleName: string) => 
-        this.oldStorage.resolveRoleAssigneeForClient(clientId, projectTypeId, roleName),
+        this.serviceAssignmentStorage.resolveRoleAssigneeForClient(clientId, projectTypeId, roleName),
       
       // Notifications and messaging domains (still in oldStorage - will be extracted in future stage)
       sendStageChangeNotifications: (projectId: string, newStatus: string, oldStatus: string) => 
@@ -147,17 +179,17 @@ export class DatabaseStorage implements IStorage {
         const projects = await this.projectStorage.getProjectsByClient(clientId);
         return projects && projects.length > 0;
       },
-      // Delete client services and role assignments (for deletion cascade)
+      // Delete client services and role assignments (for deletion cascade) - now delegated to ServiceAssignmentStorage
       deleteClientServices: async (clientId: string) => {
-        const services = await this.oldStorage.getClientServicesByClientId(clientId);
+        const services = await this.serviceAssignmentStorage.getClientServicesByClientId(clientId);
         for (const service of services) {
           // Delete role assignments first
-          const assignments = await this.oldStorage.getClientServiceRoleAssignments(service.id);
+          const assignments = await this.serviceAssignmentStorage.getClientServiceRoleAssignments(service.id);
           for (const assignment of assignments) {
-            await this.oldStorage.deleteClientServiceRoleAssignment(assignment.id);
+            await this.serviceAssignmentStorage.deleteClientServiceRoleAssignment(assignment.id);
           }
           // Delete the service
-          await this.oldStorage.deleteClientService(service.id);
+          await this.serviceAssignmentStorage.deleteClientService(service.id);
         }
       },
       // Get person by ID (for conversion operations) - now delegated to PeopleStorage
@@ -965,8 +997,249 @@ export class DatabaseStorage implements IStorage {
   // - createProjectsFromCSV (~300 lines, bulk import with validation)
   // Total: ~1620 lines extracted from oldStorage to ProjectStorage
 
+  // ============================================================================
+  // SERVICES DOMAIN - Delegated to ServiceStorage, WorkRoleStorage, ServiceAssignmentStorage
+  // ============================================================================
+  
+  // ServiceStorage methods (13 methods)
+  // Services CRUD
+  async getAllServices() {
+    return this.serviceStorage.getAllServices();
+  }
+
+  async getActiveServices() {
+    return this.serviceStorage.getActiveServices();
+  }
+
+  async getServicesWithActiveClients() {
+    return this.serviceStorage.getServicesWithActiveClients();
+  }
+
+  async getClientAssignableServices() {
+    return this.serviceStorage.getClientAssignableServices();
+  }
+
+  async getProjectTypeAssignableServices() {
+    return this.serviceStorage.getProjectTypeAssignableServices();
+  }
+
+  async getServiceById(id: string) {
+    return this.serviceStorage.getServiceById(id);
+  }
+
+  async getServiceByName(name: string) {
+    return this.serviceStorage.getServiceByName(name);
+  }
+
+  async getServiceByProjectTypeId(projectTypeId: string) {
+    return this.serviceStorage.getServiceByProjectTypeId(projectTypeId);
+  }
+
+  async getScheduledServices() {
+    return this.serviceStorage.getScheduledServices();
+  }
+
+  async createService(service: any) {
+    return this.serviceStorage.createService(service);
+  }
+
+  async updateService(id: string, service: any) {
+    return this.serviceStorage.updateService(id, service);
+  }
+
+  async deleteService(id: string) {
+    return this.serviceStorage.deleteService(id);
+  }
+
+  // Service Owner Resolution (cross-domain method using serviceAssignmentStorage and userStorage)
+  async resolveServiceOwner(clientId: string, projectTypeId: string) {
+    const clientService = await this.serviceAssignmentStorage.getClientServiceByClientAndProjectType(clientId, projectTypeId);
+    if (clientService && clientService.serviceOwnerId) {
+      return await this.userStorage.getUser(clientService.serviceOwnerId);
+    }
+    return undefined;
+  }
+
+  // WorkRoleStorage methods (10 methods)
+  // Work Roles CRUD
+  async getAllWorkRoles() {
+    return this.workRoleStorage.getAllWorkRoles();
+  }
+
+  async getWorkRoleById(id: string) {
+    return this.workRoleStorage.getWorkRoleById(id);
+  }
+
+  async getWorkRoleByName(name: string) {
+    return this.workRoleStorage.getWorkRoleByName(name);
+  }
+
+  async createWorkRole(role: any) {
+    return this.workRoleStorage.createWorkRole(role);
+  }
+
+  async updateWorkRole(id: string, role: any) {
+    return this.workRoleStorage.updateWorkRole(id, role);
+  }
+
+  async deleteWorkRole(id: string) {
+    return this.workRoleStorage.deleteWorkRole(id);
+  }
+
+  // Service-Role Mappings
+  async getServiceRolesByServiceId(serviceId: string) {
+    return this.workRoleStorage.getServiceRolesByServiceId(serviceId);
+  }
+
+  async getWorkRolesByServiceId(serviceId: string) {
+    return this.workRoleStorage.getWorkRolesByServiceId(serviceId);
+  }
+
+  async addRoleToService(serviceId: string, roleId: string) {
+    return this.workRoleStorage.addRoleToService(serviceId, roleId);
+  }
+
+  async removeRoleFromService(serviceId: string, roleId: string) {
+    return this.workRoleStorage.removeRoleFromService(serviceId, roleId);
+  }
+
+  // ServiceAssignmentStorage methods (30 methods)
+  // Client Services CRUD
+  async getAllClientServices() {
+    return this.serviceAssignmentStorage.getAllClientServices();
+  }
+
+  async getClientServiceById(id: string) {
+    return this.serviceAssignmentStorage.getClientServiceById(id);
+  }
+
+  async getClientServicesByClientId(clientId: string) {
+    return this.serviceAssignmentStorage.getClientServicesByClientId(clientId);
+  }
+
+  async getClientServicesByServiceId(serviceId: string) {
+    return this.serviceAssignmentStorage.getClientServicesByServiceId(serviceId);
+  }
+
+  async createClientService(service: any) {
+    return this.serviceAssignmentStorage.createClientService(service);
+  }
+
+  async updateClientService(id: string, service: any) {
+    return this.serviceAssignmentStorage.updateClientService(id, service);
+  }
+
+  async deleteClientService(id: string) {
+    return this.serviceAssignmentStorage.deleteClientService(id);
+  }
+
+  async getClientServiceByClientAndProjectType(clientId: string, projectTypeId: string) {
+    return this.serviceAssignmentStorage.getClientServiceByClientAndProjectType(clientId, projectTypeId);
+  }
+
+  async checkClientServiceMappingExists(clientId: string, serviceId: string) {
+    return this.serviceAssignmentStorage.checkClientServiceMappingExists(clientId, serviceId);
+  }
+
+  async getAllClientServicesWithDetails() {
+    return this.serviceAssignmentStorage.getAllClientServicesWithDetails();
+  }
+
+  // Client Service Role Assignments CRUD
+  async getClientServiceRoleAssignments(clientServiceId: string) {
+    return this.serviceAssignmentStorage.getClientServiceRoleAssignments(clientServiceId);
+  }
+
+  async getActiveClientServiceRoleAssignments(clientServiceId: string) {
+    return this.serviceAssignmentStorage.getActiveClientServiceRoleAssignments(clientServiceId);
+  }
+
+  async getClientServiceRoleAssignmentById(id: string) {
+    return this.serviceAssignmentStorage.getClientServiceRoleAssignmentById(id);
+  }
+
+  async createClientServiceRoleAssignment(assignment: any) {
+    return this.serviceAssignmentStorage.createClientServiceRoleAssignment(assignment);
+  }
+
+  async updateClientServiceRoleAssignment(id: string, assignment: any) {
+    return this.serviceAssignmentStorage.updateClientServiceRoleAssignment(id, assignment);
+  }
+
+  async deactivateClientServiceRoleAssignment(id: string) {
+    return this.serviceAssignmentStorage.deactivateClientServiceRoleAssignment(id);
+  }
+
+  async deleteClientServiceRoleAssignment(id: string) {
+    return this.serviceAssignmentStorage.deleteClientServiceRoleAssignment(id);
+  }
+
+  // Role Resolution for Project Creation
+  async resolveRoleAssigneeForClientByRoleId(clientId: string, projectTypeId: string, workRoleId: string) {
+    return this.serviceAssignmentStorage.resolveRoleAssigneeForClientByRoleId(clientId, projectTypeId, workRoleId);
+  }
+
+  async resolveRoleAssigneeForClient(clientId: string, projectTypeId: string, roleName: string) {
+    return this.serviceAssignmentStorage.resolveRoleAssigneeForClient(clientId, projectTypeId, roleName);
+  }
+
+  // Validation Methods
+  async validateClientServiceRoleCompleteness(clientServiceId: string) {
+    return this.serviceAssignmentStorage.validateClientServiceRoleCompleteness(clientServiceId);
+  }
+
+  async validateAssignedRolesAgainstService(serviceId: string, roleIds: string[]) {
+    return this.serviceAssignmentStorage.validateAssignedRolesAgainstService(serviceId, roleIds);
+  }
+
+  // People Services CRUD
+  async getAllPeopleServices() {
+    return this.serviceAssignmentStorage.getAllPeopleServices();
+  }
+
+  async getPeopleServiceById(id: string) {
+    return this.serviceAssignmentStorage.getPeopleServiceById(id);
+  }
+
+  async getPeopleServicesByPersonId(personId: string) {
+    return this.serviceAssignmentStorage.getPeopleServicesByPersonId(personId);
+  }
+
+  async getPeopleServicesByServiceId(serviceId: string) {
+    return this.serviceAssignmentStorage.getPeopleServicesByServiceId(serviceId);
+  }
+
+  async getPeopleServicesByClientId(clientId: string) {
+    return this.serviceAssignmentStorage.getPeopleServicesByClientId(clientId);
+  }
+
+  async createPeopleService(service: any) {
+    return this.serviceAssignmentStorage.createPeopleService(service);
+  }
+
+  async updatePeopleService(id: string, service: any) {
+    return this.serviceAssignmentStorage.updatePeopleService(id, service);
+  }
+
+  async deletePeopleService(id: string) {
+    return this.serviceAssignmentStorage.deletePeopleService(id);
+  }
+
+  async checkPeopleServiceMappingExists(personId: string, serviceId: string) {
+    return this.serviceAssignmentStorage.checkPeopleServiceMappingExists(personId, serviceId);
+  }
+
+  async getAllPeopleServicesWithDetails() {
+    return this.serviceAssignmentStorage.getAllPeopleServicesWithDetails();
+  }
+
+  // ✅ Stage 6 COMPLETE: All 53 service-related methods extracted and delegated:
+  // - ServiceStorage: 13 methods (services CRUD, scheduled services, service owner resolution)
+  // - WorkRoleStorage: 10 methods (work roles CRUD, service-role mappings)
+  // - ServiceAssignmentStorage: 30 methods (client services, role assignments, people services, validation)
+
   // Delegate all other methods to old storage
-  // (This is a catch-all for the remaining ~214 methods)
+  // (This is a catch-all for the remaining methods)
 
   // Add proxy for all other methods using Proxy pattern for complete coverage
   // This ensures any method not explicitly delegated above goes to oldStorage
@@ -1021,6 +1294,15 @@ export const storage = createDatabaseStorageProxy();
 //          - ProjectChronologyStorage: 4 methods (createChronologyEntry, getProjectChronology, getMostRecentStageChange, getProjectProgressMetrics)
 //          - Note: Client chronology methods (createClientChronologyEntry, getClientChronology) already in Stage 2 Clients domain
 //          - Helper injection: 18 cross-domain helpers registered for configuration, services, notifications, and messaging dependencies
-// Stage 5-14: [ ] Other domains - pending
+// Stage 5: ✅ Project configuration domain extracted - 51 methods delegated (COMPLETE)
+//          - ProjectTypesStorage: 9 methods (project type CRUD, dependencies, force delete)
+//          - ProjectStagesStorage: 28 methods (kanban stages, validation, change reasons, mappings, custom fields)
+//          - ProjectApprovalsStorage: 14 methods (stage approvals, fields, responses, validation)
+// Stage 6: ✅ Services domain extracted - 53 methods delegated (COMPLETE)
+//          - ServiceStorage: 13 methods (services CRUD, scheduled services, service owner resolution)
+//          - WorkRoleStorage: 10 methods (work roles CRUD, service-role mappings)
+//          - ServiceAssignmentStorage: 30 methods (client services, role assignments, people services, validation)
+//          - Helper updates: registerClientHelpers updated to use serviceAssignmentStorage instead of oldStorage
+// Stage 7-14: [ ] Other domains - pending
 // Stage 15: [ ] Final cleanup - remove old storage.ts
 // ============================================================================
