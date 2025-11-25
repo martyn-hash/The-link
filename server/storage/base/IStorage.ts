@@ -199,6 +199,7 @@ import {
   type InsertSignatureAuditLog,
   type CompanySettings,
   type UpdateCompanySettings,
+  type StageChangeNotificationPreview,
   userOauthAccounts,
 } from "@shared/schema";
 
@@ -240,20 +241,6 @@ export interface SuperSearchResults {
   total: number;
 }
 
-export interface StageChangeNotificationPreview {
-  project: Project;
-  client: Client;
-  currentAssignee: User | undefined;
-  recipients: Array<{
-    id: string;
-    type: 'staff' | 'portal';
-    email: string;
-    name: string;
-    role: string;
-  }>;
-  newStage: string;
-  oldStage?: string;
-}
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -323,7 +310,7 @@ export interface IStorage {
   getProjectsByClientId(clientId: string): Promise<ProjectWithRelations[]>;
   getAllProjects(filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string; dueDate?: string }): Promise<ProjectWithRelations[]>;
   updateProject(id: string, project: Partial<InsertProject>): Promise<Project>;
-  updateProjectStatus(id: string, data: UpdateProjectStatus): Promise<Project>;
+  updateProjectStatus(update: UpdateProjectStatus, userId: string): Promise<Project>;
   deleteProject(id: string): Promise<void>;
   
   getProjectChronologyByProjectId(projectId: string): Promise<ProjectChronology[]>;
@@ -737,7 +724,7 @@ export interface IStorage {
   createClientRequestTemplateSection(section: InsertClientRequestTemplateSection): Promise<ClientRequestTemplateSection>;
   updateClientRequestTemplateSection(id: string, section: UpdateClientRequestTemplateSection): Promise<ClientRequestTemplateSection>;
   deleteClientRequestTemplateSection(id: string): Promise<void>;
-  updateSectionOrders(sections: { id: string; sortOrder: number }[]): Promise<void>;
+  updateSectionOrders(updates: { id: string; order: number }[]): Promise<void>;
   
   getClientRequestTemplateQuestionsBySectionId(sectionId: string): Promise<ClientRequestTemplateQuestion[]>;
   createClientRequestTemplateQuestion(question: InsertClientRequestTemplateQuestion): Promise<ClientRequestTemplateQuestion>;
@@ -750,17 +737,8 @@ export interface IStorage {
     project: Project | null;
     sections: (ClientCustomRequestSection & { questions: ClientCustomRequestQuestion[] })[];
   })[]>;
-  getClientCustomRequestById(id: string): Promise<(ClientCustomRequest & { 
-    client: Client;
-    template: ClientRequestTemplate | null;
-    project: Project | null;
-    sections: (ClientCustomRequestSection & { questions: ClientCustomRequestQuestion[] })[];
-  }) | undefined>;
-  getClientCustomRequestsByClientId(clientId: string): Promise<(ClientCustomRequest & { 
-    template: ClientRequestTemplate | null;
-    project: Project | null;
-    sections: (ClientCustomRequestSection & { questions: ClientCustomRequestQuestion[] })[];
-  })[]>;
+  getClientCustomRequestById(id: string): Promise<ClientCustomRequest | undefined>;
+  getClientCustomRequestsByClientId(clientId: string): Promise<ClientCustomRequest[]>;
   createClientCustomRequest(request: InsertClientCustomRequest): Promise<ClientCustomRequest>;
   updateClientCustomRequest(id: string, request: UpdateClientCustomRequest): Promise<ClientCustomRequest>;
   deleteClientCustomRequest(id: string): Promise<void>;
@@ -775,20 +753,8 @@ export interface IStorage {
   updateClientCustomRequestQuestion(id: string, question: UpdateClientCustomRequestQuestion): Promise<ClientCustomRequestQuestion>;
   deleteClientCustomRequestQuestion(id: string): Promise<void>;
   
-  getAllTaskInstances(filters?: { clientId?: string; projectId?: string; status?: string; assigneeId?: string }): Promise<(TaskInstance & {
-    client: Client | null;
-    project: Project | null;
-    assignee: User | null;
-    taskType: TaskType | null;
-    responses: TaskInstanceResponse[];
-  })[]>;
-  getTaskInstanceById(id: string): Promise<(TaskInstance & {
-    client: Client | null;
-    project: Project | null;
-    assignee: User | null;
-    taskType: TaskType | null;
-    responses: TaskInstanceResponse[];
-  }) | undefined>;
+  getAllTaskInstances(filters?: { status?: string; clientId?: string }): Promise<(TaskInstance & { client?: Client })[]>;
+  getTaskInstanceById(id: string): Promise<TaskInstance | undefined>;
   getTaskInstancesByProjectId(projectId: string): Promise<TaskInstance[]>;
   createTaskInstance(instance: InsertTaskInstance): Promise<TaskInstance>;
   updateTaskInstance(id: string, instance: UpdateTaskInstance): Promise<TaskInstance>;
@@ -803,24 +769,8 @@ export interface IStorage {
   updateTaskType(id: string, taskType: UpdateTaskType): Promise<TaskType>;
   deleteTaskType(id: string): Promise<void>;
   
-  getAllInternalTasks(filters?: { status?: string; assigneeId?: string; creatorId?: string; parentId?: string; includeChildren?: boolean }): Promise<(InternalTask & {
-    assignee: User | null;
-    creator: User;
-    parent: InternalTask | null;
-    children: InternalTask[];
-    connections: (TaskConnection & { relatedTask: InternalTask })[];
-    progressNotes: (TaskProgressNote & { user: User })[];
-    documents: TaskDocument[];
-  })[]>;
-  getInternalTaskById(id: string): Promise<(InternalTask & {
-    assignee: User | null;
-    creator: User;
-    parent: InternalTask | null;
-    children: InternalTask[];
-    connections: (TaskConnection & { relatedTask: InternalTask })[];
-    progressNotes: (TaskProgressNote & { user: User })[];
-    documents: TaskDocument[];
-  }) | undefined>;
+  getAllInternalTasks(filters?: { status?: string; priority?: string; assigneeId?: string; creatorId?: string }): Promise<(InternalTask & { assignee?: User | null })[]>;
+  getInternalTaskById(id: string): Promise<(InternalTask & { assignee?: User | null }) | undefined>;
   createInternalTask(task: InsertInternalTask): Promise<InternalTask>;
   updateInternalTask(id: string, task: UpdateInternalTask): Promise<InternalTask>;
   deleteInternalTask(id: string): Promise<void>;
@@ -897,5 +847,5 @@ export interface IStorage {
   deleteTaskDocument(id: string): Promise<void>;
 
   setFallbackUser(userId: string): Promise<void>;
-  logTaskActivityToProject(task: any, type: 'create' | 'complete' | 'reopen', userId: string): Promise<void>;
+  logTaskActivityToProject(projectId: string, taskType: string, taskDescription: string, userId?: string): Promise<void>;
 }

@@ -5,6 +5,11 @@
 // by delegating to domain-focused storage modules.
 // All 535+ methods are now delegated across 52 storage modules.
 
+// Import database connection for direct queries
+import { db } from '../db.js';
+import { eq } from 'drizzle-orm';
+import { projects } from '@shared/schema';
+
 // Import the IStorage interface from the new location
 import { IStorage as OriginalIStorage } from './base/IStorage.js';
 
@@ -574,6 +579,11 @@ export class DatabaseStorage implements IStorage {
     return this.clientStorage.getClientChronology(clientId);
   }
 
+  // IStorage interface alias
+  async getClientChronologyByClientId(clientId: string) {
+    return this.clientStorage.getClientChronology(clientId);
+  }
+
   // NOTE: Client Tags moved to Stage 7 TagStorage (lines 1267+)
   // Removed duplicate delegations that were previously in clientStorage
 
@@ -587,6 +597,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getClientEmailAliasesByClientId(clientId: string) {
+    return this.clientStorage.getClientEmailAliasesByClientId(clientId);
+  }
+
+  // IStorage interface alias
+  async getClientEmailAliases(clientId: string) {
     return this.clientStorage.getClientEmailAliasesByClientId(clientId);
   }
 
@@ -696,6 +711,15 @@ export class DatabaseStorage implements IStorage {
     return this.clientPeopleStorage.getClientPeopleByPersonId(personId);
   }
 
+  // IStorage interface aliases (legacy method names)
+  async getClientPersonsByClientId(clientId: string) {
+    return this.clientPeopleStorage.getClientPeopleByClientId(clientId);
+  }
+
+  async getClientPersonsByPersonId(personId: string) {
+    return this.clientPeopleStorage.getClientPeopleByPersonId(personId);
+  }
+
   async updateClientPerson(id: string, relationship: any) {
     return this.clientPeopleStorage.updateClientPerson(id, relationship);
   }
@@ -720,6 +744,18 @@ export class DatabaseStorage implements IStorage {
     return this.projectStorage.getProject(id);
   }
 
+  // IStorage interface alias (legacy method name)
+  async getProjectById(id: string) {
+    return this.projectStorage.getProject(id);
+  }
+
+  // IStorage interface - lean project fetch (without relations)
+  async getProjectByIdLean(id: string) {
+    // Direct database query for lean project fetch (without relations)
+    const [project] = await db.select().from(projects).where(eq(projects.id, id));
+    return project;
+  }
+
   async updateProject(id: string, updateData: any) {
     return this.projectStorage.updateProject(id, updateData);
   }
@@ -738,11 +774,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getProjectsByUser(userId: string, roleFilter?: string, statusFilter?: string) {
-    return this.projectStorage.getProjectsByUser(userId, roleFilter, statusFilter);
+    return this.projectStorage.getProjectsByUser(userId, roleFilter || 'all', statusFilter ? { archived: false } : undefined);
   }
 
   async getProjectsByClient(clientId: string) {
     return this.projectStorage.getProjectsByClient(clientId);
+  }
+
+  // IStorage interface alias
+  async getProjectsByClientId(clientId: string) {
+    return this.projectStorage.getProjectsByClient(clientId);
+  }
+
+  // IStorage interface - deleteProject
+  async deleteProject(id: string) {
+    return this.projectStorage.deleteProject(id);
   }
 
   async getProjectsByClientServiceId(clientServiceId: string) {
@@ -770,7 +816,17 @@ export class DatabaseStorage implements IStorage {
     return this.projectChronologyStorage.createChronologyEntry(entry);
   }
 
+  // IStorage interface alias
+  async createProjectChronologyEntry(entry: any) {
+    return this.projectChronologyStorage.createChronologyEntry(entry);
+  }
+
   async getProjectChronology(projectId: string) {
+    return this.projectChronologyStorage.getProjectChronology(projectId);
+  }
+
+  // IStorage interface alias
+  async getProjectChronologyByProjectId(projectId: string) {
     return this.projectChronologyStorage.getProjectChronology(projectId);
   }
 
@@ -783,7 +839,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async logTaskActivityToProject(projectId: string, taskType: string, taskDescription: string, userId?: string) {
-    return this.projectChronologyStorage.logTaskActivityToProject(projectId, taskType, taskDescription, userId);
+    return this.projectChronologyStorage.logTaskActivityToProject(projectId, taskType as 'created' | 'updated' | 'note_added' | 'completed', taskDescription, userId || '');
   }
 
   // NOTE: createClientChronologyEntry and getClientChronology are part of Stage 2 (Clients domain)
@@ -856,6 +912,14 @@ export class DatabaseStorage implements IStorage {
     return this.projectStagesStorage.deleteKanbanStage(id);
   }
 
+  // IStorage interface - reorderKanbanStages
+  async reorderKanbanStages(stages: { id: string; order: number }[]) {
+    // Update order for each stage
+    for (const { id, order } of stages) {
+      await this.projectStagesStorage.updateKanbanStage(id, { order });
+    }
+  }
+
   // Stage validation (7 methods)
   async isStageNameInUse(stageName: string) {
     return this.projectStagesStorage.isStageNameInUse(stageName);
@@ -881,9 +945,15 @@ export class DatabaseStorage implements IStorage {
     return this.projectStagesStorage.getDefaultStage();
   }
 
-  // Change reasons (5 methods)
+  // Change reasons (6 methods)
   async getAllChangeReasons() {
     return this.projectStagesStorage.getAllChangeReasons();
+  }
+
+  // IStorage interface - getChangeReasonById
+  async getChangeReasonById(id: string) {
+    const reasons = await this.projectStagesStorage.getAllChangeReasons();
+    return reasons.find(r => r.id === id);
   }
 
   async getChangeReasonsByProjectTypeId(projectTypeId: string) {
@@ -917,6 +987,14 @@ export class DatabaseStorage implements IStorage {
 
   async deleteStageReasonMap(id: string) {
     return this.projectStagesStorage.deleteStageReasonMap(id);
+  }
+
+  // IStorage interface - deleteStageReasonMapsByStageId
+  async deleteStageReasonMapsByStageId(stageId: string) {
+    const maps = await this.projectStagesStorage.getStageReasonMapsByStageId(stageId);
+    for (const map of maps) {
+      await this.projectStagesStorage.deleteStageReasonMap(map.id);
+    }
   }
 
   async validateStageReasonMapping(stageId: string, reasonId: string) {
@@ -969,6 +1047,11 @@ export class DatabaseStorage implements IStorage {
 
   async getStageApprovalsByProjectTypeId(projectTypeId: string) {
     return this.projectApprovalsStorage.getStageApprovalsByProjectTypeId(projectTypeId);
+  }
+
+  // IStorage interface - getStageApprovalsByStageId
+  async getStageApprovalsByStageId(stageId: string) {
+    return this.projectApprovalsStorage.getStageApprovalsByStageId(stageId);
   }
 
   async createStageApproval(approval: any) {
@@ -1229,8 +1312,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Validation Methods
-  async validateClientServiceRoleCompleteness(clientServiceId: string) {
-    return this.serviceAssignmentStorage.validateClientServiceRoleCompleteness(clientServiceId);
+  async validateClientServiceRoleCompleteness(clientId: string, serviceId: string) {
+    return this.serviceAssignmentStorage.validateClientServiceRoleCompleteness(clientId, serviceId);
   }
 
   async validateAssignedRolesAgainstService(serviceId: string, roleIds: string[]) {
@@ -1292,8 +1375,19 @@ export class DatabaseStorage implements IStorage {
     return this.tagStorage.getAllClientTags();
   }
 
+  // IStorage interface - getClientTagById
+  async getClientTagById(id: string) {
+    const tags = await this.tagStorage.getAllClientTags();
+    return tags.find(t => t.id === id);
+  }
+
   async createClientTag(tag: any) {
     return this.tagStorage.createClientTag(tag);
+  }
+
+  // IStorage interface - updateClientTag
+  async updateClientTag(id: string, tag: any) {
+    return this.tagStorage.updateClientTag(id, tag);
   }
 
   async deleteClientTag(id: string) {
@@ -1305,8 +1399,19 @@ export class DatabaseStorage implements IStorage {
     return this.tagStorage.getAllPeopleTags();
   }
 
+  // IStorage interface - getPeopleTagById
+  async getPeopleTagById(id: string) {
+    const tags = await this.tagStorage.getAllPeopleTags();
+    return tags.find(t => t.id === id);
+  }
+
   async createPeopleTag(tag: any) {
     return this.tagStorage.createPeopleTag(tag);
+  }
+
+  // IStorage interface - updatePeopleTag
+  async updatePeopleTag(id: string, tag: any) {
+    return this.tagStorage.updatePeopleTag(id, tag);
   }
 
   async deletePeopleTag(id: string) {
@@ -1322,11 +1427,26 @@ export class DatabaseStorage implements IStorage {
     return this.tagStorage.getClientTags(clientId);
   }
 
+  // IStorage interface alias
+  async getClientTagAssignmentsByClientId(clientId: string) {
+    return this.tagStorage.getClientTags(clientId);
+  }
+
   async assignClientTag(assignment: any) {
     return this.tagStorage.assignClientTag(assignment);
   }
 
+  // IStorage interface alias
+  async createClientTagAssignment(assignment: any) {
+    return this.tagStorage.assignClientTag(assignment);
+  }
+
   async unassignClientTag(clientId: string, tagId: string) {
+    return this.tagStorage.unassignClientTag(clientId, tagId);
+  }
+
+  // IStorage interface alias
+  async deleteClientTagAssignment(clientId: string, tagId: string) {
     return this.tagStorage.unassignClientTag(clientId, tagId);
   }
 
@@ -1335,11 +1455,26 @@ export class DatabaseStorage implements IStorage {
     return this.tagStorage.getPersonTags(personId);
   }
 
+  // IStorage interface alias
+  async getPeopleTagAssignmentsByPersonId(personId: string) {
+    return this.tagStorage.getPersonTags(personId);
+  }
+
   async assignPersonTag(assignment: any) {
     return this.tagStorage.assignPersonTag(assignment);
   }
 
+  // IStorage interface alias
+  async createPeopleTagAssignment(assignment: any) {
+    return this.tagStorage.assignPersonTag(assignment);
+  }
+
   async unassignPersonTag(personId: string, tagId: string) {
+    return this.tagStorage.unassignPersonTag(personId, tagId);
+  }
+
+  // IStorage interface alias
+  async deletePeopleTagAssignment(personId: string, tagId: string) {
     return this.tagStorage.unassignPersonTag(personId, tagId);
   }
 
@@ -1391,11 +1526,26 @@ export class DatabaseStorage implements IStorage {
     return this.projectSchedulingStorage.getProjectSchedulingHistoryByServiceId(serviceId, serviceType);
   }
 
+  // IStorage interface - getProjectSchedulingHistoryByProjectId
+  async getProjectSchedulingHistoryByProjectId(projectId: string) {
+    return this.projectSchedulingStorage.getProjectSchedulingHistoryByProjectId(projectId);
+  }
+
+  // IStorage interface - getProjectSchedulingHistory
+  async getProjectSchedulingHistory(options?: { serviceId?: string; clientId?: string; personId?: string; limit?: number }) {
+    return this.projectSchedulingStorage.getProjectSchedulingHistory(options);
+  }
+
   async createSchedulingRunLog(data: any) {
     return this.projectSchedulingStorage.createSchedulingRunLog(data);
   }
 
   async getSchedulingRunLogs(limit?: number) {
+    return this.projectSchedulingStorage.getSchedulingRunLogs(limit);
+  }
+
+  // IStorage interface alias
+  async getLatestSchedulingRuns(limit?: number) {
     return this.projectSchedulingStorage.getSchedulingRunLogs(limit);
   }
 
@@ -1414,6 +1564,11 @@ export class DatabaseStorage implements IStorage {
 
   async getUserIntegrationByType(userId: string, integrationType: 'office365' | 'voodoo_sms' | 'ringcentral') {
     return this.integrationStorage.getUserIntegrationByType(userId, integrationType);
+  }
+
+  // IStorage interface alias
+  async getUserIntegration(userId: string, provider: string) {
+    return this.integrationStorage.getUserIntegrationByType(userId, provider as any);
   }
 
   async createUserIntegration(integration: any) {
@@ -1461,6 +1616,11 @@ export class DatabaseStorage implements IStorage {
     return this.pushNotificationStorage.deletePushSubscription(endpoint);
   }
 
+  // IStorage interface alias
+  async deletePushSubscriptionByEndpoint(endpoint: string) {
+    return this.pushNotificationStorage.deletePushSubscription(endpoint);
+  }
+
   async deletePushSubscriptionsByUserId(userId: string) {
     return this.pushNotificationStorage.deletePushSubscriptionsByUserId(userId);
   }
@@ -1471,6 +1631,11 @@ export class DatabaseStorage implements IStorage {
 
   async getPushNotificationTemplateByType(templateType: string) {
     return this.pushNotificationStorage.getPushNotificationTemplateByType(templateType);
+  }
+
+  // IStorage interface alias
+  async getPushNotificationTemplateById(id: string) {
+    return this.pushNotificationStorage.getPushNotificationTemplateById(id);
   }
 
   async updatePushNotificationTemplate(id: string, template: any) {
@@ -1499,6 +1664,11 @@ export class DatabaseStorage implements IStorage {
 
   async deleteNotificationIcon(id: string) {
     return this.pushNotificationStorage.deleteNotificationIcon(id);
+  }
+
+  // IStorage interface - updateNotificationIcon
+  async updateNotificationIcon(id: string, icon: any) {
+    return this.pushNotificationStorage.updateNotificationIcon(id, icon);
   }
 
   // Email Operations - EmailStorage
@@ -1532,6 +1702,11 @@ export class DatabaseStorage implements IStorage {
 
   async upsertEmailMessage(message: any) {
     return this.emailStorage.upsertEmailMessage(message);
+  }
+
+  // IStorage interface - createEmailMessage
+  async createEmailMessage(message: any) {
+    return this.emailStorage.createEmailMessage(message);
   }
 
   async getEmailMessageByInternetMessageId(internetMessageId: string) {
@@ -1588,6 +1763,16 @@ export class DatabaseStorage implements IStorage {
 
   async getMailboxMessageMapsByUserId(userId: string) {
     return this.emailStorage.getMailboxMessageMapsByUserId(userId);
+  }
+
+  // IStorage interface - getMailboxMessageMapByGraphId
+  async getMailboxMessageMapByGraphId(userId: string, graphMessageId: string) {
+    return this.emailStorage.getMailboxMessageMapByGraphId(userId, graphMessageId);
+  }
+
+  // IStorage interface - deleteMailboxMessageMapsByUserId
+  async deleteMailboxMessageMapsByUserId(userId: string) {
+    return this.emailStorage.deleteMailboxMessageMapsByUserId(userId);
   }
 
   async getMailboxMessageMapsByMessageId(messageId: string) {
@@ -1976,6 +2161,12 @@ export class DatabaseStorage implements IStorage {
     return this.projectMessageParticipantStorage.getUnreadProjectMessagesForUser(userId);
   }
 
+  // IStorage interface alias - returns count
+  async getUnreadProjectMessageCountForUser(userId: string) {
+    const unreadMessages = await this.projectMessageParticipantStorage.getUnreadProjectMessagesForUser(userId);
+    return unreadMessages.reduce((total, m) => total + m.count, 0);
+  }
+
   async getProjectMessageUnreadSummaries(olderThanMinutes: number) {
     return this.projectMessageParticipantStorage.getProjectMessageUnreadSummaries(olderThanMinutes);
   }
@@ -2010,6 +2201,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUnreadStaffThreadCountForUser(userId: string): Promise<number> {
+    return this.staffMessageThreadStorage.getUnreadStaffThreadCountForUser(userId);
+  }
+
+  // IStorage interface alias
+  async getUnreadStaffMessageCountForUser(userId: string): Promise<number> {
     return this.staffMessageThreadStorage.getUnreadStaffThreadCountForUser(userId);
   }
 
@@ -2146,6 +2342,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getClientRequestTemplatesByCategory(categoryId: string) {
+    return this.requestTemplateStorage.getClientRequestTemplatesByCategory(categoryId);
+  }
+
+  // IStorage interface alias
+  async getClientRequestTemplatesByCategoryId(categoryId: string) {
     return this.requestTemplateStorage.getClientRequestTemplatesByCategory(categoryId);
   }
 

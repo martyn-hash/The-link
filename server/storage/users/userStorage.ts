@@ -493,8 +493,8 @@ export class UserStorage {
   }
 
   // Set fallback user (removes flag from all other users first)
-  async setFallbackUser(userId: string): Promise<User> {
-    return await db.transaction(async (tx) => {
+  async setFallbackUser(userId: string): Promise<void> {
+    await db.transaction(async (tx) => {
       // Remove fallback flag from all users
       await tx
         .update(users)
@@ -511,8 +511,6 @@ export class UserStorage {
       if (!user) {
         throw new Error(`User not found: ${userId}`);
       }
-
-      return user;
     });
   }
 }
