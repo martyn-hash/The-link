@@ -380,44 +380,48 @@ client/src/pages/client-detail/
 
 ### Stage 5: Extract Service Components
 **Estimated Effort:** 4-5 hours  
-**Risk Level:** Medium
+**Risk Level:** Medium  
+**Detailed Brief:** See `client/src/pages/client-detail/STAGE_5_SERVICE_COMPONENTS.md`
 
-#### Tasks
-1. Create `components/services/ServiceRow.tsx`
-   - Extract `ClientServiceRow` component
+#### Component Inventory
+| Component | Lines | Purpose |
+|-----------|-------|---------|
+| `AddServiceModal` | ~720 | Modal for assigning services to clients |
+| `EditableServiceDetails` | ~207 | Inline UDF field editing for services |
+| `EditServiceModal` | ~318 | Modal for editing service properties |
+| `ClientServiceRow` | ~90 | Table row for displaying client services |
 
-2. Create `components/services/EditableServiceDetails.tsx`
-   - Extract UDF editing functionality
+**Expected Reduction:** ~1,335 lines
 
-3. Create `forms/AddServiceModal.tsx`
-   - Extract `AddServiceModal` (~700 lines)
-   - Maintain service/role selection logic
+#### Extraction Order (dependency-safe)
+1. `ClientServiceRow` - Leaf component, simplest
+2. `EditableServiceDetails` - Leaf component, self-contained
+3. `EditServiceModal` - Uses shared types and schemas
+4. `AddServiceModal` - Complex, uses most dependencies
 
-4. Create `forms/EditServiceModal.tsx`
-   - Extract `EditServiceModal` (~300 lines)
-
-5. Create `components/services/ServicesList.tsx`
-   - Extract client services list
-
-6. Create `components/services/PersonalServicesList.tsx`
-   - Extract personal services section
-
-7. Create `components/tabs/ServicesTab.tsx`
-   - Compose all service components
-   - Handle company vs individual client type display
+#### Key Features to Preserve
+- Companies House auto-population of dates
+- Personal service person selection
+- Role assignment with visual state indicators
+- UDF field editing and saving
+- Dual endpoint support (client services vs people services)
 
 #### Success Criteria
-- [ ] Services tab displays correctly
-- [ ] Add Service modal works with all options
-- [ ] Service UDF editing works
-- [ ] Personal services display for individual clients
-- [ ] Service role assignments work correctly
+- [ ] All 4 components extracted to `components/services/`
+- [ ] AddServiceModal creates services correctly
+- [ ] EditServiceModal edits both client and personal services
+- [ ] EditableServiceDetails saves UDF changes
+- [ ] ClientServiceRow displays and View button works
+- [ ] Companies House auto-population works
+- [ ] Personal service assignment works
+- [ ] No duplicate definitions in main file
 
-#### Testing Required
-- Add a new service to a client
-- Edit service UDF values
-- Test personal service assignment
-- Verify role assignments display
+#### Browser Tests (5 tests)
+1. **View Services Tab** - Services load with correct badges
+2. **Add Service Modal** - Open, select service, submit
+3. **View Service Details** - Click View, navigate to detail page
+4. **Edit Service** - Modify properties, save changes
+5. **Edit UDF Details** - Modify UDF fields, save
 
 ---
 
