@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { formatPersonName } from "../../utils/formatters";
+import { formatPersonName } from "../../../utils/formatters";
 import { getIcon, getTypeLabel, getTypeColor } from "../helpers";
 import type { ViewCommunicationDialogProps } from "../types";
 

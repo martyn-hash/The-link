@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { formatPersonName } from "../../utils/formatters";
+import { formatPersonName } from "../../../utils/formatters";
 import type { SMSDialogProps } from "../types";
 
 export function SMSDialog({ 

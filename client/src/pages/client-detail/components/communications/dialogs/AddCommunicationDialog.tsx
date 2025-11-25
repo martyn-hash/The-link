@@ -30,7 +30,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { insertCommunicationSchema } from "@shared/schema";
-import { formatPersonName } from "../../utils/formatters";
+import { formatPersonName } from "../../../utils/formatters";
 import type { AddCommunicationDialogProps } from "../types";
 
 const addCommunicationSchema = insertCommunicationSchema.extend({

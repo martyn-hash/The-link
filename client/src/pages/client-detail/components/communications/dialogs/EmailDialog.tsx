@@ -20,7 +20,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { TiptapEditor } from "@/components/TiptapEditor";
-import { formatPersonName } from "../../utils/formatters";
+import { formatPersonName } from "../../../utils/formatters";
 import type { EmailDialogProps } from "../types";
 
 export function EmailDialog({ 
