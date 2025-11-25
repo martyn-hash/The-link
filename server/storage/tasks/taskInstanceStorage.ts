@@ -14,7 +14,7 @@ import {
   type TaskInstance,
   type InsertTaskInstance,
   type UpdateTaskInstance,
-  type TaskTemplate,
+  type ClientRequestTemplate as TaskTemplate,
   type ClientCustomRequest,
   type Person,
   type ClientPortalUser,
@@ -37,6 +37,19 @@ export class TaskInstanceStorage {
       .from(taskInstances)
       .where(eq(taskInstances.id, id));
     return instance;
+  }
+
+  async getTaskInstancesByProjectId(projectId: string): Promise<TaskInstance[]> {
+    const results = await db
+      .select({
+        taskInstance: taskInstances,
+      })
+      .from(taskInstances)
+      .leftJoin(clientCustomRequests, eq(taskInstances.customRequestId, clientCustomRequests.id))
+      .where(eq(clientCustomRequests.projectId, projectId))
+      .orderBy(desc(taskInstances.createdAt));
+    
+    return results.map(row => row.taskInstance);
   }
 
   async getTaskInstancesByClientId(clientId: string): Promise<(TaskInstance & { template?: TaskTemplate; customRequest?: ClientCustomRequest; person?: Person; portalUser?: ClientPortalUser })[]> {

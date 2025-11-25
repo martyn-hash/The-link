@@ -40,6 +40,19 @@ export class TagStorage extends BaseStorage {
     await db.delete(clientTags).where(eq(clientTags.id, id));
   }
 
+  async updateClientTag(id: string, tag: Partial<InsertClientTag>): Promise<ClientTag> {
+    const [updated] = await db.update(clientTags).set(tag).where(eq(clientTags.id, id)).returning();
+    if (!updated) {
+      throw new Error('Client tag not found');
+    }
+    return updated;
+  }
+
+  async getClientTagById(id: string): Promise<ClientTag | undefined> {
+    const [tag] = await db.select().from(clientTags).where(eq(clientTags.id, id));
+    return tag;
+  }
+
   // ============================================================================
   // PEOPLE TAGS - CRUD Operations
   // ============================================================================
@@ -55,6 +68,19 @@ export class TagStorage extends BaseStorage {
 
   async deletePeopleTag(id: string): Promise<void> {
     await db.delete(peopleTags).where(eq(peopleTags.id, id));
+  }
+
+  async updatePeopleTag(id: string, tag: Partial<InsertPeopleTag>): Promise<PeopleTag> {
+    const [updated] = await db.update(peopleTags).set(tag).where(eq(peopleTags.id, id)).returning();
+    if (!updated) {
+      throw new Error('People tag not found');
+    }
+    return updated;
+  }
+
+  async getPeopleTagById(id: string): Promise<PeopleTag | undefined> {
+    const [tag] = await db.select().from(peopleTags).where(eq(peopleTags.id, id));
+    return tag;
   }
 
   // ============================================================================

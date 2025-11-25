@@ -3,6 +3,7 @@ import {
   stageApprovals,
   stageApprovalFields,
   stageApprovalResponses,
+  kanbanStages,
 } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import type {
@@ -93,6 +94,30 @@ export class ProjectApprovalsStorage extends BaseStorage {
    */
   async getStageApprovalById(id: string): Promise<StageApproval | undefined> {
     const [approval] = await db.select().from(stageApprovals).where(eq(stageApprovals.id, id));
+    return approval;
+  }
+
+  /**
+   * Get stage approvals by stage ID
+   * Stage approvals are linked via kanban_stages.stageApprovalId -> stage_approvals.id
+   */
+  async getStageApprovalsByStageId(stageId: string): Promise<StageApproval[]> {
+    const stage = await db
+      .select()
+      .from(kanbanStages)
+      .where(eq(kanbanStages.id, stageId))
+      .limit(1);
+    
+    if (!stage[0] || !stage[0].stageApprovalId) {
+      return [];
+    }
+
+    const approval = await db
+      .select()
+      .from(stageApprovals)
+      .where(eq(stageApprovals.id, stage[0].stageApprovalId))
+      .limit(1);
+    
     return approval;
   }
 

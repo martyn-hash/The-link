@@ -39,7 +39,23 @@ export class ProjectSchedulingStorage extends BaseStorage {
       .from(projectSchedulingHistory)
       .where(whereCondition)
       .orderBy(desc(projectSchedulingHistory.createdAt))
-      .limit(50); // Limit to last 50 entries for performance
+      .limit(50);
+  }
+
+  async getProjectSchedulingHistoryByProjectId(projectId: string): Promise<ProjectSchedulingHistory[]> {
+    return await db
+      .select()
+      .from(projectSchedulingHistory)
+      .where(eq(projectSchedulingHistory.projectId, projectId))
+      .orderBy(desc(projectSchedulingHistory.createdAt));
+  }
+
+  async getProjectSchedulingHistory(filters?: { limit?: number }): Promise<ProjectSchedulingHistory[]> {
+    return await db
+      .select()
+      .from(projectSchedulingHistory)
+      .orderBy(desc(projectSchedulingHistory.createdAt))
+      .limit(filters?.limit || 50);
   }
 
   // ============================================================================

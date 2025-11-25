@@ -2429,6 +2429,10 @@ export class DatabaseStorage implements IStorage {
     return this.customRequestStorage.getClientCustomRequestsByClientId(clientId);
   }
 
+  async getAllClientCustomRequests(filters?: { clientId?: string; status?: string }) {
+    return this.customRequestStorage.getAllClientCustomRequests(filters);
+  }
+
   async updateClientCustomRequest(id: string, request: any) {
     return this.customRequestStorage.updateClientCustomRequest(id, request);
   }
@@ -2504,6 +2508,10 @@ export class DatabaseStorage implements IStorage {
     return this.taskInstanceStorage.getTaskInstanceById(id);
   }
 
+  async getTaskInstancesByProjectId(projectId: string) {
+    return this.taskInstanceStorage.getTaskInstancesByProjectId(projectId);
+  }
+
   async getTaskInstancesByClientId(clientId: string) {
     return this.taskInstanceStorage.getTaskInstancesByClientId(clientId);
   }
@@ -2545,12 +2553,21 @@ export class DatabaseStorage implements IStorage {
     return this.taskInstanceResponseStorage.saveTaskInstanceResponse(response);
   }
 
+  async createTaskInstanceResponse(response: any) {
+    return this.taskInstanceResponseStorage.createTaskInstanceResponse(response);
+  }
+
   async getTaskInstanceResponseById(id: string) {
     return this.taskInstanceResponseStorage.getTaskInstanceResponseById(id);
   }
 
   async getTaskInstanceResponsesByTaskInstanceId(taskInstanceId: string) {
     return this.taskInstanceResponseStorage.getTaskInstanceResponsesByTaskInstanceId(taskInstanceId);
+  }
+
+  // IStorage interface alias
+  async getTaskInstanceResponsesByInstanceId(instanceId: string) {
+    return this.taskInstanceResponseStorage.getTaskInstanceResponsesByTaskInstanceId(instanceId);
   }
 
   async updateTaskInstanceResponse(id: string, response: any) {

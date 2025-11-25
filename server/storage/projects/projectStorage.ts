@@ -285,6 +285,10 @@ export class ProjectStorage extends BaseStorage {
     return updatedProject;
   }
 
+  async deleteProject(id: string): Promise<void> {
+    await db.delete(projects).where(eq(projects.id, id));
+  }
+
   async getActiveProjectsByClientAndType(clientId: string, projectTypeId: string): Promise<Project[]> {
     const activeProjects = await db.query.projects.findMany({
       where: and(

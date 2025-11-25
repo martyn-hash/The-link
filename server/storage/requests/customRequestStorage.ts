@@ -3,6 +3,9 @@ import {
   clientCustomRequests,
   clientCustomRequestSections,
   clientCustomRequestQuestions,
+  clients,
+  clientRequestTemplates,
+  projects,
   type ClientCustomRequest,
   type InsertClientCustomRequest,
   type UpdateClientCustomRequest,
@@ -11,9 +14,12 @@ import {
   type UpdateClientCustomRequestSection,
   type ClientCustomRequestQuestion,
   type InsertClientCustomRequestQuestion,
-  type UpdateClientCustomRequestQuestion
+  type UpdateClientCustomRequestQuestion,
+  type Client,
+  type ClientRequestTemplate,
+  type Project
 } from "../../../shared/schema.js";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 
 export class CustomRequestStorage {
   // Custom Request Operations (5 methods)
@@ -39,6 +45,57 @@ export class CustomRequestStorage {
       .from(clientCustomRequests)
       .where(eq(clientCustomRequests.clientId, clientId))
       .orderBy(desc(clientCustomRequests.createdAt));
+  }
+
+  async getAllClientCustomRequests(filters?: { clientId?: string }): Promise<(ClientCustomRequest & {
+    client: Client;
+    sections: (ClientCustomRequestSection & { questions: ClientCustomRequestQuestion[] })[];
+  })[]> {
+    const whereConditions = [];
+    if (filters?.clientId) {
+      whereConditions.push(eq(clientCustomRequests.clientId, filters.clientId));
+    }
+
+    const requests = await db
+      .select()
+      .from(clientCustomRequests)
+      .innerJoin(clients, eq(clientCustomRequests.clientId, clients.id))
+      .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+      .orderBy(desc(clientCustomRequests.createdAt));
+
+    const results: (ClientCustomRequest & {
+      client: Client;
+      sections: (ClientCustomRequestSection & { questions: ClientCustomRequestQuestion[] })[];
+    })[] = [];
+
+    for (const row of requests) {
+      const sections = await db
+        .select()
+        .from(clientCustomRequestSections)
+        .where(eq(clientCustomRequestSections.requestId, row.client_custom_requests.id))
+        .orderBy(clientCustomRequestSections.order);
+
+      const sectionsWithQuestions: (ClientCustomRequestSection & { questions: ClientCustomRequestQuestion[] })[] = [];
+      for (const section of sections) {
+        const questions = await db
+          .select()
+          .from(clientCustomRequestQuestions)
+          .where(eq(clientCustomRequestQuestions.sectionId, section.id))
+          .orderBy(clientCustomRequestQuestions.order);
+        sectionsWithQuestions.push({
+          ...section,
+          questions,
+        });
+      }
+
+      results.push({
+        ...row.client_custom_requests,
+        client: row.clients,
+        sections: sectionsWithQuestions,
+      });
+    }
+
+    return results;
   }
 
   async updateClientCustomRequest(id: string, request: UpdateClientCustomRequest): Promise<ClientCustomRequest> {

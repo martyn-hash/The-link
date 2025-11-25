@@ -731,10 +731,8 @@ export interface IStorage {
   updateClientRequestTemplateQuestion(id: string, question: UpdateClientRequestTemplateQuestion): Promise<ClientRequestTemplateQuestion>;
   deleteClientRequestTemplateQuestion(id: string): Promise<void>;
   
-  getAllClientCustomRequests(filters?: { clientId?: string; status?: string }): Promise<(ClientCustomRequest & { 
+  getAllClientCustomRequests(filters?: { clientId?: string }): Promise<(ClientCustomRequest & { 
     client: Client;
-    template: ClientRequestTemplate | null;
-    project: Project | null;
     sections: (ClientCustomRequestSection & { questions: ClientCustomRequestQuestion[] })[];
   })[]>;
   getClientCustomRequestById(id: string): Promise<ClientCustomRequest | undefined>;

@@ -66,7 +66,7 @@ export class PushNotificationStorage {
       .from(pushNotificationTemplates)
       .where(
         and(
-          eq(pushNotificationTemplates.templateType, templateType),
+          eq(pushNotificationTemplates.templateType, templateType as any),
           eq(pushNotificationTemplates.isActive, true)
         )
       );
@@ -75,6 +75,15 @@ export class PushNotificationStorage {
     
     const randomIndex = Math.floor(Math.random() * results.length);
     return results[randomIndex];
+  }
+
+  async getPushNotificationTemplateById(id: string): Promise<PushNotificationTemplate | undefined> {
+    const results = await db
+      .select()
+      .from(pushNotificationTemplates)
+      .where(eq(pushNotificationTemplates.id, id))
+      .limit(1);
+    return results[0];
   }
 
   async updatePushNotificationTemplate(id: string, template: Partial<InsertPushNotificationTemplate>): Promise<PushNotificationTemplate> {
@@ -123,6 +132,18 @@ export class PushNotificationStorage {
       .values(icon)
       .returning();
     return newIcon;
+  }
+
+  async updateNotificationIcon(id: string, icon: Partial<InsertNotificationIcon>): Promise<NotificationIcon> {
+    const [updated] = await db
+      .update(notificationIcons)
+      .set(icon)
+      .where(eq(notificationIcons.id, id))
+      .returning();
+    if (!updated) {
+      throw new Error('Notification icon not found');
+    }
+    return updated;
   }
 
   async deleteNotificationIcon(id: string): Promise<void> {

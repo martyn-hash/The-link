@@ -5,7 +5,7 @@ import {
   clientCustomRequestQuestions,
   type TaskInstanceResponse,
   type InsertTaskInstanceResponse,
-  type TaskTemplateQuestion
+  type ClientRequestTemplateQuestion as TaskTemplateQuestion
 } from "../../../shared/schema.js";
 import { eq } from "drizzle-orm";
 
@@ -24,6 +24,10 @@ export class TaskInstanceResponseStorage {
       })
       .returning();
     return saved;
+  }
+
+  async createTaskInstanceResponse(response: InsertTaskInstanceResponse): Promise<TaskInstanceResponse> {
+    return this.saveTaskInstanceResponse(response);
   }
 
   async getTaskInstanceResponseById(id: string): Promise<TaskInstanceResponse | undefined> {

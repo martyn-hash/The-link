@@ -185,6 +185,14 @@ export class EmailStorage {
     return updated;
   }
 
+  async createEmailMessage(message: InsertEmailMessage): Promise<EmailMessage> {
+    const [created] = await db
+      .insert(emailMessages)
+      .values(message)
+      .returning();
+    return created;
+  }
+
   async createMailboxMessageMap(mapping: InsertMailboxMessageMap): Promise<MailboxMessageMap> {
     const [created] = await db
       .insert(mailboxMessageMap)
@@ -199,6 +207,24 @@ export class EmailStorage {
       .from(mailboxMessageMap)
       .where(eq(mailboxMessageMap.mailboxUserId, userId))
       .orderBy(mailboxMessageMap.createdAt);
+  }
+
+  async getMailboxMessageMapByGraphId(userId: string, graphMessageId: string): Promise<MailboxMessageMap | undefined> {
+    const result = await db
+      .select()
+      .from(mailboxMessageMap)
+      .where(
+        and(
+          eq(mailboxMessageMap.mailboxUserId, userId),
+          eq(mailboxMessageMap.mailboxMessageId, graphMessageId)
+        )
+      )
+      .limit(1);
+    return result[0];
+  }
+
+  async deleteMailboxMessageMapsByUserId(userId: string): Promise<void> {
+    await db.delete(mailboxMessageMap).where(eq(mailboxMessageMap.mailboxUserId, userId));
   }
 
   async getMailboxMessageMapsByMessageId(messageId: string): Promise<MailboxMessageMap[]> {
