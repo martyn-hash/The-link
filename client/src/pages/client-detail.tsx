@@ -52,82 +52,27 @@ import { useToast } from "@/hooks/use-toast";
 import { useActivityTracker } from "@/lib/activityTracker";
 import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole, ClientServiceRoleAssignment, PeopleService, ProjectWithRelations, Communication, Document, ClientPortalUser } from "@shared/schema";
 import { insertPersonSchema, insertCommunicationSchema, insertClientCustomRequestSchema } from "@shared/schema";
-
-// Utility function to format names from "LASTNAME, Firstname" to "Firstname Lastname"
-function formatPersonName(fullName: string): string {
-  if (!fullName) return '';
-  
-  // Check if name is in "LASTNAME, Firstname" format
-  if (fullName.includes(',')) {
-    const [lastName, firstName] = fullName.split(',').map(part => part.trim());
-    
-    // Convert to proper case and return "Firstname Lastname"
-    const formattedFirstName = firstName.toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
-    const formattedLastName = lastName.toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
-    
-    return `${formattedFirstName} ${formattedLastName}`;
-  }
-  
-  // If not in comma format, return as is (already in proper format)
-  return fullName;
-}
-
-// Utility function to format general dates
-function formatDate(date: string | Date | null): string {
-  if (!date) return 'Not provided';
-  
-  const dateObj = typeof date === 'string' ? new Date(date) : date;
-  if (isNaN(dateObj.getTime())) return 'Invalid date';
-  
-  return dateObj.toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric'
-  });
-}
-
-// Utility function to format birth dates from Companies House (which only provides month/year)
-function formatBirthDate(dateOfBirth: string | Date | null): string {
-  if (!dateOfBirth) return 'Not provided';
-  
-  // Handle string inputs - detect if this looks like a partial date from Companies House
-  if (typeof dateOfBirth === 'string') {
-    // Pattern for partial dates: "YYYY-MM" or "YYYY-MM-01" with optional time suffix
-    const partialDatePattern = /^(\d{4})-(\d{2})(?:-01(?:T00:00:00(?:\.\d+)?Z?)?)?$/;
-    const match = dateOfBirth.match(partialDatePattern);
-    
-    if (match) {
-      const [, year, month] = match;
-      // This looks like a partial date - show as month/year
-      // Use UTC to avoid timezone issues
-      const date = new Date(Date.UTC(parseInt(year), parseInt(month) - 1, 1));
-      
-      // Validate the constructed date
-      if (isNaN(date.getTime())) {
-        return 'Invalid date';
-      }
-      
-      return date.toLocaleDateString('en-GB', { 
-        month: 'long', 
-        year: 'numeric',
-        timeZone: 'UTC'
-      });
-    }
-  }
-  
-  // For full dates or non-matching patterns, create date object
-  const date = new Date(dateOfBirth);
-  
-  // Handle invalid dates
-  if (isNaN(date.getTime())) {
-    return 'Invalid date';
-  }
-  
-  // Show full date for complete date information
-  return date.toLocaleDateString('en-GB', {
-    timeZone: 'UTC'
-  });
-}
+import { formatPersonName, formatDate, formatBirthDate, maskIdentifier } from "./client-detail/utils/formatters";
+import { 
+  CommunicationWithRelations, 
+  ClientPersonWithPerson, 
+  ClientPersonWithClient,
+  ClientServiceWithService,
+  ServiceWithDetails,
+  EnhancedClientService,
+  PeopleServiceWithRelations,
+  addServiceSchema,
+  AddServiceData,
+  addPersonSchema,
+  InsertPersonData,
+  updatePersonSchema,
+  UpdatePersonData,
+  editServiceSchema,
+  EditServiceData,
+  linkPersonToCompanySchema,
+  LinkPersonToCompanyData,
+  AddServiceModalProps
+} from "./client-detail/utils/types";
 
 // Portal Status Column Component
 function PortalStatusColumn({ 
@@ -307,14 +252,6 @@ function PortalStatusColumn({
     </div>
   );
 }
-
-// Communication types with relations
-type CommunicationWithRelations = Communication & {
-  client: Client;
-  person?: Person;
-  user: User;
-};
-
 
 // Project Link Component - displays project name with link
 function ProjectLink({ projectId }: { projectId: string }) {
@@ -1663,113 +1600,6 @@ function CallDialog({
       </DialogContent>
     </Dialog>
   );
-}
-
-type ClientPersonWithPerson = ClientPerson & { person: Person };
-type ClientPersonWithClient = ClientPerson & { client: Client };
-type ClientServiceWithService = ClientService & { 
-  service: Service & { 
-    projectType: { id: string; name: string; description: string | null; serviceId: string | null; active: boolean | null; order: number; createdAt: Date | null } 
-  } 
-};
-
-// Types for enhanced service data
-type ServiceWithDetails = Service & {
-  roles: WorkRole[];
-};
-
-// Enhanced client service type that includes service owner and role assignments
-type EnhancedClientService = ClientService & {
-  service: Service & {
-    projectType?: {
-      id: string;
-      name: string;
-      description: string | null;
-      serviceId: string | null;
-      active: boolean | null;
-      order: number;
-      createdAt: Date | null;
-    };
-  };
-  serviceOwner?: User;
-  roleAssignments: (ClientServiceRoleAssignment & {
-    workRole: WorkRole;
-    user: User;
-  })[];
-};
-
-// Form schema for adding services (conditional validation based on service type)
-const addServiceSchema = z.object({
-  serviceId: z.string().min(1, "Service is required"),
-  frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "annually"]).optional(),
-  nextStartDate: z.string().optional(),
-  nextDueDate: z.string().optional(),
-  serviceOwnerId: z.string().optional(),
-});
-
-type AddServiceData = z.infer<typeof addServiceSchema>;
-
-// Validation schema for adding new person data
-const addPersonSchema = insertPersonSchema.extend({
-  fullName: z.string().min(1, "Full name is required"),
-  email: z.string().email("Invalid email format").optional().or(z.literal("")),
-  email2: z.string().email("Invalid email format").optional().or(z.literal("")),
-  telephone2: z.string().optional().or(z.literal("")),
-  linkedinUrl: z.union([z.string().url("Invalid LinkedIn URL"), z.literal("")]).optional(),
-  instagramUrl: z.union([z.string().url("Invalid Instagram URL"), z.literal("")]).optional(),
-  twitterUrl: z.union([z.string().url("Invalid Twitter/X URL"), z.literal("")]).optional(),
-  facebookUrl: z.union([z.string().url("Invalid Facebook URL"), z.literal("")]).optional(),
-  tiktokUrl: z.union([z.string().url("Invalid TikTok URL"), z.literal("")]).optional(),
-});
-
-type InsertPersonData = z.infer<typeof addPersonSchema>;
-
-// Validation schema for updating person data - use shared schema for consistency
-const updatePersonSchema = insertPersonSchema.partial().extend({
-  fullName: z.string().min(1, "Full name is required"),
-  email: z.string().email("Invalid email format").optional().or(z.literal("")),
-  email2: z.string().email("Invalid email format").optional().or(z.literal("")),
-  telephone2: z.string().optional().or(z.literal("")),
-  // Primary contact fields
-  primaryPhone: z.string().optional().or(z.literal("")),
-  primaryEmail: z.string().email("Invalid email format").optional().or(z.literal("")),
-  linkedinUrl: z.union([z.string().url("Invalid LinkedIn URL"), z.literal("")]).optional(),
-  instagramUrl: z.union([z.string().url("Invalid Instagram URL"), z.literal("")]).optional(),
-  twitterUrl: z.union([z.string().url("Invalid Twitter/X URL"), z.literal("")]).optional(),
-  facebookUrl: z.union([z.string().url("Invalid Facebook URL"), z.literal("")]).optional(),
-  tiktokUrl: z.union([z.string().url("Invalid TikTok URL"), z.literal("")]).optional(),
-});
-
-type UpdatePersonData = z.infer<typeof updatePersonSchema>;
-
-// Schema for editing service data
-const editServiceSchema = z.object({
-  nextStartDate: z.string().optional(),
-  nextDueDate: z.string().optional(),
-  serviceOwnerId: z.string().optional(),
-  frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "annually"]).optional(),
-  isActive: z.boolean().optional(),
-  roleAssignments: z.array(z.object({
-    workRoleId: z.string(),
-    userId: z.string(),
-  })).optional(),
-});
-
-type EditServiceData = z.infer<typeof editServiceSchema>;
-
-// Helper function to mask sensitive identifiers
-function maskIdentifier(value: string, visibleChars = 2): string {
-  if (!value || value.length <= visibleChars) return value;
-  const masked = '*'.repeat(Math.max(0, value.length - visibleChars));
-  return masked + value.slice(-visibleChars);
-}
-
-// PersonCardProps removed - using Accordion pattern
-
-interface AddServiceModalProps {
-  clientId: string;
-  clientType?: 'company' | 'individual';
-  onSuccess: () => void;
 }
 
 function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddServiceModalProps) {
@@ -3580,17 +3410,6 @@ function EditServiceModal({
     </Dialog>
   );
 }
-
-// PersonCard component removed - using Accordion pattern
-
-// Form schema for linking person to a new company
-const linkPersonToCompanySchema = z.object({
-  clientId: z.string().min(1, "Company is required"),
-  officerRole: z.string().optional(),
-  isPrimaryContact: z.boolean().optional()
-});
-
-type LinkPersonToCompanyData = z.infer<typeof linkPersonToCompanySchema>;
 
 // Tabbed view component for person details
 function PersonTabbedView({ 
