@@ -413,4 +413,142 @@ export function registerSuperAdminRoutes(
       }
     }
   );
+
+  // Database health check endpoint
+  app.get(
+    "/api/super-admin/db-health",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const { db } = await import("../db");
+        const { sql } = await import("drizzle-orm");
+
+        const tableStats = await db.execute(sql`
+          SELECT 
+            schemaname,
+            relname as table_name,
+            n_live_tup as row_count,
+            n_dead_tup as dead_rows,
+            last_vacuum,
+            last_autovacuum,
+            last_analyze,
+            last_autoanalyze
+          FROM pg_stat_user_tables
+          ORDER BY n_live_tup DESC
+          LIMIT 30
+        `);
+        
+        const indexUsage = await db.execute(sql`
+          SELECT 
+            schemaname,
+            relname as table_name,
+            indexrelname as index_name,
+            idx_scan as times_used,
+            idx_tup_read,
+            idx_tup_fetch
+          FROM pg_stat_user_indexes
+          ORDER BY idx_scan DESC
+          LIMIT 30
+        `);
+
+        const unusedIndexes = await db.execute(sql`
+          SELECT 
+            schemaname,
+            relname as table_name,
+            indexrelname as index_name,
+            idx_scan as times_used,
+            pg_size_pretty(pg_relation_size(indexrelid)) as size
+          FROM pg_stat_user_indexes
+          WHERE idx_scan = 0
+          ORDER BY pg_relation_size(indexrelid) DESC
+          LIMIT 20
+        `);
+
+        const sequentialScans = await db.execute(sql`
+          SELECT 
+            schemaname,
+            relname as table_name,
+            seq_scan,
+            seq_tup_read,
+            idx_scan,
+            idx_tup_fetch
+          FROM pg_stat_user_tables
+          WHERE seq_scan > idx_scan
+          ORDER BY seq_tup_read DESC
+          LIMIT 15
+        `);
+        
+        res.json({
+          status: 'healthy',
+          tables: tableStats.rows,
+          indexes: {
+            mostUsed: indexUsage.rows,
+            unused: unusedIndexes.rows
+          },
+          sequentialScans: sequentialScans.rows,
+          timestamp: new Date().toISOString()
+        });
+      } catch (error: any) {
+        console.error("Error getting DB health stats:", error);
+        res.status(500).json({ 
+          status: 'error',
+          message: 'Failed to get extended stats',
+          error: error.message 
+        });
+      }
+    }
+  );
+
+  // Database slow queries check
+  app.get(
+    "/api/super-admin/db-health/slow-queries",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const { db } = await import("../db");
+        const { sql } = await import("drizzle-orm");
+
+        const missingIndexCandidates = await db.execute(sql`
+          SELECT 
+            schemaname,
+            relname as table_name,
+            seq_scan,
+            CASE WHEN seq_scan > 0 THEN seq_tup_read / seq_scan ELSE 0 END as avg_rows_per_scan
+          FROM pg_stat_user_tables
+          WHERE seq_scan > 0
+          ORDER BY seq_tup_read DESC
+          LIMIT 15
+        `);
+
+        const tableBlockers = await db.execute(sql`
+          SELECT 
+            relname as table_name,
+            n_dead_tup as dead_tuples,
+            n_live_tup as live_tuples,
+            CASE WHEN n_live_tup > 0 THEN round(100.0 * n_dead_tup / n_live_tup, 2) ELSE 0 END as dead_ratio_pct,
+            last_autovacuum
+          FROM pg_stat_user_tables
+          WHERE n_dead_tup > 1000
+          ORDER BY n_dead_tup DESC
+          LIMIT 10
+        `);
+
+        res.json({
+          missingIndexCandidates: missingIndexCandidates.rows,
+          tablesNeedingVacuum: tableBlockers.rows,
+          timestamp: new Date().toISOString()
+        });
+      } catch (error: any) {
+        console.error("Error getting slow query stats:", error);
+        res.status(500).json({ 
+          message: 'Failed to get slow query stats',
+          error: error.message 
+        });
+      }
+    }
+  );
 }

@@ -52,6 +52,15 @@ The monolithic shared/schema.ts (3,920 lines) has been refactored into domain-fo
 - **Documentation:** See `schema_refactor.md` for detailed architecture and migration plan
 - **Note:** Legacy schema.ts remains source of truth; domain modules provide optional targeted imports
 
+**Database Performance Optimization (Completed November 25, 2025):**
+Comprehensive database indexing strategy implemented to improve query performance:
+- **Critical indexes added:** `project_chronology(project_id)`, `project_chronology(project_id, timestamp DESC)`, `kanban_stages(project_type_id, name)`, `client_people(client_id)`, `client_people(person_id)`
+- **Composite indexes:** `projects(client_id, project_month)`, `projects(current_status, archived, inactive)`, `client_services(client_id, is_active)`, `scheduled_notifications(status, scheduled_for)`, `internal_tasks(assigned_to, status, is_archived)`
+- **Role-based system optimized:** Existing `client_service_role_assignments(clientServiceId, workRoleId, isActive)` composite index already optimal
+- **Health check endpoints:** `/api/super-admin/db-health` and `/api/super-admin/db-health/slow-queries` for monitoring
+- **Documentation:** See `database_optimisations.md` for full analysis and recommendations
+- **Note:** `bookkeeper_id` and `client_manager_id` indexes NOT needed - display-only fields, all filtering uses role-based lookup chain
+
 ### Key Features
 -   **Automated Project & Service Management**: Includes automatic schema migrations, service scheduling, project automation, and client service role assignment with task cascading.
 -   **Communication & Collaboration**: Features push notification template management, an internal tasks system, standalone staff-to-staff messaging, email threading and deduplication via Microsoft Graph, and a multi-channel client notification and reminder system. This includes a rich-text Tiptap editor for messages, file attachments, Office document conversion for in-app preview, and intelligent message expand/collapse functionality. Email notifications support rich HTML formatting with DOMPurify sanitization and dual HTML/plain text formats. Project message thread creation permissions have been refined.

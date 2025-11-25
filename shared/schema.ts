@@ -378,10 +378,11 @@ export const clientPeople = pgTable("client_people", {
   officerRole: text("officer_role"), // Existing field
   isPrimaryContact: boolean("is_primary_contact"), // Existing field
   createdAt: timestamp("created_at").defaultNow(), // Existing field
-}, (table) => ({
-  // Unique constraint for many-to-many relationship - prevent duplicate person-company links
-  uniquePersonCompany: unique("unique_person_company").on(table.clientId, table.personId),
-}));
+}, (table) => [
+  index("idx_client_people_client_id").on(table.clientId),
+  index("idx_client_people_person_id").on(table.personId),
+  unique("unique_person_company").on(table.clientId, table.personId),
+]);
 
 // Projects table (individual client work items)
 export const projects = pgTable("projects", {
@@ -411,11 +412,12 @@ export const projects = pgTable("projects", {
   index("idx_projects_project_type_id").on(table.projectTypeId),
   index("idx_projects_archived").on(table.archived),
   index("idx_projects_client_id").on(table.clientId),
-  // Additional indexes for common filter operations
   index("idx_projects_current_status").on(table.currentStatus),
   index("idx_projects_due_date").on(table.dueDate),
   index("idx_projects_inactive").on(table.inactive),
   index("idx_projects_project_month").on(table.projectMonth),
+  index("idx_projects_client_month").on(table.clientId, table.projectMonth),
+  index("idx_projects_status_filters").on(table.currentStatus, table.archived, table.inactive),
 ]);
 
 // Project chronology table
@@ -433,7 +435,10 @@ export const projectChronology = pgTable("project_chronology", {
   timestamp: timestamp("timestamp").defaultNow(),
   timeInPreviousStage: integer("time_in_previous_stage"), // in minutes
   businessHoursInPreviousStage: integer("business_hours_in_previous_stage"), // in business minutes (for precision)
-});
+}, (table) => [
+  index("idx_project_chronology_project_id").on(table.projectId),
+  index("idx_project_chronology_project_timestamp").on(table.projectId, table.timestamp),
+]);
 
 // Client chronology table - tracks client-level events like service activation/deactivation
 export const clientChronology = pgTable("client_chronology", {
@@ -544,8 +549,7 @@ export const kanbanStages = pgTable("kanban_stages", {
   index("idx_kanban_stages_project_type_id").on(table.projectTypeId),
   index("idx_kanban_stages_assigned_work_role_id").on(table.assignedWorkRoleId),
   index("idx_kanban_stages_assigned_user_id").on(table.assignedUserId),
-  // Name must be unique within a project type
-  // unique("unique_stage_name_per_project_type").on(table.projectTypeId, table.name), // Temporarily commented to unblock people table changes
+  index("idx_kanban_stages_project_type_name").on(table.projectTypeId, table.name),
 ]);
 
 // Change reasons configuration table
@@ -674,8 +678,9 @@ export const clientServices = pgTable("client_services", {
   index("idx_client_services_client_id").on(table.clientId),
   index("idx_client_services_service_id").on(table.serviceId),
   index("idx_client_services_service_owner_id").on(table.serviceOwnerId),
-  index("idx_client_services_next_due_date").on(table.nextDueDate), // Index for scheduling queries
+  index("idx_client_services_next_due_date").on(table.nextDueDate),
   index("idx_client_services_inactive_by_user_id").on(table.inactiveByUserId),
+  index("idx_client_services_client_active").on(table.clientId, table.isActive),
   unique("unique_client_service").on(table.clientId, table.serviceId),
 ]);
 
@@ -3172,6 +3177,7 @@ export const internalTasks = pgTable("internal_tasks", {
   index("idx_internal_tasks_task_type_id").on(table.taskTypeId),
   index("idx_internal_tasks_due_date").on(table.dueDate),
   index("idx_internal_tasks_is_archived").on(table.isArchived),
+  index("idx_internal_tasks_assignee_status").on(table.assignedTo, table.status, table.isArchived),
 ]);
 
 // Task connections table - links tasks to other entities
@@ -3418,6 +3424,8 @@ export const scheduledNotifications = pgTable("scheduled_notifications", {
   index("idx_scheduled_notifications_client_status_scheduled").on(table.clientId, table.status, table.scheduledFor),
   // Sent Notifications tab: client + status + sentAt DESC (covers WHERE client_id=X AND status='sent' ORDER BY sent_at DESC)
   index("idx_scheduled_notifications_client_status_sent").on(table.clientId, table.status, table.sentAt),
+  // Cron job optimization: status + scheduledFor (covers WHERE status='scheduled' AND scheduled_for <= NOW())
+  index("idx_scheduled_notifications_pending").on(table.status, table.scheduledFor),
   // Check constraint: must have either projectTypeNotificationId OR clientRequestReminderId
   check("check_notification_source", sql`
     (project_type_notification_id IS NOT NULL AND client_request_reminder_id IS NULL) OR
