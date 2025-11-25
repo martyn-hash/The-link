@@ -523,7 +523,7 @@ export default function ClientDetail() {
       setRequestType(null);
       customRequestForm.reset();
       // Navigate to the custom request builder page
-      setLocation(`/custom-requests/${data.id}/edit`);
+      navigate(`/custom-requests/${data.id}/edit`);
     },
     onError: (error: any) => {
       toast({
@@ -1110,12 +1110,12 @@ export default function ClientDetail() {
               clientServices={clientServices}
               companyServices={companyServicesQueries.data as EnhancedClientService[] | undefined}
               servicesLoading={servicesLoading}
-              servicesError={servicesError}
+              servicesError={!!servicesError}
               companyServicesLoading={companyServicesQueries.isLoading}
               companyServicesError={companyServicesQueries.isError}
               peopleServices={peopleServices}
               peopleServicesLoading={peopleServicesLoading}
-              peopleServicesError={peopleServicesError}
+              peopleServicesError={!!peopleServicesError}
               servicesWithRoles={servicesWithRoles}
               expandedPersonalServiceId={expandedPersonalServiceId}
               onExpandedPersonalServiceChange={setExpandedPersonalServiceId}
@@ -1135,7 +1135,7 @@ export default function ClientDetail() {
           </TabsContent>
 
           <TabsContent value="communications" className="space-y-8 mt-6">
-            <CommunicationsTimeline clientId={id} user={user} />
+            <CommunicationsTimeline clientId={id!} user={user} />
           </TabsContent>
 
           <TabsContent value="chronology" className="space-y-8 mt-6">
@@ -1201,14 +1201,11 @@ export default function ClientDetail() {
 
       {/* Add Person Modal */}
       <AddPersonModal
-        clientId={id}
+        clientId={id!}
         isOpen={isAddPersonModalOpen}
         onClose={() => setIsAddPersonModalOpen(false)}
         onSave={(data) => {
-          createPersonMutation.mutate({
-            ...data,
-            clientId: id,
-          });
+          createPersonMutation.mutate(data);
         }}
         isSaving={createPersonMutation.isPending}
       />
