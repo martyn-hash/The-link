@@ -78,47 +78,61 @@ export function CommunicationsTimeline({ clientId, user }: CommunicationsTimelin
   });
 
   const emailThreads = emailThreadsData?.threads || [];
+  
+  const formatDate = (date: string | Date | null | undefined): string => {
+    if (!date) return '';
+    return new Date(date as string | number | Date).toLocaleString();
+  };
+  
   const allItems: TimelineItem[] = [
-    ...(communications || []).map(comm => ({
-      id: comm.id,
-      type: comm.type,
-      loggedAt: comm.loggedAt,
-      createdAt: comm.createdAt,
-      subject: comm.subject,
-      content: comm.content,
-      user: comm.user ? { firstName: comm.user.firstName || '', lastName: comm.user.lastName || '' } : null,
-      createdBy: comm.userId,
-      projectId: comm.projectId,
-      person: comm.person,
-    })),
-    ...(messageThreads || []).map(thread => ({
-      id: thread.id,
-      type: 'message_thread' as const,
-      loggedAt: thread.createdAt,
-      createdAt: thread.createdAt,
-      subject: thread.subject,
-      content: thread.lastMessage?.content || '',
-      messageCount: thread.messageCount,
-      unreadCount: thread.unreadCount,
-      attachmentCount: thread.attachmentCount,
-    })),
-    ...emailThreads.map(thread => ({
-      id: thread.canonicalConversationId,
-      type: 'email_thread' as const,
-      loggedAt: thread.lastMessageAt,
-      createdAt: thread.firstMessageAt,
-      subject: thread.subject || 'No Subject',
-      content: thread.latestPreview || thread.subject || '',
-      user: null,
-      createdBy: null,
-      projectId: null,
-      messageCount: thread.messageCount,
-      participants: thread.participants,
-    }))
-  ].sort((a, b) => 
-    new Date((b.loggedAt || b.createdAt || 0) as string | number | Date).getTime() - 
-    new Date((a.loggedAt || a.createdAt || 0) as string | number | Date).getTime()
-  );
+    ...(communications || []).map((comm): TimelineItem => {
+      const date = comm.loggedAt || comm.createdAt;
+      return {
+        kind: 'communication',
+        id: comm.id,
+        type: comm.type,
+        sortDate: new Date(date as string | number | Date),
+        displayDate: formatDate(date),
+        subject: comm.subject,
+        content: comm.content,
+        projectId: comm.projectId,
+        data: comm,
+      };
+    }),
+    ...(messageThreads || []).map((thread): TimelineItem => {
+      const date = thread.createdAt;
+      return {
+        kind: 'message_thread',
+        id: thread.id,
+        type: 'message_thread',
+        sortDate: new Date(date),
+        displayDate: formatDate(date),
+        subject: thread.subject,
+        content: thread.lastMessage?.content || '',
+        projectId: undefined,
+        messageCount: thread.messageCount,
+        unreadCount: thread.unreadCount,
+        attachmentCount: thread.attachmentCount,
+        data: thread,
+      };
+    }),
+    ...emailThreads.map((thread): TimelineItem => {
+      const date = thread.lastMessageAt;
+      return {
+        kind: 'email_thread',
+        id: thread.canonicalConversationId,
+        type: 'email_thread',
+        sortDate: new Date(date),
+        displayDate: formatDate(date),
+        subject: thread.subject || 'No Subject',
+        content: thread.latestPreview || thread.subject || '',
+        projectId: undefined,
+        messageCount: thread.messageCount,
+        participants: thread.participants,
+        data: thread,
+      };
+    })
+  ].sort((a, b) => b.sortDate.getTime() - a.sortDate.getTime());
 
   const filteredItems = allItems.filter(item => {
     if (commTypeFilter === 'all') return true;
@@ -132,12 +146,12 @@ export function CommunicationsTimeline({ clientId, user }: CommunicationsTimelin
     setIsViewingCommunication(true);
   };
 
-  const handleViewMessageThread = (threadId: string) => {
-    setLocation(`/messages?thread=${threadId}`);
+  const handleViewMessageThread = (thread: MessageThread) => {
+    setLocation(`/messages?thread=${thread.id}`);
   };
 
-  const handleViewEmailThread = (threadId: string) => {
-    setSelectedEmailThreadId(threadId);
+  const handleViewEmailThread = (thread: EmailThread) => {
+    setSelectedEmailThreadId(thread.canonicalConversationId);
     setEmailThreadViewerOpen(true);
   };
 

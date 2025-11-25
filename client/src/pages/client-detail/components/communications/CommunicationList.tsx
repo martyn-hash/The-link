@@ -12,7 +12,7 @@ import { Clock, Eye, MessageSquare, UserIcon } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CommunicationCard } from "@/components/communication-card";
 import { getIcon, getTypeLabel, getTypeColor } from "./helpers.tsx";
-import type { CommunicationListProps, TimelineItem, CommunicationWithRelations } from "./types";
+import type { CommunicationListProps, TimelineItem } from "./types";
 
 interface ProjectLinkProps {
   projectId: string;
@@ -41,7 +41,7 @@ export function CommunicationList({
   onViewMessageThread,
   onViewEmailThread,
   onProjectClick,
-}: CommunicationListProps & { onProjectClick?: (projectId: string) => void }) {
+}: CommunicationListProps) {
   const isMobile = useIsMobile();
 
   if (!items || items.length === 0) {
@@ -54,20 +54,43 @@ export function CommunicationList({
     );
   }
 
+  const handleItemView = (item: TimelineItem) => {
+    switch (item.kind) {
+      case 'communication':
+        onViewCommunication(item.data);
+        break;
+      case 'message_thread':
+        onViewMessageThread(item.data);
+        break;
+      case 'email_thread':
+        onViewEmailThread(item.data);
+        break;
+    }
+  };
+
+  const getItemUser = (item: TimelineItem): string => {
+    switch (item.kind) {
+      case 'communication':
+        if (item.data.user) {
+          return `${item.data.user.firstName || ''} ${item.data.user.lastName || ''}`.trim() || 'Unknown';
+        }
+        return 'System';
+      case 'email_thread':
+        if (item.participants && item.participants.length > 0) {
+          return `${item.participants.length} participant${item.participants.length !== 1 ? 's' : ''}`;
+        }
+        return 'Email';
+      case 'message_thread':
+        return 'Internal Message';
+      default:
+        return 'System';
+    }
+  };
+
   if (isMobile) {
     return (
       <div className="space-y-3">
         {items.map((item: TimelineItem) => {
-          const handleView = () => {
-            if (item.type === 'message_thread') {
-              onViewMessageThread(item.id);
-            } else if (item.type === 'email_thread') {
-              onViewEmailThread(item.id);
-            } else {
-              onViewCommunication(item as unknown as CommunicationWithRelations);
-            }
-          };
-
           const handleProjectClick = item.projectId && onProjectClick
             ? () => onProjectClick(item.projectId!)
             : undefined;
@@ -77,19 +100,22 @@ export function CommunicationList({
               key={item.id}
               id={item.id}
               type={item.type}
-              loggedAt={item.loggedAt as string | Date}
-              createdAt={item.createdAt as string | Date}
+              loggedAt={item.displayDate}
+              createdAt={item.displayDate}
               subject={item.subject}
               content={item.content}
-              user={item.user}
-              createdBy={item.createdBy}
+              user={item.kind === 'communication' && item.data.user ? { 
+                firstName: item.data.user.firstName || '', 
+                lastName: item.data.user.lastName || '' 
+              } : null}
+              createdBy={item.kind === 'communication' ? item.data.userId : undefined}
               projectId={item.projectId}
               projectName={projectCache[item.projectId!]?.description || projectCache[item.projectId!]?.client?.name}
-              messageCount={item.messageCount}
-              unreadCount={item.unreadCount}
-              attachmentCount={item.attachmentCount}
-              participants={item.participants}
-              onView={handleView}
+              messageCount={item.kind !== 'communication' ? item.messageCount : undefined}
+              unreadCount={item.kind === 'message_thread' ? item.unreadCount : undefined}
+              attachmentCount={item.kind === 'message_thread' ? item.attachmentCount : undefined}
+              participants={item.kind === 'email_thread' ? item.participants : undefined}
+              onView={() => handleItemView(item)}
               onProjectClick={handleProjectClick}
             />
           );
@@ -127,14 +153,13 @@ export function CommunicationList({
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-muted-foreground" />
                 <span className="text-sm" data-testid={`text-date-${item.id}`}>
-                  {item.loggedAt ? new Date(item.loggedAt as string).toLocaleString() : 
-                   item.createdAt ? new Date(item.createdAt as string).toLocaleString() : 'No date'}
+                  {item.displayDate || 'No date'}
                 </span>
               </div>
             </TableCell>
             <TableCell data-testid={`cell-content-${item.id}`}>
               <div className="max-w-md">
-                {item.type === 'message_thread' ? (
+                {item.kind === 'message_thread' ? (
                   <div>
                     <div className="font-medium text-sm flex items-center gap-2">
                       {item.subject}
@@ -153,7 +178,7 @@ export function CommunicationList({
                       )}
                     </div>
                   </div>
-                ) : item.type === 'email_thread' ? (
+                ) : item.kind === 'email_thread' ? (
                   <div>
                     <div className="font-medium text-sm flex items-center gap-2">
                       {item.subject || 'No Subject'}
@@ -177,17 +202,7 @@ export function CommunicationList({
               <div className="flex items-center gap-2">
                 <UserIcon className="w-4 w-4 text-muted-foreground" />
                 <span className="text-sm" data-testid={`text-user-${item.id}`}>
-                  {item.type === 'email_thread' ? (
-                    item.participants && item.participants.length > 0 
-                      ? `${item.participants.length} participant${item.participants.length !== 1 ? 's' : ''}`
-                      : 'Email'
-                  ) : item.user ? (
-                    `${item.user.firstName} ${item.user.lastName}`
-                  ) : item.createdBy ? (
-                    `User ${item.createdBy}`
-                  ) : (
-                    'System'
-                  )}
+                  {getItemUser(item)}
                 </span>
               </div>
             </TableCell>
@@ -203,21 +218,21 @@ export function CommunicationList({
               )}
             </TableCell>
             <TableCell>
-              {item.type === 'message_thread' ? (
+              {item.kind === 'message_thread' ? (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => onViewMessageThread(item.id)}
+                  onClick={() => onViewMessageThread(item.data)}
                   data-testid={`button-view-thread-${item.id}`}
                 >
                   <Eye className="h-4 w-4 mr-2" />
                   View Thread
                 </Button>
-              ) : item.type === 'email_thread' ? (
+              ) : item.kind === 'email_thread' ? (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => onViewEmailThread(item.id)}
+                  onClick={() => onViewEmailThread(item.data)}
                   data-testid={`button-view-email-thread-${item.id}`}
                 >
                   <Eye className="h-4 w-4 mr-2" />
@@ -227,7 +242,7 @@ export function CommunicationList({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => onViewCommunication(item as unknown as CommunicationWithRelations)}
+                  onClick={() => onViewCommunication(item.data)}
                   data-testid={`button-view-communication-${item.id}`}
                 >
                   <Eye className="h-4 w-4 mr-2" />

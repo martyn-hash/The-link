@@ -7,7 +7,41 @@ export interface CommunicationWithRelations extends Communication {
   person?: Person | null;
 }
 
-export interface TimelineItem {
+interface BaseTimelineDisplay {
+  id: string;
+  sortDate: Date;
+  displayDate: string;
+  subject?: string | null;
+  content?: string | null;
+  projectId?: string | null;
+}
+
+export interface CommunicationTimelineItem extends BaseTimelineDisplay {
+  kind: 'communication';
+  data: CommunicationWithRelations;
+  type: string;
+}
+
+export interface MessageThreadTimelineItem extends BaseTimelineDisplay {
+  kind: 'message_thread';
+  data: MessageThread;
+  type: 'message_thread';
+  messageCount?: number;
+  unreadCount?: number;
+  attachmentCount?: number;
+}
+
+export interface EmailThreadTimelineItem extends BaseTimelineDisplay {
+  kind: 'email_thread';
+  data: EmailThread;
+  type: 'email_thread';
+  messageCount?: number;
+  participants?: string[] | null;
+}
+
+export type TimelineItem = CommunicationTimelineItem | MessageThreadTimelineItem | EmailThreadTimelineItem;
+
+export interface LegacyTimelineItem {
   id: string;
   type: string;
   loggedAt?: string | Date | null;
@@ -103,7 +137,8 @@ export interface CommunicationFiltersProps {
 export interface CommunicationListProps {
   items: TimelineItem[];
   projectCache: Record<string, any>;
-  onViewCommunication: (item: CommunicationWithRelations) => void;
-  onViewMessageThread: (threadId: string) => void;
-  onViewEmailThread: (threadId: string) => void;
+  onViewCommunication: (communication: CommunicationWithRelations) => void;
+  onViewMessageThread: (thread: MessageThread) => void;
+  onViewEmailThread: (thread: EmailThread) => void;
+  onProjectClick?: (projectId: string) => void;
 }
