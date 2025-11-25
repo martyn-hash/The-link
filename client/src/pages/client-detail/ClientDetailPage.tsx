@@ -1,94 +1,19 @@
-import { useParams, Link as RouterLink, useLocation } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { TiptapEditor } from '@/components/TiptapEditor';
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
-import DOMPurify from 'dompurify';
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import BottomNav from "@/components/bottom-nav";
 import SuperSearch from "@/components/super-search";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { SwipeableTabsWrapper } from "@/components/swipeable-tabs";
-import { Badge } from "@/components/ui/badge";
-import { Building2, MapPin, Calendar, ExternalLink, Plus, ChevronDown, ChevronRight, ChevronUp, ChevronLeft, Phone, Mail, UserIcon, Clock, Settings, Users, Briefcase, Check, ShieldCheck, Link, X, Pencil, Eye, MessageSquare, PhoneCall, FileText, Send, Inbox, Upload, Download, Trash, QrCode, CheckSquare, FileSignature, Shield, PenLine } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 import TopNavigation from "@/components/top-navigation";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Progress } from "@/components/ui/progress";
-import AddressLookup from "@/components/address-lookup";
-import AddressMap from "@/components/address-map";
-import TagManager from "@/components/tag-manager";
-import ClientChronology from "@/components/client-chronology";
-import { RingCentralPhone } from "@/components/ringcentral-phone";
-import { ObjectUploader } from "@/components/ObjectUploader";
-import { DocumentUploadDialog } from "@/components/DocumentUploadDialog";
-import { DocumentPreviewDialog } from "@/components/DocumentPreviewDialog";
-import DocumentFolderView from "@/components/DocumentFolderView";
-import { CreateFolderDialog } from "@/components/CreateFolderDialog";
-import { RiskAssessmentTab } from "@/components/RiskAssessmentTab";
-import { ClientNotificationsView } from "@/components/ClientNotificationsView";
-import { CreateTaskDialog } from "@/components/create-task-dialog";
-import { EmailThreadViewer } from "@/components/EmailThreadViewer";
-import { CommunicationCard } from "@/components/communication-card";
-import { SignatureRequestsPanel } from "@/components/SignatureRequestsPanel";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { useToast } from "@/hooks/use-toast";
 import { useActivityTracker } from "@/lib/activityTracker";
-import type { Client, Person, ClientPerson, Service, ClientService, User, WorkRole, ClientServiceRoleAssignment, PeopleService, ProjectWithRelations, Communication, Document, ClientPortalUser } from "@shared/schema";
-import { insertPersonSchema, insertCommunicationSchema } from "@shared/schema";
-import { formatPersonName, formatDate, formatBirthDate, maskIdentifier } from "./utils/formatters";
-import { getStatusColor, formatStatus } from "./utils/projectHelpers";
-import { 
-  CommunicationWithRelations, 
-  ClientPersonWithPerson, 
-  ClientPersonWithClient,
-  ClientServiceWithService,
-  ServiceWithDetails,
-  EnhancedClientService,
-  PeopleServiceWithRelations,
-  addServiceSchema,
-  AddServiceData,
-  addPersonSchema,
-  InsertPersonData,
-  updatePersonSchema,
-  UpdatePersonData,
-  editServiceSchema,
-  EditServiceData,
-  linkPersonToCompanySchema,
-  LinkPersonToCompanyData,
-  AddServiceModalProps
-} from "./utils/types";
-import { PortalStatusColumn } from "./components/PortalStatusColumn";
-import { ProjectsList, ServiceProjectsList, OpenProjectRow, CompletedProjectRow } from "./components/projects";
-import { 
-  PersonEditForm, 
-  PersonViewMode, 
-  RelatedPersonRow, 
-  PersonTabbedView, 
-  AddPersonModal 
-} from "./components/people";
-import {
-  ClientServiceRow,
-  EditableServiceDetails,
-  EditServiceModal,
-  AddServiceModal
-} from "./components/services";
+import type { EnhancedClientService } from "./utils/types";
+import { AddPersonModal } from "./components/people";
+import { EditServiceModal } from "./components/services";
 import { CommunicationsTimeline } from "./components/communications";
 import { 
   ChronologyTab, 
