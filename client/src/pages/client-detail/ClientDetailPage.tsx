@@ -100,6 +100,7 @@ import {
   ServicesTab 
 } from "./components/tabs";
 import { NewClientRequestDialog } from "./dialogs/NewClientRequestDialog";
+import { useClientData } from "./hooks";
 
 export default function ClientDetail() {
   const { id } = useParams();
@@ -130,61 +131,32 @@ export default function ClientDetail() {
   const [activeTab, setActiveTab] = useState<string>("overview");
   const [riskView, setRiskView] = useState<'risk' | 'notifications'>('risk');
 
-  const { data: client, isLoading, error } = useQuery<Client>({
-    queryKey: [`/api/clients/${id}`],
-    queryFn: getQueryFn({ on401: "throw" }),
-    enabled: !!id,
-  });
-
-  // Fetch related people/directors
-  const { data: relatedPeople, isLoading: peopleLoading, error: peopleError } = useQuery<ClientPersonWithPerson[]>({
-    queryKey: ['/api/clients', id, 'people'],
-    queryFn: getQueryFn({ on401: "throw" }),
-    enabled: !!id && !!client,
-    retry: 1, // Retry once on failure
-  });
-
-  // Fetch client services
-  const { data: clientServices, isLoading: servicesLoading, error: servicesError, refetch: refetchServices } = useQuery<EnhancedClientService[]>({
-    queryKey: [`/api/client-services/client/${id}`],
-    queryFn: getQueryFn({ on401: "throw" }),
-    enabled: !!id && !!client,
-  });
-
-  // Fetch personal services for people related to this client
-  const { data: peopleServices, isLoading: peopleServicesLoading, error: peopleServicesError, refetch: refetchPeopleServices } = useQuery<(PeopleService & { person: Person; service: Service; serviceOwner?: User })[]>({
-    queryKey: [`/api/people-services/client/${id}`],
-    queryFn: getQueryFn({ on401: "throw" }),
-    enabled: !!id && !!client,
-  });
-
-  // Fetch all services with roles to get role information for personal services
-  const { data: servicesWithRoles } = useQuery<(Service & { roles: WorkRole[] })[]>({
-    queryKey: ['/api/services'],
-    queryFn: getQueryFn({ on401: "throw" }),
-    enabled: !!id && !!client,
-  });
-
-  // Fetch projects for this client
-  const { data: clientProjects, isLoading: projectsLoading, error: projectsError } = useQuery<ProjectWithRelations[]>({
-    queryKey: [`/api/clients/${id}/projects`],
-    queryFn: getQueryFn({ on401: "throw" }),
-    enabled: !!id && !!client,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    refetchOnMount: "always", // Always refetch to ensure fresh data after mutations
-  });
-
-  // Fetch task instances for this client
-  const { data: taskInstances, isLoading: taskInstancesLoading } = useQuery<any[]>({
-    queryKey: [`/api/task-instances/client/${id}`],
-    enabled: !!id && !!client,
-  });
-
-  // Fetch internal tasks for this client
-  const { data: clientInternalTasks, isLoading: clientInternalTasksLoading } = useQuery<any[]>({
-    queryKey: [`/api/internal-tasks/client/${id}`],
-    enabled: !!id,
-  });
+  // All client data queries consolidated into a single hook
+  const {
+    client,
+    isLoading,
+    error,
+    relatedPeople,
+    peopleLoading,
+    peopleError,
+    clientServices,
+    servicesLoading,
+    servicesError,
+    refetchServices,
+    peopleServices,
+    peopleServicesLoading,
+    peopleServicesError,
+    refetchPeopleServices,
+    servicesWithRoles,
+    clientProjects,
+    projectsLoading,
+    taskInstances,
+    taskInstancesLoading,
+    clientInternalTasks,
+    clientInternalTasksLoading,
+    clientDocuments,
+    documentsLoading,
+  } = useClientData(id);
 
   // Mutation for updating person data
   const updatePersonMutation = useMutation({
@@ -362,12 +334,7 @@ export default function ClientDetail() {
     c => c.clientType === 'company' && c.id !== id && !connectedCompanyIds.includes(c.id)
   ) || [];
 
-  // Documents query and mutation
-  const { data: clientDocuments, isLoading: documentsLoading } = useQuery<Document[]>({
-    queryKey: ['/api/clients', id, 'documents'],
-    enabled: !!id,
-  });
-
+  // Document mutation (query is now in useClientData hook)
   const deleteDocumentMutation = useMutation({
     mutationFn: async (documentId: string) => {
       return await apiRequest('DELETE', `/api/documents/${documentId}`);
