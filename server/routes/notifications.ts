@@ -13,6 +13,7 @@ import {
   type Service,
   type ClientService,
   type CompanySettings,
+  type Person,
 } from "@shared/schema";
 import { scheduleServiceStartDateNotifications, scheduleProjectDueDateNotifications } from "../notification-scheduler";
 import type { NotificationVariableContext } from "../notification-variables";
@@ -45,13 +46,14 @@ const validateParams = <T>(schema: z.ZodSchema<T>, params: any): { success: true
 // Helper function to build notification variable context from database models
 function buildNotificationContext(params: {
   client: Client;
+  person?: Person;
   project: Project;
   projectType: ProjectType;
   service?: Service;
   clientService?: ClientService;
   companySettings?: CompanySettings;
 }): NotificationVariableContext {
-  const { client, project, projectType, service, clientService, companySettings } = params;
+  const { client, person, project, projectType, service, clientService, companySettings } = params;
   
   return {
     client: {

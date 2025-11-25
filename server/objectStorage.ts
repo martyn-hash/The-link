@@ -221,6 +221,14 @@ export class ObjectStorageService {
     return downloadURL;
   }
 
+  // Downloads file content as Buffer from object storage (static method for utility use)
+  static async downloadFile(objectPath: string): Promise<Buffer> {
+    const service = new ObjectStorageService();
+    const file = await service.getObjectEntityFile(objectPath);
+    const [buffer] = await file.download();
+    return buffer;
+  }
+
   // Gets the object entity file from the object path.
   async getObjectEntityFile(objectPath: string): Promise<File> {
     if (!objectPath.startsWith("/objects/")) {

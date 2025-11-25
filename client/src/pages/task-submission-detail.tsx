@@ -57,8 +57,8 @@ export default function TaskSubmissionDetail() {
 
   // Fetch submission details
   const { data: submission, isLoading, error } = useQuery<TaskSubmission>({
-    queryKey: ['/api/task-instances', submissionId, 'full'],
-    queryFn: getQueryFn(`/api/task-instances/${submissionId}/full`),
+    queryKey: [`/api/task-instances/${submissionId}/full`],
+    queryFn: getQueryFn<TaskSubmission>({ on401: 'throw' }),
     enabled: !!submissionId,
     retry: 2,
   });

@@ -21,7 +21,7 @@ export default function TagManager({ entityId, entityType, className }: TagManag
   const { toast } = useToast();
 
   // Fetch assigned tags
-  const { data: assignedTags = [], isLoading } = useQuery({
+  const { data: assignedTags = [], isLoading } = useQuery<any[]>({
     queryKey: [`/api/${entityType === "client" ? "clients" : "people"}/${entityId}/tags`],
   });
 

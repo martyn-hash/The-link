@@ -90,6 +90,7 @@ export default function ProjectDetail() {
   const [currentTab, setCurrentTab] = useState<string>("overview");
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [showInactiveDialog, setShowInactiveDialog] = useState(false);
+  const [showTaskModal, setShowTaskModal] = useState(false);
   
   // Form for making project inactive
   const inactiveForm = useForm<MakeProjectInactiveData>({

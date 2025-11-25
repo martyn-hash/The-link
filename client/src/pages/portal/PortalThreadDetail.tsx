@@ -375,7 +375,7 @@ export default function PortalThreadDetail() {
 
       console.log('[Voice Note] Calling uploadFile...');
       // Upload the audio file
-      const attachment = await uploadFile(audioFile);
+      const attachment = await uploadFile(audioFile as unknown as File);
       console.log('[Voice Note] Upload successful, attachment:', attachment);
 
       console.log('[Voice Note] Sending message with attachment...');

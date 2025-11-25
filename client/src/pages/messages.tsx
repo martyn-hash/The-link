@@ -405,6 +405,10 @@ export default function Messages() {
 
   const threadsLoading = clientStaffThreadsLoading || staffThreadsLoading || projectThreadsLoading || emailThreadsLoading;
 
+  // Get selected thread from project threads for mobile view
+  const selectedThread = (projectThreads || []).find((t: any) => t.id === selectedThreadId) || 
+    (staffThreads || []).find((t: any) => t.id === selectedThreadId);
+
   // Calculate unread counts
   // Internal Chat includes BOTH standalone staff threads AND project message threads
   // Count the NUMBER OF THREADS with unread messages (not total messages)
@@ -1341,7 +1345,7 @@ export default function Messages() {
       />
 
       {/* Mobile Thread View Dialog - Disabled for client tab (client threads not fully implemented yet) */}
-      {isMobile && selectedThreadId && activeTab !== 'client' && (
+      {isMobile && selectedThreadId && activeTab !== 'client' && selectedThread && (
         <Dialog open={showMobileThreadView} onOpenChange={setShowMobileThreadView}>
           <DialogContent className="max-w-full h-[90vh] p-0 flex flex-col">
             <DialogHeader className="border-b p-4">
@@ -1350,20 +1354,20 @@ export default function Messages() {
                   <div className="flex items-center gap-2 mb-1">
                     <Building2 className="w-4 h-4 text-muted-foreground" />
                     <span className="text-sm text-muted-foreground">
-                      {selectedThread.client.name}
+                      {(selectedThread as any).client?.name || 'Unknown Client'}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mb-1">
                     <FolderKanban className="w-4 h-4 text-muted-foreground" />
                     <span className="text-sm text-muted-foreground">
-                      {selectedThread.project.description}
+                      {(selectedThread as any).project?.description || 'Project Thread'}
                     </span>
                   </div>
                   <DialogTitle>{selectedThread.topic}</DialogTitle>
                   <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                     <Users className="w-4 h-4" />
                     <span>
-                      {selectedThread.participants.map(p => getUserDisplayName(p)).join(', ')}
+                      {(selectedThread.participants || []).map((p: any) => getUserDisplayName(p)).join(', ')}
                     </span>
                   </div>
                 </div>

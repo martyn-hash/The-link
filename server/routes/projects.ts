@@ -277,8 +277,22 @@ export function registerProjectRoutes(
         serviceId: req.query.serviceId as string | undefined,
       };
 
-      const projects = await storage.getProjectsByClient(clientId, filters);
-      res.json(projects);
+      const projects = await storage.getProjectsByClient(clientId);
+      // Apply filters locally since storage method doesn't support them
+      let filtered = projects;
+      if (filters.archived !== undefined) {
+        filtered = filtered.filter(p => p.archived === filters.archived);
+      }
+      if (filters.inactive !== undefined) {
+        filtered = filtered.filter(p => p.inactive === filters.inactive);
+      }
+      if (filters.month) {
+        filtered = filtered.filter(p => p.projectMonth === filters.month);
+      }
+      if (filters.serviceId) {
+        filtered = filtered.filter((p: any) => p.service?.id === filters.serviceId);
+      }
+      res.json(filtered);
     } catch (error) {
       console.error("Error fetching client projects:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(500).json({ message: "Failed to fetch client projects" });
@@ -1603,7 +1617,7 @@ export function registerProjectRoutes(
       }
 
       // Get all active projects (not archived)
-      const allProjects = await storage.getProjectsByUser(effectiveUserId, effectiveUser.isAdmin ? 'admin' : 'user', { archived: false });
+      const allProjects = (await storage.getProjectsByUser(effectiveUserId, effectiveUser.isAdmin ? 'admin' : 'user')).filter(p => !p.archived);
 
       // Filter projects where user is the service owner
       const myProjects = allProjects.filter(p => p.projectOwnerId === effectiveUserId);
@@ -1617,7 +1631,7 @@ export function registerProjectRoutes(
       );
 
       // PERFORMANCE FIX: Batch load all stages for unique project types (fix N+1 query)
-      const uniqueProjectTypeIds = [...new Set(myRelevantProjects.map(p => p.projectTypeId))];
+      const uniqueProjectTypeIds = Array.from(new Set(myRelevantProjects.map(p => p.projectTypeId)));
       const stagesByProjectType = new Map<string, any[]>();
       
       // Load all stages in parallel
@@ -1692,7 +1706,7 @@ export function registerProjectRoutes(
       }
 
       // Get all projects and filter by service owner
-      const allProjects = await storage.getProjectsByUser(effectiveUserId, effectiveUser.isAdmin ? 'admin' : 'user', { archived: false });
+      const allProjects = (await storage.getProjectsByUser(effectiveUserId, effectiveUser.isAdmin ? 'admin' : 'user')).filter(p => !p.archived);
       const myProjects = allProjects.filter(p => p.projectOwnerId === effectiveUserId);
 
       res.json(myProjects);
@@ -1713,7 +1727,7 @@ export function registerProjectRoutes(
       }
 
       // Get all projects and filter by current assignee
-      const allProjects = await storage.getProjectsByUser(effectiveUserId, effectiveUser.isAdmin ? 'admin' : 'user', { archived: false });
+      const allProjects = (await storage.getProjectsByUser(effectiveUserId, effectiveUser.isAdmin ? 'admin' : 'user')).filter(p => !p.archived);
       const myTasks = allProjects.filter(p => p.currentAssigneeId === effectiveUserId);
 
       res.json(myTasks);

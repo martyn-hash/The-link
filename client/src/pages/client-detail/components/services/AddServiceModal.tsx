@@ -169,7 +169,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
   // Validate that all roles are assigned (gracefully handle missing roles data)
   const areAllRolesAssigned = () => {
     if (!selectedService || !selectedService.roles || selectedService.roles.length === 0) return true;
-    return selectedService.roles.every(role => roleAssignments[role.id]);
+    return selectedService.roles.every((role: any) => roleAssignments[role.id]);
   };
 
   // Validate form is ready for submission
@@ -672,7 +672,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
                       </p>
                       
                       <div className="space-y-3">
-                        {selectedService?.roles?.map((role) => (
+                        {selectedService?.roles?.map((role: any) => (
                           <div key={role.id} className="space-y-2">
                             <div className="flex items-center justify-between">
                               <div className="flex-1">

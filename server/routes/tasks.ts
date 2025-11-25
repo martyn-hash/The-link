@@ -884,7 +884,7 @@ export function registerTaskRoutes(
           // Get category from template
           let category = null;
           if (template?.categoryId) {
-            category = await storage.getTaskTemplateCategoryById(template.categoryId);
+            category = await storage.getClientRequestTemplateCategoryById(template.categoryId);
           }
 
           // Calculate progress if in_progress
@@ -1191,7 +1191,7 @@ export function registerTaskRoutes(
           // Get category from template
           let category = null;
           if (template?.categoryId) {
-            category = await storage.getTaskTemplateCategoryById(template.categoryId);
+            category = await storage.getClientRequestTemplateCategoryById(template.categoryId);
           }
 
           // Calculate progress if in_progress

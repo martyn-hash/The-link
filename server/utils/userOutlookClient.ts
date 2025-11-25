@@ -169,7 +169,7 @@ export async function createReplyToMessage(
 ) {
   try {
     const graphClient = await getUserOutlookClient(userId);
-    const { ObjectStorageService } = await import('../services/objectStorageService');
+    const { ObjectStorageService } = await import('../objectStorage');
     
     if (!isHtml && (!attachments || attachments.length === 0)) {
       // For plain text without attachments, we can use the simple /reply action
@@ -281,7 +281,7 @@ export async function createReplyAllToMessage(
 ) {
   try {
     const graphClient = await getUserOutlookClient(userId);
-    const { ObjectStorageService } = await import('../services/objectStorageService');
+    const { ObjectStorageService } = await import('../objectStorage');
     
     if (!isHtml && (!attachments || attachments.length === 0)) {
       // For plain text without attachments, we can use the simple /replyAll action
@@ -462,7 +462,7 @@ const oauthStates = new Map<string, { userId: string; timestamp: number }>();
 // Clean up expired states (older than 10 minutes)
 setInterval(() => {
   const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
-  for (const [state, data] of oauthStates.entries()) {
+  for (const [state, data] of Array.from(oauthStates.entries())) {
     if (data.timestamp < tenMinutesAgo) {
       oauthStates.delete(state);
     }

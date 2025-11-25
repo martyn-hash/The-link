@@ -31,7 +31,7 @@ export default function TeamOverview() {
     );
   }
 
-  if (!isAuthenticated || !(user.isAdmin || user.canSeeAdminMenu)) {
+  if (!isAuthenticated || !(user?.isAdmin || user?.canSeeAdminMenu)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -42,16 +42,19 @@ export default function TeamOverview() {
     );
   }
 
-  const teamStats = users ? {
-    totalMembers: users.length,
-    adminCount: users.filter((u: any) => u.isAdmin).length,
-    managerCount: users.filter((u: any) => u.canSeeAdminMenu && !u.isAdmin).length,
-    regularUserCount: users.filter((u: any) => !u.isAdmin && !u.canSeeAdminMenu).length,
+  const usersArray = Array.isArray(users) ? users : [];
+  const projectsArray = Array.isArray(projects) ? projects : [];
+  
+  const teamStats = usersArray.length > 0 ? {
+    totalMembers: usersArray.length,
+    adminCount: usersArray.filter((u: any) => u.isAdmin).length,
+    managerCount: usersArray.filter((u: any) => u.canSeeAdminMenu && !u.isAdmin).length,
+    regularUserCount: usersArray.filter((u: any) => !u.isAdmin && !u.canSeeAdminMenu).length,
   } : null;
 
-  const workloadStats = projects ? {
-    totalProjects: projects.length,
-    projectsByBookkeeper: projects.reduce((acc: any, project: any) => {
+  const workloadStats = projectsArray.length > 0 ? {
+    totalProjects: projectsArray.length,
+    projectsByBookkeeper: projectsArray.reduce((acc: any, project: any) => {
       const bookkeeper = project.bookkeeper?.firstName + ' ' + project.bookkeeper?.lastName || 'Unassigned';
       acc[bookkeeper] = (acc[bookkeeper] || 0) + 1;
       return acc;

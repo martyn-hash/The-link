@@ -1006,7 +1006,13 @@ export function registerConfigRoutes(
         return res.status(404).json({ message: "User not found" });
       }
 
-      const fallbackUser = await storage.setFallbackUser(userId);
+      await storage.setFallbackUser(userId);
+      
+      // Refetch the user to get the updated fallback status
+      const fallbackUser = await storage.getUser(userId);
+      if (!fallbackUser) {
+        return res.status(404).json({ message: "User not found after update" });
+      }
 
       // Strip password hash from response for security
       const { passwordHash, ...sanitizedUser } = fallbackUser;

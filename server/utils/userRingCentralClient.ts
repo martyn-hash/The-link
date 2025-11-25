@@ -43,7 +43,7 @@ const oauthStates = new Map<string, { userId: string; timestamp: number }>();
 // Clean up expired states (older than 10 minutes)
 setInterval(() => {
   const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
-  for (const [state, data] of oauthStates.entries()) {
+  for (const [state, data] of Array.from(oauthStates.entries())) {
     if (data.timestamp < tenMinutesAgo) {
       oauthStates.delete(state);
     }
@@ -321,7 +321,7 @@ export async function exchangeCodeForRingCentralTokens(code: string, state: stri
     tokens: {
       access_token: authData.access_token!,
       refresh_token: authData.refresh_token,
-      expires_in: authData.expires_in || 3600,
+      expires_in: Number(authData.expires_in) || 3600,
       token_type: authData.token_type || 'Bearer'
     }
   };

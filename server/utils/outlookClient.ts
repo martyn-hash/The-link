@@ -102,3 +102,14 @@ export async function getOutlookProfile() {
     throw error;
   }
 }
+
+// Setup webhook subscription for a user's Outlook mailbox
+// Note: This requires user-level OAuth tokens (not app-level) for per-user mailbox subscriptions
+export async function setupOutlookWebhook(userId: string): Promise<any> {
+  // TODO: Implement webhook subscription for user mailbox
+  // This requires:
+  // 1. User-level OAuth access token (from userOutlookClient)
+  // 2. Graph API subscription creation
+  // 3. Webhook endpoint validation
+  throw new Error('Webhook subscription not yet implemented - use per-user OAuth flow via userOutlookClient');
+}

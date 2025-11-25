@@ -125,9 +125,10 @@ export default function ClientRequests() {
     return Array.from(categories.entries()).map(([id, name]) => ({ id, name }));
   }, [activeData, completedData]);
 
-  const formatDate = (dateString: string) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('en-GB', {
+  const formatDate = (dateValue: string | Date | null | undefined) => {
+    if (!dateValue) return '-';
+    const date = typeof dateValue === 'string' ? new Date(dateValue) : dateValue;
+    return date.toLocaleDateString('en-GB', {
       day: '2-digit',
       month: 'short',
       year: 'numeric'

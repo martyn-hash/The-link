@@ -540,9 +540,9 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     setEditingStage({
       id: stage.id,
       name: stage.name,
-      assignedRole: stage.assignedRole || undefined,
-      assignedWorkRoleId: (stage as any).assignedWorkRoleId,
-      assignedUserId: (stage as any).assignedUserId,
+      assignedRole: stage.assignedWorkRoleId || undefined,
+      assignedWorkRoleId: stage.assignedWorkRoleId || undefined,
+      assignedUserId: stage.assignedUserId || undefined,
       order: stage.order,
       color: stage.color || "#6b7280",
     });
@@ -693,8 +693,8 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                             <Label htmlFor="project-type-name">Project Type Name</Label>
                             <Input
                               id="project-type-name"
-                              value={editingProjectType.name}
-                              onChange={(e) => setEditingProjectType({
+                              value={editingProjectType?.name ?? ""}
+                              onChange={(e) => editingProjectType && setEditingProjectType({
                                 ...editingProjectType,
                                 name: e.target.value
                               })}
@@ -706,8 +706,8 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                             <Label htmlFor="project-type-description">Description</Label>
                             <Input
                               id="project-type-description"
-                              value={editingProjectType.description}
-                              onChange={(e) => setEditingProjectType({
+                              value={editingProjectType?.description ?? ""}
+                              onChange={(e) => editingProjectType && setEditingProjectType({
                                 ...editingProjectType,
                                 description: e.target.value
                               })}
@@ -719,8 +719,8 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                             <input
                               type="checkbox"
                               id="project-type-active"
-                              checked={editingProjectType.active}
-                              onChange={(e) => setEditingProjectType({
+                              checked={editingProjectType?.active ?? false}
+                              onChange={(e) => editingProjectType && setEditingProjectType({
                                 ...editingProjectType,
                                 active: e.target.checked
                               })}
@@ -1053,7 +1053,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                               </div>
                             </div>
                             <p className="text-sm text-muted-foreground">
-                              Assigned to {ROLE_OPTIONS.find(r => r.value === stage.assignedRole)?.label}
+                              Assigned to {ROLE_OPTIONS.find(r => r.value === stage.assignedWorkRoleId)?.label || stage.assignedUserId || 'Unassigned'}
                             </p>
                           </div>
                         )}

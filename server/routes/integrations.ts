@@ -1342,7 +1342,7 @@ export function registerIntegrationRoutes(
       const integrations = await storage.getUserIntegrations(effectiveUserId);
 
       // Remove sensitive tokens from response
-      const safeIntegrations = integrations.map(integration => ({
+      const safeIntegrations = integrations.map((integration: any) => ({
         ...integration,
         accessToken: integration.accessToken ? "***" : null,
         refreshToken: integration.refreshToken ? "***" : null,
@@ -1415,7 +1415,7 @@ export function registerIntegrationRoutes(
       // Ensure the user can only update their own integrations
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
       const existingIntegrations = await storage.getUserIntegrations(effectiveUserId);
-      const hasAccess = existingIntegrations.some(integration => integration.id === userIntegrationId);
+      const hasAccess = existingIntegrations.some((integration: any) => integration.id === userIntegrationId);
 
       if (!hasAccess && !req.user.isAdmin) {
         return res.status(403).json({ message: "Not authorized to update this integration" });
@@ -1453,7 +1453,7 @@ export function registerIntegrationRoutes(
       // Ensure the user can only delete their own integrations
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
       const existingIntegrations = await storage.getUserIntegrations(effectiveUserId);
-      const hasAccess = existingIntegrations.some(integration => integration.id === userIntegrationId);
+      const hasAccess = existingIntegrations.some((integration: any) => integration.id === userIntegrationId);
 
       if (!hasAccess && !req.user.isAdmin) {
         return res.status(403).json({ message: "Not authorized to delete this integration" });

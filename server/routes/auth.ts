@@ -649,7 +649,13 @@ export async function registerAuthAndMiscRoutes(
         return res.status(404).json({ message: "User not found" });
       }
 
-      const fallbackUser = await storage.setFallbackUser(userId);
+      await storage.setFallbackUser(userId);
+      
+      // Refetch the user to get the updated fallback status
+      const fallbackUser = await storage.getUser(userId);
+      if (!fallbackUser) {
+        return res.status(404).json({ message: "User not found after update" });
+      }
 
       // Strip password hash from response for security
       const { passwordHash, ...sanitizedUser } = fallbackUser;
@@ -2263,15 +2269,13 @@ export async function registerAuthAndMiscRoutes(
             let personId = personMap.get(row.person_ref);
 
             if (!personId) {
-              const personData: InsertPerson = {
+              const [person] = await tx.insert(peopleTable).values({
                 fullName: row.person_full_name,
                 email: row.person_email || null,
                 telephone: row.person_telephone || null,
                 primaryPhone: row.person_primary_phone || null,
                 primaryEmail: row.person_primary_email || null,
-              };
-
-              const [person] = await tx.insert(peopleTable).values(personData).returning();
+              }).returning();
               personId = person.id;
               personMap.set(row.person_ref, personId);
               stats.peopleCreated++;
@@ -2322,7 +2326,7 @@ export async function registerAuthAndMiscRoutes(
           const nextStartDate = parseDate(row.next_start_date);
           const nextDueDate = parseDate(row.next_due_date);
 
-          const clientServiceData: InsertClientService = {
+          const [clientService] = await tx.insert(clientServicesTable).values({
             clientId,
             serviceId: service.id,
             serviceOwnerId,
@@ -2330,9 +2334,7 @@ export async function registerAuthAndMiscRoutes(
             nextStartDate: nextStartDate,
             nextDueDate: nextDueDate,
             isActive: row.is_active?.toLowerCase() !== 'no',
-          };
-
-          const [clientService] = await tx.insert(clientServicesTable).values(clientServiceData).returning();
+          }).returning();
           const serviceKey = `${row.client_ref}|${row.service_name}`;
           clientServiceMap.set(serviceKey, clientService.id);
           stats.servicesCreated++;
@@ -2375,7 +2377,7 @@ export async function registerAuthAndMiscRoutes(
       const clientsToEnrich: string[] = [];
       
       // Check which clients have company numbers
-      for (const [clientRef, clientId] of result.clientMap.entries()) {
+      for (const [clientRef, clientId] of Array.from(result.clientMap.entries())) {
         const clientRow = clients.find((r: any) => r.client_ref === clientRef);
         if (clientRow?.company_number) {
           clientsToEnrich.push(clientId);

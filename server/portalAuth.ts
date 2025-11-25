@@ -95,7 +95,7 @@ export async function authenticatePortal(
     // Use the clientId from the JWT payload (supports company switching)
     // The clientId in the database is the default/primary company, but users
     // can switch to other companies they're connected to via JWT claims
-    req.portalUser = {
+    (req as any).portalUser = {
       id: portalUser.id,
       clientId: payload.clientId, // Use JWT's clientId, not database's
       email: portalUser.email,

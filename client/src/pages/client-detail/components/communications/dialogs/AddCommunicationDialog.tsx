@@ -162,7 +162,8 @@ export function AddCommunicationDialog({
                     <Input 
                       placeholder="Brief description or call purpose"
                       data-testid="input-subject"
-                      {...field} 
+                      {...field}
+                      value={field.value ?? ''}
                     />
                   </FormControl>
                   <FormMessage />

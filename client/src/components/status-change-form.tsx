@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ChangeEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -273,7 +274,7 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
     const statusOptions = stages.map((stage) => ({
       value: stage.name,
       label: formatStageName(stage.name),
-      assignedTo: formatRoleName(stage.assignedRole),
+      assignedTo: stage.assignedWorkRoleId ? "Assigned" : "System",
       stage: stage
     }));
     
@@ -611,7 +612,7 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
                             id={`custom-field-${field.id}`}
                             placeholder={field.placeholder || `Enter ${field.fieldName.toLowerCase()}`}
                             value={customFieldResponses[field.id] || ''}
-                            onChange={(e) => handleCustomFieldChange(field.id, e.target.value)}
+                            onChange={(e: ChangeEvent<HTMLTextAreaElement>) => handleCustomFieldChange(field.id, e.target.value)}
                             data-testid={`textarea-custom-field-${field.id}`}
                             className={`h-20 ${field.isRequired && (!customFieldResponses[field.id] || customFieldResponses[field.id] === '') 
                               ? 'border-destructive' : ''}`}

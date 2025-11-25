@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type Dispatch, type SetStateAction } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type CompanyView } from "@shared/schema";
@@ -44,11 +44,11 @@ interface CompanyFilterPanelProps {
   
   // Filter states
   selectedServices: string[];
-  setSelectedServices: (value: string[]) => void;
+  setSelectedServices: Dispatch<SetStateAction<string[]>>;
   selectedTags: string[];
-  setSelectedTags: (value: string[]) => void;
+  setSelectedTags: Dispatch<SetStateAction<string[]>>;
   daysUntilDueFilter: string[];
-  setDaysUntilDueFilter: (value: string[]) => void;
+  setDaysUntilDueFilter: Dispatch<SetStateAction<string[]>>;
   
   // Data for dropdowns
   services: { id: string; name: string }[];

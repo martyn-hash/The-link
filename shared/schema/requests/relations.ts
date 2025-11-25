@@ -76,14 +76,6 @@ export const clientCustomRequestQuestionsRelations = relations(clientCustomReque
   }),
 }));
 
-export const clientRequestRemindersRelations = relations(clientRequestReminders, ({ one, many }) => ({
-  projectTypeNotification: one(projectTypeNotifications, {
-    fields: [clientRequestReminders.projectTypeNotificationId],
-    references: [projectTypeNotifications.id],
-  }),
-  scheduledNotifications: many(scheduledNotifications),
-}));
-
 export const riskAssessmentsRelations = relations(riskAssessments, ({ one, many }) => ({
   client: one(clients, {
     fields: [riskAssessments.clientId],

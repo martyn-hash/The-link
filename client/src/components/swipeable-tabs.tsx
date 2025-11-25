@@ -66,8 +66,11 @@ export function SwipeableTabsWrapper({
     swipeDuration: 500,
   });
 
+  // Destructure ref from handlers to avoid duplicate ref warning
+  const { ref: swipeRef, ...swipeHandlers } = handlers;
+
   return (
-    <div ref={containerRef} {...handlers} className={`w-full h-full ${className}`}>
+    <div ref={containerRef} {...swipeHandlers} className={`w-full h-full ${className}`}>
       {children}
     </div>
   );

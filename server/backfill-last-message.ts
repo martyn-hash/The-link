@@ -32,7 +32,7 @@ async function backfillLastMessageByStaff() {
       continue;
     }
     
-    const isStaffMessage = lastMessage[0].isStaff;
+    const isStaffMessage = lastMessage[0].userId !== null;
     
     // Update the thread
     await db

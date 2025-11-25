@@ -29,12 +29,13 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
-interface TiptapEditorProps {
+export interface TiptapEditorProps {
   content: string;
   onChange: (html: string) => void;
   placeholder?: string;
   className?: string;
   editable?: boolean;
+  editorHeight?: string;
 }
 
 const MenuButton = ({ 

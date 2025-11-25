@@ -460,7 +460,7 @@ export function CompaniesHouseClientModal({
       } else {
         // No officers have duplicates - proceed directly to client creation
         console.log("✨ No duplicate officers found - proceeding directly to client creation");
-        createClientFromCHMutation.mutate();
+        createClientFromCHMutation.mutate({});
       }
     },
     onError: (error: any) => {
@@ -472,7 +472,7 @@ export function CompaniesHouseClientModal({
         variant: "destructive",
       });
       // Skip to direct client creation if matching fails
-      createClientFromCHMutation.mutate();
+      createClientFromCHMutation.mutate({});
     },
   });
 
@@ -706,7 +706,7 @@ export function CompaniesHouseClientModal({
                 findOfficerMatchesMutation.mutate(companyOfficers);
               } else {
                 // No officers exist, proceed directly to creation
-                createClientFromCHMutation.mutate();
+                createClientFromCHMutation.mutate({});
               }
             }}
             disabled={createClientFromCHMutation.isPending || findOfficerMatchesMutation.isPending}
@@ -1041,7 +1041,7 @@ export function CompaniesHouseClientModal({
                                   <div className="mt-1">
                                     <p className="text-xs text-gray-600 font-medium">Connected to:</p>
                                     <div className="flex flex-wrap gap-1 mt-1">
-                                      {person.companies.map((company, companyIndex) => (
+                                      {person.companies.map((company: any, companyIndex: number) => (
                                         <span 
                                           key={company.id || company.number || companyIndex}
                                           data-testid={`badge-company-${company.id || company.number || companyIndex}`}

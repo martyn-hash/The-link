@@ -40,23 +40,32 @@ export function ProjectProgressNotes({ projectId, clientId, clientPeople = [] }:
   });
 
   // Form schema for adding notes
-  const addNoteSchema = insertCommunicationSchema.extend({
+  const addNoteSchema = z.object({
+    clientId: z.string(),
+    projectId: z.string().nullable(),
+    personId: z.string().nullable(),
+    type: z.string(),
+    subject: z.string().nullable(),
+    content: z.string(),
     actualContactTime: z.string().min(1, "Date/time is required"),
-  }).omit({ userId: true, loggedAt: true });
+    isRead: z.boolean().nullable(),
+    metadata: z.any().nullable(),
+    threadId: z.string().nullable(),
+  });
 
   const form = useForm({
     resolver: zodResolver(addNoteSchema),
     defaultValues: {
       clientId,
       projectId,
-      personId: null,
-      type: 'note' as const,
+      personId: null as string | null,
+      type: 'note',
       subject: '',
       content: '',
       actualContactTime: new Date().toISOString().slice(0, 16),
-      isRead: true,
+      isRead: true as boolean | null,
       metadata: null,
-      threadId: null,
+      threadId: null as string | null,
     },
   });
 

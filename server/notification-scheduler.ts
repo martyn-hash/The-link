@@ -513,6 +513,9 @@ export async function scheduleProjectNotifications(
 
   console.log(`[NotificationScheduler] Found ${notifications.length} project notification(s) to schedule`);
 
+  // Check if push notifications are enabled globally (cache for this scheduling run)
+  const pushEnabled = await arePushNotificationsEnabled();
+
   // Create scheduled notifications for each configuration
   const scheduledNotificationsToInsert: InsertScheduledNotification[] = [];
 

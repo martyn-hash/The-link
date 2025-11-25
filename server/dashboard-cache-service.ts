@@ -35,11 +35,10 @@ export async function updateDashboardCache(userIdFilter?: string): Promise<Dashb
         usersProcessed++;
 
         // Get all active projects (not archived)
-        const allProjects = await storage.getProjectsByUser(
+        const allProjects = (await storage.getProjectsByUser(
           user.id, 
-          user.isAdmin ? 'admin' : 'user', 
-          { archived: false }
-        );
+          user.isAdmin ? 'admin' : 'user'
+        )).filter(p => !p.archived);
 
         // Filter projects where user is the current assignee (My Tasks)
         const myTasks = allProjects.filter(p => p.currentAssigneeId === user.id);

@@ -185,11 +185,11 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
   const canUpdateStatus = () => {
     // Check if user has permission to update this project
     return (
-      user.role === 'admin' ||
-      user.role === 'manager' ||
+      user.isAdmin ||
+      user.canSeeAdminMenu ||
       project.currentAssigneeId === user.id ||
-      (user.role === 'client_manager' && project.clientManagerId === user.id) ||
-      (user.role === 'bookkeeper' && project.bookkeeperId === user.id)
+      project.clientManagerId === user.id ||
+      project.bookkeeperId === user.id
     );
   };
 
@@ -206,11 +206,11 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
     const statusOptions = stages.map((stage) => ({
       value: stage.name,
       label: formatStageName(stage.name),
-      assignedTo: formatRoleName(stage.assignedRole),
+      assignedTo: stage.assignedWorkRoleId ? "Assigned" : "System",
       stage: stage
     }));
     
-    if (user.role === 'admin' || user.role === 'manager') {
+    if (user.isAdmin || user.canSeeAdminMenu) {
       return statusOptions.filter(option => option.value !== currentStatus);
     }
     

@@ -121,7 +121,7 @@ export async function getDocumentsByThreadId(threadId: string): Promise<any[]> {
  */
 export async function getDocumentCountBySource(
   clientId: string,
-  source: string
+  source: 'direct_upload' | 'message_attachment' | 'task_upload' | 'portal_upload' | 'signature_request'
 ): Promise<number> {
   const results = await db
     .select()

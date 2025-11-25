@@ -30,7 +30,7 @@ export function CallDialog({
   const [selectedPersonId, setSelectedPersonId] = useState<string | undefined>(personId);
   const [selectedPhoneNumber, setSelectedPhoneNumber] = useState<string | undefined>(phoneNumber);
   
-  const { data: clientPeople } = useQuery({
+  const { data: clientPeople } = useQuery<any[]>({
     queryKey: ['/api/clients', clientId, 'people'],
     enabled: !!clientId && isOpen,
   });
