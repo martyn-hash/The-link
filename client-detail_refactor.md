@@ -6,6 +6,29 @@ The `client/src/pages/client-detail.tsx` file is currently **9,347 lines** - a c
 
 ---
 
+## ⚠️ TESTING PREREQUISITES - READ BEFORE EACH BROWSER TEST SESSION
+
+### Login Credentials
+- **URL:** Root page (`/`)
+- **Tab:** Password tab
+- **Email:** `admin@example.com`
+- **Password:** `admin123`
+
+### Known Bugs
+1. **Projects Loading Bug:** Sometimes projects do not load on the client detail page
+   - **Workaround:** Refresh the browser and restart the testing session
+   - **Impact:** May affect Projects tab and service-related project lists
+
+### Pre-Test Checklist
+Before each browser testing session:
+- [ ] Ensure you're logged out or in a fresh session
+- [ ] Navigate to root page `/`
+- [ ] Select Password tab
+- [ ] Login with admin@example.com / admin123
+- [ ] If projects don't load, refresh browser and restart test session
+
+---
+
 ## Current State Analysis
 
 ### File Statistics
