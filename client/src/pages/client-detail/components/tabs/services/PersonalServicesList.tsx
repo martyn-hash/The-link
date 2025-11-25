@@ -84,7 +84,7 @@ export function PersonalServicesList({
       <div className="flex justify-end">
         <AddServiceModal 
           clientId={clientId} 
-          clientType="individual" 
+          clientType={clientType === null && clientId ? 'company' : (clientType as 'company' | 'individual' | undefined)} 
           onSuccess={onRefetch} 
         />
       </div>
