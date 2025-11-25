@@ -235,9 +235,9 @@ export default function PersonDetail() {
       }
       
       const firstConnection = validConnections[0];
-      const email = person.primaryEmail || person.email;
+      const email = person?.primaryEmail || person?.email;
       
-      if (!email) {
+      if (!email || !person) {
         toast({
           title: "Error",
           description: "No email address found for this person",
@@ -273,6 +273,7 @@ export default function PersonDetail() {
       }
       
       const firstConnection = validConnections[0];
+      if (!person) throw new Error('Person not found');
       return await apiRequest("POST", "/api/portal-user/send-invitation", {
         personId: id,
         clientId: firstConnection.client.id,
@@ -780,7 +781,7 @@ export default function PersonDetail() {
                       <FormItem>
                         <FormLabel>Title</FormLabel>
                         <FormControl>
-                          <Input {...field} data-testid="input-title" />
+                          <Input {...field} value={field.value ?? ""} data-testid="input-title" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -794,7 +795,7 @@ export default function PersonDetail() {
                       <FormItem>
                         <FormLabel>Date of Birth</FormLabel>
                         <FormControl>
-                          <Input type="date" {...field} data-testid="input-dob" />
+                          <Input type="date" {...field} value={field.value ?? ""} data-testid="input-dob" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -822,7 +823,7 @@ export default function PersonDetail() {
                       <FormItem>
                         <FormLabel>Occupation</FormLabel>
                         <FormControl>
-                          <Input {...field} data-testid="input-occupation" />
+                          <Input {...field} value={field.value ?? ""} data-testid="input-occupation" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -898,7 +899,7 @@ export default function PersonDetail() {
                       <FormItem>
                         <FormLabel>Address Line 1</FormLabel>
                         <FormControl>
-                          <Input {...field} data-testid="input-address1" />
+                          <Input {...field} value={field.value ?? ""} data-testid="input-address1" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -912,7 +913,7 @@ export default function PersonDetail() {
                       <FormItem>
                         <FormLabel>Address Line 2</FormLabel>
                         <FormControl>
-                          <Input {...field} data-testid="input-address2" />
+                          <Input {...field} value={field.value ?? ""} data-testid="input-address2" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -927,7 +928,7 @@ export default function PersonDetail() {
                         <FormItem>
                           <FormLabel>City</FormLabel>
                           <FormControl>
-                            <Input {...field} data-testid="input-locality" />
+                            <Input {...field} value={field.value ?? ""} data-testid="input-locality" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -941,7 +942,7 @@ export default function PersonDetail() {
                         <FormItem>
                           <FormLabel>Region</FormLabel>
                           <FormControl>
-                            <Input {...field} data-testid="input-region" />
+                            <Input {...field} value={field.value ?? ""} data-testid="input-region" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -957,7 +958,7 @@ export default function PersonDetail() {
                         <FormItem>
                           <FormLabel>Postal Code</FormLabel>
                           <FormControl>
-                            <Input {...field} data-testid="input-postalcode" />
+                            <Input {...field} value={field.value ?? ""} data-testid="input-postalcode" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -971,7 +972,7 @@ export default function PersonDetail() {
                         <FormItem>
                           <FormLabel>Country</FormLabel>
                           <FormControl>
-                            <Input {...field} data-testid="input-country" />
+                            <Input {...field} value={field.value ?? ""} data-testid="input-country" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1016,7 +1017,7 @@ export default function PersonDetail() {
                       <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
                         <FormControl>
                           <Checkbox
-                            checked={field.value}
+                            checked={field.value ?? false}
                             onCheckedChange={field.onChange}
                             data-testid="checkbox-photo-verified"
                           />
@@ -1035,7 +1036,7 @@ export default function PersonDetail() {
                       <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
                         <FormControl>
                           <Checkbox
-                            checked={field.value}
+                            checked={field.value ?? false}
                             onCheckedChange={field.onChange}
                             data-testid="checkbox-address-verified"
                           />
@@ -1054,7 +1055,7 @@ export default function PersonDetail() {
                       <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
                         <FormControl>
                           <Checkbox
-                            checked={field.value}
+                            checked={field.value ?? false}
                             onCheckedChange={field.onChange}
                             data-testid="checkbox-receive-notifications"
                           />
