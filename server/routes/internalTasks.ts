@@ -266,16 +266,19 @@ export function registerInternalTaskRoutes(
             taskTypeName = taskType?.name || null;
           }
           
-          if (assignee && creator) {
+          const assigneeName = `${assignee?.firstName || ''} ${assignee?.lastName || ''}`.trim() || 'Unknown';
+          const creatorName = `${creator?.firstName || ''} ${creator?.lastName || ''}`.trim() || 'Unknown';
+          
+          if (assignee?.email && creator) {
             // Send email notification
             await sendInternalTaskAssignmentEmail(
               assignee.email,
-              assignee.name,
+              assigneeName,
               created.title,
               created.description,
               created.priority,
               created.dueDate,
-              creator.name,
+              creatorName,
               taskTypeName
             );
             
@@ -285,8 +288,8 @@ export function registerInternalTaskRoutes(
               [assignee.id],
               {
                 taskTitle: created.title,
-                assigneeName: assignee.name,
-                creatorName: creator.name,
+                assigneeName: assigneeName,
+                creatorName: creatorName,
                 priority: created.priority,
                 dueDate: created.dueDate ? created.dueDate.toLocaleDateString('en-GB') : 'No due date'
               },
@@ -362,16 +365,19 @@ export function registerInternalTaskRoutes(
             taskTypeName = taskType?.name || null;
           }
           
-          if (assignee && reassigner) {
+          const assigneeName = `${assignee?.firstName || ''} ${assignee?.lastName || ''}`.trim() || 'Unknown';
+          const reassignerName = `${reassigner?.firstName || ''} ${reassigner?.lastName || ''}`.trim() || 'Unknown';
+          
+          if (assignee?.email && reassigner) {
             // Send email notification
             await sendInternalTaskAssignmentEmail(
               assignee.email,
-              assignee.name,
+              assigneeName,
               updated.title,
               updated.description,
               updated.priority,
               updated.dueDate,
-              reassigner.name,
+              reassignerName,
               taskTypeName
             );
             
@@ -381,8 +387,8 @@ export function registerInternalTaskRoutes(
               [assignee.id],
               {
                 taskTitle: updated.title,
-                assigneeName: assignee.name,
-                creatorName: reassigner.name,
+                assigneeName: assigneeName,
+                creatorName: reassignerName,
                 priority: updated.priority,
                 dueDate: updated.dueDate ? updated.dueDate.toLocaleDateString('en-GB') : 'No due date'
               },
