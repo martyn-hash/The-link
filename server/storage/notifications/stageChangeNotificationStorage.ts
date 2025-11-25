@@ -206,11 +206,12 @@ export class StageChangeNotificationStorage {
       const recipientIds = finalUsersToNotify.map(u => u.id).sort().join(',');
       const dedupeKey = `${projectId}:${newStageName}:${changeReason || 'none'}:${recipientIds}`;
 
+      const clientData = projectWithClient.client as any;
       const emailSubject = `Project Stage Update: ${projectWithClient.description} - ${newStageName}`;
       
       const emailBody = `
         <p>Hello,</p>
-        <p>The project "${projectWithClient.description}" for ${projectWithClient.client.name} has been moved to stage: <strong>${newStageName}</strong></p>
+        <p>The project "${projectWithClient.description}" for ${clientData.name} has been moved to stage: <strong>${newStageName}</strong></p>
         ${oldStageName ? `<p>Previous stage: ${oldStageName}</p>` : ''}
         ${changeReason ? `<p>Change reason: ${changeReason}</p>` : ''}
         ${notes ? `<p>Notes: ${notes}</p>` : ''}
@@ -220,7 +221,7 @@ export class StageChangeNotificationStorage {
       `.trim();
 
       const pushTitle = `${newStageName}: ${projectWithClient.description}`;
-      const pushBody = `${projectWithClient.client.name}${formattedDueDate ? ` | Due: ${formattedDueDate}` : ''}`;
+      const pushBody = `${clientData.name}${formattedDueDate ? ` | Due: ${formattedDueDate}` : ''}`;
 
       const recipients = finalUsersToNotify.map(user => ({
         userId: user.id,
@@ -240,7 +241,7 @@ export class StageChangeNotificationStorage {
         pushBody,
         metadata: {
           projectName: projectWithClient.description,
-          clientName: projectWithClient.client.name,
+          clientName: clientData.name,
           dueDate: formattedDueDate,
           changeReason,
           notes,
@@ -348,6 +349,8 @@ export class StageChangeNotificationStorage {
         return;
       }
       
+      const clientData2 = projectWithClient.client as any;
+      
       const mostRecentChronologyEntry = projectWithClient.chronology && projectWithClient.chronology.length > 0 
         ? projectWithClient.chronology[0] 
         : null;
@@ -412,7 +415,7 @@ export class StageChangeNotificationStorage {
             user.email!,
             `${user.firstName} ${user.lastName || ''}`.trim(),
             projectWithClient.description,
-            projectWithClient.client.name,
+            clientData2.name,
             newStageName,
             oldStageName,
             projectId,
@@ -484,7 +487,7 @@ export class StageChangeNotificationStorage {
             await sendProjectStageChangeNotification(
               projectId,
               projectWithClient.description,
-              projectWithClient.client.name,
+              clientData2.name,
               oldStageName || 'Unknown',
               newStageName,
               user.id,

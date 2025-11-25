@@ -59,7 +59,7 @@ export class ProjectChronologyStorage extends BaseStorage {
       assignee: c.assignee || undefined,
       changedBy: c.changedBy || undefined,
       fieldResponses: c.fieldResponses || [],
-    }));
+    })) as any;
   }
 
   async getMostRecentStageChange(projectId: string): Promise<{

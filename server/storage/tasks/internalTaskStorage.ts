@@ -25,7 +25,7 @@ export class InternalTaskStorage {
   async createInternalTask(task: InsertInternalTask): Promise<InternalTask> {
     const [created] = await db
       .insert(internalTasks)
-      .values(task)
+      .values(task as any)
       .returning();
     return created;
   }
@@ -249,7 +249,7 @@ export class InternalTaskStorage {
   async updateInternalTask(id: string, task: UpdateInternalTask): Promise<InternalTask> {
     const [updated] = await db
       .update(internalTasks)
-      .set({ ...task, updatedAt: new Date() })
+      .set({ ...task, updatedAt: new Date() } as any)
       .where(eq(internalTasks.id, id))
       .returning();
     if (!updated) {
@@ -361,7 +361,7 @@ export class InternalTaskStorage {
   }
 
   async getTaskProgressNotesByTaskId(taskId: string): Promise<(TaskProgressNote & { user: User })[]> {
-    return await db
+    const results = await db
       .select({
         id: taskProgressNotes.id,
         taskId: taskProgressNotes.taskId,
@@ -374,6 +374,7 @@ export class InternalTaskStorage {
       .leftJoin(users, eq(taskProgressNotes.userId, users.id))
       .where(eq(taskProgressNotes.taskId, taskId))
       .orderBy(desc(taskProgressNotes.createdAt));
+    return results as any;
   }
 
   async deleteTaskProgressNote(id: string): Promise<void> {
@@ -398,7 +399,7 @@ export class InternalTaskStorage {
   }
 
   async getTaskDocuments(taskId: string): Promise<(TaskDocument & { uploader: User })[]> {
-    return await db
+    const results = await db
       .select({
         id: taskDocuments.id,
         taskId: taskDocuments.taskId,
@@ -414,6 +415,7 @@ export class InternalTaskStorage {
       .leftJoin(users, eq(taskDocuments.uploadedBy, users.id))
       .where(eq(taskDocuments.taskId, taskId))
       .orderBy(desc(taskDocuments.createdAt));
+    return results as any;
   }
 
   async deleteTaskDocument(id: string): Promise<void> {

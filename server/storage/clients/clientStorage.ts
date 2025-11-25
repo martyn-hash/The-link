@@ -318,7 +318,7 @@ export class ClientStorage extends BaseStorage {
     return results.map(c => ({
       ...c,
       user: c.user || undefined,
-    }));
+    })) as any;
   }
 
   // ==================== Client Tags ====================

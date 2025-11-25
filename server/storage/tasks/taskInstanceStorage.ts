@@ -145,7 +145,7 @@ export class TaskInstanceStorage {
       updatedAt: row.updatedAt,
       template: row.template,
       client: row.client,
-    }));
+    })) as any;
   }
 
   async getTaskInstancesByPersonId(personId: string): Promise<(TaskInstance & { template?: TaskTemplate; customRequest?: ClientCustomRequest; client: Client })[]> {
@@ -293,7 +293,7 @@ export class TaskInstanceStorage {
       template: row.template,
       client: row.client,
       person: row.person || undefined,
-    }));
+    })) as any;
   }
 
   async getAllTaskInstances(filters?: { status?: string; clientId?: string }): Promise<(TaskInstance & { template: TaskTemplate; client: Client; person?: Person })[]> {

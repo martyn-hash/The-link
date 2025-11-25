@@ -96,7 +96,7 @@ export class ProjectStorage extends BaseStorage {
     if (!this.helpers.validateProjectStatus) {
       throw new Error('Helper validateProjectStatus not registered');
     }
-    const validation = await this.helpers.validateProjectStatus(finalProjectData.currentStatus);
+    const validation = await this.helpers.validateProjectStatus(finalProjectData.currentStatus!);
     if (!validation.isValid) {
       throw new Error(validation.reason || "Invalid project status");
     }
@@ -541,7 +541,7 @@ export class ProjectStorage extends BaseStorage {
       };
     });
     
-    return projectsWithAssignees;
+    return projectsWithAssignees as any;
   }
 
   async getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]> {
@@ -744,7 +744,7 @@ export class ProjectStorage extends BaseStorage {
       };
     });
     
-    return projectsWithAssignees;
+    return projectsWithAssignees as any;
   }
 
   async getProjectsByClient(clientId: string, filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]> {
@@ -911,7 +911,7 @@ export class ProjectStorage extends BaseStorage {
       };
     });
     
-    return projectsWithAssignees;
+    return projectsWithAssignees as any;
   }
 
   async getProjectsByClientServiceId(clientServiceId: string): Promise<ProjectWithRelations[]> {
@@ -979,7 +979,7 @@ export class ProjectStorage extends BaseStorage {
       };
     });
 
-    return projectsWithAssignees;
+    return projectsWithAssignees as any;
   }
 
   // ==================== Project Status Updates ====================
@@ -1084,7 +1084,7 @@ export class ProjectStorage extends BaseStorage {
     if (!this.helpers.validateRequiredFields) {
       throw new Error('Helper validateRequiredFields not registered');
     }
-    const requiredFieldsValidation = await this.helpers.validateRequiredFields(reason.id, update.fieldResponses);
+    const requiredFieldsValidation = await this.helpers.validateRequiredFields(reason.id, update.fieldResponses || []);
     if (!requiredFieldsValidation.isValid) {
       throw new Error(requiredFieldsValidation.reason || "Required fields validation failed");
     }

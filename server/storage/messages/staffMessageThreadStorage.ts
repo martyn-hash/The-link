@@ -114,7 +114,7 @@ export class StaffMessageThreadStorage {
       };
     }));
     
-    return enrichedThreads;
+    return enrichedThreads as any;
   }
 
   async updateStaffMessageThread(id: string, thread: Partial<InsertStaffMessageThread>): Promise<StaffMessageThread> {

@@ -111,7 +111,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
           createdAt: result.projectTypeCreatedAt,
         },
       },
-    }));
+    })) as any;
   }
 
   async getClientServiceById(id: string): Promise<(ClientService & { 
@@ -242,10 +242,10 @@ export class ServiceAssignmentStorage extends BaseStorage {
         },
         serviceOwner,
         roleAssignments,
-      };
+      } as any;
     } catch (error) {
       console.error(`[ERROR] Error in getClientServiceById for id ${id}:`, error);
-      console.error(`[ERROR] Stack trace:`, error instanceof Error ? error.stack : 'No stack trace');
+      console.error(`[ERROR] Stack trace:`, (error as any)?.stack || 'No stack trace');
       throw error;
     }
   }
@@ -352,8 +352,8 @@ export class ServiceAssignmentStorage extends BaseStorage {
               // Safe date conversion with type checking
               if (activeProject.projectMonth) {
                 try {
-                  if (activeProject.projectMonth instanceof Date) {
-                    currentProjectStartDate = activeProject.projectMonth.toISOString();
+                  if ((activeProject.projectMonth as any) instanceof Date) {
+                    currentProjectStartDate = (activeProject.projectMonth as Date).toISOString();
                   } else if (typeof activeProject.projectMonth === 'string') {
                     // Convert DD/MM/YYYY format to ISO format
                     const parts = activeProject.projectMonth.split('/');
@@ -434,7 +434,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
       const validClientServices = clientServicesWithDetails.filter(cs => cs !== null);
       
       console.log(`[DEBUG] Successfully processed ${validClientServices.length} valid client services`);
-      return validClientServices;
+      return validClientServices as any;
     } catch (error) {
       console.error(`[ERROR] Error in getClientServicesByClientId for clientId ${clientId}:`, error);
       console.error(`[ERROR] Stack trace:`, error instanceof Error ? error.stack : 'No stack trace');
@@ -443,7 +443,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
   }
 
   async getClientServicesByServiceId(serviceId: string): Promise<(ClientService & { client: Client })[]> {
-    return await db
+    const results = await db
       .select({
         id: clientServices.id,
         clientId: clientServices.clientId,
@@ -470,6 +470,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
       .from(clientServices)
       .innerJoin(clients, eq(clientServices.clientId, clients.id))
       .where(eq(clientServices.serviceId, serviceId));
+    return results as any;
   }
 
   async createClientService(clientServiceData: InsertClientService): Promise<ClientService> {
@@ -488,7 +489,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
 
     const [clientService] = await db
       .insert(clientServices)
-      .values(processedData)
+      .values(processedData as any)
       .returning();
     
     return clientService;
@@ -506,7 +507,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
 
     const [updatedClientService] = await db
       .update(clientServices)
-      .set(processedData)
+      .set(processedData as any)
       .where(eq(clientServices.id, id))
       .returning();
     
@@ -1254,7 +1255,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
 
   async createPeopleService(peopleServiceData: InsertPeopleService): Promise<PeopleService> {
     // Convert ISO string dates to Date objects for timestamp fields
-    const processedData = { ...peopleServiceData };
+    const processedData = { ...peopleServiceData } as any;
     if (processedData.nextStartDate && typeof processedData.nextStartDate === 'string') {
       processedData.nextStartDate = new Date(processedData.nextStartDate);
     }
@@ -1268,7 +1269,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
 
   async updatePeopleService(id: string, peopleServiceData: Partial<InsertPeopleService>): Promise<PeopleService> {
     // Convert ISO string dates to Date objects for timestamp fields
-    const processedData = { ...peopleServiceData };
+    const processedData = { ...peopleServiceData } as any;
     if (processedData.nextStartDate && typeof processedData.nextStartDate === 'string') {
       processedData.nextStartDate = new Date(processedData.nextStartDate);
     }
@@ -1567,7 +1568,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
       }
 
       // Extract unique project type IDs and get all relevant kanban stages in one query
-      const uniqueProjectTypeIds = [...new Set(validProjects.map(p => p.projectType.id))];
+      const uniqueProjectTypeIds = Array.from(new Set(validProjects.map(p => p.projectType.id)));
       const allStages = await db.query.kanbanStages.findMany({
         where: inArray(kanbanStages.projectTypeId, uniqueProjectTypeIds),
       });
@@ -1579,7 +1580,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
       }
 
       // Build unique client+service combinations and fetch all client services in one query
-      const clientServiceKeys = [...new Set(validProjects.map(p => `${p.clientId}:${p.projectType.serviceId}`))];
+      const clientServiceKeys = Array.from(new Set(validProjects.map(p => `${p.clientId}:${p.projectType.serviceId}`)));
       const clientServiceConditions = clientServiceKeys.map(key => {
         const [clientId, serviceId] = key.split(':');
         return and(eq(clientServices.clientId, clientId), eq(clientServices.serviceId, serviceId));

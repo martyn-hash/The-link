@@ -19,7 +19,7 @@ export class TaskTimeEntryStorage {
   }
 
   async getTaskTimeEntriesByTaskId(taskId: string): Promise<(TaskTimeEntry & { user: User })[]> {
-    return await db
+    const results = await db
       .select({
         id: taskTimeEntries.id,
         taskId: taskTimeEntries.taskId,
@@ -35,6 +35,7 @@ export class TaskTimeEntryStorage {
       .leftJoin(users, eq(taskTimeEntries.userId, users.id))
       .where(eq(taskTimeEntries.taskId, taskId))
       .orderBy(desc(taskTimeEntries.startTime));
+    return results as any;
   }
 
   async getActiveTaskTimeEntry(taskId: string, userId: string): Promise<TaskTimeEntry | undefined> {

@@ -131,7 +131,7 @@ export class ProjectMessageThreadStorage {
       };
     }));
 
-    return enrichedThreads;
+    return enrichedThreads as any;
   }
 
   async updateProjectMessageThread(id: string, thread: Partial<InsertProjectMessageThread>): Promise<ProjectMessageThread> {
