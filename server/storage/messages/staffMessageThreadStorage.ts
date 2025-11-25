@@ -157,4 +157,23 @@ export class StaffMessageThreadStorage {
       .returning();
     return updated;
   }
+
+  /**
+   * Get count of unread staff message threads for a user using a single aggregated query.
+   * This is optimized to avoid the N+1 query pattern of fetching all threads then counting.
+   */
+  async getUnreadStaffThreadCountForUser(userId: string): Promise<number> {
+    const result = await db.execute(sql`
+      SELECT COUNT(DISTINCT smp.thread_id)::int as count
+      FROM staff_message_participants smp
+      INNER JOIN staff_message_threads smt ON smt.id = smp.thread_id
+      INNER JOIN staff_messages sm ON sm.thread_id = smp.thread_id
+      WHERE smp.user_id = ${userId}
+        AND smt.is_archived = false
+        AND sm.user_id != ${userId}
+        AND sm.created_at > COALESCE(smp.last_read_at, '1970-01-01'::timestamp)
+    `);
+    
+    return (result.rows[0] as any)?.count || 0;
+  }
 }

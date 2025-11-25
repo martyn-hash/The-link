@@ -1901,6 +1901,10 @@ export class DatabaseStorage implements IStorage {
     return this.projectMessageThreadStorage.getProjectMessageThreadsForUser(userId, filters);
   }
 
+  async getUnreadProjectThreadCountForUser(userId: string): Promise<number> {
+    return this.projectMessageThreadStorage.getUnreadProjectThreadCountForUser(userId);
+  }
+
   async updateProjectMessageThread(id: string, thread: any) {
     return this.projectMessageThreadStorage.updateProjectMessageThread(id, thread);
   }
@@ -2002,6 +2006,10 @@ export class DatabaseStorage implements IStorage {
 
   async unarchiveStaffMessageThread(id: string) {
     return this.staffMessageThreadStorage.unarchiveStaffMessageThread(id);
+  }
+
+  async getUnreadStaffThreadCountForUser(userId: string): Promise<number> {
+    return this.staffMessageThreadStorage.getUnreadStaffThreadCountForUser(userId);
   }
 
   // Staff Message Operations - StaffMessageStorage (5 methods)

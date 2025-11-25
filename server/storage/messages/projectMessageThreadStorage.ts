@@ -174,4 +174,23 @@ export class ProjectMessageThreadStorage {
       .returning();
     return updated;
   }
+
+  /**
+   * Get count of unread project message threads for a user using a single aggregated query.
+   * This is optimized to avoid the N+1 query pattern of fetching all threads then counting.
+   */
+  async getUnreadProjectThreadCountForUser(userId: string): Promise<number> {
+    const result = await db.execute(sql`
+      SELECT COUNT(DISTINCT pmp.thread_id)::int as count
+      FROM project_message_participants pmp
+      INNER JOIN project_message_threads pmt ON pmt.id = pmp.thread_id
+      INNER JOIN project_messages pm ON pm.thread_id = pmp.thread_id
+      WHERE pmp.user_id = ${userId}
+        AND pmt.is_archived = false
+        AND pm.user_id != ${userId}
+        AND pm.created_at > COALESCE(pmp.last_read_at, '1970-01-01'::timestamp)
+    `);
+    
+    return (result.rows[0] as any)?.count || 0;
+  }
 }
