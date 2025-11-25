@@ -9,7 +9,6 @@ import { sendProjectMessageReminders } from "./projectMessageReminderService";
 import { updateDashboardCache } from "./dashboard-cache-service";
 import { storage, initializeDefaultNotificationTemplates } from "./storage/index";
 import { seedTaskTypes } from "./seedData";
-import { runSchemaMigrations } from "./utils/schemaMigrations";
 import { startNotificationCron } from "./notification-cron";
 import { startSignatureReminderCron } from "./signature-reminder-cron";
 import fs from "fs";
@@ -126,9 +125,6 @@ app.use((req, res, next) => {
     reusePort: true,
   }, async () => {
     log(`serving on port ${port}`);
-    
-    // Run schema migrations first to ensure database is up to date
-    await runSchemaMigrations();
     
     // Seed initial task types
     await seedTaskTypes();

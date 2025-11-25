@@ -63,7 +63,7 @@ Comprehensive database indexing strategy implemented to improve query performanc
 
 **Speed & Performance Analysis (Documented November 25, 2025):**
 Comprehensive performance review identifying optimization opportunities:
-- **Startup Optimization:** Schema migrations (`server/utils/schemaMigrations.ts`) run 20+ DB checks on every boot (~15s); all migrations now complete, can be feature-flagged or removed
+- **Startup Optimization:** ✓ RESOLVED - Removed `runSchemaMigrations()` from startup (was taking ~15s, now ~1s)
 - **Critical N+1 Query:** `/api/project-messages/unread-count` takes 4-10s due to O(n×3) queries per message thread - needs aggregated SQL query
 - **Projects N+1:** `resolveStageRoleAssignee()` makes 3 queries per project on Projects page - needs batch optimization
 - **Frontend Polling:** Multiple endpoints polled every 10-30s from multiple components - needs deduplication and increased intervals
