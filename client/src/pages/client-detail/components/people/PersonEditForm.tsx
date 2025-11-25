@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AddressLookup } from "@/components/AddressLookup";
+import AddressLookup from "@/components/address-lookup";
 import { ClientPersonWithPerson, UpdatePersonData, updatePersonSchema } from "../../utils/types";
 
 interface PersonEditFormProps {

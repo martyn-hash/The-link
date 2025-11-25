@@ -12,6 +12,7 @@ import type {
   Communication 
 } from "@shared/schema";
 import { insertPersonSchema } from "@shared/schema";
+export { insertPersonSchema };
 
 export type CommunicationWithRelations = Communication & {
   client: Client;
