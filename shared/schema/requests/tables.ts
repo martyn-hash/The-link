@@ -1,12 +1,12 @@
-import { pgTable, varchar, text, boolean, integer, timestamp, index, jsonb, check } from "drizzle-orm/pg-core";
+import { pgTable, varchar, text, boolean, integer, timestamp, index, jsonb, check, unique } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 import { users } from "../users/tables";
 import { clients } from "../clients/tables";
-import { questionTypeEnum } from "../enums";
+import { questionTypeEnum, riskLevelEnum, riskResponseEnum } from "../enums";
 import { projectTypeNotifications, notificationTypeEnum } from "../../schema";
 
-export { questionTypeEnum };
+export { questionTypeEnum, riskLevelEnum, riskResponseEnum };
 
 export const clientRequestTemplateCategories = pgTable("client_request_template_categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -131,4 +131,42 @@ export const clientRequestReminders = pgTable("client_request_reminders", {
   check("check_push_reminder_content", sql`
     (notification_type != 'push' OR (push_title IS NOT NULL AND push_body IS NOT NULL))
   `),
+]);
+
+export const riskAssessments = pgTable("risk_assessments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  version: varchar("version").notNull(),
+  amlPreparedBy: varchar("aml_prepared_by").references(() => users.id),
+  preparationStarted: timestamp("preparation_started"),
+  preparationCompleted: timestamp("preparation_completed"),
+  enhancedDueDiligenceRequired: boolean("enhanced_due_diligence_required").default(false),
+  amlReviewedBy: varchar("aml_reviewed_by").references(() => users.id),
+  reviewStarted: timestamp("review_started"),
+  reviewCompleted: timestamp("review_completed"),
+  generalInformation: text("general_information"),
+  riskLevel: riskLevelEnum("risk_level"),
+  initialDate: timestamp("initial_date"),
+  reviewDate: timestamp("review_date"),
+  furtherRisksInitialDate: timestamp("further_risks_initial_date"),
+  furtherRisksReviewDate: timestamp("further_risks_review_date"),
+  moneyLaunderingOfficer: varchar("money_laundering_officer").references(() => users.id),
+  mloReviewDate: timestamp("mlo_review_date"),
+  electronicSearchReference: text("electronic_search_reference"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_risk_assessments_client_id").on(table.clientId),
+  index("idx_risk_assessments_version").on(table.version),
+]);
+
+export const riskAssessmentResponses = pgTable("risk_assessment_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  riskAssessmentId: varchar("risk_assessment_id").notNull().references(() => riskAssessments.id, { onDelete: "cascade" }),
+  questionKey: varchar("question_key").notNull(),
+  response: riskResponseEnum("response").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_risk_responses_assessment_id").on(table.riskAssessmentId),
+  unique("unique_assessment_question").on(table.riskAssessmentId, table.questionKey),
 ]);

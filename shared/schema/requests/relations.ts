@@ -8,6 +8,8 @@ import {
   clientCustomRequestSections,
   clientCustomRequestQuestions,
   clientRequestReminders,
+  riskAssessments,
+  riskAssessmentResponses,
 } from "./tables";
 
 import { users } from "../users/tables";
@@ -80,4 +82,34 @@ export const clientRequestRemindersRelations = relations(clientRequestReminders,
     references: [projectTypeNotifications.id],
   }),
   scheduledNotifications: many(scheduledNotifications),
+}));
+
+export const riskAssessmentsRelations = relations(riskAssessments, ({ one, many }) => ({
+  client: one(clients, {
+    fields: [riskAssessments.clientId],
+    references: [clients.id],
+  }),
+  preparedBy: one(users, {
+    fields: [riskAssessments.amlPreparedBy],
+    references: [users.id],
+    relationName: "riskAssessmentPreparedBy",
+  }),
+  reviewedBy: one(users, {
+    fields: [riskAssessments.amlReviewedBy],
+    references: [users.id],
+    relationName: "riskAssessmentReviewedBy",
+  }),
+  mlo: one(users, {
+    fields: [riskAssessments.moneyLaunderingOfficer],
+    references: [users.id],
+    relationName: "riskAssessmentMlo",
+  }),
+  responses: many(riskAssessmentResponses),
+}));
+
+export const riskAssessmentResponsesRelations = relations(riskAssessmentResponses, ({ one }) => ({
+  riskAssessment: one(riskAssessments, {
+    fields: [riskAssessmentResponses.riskAssessmentId],
+    references: [riskAssessments.id],
+  }),
 }));

@@ -8,6 +8,8 @@ import {
   clientCustomRequestSections,
   clientCustomRequestQuestions,
   clientRequestReminders,
+  riskAssessments,
+  riskAssessmentResponses,
 } from "./tables";
 import {
   insertClientRequestTemplateCategorySchema,
@@ -26,6 +28,9 @@ import {
   updateClientCustomRequestQuestionSchema,
   insertClientRequestReminderSchema,
   updateClientRequestReminderSchema,
+  insertRiskAssessmentSchema,
+  updateRiskAssessmentSchema,
+  insertRiskAssessmentResponseSchema,
 } from "./schemas";
 
 export type ClientRequestTemplateCategory = typeof clientRequestTemplateCategories.$inferSelect;
@@ -59,3 +64,10 @@ export type UpdateClientCustomRequestQuestion = z.infer<typeof updateClientCusto
 export type ClientRequestReminder = typeof clientRequestReminders.$inferSelect;
 export type InsertClientRequestReminder = z.infer<typeof insertClientRequestReminderSchema>;
 export type UpdateClientRequestReminder = z.infer<typeof updateClientRequestReminderSchema>;
+
+export type RiskAssessment = typeof riskAssessments.$inferSelect;
+export type InsertRiskAssessment = z.infer<typeof insertRiskAssessmentSchema>;
+export type UpdateRiskAssessment = z.infer<typeof updateRiskAssessmentSchema>;
+
+export type RiskAssessmentResponse = typeof riskAssessmentResponses.$inferSelect;
+export type InsertRiskAssessmentResponse = z.infer<typeof insertRiskAssessmentResponseSchema>;
