@@ -6,6 +6,7 @@
 **Related Documentation:**
 - Architecture review: `app_observations.md`
 - High-level architecture: `replit.md`
+- Schema migration plan: `SCHEMA_MIGRATION_EXECUTION_PLAN.md`
 
 ---
 

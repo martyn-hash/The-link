@@ -118,10 +118,11 @@ Comprehensive review of the application covering:
 |----------|---------|
 | `read_me_before_developing.md` | Developer onboarding and rules |
 | `app_observations.md` | Architecture review and recommendations |
+| `SCHEMA_MIGRATION_EXECUTION_PLAN.md` | **ACTIVE** - Complete schema migration steps |
 | `speed_time.md` | Performance optimization history |
 | `database_optimisations.md` | Database indexing strategy |
 | `refactor_storage.md` | Storage layer architecture |
 | `client-detail_refactor.md` | Client page decomposition |
 | `clients_refactor.md` | Route modularization |
-| `schema_refactor.md` | Schema modularization |
+| `schema_refactor.md` | Schema modularization (original plan) |
 | `server/storage/CROSS_DOMAIN_PATTERN.md` | Cross-domain dependency patterns |

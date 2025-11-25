@@ -6,6 +6,7 @@
 **Related Documentation:**
 - Developer guide: `read_me_before_developing.md`
 - High-level architecture: `replit.md`
+- Schema migration plan: `SCHEMA_MIGRATION_EXECUTION_PLAN.md`
 
 ---
 
