@@ -294,7 +294,7 @@ export class DatabaseStorage implements IStorage {
    */
   private registerProjectHelpers() {
     // ProjectStorage needs helpers from configuration, services, notifications, and messaging domains
-    this.projectStorage.registerHelpers({
+    this.projectStorage.registerProjectHelpers({
       // Stage 5 helpers - now from modular ProjectStagesStorage
       getDefaultStage: getDefaultStage(this.projectStagesStorage),
       validateProjectStatus: validateProjectStatus(this.projectStagesStorage),

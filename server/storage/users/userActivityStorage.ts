@@ -148,7 +148,7 @@ export class UserActivityStorage {
     }
     
     if (options?.entityType) {
-      conditions.push(eq(userActivityTracking.entityType, options.entityType));
+      conditions.push(eq(userActivityTracking.entityType, options.entityType as any));
     }
     
     if (options?.dateFrom) {

@@ -51,7 +51,7 @@ export class StaffMessageThreadStorage {
     
     // Apply archive filter
     if (!filters?.includeArchived) {
-      query = query.where(eq(staffMessageThreads.isArchived, false)) as any;
+      query = (query as any).where(eq(staffMessageThreads.isArchived, false));
     }
     
     const threads = await query.orderBy(desc(staffMessageThreads.lastMessageAt));

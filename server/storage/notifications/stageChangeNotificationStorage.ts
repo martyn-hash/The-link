@@ -421,7 +421,7 @@ export class StageChangeNotificationStorage {
             projectId,
             stageConfigForEmail,
             chronologyForEmail,
-            projectWithClient.createdAt instanceof Date ? projectWithClient.createdAt.toISOString() : projectWithClient.createdAt,
+            projectWithClient.createdAt instanceof Date ? projectWithClient.createdAt.toISOString() : (projectWithClient.createdAt as unknown as string),
             changeReason,
             notes,
             fieldResponses

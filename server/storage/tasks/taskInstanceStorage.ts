@@ -46,7 +46,7 @@ export class TaskInstanceStorage {
       })
       .from(taskInstances)
       .leftJoin(clientCustomRequests, eq(taskInstances.customRequestId, clientCustomRequests.id))
-      .where(eq(clientCustomRequests.projectId, projectId))
+      .where(eq((clientCustomRequests as any).projectId, projectId))
       .orderBy(desc(taskInstances.createdAt));
     
     return results.map(row => row.taskInstance);

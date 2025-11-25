@@ -362,7 +362,7 @@ export class ProjectStagesStorage extends BaseStorage {
       },
     });
 
-    return mappings.map(mapping => mapping.reason);
+    return mappings.map(mapping => mapping.reason) as any;
   }
 
   // ============================================

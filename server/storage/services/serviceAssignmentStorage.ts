@@ -352,8 +352,8 @@ export class ServiceAssignmentStorage extends BaseStorage {
               // Safe date conversion with type checking
               if (activeProject.projectMonth) {
                 try {
-                  if ((activeProject.projectMonth as any) instanceof Date) {
-                    currentProjectStartDate = (activeProject.projectMonth as Date).toISOString();
+                  if ((activeProject.projectMonth as unknown) instanceof Date) {
+                    currentProjectStartDate = (activeProject.projectMonth as unknown as Date).toISOString();
                   } else if (typeof activeProject.projectMonth === 'string') {
                     // Convert DD/MM/YYYY format to ISO format
                     const parts = activeProject.projectMonth.split('/');

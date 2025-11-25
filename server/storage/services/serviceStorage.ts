@@ -363,7 +363,7 @@ export class ServiceStorage extends BaseStorage {
     activeProjects.forEach(p => {
       const key = `${p.clientId}-${p.projectTypeId}`;
       activeProjectDates.set(key, {
-        startDate: p.projectMonth,
+        startDate: p.projectMonth as any,
         dueDate: p.dueDate
       });
     });
@@ -464,7 +464,8 @@ export class ServiceStorage extends BaseStorage {
   // ==================== Service CRUD Operations ====================
 
   async createService(service: InsertService): Promise<Service> {
-    const [newService] = await db.insert(services).values(service).returning();
+    const result = await db.insert(services).values(service).returning();
+    const [newService] = result as any[];
     return newService;
   }
 

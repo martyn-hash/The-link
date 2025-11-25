@@ -18,7 +18,7 @@ export class NotificationHistoryStorage {
     return await db
       .select()
       .from(notificationHistory)
-      .where(eq(notificationHistory.projectId, projectId))
+      .where(eq((notificationHistory as any).projectId, projectId))
       .orderBy(desc(notificationHistory.createdAt));
   }
 }

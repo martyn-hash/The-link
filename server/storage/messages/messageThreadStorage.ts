@@ -47,7 +47,17 @@ export class MessageThreadStorage {
 
     const result = await db
       .select({
-        ...messageThreads,
+        id: messageThreads.id,
+        clientId: messageThreads.clientId,
+        subject: messageThreads.subject,
+        status: messageThreads.status,
+        isArchived: messageThreads.isArchived,
+        archivedAt: messageThreads.archivedAt,
+        archivedBy: messageThreads.archivedBy,
+        lastMessageAt: messageThreads.lastMessageAt,
+        createdByUserId: messageThreads.createdByUserId,
+        createdAt: messageThreads.createdAt,
+        updatedAt: messageThreads.updatedAt,
         unreadCount: sql<number>`COALESCE(COUNT(CASE WHEN ${messages.isReadByClient} = false AND ${messages.clientPortalUserId} IS NULL THEN 1 END), 0)::int`
       })
       .from(messageThreads)
@@ -59,7 +69,7 @@ export class MessageThreadStorage {
     return result.map(row => ({
       ...row,
       unreadCount: row.unreadCount || 0
-    })) as (MessageThread & { unreadCount: number })[];
+    })) as any;
   }
 
   async getAllMessageThreads(filters?: { status?: string; clientId?: string }): Promise<MessageThread[]> {
@@ -106,18 +116,18 @@ export class MessageThreadStorage {
     const row = result[0];
     const isFromStaff = !!row.message.userId;
     
-    let senderName = 'Unknown';
+    let senderName: string = 'Unknown';
     if (isFromStaff && row.user) {
-      senderName = `${row.user.firstName || ''} ${row.user.lastName || ''}`.trim() || row.user.email;
+      senderName = `${row.user.firstName || ''} ${row.user.lastName || ''}`.trim() || row.user.email || 'Unknown';
     } else if (!isFromStaff && row.clientPortalUser) {
-      senderName = row.clientPortalUser.email;
+      senderName = row.clientPortalUser.email || 'Unknown';
     }
     
     return {
       content: row.message.content,
-      senderName,
+      senderName: senderName!,
       isFromStaff,
-      createdAt: row.message.createdAt,
+      createdAt: row.message.createdAt!,
     };
   }
 

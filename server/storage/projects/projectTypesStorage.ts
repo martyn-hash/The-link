@@ -47,7 +47,8 @@ export class ProjectTypesStorage extends BaseStorage {
    * Create a new project type
    */
   async createProjectType(projectType: InsertProjectType): Promise<ProjectType> {
-    const [newProjectType] = await db.insert(projectTypes).values(projectType).returning();
+    const result = await db.insert(projectTypes).values(projectType).returning();
+    const [newProjectType] = result as any[];
     return newProjectType;
   }
 

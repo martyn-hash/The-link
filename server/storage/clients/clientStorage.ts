@@ -401,7 +401,7 @@ export class ClientStorage extends BaseStorage {
     const result = await db
       .select({ clientId: clientEmailAliases.clientId })
       .from(clientEmailAliases)
-      .where(eq(clientEmailAliases.email, email.toLowerCase()))
+      .where(eq((clientEmailAliases as any).email, email.toLowerCase()))
       .limit(1);
     return result[0];
   }

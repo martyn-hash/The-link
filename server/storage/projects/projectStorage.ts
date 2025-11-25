@@ -41,7 +41,7 @@ import { sendBulkProjectAssignmentSummaryEmail } from '../../emailService.js';
  */
 export class ProjectStorage extends BaseStorage {
   // Helper references (will be injected by facade)
-  private helpers: {
+  private projectHelpers: {
     getDefaultStage?: () => Promise<any>;
     validateProjectStatus?: (status: string) => Promise<any>;
     getServiceByProjectTypeId?: (projectTypeId: string) => Promise<any>;
@@ -70,8 +70,8 @@ export class ProjectStorage extends BaseStorage {
   /**
    * Register helper methods for cross-domain dependencies
    */
-  registerHelpers(helpers: typeof this.helpers) {
-    this.helpers = { ...this.helpers, ...helpers };
+  registerProjectHelpers(helpers: typeof this.projectHelpers) {
+    this.projectHelpers = { ...this.projectHelpers, ...helpers };
   }
 
   // ==================== Core Project CRUD Operations ====================
@@ -82,10 +82,10 @@ export class ProjectStorage extends BaseStorage {
     
     if (!finalProjectData.currentStatus) {
       // Use default stage when no status is provided
-      if (!this.helpers.getDefaultStage) {
+      if (!this.projectHelpers.getDefaultStage) {
         throw new Error('Helper getDefaultStage not registered');
       }
-      const defaultStage = await this.helpers.getDefaultStage();
+      const defaultStage = await this.projectHelpers.getDefaultStage();
       if (!defaultStage) {
         throw new Error("No kanban stages found. Please create at least one stage before creating projects.");
       }
@@ -93,35 +93,35 @@ export class ProjectStorage extends BaseStorage {
     }
     
     // Validate that the currentStatus matches an existing stage
-    if (!this.helpers.validateProjectStatus) {
+    if (!this.projectHelpers.validateProjectStatus) {
       throw new Error('Helper validateProjectStatus not registered');
     }
-    const validation = await this.helpers.validateProjectStatus(finalProjectData.currentStatus!);
+    const validation = await this.projectHelpers.validateProjectStatus(finalProjectData.currentStatus!);
     if (!validation.isValid) {
       throw new Error(validation.reason || "Invalid project status");
     }
 
     // Check if project type is mapped to a service for role-based assignments
-    if (!this.helpers.getServiceByProjectTypeId) {
+    if (!this.projectHelpers.getServiceByProjectTypeId) {
       throw new Error('Helper getServiceByProjectTypeId not registered');
     }
-    const service = await this.helpers.getServiceByProjectTypeId(finalProjectData.projectTypeId);
+    const service = await this.projectHelpers.getServiceByProjectTypeId(finalProjectData.projectTypeId);
     
     if (service) {
       // Project type is mapped to a service - use role-based assignments
       try {
-        if (!this.helpers.getClientServiceByClientAndProjectType || !this.helpers.resolveProjectAssignments) {
+        if (!this.projectHelpers.getClientServiceByClientAndProjectType || !this.projectHelpers.resolveProjectAssignments) {
           throw new Error('Helper methods not registered');
         }
         
-        const clientService = await this.helpers.getClientServiceByClientAndProjectType(
+        const clientService = await this.projectHelpers.getClientServiceByClientAndProjectType(
           finalProjectData.clientId, 
           finalProjectData.projectTypeId
         );
         
         if (clientService) {
           // Use role-based assignment logic
-          const roleAssignments = await this.helpers.resolveProjectAssignments(
+          const roleAssignments = await this.projectHelpers.resolveProjectAssignments(
             finalProjectData.clientId, 
             finalProjectData.projectTypeId
           );
@@ -170,9 +170,9 @@ export class ProjectStorage extends BaseStorage {
     }
 
     // Set project owner based on service owner resolution
-    if (service && this.helpers.resolveServiceOwner) {
+    if (service && this.projectHelpers.resolveServiceOwner) {
       // For service-mapped projects, resolve the effective service owner
-      const serviceOwner = await this.helpers.resolveServiceOwner(finalProjectData.clientId, finalProjectData.projectTypeId);
+      const serviceOwner = await this.projectHelpers.resolveServiceOwner(finalProjectData.clientId, finalProjectData.projectTypeId);
       if (serviceOwner) {
         finalProjectData.projectOwnerId = serviceOwner.id;
         console.log(`Project owner set to service owner: ${serviceOwner.email} (${serviceOwner.id})`);
@@ -247,8 +247,8 @@ export class ProjectStorage extends BaseStorage {
     }
 
     // Resolve the stage role assignee if helpers are available
-    const stageRoleAssignee = this.helpers.resolveStageRoleAssignee
-      ? await this.helpers.resolveStageRoleAssignee(project)
+    const stageRoleAssignee = this.projectHelpers.resolveStageRoleAssignee
+      ? await this.projectHelpers.resolveStageRoleAssignee(project)
       : undefined;
 
     return {
@@ -522,8 +522,8 @@ export class ProjectStorage extends BaseStorage {
     
     // OPTIMIZED: Use batch lookup for stage role assignees (Issue #3 fix)
     // This reduces N+1 queries (3 per project) to just 3 batch queries total
-    const stageRoleAssigneesMap = this.helpers.resolveStageRoleAssigneesBatch
-      ? await this.helpers.resolveStageRoleAssigneesBatch(results)
+    const stageRoleAssigneesMap = this.projectHelpers.resolveStageRoleAssigneesBatch
+      ? await this.projectHelpers.resolveStageRoleAssigneesBatch(results)
       : new Map<string, User | undefined>();
 
     // Convert null relations to undefined and populate stage role assignee from batch result
@@ -725,8 +725,8 @@ export class ProjectStorage extends BaseStorage {
     });
     
     // OPTIMIZED: Use batch lookup for stage role assignees (Issue #3 fix)
-    const stageRoleAssigneesMap = this.helpers.resolveStageRoleAssigneesBatch
-      ? await this.helpers.resolveStageRoleAssigneesBatch(results)
+    const stageRoleAssigneesMap = this.projectHelpers.resolveStageRoleAssigneesBatch
+      ? await this.projectHelpers.resolveStageRoleAssigneesBatch(results)
       : new Map<string, User | undefined>();
 
     // Convert null relations to undefined and populate stage role assignee from batch result
@@ -892,8 +892,8 @@ export class ProjectStorage extends BaseStorage {
     });
     
     // OPTIMIZED: Use batch lookup for stage role assignees (Issue #3 fix)
-    const stageRoleAssigneesMap = this.helpers.resolveStageRoleAssigneesBatch
-      ? await this.helpers.resolveStageRoleAssigneesBatch(results)
+    const stageRoleAssigneesMap = this.projectHelpers.resolveStageRoleAssigneesBatch
+      ? await this.projectHelpers.resolveStageRoleAssigneesBatch(results)
       : new Map<string, User | undefined>();
 
     // Convert null relations to undefined and populate stage role assignee from batch result
@@ -960,8 +960,8 @@ export class ProjectStorage extends BaseStorage {
     });
 
     // OPTIMIZED: Use batch lookup for stage role assignees (Issue #3 fix)
-    const stageRoleAssigneesMap = this.helpers.resolveStageRoleAssigneesBatch
-      ? await this.helpers.resolveStageRoleAssigneesBatch(results)
+    const stageRoleAssigneesMap = this.projectHelpers.resolveStageRoleAssigneesBatch
+      ? await this.projectHelpers.resolveStageRoleAssigneesBatch(results)
       : new Map<string, User | undefined>();
 
     // Convert null relations to undefined and populate stage role assignee from batch result
@@ -994,10 +994,10 @@ export class ProjectStorage extends BaseStorage {
     const oldStatus = project.currentStatus;
 
     // Validate the new status using the centralized validation method
-    if (!this.helpers.validateProjectStatus) {
+    if (!this.projectHelpers.validateProjectStatus) {
       throw new Error('Helper validateProjectStatus not registered');
     }
-    const validation = await this.helpers.validateProjectStatus(update.newStatus);
+    const validation = await this.projectHelpers.validateProjectStatus(update.newStatus);
     if (!validation.isValid) {
       throw new Error(validation.reason || "Invalid project status");
     }
@@ -1025,10 +1025,10 @@ export class ProjectStorage extends BaseStorage {
     }
 
     // Validate that the submitted reason is mapped to the target stage
-    if (!this.helpers.validateStageReasonMapping) {
+    if (!this.projectHelpers.validateStageReasonMapping) {
       throw new Error('Helper validateStageReasonMapping not registered');
     }
-    const stageReasonValidation = await this.helpers.validateStageReasonMapping(stage.id, reason.id);
+    const stageReasonValidation = await this.projectHelpers.validateStageReasonMapping(stage.id, reason.id);
     if (!stageReasonValidation.isValid) {
       throw new Error(stageReasonValidation.reason || "Invalid stage-reason mapping");
     }
@@ -1081,10 +1081,10 @@ export class ProjectStorage extends BaseStorage {
     }
 
     // Validate required fields for this reason
-    if (!this.helpers.validateRequiredFields) {
+    if (!this.projectHelpers.validateRequiredFields) {
       throw new Error('Helper validateRequiredFields not registered');
     }
-    const requiredFieldsValidation = await this.helpers.validateRequiredFields(reason.id, update.fieldResponses || []);
+    const requiredFieldsValidation = await this.projectHelpers.validateRequiredFields(reason.id, update.fieldResponses || []);
     if (!requiredFieldsValidation.isValid) {
       throw new Error(requiredFieldsValidation.reason || "Required fields validation failed");
     }
@@ -1096,12 +1096,12 @@ export class ProjectStorage extends BaseStorage {
       newAssigneeId = stage.assignedUserId;
     } else if (stage.assignedWorkRoleId) {
       // Work role assignment - get the work role name and resolve through client service role assignments
-      if (!this.helpers.getWorkRoleById || !this.helpers.resolveRoleAssigneeForClient) {
+      if (!this.projectHelpers.getWorkRoleById || !this.projectHelpers.resolveRoleAssigneeForClient) {
         throw new Error('Helper methods not registered');
       }
-      const workRole = await this.helpers.getWorkRoleById(stage.assignedWorkRoleId);
+      const workRole = await this.projectHelpers.getWorkRoleById(stage.assignedWorkRoleId);
       if (workRole) {
-        const roleAssignment = await this.helpers.resolveRoleAssigneeForClient(project.clientId, project.projectTypeId, workRole.name);
+        const roleAssignment = await this.projectHelpers.resolveRoleAssigneeForClient(project.clientId, project.projectTypeId, workRole.name);
         newAssigneeId = roleAssignment?.id || project.clientManagerId;
       } else {
         console.warn(`Work role ${stage.assignedWorkRoleId} not found, using client manager`);
@@ -1234,15 +1234,15 @@ export class ProjectStorage extends BaseStorage {
     // Send stage change notifications after successful project update
     // This is done outside the transaction to avoid affecting the project update if notifications fail
     // CRITICAL FIX: Use captured oldStatus instead of project.currentStatus to avoid scope issues
-    if (this.helpers.sendStageChangeNotifications) {
-      await this.helpers.sendStageChangeNotifications(update.projectId, update.newStatus, oldStatus);
+    if (this.projectHelpers.sendStageChangeNotifications) {
+      await this.projectHelpers.sendStageChangeNotifications(update.projectId, update.newStatus, oldStatus);
     }
 
     // Auto-create message thread if person changing stage differs from person responsible for new stage
     // Only create if both users are defined (new stage has an assignee)
     if (userId && newAssigneeId && userId !== newAssigneeId && chronologyEntryId) {
       try {
-        if (!this.helpers.createProjectMessageThread || !this.helpers.createProjectMessageParticipant || !this.helpers.createProjectMessage) {
+        if (!this.projectHelpers.createProjectMessageThread || !this.projectHelpers.createProjectMessageParticipant || !this.projectHelpers.createProjectMessage) {
           console.warn('Message thread helpers not registered, skipping thread creation');
         } else {
           // Create unique thread topic with timestamp for each stage change
@@ -1257,26 +1257,26 @@ export class ProjectStorage extends BaseStorage {
           const threadTopic = `${oldStatus} to ${update.newStatus} - ${timestamp} (${shortId})`;
           
           // Create the message thread (no duplicate check - create new thread every time)
-          const newThread = await this.helpers.createProjectMessageThread({
+          const newThread = await this.projectHelpers.createProjectMessageThread({
             projectId: update.projectId,
             topic: threadTopic,
             createdByUserId: userId,
           });
           
           // Add both users as participants
-          await this.helpers.createProjectMessageParticipant({
+          await this.projectHelpers.createProjectMessageParticipant({
             threadId: newThread.id,
             userId: userId,
           });
           
-          await this.helpers.createProjectMessageParticipant({
+          await this.projectHelpers.createProjectMessageParticipant({
             threadId: newThread.id,
             userId: newAssigneeId,
           });
           
           // Create initial message with stage change notes if provided
           if (update.notesHtml && update.notesHtml.trim()) {
-            await this.helpers.createProjectMessage({
+            await this.projectHelpers.createProjectMessage({
               threadId: newThread.id,
               content: update.notesHtml,
               userId: userId,
@@ -1297,8 +1297,8 @@ export class ProjectStorage extends BaseStorage {
       console.log(`[Storage] Project ${update.projectId} moved to final stage '${update.newStatus}', cancelling all remaining notifications`);
       
       try {
-        if (this.helpers.cancelScheduledNotificationsForProject) {
-          await this.helpers.cancelScheduledNotificationsForProject(update.projectId, `Project moved to final stage: ${update.newStatus}`);
+        if (this.projectHelpers.cancelScheduledNotificationsForProject) {
+          await this.projectHelpers.cancelScheduledNotificationsForProject(update.projectId, `Project moved to final stage: ${update.newStatus}`);
         }
       } catch (error) {
         console.error(`[Storage] Failed to cancel notifications for project ${update.projectId}:`, error);
@@ -1741,10 +1741,10 @@ export class ProjectStorage extends BaseStorage {
         let alreadyExistsCount = 0;
 
         // Get required configuration data
-        if (!this.helpers.getDefaultStage) {
+        if (!this.projectHelpers.getDefaultStage) {
           throw new Error('Helper getDefaultStage not registered');
         }
-        const defaultStage = await this.helpers.getDefaultStage();
+        const defaultStage = await this.projectHelpers.getDefaultStage();
         if (!defaultStage) {
           throw new Error("No kanban stages found. Please create at least one stage before importing projects.");
         }
@@ -1755,19 +1755,19 @@ export class ProjectStorage extends BaseStorage {
         for (const data of projectsData) {
           try {
             // Find project type for this description
-            if (!this.helpers.getProjectTypeByName) {
+            if (!this.projectHelpers.getProjectTypeByName) {
               throw new Error('Helper getProjectTypeByName not registered');
             }
-            const projectType = await this.helpers.getProjectTypeByName(data.projectDescription);
+            const projectType = await this.projectHelpers.getProjectTypeByName(data.projectDescription);
             if (!projectType) {
               throw new Error(`Project type '${data.projectDescription}' not found. Please configure this project type in the admin area before importing.`);
             }
 
             // Find or create client
-            if (!this.helpers.getClientByName) {
+            if (!this.projectHelpers.getClientByName) {
               throw new Error('Helper getClientByName not registered');
             }
-            let client = await this.helpers.getClientByName(data.clientName);
+            let client = await this.projectHelpers.getClientByName(data.clientName);
             if (!client) {
               const [newClient] = await tx.insert(clients).values({
                 name: data.clientName,
@@ -1782,23 +1782,23 @@ export class ProjectStorage extends BaseStorage {
             let finalCurrentAssigneeId: string;
             let usedRoleBasedAssignment = false;
 
-            if (!this.helpers.getServiceByProjectTypeId) {
+            if (!this.projectHelpers.getServiceByProjectTypeId) {
               throw new Error('Helper getServiceByProjectTypeId not registered');
             }
-            const service = await this.helpers.getServiceByProjectTypeId(projectType.id);
+            const service = await this.projectHelpers.getServiceByProjectTypeId(projectType.id);
             
             if (service) {
               // Project type is mapped to a service - try role-based assignments
               try {
-                if (!this.helpers.getClientServiceByClientAndProjectType || !this.helpers.resolveProjectAssignments) {
+                if (!this.projectHelpers.getClientServiceByClientAndProjectType || !this.projectHelpers.resolveProjectAssignments) {
                   throw new Error('Helper methods not registered');
                 }
                 
-                const clientService = await this.helpers.getClientServiceByClientAndProjectType(client.id, projectType.id);
+                const clientService = await this.projectHelpers.getClientServiceByClientAndProjectType(client.id, projectType.id);
                 
                 if (clientService) {
                   // Use role-based assignment logic
-                  const roleAssignments = await this.helpers.resolveProjectAssignments(client.id, projectType.id);
+                  const roleAssignments = await this.projectHelpers.resolveProjectAssignments(client.id, projectType.id);
                   
                   finalBookkeeperId = roleAssignments.bookkeeperId;
                   finalClientManagerId = roleAssignments.clientManagerId;
@@ -1816,11 +1816,11 @@ export class ProjectStorage extends BaseStorage {
                     `Project type '${data.projectDescription}' is service-mapped but client '${data.clientName}' has no service assignment. Using CSV email assignments.`
                   );
                   
-                  if (!this.helpers.getUserByEmail) {
+                  if (!this.projectHelpers.getUserByEmail) {
                     throw new Error('Helper getUserByEmail not registered');
                   }
-                  const bookkeeper = await this.helpers.getUserByEmail(data.bookkeeperEmail);
-                  const clientManager = await this.helpers.getUserByEmail(data.clientManagerEmail);
+                  const bookkeeper = await this.projectHelpers.getUserByEmail(data.bookkeeperEmail);
+                  const clientManager = await this.projectHelpers.getUserByEmail(data.clientManagerEmail);
                   
                   if (!bookkeeper || !clientManager) {
                     throw new Error(`Bookkeeper (${data.bookkeeperEmail}) or client manager (${data.clientManagerEmail}) not found`);
@@ -1837,11 +1837,11 @@ export class ProjectStorage extends BaseStorage {
                     `Role-based assignment failed for project type '${data.projectDescription}': ${error.message}. Using CSV email assignments.`
                   );
                   
-                  if (!this.helpers.getUserByEmail) {
+                  if (!this.projectHelpers.getUserByEmail) {
                     throw new Error('Helper getUserByEmail not registered');
                   }
-                  const bookkeeper = await this.helpers.getUserByEmail(data.bookkeeperEmail);
-                  const clientManager = await this.helpers.getUserByEmail(data.clientManagerEmail);
+                  const bookkeeper = await this.projectHelpers.getUserByEmail(data.bookkeeperEmail);
+                  const clientManager = await this.projectHelpers.getUserByEmail(data.clientManagerEmail);
                   
                   if (!bookkeeper || !clientManager) {
                     throw new Error(`Bookkeeper (${data.bookkeeperEmail}) or client manager (${data.clientManagerEmail}) not found`);
@@ -1856,11 +1856,11 @@ export class ProjectStorage extends BaseStorage {
               }
             } else {
               // Project type is NOT mapped to a service - use CSV email assignments (existing logic)
-              if (!this.helpers.getUserByEmail) {
+              if (!this.projectHelpers.getUserByEmail) {
                 throw new Error('Helper getUserByEmail not registered');
               }
-              const bookkeeper = await this.helpers.getUserByEmail(data.bookkeeperEmail);
-              const clientManager = await this.helpers.getUserByEmail(data.clientManagerEmail);
+              const bookkeeper = await this.projectHelpers.getUserByEmail(data.bookkeeperEmail);
+              const clientManager = await this.projectHelpers.getUserByEmail(data.clientManagerEmail);
               
               if (!bookkeeper || !clientManager) {
                 throw new Error(`Bookkeeper (${data.bookkeeperEmail}) or client manager (${data.clientManagerEmail}) not found`);

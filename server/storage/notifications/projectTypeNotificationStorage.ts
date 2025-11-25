@@ -227,7 +227,7 @@ export class ProjectTypeNotificationStorage {
             clientId: client.id,
             clientName: client.name,
             projectId: project.id,
-            projectName: project.name,
+            projectName: (project as any).name || project.description,
             projectDescription: project.description,
             stageId: notification.stageId,
             stageName,
