@@ -19,6 +19,12 @@ import {
   insertScheduledNotificationSchema,
   updateScheduledNotificationSchema,
   insertNotificationHistorySchema,
+  previewCandidateRecipientSchema,
+  previewCandidateSchema,
+  previewCandidatesResponseSchema,
+  stageChangeNotificationRecipientSchema,
+  stageChangeNotificationPreviewSchema,
+  sendStageChangeNotificationSchema,
 } from "./schemas";
 
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
@@ -44,3 +50,13 @@ export type UpdateScheduledNotification = z.infer<typeof updateScheduledNotifica
 
 export type NotificationHistory = typeof notificationHistory.$inferSelect;
 export type InsertNotificationHistory = z.infer<typeof insertNotificationHistorySchema>;
+
+// Preview candidate types
+export type PreviewCandidateRecipient = z.infer<typeof previewCandidateRecipientSchema>;
+export type PreviewCandidate = z.infer<typeof previewCandidateSchema>;
+export type PreviewCandidatesResponse = z.infer<typeof previewCandidatesResponseSchema>;
+
+// Stage change notification types
+export type StageChangeNotificationRecipient = z.infer<typeof stageChangeNotificationRecipientSchema>;
+export type StageChangeNotificationPreview = z.infer<typeof stageChangeNotificationPreviewSchema>;
+export type SendStageChangeNotification = z.infer<typeof sendStageChangeNotificationSchema>;

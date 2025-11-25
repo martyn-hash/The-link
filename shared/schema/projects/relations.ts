@@ -18,4 +18,6 @@ export {
   stageApprovalFieldsRelations,
   stageApprovalResponsesRelations,
   projectSchedulingHistoryRelations,
+  reasonCustomFieldsRelations,
+  reasonFieldResponsesRelations,
 } from '../../schema';

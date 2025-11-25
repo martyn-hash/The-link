@@ -38,6 +38,9 @@ import {
   updateProjectStatusSchema,
   csvProjectSchema,
 } from './schemas';
+import type { Client } from '../clients/types';
+import type { User } from '../users/types';
+import type { Service } from '../services/types';
 
 export type Project = typeof projects.$inferSelect;
 export type InsertProject = z.infer<typeof insertProjectSchema>;
@@ -95,3 +98,33 @@ export {
   InsertUserProjectPreference,
   UpdateUserProjectPreference,
 } from '../users/types';
+
+// Backward compatibility aliases (legacy used plural names)
+export type SchedulingRunLogs = SchedulingRunLog;
+export type InsertSchedulingRunLogs = InsertSchedulingRunLog;
+
+// ProjectWithRelations type for projects with expanded relations
+export type ProjectWithRelations = Project & {
+  client: Client;
+  bookkeeper: User;
+  clientManager: User;
+  currentAssignee?: User;
+  projectOwner?: User;
+  projectType: ProjectType & {
+    service?: Service;
+  };
+  chronology: (ProjectChronology & { 
+    assignee?: User;
+    changedBy?: User;
+    fieldResponses: (ReasonFieldResponse & { customField: ReasonCustomField })[];
+  })[];
+  stageApprovalResponses?: (StageApprovalResponse & { 
+    field: StageApprovalField;
+  })[];
+  progressMetrics?: {
+    reasonId: string;
+    label: string;
+    total: number;
+  }[];
+  stageRoleAssignee?: User;
+};

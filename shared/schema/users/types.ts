@@ -77,3 +77,14 @@ export type UpdateDashboardCache = z.infer<typeof updateDashboardCacheSchema>;
 export type UserProjectPreference = typeof userProjectPreferences.$inferSelect;
 export type InsertUserProjectPreference = z.infer<typeof insertUserProjectPreferencesSchema>;
 export type UpdateUserProjectPreference = z.infer<typeof updateUserProjectPreferencesSchema>;
+
+// Backward compatibility aliases (legacy used plural names)
+export type UserNotificationPreferences = UserNotificationPreference;
+export type InsertUserNotificationPreferences = InsertUserNotificationPreference;
+export type UpdateUserNotificationPreferences = UpdateUserNotificationPreference;
+export type UserColumnPreferences = UserColumnPreference;
+export type InsertUserColumnPreferences = InsertUserColumnPreference;
+export type UpdateUserColumnPreferences = UpdateUserColumnPreference;
+export type UserProjectPreferences = UserProjectPreference;
+export type InsertUserProjectPreferences = InsertUserProjectPreference;
+export type UpdateUserProjectPreferences = UpdateUserProjectPreference;

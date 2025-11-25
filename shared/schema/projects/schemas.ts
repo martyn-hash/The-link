@@ -134,6 +134,8 @@ export const insertReasonCustomFieldSchema = createInsertSchema(reasonCustomFiel
   createdAt: true,
 });
 
+export const updateReasonCustomFieldSchema = insertReasonCustomFieldSchema.partial();
+
 export const insertReasonFieldResponseSchema = createInsertSchema(reasonFieldResponses).omit({
   id: true,
   createdAt: true,
@@ -148,6 +150,9 @@ export const insertSchedulingRunLogSchema = createInsertSchema(schedulingRunLogs
   id: true,
   createdAt: true,
 });
+
+// Backward compatibility alias (legacy used plural name)
+export const insertSchedulingRunLogsSchema = insertSchedulingRunLogSchema;
 
 export const completeProjectSchema = z.object({
   projectId: z.string(),
