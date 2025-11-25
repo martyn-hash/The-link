@@ -732,23 +732,18 @@ export function registerMessageRoutes(
   // Get count of unread INTERNAL message threads for the current user
   // Internal = staff-to-staff only (both project threads and standalone staff threads)
   // Excludes client-staff threads
+  // OPTIMIZED: Uses aggregated SQL queries instead of fetching all threads (Issue #2 fix)
   app.get("/api/project-messages/unread-count", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
 
-      let unreadThreadCount = 0;
+      // Use optimized single-query methods instead of fetching all threads
+      const [unreadStaffThreads, unreadProjectThreads] = await Promise.all([
+        storage.getUnreadStaffThreadCountForUser(effectiveUserId),
+        storage.getUnreadProjectThreadCountForUser(effectiveUserId),
+      ]);
 
-      // Count unread standalone staff message threads (staff-to-staff conversations)
-      const staffThreads = await storage.getStaffMessageThreadsForUser(effectiveUserId, { includeArchived: false });
-      const unreadStaffThreads = staffThreads.filter(t => t.unreadCount > 0).length;
-      unreadThreadCount += unreadStaffThreads;
-
-      // Count unread project message threads (staff-to-staff about projects)
-      const projectThreads = await storage.getProjectMessageThreadsForUser(effectiveUserId, { includeArchived: false });
-      const unreadProjectThreads = projectThreads.filter(t => t.unreadCount > 0).length;
-      unreadThreadCount += unreadProjectThreads;
-
-      res.json({ unreadCount: unreadThreadCount });
+      res.json({ unreadCount: unreadStaffThreads + unreadProjectThreads });
     } catch (error) {
       console.error("Error fetching unread thread count:", error);
       res.status(500).json({ message: "Failed to fetch unread count" });
