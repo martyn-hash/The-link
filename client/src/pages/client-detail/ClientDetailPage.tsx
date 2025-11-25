@@ -9,12 +9,15 @@ import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { SwipeableTabsWrapper } from "@/components/swipeable-tabs";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import TopNavigation from "@/components/top-navigation";
 import { useActivityTracker } from "@/lib/activityTracker";
 import type { EnhancedClientService } from "./utils/types";
 import { AddPersonModal } from "./components/people";
 import { EditServiceModal } from "./components/services";
 import { CommunicationsTimeline } from "./components/communications";
+import { CompanyCreationForm } from "./forms/CompanyCreationForm";
 import { 
   ChronologyTab, 
   RiskTab, 
@@ -33,19 +36,22 @@ export default function ClientDetail() {
   const { id } = useParams();
   const [, navigate] = useLocation();
   const { user } = useAuth();
-  const { toast } = useToast();
   const isMobile = useIsMobile();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const { trackClientView } = useActivityTracker();
-  const [expandedPersonId, setExpandedPersonId] = useState<string | null>(null);
-  const [expandedClientServiceId, setExpandedClientServiceId] = useState<string | null>(null);
+  
+  // State for expanded/editing items in service modals
   const [expandedPersonalServiceId, setExpandedPersonalServiceId] = useState<string | null>(null);
   const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
   const [editingPersonalServiceId, setEditingPersonalServiceId] = useState<string | null>(null);
-  const [revealedIdentifiers, setRevealedIdentifiers] = useState<Set<string>>(new Set());
+  
+  // State for person editing
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [isAddPersonModalOpen, setIsAddPersonModalOpen] = useState(false);
   const [isNewRequestDialogOpen, setIsNewRequestDialogOpen] = useState(false);
+  
+  // State for company selection
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
   
   // Track client view activity when component mounts
   useEffect(() => {
@@ -320,6 +326,73 @@ export default function ClientDetail() {
         relatedPeople={relatedPeople}
         onSuccess={(tab) => tab && setActiveTab(tab)}
       />
+
+      {/* Company Selection Dialog */}
+      <Dialog open={showCompanySelection} onOpenChange={setShowCompanySelection}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Link to Company</DialogTitle>
+            <DialogDescription>
+              Select an existing company to connect this person to.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
+              <SelectTrigger data-testid="select-company">
+                <SelectValue placeholder="Select a company" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableCompanies.map((company) => (
+                  <SelectItem key={company.id} value={company.id}>
+                    {company.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex justify-end space-x-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowCompanySelection(false);
+                  setSelectedCompanyId("");
+                }}
+                data-testid="button-cancel-company-selection"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (selectedCompanyId) {
+                    linkToCompanyMutation.mutate({ companyClientId: selectedCompanyId });
+                    setSelectedCompanyId("");
+                  }
+                }}
+                disabled={!selectedCompanyId || linkToCompanyMutation.isPending}
+                data-testid="button-link-company"
+              >
+                {linkToCompanyMutation.isPending ? "Linking..." : "Link Company"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Company Creation Dialog */}
+      <Dialog open={showCompanyCreation} onOpenChange={setShowCompanyCreation}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Create New Company</DialogTitle>
+            <DialogDescription>
+              Create a new company and link it to this person.
+            </DialogDescription>
+          </DialogHeader>
+          <CompanyCreationForm
+            onSubmit={(data) => convertToCompanyMutation.mutate(data)}
+            onCancel={() => setShowCompanyCreation(false)}
+            isSubmitting={convertToCompanyMutation.isPending}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* Mobile Bottom Navigation */}
       <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
