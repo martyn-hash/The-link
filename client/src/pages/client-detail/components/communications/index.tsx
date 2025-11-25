@@ -3,4 +3,4 @@ export { CommunicationFilters } from "./CommunicationFilters";
 export { CommunicationList } from "./CommunicationList";
 export * from "./dialogs";
 export * from "./types";
-export * from "./helpers";
+export * from "./helpers.tsx";
