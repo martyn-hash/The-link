@@ -129,3 +129,90 @@ export class PushNotificationStorage {
     await db.delete(notificationIcons).where(eq(notificationIcons.id, id));
   }
 }
+
+export async function initializeDefaultNotificationTemplates(): Promise<void> {
+  const storage = new PushNotificationStorage();
+  
+  try {
+    const existingTemplates = await storage.getAllPushNotificationTemplates();
+    
+    if (existingTemplates.length > 0) {
+      console.log('[Templates] Default notification templates already initialized');
+      return;
+    }
+
+    const defaultTemplates: InsertPushNotificationTemplate[] = [
+      {
+        templateType: 'new_message_staff',
+        name: 'New Message from Staff',
+        titleTemplate: 'New Team Message',
+        bodyTemplate: '{staffName} sent you a message',
+        iconUrl: '/pwa-icon-192.png',
+        badgeUrl: null,
+        isActive: true,
+      },
+      {
+        templateType: 'new_message_client',
+        name: 'New Message from Client',
+        titleTemplate: 'New Client Message',
+        bodyTemplate: '{clientName} sent you a message',
+        iconUrl: '/pwa-icon-192.png',
+        badgeUrl: null,
+        isActive: true,
+      },
+      {
+        templateType: 'document_request',
+        name: 'Document Request',
+        titleTemplate: 'Document Request',
+        bodyTemplate: 'A document has been requested',
+        iconUrl: '/pwa-icon-192.png',
+        badgeUrl: null,
+        isActive: true,
+      },
+      {
+        templateType: 'task_assigned',
+        name: 'Task Assigned',
+        titleTemplate: 'New Task Assigned',
+        bodyTemplate: '{creatorName} assigned you a task: {taskTitle}',
+        iconUrl: '/pwa-icon-192.png',
+        badgeUrl: null,
+        isActive: true,
+      },
+      {
+        templateType: 'status_update',
+        name: 'Status Update',
+        titleTemplate: 'Status Update',
+        bodyTemplate: 'Status has been updated',
+        iconUrl: '/pwa-icon-192.png',
+        badgeUrl: null,
+        isActive: true,
+      },
+      {
+        templateType: 'reminder',
+        name: 'Reminder',
+        titleTemplate: 'Reminder',
+        bodyTemplate: 'You have a reminder',
+        iconUrl: '/pwa-icon-192.png',
+        badgeUrl: null,
+        isActive: true,
+      },
+      {
+        templateType: 'project_stage_change',
+        name: 'Project Stage Change',
+        titleTemplate: '{projectName} Stage Updated',
+        bodyTemplate: '{clientName} - {projectName} moved from {oldStage} to {newStage}',
+        iconUrl: '/pwa-icon-192.png',
+        badgeUrl: null,
+        isActive: true,
+      },
+    ];
+
+    for (const template of defaultTemplates) {
+      await storage.createPushNotificationTemplate(template);
+    }
+
+    console.log('[Templates] Default notification templates initialized successfully');
+  } catch (error) {
+    console.error('[Templates] Error initializing default notification templates:', error);
+  }
+}

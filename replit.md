@@ -15,7 +15,15 @@ The application features a modern SaaS aesthetic inspired by Linear, Stripe, and
 The frontend is built with React and TypeScript, using Wouter for routing, TanStack Query for server state management, and shadcn/ui with Tailwind CSS for styling. The backend is an Express.js server in TypeScript, offering a modular RESTful API. It incorporates middleware for authentication, authorization, and data validation, handling core logic for service mapping, project creation, sophisticated scheduling with UTC date normalization, and comprehensive audit trails. A nightly scheduler automates project generation. The backend storage layer has been fully refactored from a monolithic file into 52 domain-focused modules using a facade pattern that maintains backward compatibility.
 
 ### System Design
-PostgreSQL (Neon) is the primary database, managed via Drizzle ORM, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage, accessed through Replit App Storage, handles object storage with secure signed URLs for documents. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control. The client portal employs passwordless email verification with magic link tokens. The system supports a multi-tenant architecture and is designed for modularity. The storage layer refactoring is now complete (Stage 15 finished November 24, 2025) with 535 methods delegated across 52 domain-focused storage modules. All application code now uses the modular facade (`server/storage/index.ts`) for data access, providing clean domain separation across Users, Clients, People, Projects, Services, Tags, Communications, Integrations, Documents/Portal, Messages, Requests, Tasks, Notifications, and Settings domains.
+PostgreSQL (Neon) is the primary database, managed via Drizzle ORM, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage, accessed through Replit App Storage, handles object storage with secure signed URLs for documents. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control. The client portal employs passwordless email verification with magic link tokens. The system supports a multi-tenant architecture and is designed for modularity.
+
+**Storage Layer Architecture (Completed November 25, 2025):**
+The storage layer has been fully refactored from a monolithic 13,630-line file into a modern modular architecture:
+- **52 domain-focused storage modules** across 14 domains (Users, Clients, People, Projects, Services, Tags, Communications, Integrations, Documents/Portal, Messages, Requests, Tasks, Notifications, Settings)
+- **535+ methods** delegated with type-safe facades
+- **IStorage interface** defined in `server/storage/base/IStorage.ts` (820 lines)
+- **Backward-compatible facade** at `server/storage/index.ts` maintains the same API
+- **Complete decoupling** from the old monolithic storage.ts which has been deleted
 
 ### Key Features
 -   **Automated Project & Service Management**: Includes automatic schema migrations, service scheduling, project automation, and client service role assignment with task cascading.
