@@ -323,43 +323,44 @@ client/src/pages/client-detail/
 
 ### Stage 4: Extract People Components
 **Estimated Effort:** 4-5 hours  
-**Risk Level:** Medium
+**Risk Level:** Medium  
+**Detailed Brief:** See `client/src/pages/client-detail/STAGE_4_PEOPLE_COMPONENTS.md`
 
-#### Tasks
-1. Create `components/people/PersonEditForm.tsx`
-   - Extract `PersonEditForm` component (~550 lines)
-   - Ensure form validation works
+#### Component Inventory
+| Component | Lines | Purpose |
+|-----------|-------|---------|
+| `AddPersonModal` | ~1,087 | Modal for adding new people |
+| `PersonTabbedView` | ~1,204 | Tabbed person view/edit interface |
+| `PersonViewMode` | ~515 | Read-only person display |
+| `PersonEditForm` | ~686 | Full person edit form |
+| `RelatedPersonRow` | ~200 | Table row for Related People section |
 
-2. Create `components/people/PersonViewMode.tsx`
-   - Extract `PersonViewMode` component (~500 lines)
-   - Maintain inline edit triggers
+**Expected Reduction:** ~2,400 lines
 
-3. Create `components/people/PersonTabbedView.tsx`
-   - Extract `PersonTabbedView` component (~600 lines)
-   - Uses PersonViewMode and PersonEditForm
-
-4. Create `forms/AddPersonModal.tsx`
-   - Extract `AddPersonModal` component (~550 lines)
-   - Maintain form validation and submission
-
-5. Create `components/people/PeopleSection.tsx`
-   - Extract the "Connected People" section from Overview tab
-   - Orchestrates person list and add person button
+#### Extraction Order (dependency-safe)
+1. `PersonEditForm` - Leaf component
+2. `PersonViewMode` - Leaf component
+3. `RelatedPersonRow` - Leaf component (uses PortalStatusColumn)
+4. `PersonTabbedView` - Uses PersonViewMode, PersonEditForm
+5. `AddPersonModal` - Standalone modal
 
 #### Success Criteria
-- [ ] People section displays in Overview tab
-- [ ] Add Person modal works (form validation, submission)
-- [ ] Person inline editing works (view/edit toggle)
-- [ ] Person tabbed view displays all tabs correctly
+- [ ] All 5 components extracted to `components/people/`
+- [ ] PersonTabbedView displays all 4 tabs correctly
+- [ ] PersonEditForm validates and saves correctly
+- [ ] AddPersonModal creates new people
 - [ ] Address lookup integration works
-- [ ] Phone number formatting (UK mobile) works correctly
+- [ ] UK mobile phone formatting works (+447 format)
+- [ ] No duplicate definitions in main file
+- [ ] TypeScript errors remain at 28
 
-#### Testing Required
-- Add a new person via modal
-- Edit existing person details inline
-- Toggle between person view tabs
-- Test address lookup functionality
-- Verify primary phone/email fields update correctly
+#### Browser Tests (6 tests)
+1. **View Person Details** - Expand person card, check all tabs
+2. **Edit Person Details** - Edit form, validate, save changes
+3. **Add New Person** - Modal, form validation, submit
+4. **Portal Invite/QR Code** - Send invite, generate QR
+5. **Address Lookup** - Postcode search, address selection
+6. **Link Person to Company** - Related Companies tab, link modal
 
 ---
 
