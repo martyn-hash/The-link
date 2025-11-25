@@ -103,21 +103,25 @@ The following foreign keys lack indexes and will cause sequential scans:
 
 | Table | Column | Recommended Index | Priority | Rationale |
 |-------|--------|-------------------|----------|-----------|
-| `projects` | `bookkeeper_id` | `idx_projects_bookkeeper_id` | **HIGH** | Used in project filtering by team member |
-| `projects` | `client_manager_id` | `idx_projects_client_manager_id` | **HIGH** | Used in "My Projects" views, user filtering |
-| `projects` | `inactive_by_user_id` | `idx_projects_inactive_by_user_id` | LOW | Rarely queried |
 | `project_chronology` | `project_id` | `idx_project_chronology_project_id` | **CRITICAL** | Powers timeline views - heavily queried |
 | `project_chronology` | `assignee_id` | `idx_project_chronology_assignee_id` | MEDIUM | Used in activity tracking |
 | `project_chronology` | `changed_by_id` | `idx_project_chronology_changed_by_id` | MEDIUM | Used in audit trails |
-| `client_chronology` | `user_id` | `idx_client_chronology_user_id` | LOW | Rarely filtered by user |
 | `client_people` | `client_id` | `idx_client_people_client_id` | **HIGH** | Used when loading client details |
 | `client_people` | `person_id` | `idx_client_people_person_id` | **HIGH** | Used when loading person details |
+| `client_chronology` | `user_id` | `idx_client_chronology_user_id` | LOW | Rarely filtered by user |
+| `projects` | `inactive_by_user_id` | `idx_projects_inactive_by_user_id` | LOW | Rarely queried |
 | `magic_link_tokens` | `user_id` | `idx_magic_link_tokens_user_id` | LOW | Low volume table |
-| `service_roles` | `service_id` | `idx_service_roles_service_id` | MEDIUM | Used in role lookups |
-| `service_roles` | `work_role_id` | `idx_service_roles_work_role_id` | MEDIUM | Used in role lookups |
-| `user_activity_tracking` | `user_id` | Exists via composite | - | Already covered |
-| `client_portal_users` | `client_id` | `client_portal_users_client_id_idx` | Exists | Already indexed |
-| `client_portal_users` | `person_id` | `client_portal_users_person_id_idx` | Exists | Already indexed |
+
+### Indexes NOT Needed (Role-Based System)
+
+The following foreign keys do **not** require indexes because the application uses role-based assignment exclusively:
+
+| Table | Column | Status | Rationale |
+|-------|--------|--------|-----------|
+| `projects` | `bookkeeper_id` | ⚪ NOT NEEDED | Display-only field - all filtering uses role resolution chain |
+| `projects` | `client_manager_id` | ⚪ NOT NEEDED | Display-only field - all filtering uses role resolution chain |
+
+These columns are populated when projects are created via `resolveProjectAssignments()` but are never used in WHERE clauses or for filtering. The actual assignee lookups use the role-based system: `kanbanStages` → `clientServices` → `clientServiceRoleAssignments` (which already has optimal indexes).
 
 ---
 
@@ -142,18 +146,18 @@ These indexes target common multi-column query patterns:
 ### Implementation SQL
 
 ```sql
--- Critical: Project chronology timeline index
+-- CRITICAL: Project chronology timeline indexes
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_project_chronology_project_id 
+ON project_chronology (project_id);
+
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_project_chronology_project_timestamp 
 ON project_chronology (project_id, timestamp DESC);
 
--- High: Projects foreign key indexes
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_projects_bookkeeper_id 
-ON projects (bookkeeper_id);
+-- IMPORTANT: Role resolution chain optimization
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_kanban_stages_project_type_name 
+ON kanban_stages (project_type_id, name);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_projects_client_manager_id 
-ON projects (client_manager_id);
-
--- High: Client-People relationship indexes
+-- HIGH: Client-People relationship indexes
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_client_people_client_id 
 ON client_people (client_id);
 
@@ -183,6 +187,17 @@ ON internal_tasks (assigned_to, status, is_archived) WHERE is_archived = false;
 
 When users navigate to the `/projects` page, the `GET /api/projects` endpoint calls `storage.getAllProjects(filters)`.
 
+### Important: Role-Based Assignment System
+
+This application uses a **role-based assignment system** exclusively. The `bookkeeper_id` and `client_manager_id` columns on the `projects` table are:
+- **Stored** when projects are created (via `resolveProjectAssignments()`)
+- **NOT used for filtering or querying** - they're just denormalized data for display
+
+All actual assignee lookups go through the role resolution chain:
+1. `kanbanStages` - find stage by `(projectTypeId, name)`
+2. `clientServices` - find service by `(clientId, serviceId)`
+3. `clientServiceRoleAssignments` - find user by `(clientServiceId, workRoleId, isActive)`
+
 ### Current Query Pattern
 
 ```typescript
@@ -190,8 +205,8 @@ db.query.projects.findMany({
   where: whereClause,  // filters: month, archived, inactive, serviceId, assigneeId, etc.
   with: {
     client: true,              // JOIN via client_id ✅ indexed
-    bookkeeper: true,          // JOIN via bookkeeper_id ❌ MISSING INDEX
-    clientManager: true,       // JOIN via client_manager_id ❌ MISSING INDEX
+    bookkeeper: true,          // JOIN via bookkeeper_id (display only, not filtered)
+    clientManager: true,       // JOIN via client_manager_id (display only, not filtered)
     currentAssignee: true,     // JOIN via current_assignee_id ✅ indexed
     projectOwner: true,        // JOIN via project_owner_id ✅ indexed
     projectType: {
@@ -206,6 +221,40 @@ db.query.projects.findMany({
     }
   }
 })
+
+// Then for EACH project:
+await resolveStageRoleAssignee(project)  // ❌ N+1 QUERY ISSUE
+```
+
+### Role Resolution Query Chain (N+1 Issue)
+
+For each project, `resolveStageRoleAssignee()` executes 3 queries:
+
+```typescript
+// Query 1: Find kanban stage
+db.query.kanbanStages.findFirst({
+  where: and(
+    eq(kanbanStages.projectTypeId, project.projectType.id),
+    eq(kanbanStages.name, project.currentStatus)  // ❌ Missing composite index
+  )
+});
+
+// Query 2: Find client service  
+db.query.clientServices.findFirst({
+  where: and(
+    eq(clientServices.clientId, project.clientId),
+    eq(clientServices.serviceId, project.projectType.serviceId)  // ✅ Covered by unique constraint
+  )
+});
+
+// Query 3: Find role assignment
+db.query.clientServiceRoleAssignments.findFirst({
+  where: and(
+    eq(clientServiceRoleAssignments.clientServiceId, clientService.id),
+    eq(clientServiceRoleAssignments.workRoleId, stage.assignedWorkRoleId),
+    eq(clientServiceRoleAssignments.isActive, true)  // ✅ Covered by existing composite index
+  )
+});
 ```
 
 ### Performance Issues
@@ -214,26 +263,32 @@ db.query.projects.findMany({
 |-------|--------|----------|
 | Missing `project_chronology.project_id` index | Sequential scan on every project load | Add `idx_project_chronology_project_id` |
 | Missing composite `(project_id, timestamp DESC)` | Slow ORDER BY for chronology | Add `idx_project_chronology_project_timestamp` |
-| Missing `projects.bookkeeper_id` index | Slow JOIN for bookkeeper data | Add `idx_projects_bookkeeper_id` |
-| Missing `projects.client_manager_id` index | Slow JOIN for client manager data | Add `idx_projects_client_manager_id` |
-| N+1 for `resolveStageRoleAssignee()` | 1 extra query per project | Batch lookup or pre-fetch |
+| Missing `kanbanStages(projectTypeId, name)` composite | Role resolution query 1 slow | Add `idx_kanban_stages_project_type_name` |
+| N+1 for `resolveStageRoleAssignee()` | 3 extra queries per project | Batch lookup or pre-fetch |
 | Full chronology loaded for list view | Unnecessary data transfer | Only load in detail view |
+
+### Already Optimized (No Action Needed)
+
+| Table | Index | Status |
+|-------|-------|--------|
+| `client_services` | `unique_client_service(clientId, serviceId)` | ✅ Unique constraint acts as index |
+| `client_service_role_assignments` | `idx_..._active(clientServiceId, workRoleId, isActive)` | ✅ Perfect composite index |
+| `projects.bookkeeper_id` | N/A | ⚪ Not needed - display only, not filtered |
+| `projects.client_manager_id` | N/A | ⚪ Not needed - display only, not filtered |
 
 ### Recommended Indexes for `/projects` Page
 
 ```sql
--- CRITICAL: These directly impact /projects page performance
+-- CRITICAL: Chronology performance
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_project_chronology_project_id 
 ON project_chronology (project_id);
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_project_chronology_project_timestamp 
 ON project_chronology (project_id, timestamp DESC);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_projects_bookkeeper_id 
-ON projects (bookkeeper_id);
-
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_projects_client_manager_id 
-ON projects (client_manager_id);
+-- IMPORTANT: Role resolution chain optimization
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_kanban_stages_project_type_name 
+ON kanban_stages (project_type_id, name);
 ```
 
 ### Query Optimization Opportunities
@@ -242,7 +297,11 @@ ON projects (client_manager_id);
    - Only loading chronology in the detail view (`getProject()`)
    - Or using a subquery to fetch just the most recent entry
 
-2. **Batch stageRoleAssignee lookups**: Instead of N+1 queries, pre-fetch all role assignments for visible project types
+2. **Batch stageRoleAssignee lookups**: The N+1 issue with `resolveStageRoleAssignee()` could be solved by:
+   - Pre-fetching all kanban stages for visible project types in one query
+   - Pre-fetching all client services for visible clients in one query
+   - Pre-fetching all role assignments for visible client-services in one query
+   - Then resolving in-memory
 
 3. **Add pagination**: For large datasets, implement cursor-based pagination
 
@@ -452,17 +511,19 @@ export async function registerHealthRoutes(app: Express) {
 ### Phase 1: Critical (Immediate)
 1. Add index on `project_chronology.project_id` 
 2. Add composite index `(project_id, timestamp DESC)` on `project_chronology`
-3. Add indexes on `projects.bookkeeper_id` and `projects.client_manager_id`
+3. Add composite index `(project_type_id, name)` on `kanban_stages` for role resolution
 4. Add indexes on `client_people.client_id` and `client_people.person_id`
+
+**Note:** `projects.bookkeeper_id` and `projects.client_manager_id` indexes are **NOT needed** - these columns are display-only. All filtering uses the role-based lookup chain which already has optimal indexes on `client_service_role_assignments`.
 
 ### Phase 2: High Priority (This Sprint)
 1. Implement DB health check endpoint
 2. Add remaining composite indexes for common query patterns
-3. Review and optimize `getAllProjects()` query
+3. Review and optimize `getAllProjects()` query - consider batching `resolveStageRoleAssignee()` calls
 
 ### Phase 3: Medium Priority (Next Sprint)
 1. Add projection-based queries for list views
-2. Implement batch loading for N+1 patterns
+2. Implement batch loading for role resolution N+1 pattern
 3. Add caching for progress metrics
 
 ### Phase 4: Ongoing
@@ -519,12 +580,23 @@ LIMIT 10;
 
 ## 9. Summary
 
-| Category | Issues Found | Priority |
-|----------|-------------|----------|
-| Missing FK Indexes | 12 | HIGH |
-| Missing Composite Indexes | 9 | HIGH |
-| Heavy Queries | 3 | MEDIUM |
-| ORM Over-fetching | 3 patterns | MEDIUM |
-| Health Check | Missing | HIGH |
+| Category | Issues Found | Priority | Notes |
+|----------|-------------|----------|-------|
+| Missing FK Indexes | 10 | HIGH | Excludes bookkeeper_id/client_manager_id (not needed for role-based system) |
+| Missing Composite Indexes | 8 | HIGH | Including critical `kanban_stages(project_type_id, name)` |
+| N+1 Query Pattern | 1 major | HIGH | `resolveStageRoleAssignee()` - 3 queries per project |
+| Heavy Queries | 3 | MEDIUM | |
+| ORM Over-fetching | 3 patterns | MEDIUM | |
+| Health Check | Missing | HIGH | |
+
+### Role-Based System Status
+
+| Table | Required Index | Status |
+|-------|---------------|--------|
+| `client_service_role_assignments` | `(clientServiceId, workRoleId, isActive)` | ✅ Already exists |
+| `client_services` | `(clientId, serviceId)` | ✅ Covered by unique constraint |
+| `kanban_stages` | `(projectTypeId, name)` | ❌ Missing - add in Phase 1 |
+| `projects.bookkeeper_id` | N/A | ⚪ Not needed (display only) |
+| `projects.client_manager_id` | N/A | ⚪ Not needed (display only) |
 
 Total estimated effort: 2-3 days for Phase 1 and 2 implementations.
