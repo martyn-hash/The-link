@@ -34,6 +34,15 @@ The client-detail.tsx page (originally 9,347 lines) has been refactored into a m
 - **Location:** `client/src/pages/client-detail/` with subdirectories: `components/tabs/`, `components/services/`, `components/modals/`, `dialogs/`, `forms/`, `hooks/`, `utils/`
 - **Documentation:** See `client-detail_refactor.md` and stage-specific `.md` files for detailed architecture
 
+**Schema Layer Refactoring (All 12 Stages Complete, November 25, 2025):**
+The monolithic shared/schema.ts (3,920 lines) has been refactored into domain-focused modules:
+- **10 domain modules** in `shared/schema/` directory: Users, Clients, Projects, Services, Communications, Notifications, Documents, Email, Tasks, Requests
+- **Backward-compatible barrel** at `shared/schema/index.ts` re-exports from legacy schema.ts
+- **Domain modules available** as alternative import paths for tree-shaking (e.g., `import { users } from '@shared/schema/users'`)
+- **Cross-domain dependencies** use temporary shims importing from legacy schema until final migration
+- **Documentation:** See `schema_refactor.md` for detailed architecture and migration plan
+- **Note:** Legacy schema.ts remains source of truth; domain modules provide optional targeted imports
+
 ### Key Features
 -   **Automated Project & Service Management**: Includes automatic schema migrations, service scheduling, project automation, and client service role assignment with task cascading.
 -   **Communication & Collaboration**: Features push notification template management, an internal tasks system, standalone staff-to-staff messaging, email threading and deduplication via Microsoft Graph, and a multi-channel client notification and reminder system. This includes a rich-text Tiptap editor for messages, file attachments, Office document conversion for in-app preview, and intelligent message expand/collapse functionality. Email notifications support rich HTML formatting with DOMPurify sanitization and dual HTML/plain text formats. Project message thread creation permissions have been refined.
