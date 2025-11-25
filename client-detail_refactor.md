@@ -610,55 +610,50 @@ type TimelineItem =
 
 ---
 
-### Stage 8: Extract Dialogs & Inline Components
+### Stage 8: Extract Dialogs & Inline Components ✅ COMPLETED
 **Estimated Effort:** 3-4 hours  
+**Actual Effort:** ~1.5 hours
 **Risk Level:** Medium
-**Status:** PLANNING COMPLETE (November 25, 2025)
+**Status:** COMPLETED (November 25, 2025)
 **Detailed Brief:** See `client/src/pages/client-detail/STAGE_8_DIALOGS_EXTRACTION.md`
 
 #### Component Inventory
-| Component | Lines | Location | Priority |
-|-----------|-------|----------|----------|
-| `NewClientRequestDialog` | ~220 | 1216-1434 | P1 |
-| `ProjectLink` | ~20 | 104-124 | P3 |
-| `CompanyCreationForm` | ~127 | 127-254 | P2 |
+| Component | Lines | Status |
+|-----------|-------|--------|
+| `NewClientRequestDialog` | ~290 | ✅ Extracted to `dialogs/NewClientRequestDialog.tsx` |
+| `ProjectLink` | ~20 | ✅ Removed duplicate (extracted version in `utils/`) |
+| `CompanyCreationForm` | ~127 | ✅ Removed duplicate (extracted version in `forms/`) |
 
-#### Pre-Stage: Fix LSP Errors
-6 LSP errors must be fixed first:
-- Line 526: `setLocation` → `navigate`
-- Lines 1113, 1118: Convert `Error | null` to boolean
-- Lines 1138, 1204: Add non-null assertions
-- Line 1210: Remove invalid `clientId` property
+#### Extraction Phases (All Completed)
+**Phase 8.1** ✅: Fixed 6 LSP errors (setLocation→navigate, boolean conversions, type assertions)
+**Phase 8.2** ✅: Extracted `NewClientRequestDialog` with self-contained state, queries, and mutations
+**Phase 8.3** ✅: Removed duplicate inline components (already extracted in earlier stages)
+**Phase 8.4** ✅: Created `dialogs/index.tsx` re-exports
+**Phase 8.5** ✅: E2E tests passed (24/24 steps)
 
-#### Extraction Phases
-**Phase 8.1** (15 min): Fix all LSP errors
-**Phase 8.2** (2 hrs): Extract `NewClientRequestDialog` to `dialogs/NewClientRequestDialog.tsx`
-**Phase 8.3** (30 min): Move `ProjectLink` and verify `CompanyCreationForm`
-**Phase 8.4** (30 min): Clean up main component
-**Phase 8.5** (15 min): Create `dialogs/index.tsx` re-exports
+#### Files Created/Modified
+- `dialogs/NewClientRequestDialog.tsx` (~290 lines) - Full dialog with two-phase flow
+- `dialogs/index.tsx` - Re-exports
 
-#### NewClientRequestDialog Complexity
-- Two-phase flow: Type selection → Form
-- Template mode: Category → Template → Person selection
-- Custom mode: Name/Description form with navigation
-- Multiple queries (categories, templates)
-- Two mutations (template instance, custom request)
+#### Success Criteria (All Met)
+- [x] Dialog opens/closes correctly
+- [x] Template flow works (Category → Template → Person → Create)
+- [x] Custom flow works (Name → Create → Navigate)
+- [x] State resets on dialog close
+- [x] Toast notifications display
+- [x] Zero LSP errors
 
-#### Success Criteria
-- [ ] Dialog opens/closes correctly
-- [ ] Template flow works (Category → Template → Person → Create)
-- [ ] Custom flow works (Name → Create → Navigate)
-- [ ] State resets on dialog close
-- [ ] Toast notifications display
-- [ ] Zero LSP errors
+#### Testing Results
+- ✅ E2E Test PASSED: 24/24 steps
+- ✅ Dialog two-phase flow verified (Template and Custom)
+- ✅ All tabs accessible and functional
+- ✅ No regressions in existing functionality
 
-#### Testing Required
-- Full New Client Request dialog flow (template & custom)
-- Verify existing dialogs still work
-- Tab functionality regression test
-
-**Expected Reduction:** ~450-550 lines  
-**Target Post-Stage 8:** ~900-1,000 lines (~89-90% total reduction from original)
+#### Line Count Change
+- Before: 1,446 lines
+- After: 983 lines
+- Stage 8 Reduction: 463 lines (32.0%)
+- **Total Reduction from Original: 8,364 lines (89.5% reduction from 9,347)**
 
 ---
 
@@ -755,14 +750,14 @@ type TimelineItem =
 | Stage 5 | 4-5 hours | ~3 hours | ✅ DONE | Stage 4 |
 | Stage 6 | 6-8 hours | ~4 hours | ✅ DONE | Stage 5 |
 | Stage 7 | 5-7 hours | ~4 hours | ✅ DONE | Stage 6 |
-| Stage 8 | 3-4 hours | - | 📋 PLANNED | Stage 7 |
+| Stage 8 | 3-4 hours | ~1.5 hours | ✅ DONE | Stage 7 |
 | Stage 9 | 3-4 hours | - | Pending | Stage 8 |
 | Stage 10 | 2-3 hours | - | Pending | Stage 9 |
 
-**Progress:** Stages 1-7 complete in ~17.5 hours (vs 26-33 estimated)  
-**Current File:** 1,446 lines (84.5% reduction from 9,347)  
-**Remaining Estimate:** 8-11 hours for Stages 8-10  
-**Total Estimated Time: ~25.5-28.5 hours** (~3 working days)
+**Progress:** Stages 1-8 complete in ~19 hours (vs 29-37 estimated)  
+**Current File:** 983 lines (89.5% reduction from 9,347)  
+**Remaining Estimate:** 5-7 hours for Stages 9-10  
+**Total Estimated Time: ~24-26 hours** (~3 working days)
 
 ---
 
