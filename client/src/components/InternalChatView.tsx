@@ -193,7 +193,7 @@ export function InternalChatView({
   const previousMessageCountRef = useRef<number>(0);
   const isInitialThreadLoadRef = useRef<boolean>(true);
 
-  // Fetch project message threads
+  // OPTIMIZED: Fetch project message threads with 60s polling interval (Issue #4 fix)
   const { data: projectThreads, isLoading: projectThreadsLoading } = useQuery<ProjectMessageThread[]>({
     queryKey: ['/api/project-messages/my-threads', { includeArchived: archiveFilter === 'archived' }],
     queryFn: async () => {
@@ -204,10 +204,10 @@ export function InternalChatView({
       return response.json();
     },
     enabled: !!user,
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 60s interval for thread list background polling
   });
 
-  // Fetch standalone staff message threads
+  // OPTIMIZED: Fetch standalone staff message threads with 60s polling interval (Issue #4 fix)
   const { data: staffThreads, isLoading: staffThreadsLoading } = useQuery<StaffMessageThread[]>({
     queryKey: ['/api/staff-messages/my-threads', { includeArchived: archiveFilter === 'archived' }],
     queryFn: async () => {
@@ -218,7 +218,7 @@ export function InternalChatView({
       return response.json();
     },
     enabled: !!user,
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 60s interval for thread list background polling
   });
 
   // Merge both thread types
@@ -256,7 +256,8 @@ export function InternalChatView({
     enabled: showNewThreadDialog,
   });
 
-  // Fetch messages for selected thread (works for both project and staff threads)
+  // OPTIMIZED: Fetch messages for selected thread with 30s polling (Issue #4 fix)
+  // Kept at 30s for active conversations - responsive enough while reducing overhead
   const { data: messages, isLoading: messagesLoading} = useQuery<(ProjectMessage | StaffMessage)[]>({
     queryKey: [selectedThreadType === 'staff' ? '/api/staff-messages/threads' : '/api/internal/project-messages/threads', selectedThreadId, 'messages'],
     queryFn: async () => {
@@ -270,7 +271,7 @@ export function InternalChatView({
       return response.json();
     },
     enabled: !!selectedThreadId && !!selectedThreadType,
-    refetchInterval: 10000,
+    refetchInterval: 30000, // 30s interval for active messaging views
   });
 
   // Infer thread type when thread is selected (handles URL navigation and programmatic selection)

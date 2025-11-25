@@ -52,16 +52,17 @@ export default function PortalThreadList() {
     );
   }
 
+  // OPTIMIZED: Increased polling interval to 60s for portal thread list (Issue #4 fix)
   const { data: threads, isLoading: threadsLoading } = useQuery({
     queryKey: ['/api/portal/threads', statusFilter],
     queryFn: () => portalApi.threads.list(statusFilter),
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 60s interval for background polling
   });
 
   const { data: unreadData } = useQuery({
     queryKey: ['/api/portal/unread-count'],
     queryFn: () => portalApi.unreadCount(),
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 60s interval for background polling
   });
 
   // Update app badge with unread count

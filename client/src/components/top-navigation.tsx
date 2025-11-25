@@ -30,11 +30,12 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
   const { isImpersonating } = useAuth();
   const isMobile = useIsMobile();
 
-  // Fetch unread message count
+  // OPTIMIZED: Fetch unread message count using aggregated endpoint (Issue #4 fix)
+  // Interval increased to 60s for background polling efficiency
   const { data: unreadData, isLoading: isLoadingUnread, error: unreadError } = useQuery<{ unreadCount: number }>({
     queryKey: ['/api/project-messages/unread-count'],
     enabled: !!user,
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 60000, // 60s interval for background status polling
     retry: (failureCount, error) => {
       // Always retry on network errors (Failed to fetch)
       if (error?.message?.includes('Failed to fetch')) {

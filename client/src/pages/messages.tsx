@@ -330,7 +330,7 @@ export default function Messages() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Fetch client-staff message threads (Client Chat)
+  // OPTIMIZED: Fetch client-staff message threads with 60s polling (Issue #4 fix)
   const { data: clientStaffThreads, isLoading: clientStaffThreadsLoading } = useQuery<any[]>({
     queryKey: ['/api/internal/messages/threads', { includeArchived: archiveFilter === 'archived' }],
     queryFn: async () => {
@@ -341,10 +341,10 @@ export default function Messages() {
       return response.json();
     },
     enabled: isAuthenticated && !!user,
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 60s interval for thread list background polling
   });
 
-  // Fetch standalone staff message threads (Internal Chat)
+  // OPTIMIZED: Fetch standalone staff message threads with 60s polling (Issue #4 fix)
   const { data: staffThreads, isLoading: staffThreadsLoading } = useQuery<StaffMessageThread[]>({
     queryKey: ['/api/staff-messages/my-threads', { includeArchived: archiveFilter === 'archived' }],
     queryFn: async () => {
@@ -355,10 +355,10 @@ export default function Messages() {
       return response.json();
     },
     enabled: isAuthenticated && !!user,
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 60s interval for thread list background polling
   });
 
-  // Fetch project message threads (Internal Chat - project discussions)
+  // OPTIMIZED: Fetch project message threads with 60s polling (Issue #4 fix)
   const { data: projectThreads, isLoading: projectThreadsLoading } = useQuery<ProjectMessageThread[]>({
     queryKey: ['/api/project-messages/my-threads', { includeArchived: archiveFilter === 'archived' }],
     queryFn: async () => {
@@ -369,10 +369,10 @@ export default function Messages() {
       return response.json();
     },
     enabled: isAuthenticated && !!user,
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 60s interval for thread list background polling
   });
 
-  // Fetch email threads (Client Emails)
+  // OPTIMIZED: Fetch email threads with 60s polling (Issue #4 fix)
   const { data: emailThreadsData, isLoading: emailThreadsLoading } = useQuery<{ threads: EmailThread[] }>({
     queryKey: ['/api/emails/my-threads', { myEmailsOnly: emailFilter === 'my' }],
     queryFn: async () => {
@@ -384,7 +384,7 @@ export default function Messages() {
       return response.json();
     },
     enabled: isAuthenticated && !!user,
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 60s interval for thread list background polling
   });
 
   const emailThreads = emailThreadsData?.threads || [];
@@ -414,7 +414,8 @@ export default function Messages() {
   const clientUnreadCount = clientChatThreads.filter(thread => thread.hasUnreadMessages).length;
   const emailUnreadCount = emailThreads.filter(thread => thread.hasUnread).length;
 
-  // Fetch messages for selected thread (project threads only)
+  // OPTIMIZED: Fetch messages for selected thread with 30s polling (Issue #4 fix)
+  // Kept at 30s for active conversations - responsive enough while reducing overhead
   const { data: messages, isLoading: messagesLoading} = useQuery<ProjectMessage[]>({
     queryKey: ['/api/internal/project-messages/threads', selectedThreadId, 'messages'],
     queryFn: async () => {
@@ -425,7 +426,7 @@ export default function Messages() {
       return response.json();
     },
     enabled: !!selectedThreadId && isAuthenticated,
-    refetchInterval: 10000,
+    refetchInterval: 30000, // 30s interval for active messaging views
   });
 
   // Mutations

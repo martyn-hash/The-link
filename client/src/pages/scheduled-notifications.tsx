@@ -92,10 +92,10 @@ export default function ScheduledNotificationsPage() {
     return params;
   };
 
-  // Fetch notifications with auto-refresh every 30 seconds
+  // OPTIMIZED: Fetch notifications with 60s polling interval (Issue #4 fix)
   const { data: notifications = [], isLoading, refetch } = useQuery<NotificationWithRelations[]>({
     queryKey: ["/api/scheduled-notifications", buildQueryParams()],
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 60s interval for background status polling
   });
 
   // Fetch clients for filter dropdown

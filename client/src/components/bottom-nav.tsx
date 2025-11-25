@@ -10,49 +10,18 @@ interface BottomNavProps {
   onSearchClick: () => void;
 }
 
-interface ProjectMessageThread {
-  unreadCount: number;
-}
-
-interface StaffMessageThread {
-  unreadCount: number;
-}
-
 export default function BottomNav({ user, onSearchClick }: BottomNavProps) {
   const [location] = useLocation();
 
-  // Fetch project message threads (Client Chat) unread count
-  const { data: projectThreads } = useQuery<ProjectMessageThread[]>({
-    queryKey: ['/api/project-messages/my-threads', { includeArchived: false }],
-    queryFn: async () => {
-      const response = await fetch('/api/project-messages/my-threads?includeArchived=false', {
-        credentials: 'include'
-      });
-      if (!response.ok) return [];
-      return response.json();
-    },
+  // OPTIMIZED: Use the same optimized unread-count endpoint as top-navigation
+  // This shares the same queryKey so React Query deduplicates requests (Issue #4 fix)
+  const { data: unreadData } = useQuery<{ unreadCount: number }>({
+    queryKey: ['/api/project-messages/unread-count'],
     enabled: !!user,
-    refetchInterval: 30000,
+    refetchInterval: 60000, // 60s interval for background status polling
   });
 
-  // Fetch staff message threads (Internal Chat) unread count
-  const { data: staffThreads } = useQuery<StaffMessageThread[]>({
-    queryKey: ['/api/staff-messages/my-threads', { includeArchived: false }],
-    queryFn: async () => {
-      const response = await fetch('/api/staff-messages/my-threads?includeArchived=false', {
-        credentials: 'include'
-      });
-      if (!response.ok) return [];
-      return response.json();
-    },
-    enabled: !!user,
-    refetchInterval: 30000,
-  });
-
-  // Calculate total unread count
-  const totalUnreadCount = 
-    (projectThreads?.reduce((sum, thread) => sum + thread.unreadCount, 0) || 0) +
-    (staffThreads?.reduce((sum, thread) => sum + thread.unreadCount, 0) || 0);
+  const totalUnreadCount = unreadData?.unreadCount || 0;
 
   const isActive = (href: string) => {
     if (href === "/") {

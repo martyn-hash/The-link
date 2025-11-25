@@ -128,13 +128,13 @@ export default function Dashboard() {
     },
   });
 
-  // Fetch dashboard data (only for recently viewed)
+  // OPTIMIZED: Fetch dashboard data with 60s polling interval (Issue #4 fix)
   const { data: dashboardData, isLoading: dashboardLoading, error } = useQuery<DashboardStats>({
     queryKey: ["/api/dashboard"],
     enabled: isAuthenticated && !!user,
     retry: false,
-    staleTime: 30000, // 30 seconds
-    refetchInterval: 30000, // Refetch every 30 seconds
+    staleTime: 60000, // 60 seconds
+    refetchInterval: 60000, // 60s interval for background status polling
   });
 
   // Redirect to login if not authenticated

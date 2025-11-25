@@ -99,10 +99,12 @@ export default function PortalThreadDetail() {
     queryFn: () => portalApi.threads.get(threadId),
   });
 
+  // OPTIMIZED: Increased polling interval to 30s for active conversations (Issue #4 fix)
+  // Still responsive enough for active messaging, but reduces network overhead
   const { data: messages, isLoading: messagesLoading } = useQuery<Message[]>({
     queryKey: ['/api/portal/threads', threadId, 'messages'],
     queryFn: () => portalApi.messages.list(threadId),
-    refetchInterval: 10000,
+    refetchInterval: 30000, // 30s interval for active messaging views
   });
 
   const sendMessageMutation = useMutation({

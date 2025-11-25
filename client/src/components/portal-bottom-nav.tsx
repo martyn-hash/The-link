@@ -17,11 +17,11 @@ export default function PortalBottomNav() {
   const { toast } = useToast();
   const [isSwitching, setIsSwitching] = useState(false);
 
-  // Fetch incomplete task count
+  // OPTIMIZED: Fetch incomplete task count with 60s polling interval (Issue #4 fix)
   const { data: taskCountData } = useQuery<{ count: number }>({
     queryKey: ['/api/portal/task-instances/count/incomplete'],
     queryFn: () => portalRequest('GET', '/api/portal/task-instances/count/incomplete'),
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 60000, // 60s interval for background status polling
   });
 
   const isActive = (href: string) => {
