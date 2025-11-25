@@ -90,3 +90,38 @@ Comprehensive performance review identifying optimization opportunities:
 ### Frontend Libraries
 -   **UI Components**: `@radix-ui/*`, `@dnd-kit/*`, `@tiptap/*`, `react-hook-form` with `zod`, `sonner`.
 -   **Utilities**: `date-fns`, `clsx`, `tailwind-merge`, `@getaddress/autocomplete`.
+
+## Developer Documentation
+
+**Before starting development work, please read:** `read_me_before_developing.md`
+
+This document contains:
+- Test login credentials (admin@example.com / admin123 via Password tab)
+- Critical development rules and forbidden file modifications
+- Code patterns and best practices
+- Import path quick reference
+- Testing checklist
+
+**Architecture Review:** `app_observations.md`
+
+Comprehensive review of the application covering:
+- File and folder structure analysis
+- Code quality and pattern assessment
+- Performance optimization status
+- Technical debt inventory
+- Security considerations
+- Scalability recommendations
+
+### Key Documentation Index
+
+| Document | Purpose |
+|----------|---------|
+| `read_me_before_developing.md` | Developer onboarding and rules |
+| `app_observations.md` | Architecture review and recommendations |
+| `speed_time.md` | Performance optimization history |
+| `database_optimisations.md` | Database indexing strategy |
+| `refactor_storage.md` | Storage layer architecture |
+| `client-detail_refactor.md` | Client page decomposition |
+| `clients_refactor.md` | Route modularization |
+| `schema_refactor.md` | Schema modularization |
+| `server/storage/CROSS_DOMAIN_PATTERN.md` | Cross-domain dependency patterns |
