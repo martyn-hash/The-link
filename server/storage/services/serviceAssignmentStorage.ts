@@ -1547,4 +1547,115 @@ export class ServiceAssignmentStorage extends BaseStorage {
       return undefined;
     }
   }
+
+  /**
+   * Batch resolve stage role assignees for multiple projects.
+   * OPTIMIZED: Reduces N+1 queries (3 per project) to just 3 batch queries total.
+   * Used by getAllProjects and similar bulk project fetching methods.
+   */
+  async resolveStageRoleAssigneesBatch(projects: any[]): Promise<Map<string, User | undefined>> {
+    const result = new Map<string, User | undefined>();
+
+    try {
+      // Filter projects that have the required data for resolution
+      const validProjects = projects.filter(
+        p => p.currentStatus && p.projectType?.id && p.projectType?.serviceId
+      );
+
+      if (validProjects.length === 0) {
+        return result;
+      }
+
+      // Extract unique project type IDs and get all relevant kanban stages in one query
+      const uniqueProjectTypeIds = [...new Set(validProjects.map(p => p.projectType.id))];
+      const allStages = await db.query.kanbanStages.findMany({
+        where: inArray(kanbanStages.projectTypeId, uniqueProjectTypeIds),
+      });
+
+      // Build a map of projectTypeId:stageName -> stage
+      const stageMap = new Map<string, typeof allStages[0]>();
+      for (const stage of allStages) {
+        stageMap.set(`${stage.projectTypeId}:${stage.name}`, stage);
+      }
+
+      // Build unique client+service combinations and fetch all client services in one query
+      const clientServiceKeys = [...new Set(validProjects.map(p => `${p.clientId}:${p.projectType.serviceId}`))];
+      const clientServiceConditions = clientServiceKeys.map(key => {
+        const [clientId, serviceId] = key.split(':');
+        return and(eq(clientServices.clientId, clientId), eq(clientServices.serviceId, serviceId));
+      });
+
+      let allClientServices: typeof clientServices.$inferSelect[] = [];
+      if (clientServiceConditions.length > 0) {
+        allClientServices = await db.query.clientServices.findMany({
+          where: or(...clientServiceConditions),
+        });
+      }
+
+      // Build a map of clientId:serviceId -> clientService
+      const clientServiceMap = new Map<string, typeof allClientServices[0]>();
+      for (const cs of allClientServices) {
+        clientServiceMap.set(`${cs.clientId}:${cs.serviceId}`, cs);
+      }
+
+      // Collect all unique client service IDs that we need role assignments for
+      const clientServiceIds = allClientServices.map(cs => cs.id);
+
+      // Fetch all role assignments for these client services in one query
+      let allRoleAssignments: Array<{
+        clientServiceId: string;
+        workRoleId: string;
+        user: User | null;
+      }> = [];
+
+      if (clientServiceIds.length > 0) {
+        const assignments = await db.query.clientServiceRoleAssignments.findMany({
+          where: and(
+            inArray(clientServiceRoleAssignments.clientServiceId, clientServiceIds),
+            eq(clientServiceRoleAssignments.isActive, true)
+          ),
+          with: {
+            user: true,
+          },
+        });
+        allRoleAssignments = assignments.map(a => ({
+          clientServiceId: a.clientServiceId,
+          workRoleId: a.workRoleId,
+          user: a.user as User | null,
+        }));
+      }
+
+      // Build a map of clientServiceId:workRoleId -> user
+      const roleAssignmentMap = new Map<string, User | null>();
+      for (const ra of allRoleAssignments) {
+        roleAssignmentMap.set(`${ra.clientServiceId}:${ra.workRoleId}`, ra.user);
+      }
+
+      // Resolve for each project using the cached data
+      for (const project of validProjects) {
+        // Find the stage
+        const stage = stageMap.get(`${project.projectType.id}:${project.currentStatus}`);
+        if (!stage || !stage.assignedWorkRoleId) {
+          result.set(project.id, undefined);
+          continue;
+        }
+
+        // Find the client service
+        const clientService = clientServiceMap.get(`${project.clientId}:${project.projectType.serviceId}`);
+        if (!clientService) {
+          result.set(project.id, undefined);
+          continue;
+        }
+
+        // Find the role assignment
+        const user = roleAssignmentMap.get(`${clientService.id}:${stage.assignedWorkRoleId}`);
+        result.set(project.id, user || undefined);
+      }
+
+      return result;
+    } catch (error) {
+      console.error('[Storage] Error in batch resolve stage role assignees:', error);
+      return result;
+    }
+  }
 }

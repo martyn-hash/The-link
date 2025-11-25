@@ -49,6 +49,7 @@ export class ProjectStorage extends BaseStorage {
     resolveProjectAssignments?: (clientId: string, projectTypeId: string) => Promise<any>;
     resolveServiceOwner?: (clientId: string, projectTypeId: string) => Promise<any>;
     resolveStageRoleAssignee?: (project: any) => Promise<User | undefined>;
+    resolveStageRoleAssigneesBatch?: (projects: any[]) => Promise<Map<string, User | undefined>>;
     validateStageReasonMapping?: (stageId: string, reasonId: string) => Promise<any>;
     validateRequiredFields?: (reasonId: string, fieldResponses: any[]) => Promise<any>;
     getWorkRoleById?: (workRoleId: string) => Promise<any>;
@@ -515,23 +516,26 @@ export class ProjectStorage extends BaseStorage {
       },
     });
     
-    // Convert null relations to undefined and populate stage role assignee
-    const projectsWithAssignees = await Promise.all(results.map(async (project) => {
-      const stageRoleAssignee = this.helpers.resolveStageRoleAssignee
-        ? await this.helpers.resolveStageRoleAssignee(project)
-        : undefined;
+    // OPTIMIZED: Use batch lookup for stage role assignees (Issue #3 fix)
+    // This reduces N+1 queries (3 per project) to just 3 batch queries total
+    const stageRoleAssigneesMap = this.helpers.resolveStageRoleAssigneesBatch
+      ? await this.helpers.resolveStageRoleAssigneesBatch(results)
+      : new Map<string, User | undefined>();
+
+    // Convert null relations to undefined and populate stage role assignee from batch result
+    const projectsWithAssignees = results.map((project) => {
       return {
         ...project,
         currentAssignee: project.currentAssignee || undefined,
         projectOwner: project.projectOwner || undefined,
-        stageRoleAssignee,
+        stageRoleAssignee: stageRoleAssigneesMap.get(project.id),
         chronology: project.chronology.map(c => ({
           ...c,
           assignee: c.assignee || undefined,
           changedBy: c.changedBy || undefined,
         })),
       };
-    }));
+    });
     
     return projectsWithAssignees;
   }
@@ -716,23 +720,25 @@ export class ProjectStorage extends BaseStorage {
       },
     });
     
-    // Convert null relations to undefined and populate stage role assignee
-    const projectsWithAssignees = await Promise.all(results.map(async (project) => {
-      const stageRoleAssignee = this.helpers.resolveStageRoleAssignee
-        ? await this.helpers.resolveStageRoleAssignee(project)
-        : undefined;
+    // OPTIMIZED: Use batch lookup for stage role assignees (Issue #3 fix)
+    const stageRoleAssigneesMap = this.helpers.resolveStageRoleAssigneesBatch
+      ? await this.helpers.resolveStageRoleAssigneesBatch(results)
+      : new Map<string, User | undefined>();
+
+    // Convert null relations to undefined and populate stage role assignee from batch result
+    const projectsWithAssignees = results.map((project) => {
       return {
         ...project,
         currentAssignee: project.currentAssignee || undefined,
         projectOwner: project.projectOwner || undefined,
-        stageRoleAssignee,
+        stageRoleAssignee: stageRoleAssigneesMap.get(project.id),
         chronology: project.chronology.map(c => ({
           ...c,
           assignee: c.assignee || undefined,
           changedBy: c.changedBy || undefined,
         })),
       };
-    }));
+    });
     
     return projectsWithAssignees;
   }
@@ -881,23 +887,25 @@ export class ProjectStorage extends BaseStorage {
       },
     });
     
-    // Convert null relations to undefined and populate stage role assignee
-    const projectsWithAssignees = await Promise.all(results.map(async (project) => {
-      const stageRoleAssignee = this.helpers.resolveStageRoleAssignee
-        ? await this.helpers.resolveStageRoleAssignee(project)
-        : undefined;
+    // OPTIMIZED: Use batch lookup for stage role assignees (Issue #3 fix)
+    const stageRoleAssigneesMap = this.helpers.resolveStageRoleAssigneesBatch
+      ? await this.helpers.resolveStageRoleAssigneesBatch(results)
+      : new Map<string, User | undefined>();
+
+    // Convert null relations to undefined and populate stage role assignee from batch result
+    const projectsWithAssignees = results.map((project) => {
       return {
         ...project,
         currentAssignee: project.currentAssignee || undefined,
         projectOwner: project.projectOwner || undefined,
-        stageRoleAssignee,
+        stageRoleAssignee: stageRoleAssigneesMap.get(project.id),
         chronology: project.chronology.map(c => ({
           ...c,
           assignee: c.assignee || undefined,
           changedBy: c.changedBy || undefined,
         })),
       };
-    }));
+    });
     
     return projectsWithAssignees;
   }
@@ -947,23 +955,25 @@ export class ProjectStorage extends BaseStorage {
       orderBy: [desc(projects.createdAt)],
     });
 
-    // Convert null relations to undefined and populate stage role assignee
-    const projectsWithAssignees = await Promise.all(results.map(async (project) => {
-      const stageRoleAssignee = this.helpers.resolveStageRoleAssignee
-        ? await this.helpers.resolveStageRoleAssignee(project)
-        : undefined;
+    // OPTIMIZED: Use batch lookup for stage role assignees (Issue #3 fix)
+    const stageRoleAssigneesMap = this.helpers.resolveStageRoleAssigneesBatch
+      ? await this.helpers.resolveStageRoleAssigneesBatch(results)
+      : new Map<string, User | undefined>();
+
+    // Convert null relations to undefined and populate stage role assignee from batch result
+    const projectsWithAssignees = results.map((project) => {
       return {
         ...project,
         currentAssignee: project.currentAssignee || undefined,
         projectOwner: project.projectOwner || undefined,
-        stageRoleAssignee,
+        stageRoleAssignee: stageRoleAssigneesMap.get(project.id),
         chronology: project.chronology.map(c => ({
           ...c,
           assignee: c.assignee || undefined,
           changedBy: c.changedBy || undefined,
         })),
       };
-    }));
+    });
 
     return projectsWithAssignees;
   }

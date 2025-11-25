@@ -303,6 +303,7 @@ export class DatabaseStorage implements IStorage {
       resolveServiceOwner: (clientId: string, projectTypeId: string) => 
         this.serviceAssignmentStorage.resolveServiceOwner(clientId, projectTypeId),
       resolveStageRoleAssignee: (project: any) => this.serviceAssignmentStorage.resolveStageRoleAssignee(project),
+      resolveStageRoleAssigneesBatch: (projects: any[]) => this.serviceAssignmentStorage.resolveStageRoleAssigneesBatch(projects),
       getWorkRoleById: (workRoleId: string) => this.workRoleStorage.getWorkRoleById(workRoleId),
       resolveRoleAssigneeForClient: (clientId: string, projectTypeId: string, roleName: string) => 
         this.serviceAssignmentStorage.resolveRoleAssigneeForClient(clientId, projectTypeId, roleName),
