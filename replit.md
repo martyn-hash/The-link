@@ -34,6 +34,15 @@ The client-detail.tsx page (originally 9,347 lines) has been refactored into a m
 - **Location:** `client/src/pages/client-detail/` with subdirectories: `components/tabs/`, `components/services/`, `components/modals/`, `dialogs/`, `forms/`, `hooks/`, `utils/`
 - **Documentation:** See `client-detail_refactor.md` and stage-specific `.md` files for detailed architecture
 
+**Client Routes Refactoring (Completed November 25, 2025):**
+The monolithic server/routes/clients.ts (2,348 lines) has been refactored into a modular structure:
+- **Main file reduced** from 2,348 lines to 295 lines (core CRUD only)
+- **7 domain modules** in `server/routes/clients/` directory
+- **Module breakdown:** companiesHouse.ts (698 lines), services.ts (837 lines), documents.ts (242 lines), people.ts (151 lines), portalUsers.ts (117 lines), riskAssessments.ts (62 lines), index.ts (31 lines)
+- **Pattern:** Each module exports a `register*Routes` function with consistent middleware parameters
+- **Backward compatible** - main registerClientRoutes function delegates to all modules
+- **Documentation:** See `clients_refactor.md` for detailed plan and results
+
 **Schema Layer Refactoring (All 12 Stages Complete, November 25, 2025):**
 The monolithic shared/schema.ts (3,920 lines) has been refactored into domain-focused modules:
 - **10 domain modules** in `shared/schema/` directory: Users, Clients, Projects, Services, Communications, Notifications, Documents, Email, Tasks, Requests
