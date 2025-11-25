@@ -4,9 +4,12 @@ import { sql } from "drizzle-orm";
 import { users } from "../users/tables";
 import { clients } from "../clients/tables";
 import { questionTypeEnum, riskLevelEnum, riskResponseEnum } from "../enums";
-import { projectTypeNotifications, notificationTypeEnum } from "../../schema";
+import { projectTypeNotifications, notificationTypeEnum, clientRequestReminders } from "../notifications/tables";
 
 export { questionTypeEnum, riskLevelEnum, riskResponseEnum };
+
+// Re-export from notifications domain for backward compatibility
+export { clientRequestReminders };
 
 export const clientRequestTemplateCategories = pgTable("client_request_template_categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -105,32 +108,6 @@ export const clientCustomRequestQuestions = pgTable("client_custom_request_quest
 }, (table) => [
   index("idx_client_custom_request_questions_section_id").on(table.sectionId),
   index("idx_client_custom_request_questions_order").on(table.sectionId, table.order),
-]);
-
-export const clientRequestReminders = pgTable("client_request_reminders", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  projectTypeNotificationId: varchar("project_type_notification_id").notNull().references(() => projectTypeNotifications.id, { onDelete: "cascade" }),
-  notificationType: notificationTypeEnum("notification_type").notNull(),
-  daysAfterCreation: integer("days_after_creation").notNull(),
-  emailTitle: varchar("email_title"),
-  emailBody: text("email_body"),
-  smsContent: varchar("sms_content", { length: 160 }),
-  pushTitle: varchar("push_title", { length: 50 }),
-  pushBody: varchar("push_body", { length: 120 }),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => [
-  index("idx_client_request_reminders_notification_id").on(table.projectTypeNotificationId),
-  check("check_email_reminder_content", sql`
-    (notification_type != 'email' OR (email_title IS NOT NULL AND email_body IS NOT NULL))
-  `),
-  check("check_sms_reminder_content", sql`
-    (notification_type != 'sms' OR sms_content IS NOT NULL)
-  `),
-  check("check_push_reminder_content", sql`
-    (notification_type != 'push' OR (push_title IS NOT NULL AND push_body IS NOT NULL))
-  `),
 ]);
 
 export const riskAssessments = pgTable("risk_assessments", {

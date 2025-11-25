@@ -4,13 +4,14 @@ import {
   mailboxMessageMap,
   emailThreads,
   unmatchedEmails,
-  clientEmailAliases,
-  clientDomainAllowlist,
   emailAttachments,
   emailMessageAttachments,
   graphWebhookSubscriptions,
   graphSyncState,
 } from "./tables";
+
+// Re-export client email schemas from clients domain for backward compatibility
+export { insertClientEmailAliasSchema, insertClientDomainAllowlistSchema } from "../clients/schemas";
 
 export const insertEmailMessageSchema = createInsertSchema(emailMessages).omit({
   processedAt: true,
@@ -29,16 +30,6 @@ export const insertEmailThreadSchema = createInsertSchema(emailThreads).omit({
 });
 
 export const insertUnmatchedEmailSchema = createInsertSchema(unmatchedEmails).omit({
-  createdAt: true,
-});
-
-export const insertClientEmailAliasSchema = createInsertSchema(clientEmailAliases).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertClientDomainAllowlistSchema = createInsertSchema(clientDomainAllowlist).omit({
-  id: true,
   createdAt: true,
 });
 

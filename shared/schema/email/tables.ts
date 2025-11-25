@@ -2,7 +2,7 @@ import { pgTable, pgEnum, varchar, text, boolean, integer, timestamp, index, uni
 import { sql } from "drizzle-orm";
 
 import { users } from "../users/tables";
-import { clients } from "../clients/tables";
+import { clients, clientEmailAliases, clientDomainAllowlist } from "../clients/tables";
 
 export const emailDirectionEnum = pgEnum("email_direction", ["inbound", "outbound", "internal", "external"]);
 
@@ -108,33 +108,8 @@ export const unmatchedEmails = pgTable("unmatched_emails", {
   index("idx_unmatched_emails_retry_count").on(table.retryCount),
 ]);
 
-export const clientEmailAliases = pgTable("client_email_aliases", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
-  emailLowercase: varchar("email_lowercase").notNull(),
-  isPrimary: boolean("is_primary").default(false),
-  source: varchar("source").default('manual'),
-  verifiedAt: timestamp("verified_at"),
-  createdAt: timestamp("created_at").defaultNow(),
-}, (table) => [
-  unique("unique_client_email").on(table.emailLowercase),
-  index("idx_client_email_aliases_client_id").on(table.clientId),
-  index("idx_client_email_aliases_email").on(table.emailLowercase),
-]);
-
-export const clientDomainAllowlist = pgTable("client_domain_allowlist", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
-  domain: varchar("domain").notNull(),
-  matchConfidence: emailMatchConfidenceEnum("match_confidence").default('medium'),
-  notes: text("notes"),
-  createdBy: varchar("created_by").references(() => users.id),
-  createdAt: timestamp("created_at").defaultNow(),
-}, (table) => [
-  unique("unique_client_domain").on(table.clientId, table.domain),
-  index("idx_client_domain_allowlist_client_id").on(table.clientId),
-  index("idx_client_domain_allowlist_domain").on(table.domain),
-]);
+// Re-export client email tables from clients domain for backward compatibility
+export { clientEmailAliases, clientDomainAllowlist };
 
 export const emailAttachments = pgTable("email_attachments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

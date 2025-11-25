@@ -47,13 +47,7 @@ export const inactiveReasonEnum = pgEnum("inactive_reason", ["created_in_error",
 
 export const communicationMethodEnum = pgEnum("communication_method", ["phone", "email", "video_call", "in_person", "text_message"]);
 
-export const communicationTypeEnum = pgEnum("communication_type", ["incoming", "outgoing"]);
-
 export const communicationSourceEnum = pgEnum("communication_source", ["staff_portal", "client_portal", "system"]);
-
-export const emailDirectionEnum = pgEnum("email_direction", ["inbound", "outbound"]);
-
-export const emailMatchConfidenceEnum = pgEnum("email_match_confidence", ["high", "medium", "low"]);
 
 export const riskLevelEnum = pgEnum("risk_level", ["low", "medium", "high"]);
 

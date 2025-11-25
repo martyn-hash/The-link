@@ -4,8 +4,6 @@ import {
   mailboxMessageMap,
   emailThreads,
   unmatchedEmails,
-  clientEmailAliases,
-  clientDomainAllowlist,
   emailAttachments,
   emailMessageAttachments,
   graphWebhookSubscriptions,
@@ -16,13 +14,19 @@ import {
   insertMailboxMessageMapSchema,
   insertEmailThreadSchema,
   insertUnmatchedEmailSchema,
-  insertClientEmailAliasSchema,
-  insertClientDomainAllowlistSchema,
   insertEmailAttachmentSchema,
   insertEmailMessageAttachmentSchema,
   insertGraphWebhookSubscriptionSchema,
   insertGraphSyncStateSchema,
 } from "./schemas";
+
+// Re-export client email types from clients domain for backward compatibility
+export { 
+  ClientEmailAlias, 
+  InsertClientEmailAlias, 
+  ClientDomainAllowlist, 
+  InsertClientDomainAllowlist 
+} from "../clients/types";
 
 export type EmailMessage = typeof emailMessages.$inferSelect;
 export type InsertEmailMessage = z.infer<typeof insertEmailMessageSchema>;
@@ -35,12 +39,6 @@ export type InsertEmailThread = z.infer<typeof insertEmailThreadSchema>;
 
 export type UnmatchedEmail = typeof unmatchedEmails.$inferSelect;
 export type InsertUnmatchedEmail = z.infer<typeof insertUnmatchedEmailSchema>;
-
-export type ClientEmailAlias = typeof clientEmailAliases.$inferSelect;
-export type InsertClientEmailAlias = z.infer<typeof insertClientEmailAliasSchema>;
-
-export type ClientDomainAllowlist = typeof clientDomainAllowlist.$inferSelect;
-export type InsertClientDomainAllowlist = z.infer<typeof insertClientDomainAllowlistSchema>;
 
 export type EmailAttachment = typeof emailAttachments.$inferSelect;
 export type InsertEmailAttachment = z.infer<typeof insertEmailAttachmentSchema>;

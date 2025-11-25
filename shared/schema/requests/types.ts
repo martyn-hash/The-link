@@ -7,7 +7,6 @@ import {
   clientCustomRequests,
   clientCustomRequestSections,
   clientCustomRequestQuestions,
-  clientRequestReminders,
   riskAssessments,
   riskAssessmentResponses,
 } from "./tables";
@@ -26,12 +25,17 @@ import {
   updateClientCustomRequestSectionSchema,
   insertClientCustomRequestQuestionSchema,
   updateClientCustomRequestQuestionSchema,
-  insertClientRequestReminderSchema,
-  updateClientRequestReminderSchema,
   insertRiskAssessmentSchema,
   updateRiskAssessmentSchema,
   insertRiskAssessmentResponseSchema,
 } from "./schemas";
+
+// Re-export client request reminder types from notifications domain for backward compatibility
+export { 
+  ClientRequestReminder, 
+  InsertClientRequestReminder, 
+  UpdateClientRequestReminder 
+} from "../notifications/types";
 
 export type ClientRequestTemplateCategory = typeof clientRequestTemplateCategories.$inferSelect;
 export type InsertClientRequestTemplateCategory = z.infer<typeof insertClientRequestTemplateCategorySchema>;
@@ -60,10 +64,6 @@ export type UpdateClientCustomRequestSection = z.infer<typeof updateClientCustom
 export type ClientCustomRequestQuestion = typeof clientCustomRequestQuestions.$inferSelect;
 export type InsertClientCustomRequestQuestion = z.infer<typeof insertClientCustomRequestQuestionSchema>;
 export type UpdateClientCustomRequestQuestion = z.infer<typeof updateClientCustomRequestQuestionSchema>;
-
-export type ClientRequestReminder = typeof clientRequestReminders.$inferSelect;
-export type InsertClientRequestReminder = z.infer<typeof insertClientRequestReminderSchema>;
-export type UpdateClientRequestReminder = z.infer<typeof updateClientRequestReminderSchema>;
 
 export type RiskAssessment = typeof riskAssessments.$inferSelect;
 export type InsertRiskAssessment = z.infer<typeof insertRiskAssessmentSchema>;

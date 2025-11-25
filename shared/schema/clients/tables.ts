@@ -1,7 +1,8 @@
 import { pgTable, varchar, text, timestamp, boolean, index, unique, jsonb, integer } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from '../users/tables';
-import { nationalityEnum, emailMatchConfidenceEnum } from '../enums';
+import { nationalityEnum } from '../enums';
+import { emailMatchConfidenceEnum } from '../email/tables';
 
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

@@ -8,10 +8,15 @@ import {
   clientCustomRequests,
   clientCustomRequestSections,
   clientCustomRequestQuestions,
-  clientRequestReminders,
   riskAssessments,
   riskAssessmentResponses,
 } from "./tables";
+
+// Re-export client request reminder schemas from notifications domain for backward compatibility
+export { 
+  insertClientRequestReminderSchema, 
+  updateClientRequestReminderSchema 
+} from "../notifications/schemas";
 
 export const insertClientRequestTemplateCategorySchema = createInsertSchema(clientRequestTemplateCategories).omit({
   id: true,
@@ -68,14 +73,6 @@ export const insertClientCustomRequestQuestionSchema = createInsertSchema(client
 });
 
 export const updateClientCustomRequestQuestionSchema = insertClientCustomRequestQuestionSchema.partial();
-
-export const insertClientRequestReminderSchema = createInsertSchema(clientRequestReminders).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export const updateClientRequestReminderSchema = insertClientRequestReminderSchema.partial();
 
 export const insertRiskAssessmentSchema = createInsertSchema(riskAssessments).omit({
   id: true,
