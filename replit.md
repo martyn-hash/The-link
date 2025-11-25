@@ -25,11 +25,11 @@ The storage layer has been fully refactored from a monolithic 13,630-line file i
 - **Backward-compatible facade** at `server/storage/index.ts` maintains the same API
 - **Complete decoupling** from the old monolithic storage.ts which has been deleted
 
-**Client Detail Page Refactoring (Stages 1-8 Complete, November 25, 2025):**
+**Client Detail Page Refactoring (Stages 1-9 Complete, November 25, 2025):**
 The client-detail.tsx page (originally 9,347 lines) has been refactored into a modular component architecture:
-- **Current Status:** 983 lines (89.5% reduction achieved)
-- **Completed Stages:** 8 of 10 (Utilities, Directory Structure, Projects, People, Services, Communications, Tab Components, Dialogs)
-- **Stage 8 Extractions:** NewClientRequestDialog extracted to `dialogs/`, duplicate inline components removed
+- **Current Status:** 407 lines (95.6% reduction achieved)
+- **Completed Stages:** 9 of 10 (Utilities, Directory Structure, Projects, People, Services, Communications, Tab Components, Dialogs, Main Page Container)
+- **Stage 9 Extractions:** Custom hooks (useClientData, useClientMutations, useCompanyConnections), ClientHeader, ClientTabNavigation components
 - **Key Patterns:** Prop drilling over Context for explicit dependencies, mutations in parent, grouped props, discriminated union types
 - **Location:** `client/src/pages/client-detail/` with subdirectories: `components/tabs/`, `components/services/`, `dialogs/`, `forms/`, `hooks/`, `utils/`
 - **Documentation:** See `client-detail_refactor.md` and stage-specific `.md` files for detailed architecture
