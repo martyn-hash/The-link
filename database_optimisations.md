@@ -179,11 +179,80 @@ ON internal_tasks (assigned_to, status, is_archived) WHERE is_archived = false;
 
 ---
 
-## 3. Heavy Queries Requiring Isolation
+## 3. `/projects` Page Query Analysis
+
+When users navigate to the `/projects` page, the `GET /api/projects` endpoint calls `storage.getAllProjects(filters)`.
+
+### Current Query Pattern
+
+```typescript
+db.query.projects.findMany({
+  where: whereClause,  // filters: month, archived, inactive, serviceId, assigneeId, etc.
+  with: {
+    client: true,              // JOIN via client_id ✅ indexed
+    bookkeeper: true,          // JOIN via bookkeeper_id ❌ MISSING INDEX
+    clientManager: true,       // JOIN via client_manager_id ❌ MISSING INDEX
+    currentAssignee: true,     // JOIN via current_assignee_id ✅ indexed
+    projectOwner: true,        // JOIN via project_owner_id ✅ indexed
+    projectType: {
+      with: { service: true }  // JOIN via project_type_id ✅ indexed
+    },
+    chronology: {              // JOIN via project_id ❌ MISSING INDEX (CRITICAL)
+      orderBy: desc(timestamp),
+      with: {
+        assignee: true,
+        changedBy: true,
+      }
+    }
+  }
+})
+```
+
+### Performance Issues
+
+| Issue | Impact | Solution |
+|-------|--------|----------|
+| Missing `project_chronology.project_id` index | Sequential scan on every project load | Add `idx_project_chronology_project_id` |
+| Missing composite `(project_id, timestamp DESC)` | Slow ORDER BY for chronology | Add `idx_project_chronology_project_timestamp` |
+| Missing `projects.bookkeeper_id` index | Slow JOIN for bookkeeper data | Add `idx_projects_bookkeeper_id` |
+| Missing `projects.client_manager_id` index | Slow JOIN for client manager data | Add `idx_projects_client_manager_id` |
+| N+1 for `resolveStageRoleAssignee()` | 1 extra query per project | Batch lookup or pre-fetch |
+| Full chronology loaded for list view | Unnecessary data transfer | Only load in detail view |
+
+### Recommended Indexes for `/projects` Page
+
+```sql
+-- CRITICAL: These directly impact /projects page performance
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_project_chronology_project_id 
+ON project_chronology (project_id);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_project_chronology_project_timestamp 
+ON project_chronology (project_id, timestamp DESC);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_projects_bookkeeper_id 
+ON projects (bookkeeper_id);
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_projects_client_manager_id 
+ON projects (client_manager_id);
+```
+
+### Query Optimization Opportunities
+
+1. **Remove chronology from list view**: The chronology is already loaded but only shows the latest entry in the UI. Consider:
+   - Only loading chronology in the detail view (`getProject()`)
+   - Or using a subquery to fetch just the most recent entry
+
+2. **Batch stageRoleAssignee lookups**: Instead of N+1 queries, pre-fetch all role assignments for visible project types
+
+3. **Add pagination**: For large datasets, implement cursor-based pagination
+
+---
+
+## 4. Heavy Queries Requiring Isolation
 
 The following queries are complex and should be moved to dedicated repository modules:
 
-### 3.1 Project Listing Query (`projectStorage.ts`)
+### 4.1 Project Listing Query (`projectStorage.ts`)
 
 **Location:** `server/storage/projects/projectStorage.ts` - `getAllProjects()`
 
@@ -202,7 +271,7 @@ The following queries are complex and should be moved to dedicated repository mo
 2. Consider pagination for large result sets
 3. Use projection to select only needed columns
 
-### 3.2 Project Progress Metrics (`projectChronologyStorage.ts`)
+### 4.2 Project Progress Metrics (`projectChronologyStorage.ts`)
 
 **Location:** `server/storage/projects/projectChronologyStorage.ts` - `getProjectProgressMetrics()`
 
@@ -216,7 +285,7 @@ The following queries are complex and should be moved to dedicated repository mo
 - Consider caching results in `dashboardCache` table
 - Add index: `CREATE INDEX idx_reason_field_responses_field_type ON reason_field_responses (field_type) WHERE field_type = 'number'`
 
-### 3.3 Dashboard Statistics
+### 4.3 Dashboard Statistics
 
 **Location:** `server/dashboard-cache-service.ts`
 
@@ -224,9 +293,9 @@ The following queries are complex and should be moved to dedicated repository mo
 
 ---
 
-## 4. ORM Over-Fetching Patterns
+## 5. ORM Over-Fetching Patterns
 
-### 4.1 Avoid Deep Nesting in List Views
+### 5.1 Avoid Deep Nesting in List Views
 
 **Anti-pattern identified in `getAllProjects()`:**
 ```typescript
@@ -259,7 +328,7 @@ with: {
 // Load chronology only in detail view
 ```
 
-### 4.2 Selective Column Loading
+### 5.2 Selective Column Loading
 
 For high-traffic endpoints, specify exactly which columns are needed:
 
@@ -277,7 +346,7 @@ const clients = await db
   .from(clients);
 ```
 
-### 4.3 N+1 Query Detection
+### 5.3 N+1 Query Detection
 
 Current pattern in `getAllProjects()` that causes N+1:
 ```typescript
@@ -291,7 +360,7 @@ const projectsWithAssignees = await Promise.all(results.map(async (project) => {
 
 ---
 
-## 5. Database Health Check Endpoint
+## 6. Database Health Check Endpoint
 
 ### Recommended Implementation
 
@@ -378,7 +447,7 @@ export async function registerHealthRoutes(app: Express) {
 
 ---
 
-## 6. Implementation Priority
+## 7. Implementation Priority
 
 ### Phase 1: Critical (Immediate)
 1. Add index on `project_chronology.project_id` 
@@ -403,7 +472,7 @@ export async function registerHealthRoutes(app: Express) {
 
 ---
 
-## 7. Monitoring Queries
+## 8. Monitoring Queries
 
 ### Check Index Usage
 ```sql
@@ -448,7 +517,7 @@ LIMIT 10;
 
 ---
 
-## 8. Summary
+## 9. Summary
 
 | Category | Issues Found | Priority |
 |----------|-------------|----------|
