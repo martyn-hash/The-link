@@ -142,7 +142,7 @@ export function NotificationsTab({
                   <NotificationRow
                     key={notification.id}
                     notification={notification}
-                    projectTypeId={projectTypeId}
+                    projectTypeId={projectTypeId || ''}
                     stages={stages || []}
                     clientRequestTemplates={clientRequestTemplates || []}
                     onDelete={(id) => deleteNotificationMutation.mutate(id)}
@@ -249,7 +249,7 @@ export function NotificationsTab({
                   <NotificationRow
                     key={notification.id}
                     notification={notification}
-                    projectTypeId={projectTypeId}
+                    projectTypeId={projectTypeId || ''}
                     stages={stages || []}
                     clientRequestTemplates={clientRequestTemplates || []}
                     onDelete={(id) => deleteNotificationMutation.mutate(id)}

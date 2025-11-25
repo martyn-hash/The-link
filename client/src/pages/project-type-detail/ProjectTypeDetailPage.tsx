@@ -5,15 +5,13 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowLeft, Settings, Layers, List, ShieldCheck, Bell } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
+import { Settings, Layers, List, ShieldCheck, Bell } from "lucide-react";
 
 import type { EditingStage, EditingReason, EditingStageApproval, EditingStageApprovalField } from "./utils/types";
+import { SYSTEM_ROLE_OPTIONS } from "./utils/constants";
+import { PageHeader } from "./components/PageHeader";
 import { 
   SettingsTab, 
   KanbanStagesTab, 
@@ -212,11 +210,8 @@ export default function ProjectTypeDetail() {
   } = useNotificationMutations(
     projectTypeId,
     {
-      onNotificationCreated: () => { setIsAddingProjectNotification(false); setIsAddingStageNotification(false); setEditingNotification(null); },
-      onNotificationUpdated: () => { setEditingNotification(null); },
+      onNotificationCreated: () => { setIsAddingProjectNotification(false); setIsAddingStageNotification(false); },
       onRescheduleComplete: () => { setShowRescheduleDialog(false); },
-      onReminderCreated: () => { setAddingReminderForNotification(null); },
-      onReminderUpdated: () => { setEditingReminder(null); },
     }
   );
 
@@ -408,99 +403,13 @@ export default function ProjectTypeDetail() {
     <div className="min-h-screen bg-background flex flex-col">
       <TopNavigation user={user} />
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header with breadcrumbs */}
-        <div className="border-b border-border bg-card">
-          <div className="page-container py-6 md:py-8">
-            {/* Breadcrumb */}
-            <Breadcrumb className="mb-4">
-              <BreadcrumbList>
-                <BreadcrumbItem>
-                  <BreadcrumbLink asChild>
-                    <Link href="/settings" data-testid="breadcrumb-settings">
-                      Settings
-                    </Link>
-                  </BreadcrumbLink>
-                </BreadcrumbItem>
-                <BreadcrumbSeparator />
-                <BreadcrumbItem>
-                  <BreadcrumbPage data-testid="breadcrumb-project-type">
-                    {projectType.name}
-                  </BreadcrumbPage>
-                </BreadcrumbItem>
-              </BreadcrumbList>
-            </Breadcrumb>
-
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center space-x-4">
-                  <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground flex items-center" data-testid="text-project-type-name">
-                    <Settings className="w-6 h-6 mr-3 text-primary" />
-                    {projectType.name}
-                  </h1>
-                  <div className="flex items-center space-x-6">
-                    {/* Active/Inactive Toggle */}
-                    <div className="flex items-center space-x-2">
-                      <Switch
-                        id="active-toggle"
-                        checked={projectType.active !== false}
-                        onCheckedChange={handleActiveToggle}
-                        disabled={updateProjectTypeActiveMutation.isPending}
-                        data-testid="switch-active-project-type"
-                      />
-                      <Label 
-                        htmlFor="active-toggle" 
-                        className="text-sm font-medium cursor-pointer"
-                        data-testid="label-active-project-type"
-                      >
-                        {projectType.active !== false ? "Active" : "Inactive"}
-                      </Label>
-                    </div>
-                    
-                    {/* Single Project Per Client Toggle */}
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="flex items-center space-x-2" data-testid="tooltip-trigger-single-project">
-                            <Switch
-                              id="single-project-toggle"
-                              checked={projectType.singleProjectPerClient === true}
-                              onCheckedChange={handleSingleProjectToggle}
-                              disabled={updateProjectTypeSingleProjectMutation.isPending}
-                              data-testid="switch-single-project-per-client"
-                            />
-                            <Label 
-                              htmlFor="single-project-toggle" 
-                              className="text-sm font-medium cursor-pointer"
-                              data-testid="label-single-project-per-client"
-                            >
-                              Single Project Per Client
-                            </Label>
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent data-testid="tooltip-content-single-project">
-                          <p className="max-w-xs">
-                            When enabled, scheduling a new project will automatically archive any active projects of this type for the same client as unsuccessfully completed.
-                          </p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                </div>
-                {projectType.description && (
-                  <p className="text-muted-foreground mt-1" data-testid="text-project-type-description">
-                    {projectType.description}
-                  </p>
-                )}
-              </div>
-              <Link href="/settings">
-                <Button variant="outline" data-testid="button-back-to-project-types">
-                  <ArrowLeft className="w-4 h-4 mr-2" />
-                  Back to Project Types
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
+        <PageHeader
+          projectType={projectType}
+          isActiveTogglePending={updateProjectTypeActiveMutation.isPending}
+          isSingleProjectTogglePending={updateProjectTypeSingleProjectMutation.isPending}
+          onActiveToggle={handleActiveToggle}
+          onSingleProjectToggle={handleSingleProjectToggle}
+        />
 
         {/* Content with tabs */}
         <div className="flex-1 overflow-auto">
@@ -568,7 +477,7 @@ export default function ProjectTypeDetail() {
               isAddingCustomField={isAddingCustomField}
               setIsAddingCustomField={setIsAddingCustomField}
               reasonMutations={{ createReasonMutation, updateReasonMutation, deleteReasonMutation }}
-              customFieldMutations={{ createCustomFieldMutation, deleteCustomFieldMutation }}
+              customFieldMutations={{ createCustomFieldMutation, updateCustomFieldMutation, deleteCustomFieldMutation }}
               onReasonSubmit={handleReasonSubmit}
             />
 
@@ -595,7 +504,7 @@ export default function ProjectTypeDetail() {
               notifications={notifications}
               stages={stages}
               clientRequestTemplates={clientRequestTemplates}
-              isAdmin={isAdmin}
+              isAdmin={isAdmin === true}
               isAddingProjectNotification={isAddingProjectNotification}
               setIsAddingProjectNotification={setIsAddingProjectNotification}
               isAddingStageNotification={isAddingStageNotification}
@@ -604,9 +513,13 @@ export default function ProjectTypeDetail() {
               setShowRescheduleDialog={setShowRescheduleDialog}
               notificationMutations={{ 
                 createNotificationMutation, 
+                updateNotificationMutation,
                 deleteNotificationMutation, 
+                rescheduleNotificationsMutation,
+                createReminderMutation,
+                updateReminderMutation,
+                deleteReminderMutation,
                 toggleNotificationsActiveMutation, 
-                rescheduleNotificationsMutation 
               }}
             />
 
