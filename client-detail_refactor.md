@@ -443,54 +443,76 @@ client/src/pages/client-detail/
 
 ### Stage 6: Extract Communications Components (Largest)
 **Estimated Effort:** 6-8 hours  
-**Risk Level:** High
+**Risk Level:** High  
+**Detailed Brief:** See `client/src/pages/client-detail/STAGE_6_COMMUNICATIONS_COMPONENTS.md`
 
-#### Tasks
-1. Create `components/communications/CommunicationFilters.tsx`
-   - Extract filter dropdown component
+#### Component Inventory
+| Component | Lines | Purpose |
+|-----------|-------|---------|
+| `CommunicationsTimeline` | ~1,235 | Main orchestrator with all state/queries |
+| `CallDialog` | ~85 | Phone call dialog with RingCentral |
+| **Total Code Block** | **~1,320** | Lines 117-1440 in current file |
 
-2. Create `components/communications/dialogs/AddCommunicationDialog.tsx`
-   - Extract add communication modal
+#### Inline Dialogs to Extract (6 total)
+| Dialog | Est. Lines | Key Features |
+|--------|------------|--------------|
+| `AddCommunicationDialog` | ~150 | Phone call/note form with person selection |
+| `SMSDialog` | ~120 | SMS with person mobile validation |
+| `EmailDialog` | ~160 | TiptapEditor, signature appending |
+| `ViewCommunicationDialog` | ~130 | Read-only detail view |
+| `CreateMessageDialog` | ~80 | Instant message thread creation |
+| `CallDialog` | ~100 | RingCentral phone integration |
 
-3. Create `components/communications/dialogs/SMSDialog.tsx`
-   - Extract SMS sending dialog
+#### Extraction Phases
+**Phase 6.1** (1 hr): Create foundation files (types.ts, helpers.ts, directory structure)
+**Phase 6.2** (2 hrs): Extract simple dialogs (CreateMessage, ViewCommunication, AddCommunication)
+**Phase 6.3** (2 hrs): Extract complex dialogs (SMS, Call, Email with TiptapEditor)
+**Phase 6.4** (1.5 hrs): Extract list components (Filters, List with mobile/desktop views)
+**Phase 6.5** (1.5 hrs): Refactor main component to orchestrator role
 
-4. Create `components/communications/dialogs/EmailDialog.tsx`
-   - Extract email sending dialog (with TiptapEditor)
+#### Key Data Flow
+```
+CommunicationsTimeline (Parent)
+├── Queries: communications, messageThreads, emailThreads, clientPeople
+├── State: 17 state variables (dialog visibility, selections, filters)
+│
+├── CommunicationFilters → Filter buttons with counts
+├── CommunicationList → Mobile cards + Desktop table
+└── 6 Dialog Components → Each receives clientId, isOpen, onClose, onSuccess
+```
 
-5. Create `components/communications/dialogs/CallDialog.tsx`
-   - Extract RingCentral call dialog
+#### External Dependencies
+- `TiptapEditor` - Rich text in EmailDialog
+- `RingCentralPhone` - Phone calls in CallDialog
+- `EmailThreadViewer` - View email threads
+- `CommunicationCard` - Mobile card view
 
-6. Create `components/communications/dialogs/MessageThreadDialog.tsx`
-   - Extract instant message thread creation
-
-7. Create `components/communications/CommunicationList.tsx`
-   - Extract table/card view logic
-
-8. Create `components/communications/CommunicationsTimeline.tsx`
-   - Compose all communication components
-   - Handle combined timeline (comms + threads + emails)
-
-9. Create `components/tabs/CommunicationsTab.tsx`
-   - Wrapper for communications timeline
+**Expected Reduction:** ~1,320 lines  
+**Target Post-Stage 6:** ~2,919 lines (68.8% total reduction)
 
 #### Success Criteria
-- [ ] Communications tab displays all types (calls, notes, SMS, email, threads)
-- [ ] Filter dropdown works correctly
-- [ ] Add Communication dialog works
-- [ ] Send SMS dialog works (with person selection)
-- [ ] Send Email dialog works (with rich text editor)
+- [ ] All 6 dialogs extracted to `components/communications/dialogs/`
+- [ ] Helpers (getIcon, getTypeColor, getTypeLabel) extracted
+- [ ] CommunicationFilters component extracted
+- [ ] CommunicationList with mobile/desktop views extracted
+- [ ] CommunicationsTimeline reduced to orchestrator (~400 lines)
+- [ ] Communications tab displays all types
+- [ ] Filter buttons work with correct counts
+- [ ] Add Communication (Note/Phone Call) works
+- [ ] Send SMS with person mobile validation works
+- [ ] Send Email with TiptapEditor works
+- [ ] Create Instant Message and redirect works
+- [ ] Make Call dialog with RingCentral works
 - [ ] View communication detail modal works
-- [ ] Email thread viewer integration works
+- [ ] Email thread viewer opens correctly
 
-#### Testing Required
-- View communications timeline
-- Filter by type
-- Add a note
-- Send SMS (verify person mobile validation)
-- Send email (verify rich text, signature appending)
-- View email thread
-- Click to call (RingCentral integration)
+#### Browser Tests (6 tests)
+1. **View Communications Tab** - Timeline loads, filters display
+2. **Add Communication** - Note/phone call creation
+3. **Send SMS** - Person selection, mobile validation
+4. **Send Email** - TiptapEditor, signature
+5. **Create Instant Message** - Thread creation, redirect
+6. **Make Call** - RingCentral dialog (if available)
 
 ---
 
