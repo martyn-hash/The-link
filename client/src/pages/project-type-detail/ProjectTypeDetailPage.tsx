@@ -57,107 +57,16 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-interface EditingStage {
-  id?: string;
-  name: string;
-  assignedRole?: string;
-  assignedWorkRoleId?: string;
-  assignedUserId?: string;
-  order: number;
-  color: string;
-  maxInstanceTime?: number;
-  maxTotalTime?: number;
-  stageApprovalId?: string;
-  canBeFinalStage?: boolean;
-}
-
-interface EditingReason {
-  id?: string;
-  reason: string;
-  description: string;
-  showCountInProject: boolean;
-  countLabel: string;
-  stageApprovalId?: string;
-}
-
-interface EditingStageApproval {
-  id?: string;
-  name: string;
-  description: string;
-}
-
-interface EditingStageApprovalField {
-  id?: string;
-  stageApprovalId: string;
-  fieldName: string;
-  fieldType: 'boolean' | 'number' | 'long_text' | 'multi_select';
-  isRequired: boolean;
-  order: number;
-  // For all field types
-  placeholder?: string;
-  // Boolean validation
-  expectedValueBoolean?: boolean;
-  // Number validation  
-  comparisonType?: 'equal_to' | 'less_than' | 'greater_than';
-  expectedValueNumber?: number;
-  // Multi-select options
-  options?: string[];
-}
-
-const DEFAULT_STAGE: EditingStage = {
-  name: "",
-  assignedRole: "client_manager",
-  order: 0,
-  color: "#6b7280",
-  canBeFinalStage: false,
-};
-
-const DEFAULT_REASON: EditingReason = {
-  reason: "",
-  description: "",
-  showCountInProject: false,
-  countLabel: "",
-  stageApprovalId: undefined,
-};
-
-const DEFAULT_STAGE_APPROVAL: EditingStageApproval = { name: "", description: "" };
-const DEFAULT_STAGE_APPROVAL_FIELD: EditingStageApprovalField = { 
-  stageApprovalId: "", fieldName: "", fieldType: "boolean", isRequired: false, order: 0 
-};
-
-// System roles fallback for backward compatibility
-const SYSTEM_ROLE_OPTIONS = [
-  { value: "admin", label: "Admin" },
-  { value: "manager", label: "Manager" },
-  { value: "client_manager", label: "Client Manager" },
-  { value: "bookkeeper", label: "Bookkeeper" },
-];
-
-const STAGE_COLORS = [
-  "#6b7280", "#ef4444", "#f97316", "#eab308", 
-  "#22c55e", "#3b82f6", "#6366f1", "#8b5cf6", "#ec4899"
-];
-
-// Character limit helper component
-function CharacterCounter({ current, max, className = "" }: { current: number; max: number; className?: string }) {
-  const isOverLimit = current > max;
-  const percentage = (current / max) * 100;
-  
-  let colorClass = "text-muted-foreground";
-  if (isOverLimit) {
-    colorClass = "text-red-600 font-semibold";
-  } else if (percentage > 80) {
-    colorClass = "text-yellow-600 font-semibold";
-  } else if (percentage > 50) {
-    colorClass = "text-blue-600";
-  }
-  
-  return (
-    <span className={`text-xs ${colorClass} ${className}`} data-testid="character-counter">
-      {current}/{max}
-    </span>
-  );
-}
+import type { EditingStage, EditingReason, EditingStageApproval, EditingStageApprovalField } from "./utils/types";
+import { 
+  DEFAULT_STAGE, 
+  DEFAULT_REASON, 
+  DEFAULT_STAGE_APPROVAL, 
+  DEFAULT_STAGE_APPROVAL_FIELD,
+  SYSTEM_ROLE_OPTIONS,
+  STAGE_COLORS 
+} from "./utils/constants";
+import { CharacterCounter } from "./utils/helpers";
 
 // Custom field form component
 function CustomFieldForm({ 
