@@ -1,10 +1,12 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { EditingStage } from "../utils/types";
 
 interface StageMutationCallbacks {
-  onSuccess?: () => void;
-  onError?: (error: Error) => void;
+  onStageCreated?: () => void;
+  onStageUpdated?: () => void;
+  onStageDeleted?: () => void;
 }
 
 export function useStageMutations(
@@ -12,7 +14,7 @@ export function useStageMutations(
   callbacks: StageMutationCallbacks = {}
 ) {
   const queryClient = useQueryClient();
-  const { onSuccess, onError } = callbacks;
+  const { toast } = useToast();
 
   const invalidateStages = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/config/project-types", projectTypeId, "stages"] });
@@ -24,33 +26,53 @@ export function useStageMutations(
       return await apiRequest("POST", "/api/config/stages", { ...stage, projectTypeId });
     },
     onSuccess: () => {
+      toast({ title: "Success", description: "Stage created successfully" });
       invalidateStages();
-      onSuccess?.();
+      callbacks.onStageCreated?.();
     },
-    onError: (error: Error) => onError?.(error),
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create stage",
+        variant: "destructive",
+      });
+    },
   });
 
   const updateStageMutation = useMutation({
-    mutationFn: async (stage: EditingStage) => {
-      if (!stage.id) throw new Error("Stage ID is required");
-      return await apiRequest("PATCH", `/api/config/stages/${stage.id}`, stage);
+    mutationFn: async ({ id, ...stage }: EditingStage) => {
+      return await apiRequest("PATCH", `/api/config/stages/${id}`, stage);
     },
     onSuccess: () => {
+      toast({ title: "Success", description: "Stage updated successfully" });
       invalidateStages();
-      onSuccess?.();
+      callbacks.onStageUpdated?.();
     },
-    onError: (error: Error) => onError?.(error),
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update stage",
+        variant: "destructive",
+      });
+    },
   });
 
   const deleteStageMutation = useMutation({
-    mutationFn: async (stageId: string) => {
-      return await apiRequest("DELETE", `/api/config/stages/${stageId}`);
+    mutationFn: async (id: string) => {
+      return await apiRequest("DELETE", `/api/config/stages/${id}`);
     },
     onSuccess: () => {
+      toast({ title: "Success", description: "Stage deleted successfully" });
       invalidateStages();
-      onSuccess?.();
+      callbacks.onStageDeleted?.();
     },
-    onError: (error: Error) => onError?.(error),
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete stage",
+        variant: "destructive",
+      });
+    },
   });
 
   return {
