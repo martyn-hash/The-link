@@ -153,41 +153,38 @@ export class EmailResolverService {
         return;
       }
 
-      await storage.updateEmailMessage(message.id, {
+      await storage.updateEmailMessage(message.internetMessageId, {
         clientId,
-        matchConfidence: confidence
+        clientMatchConfidence: confidence
       });
 
       // 2. Get the thread and update it if needed
-      if (message.threadId) {
-        const thread = await storage.getEmailThreadById(message.threadId);
+      const threadKey = message.canonicalConversationId || message.threadKey;
+      if (threadKey) {
+        const thread = await storage.getEmailThreadById(threadKey);
         
         if (thread) {
-          // Update thread if it doesn't have a client or has lower confidence
-          const shouldUpdateThread = 
-            !thread.clientId || 
-            (thread.matchConfidence === 'low' && confidence !== 'low') ||
-            (thread.matchConfidence === 'medium' && confidence === 'high');
+          // Update thread if it doesn't have a client
+          const shouldUpdateThread = !thread.clientId;
 
           if (shouldUpdateThread) {
-            await storage.updateEmailThread(thread.id, {
-              clientId,
-              matchConfidence: confidence
+            await storage.updateEmailThread(thread.canonicalConversationId, {
+              clientId
             });
 
             // 3. Ancestry-based promotion: update all other messages in this thread
-            const threadMessages = await storage.getEmailMessagesByThreadId(thread.id);
+            const threadMessages = await storage.getEmailMessagesByThreadId(thread.canonicalConversationId);
             for (const threadMessage of threadMessages) {
               if (threadMessage.internetMessageId !== unmatchedEmail.internetMessageId) {
                 const shouldUpdateMessage = 
                   !threadMessage.clientId ||
-                  (threadMessage.matchConfidence === 'low' && confidence !== 'low') ||
-                  (threadMessage.matchConfidence === 'medium' && confidence === 'high');
+                  (threadMessage.clientMatchConfidence === 'low' && confidence !== 'low') ||
+                  (threadMessage.clientMatchConfidence === 'medium' && confidence === 'high');
 
                 if (shouldUpdateMessage) {
-                  await storage.updateEmailMessage(threadMessage.id, {
+                  await storage.updateEmailMessage(threadMessage.internetMessageId, {
                     clientId,
-                    matchConfidence: confidence
+                    clientMatchConfidence: confidence
                   });
 
                   // Remove from quarantine if it's there
