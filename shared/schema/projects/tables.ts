@@ -3,7 +3,7 @@ import { sql } from 'drizzle-orm';
 import { users } from '../users/tables';
 import { clients } from '../clients/tables';
 import { inactiveReasonEnum, stageApprovalFieldTypeEnum, comparisonTypeEnum, customFieldTypeEnum } from '../enums';
-import { services, workRoles, clientServices, peopleServices } from '../../schema';
+import { services, workRoles, clientServices, peopleServices } from '../services/tables';
 
 export const projectTypes: any = pgTable("project_types", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
