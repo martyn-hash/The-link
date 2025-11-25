@@ -154,34 +154,51 @@ client/src/pages/client-detail/
 
 ## Staged Refactoring Plan
 
-### Stage 1: Foundation - Utilities & Types Extraction
+### Stage 1: Foundation - Utilities & Types Extraction ✅ COMPLETED
 **Estimated Effort:** 2-3 hours  
-**Risk Level:** Low
+**Risk Level:** Low  
+**Status:** COMPLETED (November 25, 2025)
 
 #### Tasks
 1. Create `client-detail/utils/formatters.ts`
-   - Extract `formatPersonName()`
-   - Extract `formatDate()`
-   - Extract `formatBirthDate()`
-   - Extract `maskIdentifier()`
+   - ✅ Extract `formatPersonName()`
+   - ✅ Extract `formatDate()`
+   - ✅ Extract `formatBirthDate()`
+   - ✅ Extract `maskIdentifier()`
 
 2. Create `client-detail/utils/types.ts`
-   - Extract shared types (`CommunicationWithRelations`, `EnhancedClientService`, etc.)
-   - Export type aliases for commonly used type combinations
+   - ✅ Extract shared types (`CommunicationWithRelations`, `EnhancedClientService`, etc.)
+   - ✅ Export type aliases for commonly used type combinations
+   - ✅ Extract all Zod schemas (addServiceSchema, addPersonSchema, updatePersonSchema, editServiceSchema, linkPersonToCompanySchema)
+   - ✅ Export inferred types (AddServiceData, InsertPersonData, UpdatePersonData, EditServiceData, LinkPersonToCompanyData)
 
-3. Update imports in `client-detail.tsx` to use new utility files
+3. ✅ Update imports in `client-detail.tsx` to use new utility files
+4. ✅ Directory structure created with components/, forms/, hooks/, utils/ subdirectories
 
 #### Success Criteria
-- [ ] All utility functions work identically (test with sample data)
-- [ ] No TypeScript errors after refactor
-- [ ] Application loads and displays client detail page correctly
-- [ ] All date/name formatting displays correctly
+- [x] All utility functions work identically (test with sample data)
+- [x] No TypeScript errors after refactor (28 pre-existing errors remain, none introduced)
+- [x] Application loads and displays client detail page correctly
+- [x] All date/name formatting displays correctly
 
-#### Testing Required
-- Manual verification of client detail page loading
-- Verify name formatting (e.g., "SMITH, John" → "John Smith")
-- Verify date formatting in various contexts
-- Run existing test suite (if any)
+#### Testing Results
+- ✅ Client detail page loads successfully with all tabs functional
+- ✅ Name formatting verified (displays correctly)
+- ✅ Date formatting verified (DD/MM/YYYY and "DD Mon YYYY" formats working)
+- ✅ Projects tab loads with proper data display
+- ✅ Architect review: PASS - "cleanly externalizes shared utilities and types"
+
+#### Files Created
+- `client/src/pages/client-detail/utils/formatters.ts` - 4 utility functions
+- `client/src/pages/client-detail/utils/types.ts` - Shared types and Zod schemas
+- `client/src/pages/client-detail/components/.gitkeep`
+- `client/src/pages/client-detail/forms/.gitkeep`
+- `client/src/pages/client-detail/hooks/.gitkeep`
+
+#### Line Count Change
+- Before: 9,347 lines
+- After: 9,165 lines
+- Reduction: 182 lines moved to utility modules
 
 ---
 
