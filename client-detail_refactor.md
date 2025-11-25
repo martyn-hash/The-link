@@ -544,45 +544,73 @@ type TimelineItem =
 ---
 
 ### Stage 7: Extract Tab Components
-**Estimated Effort:** 3-4 hours  
-**Risk Level:** Medium
+**Estimated Effort:** 5-7 hours  
+**Risk Level:** Medium-High  
+**Status:** PLANNING COMPLETE (November 25, 2025)
+**Detailed Brief:** See `client/src/pages/client-detail/STAGE_7_TAB_COMPONENTS.md`
+
+#### Component Inventory
+| Tab | Lines | Complexity | Priority |
+|-----|-------|------------|----------|
+| Overview | ~304 | High | 1 |
+| Services | ~729 | Very High | 3 |
+| Projects | ~36 | Low (extracted) | 8 |
+| Communications | ~3 | Low (extracted) | 7 |
+| Chronology | ~13 | Low | 6 |
+| Documents | ~60 | Medium | 4 |
+| Tasks | ~394 | High | 2 |
+| Risk | ~7 | Low | 5 |
+
+#### Additional Extractions
+- `CompanyCreationForm` (~127 lines) → `forms/CompanyCreationForm.tsx`
+- `ProjectLink` (~20 lines) → `utils/ProjectLink.tsx`
+
+**Total Extractable Code:** ~1,160+ lines
+
+#### Extraction Phases
+**Phase 7.1** (1 hr): Simple tabs (Chronology, Risk, Documents)
+**Phase 7.2** (30 min): Projects tab wrapper
+**Phase 7.3** (1.5 hrs): Overview tab with company details + people + connections
+**Phase 7.4** (2 hrs): Tasks tab with internal tasks + client requests + dialog
+**Phase 7.5** (2 hrs): Services tab with client services + personal services sections
+
+#### Key Architecture Decisions
+1. **Prop Drilling over Context:** Each tab explicitly declares dependencies
+2. **Mutations Stay in Parent:** Tabs trigger via callbacks
+3. **Grouped Props:** Related props grouped into objects to reduce prop count
+4. **Lazy Loading Preserved:** Queries only run when tab is active
 
 #### Tasks
-1. Create `components/tabs/OverviewTab.tsx`
-   - Company details section
-   - People section
-   - Connected companies (for individuals)
-
-2. Create `components/tabs/ProjectsTab.tsx`
-   - Open projects section
-   - Completed projects section
-
-3. Create `components/tabs/ChronologyTab.tsx`
-   - Wrapper for existing ClientChronology component
-
-4. Create `components/tabs/DocumentsTab.tsx`
-   - Client docs sub-tab
-   - Signed docs sub-tab
-   - Signature requests panel
-
-5. Create `components/tabs/TasksTab.tsx`
-   - Internal tasks section
-   - Client requests section
-
-6. Create `components/tabs/RiskNotificationsTab.tsx`
-   - Wrapper for RiskAssessmentTab and ClientNotificationsView
-   - Handle risk/notifications toggle
+1. Create `components/tabs/ChronologyTab.tsx` (~30 lines)
+2. Create `components/tabs/RiskTab.tsx` (~40 lines)
+3. Create `components/tabs/DocumentsTab.tsx` (~80 lines)
+4. Create `components/tabs/ProjectsTab.tsx` (~50 lines)
+5. Create `components/tabs/OverviewTab.tsx` (~350 lines)
+6. Create `components/tabs/TasksTab.tsx` (~200 lines)
+   - With sub-components: InternalTasksList, ClientRequestsList, NewRequestDialog
+7. Create `components/tabs/ServicesTab.tsx` (~200 lines)
+   - With sub-components: ClientServicesSection, PersonalServicesSection
+8. Extract `forms/CompanyCreationForm.tsx` (~140 lines)
+9. Extract `utils/ProjectLink.tsx` (~25 lines)
 
 #### Success Criteria
 - [ ] All 8 tabs render correctly
-- [ ] Tab switching works (desktop and mobile)
-- [ ] Tab content matches current behavior
+- [ ] Tab switching works (desktop and mobile swipe)
+- [ ] Tab content matches current behavior exactly
 - [ ] Nested tabs work (Services, Documents)
+- [ ] Mobile vs desktop views display correctly
+- [ ] All CRUD operations work
+- [ ] Loading and empty states display correctly
 
 #### Testing Required
-- Navigate through all tabs
-- Test mobile tab navigation (swipe, arrows)
-- Verify nested tabs in Services and Documents tabs
+- Navigate through all 8 tabs on desktop
+- Swipe through tabs on mobile viewport
+- Verify nested tabs in Services and Documents
+- Test Add Person, Add Service, New Request dialogs
+- Verify project navigation from Overview
+
+**Expected Reduction:** ~800-1,000 lines  
+**Target Post-Stage 7:** ~1,900-2,100 lines (~78% total reduction from original)
 
 ---
 
@@ -717,20 +745,22 @@ type TimelineItem =
 
 ## Timeline Estimate
 
-| Stage | Duration | Dependencies |
-|-------|----------|--------------|
-| Stage 1 | 2-3 hours | None |
-| Stage 2 | 1 hour | Stage 1 |
-| Stage 3 | 2-3 hours | Stage 2 |
-| Stage 4 | 4-5 hours | Stage 3 |
-| Stage 5 | 4-5 hours | Stage 4 |
-| Stage 6 | 6-8 hours | Stage 5 |
-| Stage 7 | 3-4 hours | Stage 6 |
-| Stage 8 | 4-5 hours | Stage 7 |
-| Stage 9 | 3-4 hours | Stage 8 |
-| Stage 10 | 2-3 hours | Stage 9 |
+| Stage | Estimated | Actual | Status | Dependencies |
+|-------|-----------|--------|--------|--------------|
+| Stage 1 | 2-3 hours | ~1 hour | ✅ DONE | None |
+| Stage 2 | 1 hour | ~30 min | ✅ DONE | Stage 1 |
+| Stage 3 | 2-3 hours | ~2 hours | ✅ DONE | Stage 2 |
+| Stage 4 | 4-5 hours | ~3 hours | ✅ DONE | Stage 3 |
+| Stage 5 | 4-5 hours | ~3 hours | ✅ DONE | Stage 4 |
+| Stage 6 | 6-8 hours | ~4 hours | ✅ DONE | Stage 5 |
+| Stage 7 | 5-7 hours | - | 📋 PLANNED | Stage 6 |
+| Stage 8 | 4-5 hours | - | Pending | Stage 7 |
+| Stage 9 | 3-4 hours | - | Pending | Stage 8 |
+| Stage 10 | 2-3 hours | - | Pending | Stage 9 |
 
-**Total Estimated Time: 32-41 hours** (4-5 working days)
+**Progress:** Stages 1-6 complete in ~13.5 hours (vs 21-28 estimated)  
+**Remaining Estimate:** 14-19 hours for Stages 7-10  
+**Total Estimated Time: 27.5-32.5 hours** (~3-4 working days)
 
 ---
 
