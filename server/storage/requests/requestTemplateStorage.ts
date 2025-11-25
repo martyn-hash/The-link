@@ -4,20 +4,33 @@ import {
   clientRequestTemplates,
   clientRequestTemplateSections,
   clientRequestTemplateQuestions,
-  type TaskTemplateCategory,
-  type InsertTaskTemplateCategory,
-  type UpdateTaskTemplateCategory,
-  type TaskTemplate,
-  type InsertTaskTemplate,
-  type UpdateTaskTemplate,
-  type TaskTemplateSection,
-  type InsertTaskTemplateSection,
-  type UpdateTaskTemplateSection,
-  type TaskTemplateQuestion,
-  type InsertTaskTemplateQuestion,
-  type UpdateTaskTemplateQuestion
+  type ClientRequestTemplateCategory,
+  type InsertClientRequestTemplateCategory,
+  type UpdateClientRequestTemplateCategory,
+  type ClientRequestTemplate,
+  type InsertClientRequestTemplate,
+  type UpdateClientRequestTemplate,
+  type ClientRequestTemplateSection,
+  type InsertClientRequestTemplateSection,
+  type UpdateClientRequestTemplateSection,
+  type ClientRequestTemplateQuestion,
+  type InsertClientRequestTemplateQuestion,
+  type UpdateClientRequestTemplateQuestion
 } from "../../../shared/schema.js";
 import { eq } from "drizzle-orm";
+
+type TaskTemplateCategory = ClientRequestTemplateCategory;
+type InsertTaskTemplateCategory = InsertClientRequestTemplateCategory;
+type UpdateTaskTemplateCategory = UpdateClientRequestTemplateCategory;
+type TaskTemplate = ClientRequestTemplate;
+type InsertTaskTemplate = InsertClientRequestTemplate;
+type UpdateTaskTemplate = UpdateClientRequestTemplate;
+type TaskTemplateSection = ClientRequestTemplateSection;
+type InsertTaskTemplateSection = InsertClientRequestTemplateSection;
+type UpdateTaskTemplateSection = UpdateClientRequestTemplateSection;
+type TaskTemplateQuestion = ClientRequestTemplateQuestion;
+type InsertTaskTemplateQuestion = InsertClientRequestTemplateQuestion;
+type UpdateTaskTemplateQuestion = UpdateClientRequestTemplateQuestion;
 
 export class RequestTemplateStorage {
   // Template Category Operations (5 methods)

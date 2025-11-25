@@ -710,11 +710,8 @@ export interface IStorage {
   updateClientRequestTemplateCategory(id: string, category: UpdateClientRequestTemplateCategory): Promise<ClientRequestTemplateCategory>;
   deleteClientRequestTemplateCategory(id: string): Promise<void>;
   
-  getAllClientRequestTemplates(): Promise<(ClientRequestTemplate & { category: ClientRequestTemplateCategory | null })[]>;
-  getClientRequestTemplateById(id: string): Promise<(ClientRequestTemplate & { 
-    category: ClientRequestTemplateCategory | null;
-    sections: (ClientRequestTemplateSection & { questions: ClientRequestTemplateQuestion[] })[];
-  }) | undefined>;
+  getAllClientRequestTemplates(includeInactive?: boolean): Promise<ClientRequestTemplate[]>;
+  getClientRequestTemplateById(id: string): Promise<ClientRequestTemplate | undefined>;
   getClientRequestTemplatesByCategoryId(categoryId: string): Promise<ClientRequestTemplate[]>;
   createClientRequestTemplate(template: InsertClientRequestTemplate): Promise<ClientRequestTemplate>;
   updateClientRequestTemplate(id: string, template: UpdateClientRequestTemplate): Promise<ClientRequestTemplate>;

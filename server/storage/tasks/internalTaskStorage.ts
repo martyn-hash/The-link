@@ -39,12 +39,12 @@ export class InternalTaskStorage {
   }
 
   async getInternalTasksByAssignee(assigneeId: string, filters?: { status?: string; priority?: string }): Promise<InternalTask[]> {
-    const conditions = [eq(internalTasks.assignedTo, assigneeId)];
+    const conditions: any[] = [eq(internalTasks.assignedTo, assigneeId)];
     if (filters?.status) {
-      conditions.push(eq(internalTasks.status, filters.status));
+      conditions.push(eq(internalTasks.status, filters.status as any));
     }
     if (filters?.priority) {
-      conditions.push(eq(internalTasks.priority, filters.priority));
+      conditions.push(eq(internalTasks.priority, filters.priority as any));
     }
     
     const assigneeAlias = alias(users, 'assignee');
@@ -73,12 +73,12 @@ export class InternalTaskStorage {
   }
 
   async getInternalTasksByCreator(creatorId: string, filters?: { status?: string; priority?: string }): Promise<InternalTask[]> {
-    const conditions = [eq(internalTasks.createdBy, creatorId)];
+    const conditions: any[] = [eq(internalTasks.createdBy, creatorId)];
     if (filters?.status) {
-      conditions.push(eq(internalTasks.status, filters.status));
+      conditions.push(eq(internalTasks.status, filters.status as any));
     }
     if (filters?.priority) {
-      conditions.push(eq(internalTasks.priority, filters.priority));
+      conditions.push(eq(internalTasks.priority, filters.priority as any));
     }
     
     const assigneeAlias = alias(users, 'assignee');
@@ -107,12 +107,12 @@ export class InternalTaskStorage {
   }
 
   async getAllInternalTasks(filters?: { status?: string; priority?: string; assigneeId?: string; creatorId?: string }): Promise<InternalTask[]> {
-    const conditions = [];
+    const conditions: any[] = [];
     if (filters?.status) {
-      conditions.push(eq(internalTasks.status, filters.status));
+      conditions.push(eq(internalTasks.status, filters.status as any));
     }
     if (filters?.priority) {
-      conditions.push(eq(internalTasks.priority, filters.priority));
+      conditions.push(eq(internalTasks.priority, filters.priority as any));
     }
     if (filters?.assigneeId) {
       conditions.push(eq(internalTasks.assignedTo, filters.assigneeId));
@@ -177,7 +177,7 @@ export class InternalTaskStorage {
     tasksWithTypes.forEach(row => {
       if (row.task.assignedTo) allUserIds.add(row.task.assignedTo);
       if (row.task.createdBy) allUserIds.add(row.task.createdBy);
-      if (row.task.completedBy) allUserIds.add(row.task.completedBy);
+      if (row.task.closedBy) allUserIds.add(row.task.closedBy);
     });
     
     const usersList = await db
@@ -192,7 +192,7 @@ export class InternalTaskStorage {
       taskType: row.taskType || undefined,
       assignee: row.task.assignedTo ? usersMap.get(row.task.assignedTo) : undefined,
       creator: row.task.createdBy ? usersMap.get(row.task.createdBy) : undefined,
-      completedBy: row.task.completedBy ? usersMap.get(row.task.completedBy) : undefined,
+      closedByUser: row.task.closedBy ? usersMap.get(row.task.closedBy) : undefined,
     })) as any;
   }
 
@@ -227,7 +227,7 @@ export class InternalTaskStorage {
     tasksWithTypes.forEach(row => {
       if (row.task.assignedTo) allUserIds.add(row.task.assignedTo);
       if (row.task.createdBy) allUserIds.add(row.task.createdBy);
-      if (row.task.completedBy) allUserIds.add(row.task.completedBy);
+      if (row.task.closedBy) allUserIds.add(row.task.closedBy);
     });
     
     const usersList = await db
@@ -242,7 +242,7 @@ export class InternalTaskStorage {
       taskType: row.taskType || undefined,
       assignee: row.task.assignedTo ? usersMap.get(row.task.assignedTo) : undefined,
       creator: row.task.createdBy ? usersMap.get(row.task.createdBy) : undefined,
-      completedBy: row.task.completedBy ? usersMap.get(row.task.completedBy) : undefined,
+      closedByUser: row.task.closedBy ? usersMap.get(row.task.closedBy) : undefined,
     })) as any;
   }
 
