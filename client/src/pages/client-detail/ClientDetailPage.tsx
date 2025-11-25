@@ -100,7 +100,7 @@ import {
   ServicesTab 
 } from "./components/tabs";
 import { NewClientRequestDialog } from "./dialogs/NewClientRequestDialog";
-import { useClientData } from "./hooks";
+import { useClientData, useClientMutations } from "./hooks";
 
 export default function ClientDetail() {
   const { id } = useParams();
@@ -158,50 +158,15 @@ export default function ClientDetail() {
     documentsLoading,
   } = useClientData(id);
 
-  // Mutation for updating person data
-  const updatePersonMutation = useMutation({
-    mutationFn: async ({ personId, data }: { personId: string; data: UpdatePersonData }) => {
-      return await apiRequest("PATCH", `/api/people/${personId}`, data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/clients', id, 'people'] });
-      setEditingPersonId(null);
-      toast({
-        title: "Success",
-        description: "Person details updated successfully",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to update person details",
-        variant: "destructive",
-      });
-    },
+  // Client mutations consolidated into a single hook
+  const {
+    updatePersonMutation,
+    createPersonMutation,
+    deleteDocumentMutation,
+  } = useClientMutations(id, {
+    onPersonUpdated: () => setEditingPersonId(null),
+    onPersonCreated: () => setIsAddPersonModalOpen(false),
   });
-
-  // Mutation for creating new person
-  const createPersonMutation = useMutation({
-    mutationFn: async (data: InsertPersonData) => {
-      return await apiRequest("POST", `/api/clients/${id}/people`, data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/clients', id, 'people'] });
-      setIsAddPersonModalOpen(false);
-      toast({
-        title: "Success",
-        description: "Person added successfully",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to add person",
-        variant: "destructive",
-      });
-    },
-  });
-
 
   // Company Connections functionality for individual clients (many-to-many)
   const [showCompanySelection, setShowCompanySelection] = useState(false);
@@ -333,27 +298,6 @@ export default function ClientDetail() {
   const availableCompanies = companyClients?.filter(
     c => c.clientType === 'company' && c.id !== id && !connectedCompanyIds.includes(c.id)
   ) || [];
-
-  // Document mutation (query is now in useClientData hook)
-  const deleteDocumentMutation = useMutation({
-    mutationFn: async (documentId: string) => {
-      return await apiRequest('DELETE', `/api/documents/${documentId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/clients', id, 'documents'] });
-      toast({
-        title: 'Success',
-        description: 'Document deleted successfully',
-      });
-    },
-    onError: () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to delete document',
-        variant: 'destructive',
-      });
-    },
-  });
 
   if (isLoading) {
     return (
