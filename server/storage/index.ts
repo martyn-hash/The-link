@@ -47,7 +47,8 @@ import {
 import { 
   DocumentStorage, 
   RiskAssessmentStorage, 
-  PortalDocumentStorage 
+  PortalDocumentStorage,
+  SignatureStorage
 } from './documents/index.js';
 import { PortalStorage } from './portal/index.js';
 import {
@@ -124,6 +125,7 @@ export class DatabaseStorage implements IStorage {
   private documentStorage: DocumentStorage;
   private riskAssessmentStorage: RiskAssessmentStorage;
   private portalDocumentStorage: PortalDocumentStorage;
+  private signatureStorage: SignatureStorage;
   private portalStorage: PortalStorage;
   private messageThreadStorage: MessageThreadStorage;
   private messageStorage: MessageStorage;
@@ -195,6 +197,7 @@ export class DatabaseStorage implements IStorage {
     this.documentStorage = new DocumentStorage();
     this.riskAssessmentStorage = new RiskAssessmentStorage();
     this.portalDocumentStorage = new PortalDocumentStorage();
+    this.signatureStorage = new SignatureStorage();
     
     // Initialize portal domain storage (Stage 9)
     this.portalStorage = new PortalStorage();
@@ -1942,6 +1945,79 @@ export class DatabaseStorage implements IStorage {
     return this.riskAssessmentStorage.getRiskAssessmentResponses(assessmentId);
   }
 
+  // Signature Request Operations - SignatureStorage
+  async createSignatureRequest(request: any) {
+    return this.signatureStorage.createSignatureRequest(request);
+  }
+
+  async getSignatureRequestById(id: string) {
+    return this.signatureStorage.getSignatureRequestById(id);
+  }
+
+  async getSignatureRequestsByClientId(clientId: string) {
+    return this.signatureStorage.getSignatureRequestsByClientId(clientId);
+  }
+
+  async getSignatureRequestByPublicToken(token: string) {
+    return this.signatureStorage.getSignatureRequestByPublicToken(token);
+  }
+
+  async updateSignatureRequest(id: string, request: any) {
+    return this.signatureStorage.updateSignatureRequest(id, request);
+  }
+
+  async deleteSignatureRequest(id: string) {
+    return this.signatureStorage.deleteSignatureRequest(id);
+  }
+
+  async createSignatureRequestRecipient(recipient: any) {
+    return this.signatureStorage.createSignatureRequestRecipient(recipient);
+  }
+
+  async getSignatureRequestRecipientsByRequestId(requestId: string) {
+    return this.signatureStorage.getSignatureRequestRecipientsByRequestId(requestId);
+  }
+
+  async getSignatureRequestRecipientByToken(token: string) {
+    return this.signatureStorage.getSignatureRequestRecipientByToken(token);
+  }
+
+  async updateSignatureRequestRecipient(id: string, recipient: any) {
+    return this.signatureStorage.updateSignatureRequestRecipient(id, recipient);
+  }
+
+  async deleteSignatureRequestRecipient(id: string) {
+    return this.signatureStorage.deleteSignatureRequestRecipient(id);
+  }
+
+  async createSignatureField(field: any) {
+    return this.signatureStorage.createSignatureField(field);
+  }
+
+  async getSignatureFieldsByRequestId(requestId: string) {
+    return this.signatureStorage.getSignatureFieldsByRequestId(requestId);
+  }
+
+  async getSignatureFieldsBySignerId(signerId: string) {
+    return this.signatureStorage.getSignatureFieldsBySignerId(signerId);
+  }
+
+  async updateSignatureField(id: string, field: any) {
+    return this.signatureStorage.updateSignatureField(id, field);
+  }
+
+  async deleteSignatureField(id: string) {
+    return this.signatureStorage.deleteSignatureField(id);
+  }
+
+  async createSignatureAuditLog(log: any) {
+    return this.signatureStorage.createSignatureAuditLog(log);
+  }
+
+  async getSignatureAuditLogsByRequestId(requestId: string) {
+    return this.signatureStorage.getSignatureAuditLogsByRequestId(requestId);
+  }
+
   // Client Portal User Operations - PortalStorage
   async createClientPortalUser(user: any) {
     return this.portalStorage.createClientPortalUser(user);
@@ -2169,6 +2245,10 @@ export class DatabaseStorage implements IStorage {
 
   async getProjectMessageUnreadSummaries(olderThanMinutes: number) {
     return this.projectMessageParticipantStorage.getProjectMessageUnreadSummaries(olderThanMinutes);
+  }
+
+  async getProjectMessageParticipantsNeedingReminders(hoursThreshold: number) {
+    return this.projectMessageParticipantStorage.getProjectMessageParticipantsNeedingReminders(hoursThreshold);
   }
 
   // Staff Message Thread Operations - StaffMessageThreadStorage (7 methods)
@@ -2700,6 +2780,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTaskDocuments(taskId: string) {
+    return this.internalTaskStorage.getTaskDocuments(taskId);
+  }
+
+  // IStorage interface alias
+  async getTaskDocumentsByTaskId(taskId: string) {
     return this.internalTaskStorage.getTaskDocuments(taskId);
   }
 

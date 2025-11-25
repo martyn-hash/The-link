@@ -252,10 +252,86 @@ export class ProjectMessageParticipantStorage {
         projectId: participant.projectId,
         projectName: project.name,
         unreadCount: unreadMessages.length,
-        oldestUnreadAt: unreadMessages[0].createdAt,
+        oldestUnreadAt: unreadMessages[0].createdAt ?? new Date(),
       });
     }
     
     return Array.from(userMap.values()).filter(u => u.threads.length > 0);
+  }
+
+  async getProjectMessageParticipantsNeedingReminders(hoursThreshold: number): Promise<Array<{
+    threadId: string;
+    userId: string;
+    userEmail: string;
+    userName: string;
+    projectDescription: string;
+    clientName: string;
+    unreadCount: number;
+  }>> {
+    const cutoffTime = new Date(Date.now() - hoursThreshold * 60 * 60 * 1000);
+    
+    const participantsWithUnread = await db
+      .select({
+        userId: projectMessageParticipants.userId,
+        threadId: projectMessageParticipants.threadId,
+        lastReadAt: projectMessageParticipants.lastReadAt,
+        lastReminderEmailSentAt: projectMessageParticipants.lastReminderEmailSentAt,
+        projectId: projectMessageThreads.projectId,
+      })
+      .from(projectMessageParticipants)
+      .innerJoin(projectMessageThreads, eq(projectMessageParticipants.threadId, projectMessageThreads.id))
+      .where(
+        or(
+          isNull(projectMessageParticipants.lastReadAt),
+          sql`${projectMessageParticipants.lastReadAt} < ${cutoffTime}`
+        )
+      );
+    
+    const results: Array<{
+      threadId: string;
+      userId: string;
+      userEmail: string;
+      userName: string;
+      projectDescription: string;
+      clientName: string;
+      unreadCount: number;
+    }> = [];
+    
+    for (const participant of participantsWithUnread) {
+      const unreadMessages = await db
+        .select({ id: projectMessages.id })
+        .from(projectMessages)
+        .where(and(
+          eq(projectMessages.threadId, participant.threadId),
+          ne(projectMessages.userId, participant.userId),
+          participant.lastReadAt 
+            ? sql`${projectMessages.createdAt} > ${participant.lastReadAt}`
+            : sql`true`,
+          sql`${projectMessages.createdAt} < ${cutoffTime}`,
+          participant.lastReminderEmailSentAt
+            ? sql`${projectMessages.createdAt} > ${participant.lastReminderEmailSentAt}`
+            : sql`true`
+        ));
+      
+      if (unreadMessages.length === 0) continue;
+      
+      const user = await this.getUser(participant.userId);
+      if (!user || !user.email) continue;
+      
+      const project = await this.getProject(participant.projectId);
+      if (!project) continue;
+      
+      results.push({
+        threadId: participant.threadId,
+        userId: participant.userId,
+        userEmail: user.email,
+        userName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+        projectDescription: project.description || project.name || 'Unknown Project',
+        clientName: project.clientName || 'Unknown Client',
+        unreadCount: unreadMessages.length,
+      });
+    }
+    
+    return results;
   }
 }
