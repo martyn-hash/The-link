@@ -243,9 +243,10 @@ client/src/pages/client-detail/
 
 ---
 
-### Stage 3: Extract Simple Row Components
+### Stage 3: Extract Simple Row Components ✅ COMPLETED
 **Estimated Effort:** 2-3 hours  
-**Risk Level:** Low
+**Risk Level:** Low  
+**Status:** COMPLETED (November 25, 2025)
 
 #### Readiness Checklist
 - [x] Components identified with line numbers:
@@ -265,40 +266,58 @@ client/src/pages/client-detail/
 - [x] Types needed: `ProjectWithRelations` from shared/schema
 
 #### Tasks
-1. Create `utils/projectHelpers.ts`
-   - Extract shared `getStatusColor()` and `formatStatus()` functions
+1. ✅ Create `utils/projectHelpers.ts`
+   - Extracted `getStatusColor()` and `formatStatus()` functions
 
-2. Create `components/projects/OpenProjectRow.tsx`
-   - Extract `OpenProjectRow` component (~75 lines)
-   - Import shared helpers
+2. ✅ Create `components/projects/OpenProjectRow.tsx`
+   - Extracted `OpenProjectRow` component (~75 lines)
+   - Uses shared helpers from projectHelpers.ts
 
-3. Create `components/projects/CompletedProjectRow.tsx`
-   - Extract `CompletedProjectRow` component (~91 lines)
-   - Import shared helpers
+3. ✅ Create `components/projects/CompletedProjectRow.tsx`
+   - Extracted `CompletedProjectRow` component (~91 lines)
+   - Uses shared helpers from projectHelpers.ts
 
-4. Create `components/projects/ProjectsList.tsx`
-   - Extract `ProjectsList` component (~180 lines)
+4. ✅ Create `components/projects/ProjectsList.tsx`
+   - Extracted `ProjectsList` component (~180 lines)
    - Uses OpenProjectRow and CompletedProjectRow
 
-5. Create `components/projects/ServiceProjectsList.tsx`
-   - Extract `ServiceProjectsList` component (~12 lines)
+5. ✅ Create `components/projects/ServiceProjectsList.tsx`
+   - Extracted `ServiceProjectsList` component (~12 lines)
    - Uses ProjectsList
 
-6. Create `components/PortalStatusColumn.tsx`
-   - Extract portal status display and actions (~190 lines)
+6. ✅ Create `components/projects/index.tsx`
+   - Re-exports all project components for clean imports
+
+7. ✅ Create `components/PortalStatusColumn.tsx`
+   - Extracted portal status display and actions (~190 lines)
    - Self-contained with its own mutations
 
 #### Success Criteria
-- [ ] All extracted components render correctly
-- [ ] Projects tab displays open and completed projects
-- [ ] Service-specific projects display correctly
-- [ ] Portal status indicators work correctly
-- [ ] No duplicate utility functions remain in main file
+- [x] All extracted components render correctly
+- [x] Projects tab displays open and completed projects
+- [x] Service-specific projects display correctly
+- [x] Portal status indicators work correctly
+- [x] No duplicate utility functions remain in main file
 
-#### Testing Required
-- Navigate to Projects tab and verify both sections
-- Click on project links and verify navigation
-- Test portal invite/QR code generation buttons (in People section)
+#### Testing Results
+- ✅ E2E test passed: Projects tab loads with data
+- ✅ Status badges display correctly (e.g., "Do the work")
+- ✅ View buttons work and navigate correctly
+- ✅ Architect review: PASS - "verified no duplicate definitions, all functionality preserved"
+
+#### Files Created
+- `client/src/pages/client-detail/utils/projectHelpers.ts` - Shared project utilities
+- `client/src/pages/client-detail/components/projects/OpenProjectRow.tsx` - Open project row
+- `client/src/pages/client-detail/components/projects/CompletedProjectRow.tsx` - Completed project row
+- `client/src/pages/client-detail/components/projects/ProjectsList.tsx` - Main project list
+- `client/src/pages/client-detail/components/projects/ServiceProjectsList.tsx` - Service-filtered projects
+- `client/src/pages/client-detail/components/projects/index.tsx` - Re-exports
+- `client/src/pages/client-detail/components/PortalStatusColumn.tsx` - Portal status column
+
+#### Line Count Change
+- Before: 9,166 lines
+- After: 8,603 lines
+- Reduction: 563 lines moved to extracted components
 
 ---
 
