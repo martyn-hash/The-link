@@ -247,37 +247,58 @@ client/src/pages/client-detail/
 **Estimated Effort:** 2-3 hours  
 **Risk Level:** Low
 
+#### Readiness Checklist
+- [x] Components identified with line numbers:
+  - `PortalStatusColumn` (line 78, ~190 lines) - Portal access status and invite actions
+  - `ServiceProjectsList` (line 5829, ~12 lines) - Fetches service-specific projects
+  - `OpenProjectRow` (line 5844, ~75 lines) - Table row for open projects
+  - `CompletedProjectRow` (line 5923, ~91 lines) - Table row for completed projects
+  - `ProjectsList` (line 6018, ~180 lines) - Project list with mobile/desktop views
+- [x] Shared utilities identified:
+  - `getStatusColor()` - Duplicated in 3 components, extract to utils
+  - `formatStatus()` - Duplicated in 3 components, extract to utils
+- [x] Dependencies mapped:
+  - All use `useLocation` from wouter
+  - `ProjectsList` uses `useIsMobile` hook
+  - `PortalStatusColumn` has its own mutations (can stay self-contained)
+  - All need `formatDate` from utils/formatters
+- [x] Types needed: `ProjectWithRelations` from shared/schema
+
 #### Tasks
-1. Create `components/projects/OpenProjectRow.tsx`
-   - Extract `OpenProjectRow` component
-   - Keep same props interface
+1. Create `utils/projectHelpers.ts`
+   - Extract shared `getStatusColor()` and `formatStatus()` functions
 
-2. Create `components/projects/CompletedProjectRow.tsx`
-   - Extract `CompletedProjectRow` component
+2. Create `components/projects/OpenProjectRow.tsx`
+   - Extract `OpenProjectRow` component (~75 lines)
+   - Import shared helpers
 
-3. Create `components/projects/ProjectsList.tsx`
-   - Extract `ProjectsList` component
-   - Include both row components
+3. Create `components/projects/CompletedProjectRow.tsx`
+   - Extract `CompletedProjectRow` component (~91 lines)
+   - Import shared helpers
 
-4. Create `components/services/ServiceProjectsList.tsx`
-   - Extract `ServiceProjectsList` component
+4. Create `components/projects/ProjectsList.tsx`
+   - Extract `ProjectsList` component (~180 lines)
+   - Uses OpenProjectRow and CompletedProjectRow
 
-5. Create `components/PortalStatusColumn.tsx`
-   - Extract portal status display and actions
+5. Create `components/projects/ServiceProjectsList.tsx`
+   - Extract `ServiceProjectsList` component (~12 lines)
+   - Uses ProjectsList
 
-6. Create `components/ProjectLink.tsx`
-   - Extract simple project link component
+6. Create `components/PortalStatusColumn.tsx`
+   - Extract portal status display and actions (~190 lines)
+   - Self-contained with its own mutations
 
 #### Success Criteria
 - [ ] All extracted components render correctly
 - [ ] Projects tab displays open and completed projects
 - [ ] Service-specific projects display correctly
 - [ ] Portal status indicators work correctly
+- [ ] No duplicate utility functions remain in main file
 
 #### Testing Required
 - Navigate to Projects tab and verify both sections
 - Click on project links and verify navigation
-- Test portal invite/QR code generation buttons
+- Test portal invite/QR code generation buttons (in People section)
 
 ---
 
