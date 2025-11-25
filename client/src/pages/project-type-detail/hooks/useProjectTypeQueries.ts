@@ -15,16 +15,18 @@ import type {
 interface UseProjectTypeQueriesParams {
   projectTypeId: string | undefined;
   isAuthenticated: boolean;
+  authLoading: boolean;
   user: any;
 }
 
 export function useProjectTypeQueries({
   projectTypeId,
   isAuthenticated,
+  authLoading,
   user,
 }: UseProjectTypeQueriesParams) {
-  const enabled = !!projectTypeId && isAuthenticated && !!user;
-  const globalEnabled = isAuthenticated && !!user;
+  const enabled = !!projectTypeId && isAuthenticated && !!user && !authLoading;
+  const globalEnabled = isAuthenticated && !!user && !authLoading;
 
   const projectTypeQuery = useQuery<ProjectType>({
     queryKey: ["/api/config/project-types", projectTypeId],

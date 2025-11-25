@@ -156,6 +156,7 @@ export default function ProjectTypeDetail() {
   } = useProjectTypeQueries({
     projectTypeId,
     isAuthenticated,
+    authLoading,
     user,
   });
 
