@@ -1406,17 +1406,18 @@ export const udfDefinitionSchema = z.object({
   placeholder: z.string().optional(),
 });
 
-// Services schema - base schema
-export const baseInsertServiceSchema = createInsertSchema(services).omit({
-  id: true,
-  createdAt: true,
-}).extend({
+// Services schema - base schema (explicit types to avoid unknown from any-typed table)
+export const baseInsertServiceSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  description: z.string().optional().nullable(),
+  projectTypeId: z.string().optional().nullable(),
   udfDefinitions: z.array(udfDefinitionSchema).optional().default([]),
   isCompaniesHouseConnected: z.boolean().optional().default(false),
-  chStartDateField: z.string().optional(),
-  chDueDateField: z.string().optional(),
+  chStartDateField: z.string().optional().nullable(),
+  chDueDateField: z.string().optional().nullable(),
   isPersonalService: z.boolean().optional().default(false),
   isStaticService: z.boolean().optional().default(false),
+  isActive: z.boolean().optional().default(true),
 });
 
 // Services schema with validation
@@ -1451,9 +1452,9 @@ export const insertChChangeRequestSchema = createInsertSchema(chChangeRequests).
 export const updateChChangeRequestSchema = insertChChangeRequestSchema.partial();
 
 // Work roles schema  
-export const insertWorkRoleSchema = createInsertSchema(workRoles).omit({
-  id: true,
-  createdAt: true,
+export const insertWorkRoleSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  description: z.string().optional().nullable(),
 });
 
 // Service roles schema
