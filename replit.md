@@ -25,6 +25,14 @@ The storage layer has been fully refactored from a monolithic 13,630-line file i
 - **Backward-compatible facade** at `server/storage/index.ts` maintains the same API
 - **Complete decoupling** from the old monolithic storage.ts which has been deleted
 
+**Client Detail Page Refactoring (In Progress - Stages 1-6 Complete, November 25, 2025):**
+The client-detail.tsx page (originally 9,347 lines) is being refactored into a modular component architecture:
+- **Current Status:** 2,915 lines (68.8% reduction achieved)
+- **Completed Stages:** 6 of 10 (Utilities, Directory Structure, Projects, People, Services, Communications)
+- **Key Pattern:** Discriminated union types for type-safe timeline item handling in Communications
+- **Location:** `client/src/pages/client-detail/` with subdirectories: `components/`, `forms/`, `hooks/`, `utils/`
+- **Documentation:** See `client-detail_refactor.md` and stage-specific `.md` files for detailed architecture
+
 ### Key Features
 -   **Automated Project & Service Management**: Includes automatic schema migrations, service scheduling, project automation, and client service role assignment with task cascading.
 -   **Communication & Collaboration**: Features push notification template management, an internal tasks system, standalone staff-to-staff messaging, email threading and deduplication via Microsoft Graph, and a multi-channel client notification and reminder system. This includes a rich-text Tiptap editor for messages, file attachments, Office document conversion for in-app preview, and intelligent message expand/collapse functionality. Email notifications support rich HTML formatting with DOMPurify sanitization and dual HTML/plain text formats. Project message thread creation permissions have been refined.

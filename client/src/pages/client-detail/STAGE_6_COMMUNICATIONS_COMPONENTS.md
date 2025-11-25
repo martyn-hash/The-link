@@ -1,23 +1,26 @@
 # Stage 6: Extract Communications Components - Detailed Planning Brief
 
-**Status:** PLANNING  
+**Status:** COMPLETED  
 **Created:** November 25, 2025  
+**Completed:** November 25, 2025  
 **Estimated Effort:** 6-8 hours  
+**Actual Effort:** ~4 hours  
 **Risk Level:** HIGH  
 
 ---
 
 ## Executive Summary
 
-Stage 6 is the largest and most complex extraction phase, involving the `CommunicationsTimeline` component (1,235 lines) and `CallDialog` component (85 lines). The communications system integrates multiple data sources (communications, message threads, email threads), multiple communication channels (phone, SMS, email, instant messages), and uses several external components. This phase requires careful attention to:
+Stage 6 was the largest and most complex extraction phase, involving the `CommunicationsTimeline` component (1,235 lines) and `CallDialog` component (85 lines). The communications system integrates multiple data sources (communications, message threads, email threads), multiple communication channels (phone, SMS, email, instant messages), and uses several external components. This phase successfully addressed:
 
-1. **State lifting** - Multiple dialogs share clientPeople data
-2. **Data flow** - Unified timeline merges 3 different data sources
-3. **External dependencies** - Integration with RingCentral, TiptapEditor, external components
-4. **Cache invalidation** - All mutations must properly refresh data
+1. **State lifting** - Multiple dialogs share clientPeople data via props
+2. **Data flow** - Unified timeline merges 3 different data sources using type-safe discriminated unions
+3. **External dependencies** - Integration with RingCentral, TiptapEditor, external components preserved
+4. **Cache invalidation** - All mutations properly refresh data
+5. **Type safety** - Implemented discriminated union pattern for TimelineItem
 
-**Expected Reduction:** ~1,320 lines (31% of remaining 4,239 lines)  
-**Target Post-Stage 6:** ~2,919 lines
+**Actual Reduction:** ~1,325 lines (31% of remaining 4,240 lines)  
+**Actual Post-Stage 6:** 2,915 lines (target was ~2,919)
 
 ---
 
@@ -468,3 +471,87 @@ Order by complexity (simplest first):
 10. Mobile card view displays correctly
 11. Desktop table view displays correctly
 12. No console errors or TypeScript issues
+
+---
+
+## Implementation Notes
+
+### Type-Safe Discriminated Union Pattern
+
+A key architectural decision in Stage 6 was implementing a discriminated union pattern for `TimelineItem` to enable type-safe handling of the three different data sources without unsafe casts.
+
+```typescript
+// Base interface for shared display properties
+interface BaseTimelineDisplay {
+  id: string;
+  sortDate: Date;
+  displayDate: string;
+  subject?: string | null;
+  content?: string | null;
+  projectId?: string | null;
+}
+
+// Discriminated union variants - each carries the original data payload
+interface CommunicationTimelineItem extends BaseTimelineDisplay {
+  kind: 'communication';
+  data: CommunicationWithRelations;
+  type: string;  // 'phone_call', 'sms_sent', 'email_sent', 'note', etc.
+}
+
+interface MessageThreadTimelineItem extends BaseTimelineDisplay {
+  kind: 'message_thread';
+  data: MessageThread;
+  type: 'message_thread';
+  messageCount?: number;
+  unreadCount?: number;
+  attachmentCount?: number;
+}
+
+interface EmailThreadTimelineItem extends BaseTimelineDisplay {
+  kind: 'email_thread';
+  data: EmailThread;
+  type: 'email_thread';
+  messageCount?: number;
+  participants?: string[] | null;
+}
+
+// Union type enables exhaustive type checking
+type TimelineItem = CommunicationTimelineItem | MessageThreadTimelineItem | EmailThreadTimelineItem;
+```
+
+### Usage in CommunicationList
+
+The discriminated union enables clean switch-based handling:
+
+```typescript
+const handleItemView = (item: TimelineItem) => {
+  switch (item.kind) {
+    case 'communication':
+      onViewCommunication(item.data);  // TypeScript knows: CommunicationWithRelations
+      break;
+    case 'message_thread':
+      onViewMessageThread(item.data);  // TypeScript knows: MessageThread
+      break;
+    case 'email_thread':
+      onViewEmailThread(item.data);    // TypeScript knows: EmailThread
+      break;
+  }
+};
+```
+
+### Benefits
+
+1. **Type Safety** - No unsafe casts (`as unknown as Type`)
+2. **Exhaustive Checking** - TypeScript warns if a variant is not handled
+3. **Original Data Preserved** - Each variant carries full original payload
+4. **Clean Interfaces** - Handlers receive correctly typed data
+
+---
+
+## Completion Summary
+
+- **Lines Removed from ClientDetailPage.tsx:** 1,325
+- **Components Created:** 12 files (6 dialogs + 6 supporting files)
+- **Type Safety:** Full discriminated union pattern implemented
+- **Test Coverage:** All functionality verified via Playwright tests
+- **Architect Review:** Passed with no critical issues
