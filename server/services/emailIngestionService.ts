@@ -62,6 +62,13 @@ interface GraphMessage {
   bodyPreview?: string;
   inReplyTo?: string;
   internetMessageHeaders?: Array<{ name: string; value: string }>;
+  attachments?: Array<{
+    id: string;
+    name: string;
+    size: number;
+    contentType: string;
+    isInline?: boolean;
+  }>;
 }
 
 interface DeltaSyncResult {
@@ -449,6 +456,15 @@ export class EmailIngestionService {
   }
 
   /**
+   * Compute subject stem by removing Re:, Fwd:, etc prefixes
+   */
+  computeSubjectStem(subject: string | null): string {
+    if (!subject) return '';
+    // Remove common prefixes like Re:, Fwd:, FW:, etc.
+    return subject.replace(/^(Re|Fwd|FW|RE|Fw):\s*/gi, '').trim();
+  }
+
+  /**
    * Ingest messages from delta sync
    * Idempotently upserts messages and creates mailbox mappings
    */
@@ -506,35 +522,31 @@ export class EmailIngestionService {
         )?.value.replace(/<|>/g, '');
 
         // Prepare email message for upsert
+        // Note: Field names must match schema (from, to, cc, bcc, sentDateTime, receivedDateTime)
         const emailMessage: InsertEmailMessage = {
-          internetMessageId: graphMessage.internetMessageId,
-          conversationId: graphMessage.conversationId || null,
+          internetMessageId: graphMessage.internetMessageId!,
+          canonicalConversationId: graphMessage.conversationId || graphMessage.internetMessageId!,
+          conversationIdSeen: graphMessage.conversationId || graphMessage.internetMessageId!,
           subject: graphMessage.subject || '(no subject)',
+          subjectStem: this.computeSubjectStem(graphMessage.subject || ''),
           bodyPreview: graphMessage.bodyPreview || '',
           body: graphMessage.body?.content || '',
-          bodyType: graphMessage.body?.contentType || 'text',
-          fromEmail,
-          fromName: graphMessage.from?.emailAddress?.name || null,
-          toEmails,
-          ccEmails,
-          bccEmails,
-          sentAt: graphMessage.sentDateTime ? new Date(graphMessage.sentDateTime) : new Date(),
-          receivedAt: graphMessage.receivedDateTime ? new Date(graphMessage.receivedDateTime) : new Date(),
-          importance: graphMessage.importance || 'normal',
-          isRead: graphMessage.isRead || false,
-          isDraft: graphMessage.isDraft || false,
+          from: fromEmail || '',
+          to: toEmails,
+          cc: ccEmails,
+          bcc: bccEmails,
+          sentDateTime: graphMessage.sentDateTime ? new Date(graphMessage.sentDateTime) : new Date(),
+          receivedDateTime: graphMessage.receivedDateTime ? new Date(graphMessage.receivedDateTime) : new Date(),
           hasAttachments: graphMessage.hasAttachments || false,
           inReplyTo,
           references,
-          // Noise control fields (Phase 8)
+          conversationIndex: graphMessage.conversationIndex || null,
+          graphMessageId: graphMessage.id,
           direction,
           isInternalOnly,
           participantCount,
-          // Threading will be computed in Phase 4
-          threadId: null,
-          // Client association will be computed in Phase 5
           clientId: null,
-          matchConfidence: null
+          clientMatchConfidence: null
         };
 
         // Upsert message (idempotent by internetMessageId)
@@ -542,18 +554,15 @@ export class EmailIngestionService {
 
         // Create mailbox mapping for this user
         // Check if mapping already exists to avoid duplicates
-        const existingMaps = await storage.getMailboxMessageMapsByMessageId(savedMessage.id);
-        const hasMapping = existingMaps.some(map => map.userId === userId);
+        const existingMaps = await storage.getMailboxMessageMapsByMessageId(savedMessage.internetMessageId);
+        const hasMapping = existingMaps.some(map => map.mailboxUserId === userId);
 
         if (!hasMapping) {
           await storage.createMailboxMessageMap({
-            userId,
-            messageId: savedMessage.id,
-            graphMessageId: graphMessage.id,
-            folderPath: folderType,
-            isDeleted: false,
-            changeKey: graphMessage.changeKey || null,
-            receivedAt: graphMessage.receivedDateTime ? new Date(graphMessage.receivedDateTime) : new Date()
+            mailboxUserId: userId,
+            mailboxMessageId: graphMessage.id,
+            internetMessageId: savedMessage.internetMessageId,
+            folderPath: folderType
           });
         }
 
@@ -646,23 +655,23 @@ export class EmailIngestionService {
       const unthreadedMessages = await storage.getUnthreadedMessages();
       console.log(`[Email Threading] Found ${unthreadedMessages.length} unthreaded messages`);
 
-      // Layer 1: Group by conversationId
+      // Layer 1: Group by canonicalConversationId
       const conversationGroups = new Map<string, EmailMessage[]>();
       const orphanedMessages: EmailMessage[] = [];
 
       for (const message of unthreadedMessages) {
-        if (message.conversationId) {
-          if (!conversationGroups.has(message.conversationId)) {
-            conversationGroups.set(message.conversationId, []);
+        if (message.canonicalConversationId) {
+          if (!conversationGroups.has(message.canonicalConversationId)) {
+            conversationGroups.set(message.canonicalConversationId, []);
           }
-          conversationGroups.get(message.conversationId)!.push(message);
+          conversationGroups.get(message.canonicalConversationId)!.push(message);
         } else {
           orphanedMessages.push(message);
         }
       }
 
-      // Process conversationId groups
-      for (const [conversationId, messages] of conversationGroups) {
+      // Process canonicalConversationId groups
+      for (const [conversationId, messages] of Array.from(conversationGroups.entries())) {
         try {
           await this.threadByConversationId(conversationId, messages);
           stats.threaded += messages.length;
@@ -679,7 +688,7 @@ export class EmailIngestionService {
           await this.threadOrphanedMessage(message);
           stats.threaded++;
         } catch (error) {
-          console.error(`[Email Threading] Error threading orphaned message ${message.id}:`, error);
+          console.error(`[Email Threading] Error threading orphaned message ${message.internetMessageId}:`, error);
           stats.errors++;
         }
       }
@@ -705,7 +714,7 @@ export class EmailIngestionService {
     if (!thread) {
       // Create new thread
       const sortedMessages = messages.sort((a, b) => 
-        new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime()
+        new Date(a.sentDateTime || a.receivedDateTime).getTime() - new Date(b.sentDateTime || b.receivedDateTime).getTime()
       );
       const firstMessage = sortedMessages[0];
       const lastMessage = sortedMessages[sortedMessages.length - 1];
@@ -713,38 +722,39 @@ export class EmailIngestionService {
       // Collect all participants
       const allParticipants = new Set<string>();
       messages.forEach(msg => {
-        if (msg.fromEmail) allParticipants.add(msg.fromEmail);
-        msg.toEmails.forEach(email => allParticipants.add(email));
-        msg.ccEmails.forEach(email => allParticipants.add(email));
+        if (msg.from) allParticipants.add(msg.from);
+        (msg.to || []).forEach((email: string) => allParticipants.add(email));
+        (msg.cc || []).forEach((email: string) => allParticipants.add(email));
       });
 
       thread = await storage.createEmailThread({
-        conversationId,
-        threadKey: null, // Not using threadKey for conversationId-based threads
+        canonicalConversationId: conversationId,
+        threadKey: null,
         subject: firstMessage.subject,
         participants: Array.from(allParticipants),
         messageCount: messages.length,
-        firstMessageAt: firstMessage.sentAt,
-        lastMessageAt: lastMessage.sentAt,
-        clientId: null, // Will be set in Phase 5
-        matchConfidence: null
+        firstMessageAt: firstMessage.sentDateTime || firstMessage.receivedDateTime,
+        lastMessageAt: lastMessage.sentDateTime || lastMessage.receivedDateTime,
+        clientId: null
       });
     } else {
       // Update thread with latest message info
       const sortedMessages = messages.sort((a, b) => 
-        new Date(a.sentAt).getTime() - new Date(b.sentAt).getTime()
+        new Date(a.sentDateTime || a.receivedDateTime).getTime() - new Date(b.sentDateTime || b.receivedDateTime).getTime()
       );
       const lastMessage = sortedMessages[sortedMessages.length - 1];
 
-      await storage.updateEmailThread(thread.id, {
+      await storage.updateEmailThread(thread.canonicalConversationId, {
         messageCount: messages.length,
-        lastMessageAt: lastMessage.sentAt
+        lastMessageAt: lastMessage.sentDateTime || lastMessage.receivedDateTime
       });
     }
 
-    // Link all messages to this thread
+    // Link all messages to this thread by updating their threadKey
     for (const message of messages) {
-      await storage.updateEmailMessage(message.id, { threadId: thread.id });
+      await storage.updateEmailMessage(message.internetMessageId, { 
+        threadKey: thread.canonicalConversationId 
+      });
     }
   }
 
@@ -755,16 +765,17 @@ export class EmailIngestionService {
     // Layer 2: Try to find thread by inReplyTo ancestry
     if (message.inReplyTo) {
       const parentMessage = await storage.getEmailMessageByInternetMessageId(message.inReplyTo);
-      if (parentMessage && parentMessage.threadId) {
+      if (parentMessage && parentMessage.threadKey) {
         // Link to parent's thread
-        await storage.updateEmailMessage(message.id, { threadId: parentMessage.threadId });
+        await storage.updateEmailMessage(message.internetMessageId, { threadKey: parentMessage.threadKey });
         
         // Update thread's last message time
-        const thread = await storage.getEmailThreadById(parentMessage.threadId);
-        if (thread && new Date(message.sentAt) > new Date(thread.lastMessageAt)) {
-          await storage.updateEmailThread(thread.id, {
-            lastMessageAt: message.sentAt,
-            messageCount: thread.messageCount + 1
+        const thread = await storage.getEmailThreadByThreadKey(parentMessage.threadKey);
+        const messageTime = message.sentDateTime || message.receivedDateTime;
+        if (thread && new Date(messageTime).getTime() > new Date(thread.lastMessageAt).getTime()) {
+          await storage.updateEmailThread(thread.canonicalConversationId, {
+            lastMessageAt: messageTime,
+            messageCount: (thread.messageCount || 0) + 1
           });
         }
         return;
@@ -773,47 +784,48 @@ export class EmailIngestionService {
 
     // Layer 3: Compute threadKey for orphaned message
     const participants = [
-      message.fromEmail,
-      ...message.toEmails,
-      ...message.ccEmails
-    ].filter((email): email is string => email !== null);
+      message.from,
+      ...(message.to || []),
+      ...(message.cc || [])
+    ].filter((email): email is string => email !== null && email !== undefined);
 
-    const rootMessageId = message.references.length > 0 
-      ? message.references[0] 
+    const refs = (message.references || []).filter((r): r is string => r !== null);
+    const rootMessageId = refs.length > 0 
+      ? refs[0] 
       : message.internetMessageId;
 
     const threadKey = await this.computeThreadKey(
       rootMessageId,
-      message.subject,
+      message.subject || '',
       participants
     );
 
     // Check if thread with this threadKey exists
     let thread = await storage.getEmailThreadByThreadKey(threadKey);
+    const messageTime = message.sentDateTime || message.receivedDateTime;
 
     if (!thread) {
       // Create new thread with threadKey
       thread = await storage.createEmailThread({
-        conversationId: null,
+        canonicalConversationId: threadKey,
         threadKey,
         subject: message.subject,
         participants,
         messageCount: 1,
-        firstMessageAt: message.sentAt,
-        lastMessageAt: message.sentAt,
-        clientId: null,
-        matchConfidence: null
+        firstMessageAt: messageTime,
+        lastMessageAt: messageTime,
+        clientId: null
       });
     } else {
       // Update thread
-      await storage.updateEmailThread(thread.id, {
-        messageCount: thread.messageCount + 1,
-        lastMessageAt: message.sentAt
+      await storage.updateEmailThread(thread.canonicalConversationId, {
+        messageCount: (thread.messageCount || 0) + 1,
+        lastMessageAt: messageTime
       });
     }
 
     // Link message to thread
-    await storage.updateEmailMessage(message.id, { threadId: thread.id });
+    await storage.updateEmailMessage(message.internetMessageId, { threadKey: thread.threadKey });
   }
 
   /**
@@ -844,24 +856,23 @@ export class EmailIngestionService {
 
           if (matchResult.clientId) {
             // Match found - update thread and all its messages
-            await storage.updateEmailThread(thread.id, {
-              clientId: matchResult.clientId,
-              matchConfidence: matchResult.confidence
+            await storage.updateEmailThread(thread.canonicalConversationId, {
+              clientId: matchResult.clientId
             });
 
             // Update all messages in this thread
-            const messages = await storage.getEmailMessagesByThreadId(thread.id);
+            const messages = await storage.getEmailMessagesByThreadId(thread.canonicalConversationId);
             for (const message of messages) {
-              await storage.updateEmailMessage(message.id, {
+              await storage.updateEmailMessage(message.internetMessageId, {
                 clientId: matchResult.clientId,
-                matchConfidence: matchResult.confidence
+                clientMatchConfidence: matchResult.confidence
               });
             }
 
             stats.matched++;
           } else {
             // No match - quarantine all messages in this thread
-            const messages = await storage.getEmailMessagesByThreadId(thread.id);
+            const messages = await storage.getEmailMessagesByThreadId(thread.canonicalConversationId);
             for (const message of messages) {
               // Check if message is already in quarantine to prevent duplicates
               const existing = await storage.getUnmatchedEmailByMessageId(message.internetMessageId);
@@ -871,7 +882,7 @@ export class EmailIngestionService {
                 
                 // Determine mailbox owner (first mailbox that has this message)
                 const mailboxMappings = await storage.getMailboxMessageMapsByMessageId(message.internetMessageId);
-                const mailboxOwnerUserId = mailboxMappings[0]?.userId || null;
+                const mailboxOwnerUserId = mailboxMappings[0]?.mailboxUserId || null;
                 
                 await storage.createUnmatchedEmail({
                   internetMessageId: message.internetMessageId,
@@ -893,7 +904,7 @@ export class EmailIngestionService {
             stats.quarantined++;
           }
         } catch (error) {
-          console.error(`[Client Association] Error matching thread ${thread.id}:`, error);
+          console.error(`[Client Association] Error matching thread ${thread.canonicalConversationId}:`, error);
           stats.errors++;
         }
       }
