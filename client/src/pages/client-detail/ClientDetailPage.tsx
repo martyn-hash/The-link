@@ -100,7 +100,7 @@ import {
   ServicesTab 
 } from "./components/tabs";
 import { NewClientRequestDialog } from "./dialogs/NewClientRequestDialog";
-import { useClientData, useClientMutations } from "./hooks";
+import { useClientData, useClientMutations, useCompanyConnections } from "./hooks";
 
 export default function ClientDetail() {
   const { id } = useParams();
@@ -168,136 +168,22 @@ export default function ClientDetail() {
     onPersonCreated: () => setIsAddPersonModalOpen(false),
   });
 
-  // Company Connections functionality for individual clients (many-to-many)
-  const [showCompanySelection, setShowCompanySelection] = useState(false);
-  const [showCompanyCreation, setShowCompanyCreation] = useState(false);
-
-  // Query to fetch company connections for this person (many-to-many)
-  const { data: companyConnections = [], isLoading: connectionsLoading } = useQuery<Array<{
-    client: Client;
-    officerRole?: string;
-    isPrimaryContact?: boolean;
-  }>>({
-    queryKey: [`/api/people/${id}/companies`],
-    queryFn: getQueryFn({ on401: "throw" }),
-    enabled: !!id && !!client && client.clientType === 'individual',
-  });
-
-  // Query to fetch client services for all connected companies (for individual clients)
-  const companyServicesQueries = useQuery<ClientServiceWithService[]>({
-    queryKey: ['connected-company-services', (companyConnections ?? []).map(conn => conn.client.id)],
-    queryFn: async () => {
-      const connectedCompanyIds = (companyConnections ?? []).map(conn => conn.client.id);
-      if (client?.clientType !== 'individual' || connectedCompanyIds.length === 0) {
-        return [];
-      }
-      
-      // Fetch services for all connected companies
-      const servicesPromises = connectedCompanyIds.map(async (companyId) => {
-        const response = await fetch(`/api/client-services/client/${companyId}`, {
-          credentials: 'include'
-        });
-        if (!response.ok) {
-          throw new Error(`Failed to fetch services for company ${companyId}`);
-        }
-        const services = await response.json();
-        return services.map((service: any) => ({ ...service, companyId, companyName: companyConnections.find(conn => conn.client.id === companyId)?.client.name }));
-      });
-      
-      const allServices = await Promise.all(servicesPromises);
-      return allServices.flat();
-    },
-    enabled: !!client && client.clientType === 'individual' && (companyConnections?.length ?? 0) > 0,
-  });
-
-  // Query to fetch all company clients for selection
-  const { data: companyClients } = useQuery<Client[]>({
-    queryKey: ['/api/clients?search='],
-    queryFn: getQueryFn({ on401: "throw" }),
-    enabled: showCompanySelection,
-  });
-
-  // Mutation to link person to a company
-  const linkToCompanyMutation = useMutation({
-    mutationFn: async (data: { companyClientId: string; officerRole?: string; isPrimaryContact?: boolean }) => {
-      return await apiRequest("POST", `/api/people/${id}/companies`, {
-        clientId: data.companyClientId,
-        officerRole: data.officerRole,
-        isPrimaryContact: data.isPrimaryContact
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/people/${id}/companies`] });
-      setShowCompanySelection(false);
-      toast({
-        title: "Success",
-        description: "Successfully linked to company",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to link to company",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Mutation to unlink person from a company
-  const unlinkFromCompanyMutation = useMutation({
-    mutationFn: async (companyClientId: string) => {
-      return await apiRequest("DELETE", `/api/people/${id}/companies/${companyClientId}`);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/people/${id}/companies`] });
-      toast({
-        title: "Success",
-        description: "Successfully removed company connection",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to remove company connection",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Mutation to convert individual client to company client
-  const convertToCompanyMutation = useMutation({
-    mutationFn: async (companyData: { 
-      companyName: string; 
-      companyNumber?: string; 
-      officerRole?: string; 
-      isPrimaryContact?: boolean;
-    }) => {
-      return await apiRequest("POST", `/api/people/${id}/convert-to-company-client`, companyData);
-    },
-    onSuccess: (result: any) => {
-      // Invalidate all relevant queries
-      queryClient.invalidateQueries({ queryKey: [`/api/clients/${id}`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/people/${id}/companies`] });
-      setShowCompanyCreation(false);
-      toast({
-        title: "Success",
-        description: `Successfully created company "${result.companyClient.fullName}" and linked to this person`,
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to create company",
-        variant: "destructive",
-      });
-    },
-  });
-
-  // Filter company clients (exclude individuals, current client, and already connected companies)
-  const connectedCompanyIds = (companyConnections ?? []).map(conn => conn.client.id);
-  const availableCompanies = companyClients?.filter(
-    c => c.clientType === 'company' && c.id !== id && !connectedCompanyIds.includes(c.id)
-  ) || [];
+  // Company connections for individual clients (queries, mutations, state)
+  const {
+    companyConnections,
+    connectionsLoading,
+    companyServices: companyServicesData,
+    companyServicesLoading,
+    companyServicesError,
+    availableCompanies,
+    showCompanySelection,
+    setShowCompanySelection,
+    showCompanyCreation,
+    setShowCompanyCreation,
+    linkToCompanyMutation,
+    unlinkFromCompanyMutation,
+    convertToCompanyMutation,
+  } = useCompanyConnections(id, client?.clientType as 'individual' | 'company' | undefined);
 
   if (isLoading) {
     return (
@@ -671,11 +557,11 @@ export default function ClientDetail() {
               clientId={id!}
               companyConnections={companyConnections}
               clientServices={clientServices}
-              companyServices={companyServicesQueries.data as EnhancedClientService[] | undefined}
+              companyServices={companyServicesData as EnhancedClientService[] | undefined}
               servicesLoading={servicesLoading}
               servicesError={!!servicesError}
-              companyServicesLoading={companyServicesQueries.isLoading}
-              companyServicesError={companyServicesQueries.isError}
+              companyServicesLoading={companyServicesLoading}
+              companyServicesError={companyServicesError}
               peopleServices={peopleServices}
               peopleServicesLoading={peopleServicesLoading}
               peopleServicesError={!!peopleServicesError}

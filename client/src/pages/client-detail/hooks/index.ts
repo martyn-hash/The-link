@@ -3,3 +3,6 @@ export type { UseClientDataResult, PeopleServiceWithRelations } from './useClien
 
 export { useClientMutations } from './useClientMutations';
 export type { UseClientMutationsCallbacks } from './useClientMutations';
+
+export { useCompanyConnections } from './useCompanyConnections';
+export type { UseCompanyConnectionsResult, UseCompanyConnectionsCallbacks, CompanyConnection } from './useCompanyConnections';
