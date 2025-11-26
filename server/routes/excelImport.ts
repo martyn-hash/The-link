@@ -1183,93 +1183,117 @@ export function registerExcelImportRoutes(
         XLSX.utils.book_append_sheet(workbook, peopleSheet, "People");
 
         // ===== SERVICE DATA SHEET =====
-        // This sheet uses a normalized format: one row per UDF value
-        // Users copy the template rows for each client they want to import
+        // Wide format: one row per service, UDFs and Roles as columns
+        // Each column includes service name for easy identification
         
         const activeServices = services.filter((s: any) => s.isActive !== false);
         
-        // Role columns - these are always included
-        const roleHeaders = workRoles.map((role: any) => `Role: ${role.name}`);
+        // Build all UDF columns across all services: "{Service} - {FieldName} (ID: {fieldId})"
+        interface UdfColumn {
+          serviceName: string;
+          fieldId: string;
+          fieldName: string;
+          header: string;
+        }
+        const allUdfColumns: UdfColumn[] = [];
         
-        // Base headers for the normalized format
+        for (const service of activeServices) {
+          const udfs = (service.udfDefinitions || []) as Array<{id: string; name: string; type: string}>;
+          for (const udf of udfs) {
+            allUdfColumns.push({
+              serviceName: service.name,
+              fieldId: udf.id,
+              fieldName: udf.name,
+              header: `${service.name} - ${udf.name} (ID: ${udf.id})`
+            });
+          }
+        }
+        
+        // Build all Role columns with service name: "{Service} - {RoleName}"
+        interface RoleColumn {
+          serviceName: string;
+          roleName: string;
+          header: string;
+        }
+        const allRoleColumns: RoleColumn[] = [];
+        
+        for (const service of activeServices) {
+          for (const role of workRoles) {
+            allRoleColumns.push({
+              serviceName: service.name,
+              roleName: role.name,
+              header: `${service.name} - ${role.name}`
+            });
+          }
+        }
+        
+        // Build headers: base columns + service config + all UDF columns + all role columns
         const serviceDataHeaders = [
           "Client Company Number",
-          "Client Name", 
+          "Client Name",
           "Service Name",
-          "Field ID",
-          "Field Name (reference only)",
-          "Value",
           "Frequency",
           "Next Start Date",
           "Next Due Date",
           "Service Owner",
-          ...roleHeaders
+          ...allUdfColumns.map(u => u.header),
+          ...allRoleColumns.map(r => r.header)
         ];
         
-        // Instructions row explaining each column
+        // Instructions row
         const instructionRow = [
-          "8-digit padded number",
-          "Use if no company number",
+          "8-digit padded",
+          "Use if no company #",
           "Must match exactly",
-          "From UDF Reference sheet",
-          "For your reference only",
-          "The value to set",
           "Monthly/Quarterly/Annual",
           "dd/mm/yyyy",
           "dd/mm/yyyy",
           "user@email.com",
-          ...roleHeaders.map(() => "user@email.com")
+          ...allUdfColumns.map(() => "Enter value"),
+          ...allRoleColumns.map(() => "user@email.com")
         ];
         
-        // Create template rows - one for each service/UDF combination
-        // Users will duplicate and fill in for each client
+        // Create one template row per service
+        // User copies the row and fills in client info
         const serviceDataRows: any[][] = [];
         
         for (const service of activeServices) {
-          const udfs = (service.udfDefinitions || []) as Array<{id: string; name: string; type: string}>;
+          const row: any[] = [
+            "",  // Client Company Number - user fills in
+            "",  // Client Name - user fills in
+            service.name,  // Service Name (pre-filled)
+            "",  // Frequency
+            "",  // Next Start Date
+            "",  // Next Due Date
+            "",  // Service Owner
+          ];
           
-          if (udfs.length > 0) {
-            // Create a template row for each UDF (users copy for each client)
-            for (const udf of udfs) {
-              const row = [
-                "",  // Client Company Number - user fills in
-                "",  // Client Name - user fills in
-                service.name,  // Service Name (pre-filled)
-                udf.id,  // Field ID (pre-filled)
-                udf.name,  // Field Name for reference (pre-filled)
-                "",  // Value - user fills in
-                "",  // Frequency - user fills in (optional)
-                "",  // Next Start Date - user fills in (optional)
-                "",  // Next Due Date - user fills in (optional)
-                "",  // Service Owner - user fills in (optional)
-                ...roleHeaders.map(() => "")  // Role assignments - user fills in (optional)
-              ];
-              serviceDataRows.push(row);
+          // Add UDF column values - empty for columns not belonging to this service
+          for (const udfCol of allUdfColumns) {
+            if (udfCol.serviceName === service.name) {
+              row.push("");  // User fills in value for this service's UDF
+            } else {
+              row.push("-");  // Not applicable for this service
             }
-          } else {
-            // Service without UDFs - still include for config/roles
-            const row = [
-              "",  // Client Company Number
-              "",  // Client Name
-              service.name,  // Service Name
-              "",  // No Field ID
-              "(No custom fields)",  // Indicates no UDFs
-              "",  // No Value needed
-              "",  // Frequency
-              "",  // Next Start Date
-              "",  // Next Due Date
-              "",  // Service Owner
-              ...roleHeaders.map(() => "")
-            ];
-            serviceDataRows.push(row);
           }
+          
+          // Add Role column values - empty for columns not belonging to this service
+          for (const roleCol of allRoleColumns) {
+            if (roleCol.serviceName === service.name) {
+              row.push("");  // User fills in email for this service's role
+            } else {
+              row.push("-");  // Not applicable for this service
+            }
+          }
+          
+          serviceDataRows.push(row);
         }
         
-        // Build the sheet with headers, instructions, then template rows
+        // Build the sheet
         const serviceSheetData = [
           serviceDataHeaders,
           instructionRow,
-          ["--- TEMPLATE ROWS BELOW (copy and fill for each client) ---", ...Array(serviceDataHeaders.length - 1).fill("")],
+          ["--- TEMPLATE ROWS: Copy the row for your service and fill in client data ---", ...Array(serviceDataHeaders.length - 1).fill("")],
           ...serviceDataRows
         ];
         
@@ -1277,7 +1301,7 @@ export function registerExcelImportRoutes(
         
         // Set column widths
         serviceDataSheet["!cols"] = serviceDataHeaders.map((h: string) => ({ 
-          wch: Math.max(String(h).length + 2, 22) 
+          wch: Math.min(Math.max(String(h).length + 2, 15), 40)
         }));
         
         XLSX.utils.book_append_sheet(workbook, serviceDataSheet, "Service Data");
