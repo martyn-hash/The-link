@@ -102,6 +102,7 @@ export const projectTypeNotifications = pgTable("project_type_notifications", {
   index("idx_project_type_notifications_project_type_id").on(table.projectTypeId),
   index("idx_project_type_notifications_stage_id").on(table.stageId),
   index("idx_project_type_notifications_category").on(table.category),
+  index("idx_project_type_notifications_client_request_template_id").on(table.clientRequestTemplateId),
   check("check_project_notification_fields", sql`
     (category != 'project' OR (date_reference IS NOT NULL AND offset_type IS NOT NULL AND offset_days IS NOT NULL))
   `),
@@ -183,6 +184,7 @@ export const scheduledNotifications = pgTable("scheduled_notifications", {
   index("idx_scheduled_notifications_status").on(table.status),
   index("idx_scheduled_notifications_client_status_scheduled").on(table.clientId, table.status, table.scheduledFor),
   index("idx_scheduled_notifications_client_status_sent").on(table.clientId, table.status, table.sentAt),
+  index("idx_scheduled_notifications_status_scheduled_for").on(table.status, table.scheduledFor),
   check("check_notification_source", sql`
     (project_type_notification_id IS NOT NULL AND client_request_reminder_id IS NULL) OR
     (project_type_notification_id IS NULL AND client_request_reminder_id IS NOT NULL)
@@ -209,4 +211,5 @@ export const notificationHistory = pgTable("notification_history", {
   index("idx_notification_history_sent_at").on(table.sentAt),
   index("idx_notification_history_status").on(table.status),
   index("idx_notification_history_notification_type").on(table.notificationType),
+  index("idx_notification_history_client_created").on(table.clientId, table.createdAt),
 ]);

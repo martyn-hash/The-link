@@ -4,8 +4,9 @@ import { users } from '../users/tables';
 import { clients } from '../clients/tables';
 import { inactiveReasonEnum, stageApprovalFieldTypeEnum, comparisonTypeEnum, customFieldTypeEnum } from '../enums';
 import { services, workRoles, clientServices, peopleServices } from '../services/tables';
+import { projectTypes } from './base';
 
-export { projectTypes } from './base';
+export { projectTypes };
 
 export const projects = pgTable("projects", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
