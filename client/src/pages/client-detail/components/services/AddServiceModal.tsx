@@ -29,7 +29,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Plus, User as UserIcon } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Plus, User as UserIcon, FileText } from "lucide-react";
 import { formatPersonName } from "../../utils/formatters";
 import { 
   AddServiceData, 
@@ -45,6 +46,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
   const [selectedService, setSelectedService] = useState<ServiceWithDetails | null>(null);
   const [roleAssignments, setRoleAssignments] = useState<Record<string, string>>({});
   const [selectedPersonId, setSelectedPersonId] = useState<string>("");
+  const [udfValues, setUdfValues] = useState<Record<string, any>>({});
   const { toast } = useToast();
   
   // Helper function to determine field state for visual indicators
@@ -127,9 +129,10 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
     
     setSelectedService(service);
     
-    // Reset assignments when service changes
+    // Reset assignments and UDF values when service changes
     setRoleAssignments({});
     setSelectedPersonId("");
+    setUdfValues({});
     
     // Clear fields for static services (they don't need frequency, dates, or owner)
     if (service.isStaticService) {
@@ -241,6 +244,19 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
   // Create client service mutation with role assignments
   const createClientServiceMutation = useMutation({
     mutationFn: async (data: AddServiceData) => {
+      // Process UDF values - convert date strings to ISO format
+      const processedUdfValues: Record<string, any> = {};
+      if (selectedService?.udfDefinitions && Array.isArray(selectedService.udfDefinitions)) {
+        selectedService.udfDefinitions.forEach((field: any) => {
+          const value = udfValues[field.id];
+          if (field.type === 'date' && value) {
+            processedUdfValues[field.id] = new Date(value).toISOString();
+          } else if (value !== undefined && value !== '') {
+            processedUdfValues[field.id] = value;
+          }
+        });
+      }
+      
       // Step 1: Create the client service
       const clientService = await apiRequest("POST", "/api/client-services", {
         clientId,
@@ -249,6 +265,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
         nextStartDate: data.nextStartDate && data.nextStartDate.trim() ? new Date(data.nextStartDate).toISOString() : null,
         nextDueDate: data.nextDueDate && data.nextDueDate.trim() ? new Date(data.nextDueDate).toISOString() : null,
         serviceOwnerId: data.serviceOwnerId && data.serviceOwnerId.trim() ? data.serviceOwnerId : null,
+        udfValues: Object.keys(processedUdfValues).length > 0 ? processedUdfValues : undefined,
       });
       
       // Step 2: Create role assignments if any roles are assigned
@@ -279,6 +296,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
       form.reset();
       setSelectedService(null);
       setRoleAssignments({});
+      setUdfValues({});
       setIsOpen(false);
       onSuccess?.();
     },
@@ -360,6 +378,11 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
   // Check if Static service is selected
   const isStaticService = selectedService?.isStaticService || false;
   
+  // Check if service has UDF definitions
+  const hasUdfFields = selectedService?.udfDefinitions && 
+    Array.isArray(selectedService.udfDefinitions) && 
+    selectedService.udfDefinitions.length > 0;
+  
   // Helper to check if field should be disabled (only if CH service AND data was successfully populated)
   const isFieldDisabled = (fieldName: 'frequency' | 'nextStartDate' | 'nextDueDate') => {
     if (!isCompaniesHouseService) return false;
@@ -385,13 +408,13 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
           Add Service
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-4xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className={`max-h-[80vh] overflow-y-auto ${hasUdfFields ? 'sm:max-w-6xl' : 'sm:max-w-4xl'}`}>
         <DialogHeader>
           <DialogTitle>Add Service</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className={`grid grid-cols-1 gap-8 ${hasUdfFields ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
               {/* Column 1: Service Details */}
               <div className="space-y-4">
                 <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Service Details</h3>
@@ -732,6 +755,96 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
                   </div>
                 )}
               </div>
+
+              {/* Column 3: Service-Specific Details (UDFs) - Only shown when service has UDF definitions */}
+              {hasUdfFields && (
+                <div className="space-y-4">
+                  <h3 className="font-medium text-sm text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Service-Specific Details
+                  </h3>
+                  <div className="space-y-4">
+                    {(selectedService?.udfDefinitions as any[])?.map((field: any) => (
+                      <div key={field.id} className="space-y-2">
+                        <label className="text-sm font-medium flex items-center gap-1">
+                          {field.name}
+                          {field.required && <span className="text-red-500">*</span>}
+                        </label>
+                        
+                        {field.type === 'number' && (
+                          <Input
+                            type="number"
+                            value={udfValues[field.id] ?? ''}
+                            onChange={(e) => setUdfValues({ ...udfValues, [field.id]: e.target.value ? Number(e.target.value) : null })}
+                            placeholder={field.placeholder || `Enter ${field.name.toLowerCase()}`}
+                            data-testid={`input-udf-${field.id}`}
+                          />
+                        )}
+                        
+                        {field.type === 'date' && (
+                          <Input
+                            type="date"
+                            value={udfValues[field.id] ?? ''}
+                            onChange={(e) => setUdfValues({ ...udfValues, [field.id]: e.target.value })}
+                            data-testid={`input-udf-${field.id}`}
+                          />
+                        )}
+                        
+                        {field.type === 'boolean' && (
+                          <div className="flex items-center space-x-2 h-10">
+                            <Switch
+                              checked={udfValues[field.id] ?? false}
+                              onCheckedChange={(checked) => setUdfValues({ ...udfValues, [field.id]: checked })}
+                              data-testid={`switch-udf-${field.id}`}
+                            />
+                            <span className="text-sm text-muted-foreground">
+                              {udfValues[field.id] ? 'Yes' : 'No'}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {field.type === 'short_text' && (
+                          <Input
+                            type="text"
+                            value={udfValues[field.id] ?? ''}
+                            onChange={(e) => setUdfValues({ ...udfValues, [field.id]: e.target.value })}
+                            placeholder={field.placeholder || `Enter ${field.name.toLowerCase()}`}
+                            data-testid={`input-udf-${field.id}`}
+                          />
+                        )}
+                        
+                        {field.type === 'long_text' && (
+                          <textarea
+                            value={udfValues[field.id] ?? ''}
+                            onChange={(e) => setUdfValues({ ...udfValues, [field.id]: e.target.value })}
+                            placeholder={field.placeholder || `Enter ${field.name.toLowerCase()}`}
+                            className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                            data-testid={`textarea-udf-${field.id}`}
+                          />
+                        )}
+                        
+                        {field.type === 'select' && field.options && (
+                          <Select 
+                            value={udfValues[field.id] ?? ''} 
+                            onValueChange={(value) => setUdfValues({ ...udfValues, [field.id]: value })}
+                          >
+                            <SelectTrigger data-testid={`select-udf-${field.id}`}>
+                              <SelectValue placeholder={`Select ${field.name.toLowerCase()}`} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {field.options.map((option: string) => (
+                                <SelectItem key={option} value={option}>
+                                  {option}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end space-x-2">
