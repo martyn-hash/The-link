@@ -91,14 +91,6 @@ export type CompleteProject = z.infer<typeof completeProjectSchema>;
 export type UpdateProjectStatus = z.infer<typeof updateProjectStatusSchema>;
 export type CSVProject = z.infer<typeof csvProjectSchema>;
 
-export {
-  ProjectView,
-  InsertProjectView,
-  UserProjectPreference,
-  InsertUserProjectPreference,
-  UpdateUserProjectPreference,
-} from '../users/types';
-
 // Backward compatibility aliases (legacy used plural names)
 export type SchedulingRunLogs = SchedulingRunLog;
 export type InsertSchedulingRunLogs = InsertSchedulingRunLog;

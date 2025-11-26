@@ -6,7 +6,7 @@ import {
   clientPortalUsers,
   type MessageThread,
   type InsertMessageThread
-} from "../../../shared/schema.js";
+} from "@shared/schema";
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
 
 export class MessageThreadStorage {

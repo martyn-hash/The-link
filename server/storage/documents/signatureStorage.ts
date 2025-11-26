@@ -12,7 +12,7 @@ import {
   type InsertSignatureField,
   type SignatureAuditLog,
   type InsertSignatureAuditLog
-} from "../../../shared/schema.js";
+} from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 
 export class SignatureStorage {

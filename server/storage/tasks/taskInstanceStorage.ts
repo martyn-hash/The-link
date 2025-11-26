@@ -19,7 +19,7 @@ import {
   type Person,
   type ClientPortalUser,
   type Client
-} from "../../../shared/schema.js";
+} from "@shared/schema";
 import { eq, desc, and } from "drizzle-orm";
 
 export class TaskInstanceStorage {

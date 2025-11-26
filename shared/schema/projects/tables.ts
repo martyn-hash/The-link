@@ -5,17 +5,7 @@ import { clients } from '../clients/tables';
 import { inactiveReasonEnum, stageApprovalFieldTypeEnum, comparisonTypeEnum, customFieldTypeEnum } from '../enums';
 import { services, workRoles, clientServices, peopleServices } from '../services/tables';
 
-export const projectTypes: any = pgTable("project_types", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: varchar("name").notNull().unique(),
-  description: text("description"),
-  serviceId: varchar("service_id").references(() => services.id, { onDelete: "set null" }),
-  active: boolean("active").default(true),
-  notificationsActive: boolean("notifications_active").default(true),
-  singleProjectPerClient: boolean("single_project_per_client").default(false),
-  order: integer("order").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
+export { projectTypes } from './base';
 
 export const projects = pgTable("projects", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

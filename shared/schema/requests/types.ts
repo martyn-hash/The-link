@@ -30,13 +30,6 @@ import {
   insertRiskAssessmentResponseSchema,
 } from "./schemas";
 
-// Re-export client request reminder types from notifications domain for backward compatibility
-export { 
-  ClientRequestReminder, 
-  InsertClientRequestReminder, 
-  UpdateClientRequestReminder 
-} from "../notifications/types";
-
 export type ClientRequestTemplateCategory = typeof clientRequestTemplateCategories.$inferSelect;
 export type InsertClientRequestTemplateCategory = z.infer<typeof insertClientRequestTemplateCategorySchema>;
 export type UpdateClientRequestTemplateCategory = z.infer<typeof updateClientRequestTemplateCategorySchema>;

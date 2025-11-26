@@ -4,9 +4,9 @@ import { inactiveReasonEnum } from "../enums";
 
 import { users } from "../users/tables";
 import { clients, people } from "../clients/tables";
-import { projectTypes } from "../../schema";
+import { projectTypes } from "../projects/base";
 
-export const services: any = pgTable("services", {
+export const services = pgTable("services", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull().unique(),
   description: text("description"),

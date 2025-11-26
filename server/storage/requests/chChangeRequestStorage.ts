@@ -8,7 +8,7 @@ import {
   type UpdateChChangeRequest,
   type Client,
   type User
-} from "../../../shared/schema.js";
+} from "@shared/schema";
 import { eq, desc, sql } from "drizzle-orm";
 
 export class ChChangeRequestStorage {

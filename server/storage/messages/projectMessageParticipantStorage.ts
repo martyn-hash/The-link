@@ -5,7 +5,7 @@ import {
   projectMessages,
   type ProjectMessageParticipant,
   type InsertProjectMessageParticipant
-} from "../../../shared/schema.js";
+} from "@shared/schema";
 import { eq, and, desc, sql, ne, or, isNull } from "drizzle-orm";
 
 export class ProjectMessageParticipantStorage {

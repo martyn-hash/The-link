@@ -4,7 +4,7 @@ import {
   staffMessages,
   type StaffMessageParticipant,
   type InsertStaffMessageParticipant
-} from "../../../shared/schema.js";
+} from "@shared/schema";
 import { eq, and, desc, sql, ne } from "drizzle-orm";
 
 export class StaffMessageParticipantStorage {

@@ -12,7 +12,7 @@ import {
 
 import { users } from "../users/tables";
 import { clients, people, clientPortalUsers } from "../clients/tables";
-import { clientRequestTemplates, clientCustomRequests } from "../../schema";
+import { clientRequestTemplates, clientCustomRequests } from "../requests/tables";
 
 export const taskInstancesRelations = relations(taskInstances, ({ one, many }) => ({
   template: one(clientRequestTemplates, {

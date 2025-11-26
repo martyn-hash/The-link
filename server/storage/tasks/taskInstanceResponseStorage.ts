@@ -6,7 +6,7 @@ import {
   type TaskInstanceResponse,
   type InsertTaskInstanceResponse,
   type ClientRequestTemplateQuestion as TaskTemplateQuestion
-} from "../../../shared/schema.js";
+} from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 export class TaskInstanceResponseStorage {

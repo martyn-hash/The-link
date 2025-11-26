@@ -16,7 +16,7 @@ import {
   type ClientRequestTemplateQuestion,
   type InsertClientRequestTemplateQuestion,
   type UpdateClientRequestTemplateQuestion
-} from "../../../shared/schema.js";
+} from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 type TaskTemplateCategory = ClientRequestTemplateCategory;

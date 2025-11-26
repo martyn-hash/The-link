@@ -13,8 +13,8 @@ import {
   unique,
   uniqueIndex,
   alias,
-  AnyPgColumn,
   real,
+  PgColumn,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -36,8 +36,9 @@ export {
   unique,
   uniqueIndex,
   alias,
-  AnyPgColumn,
   real,
   createInsertSchema,
   z,
 };
+
+export type { PgColumn };

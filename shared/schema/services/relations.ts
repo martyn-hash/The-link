@@ -11,7 +11,8 @@ import {
 
 import { users } from "../users/tables";
 import { clients, people } from "../clients/tables";
-import { projectTypes, projectSchedulingHistory } from "../../schema";
+import { projectTypes } from "../projects/base";
+import { projectSchedulingHistory } from "../projects/tables";
 
 export const servicesRelations = relations(services, ({ one, many }) => ({
   projectType: one(projectTypes, {

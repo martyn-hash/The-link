@@ -3,7 +3,10 @@ import { sql } from "drizzle-orm";
 
 import { users } from "../users/tables";
 import { clients, people, clientPortalUsers } from "../clients/tables";
-import { projects, projectTypes, kanbanStages, clientServices, clientRequestTemplates, taskInstances } from "../../schema";
+import { projects, projectTypes, kanbanStages } from "../projects/tables";
+import { clientServices } from "../services/tables";
+import { clientRequestTemplates } from "../requests/tables";
+import { taskInstances } from "../tasks/tables";
 
 export const pushTemplateTypeEnum = pgEnum("push_template_type", [
   "new_message_staff",

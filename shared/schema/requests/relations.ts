@@ -14,7 +14,8 @@ import {
 
 import { users } from "../users/tables";
 import { clients } from "../clients/tables";
-import { projectTypeNotifications, taskInstances, scheduledNotifications } from "../../schema";
+import { projectTypeNotifications, scheduledNotifications } from "../notifications/tables";
+import { taskInstances } from "../tasks/tables";
 
 export const clientRequestTemplateCategoriesRelations = relations(clientRequestTemplateCategories, ({ many }) => ({
   templates: many(clientRequestTemplates),

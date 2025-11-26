@@ -18,7 +18,7 @@ import {
   type Client,
   type ClientRequestTemplate,
   type Project
-} from "../../../shared/schema.js";
+} from "@shared/schema";
 import { eq, desc, and } from "drizzle-orm";
 
 export class CustomRequestStorage {

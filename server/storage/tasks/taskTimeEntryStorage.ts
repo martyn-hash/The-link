@@ -6,7 +6,7 @@ import {
   type InsertTaskTimeEntry,
   type StopTaskTimeEntry,
   type User
-} from "../../../shared/schema.js";
+} from "@shared/schema";
 import { eq, desc, and, isNull } from "drizzle-orm";
 
 export class TaskTimeEntryStorage {

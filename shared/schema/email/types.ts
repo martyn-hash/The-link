@@ -20,14 +20,6 @@ import {
   insertGraphSyncStateSchema,
 } from "./schemas";
 
-// Re-export client email types from clients domain for backward compatibility
-export { 
-  ClientEmailAlias, 
-  InsertClientEmailAlias, 
-  ClientDomainAllowlist, 
-  InsertClientDomainAllowlist 
-} from "../clients/types";
-
 export type EmailMessage = typeof emailMessages.$inferSelect;
 export type InsertEmailMessage = z.infer<typeof insertEmailMessageSchema>;
 

@@ -4,7 +4,7 @@ import {
   type TaskType,
   type InsertTaskType,
   type UpdateTaskType
-} from "../../../shared/schema.js";
+} from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 
 export class TaskTypeStorage {

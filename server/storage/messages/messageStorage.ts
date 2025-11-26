@@ -7,7 +7,7 @@ import {
   projects,
   type Message,
   type InsertMessage
-} from "../../../shared/schema.js";
+} from "@shared/schema";
 import { eq, and, sql, isNull, or } from "drizzle-orm";
 
 export class MessageStorage {

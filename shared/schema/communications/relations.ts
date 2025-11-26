@@ -15,7 +15,8 @@ import {
 
 import { users } from "../users/tables";
 import { clients, people, clientPortalUsers } from "../clients/tables";
-import { projects, services } from "../../schema";
+import { projects } from "../projects/tables";
+import { services } from "../services/tables";
 
 export const communicationsRelations = relations(communications, ({ one }) => ({
   client: one(clients, {

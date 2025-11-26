@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { users } from "../users/tables";
 import { clients, people, clientPortalUsers } from "../clients/tables";
 import { internalTaskStatusEnum, internalTaskPriorityEnum, taskInstanceStatusEnum } from "../enums";
-import { clientRequestTemplates, clientCustomRequests } from "../../schema";
+import { clientRequestTemplates, clientCustomRequests } from "../requests/tables";
 
 export { taskInstanceStatusEnum, internalTaskStatusEnum, internalTaskPriorityEnum };
 

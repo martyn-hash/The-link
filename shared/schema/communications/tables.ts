@@ -3,7 +3,8 @@ import { sql } from "drizzle-orm";
 
 import { users } from "../users/tables";
 import { clients, people, clientPortalUsers } from "../clients/tables";
-import { projects, services } from "../../schema";
+import { projects } from "../projects/tables";
+import { services } from "../services/tables";
 
 export const communicationTypeEnum = pgEnum("communication_type", [
   "phone_call",

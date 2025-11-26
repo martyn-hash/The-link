@@ -8,7 +8,7 @@ import {
   users,
   type ProjectMessageThread,
   type InsertProjectMessageThread
-} from "../../../shared/schema.js";
+} from "@shared/schema";
 import { eq, and, desc, sql, inArray, ne } from "drizzle-orm";
 
 export class ProjectMessageThreadStorage {

@@ -10,9 +10,6 @@ import {
   graphSyncState,
 } from "./tables";
 
-// Re-export client email schemas from clients domain for backward compatibility
-export { insertClientEmailAliasSchema, insertClientDomainAllowlistSchema } from "../clients/schemas";
-
 export const insertEmailMessageSchema = createInsertSchema(emailMessages).omit({
   processedAt: true,
   createdAt: true,

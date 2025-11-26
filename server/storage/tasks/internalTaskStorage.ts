@@ -17,7 +17,7 @@ import {
   type TaskDocument,
   type InsertTaskDocument,
   type User
-} from "../../../shared/schema.js";
+} from "@shared/schema";
 import { eq, desc, and, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 

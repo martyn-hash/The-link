@@ -4,8 +4,6 @@ import {
   mailboxMessageMap,
   emailThreads,
   unmatchedEmails,
-  clientEmailAliases,
-  clientDomainAllowlist,
   emailAttachments,
   emailMessageAttachments,
   graphWebhookSubscriptions,
@@ -58,24 +56,6 @@ export const unmatchedEmailsRelations = relations(unmatchedEmails, ({ one }) => 
   }),
   mailboxOwner: one(users, {
     fields: [unmatchedEmails.mailboxOwnerUserId],
-    references: [users.id],
-  }),
-}));
-
-export const clientEmailAliasesRelations = relations(clientEmailAliases, ({ one }) => ({
-  client: one(clients, {
-    fields: [clientEmailAliases.clientId],
-    references: [clients.id],
-  }),
-}));
-
-export const clientDomainAllowlistRelations = relations(clientDomainAllowlist, ({ one }) => ({
-  client: one(clients, {
-    fields: [clientDomainAllowlist.clientId],
-    references: [clients.id],
-  }),
-  createdByUser: one(users, {
-    fields: [clientDomainAllowlist.createdBy],
     references: [users.id],
   }),
 }));
