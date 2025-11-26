@@ -416,11 +416,11 @@ export interface IStorage {
   prepareStageChangeNotification(projectId: string, newStageName: string, oldStageName?: string): Promise<StageChangeNotificationPreview | null>;
   sendStageChangeNotifications(projectId: string, newStageName: string, oldStageName?: string): Promise<void>;
   
-  getAllServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]>;
-  getActiveServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]>;
+  getAllServices(): Promise<(Service & { projectType: ProjectType | null; roles: WorkRole[] })[]>;
+  getActiveServices(): Promise<(Service & { projectType: ProjectType | null; roles: WorkRole[] })[]>;
   getServicesWithActiveClients(): Promise<Service[]>;
-  getClientAssignableServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]>;
-  getProjectTypeAssignableServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]>;
+  getClientAssignableServices(): Promise<(Service & { projectType: ProjectType | null; roles: WorkRole[] })[]>;
+  getProjectTypeAssignableServices(): Promise<(Service & { projectType: ProjectType | null; roles: WorkRole[] })[]>;
   getServiceById(id: string): Promise<Service | undefined>;
   getServiceByName(name: string): Promise<Service | undefined>;
   getScheduledServices(): Promise<ScheduledServiceView[]>;
@@ -441,15 +441,15 @@ export interface IStorage {
   addRoleToService(serviceId: string, roleId: string): Promise<ServiceRole>;
   removeRoleFromService(serviceId: string, roleId: string): Promise<void>;
 
-  getAllClientServices(): Promise<(ClientService & { client: Client; service: Service & { projectType: ProjectType } })[]>;
+  getAllClientServices(): Promise<(ClientService & { client: Client; service: Service & { projectType: ProjectType | null } })[]>;
   getClientServiceById(id: string): Promise<(ClientService & { 
     client: Client; 
-    service: Service & { projectType: ProjectType }; 
+    service: Service & { projectType: ProjectType | null }; 
     serviceOwner?: User;
     roleAssignments: (ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[];
   }) | undefined>;
   getClientServicesByClientId(clientId: string): Promise<(ClientService & { 
-    service: Service & { projectType: ProjectType }; 
+    service: Service & { projectType: ProjectType | null }; 
     serviceOwner?: User; 
     roleAssignments: (ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[];
   })[]>;
@@ -458,14 +458,14 @@ export interface IStorage {
   updateClientService(id: string, clientService: Partial<InsertClientService>): Promise<ClientService>;
   deleteClientService(id: string): Promise<void>;
   
-  getAllPeopleServices(): Promise<(PeopleService & { person: Person; service: Service & { projectType: ProjectType } })[]>;
+  getAllPeopleServices(): Promise<(PeopleService & { person: Person; service: Service & { projectType: ProjectType | null } })[]>;
   getPeopleServiceById(id: string): Promise<(PeopleService & { 
     person: Person; 
-    service: Service & { projectType: ProjectType }; 
+    service: Service & { projectType: ProjectType | null }; 
     serviceOwner?: User;
   }) | undefined>;
   getPeopleServicesByPersonId(personId: string): Promise<(PeopleService & { 
-    service: Service & { projectType: ProjectType }; 
+    service: Service & { projectType: ProjectType | null }; 
     serviceOwner?: User; 
   })[]>;
   getPeopleServicesByServiceId(serviceId: string): Promise<(PeopleService & { person: Person })[]>;

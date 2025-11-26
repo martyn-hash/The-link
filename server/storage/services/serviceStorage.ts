@@ -51,21 +51,13 @@ export class ServiceStorage extends BaseStorage {
     }, {} as Record<string, WorkRole[]>);
 
     // Deduplicate services using a Map (services can have multiple project types)
-    const servicesMap = new Map<string, Service & { projectType: ProjectType; roles: WorkRole[] }>();
+    const servicesMap = new Map<string, Service & { projectType: ProjectType | null; roles: WorkRole[] }>();
     
     servicesData.forEach((row) => {
       if (!servicesMap.has(row.service.id)) {
         servicesMap.set(row.service.id, {
           ...row.service,
-          projectType: row.projectType || {
-            id: '',
-            name: '',
-            description: null,
-            serviceId: null,
-            active: true,
-            order: 0,
-            createdAt: null,
-          },
+          projectType: row.projectType?.id ? row.projectType : null,
           roles: rolesByServiceId[row.service.id] || [],
         });
       }
@@ -74,7 +66,7 @@ export class ServiceStorage extends BaseStorage {
     return Array.from(servicesMap.values());
   }
 
-  async getActiveServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]> {
+  async getActiveServices(): Promise<(Service & { projectType: ProjectType | null; roles: WorkRole[] })[]> {
     // Get services with their optional project types
     const servicesData = await db
       .select({
@@ -105,21 +97,13 @@ export class ServiceStorage extends BaseStorage {
     }, {} as Record<string, WorkRole[]>);
 
     // Deduplicate services using a Map (services can have multiple project types)
-    const servicesMap = new Map<string, Service & { projectType: ProjectType; roles: WorkRole[] }>();
+    const servicesMap = new Map<string, Service & { projectType: ProjectType | null; roles: WorkRole[] }>();
     
     servicesData.forEach((row) => {
       if (!servicesMap.has(row.service.id)) {
         servicesMap.set(row.service.id, {
           ...row.service,
-          projectType: row.projectType || {
-            id: '',
-            name: '',
-            description: null,
-            serviceId: null,
-            active: true,
-            order: 0,
-            createdAt: null,
-          },
+          projectType: row.projectType?.id ? row.projectType : null,
           roles: rolesByServiceId[row.service.id] || [],
         });
       }
@@ -139,7 +123,7 @@ export class ServiceStorage extends BaseStorage {
     return servicesWithActiveClients.map(row => row.service);
   }
 
-  async getClientAssignableServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]> {
+  async getClientAssignableServices(): Promise<(Service & { projectType: ProjectType | null; roles: WorkRole[] })[]> {
     // Get services that are NOT personal services (for client assignment)
     const servicesData = await db
       .select({
@@ -171,21 +155,13 @@ export class ServiceStorage extends BaseStorage {
     }, {} as Record<string, WorkRole[]>);
 
     // Deduplicate services using a Map (services can have multiple project types)
-    const servicesMap = new Map<string, Service & { projectType: ProjectType; roles: WorkRole[] }>();
+    const servicesMap = new Map<string, Service & { projectType: ProjectType | null; roles: WorkRole[] }>();
     
     servicesData.forEach((row) => {
       if (!servicesMap.has(row.service.id)) {
         servicesMap.set(row.service.id, {
           ...row.service,
-          projectType: row.projectType || {
-            id: '',
-            name: '',
-            description: null,
-            serviceId: null,
-            active: true,
-            order: 0,
-            createdAt: null,
-          },
+          projectType: row.projectType?.id ? row.projectType : null,
           roles: rolesByServiceId[row.service.id] || [],
         });
       }
@@ -194,7 +170,7 @@ export class ServiceStorage extends BaseStorage {
     return Array.from(servicesMap.values());
   }
 
-  async getProjectTypeAssignableServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]> {
+  async getProjectTypeAssignableServices(): Promise<(Service & { projectType: ProjectType | null; roles: WorkRole[] })[]> {
     // Get services that are NOT personal services AND NOT static services (for project type mapping)
     const servicesData = await db
       .select({
@@ -231,21 +207,13 @@ export class ServiceStorage extends BaseStorage {
     }, {} as Record<string, WorkRole[]>);
 
     // Deduplicate services using a Map (services can have multiple project types)
-    const servicesMap = new Map<string, Service & { projectType: ProjectType; roles: WorkRole[] }>();
+    const servicesMap = new Map<string, Service & { projectType: ProjectType | null; roles: WorkRole[] }>();
     
     servicesData.forEach((row) => {
       if (!servicesMap.has(row.service.id)) {
         servicesMap.set(row.service.id, {
           ...row.service,
-          projectType: row.projectType || {
-            id: '',
-            name: '',
-            description: null,
-            serviceId: null,
-            active: true,
-            order: 0,
-            createdAt: null,
-          },
+          projectType: row.projectType?.id ? row.projectType : null,
           roles: rolesByServiceId[row.service.id] || [],
         });
       }

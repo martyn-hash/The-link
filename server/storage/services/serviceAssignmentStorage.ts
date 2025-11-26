@@ -34,7 +34,7 @@ import type {
 export class ServiceAssignmentStorage extends BaseStorage {
   // ==================== Client Services CRUD operations ====================
 
-  async getAllClientServices(): Promise<(ClientService & { client: Client; service: Service & { projectType: ProjectType } })[]> {
+  async getAllClientServices(): Promise<(ClientService & { client: Client; service: Service & { projectType: ProjectType | null } })[]> {
     const results = await db
       .select({
         id: clientServices.id,
@@ -102,21 +102,21 @@ export class ServiceAssignmentStorage extends BaseStorage {
         projectTypeId: result.projectTypeId,
         udfDefinitions: result.serviceUdfDefinitions,
         createdAt: result.serviceCreatedAt,
-        projectType: {
+        projectType: result.projectTypeId ? {
           id: result.projectTypeId,
           name: result.projectTypeName,
           description: result.projectTypeDescription,
           active: result.projectTypeActive,
           order: result.projectTypeOrder,
           createdAt: result.projectTypeCreatedAt,
-        },
+        } : null,
       },
     })) as any;
   }
 
   async getClientServiceById(id: string): Promise<(ClientService & { 
     client: Client; 
-    service: Service & { projectType: ProjectType }; 
+    service: Service & { projectType: ProjectType | null }; 
     serviceOwner?: User;
     roleAssignments: (ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[];
   }) | undefined> {
@@ -181,8 +181,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
           .from(projectTypes)
           .where(or(
             eq(projectTypes.name, service.name),
-            ilike(projectTypes.name, `%${service.name.replace(' Service', '')}%`),
-            ilike(service.name, `%${projectTypes.name}%`)
+            ilike(projectTypes.name, `%${service.name.replace(' Service', '')}%`)
           ));
         projectType = projectTypesList.length ? projectTypesList[0] : undefined;
         console.log(`[DEBUG] Project type found by name matching: ${projectType?.name || 'None'} for service: ${service.name}`);
@@ -238,7 +237,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
           chStartDateField: service.chStartDateField,
           chDueDateField: service.chDueDateField,
           createdAt: service.createdAt,
-          projectType,
+          projectType: projectType || null,
         },
         serviceOwner,
         roleAssignments,
@@ -251,7 +250,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
   }
 
   async getClientServicesByClientId(clientId: string): Promise<(ClientService & { 
-    service: Service & { projectType: ProjectType }; 
+    service: Service & { projectType: ProjectType | null }; 
     serviceOwner?: User; 
     roleAssignments: (ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[];
     hasActiveProject?: boolean;
@@ -304,8 +303,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
               .from(projectTypes)
               .where(or(
                 eq(projectTypes.name, service.name),
-                ilike(projectTypes.name, `%${service.name.replace(' Service', '')}%`),
-                ilike(service.name, `%${projectTypes.name}%`)
+                ilike(projectTypes.name, `%${service.name.replace(' Service', '')}%`)
               ));
             projectType = projectTypesList.length ? projectTypesList[0] : undefined;
             console.log(`[DEBUG] Project type found by name matching: ${projectType?.name || 'None'} for service: ${service.name}`);
@@ -419,7 +417,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
               chStartDateField: service.chStartDateField,
               chDueDateField: service.chDueDateField,
               createdAt: service.createdAt,
-              projectType,
+              projectType: projectType || null,
             },
             serviceOwner,
             roleAssignments,
@@ -593,7 +591,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
     return !!existing;
   }
 
-  async getAllClientServicesWithDetails(): Promise<(ClientService & { service: Service & { projectType: ProjectType } })[]> {
+  async getAllClientServicesWithDetails(): Promise<(ClientService & { service: Service & { projectType: ProjectType | null } })[]> {
     const results = await db
       .select({
         clientService: clientServices,
@@ -610,7 +608,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
       ...result.clientService,
       service: {
         ...result.service,
-        projectType: result.projectType
+        projectType: result.projectType?.id ? result.projectType : null
       }
     })); // Return all services, including those with null project types for error detection
   }
@@ -1040,7 +1038,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
 
   // ==================== People Services CRUD operations ====================
 
-  async getAllPeopleServices(): Promise<(PeopleService & { person: Person; service: Service })[]> {
+  async getAllPeopleServices(): Promise<(PeopleService & { person: Person; service: Service & { projectType: ProjectType | null } })[]> {
     const results = await db
       .select({
         id: peopleServices.id,
@@ -1059,10 +1057,13 @@ export class ServiceAssignmentStorage extends BaseStorage {
         person: people,
         // Service details  
         service: services,
+        // Project type details
+        projectType: projectTypes,
       })
       .from(peopleServices)
       .leftJoin(people, eq(peopleServices.personId, people.id))
-      .leftJoin(services, eq(peopleServices.serviceId, services.id));
+      .leftJoin(services, eq(peopleServices.serviceId, services.id))
+      .leftJoin(projectTypes, eq(projectTypes.serviceId, services.id));
 
     return results.map(result => ({
       id: result.id,
@@ -1078,11 +1079,14 @@ export class ServiceAssignmentStorage extends BaseStorage {
       isActive: result.isActive,
       createdAt: result.createdAt,
       person: result.person!,
-      service: result.service!,
+      service: {
+        ...result.service!,
+        projectType: result.projectType?.id ? result.projectType : null,
+      },
     }));
   }
 
-  async getPeopleServiceById(id: string): Promise<(PeopleService & { person: Person; service: Service }) | undefined> {
+  async getPeopleServiceById(id: string): Promise<(PeopleService & { person: Person; service: Service & { projectType: ProjectType | null }; serviceOwner?: User }) | undefined> {
     const [result] = await db
       .select({
         id: peopleServices.id,
@@ -1101,10 +1105,16 @@ export class ServiceAssignmentStorage extends BaseStorage {
         person: people,
         // Service details
         service: services,
+        // Project type details
+        projectType: projectTypes,
+        // Service owner details
+        serviceOwner: users,
       })
       .from(peopleServices)
       .leftJoin(people, eq(peopleServices.personId, people.id))
       .leftJoin(services, eq(peopleServices.serviceId, services.id))
+      .leftJoin(projectTypes, eq(projectTypes.serviceId, services.id))
+      .leftJoin(users, eq(peopleServices.serviceOwnerId, users.id))
       .where(eq(peopleServices.id, id));
 
     if (!result) return undefined;
@@ -1123,11 +1133,15 @@ export class ServiceAssignmentStorage extends BaseStorage {
       isActive: result.isActive,
       createdAt: result.createdAt,
       person: result.person!,
-      service: result.service!,
+      service: {
+        ...result.service!,
+        projectType: result.projectType?.id ? result.projectType : null,
+      },
+      ...(result.serviceOwner ? { serviceOwner: result.serviceOwner } : {}),
     };
   }
 
-  async getPeopleServicesByPersonId(personId: string): Promise<(PeopleService & { service: Service })[]> {
+  async getPeopleServicesByPersonId(personId: string): Promise<(PeopleService & { service: Service & { projectType: ProjectType | null }; serviceOwner?: User })[]> {
     const results = await db
       .select({
         id: peopleServices.id,
@@ -1144,9 +1158,15 @@ export class ServiceAssignmentStorage extends BaseStorage {
         createdAt: peopleServices.createdAt,
         // Service details
         service: services,
+        // Project type details
+        projectType: projectTypes,
+        // Service owner details
+        serviceOwner: users,
       })
       .from(peopleServices)
       .leftJoin(services, eq(peopleServices.serviceId, services.id))
+      .leftJoin(projectTypes, eq(projectTypes.serviceId, services.id))
+      .leftJoin(users, eq(peopleServices.serviceOwnerId, users.id))
       .where(eq(peopleServices.personId, personId));
 
     return results.map(result => ({
@@ -1162,7 +1182,11 @@ export class ServiceAssignmentStorage extends BaseStorage {
       notes: result.notes,
       isActive: result.isActive,
       createdAt: result.createdAt,
-      service: result.service!,
+      service: {
+        ...result.service!,
+        projectType: result.projectType?.id ? result.projectType : null,
+      },
+      ...(result.serviceOwner ? { serviceOwner: result.serviceOwner } : {}),
     }));
   }
 
@@ -1310,7 +1334,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
     return !!existing;
   }
 
-  async getAllPeopleServicesWithDetails(): Promise<(PeopleService & { service: Service & { projectType: ProjectType } })[]> {
+  async getAllPeopleServicesWithDetails(): Promise<(PeopleService & { service: Service & { projectType: ProjectType | null } })[]> {
     const results = await db
       .select({
         peopleService: peopleServices,
@@ -1327,7 +1351,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
       ...result.peopleService,
       service: {
         ...result.service,
-        projectType: result.projectType
+        projectType: result.projectType?.id ? result.projectType : null
       }
     })); // Return all services, including those with null project types for error detection
   }
@@ -1542,7 +1566,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
         },
       });
 
-      return (roleAssignment?.user as User) || undefined;
+      return roleAssignment?.user ? (roleAssignment.user as unknown as User) : undefined;
     } catch (error) {
       console.error('[Storage] Error resolving stage role assignee:', error);
       return undefined;
