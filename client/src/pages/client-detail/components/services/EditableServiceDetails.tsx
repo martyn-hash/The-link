@@ -39,6 +39,8 @@ export function EditableServiceDetails({
     return formattedValues;
   });
 
+  const VAT_UDF_FIELD_ID = 'vat_number_auto';
+
   const [vatValidationStatus, setVatValidationStatus] = useState<Record<string, {
     status: 'validated' | 'invalid' | 'unvalidated' | 'validating';
     companyName?: string;
@@ -46,17 +48,19 @@ export function EditableServiceDetails({
     error?: string;
   }>>(() => {
     const initialStatus: Record<string, any> = {};
-    const udfMeta = (clientService.udfValues as Record<string, any>)?._meta || {};
+    const udfValuesData = (clientService.udfValues as Record<string, any>) || {};
     
     if (clientService.service?.udfDefinitions && Array.isArray(clientService.service.udfDefinitions)) {
       clientService.service.udfDefinitions.forEach((field: any) => {
-        if (field.id === 'vat_number_auto') {
-          const meta = udfMeta[field.id];
-          if (meta?.vatValidationStatus) {
+        if (field.id === VAT_UDF_FIELD_ID) {
+          const validationKey = `${VAT_UDF_FIELD_ID}_validation`;
+          const validationData = udfValuesData[validationKey];
+          if (validationData?.isValid !== undefined) {
             initialStatus[field.id] = {
-              status: meta.vatValidationStatus,
-              companyName: meta.vatCompanyName,
-              validatedAt: meta.vatValidatedAt,
+              status: validationData.isValid ? 'validated' : 'invalid',
+              companyName: validationData.companyName,
+              validatedAt: validationData.validatedAt,
+              error: validationData.error,
             };
           } else {
             initialStatus[field.id] = { status: 'unvalidated' };
@@ -68,19 +72,51 @@ export function EditableServiceDetails({
     return initialStatus;
   });
 
-  const validateVatMutation = useMutation({
-    mutationFn: async (vatNumber: string) => {
-      const response = await apiRequest("POST", "/api/vat/validate", { vatNumber });
+  const saveAndValidateVatMutation = useMutation({
+    mutationFn: async () => {
+      const processedUdfValues: Record<string, any> = {};
+      
+      if (clientService.service?.udfDefinitions && Array.isArray(clientService.service.udfDefinitions)) {
+        clientService.service.udfDefinitions.forEach((field: any) => {
+          const value = udfValues[field.id];
+          if (field.type === 'date' && value) {
+            processedUdfValues[field.id] = new Date(value).toISOString();
+          } else {
+            processedUdfValues[field.id] = value;
+          }
+        });
+      }
+      
+      const existingUdfValues = (clientService.udfValues || {}) as Record<string, any>;
+      const validationKey = `${VAT_UDF_FIELD_ID}_validation`;
+      if (existingUdfValues[validationKey]) {
+        processedUdfValues[validationKey] = existingUdfValues[validationKey];
+      }
+      
+      await apiRequest("PUT", `/api/client-services/${clientService.id}`, {
+        nextStartDate: clientService.nextStartDate,
+        nextDueDate: clientService.nextDueDate,
+        serviceOwnerId: clientService.serviceOwnerId,
+        frequency: clientService.frequency,
+        isActive: clientService.isActive,
+        roleAssignments: clientService.roleAssignments?.map(ra => ({
+          workRoleId: ra.workRole.id,
+          userId: ra.user.id,
+        })) || [],
+        udfValues: processedUdfValues,
+      });
+      
+      const response = await apiRequest("POST", `/api/client-services/${clientService.id}/validate-vat`, {});
       return response.json();
     },
     onSuccess: (data) => {
       if (data.isValid) {
         setVatValidationStatus(prev => ({
           ...prev,
-          vat_number_auto: {
+          [VAT_UDF_FIELD_ID]: {
             status: 'validated',
             companyName: data.companyName,
-            validatedAt: new Date().toISOString(),
+            validatedAt: data.validatedAt || new Date().toISOString(),
           }
         }));
         toast({
@@ -90,7 +126,7 @@ export function EditableServiceDetails({
       } else {
         setVatValidationStatus(prev => ({
           ...prev,
-          vat_number_auto: {
+          [VAT_UDF_FIELD_ID]: {
             status: 'invalid',
             error: data.error || 'Invalid VAT number',
           }
@@ -101,11 +137,13 @@ export function EditableServiceDetails({
           variant: "destructive",
         });
       }
+      onUpdate();
+      queryClient.invalidateQueries({ queryKey: [`/api/client-services/client/${clientService.clientId}`] });
     },
     onError: (error) => {
       setVatValidationStatus(prev => ({
         ...prev,
-        vat_number_auto: {
+        [VAT_UDF_FIELD_ID]: {
           status: 'unvalidated',
           error: error instanceof Error ? error.message : 'Validation failed',
         }
@@ -132,7 +170,7 @@ export function EditableServiceDetails({
       ...prev,
       [fieldId]: { status: 'validating' }
     }));
-    validateVatMutation.mutate(vatNumber);
+    saveAndValidateVatMutation.mutate();
   };
 
   const updateServiceMutation = useMutation({
@@ -152,17 +190,11 @@ export function EditableServiceDetails({
         });
       }
       
-      // Add VAT validation metadata
-      const vatStatus = vatValidationStatus.vat_number_auto;
-      if (vatStatus && vatStatus.status !== 'unvalidated') {
-        processedUdfValues._meta = {
-          ...(processedUdfValues._meta || {}),
-          vat_number_auto: {
-            vatValidationStatus: vatStatus.status,
-            vatCompanyName: vatStatus.companyName,
-            vatValidatedAt: vatStatus.validatedAt,
-          }
-        };
+      // Preserve existing validation metadata when updating UDF values
+      const existingUdfValues = (clientService.udfValues || {}) as Record<string, any>;
+      const validationKey = `${VAT_UDF_FIELD_ID}_validation`;
+      if (existingUdfValues[validationKey]) {
+        processedUdfValues[validationKey] = existingUdfValues[validationKey];
       }
 
       return apiRequest("PUT", `/api/client-services/${clientService.id}`, {
@@ -299,7 +331,7 @@ export function EditableServiceDetails({
                     value={udfValues[field.id] ?? ''}
                     onChange={(e) => {
                       setUdfValues({ ...udfValues, [field.id]: e.target.value });
-                      if (field.id === 'vat_number_auto') {
+                      if (field.id === VAT_UDF_FIELD_ID) {
                         setVatValidationStatus(prev => ({
                           ...prev,
                           [field.id]: { status: 'unvalidated' }
@@ -308,11 +340,11 @@ export function EditableServiceDetails({
                     }}
                     placeholder={field.placeholder || `Enter ${field.name.toLowerCase()}`}
                     disabled={!isEditing}
-                    className={field.id === 'vat_number_auto' && vatValidationStatus[field.id]?.status === 'invalid' ? 'border-red-500' : ''}
+                    className={field.id === VAT_UDF_FIELD_ID && vatValidationStatus[field.id]?.status === 'invalid' ? 'border-red-500' : ''}
                     data-testid={`input-service-detail-${field.id}`}
                   />
                   
-                  {field.id === 'vat_number_auto' && (
+                  {field.id === VAT_UDF_FIELD_ID && (
                     <>
                       {vatValidationStatus[field.id]?.status === 'validated' && (
                         <Tooltip>
@@ -364,17 +396,17 @@ export function EditableServiceDetails({
                           size="sm"
                           variant="outline"
                           onClick={() => handleValidateVat(field.id)}
-                          disabled={vatValidationStatus[field.id]?.status === 'validating'}
+                          disabled={saveAndValidateVatMutation.isPending}
                           data-testid="button-validate-vat"
                         >
-                          {vatValidationStatus[field.id]?.status === 'validating' ? 'Validating...' : 'Validate'}
+                          {saveAndValidateVatMutation.isPending ? 'Validating...' : 'Validate'}
                         </Button>
                       )}
                     </>
                   )}
                 </div>
                 
-                {field.id === 'vat_number_auto' && vatValidationStatus[field.id]?.status === 'validated' && vatValidationStatus[field.id]?.companyName && (
+                {field.id === VAT_UDF_FIELD_ID && vatValidationStatus[field.id]?.status === 'validated' && vatValidationStatus[field.id]?.companyName && (
                   <p className="text-xs text-green-600" data-testid="text-vat-company-name">
                     Registered to: {vatValidationStatus[field.id]?.companyName}
                   </p>
