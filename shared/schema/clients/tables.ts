@@ -1,4 +1,4 @@
-import { pgTable, varchar, text, timestamp, boolean, index, unique, jsonb, integer } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, text, timestamp, boolean, index, unique, jsonb, integer, decimal } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from '../users/tables';
 import { nationalityEnum } from '../enums';
@@ -35,6 +35,21 @@ export const clients = pgTable("clients", {
   confirmationStatementNextMadeUpTo: timestamp("confirmation_statement_next_made_up_to"),
   confirmationStatementOverdue: boolean("confirmation_statement_overdue").default(false),
   companiesHouseData: jsonb("companies_house_data"),
+  
+  managerId: varchar("manager_id").references(() => users.id),
+  clientOnboardedDate: timestamp("client_onboarded_date"),
+  monthlyChargeQuote: decimal("monthly_charge_quote", { precision: 10, scale: 2 }),
+  companyUtr: varchar("company_utr"),
+  companiesHouseAuthCode: varchar("companies_house_auth_code"),
+  companyTelephone: varchar("company_telephone"),
+  postalAddress1: varchar("postal_address_1"),
+  postalAddress2: varchar("postal_address_2"),
+  postalAddress3: varchar("postal_address_3"),
+  postalAddressPostcode: varchar("postal_address_postcode"),
+  postalAddressCountry: varchar("postal_address_country"),
+  companyEmailDomain: varchar("company_email_domain"),
+  tradingAs: varchar("trading_as"),
+  notes: text("notes"),
 });
 
 export const people = pgTable("people", {
@@ -73,6 +88,10 @@ export const people = pgTable("people", {
   photoIdVerified: boolean("photo_id_verified").default(false),
   addressVerified: boolean("address_verified").default(false),
   createdAt: timestamp("created_at").defaultNow(),
+  
+  initialContactDate: timestamp("initial_contact_date"),
+  invoiceAddressType: text("invoice_address_type"),
+  amlComplete: boolean("aml_complete").default(false),
 });
 
 export const clientPeople = pgTable("client_people", {
