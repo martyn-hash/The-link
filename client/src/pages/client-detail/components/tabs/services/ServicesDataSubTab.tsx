@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,12 +7,22 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertCircle, Save, Pencil, X, Check } from "lucide-react";
+import { AlertCircle, Save, Pencil, X, Check, CheckCircle2, HelpCircle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { UDFDefinition, Service, ClientService } from "@shared/schema";
 import type { EnhancedClientService } from "../../../utils/types";
+
+const VAT_UDF_FIELD_ID = 'vat_number_auto';
+
+interface VatValidationStatus {
+  status: 'validated' | 'invalid' | 'unvalidated' | 'validating';
+  companyName?: string;
+  validatedAt?: string;
+  error?: string;
+}
 
 interface ServicesDataSubTabProps {
   clientId: string;
@@ -127,15 +137,96 @@ interface ServiceDataCardProps {
   clientService: EnhancedClientService;
   onSave: (clientServiceId: string, udfValues: Record<string, any>) => Promise<void>;
   isSaving: boolean;
+  onRefetch: () => void;
 }
 
-function ServiceDataCard({ clientService, onSave, isSaving }: ServiceDataCardProps) {
+function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: ServiceDataCardProps) {
+  const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
   const [editedValues, setEditedValues] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const udfDefinitions = (clientService.service.udfDefinitions as UDFDefinition[] | null) || [];
   const currentValues = (clientService.udfValues as Record<string, any>) || {};
+
+  // Initialize VAT validation status from stored metadata
+  const getInitialVatStatus = (): VatValidationStatus => {
+    const validationKey = `${VAT_UDF_FIELD_ID}_validation`;
+    const validationData = currentValues[validationKey];
+    
+    if (validationData?.isValid !== undefined) {
+      return {
+        status: validationData.isValid ? 'validated' : 'invalid',
+        companyName: validationData.companyName,
+        validatedAt: validationData.validatedAt,
+        error: validationData.error,
+      };
+    }
+    
+    return { status: 'unvalidated' };
+  };
+
+  const [vatStatus, setVatStatus] = useState<VatValidationStatus>(getInitialVatStatus);
+
+  // Sync VAT status when clientService.udfValues changes (e.g., after refetch)
+  useEffect(() => {
+    if (!isEditing) {
+      setVatStatus(getInitialVatStatus());
+    }
+  }, [clientService.udfValues]);
+
+  // Check if this service has a VAT field
+  const hasVatField = udfDefinitions.some(def => def.id === VAT_UDF_FIELD_ID);
+  const isVatService = (clientService.service as any).isVatService === true;
+
+  // VAT validation mutation
+  const validateVatMutation = useMutation({
+    mutationFn: async () => {
+      // First save current values if editing
+      if (isEditing && Object.keys(editedValues).length > 0) {
+        await onSave(clientService.id, editedValues);
+      }
+      
+      const response = await apiRequest("POST", `/api/client-services/${clientService.id}/validate-vat`, {});
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      if (data.isValid) {
+        setVatStatus({
+          status: 'validated',
+          companyName: data.companyName,
+          validatedAt: data.validatedAt,
+        });
+        toast({
+          title: "VAT Validated",
+          description: `VAT number is registered to ${data.companyName}`,
+        });
+      } else {
+        setVatStatus({
+          status: 'invalid',
+          error: data.error,
+        });
+        toast({
+          title: "VAT Invalid",
+          description: data.error || "VAT number not found in HMRC records",
+          variant: "destructive",
+        });
+      }
+      onRefetch();
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientService.clientId, "services"] });
+    },
+    onError: (error: any) => {
+      setVatStatus({
+        status: 'unvalidated',
+        error: error instanceof Error ? error.message : 'Validation failed',
+      });
+      toast({
+        title: "Validation Error",
+        description: error instanceof Error ? error.message : "Could not connect to HMRC API",
+        variant: "destructive",
+      });
+    },
+  });
 
   if (udfDefinitions.length === 0) {
     return null;
@@ -151,6 +242,8 @@ function ServiceDataCard({ clientService, onSave, isSaving }: ServiceDataCardPro
     setIsEditing(false);
     setEditedValues({});
     setErrors({});
+    // Reset VAT status to stored value
+    setVatStatus(getInitialVatStatus());
   };
 
   const isEmptyValue = (value: any, type: string): boolean => {
@@ -186,13 +279,30 @@ function ServiceDataCard({ clientService, onSave, isSaving }: ServiceDataCardPro
   const handleSave = async () => {
     if (!validateAll()) return;
     
-    await onSave(clientService.id, editedValues);
+    // When saving, if VAT value changed, mark as unvalidated
+    const originalVat = currentValues[VAT_UDF_FIELD_ID];
+    const newVat = editedValues[VAT_UDF_FIELD_ID];
+    if (originalVat !== newVat && hasVatField) {
+      // Clear validation metadata when VAT number changes
+      const updatedValues = { ...editedValues };
+      delete updatedValues[`${VAT_UDF_FIELD_ID}_validation`];
+      await onSave(clientService.id, updatedValues);
+      setVatStatus({ status: 'unvalidated' });
+    } else {
+      await onSave(clientService.id, editedValues);
+    }
+    
     setIsEditing(false);
     setEditedValues({});
   };
 
   const handleValueChange = (fieldId: string, value: any) => {
     setEditedValues((prev) => ({ ...prev, [fieldId]: value }));
+    
+    // If VAT field changed, mark as unvalidated
+    if (fieldId === VAT_UDF_FIELD_ID) {
+      setVatStatus({ status: 'unvalidated' });
+    }
     
     const def = udfDefinitions.find((d) => d.id === fieldId);
     if (!def) return;
@@ -220,6 +330,20 @@ function ServiceDataCard({ clientService, onSave, isSaving }: ServiceDataCardPro
       }
       return newErrors;
     });
+  };
+
+  const handleValidateVat = () => {
+    const vatNumber = isEditing ? editedValues[VAT_UDF_FIELD_ID] : currentValues[VAT_UDF_FIELD_ID];
+    if (!vatNumber) {
+      toast({
+        title: "No VAT Number",
+        description: "Please enter a VAT number first",
+        variant: "destructive",
+      });
+      return;
+    }
+    setVatStatus({ status: 'validating' });
+    validateVatMutation.mutate();
   };
 
   return (
@@ -264,6 +388,7 @@ function ServiceDataCard({ clientService, onSave, isSaving }: ServiceDataCardPro
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {udfDefinitions.map((def) => {
             const displayValue = isEditing ? editedValues[def.id] : currentValues[def.id];
+            const isVatField = def.id === VAT_UDF_FIELD_ID;
             
             return (
               <div key={def.id} className="space-y-1.5">
@@ -271,22 +396,154 @@ function ServiceDataCard({ clientService, onSave, isSaving }: ServiceDataCardPro
                   {def.name}
                   {def.required && <span className="text-red-500 ml-1">*</span>}
                 </Label>
+                
                 {isEditing ? (
-                  <UdfField
-                    definition={def}
-                    value={displayValue}
-                    onChange={(value) => handleValueChange(def.id, value)}
-                    disabled={isSaving}
-                    error={errors[def.id]}
-                  />
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1">
+                        <UdfField
+                          definition={def}
+                          value={displayValue}
+                          onChange={(value) => handleValueChange(def.id, value)}
+                          disabled={isSaving || validateVatMutation.isPending}
+                          error={errors[def.id]}
+                        />
+                      </div>
+                      
+                      {/* VAT validation icons and button */}
+                      {isVatField && (
+                        <>
+                          {vatStatus.status === 'validated' && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" data-testid="icon-vat-validated" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>VAT Validated</p>
+                                {vatStatus.companyName && (
+                                  <p className="text-xs text-muted-foreground">{vatStatus.companyName}</p>
+                                )}
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                          
+                          {vatStatus.status === 'invalid' && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" data-testid="icon-vat-invalid" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>VAT Number Invalid</p>
+                                {vatStatus.error && (
+                                  <p className="text-xs text-muted-foreground">{vatStatus.error}</p>
+                                )}
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                          
+                          {vatStatus.status === 'unvalidated' && displayValue && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <HelpCircle className="h-5 w-5 text-orange-400 flex-shrink-0" data-testid="icon-vat-unvalidated" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>VAT Not Validated</p>
+                                <p className="text-xs text-muted-foreground">Click Validate to check with HMRC</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                          
+                          {vatStatus.status === 'validating' && (
+                            <Loader2 className="h-5 w-5 text-blue-500 animate-spin flex-shrink-0" data-testid="icon-vat-validating" />
+                          )}
+                          
+                          {displayValue && vatStatus.status !== 'validated' && vatStatus.status !== 'validating' && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={handleValidateVat}
+                              disabled={validateVatMutation.isPending || isSaving}
+                              data-testid="button-validate-vat"
+                            >
+                              Validate
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    
+                    {/* VAT company name display when validated */}
+                    {isVatField && vatStatus.status === 'validated' && vatStatus.companyName && (
+                      <p className="text-xs text-green-600" data-testid="text-vat-company-name">
+                        Registered to: {vatStatus.companyName}
+                      </p>
+                    )}
+                  </div>
                 ) : (
-                  <div className="text-sm text-muted-foreground p-2 bg-muted/30 rounded-md min-h-[2.5rem] flex items-center">
-                    {def.type === "boolean" ? (
-                      displayValue ? "Yes" : "No"
-                    ) : def.type === "date" && displayValue ? (
-                      new Date(displayValue).toLocaleDateString('en-GB')
-                    ) : (
-                      displayValue || <span className="text-muted-foreground/50 italic">Not set</span>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm text-muted-foreground p-2 bg-muted/30 rounded-md min-h-[2.5rem] flex items-center flex-1">
+                        {def.type === "boolean" ? (
+                          displayValue ? "Yes" : "No"
+                        ) : def.type === "date" && displayValue ? (
+                          new Date(displayValue).toLocaleDateString('en-GB')
+                        ) : (
+                          displayValue || <span className="text-muted-foreground/50 italic">Not set</span>
+                        )}
+                      </div>
+                      
+                      {/* VAT validation icons in read mode */}
+                      {isVatField && displayValue && (
+                        <>
+                          {vatStatus.status === 'validated' && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" data-testid="icon-vat-validated" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>VAT Validated</p>
+                                {vatStatus.companyName && (
+                                  <p className="text-xs text-muted-foreground">{vatStatus.companyName}</p>
+                                )}
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                          
+                          {vatStatus.status === 'invalid' && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0" data-testid="icon-vat-invalid" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>VAT Number Invalid</p>
+                                {vatStatus.error && (
+                                  <p className="text-xs text-muted-foreground">{vatStatus.error}</p>
+                                )}
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                          
+                          {vatStatus.status === 'unvalidated' && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <HelpCircle className="h-5 w-5 text-orange-400 flex-shrink-0" data-testid="icon-vat-unvalidated" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>VAT Not Validated</p>
+                                <p className="text-xs text-muted-foreground">Edit to validate with HMRC</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    
+                    {/* VAT company name display when validated */}
+                    {isVatField && vatStatus.status === 'validated' && vatStatus.companyName && (
+                      <p className="text-xs text-green-600" data-testid="text-vat-company-name">
+                        Registered to: {vatStatus.companyName}
+                      </p>
                     )}
                   </div>
                 )}
@@ -389,6 +646,7 @@ export function ServicesDataSubTab({
           clientService={cs}
           onSave={handleSave}
           isSaving={updateUdfMutation.isPending}
+          onRefetch={onRefetch}
         />
       ))}
     </div>
