@@ -2,6 +2,8 @@ import { Express, Request, Response } from "express";
 import multer from "multer";
 import XLSX from "xlsx";
 import { storage } from "../storage/index";
+import { companiesHouseService } from "../companies-house-service";
+import { createClientServiceMapping } from "../core/service-mapper";
 
 const uploadExcel = multer({
   storage: multer.memoryStorage(),
@@ -736,7 +738,7 @@ export function registerExcelImportRoutes(
               }
             }
 
-            const clientData = {
+            let clientData: any = {
               name: t.name,
               email: t.email || null,
               clientType: t.clientType || null,
@@ -762,6 +764,45 @@ export function registerExcelImportRoutes(
               tradingAs: t.tradingAs || null,
               notes: t.notes || null,
             };
+
+            // Companies House enrichment for clients with company numbers
+            if (t.companyNumber && t.companyNumber.length >= 6 && t.clientType === 'Company') {
+              try {
+                console.log(`[ExcelImport] Fetching CH data for company ${t.companyNumber}`);
+                const chProfile = await companiesHouseService.getCompanyProfile(t.companyNumber);
+                if (chProfile) {
+                  const chData = companiesHouseService.transformCompanyToClient(chProfile);
+                  // Merge CH data - user-provided values take precedence
+                  clientData = {
+                    ...chData,  // CH data as base
+                    ...clientData,  // Import data overwrites
+                    // Ensure CH-specific fields are always from CH API
+                    companiesHouseName: chData.companiesHouseName,
+                    companiesHouseData: chData.companiesHouseData,
+                    nextAccountsDue: chData.nextAccountsDue,
+                    nextAccountsPeriodEnd: chData.nextAccountsPeriodEnd,
+                    confirmationStatementNextDue: chData.confirmationStatementNextDue,
+                    confirmationStatementNextMadeUpTo: chData.confirmationStatementNextMadeUpTo,
+                    confirmationStatementLastMadeUpTo: chData.confirmationStatementLastMadeUpTo,
+                    accountingReferenceDay: chData.accountingReferenceDay,
+                    accountingReferenceMonth: chData.accountingReferenceMonth,
+                    lastAccountsMadeUpTo: chData.lastAccountsMadeUpTo,
+                    lastAccountsType: chData.lastAccountsType,
+                    accountsOverdue: chData.accountsOverdue,
+                    confirmationStatementOverdue: chData.confirmationStatementOverdue,
+                    jurisdiction: chData.jurisdiction,
+                    // Keep user-provided values if they exist, otherwise use CH
+                    name: t.name || chData.name,
+                    companyStatus: t.companyStatus || chData.companyStatus,
+                    sicCodes: t.sicCodes.length > 0 ? t.sicCodes : chData.sicCodes,
+                  };
+                  console.log(`[ExcelImport] CH enrichment successful for ${t.companyNumber}`);
+                }
+              } catch (chError: any) {
+                console.warn(`[ExcelImport] CH enrichment failed for ${t.companyNumber}: ${chError.message}`);
+                // Continue without CH enrichment - just use import data
+              }
+            }
 
             let existingClient = null;
             if (t.companyNumber && t.companyNumber.length >= 6) {
@@ -917,7 +958,8 @@ export function registerExcelImportRoutes(
                   
                   if (!matchedClientService) {
                     try {
-                      matchedClientService = await storage.createClientService({
+                      // Use service mapper which handles CH-connected services correctly
+                      matchedClientService = await createClientServiceMapping({
                         clientId: resolvedClientId,
                         serviceId: t.serviceId,
                         isActive: true,
@@ -975,6 +1017,10 @@ export function registerExcelImportRoutes(
             try {
               const clientService = await storage.getClientServiceById(clientServiceId);
               if (clientService) {
+                // Check if this is a CH-connected service (dates auto-populated from CH data)
+                const service = await storage.getServiceById(clientService.serviceId);
+                const isCHConnected = service?.isCompaniesHouseConnected || false;
+                
                 const updateData: any = {};
                 
                 if (Object.keys(updates.udfValues).length > 0) {
@@ -982,9 +1028,13 @@ export function registerExcelImportRoutes(
                   updateData.udfValues = { ...existingValues, ...updates.udfValues };
                 }
                 
-                if (updates.configUpdates.frequency) updateData.frequency = updates.configUpdates.frequency;
-                if (updates.configUpdates.nextStartDate) updateData.nextStartDate = updates.configUpdates.nextStartDate;
-                if (updates.configUpdates.nextDueDate) updateData.nextDueDate = updates.configUpdates.nextDueDate;
+                // Only apply frequency/dates from import for non-CH-connected services
+                // CH-connected services get their dates from the client's CH data
+                if (!isCHConnected) {
+                  if (updates.configUpdates.frequency) updateData.frequency = updates.configUpdates.frequency;
+                  if (updates.configUpdates.nextStartDate) updateData.nextStartDate = updates.configUpdates.nextStartDate;
+                  if (updates.configUpdates.nextDueDate) updateData.nextDueDate = updates.configUpdates.nextDueDate;
+                }
                 if (updates.configUpdates.serviceOwnerId) updateData.serviceOwnerId = updates.configUpdates.serviceOwnerId;
                 
                 if (Object.keys(updateData).length > 0) {
@@ -1217,6 +1267,7 @@ export function registerExcelImportRoutes(
           "Client Company Number",
           "Client Name",
           "Service Name",
+          "CH Connected?",
           "Frequency",
           "Next Start Date",
           "Next Due Date",
@@ -1230,6 +1281,7 @@ export function registerExcelImportRoutes(
           "8-digit padded",
           "Use if no company #",
           "Must match exactly",
+          "(info only)",
           "Monthly/Quarterly/Annual",
           "dd/mm/yyyy",
           "dd/mm/yyyy",
@@ -1242,13 +1294,17 @@ export function registerExcelImportRoutes(
         const serviceDataRows: any[][] = [];
         
         for (const service of activeServices) {
+          // Check if this is a CH-connected service (dates auto-populated)
+          const isCHConnected = service.isCompaniesHouseConnected || false;
+          
           const row: any[] = [
             "",  // Client Company Number
             "",  // Client Name
-            service.name,  // Service Name (pre-filled)
-            "",  // Frequency
-            "",  // Next Start Date
-            "",  // Next Due Date
+            service.name,  // Service Name (exact match required)
+            isCHConnected ? "Yes - dates auto from CH" : "No",  // CH Connected indicator
+            isCHConnected ? "(auto - annually)" : "",  // Frequency - auto for CH services
+            isCHConnected ? "(auto from CH data)" : "",  // Next Start Date
+            isCHConnected ? "(auto from CH data)" : "",  // Next Due Date
             "",  // Service Owner
             ...roleHeaders.map(() => ""),  // All role columns empty
             ...allUdfs.map(() => "")  // All UDF columns empty (1 per UDF)
