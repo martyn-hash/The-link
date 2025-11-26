@@ -160,6 +160,32 @@ interface PersonRow {
   "Mobile Number": string | number;
 }
 
+interface ServiceDataRow {
+  "Client Company Number"?: string | number;
+  "Client Name"?: string;
+  "Service Name": string;
+  "Field ID": string;
+  "Value": string | number | boolean;
+}
+
+interface TransformedServiceData {
+  original: ServiceDataRow;
+  transformed: {
+    clientCompanyNumber: string;
+    clientName: string;
+    clientId: string | null;
+    serviceName: string;
+    serviceId: string | null;
+    fieldId: string;
+    fieldName: string | null;
+    fieldType: string | null;
+    value: any;
+    clientServiceId: string | null;
+  };
+  warnings: string[];
+  errors: string[];
+}
+
 interface TransformedClient {
   original: ClientRow;
   transformed: {
@@ -263,15 +289,36 @@ export function registerExcelImportRoutes(
 
         const clientSheet = workbook.Sheets[clientSheetName];
         const personSheet = workbook.Sheets[personSheetName];
+        
+        const serviceDataSheetName = workbook.SheetNames.find(n => 
+          n.toLowerCase().includes("service") && n.toLowerCase().includes("data")
+        );
 
         const clientData: ClientRow[] = XLSX.utils.sheet_to_json(clientSheet);
         const personData: PersonRow[] = XLSX.utils.sheet_to_json(personSheet);
+        const serviceDataRows: ServiceDataRow[] = serviceDataSheetName 
+          ? XLSX.utils.sheet_to_json(workbook.Sheets[serviceDataSheetName])
+          : [];
 
         const users = await storage.getAllUsers();
         const userEmailMap = new Map(users.map((u: any) => [u.email?.toLowerCase(), u]));
+        
+        const allServices = await storage.getAllServices();
+        const serviceNameMap = new Map(allServices.map((s: any) => [s.name.toLowerCase(), s]));
+        
+        const existingClients = await storage.getAllClients();
+        const clientCompanyNumberMap = new Map<string, any>();
+        const clientNameMap = new Map<string, any>();
+        for (const c of existingClients) {
+          if (c.companyNumber) {
+            clientCompanyNumberMap.set(c.companyNumber.padStart(8, "0"), c);
+          }
+          clientNameMap.set(c.name.toLowerCase(), c);
+        }
 
         const transformedClients: TransformedClient[] = [];
         const transformedPeople: TransformedPerson[] = [];
+        const transformedServiceData: TransformedServiceData[] = [];
 
         for (const row of clientData) {
           const warnings: string[] = [];
@@ -404,26 +451,152 @@ export function registerExcelImportRoutes(
             person.errors.push(`Client "${person.transformed.clientName}" not found in Client sheet`);
           }
         }
+        
+        const inFileClientByCompanyNumber = new Map<string, any>();
+        const inFileClientByName = new Map<string, any>();
+        for (const client of transformedClients) {
+          const cn = client.transformed.companyNumber;
+          if (cn && cn !== "00000000") {
+            inFileClientByCompanyNumber.set(cn, client);
+          }
+          if (client.transformed.name) {
+            inFileClientByName.set(client.transformed.name.toLowerCase(), client);
+          }
+        }
+        
+        for (const row of serviceDataRows) {
+          const warnings: string[] = [];
+          const errors: string[] = [];
+          
+          const clientCompanyNumber = String(row["Client Company Number"] || "").padStart(8, "0");
+          const clientName = String(row["Client Name"] || "");
+          const serviceName = String(row["Service Name"] || "");
+          const fieldId = String(row["Field ID"] || "");
+          const rawValue = row["Value"];
+          
+          if (!serviceName) {
+            errors.push("Service Name is required");
+          }
+          if (!fieldId) {
+            errors.push("Field ID is required");
+          }
+          if (!clientCompanyNumber && !clientName) {
+            errors.push("Either Client Company Number or Client Name is required");
+          }
+          
+          let matchedClient: any = null;
+          let isInFileClient = false;
+          let inFileClientRef: any = null;
+          
+          if (clientCompanyNumber && clientCompanyNumber !== "00000000") {
+            matchedClient = clientCompanyNumberMap.get(clientCompanyNumber);
+            if (!matchedClient) {
+              inFileClientRef = inFileClientByCompanyNumber.get(clientCompanyNumber);
+              if (inFileClientRef) isInFileClient = true;
+            }
+          }
+          if (!matchedClient && !isInFileClient && clientName) {
+            matchedClient = clientNameMap.get(clientName.toLowerCase());
+            if (!matchedClient) {
+              inFileClientRef = inFileClientByName.get(clientName.toLowerCase());
+              if (inFileClientRef) isInFileClient = true;
+            }
+          }
+          
+          if (!matchedClient && !isInFileClient && (clientCompanyNumber || clientName)) {
+            errors.push(`Client not found: ${clientCompanyNumber !== "00000000" ? `Company Number ${clientCompanyNumber}` : clientName}`);
+          }
+          
+          let matchedService: any = null;
+          if (serviceName) {
+            matchedService = serviceNameMap.get(serviceName.toLowerCase());
+          }
+          if (!matchedService && serviceName) {
+            errors.push(`Service "${serviceName}" not found in system`);
+          }
+          
+          let fieldName: string | null = null;
+          let fieldType: string | null = null;
+          let clientServiceId: string | null = null;
+          
+          if (matchedService) {
+            const udfDefs = (matchedService.udfDefinitions as any[] || []);
+            const udfDef = udfDefs.find((d: any) => d.id === fieldId || d.name === fieldId);
+            
+            if (udfDef) {
+              fieldName = udfDef.name;
+              fieldType = udfDef.type;
+              
+              if (udfDef.regex && rawValue !== undefined && rawValue !== null && rawValue !== "") {
+                try {
+                  const regex = new RegExp(udfDef.regex);
+                  if (!regex.test(String(rawValue))) {
+                    errors.push(udfDef.regexError || `Value "${rawValue}" does not match required format for ${udfDef.name}`);
+                  }
+                } catch {}
+              }
+            } else {
+              errors.push(`Field "${fieldId}" not found in service "${serviceName}" UDF definitions`);
+            }
+            
+            if (matchedClient) {
+              const clientServices = await storage.getClientServicesByClientId(matchedClient.id);
+              const matchedClientService = clientServices.find((cs: any) => cs.serviceId === matchedService.id);
+              if (matchedClientService) {
+                clientServiceId = matchedClientService.id;
+              } else {
+                warnings.push(`Client "${matchedClient.name}" does not have service "${serviceName}" assigned - will be automatically linked during import`);
+              }
+            } else if (isInFileClient) {
+              warnings.push(`New client "${clientName || inFileClientRef.transformed.name}" - service "${serviceName}" will be automatically linked during import`);
+            }
+          }
+          
+          transformedServiceData.push({
+            original: row,
+            transformed: {
+              clientCompanyNumber: clientCompanyNumber !== "00000000" ? clientCompanyNumber : "",
+              clientName: clientName || (isInFileClient ? inFileClientRef.transformed.name : ""),
+              clientId: matchedClient?.id || null,
+              serviceName,
+              serviceId: matchedService?.id || null,
+              fieldId,
+              fieldName,
+              fieldType,
+              value: rawValue,
+              clientServiceId,
+              isInFileClient,
+            },
+            warnings,
+            errors,
+          });
+        }
 
         const hasErrors = transformedClients.some(c => c.errors.length > 0) || 
-                         transformedPeople.some(p => p.errors.length > 0);
+                         transformedPeople.some(p => p.errors.length > 0) ||
+                         transformedServiceData.some(s => s.errors.length > 0);
         const hasWarnings = transformedClients.some(c => c.warnings.length > 0) || 
-                           transformedPeople.some(p => p.warnings.length > 0);
+                           transformedPeople.some(p => p.warnings.length > 0) ||
+                           transformedServiceData.some(s => s.warnings.length > 0);
 
         res.json({
           success: true,
           summary: {
             clientCount: transformedClients.length,
             personCount: transformedPeople.length,
+            serviceDataCount: transformedServiceData.length,
             hasErrors,
             hasWarnings,
             errorCount: transformedClients.reduce((acc, c) => acc + c.errors.length, 0) +
-                       transformedPeople.reduce((acc, p) => acc + p.errors.length, 0),
+                       transformedPeople.reduce((acc, p) => acc + p.errors.length, 0) +
+                       transformedServiceData.reduce((acc, s) => acc + s.errors.length, 0),
             warningCount: transformedClients.reduce((acc, c) => acc + c.warnings.length, 0) +
-                         transformedPeople.reduce((acc, p) => acc + p.warnings.length, 0),
+                         transformedPeople.reduce((acc, p) => acc + p.warnings.length, 0) +
+                         transformedServiceData.reduce((acc, s) => acc + s.warnings.length, 0),
           },
           clients: transformedClients,
           people: transformedPeople,
+          serviceData: transformedServiceData,
           availableManagers: users.map((u: any) => ({ id: u.id, email: u.email, name: u.fullName })),
         });
       } catch (error: any) {
@@ -439,7 +612,7 @@ export function registerExcelImportRoutes(
     requireAdmin,
     async (req: any, res: Response) => {
       try {
-        const { clients, people } = req.body;
+        const { clients, people, serviceData } = req.body;
         
         if (!clients || !people) {
           return res.status(400).json({ error: "Missing clients or people data" });
@@ -451,6 +624,8 @@ export function registerExcelImportRoutes(
           peopleCreated: 0,
           peopleUpdated: 0,
           relationshipsCreated: 0,
+          serviceDataUpdated: 0,
+          serviceDataSkipped: 0,
           errors: [] as string[],
         };
 
@@ -534,6 +709,12 @@ export function registerExcelImportRoutes(
             }
             
             clientIdMap.set(t.name.toLowerCase(), clientId);
+            if (t.companyNumber) {
+              const paddedCompanyNumber = t.companyNumber.padStart(8, "0");
+              if (paddedCompanyNumber !== "00000000") {
+                clientIdMap.set(paddedCompanyNumber, clientId);
+              }
+            }
           } catch (error: any) {
             results.errors.push(`Client "${client.transformed.name}": ${error.message}`);
           }
@@ -627,6 +808,77 @@ export function registerExcelImportRoutes(
             }
           } catch (error: any) {
             results.errors.push(`Person "${person.transformed.fullName}": ${error.message}`);
+          }
+        }
+
+        if (serviceData && serviceData.length > 0) {
+          const clientServiceUpdates = new Map<string, Record<string, any>>();
+          
+          for (const item of serviceData) {
+            try {
+              const t = item.transformed;
+              
+              let clientServiceId = t.clientServiceId;
+              
+              if (!clientServiceId && t.serviceId) {
+                let resolvedClientId: string | undefined = t.clientId || undefined;
+                
+                if (!resolvedClientId) {
+                  const paddedCompanyNumber = t.clientCompanyNumber ? t.clientCompanyNumber.padStart(8, "0") : "";
+                  resolvedClientId = (paddedCompanyNumber && paddedCompanyNumber !== "00000000" 
+                    ? clientIdMap.get(paddedCompanyNumber) 
+                    : undefined) || clientIdMap.get(t.clientName?.toLowerCase() || "");
+                }
+                
+                if (resolvedClientId) {
+                  const clientServices = await storage.getClientServicesByClientId(resolvedClientId);
+                  let matchedClientService = clientServices.find((cs: any) => cs.serviceId === t.serviceId);
+                  
+                  if (!matchedClientService) {
+                    try {
+                      matchedClientService = await storage.createClientService({
+                        clientId: resolvedClientId,
+                        serviceId: t.serviceId,
+                        isActive: true,
+                        udfValues: {},
+                      });
+                    } catch (createError: any) {
+                      results.errors.push(`Failed to create service link for ${t.clientName}/${t.serviceName}: ${createError.message}`);
+                    }
+                  }
+                  
+                  if (matchedClientService) {
+                    clientServiceId = matchedClientService.id;
+                  }
+                }
+              }
+              
+              if (!clientServiceId) {
+                results.serviceDataSkipped++;
+                continue;
+              }
+              
+              const currentValues = clientServiceUpdates.get(clientServiceId) || {};
+              currentValues[t.fieldId] = t.value;
+              clientServiceUpdates.set(clientServiceId, currentValues);
+            } catch (error: any) {
+              results.errors.push(`Service Data for ${item.transformed.clientName}/${item.transformed.serviceName}: ${error.message}`);
+            }
+          }
+          
+          const updateEntries = Array.from(clientServiceUpdates.entries());
+          for (const [clientServiceId, newUdfValues] of updateEntries) {
+            try {
+              const clientService = await storage.getClientServiceById(clientServiceId);
+              if (clientService) {
+                const existingValues = (clientService.udfValues as Record<string, any>) || {};
+                const mergedValues = { ...existingValues, ...newUdfValues };
+                await storage.updateClientService(clientServiceId, { udfValues: mergedValues });
+                results.serviceDataUpdated++;
+              }
+            } catch (error: any) {
+              results.errors.push(`Service Data update for ${clientServiceId}: ${error.message}`);
+            }
           }
         }
 

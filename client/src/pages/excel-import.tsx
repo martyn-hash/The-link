@@ -90,11 +90,31 @@ interface TransformedPerson {
   errors: string[];
 }
 
+interface TransformedServiceData {
+  original: any;
+  transformed: {
+    clientCompanyNumber: string;
+    clientName: string;
+    clientId: string | null;
+    serviceName: string;
+    serviceId: string | null;
+    fieldId: string;
+    fieldName: string | null;
+    fieldType: string | null;
+    value: any;
+    clientServiceId: string | null;
+    isInFileClient?: boolean;
+  };
+  warnings: string[];
+  errors: string[];
+}
+
 interface ParseResult {
   success: boolean;
   summary: {
     clientCount: number;
     personCount: number;
+    serviceDataCount: number;
     hasErrors: boolean;
     hasWarnings: boolean;
     errorCount: number;
@@ -102,6 +122,7 @@ interface ParseResult {
   };
   clients: TransformedClient[];
   people: TransformedPerson[];
+  serviceData: TransformedServiceData[];
   availableManagers: { id: string; email: string; name: string }[];
 }
 
@@ -112,6 +133,8 @@ interface ImportResult {
   peopleCreated: number;
   peopleUpdated: number;
   relationshipsCreated: number;
+  serviceDataUpdated: number;
+  serviceDataSkipped: number;
   errors: string[];
 }
 
@@ -182,9 +205,12 @@ export default function ExcelImport() {
           description: `Found ${result.summary.warningCount} warnings to review.`,
         });
       } else {
+        const serviceDataMsg = result.summary.serviceDataCount > 0 
+          ? ` with ${result.summary.serviceDataCount} service data fields` 
+          : '';
         toast({
           title: "Parsing Successful",
-          description: `Ready to import ${result.summary.clientCount} clients and ${result.summary.personCount} people.`,
+          description: `Ready to import ${result.summary.clientCount} clients and ${result.summary.personCount} people${serviceDataMsg}.`,
         });
       }
     } catch (error: any) {
@@ -210,6 +236,7 @@ export default function ExcelImport() {
         body: JSON.stringify({
           clients: parseResult.clients,
           people: parseResult.people,
+          serviceData: parseResult.serviceData || [],
         }),
         credentials: 'include',
       });
@@ -226,9 +253,12 @@ export default function ExcelImport() {
       setImportProgress(100);
       setCurrentStep('complete');
 
+      const serviceDataMsg = result.serviceDataUpdated > 0 
+        ? ` and ${result.serviceDataUpdated} service data updates` 
+        : '';
       toast({
         title: "Import Complete",
-        description: `Created ${result.clientsCreated} clients, updated ${result.clientsUpdated}, and processed ${result.peopleCreated + result.peopleUpdated} people.`,
+        description: `Created ${result.clientsCreated} clients, updated ${result.clientsUpdated}, and processed ${result.peopleCreated + result.peopleUpdated} people${serviceDataMsg}.`,
       });
     } catch (error: any) {
       toast({
@@ -444,7 +474,7 @@ export default function ExcelImport() {
             )}
 
             <Tabs defaultValue="clients" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="clients" data-testid="tab-clients">
                   <Building2 className="w-4 h-4 mr-2" />
                   Clients ({parseResult.summary.clientCount})
@@ -452,6 +482,10 @@ export default function ExcelImport() {
                 <TabsTrigger value="people" data-testid="tab-people">
                   <User className="w-4 h-4 mr-2" />
                   People ({parseResult.summary.personCount})
+                </TabsTrigger>
+                <TabsTrigger value="serviceData" data-testid="tab-service-data">
+                  <FileSpreadsheet className="w-4 h-4 mr-2" />
+                  Service Data ({parseResult.summary.serviceDataCount || 0})
                 </TabsTrigger>
               </TabsList>
 
@@ -660,6 +694,101 @@ export default function ExcelImport() {
                   </CardContent>
                 </Card>
               </TabsContent>
+
+              <TabsContent value="serviceData" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Service Data Preview</CardTitle>
+                    <CardDescription>
+                      Review the service-specific custom field values before import (optional sheet)
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {(!parseResult.serviceData || parseResult.serviceData.length === 0) ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <FileSpreadsheet className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                        <p>No "Service Data" sheet found in the Excel file.</p>
+                        <p className="text-sm mt-2">This is optional - you can add service-specific data later via the client detail page.</p>
+                      </div>
+                    ) : (
+                      <ScrollArea className="h-[400px]">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Client</TableHead>
+                              <TableHead>Service</TableHead>
+                              <TableHead>Field</TableHead>
+                              <TableHead>Value</TableHead>
+                              <TableHead>Status</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {parseResult.serviceData.map((item, idx) => (
+                              <TableRow key={idx} className={item.errors.length > 0 ? 'bg-red-50 dark:bg-red-950/20' : ''}>
+                                <TableCell className="font-medium">
+                                  {item.transformed.clientName}
+                                  {item.transformed.clientId && (
+                                    <CheckCircle className="w-3 h-3 text-green-500 inline ml-1" />
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-sm">
+                                  {item.transformed.serviceName}
+                                  {item.transformed.serviceId && (
+                                    <CheckCircle className="w-3 h-3 text-green-500 inline ml-1" />
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-sm">
+                                  {item.transformed.fieldName || item.transformed.fieldId}
+                                  {item.transformed.fieldType && (
+                                    <span className="text-xs text-muted-foreground ml-1">({item.transformed.fieldType})</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="font-mono text-sm max-w-[200px] truncate">
+                                  {String(item.transformed.value ?? '')}
+                                </TableCell>
+                                <TableCell>
+                                  {item.errors.length > 0 ? (
+                                    <Tooltip>
+                                      <TooltipTrigger>
+                                        <Badge variant="destructive">Error</Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        {item.errors.join(', ')}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : item.warnings.length > 0 ? (
+                                    <Tooltip>
+                                      <TooltipTrigger>
+                                        <Badge variant="outline" className="border-yellow-500 text-yellow-600">Warning</Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        {item.warnings.join(', ')}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : item.transformed.clientServiceId ? (
+                                    <Badge variant="outline" className="border-green-500 text-green-600">Ready</Badge>
+                                  ) : item.transformed.isInFileClient ? (
+                                    <Tooltip>
+                                      <TooltipTrigger>
+                                        <Badge variant="outline" className="border-blue-500 text-blue-600">New Client</Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Client will be created during import - service must be assigned first for data to apply
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <Badge variant="outline" className="border-yellow-500 text-yellow-600">No Service Link</Badge>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </ScrollArea>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
             </Tabs>
 
             <div className="flex gap-4">
@@ -676,6 +805,7 @@ export default function ExcelImport() {
               >
                 <Upload className="w-4 h-4 mr-2" />
                 Import {parseResult.summary.clientCount} Clients & {parseResult.summary.personCount} People
+                {(parseResult.serviceData?.length || 0) > 0 && ` + ${parseResult.serviceData.length} Service Fields`}
               </Button>
             </div>
           </div>
@@ -706,7 +836,7 @@ export default function ExcelImport() {
               )}
               <AlertTitle>{importResult.success ? "Import Successful!" : "Import Completed with Errors"}</AlertTitle>
               <AlertDescription>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
+                <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mt-4">
                   <div className="text-center p-3 bg-muted rounded-lg">
                     <p className="text-2xl font-bold text-green-600">{importResult.clientsCreated}</p>
                     <p className="text-xs text-muted-foreground">Clients Created</p>
@@ -726,6 +856,13 @@ export default function ExcelImport() {
                   <div className="text-center p-3 bg-muted rounded-lg">
                     <p className="text-2xl font-bold text-purple-600">{importResult.relationshipsCreated}</p>
                     <p className="text-xs text-muted-foreground">Relationships</p>
+                  </div>
+                  <div className="text-center p-3 bg-muted rounded-lg">
+                    <p className="text-2xl font-bold text-orange-600">{importResult.serviceDataUpdated || 0}</p>
+                    <p className="text-xs text-muted-foreground">Service Data Updated</p>
+                    {importResult.serviceDataSkipped > 0 && (
+                      <p className="text-xs text-yellow-600 mt-1">({importResult.serviceDataSkipped} skipped)</p>
+                    )}
                   </div>
                 </div>
               </AlertDescription>
