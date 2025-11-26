@@ -290,3 +290,72 @@ These are strategic improvements for production readiness.
 - Architecture review: `app_observations.md`
 - Developer guide: `read_me_before_developing.md`
 - High-level architecture: `replit.md`
+
+---
+
+## Appendix A: Node.js to Bun Migration Analysis
+
+**Question:** Should we migrate from Node.js to Bun for speed improvements?
+
+**Recommendation:** **No - Not recommended for this application**
+
+### Performance Context
+
+The performance issues identified in this application were **database-bound**, not runtime-bound:
+
+| Issue Fixed | Root Cause |
+|------------|------------|
+| Schema migrations (15s → 1s) | Database initialization |
+| N+1 queries (80+ → 2 queries) | Query patterns |
+| Projects page (301 → 3-4 queries) | Query optimization |
+
+Research shows Bun and Node.js have near-parity for database-bound workloads (22ms vs 23ms median).
+
+### Bun Performance Advantages (2025 Benchmarks)
+
+| Metric | Bun vs Node | Applies to The Link? |
+|--------|-------------|---------------------|
+| HTTP throughput | 3-4× faster | **No** - DB is the bottleneck |
+| Cold starts | 4× faster | **Limited** - Persistent server |
+| File I/O | 3× faster | **Minimal** - DB-centric app |
+| Package install | 10-30× faster | **Dev only** |
+| Native TypeScript | Built-in | **No gain** - tsx works fine |
+
+### Risk Assessment for Migration
+
+| Factor | Risk | Notes |
+|--------|------|-------|
+| Native modules (bcrypt, sharp) | **HIGH** | May break - uses JavaScriptCore not V8 |
+| Express + 50+ npm packages | **MEDIUM** | 90% compatible, edge cases exist |
+| Replit deployment | **UNKNOWN** | May lack full Bun runtime support |
+| Production stability | **HIGH** | CRM data is business-critical |
+| No LTS support | **HIGH** | Bun lacks long-term support releases |
+
+### When Bun Would Make Sense
+
+Consider Bun for **new, separate microservices** that are:
+- CPU-intensive (image processing, data transformation)
+- High-concurrency with minimal DB interaction
+- Greenfield with no legacy dependencies
+- Non-critical to business operations
+
+### Conclusion
+
+The effort-to-benefit ratio is unfavorable:
+- **Effort:** 1-2 weeks of migration + testing + debugging edge cases
+- **Benefit:** Minimal, since bottlenecks are database-related
+
+**Better ROI alternatives:**
+1. Complete the query waterfall optimizations (Phase 2.2)
+2. Add the missing database indexes (Phase 3.1)
+3. Implement server-side caching (Phase 4.2)
+
+These address actual bottlenecks with lower risk and measurable impact.
+
+### Future Reconsideration Triggers
+
+Revisit this decision if:
+- [ ] Bun reaches LTS status
+- [ ] Replit adds native Bun deployment support
+- [ ] Application develops CPU-bound bottlenecks
+- [ ] A new service needs to be built from scratch
