@@ -431,16 +431,61 @@ export class ServiceStorage extends BaseStorage {
 
   // ==================== Service CRUD Operations ====================
 
+  private ensureVatUdf(udfDefinitions: any[] = [], isVatService: boolean): any[] {
+    const VAT_UDF_FIELD_ID = 'vat_number_auto';
+    const VAT_UDF_FIELD_NAME = 'VAT Number';
+    const VAT_NUMBER_REGEX = '^(GB)?\\s?\\d{3}\\s?\\d{4}\\s?\\d{2}(\\s?\\d{3})?$';
+    const VAT_NUMBER_REGEX_ERROR = 'Please enter a valid UK VAT number (e.g., 123456789 or GB123456789)';
+
+    const udfs = Array.isArray(udfDefinitions) ? [...udfDefinitions] : [];
+    const existingVatUdfIndex = udfs.findIndex(udf => udf.id === VAT_UDF_FIELD_ID);
+
+    if (isVatService) {
+      if (existingVatUdfIndex === -1) {
+        udfs.unshift({
+          id: VAT_UDF_FIELD_ID,
+          name: VAT_UDF_FIELD_NAME,
+          type: 'short_text',
+          required: true,
+          placeholder: 'e.g., GB123456789',
+          regex: VAT_NUMBER_REGEX,
+          regexError: VAT_NUMBER_REGEX_ERROR,
+        });
+      }
+    }
+    return udfs;
+  }
+
   async createService(service: InsertService): Promise<Service> {
-    const result = await db.insert(services).values(service).returning();
+    const isVatService = (service as any).isVatService === true;
+    const processedService = {
+      ...service,
+      udfDefinitions: this.ensureVatUdf(service.udfDefinitions as any[], isVatService),
+    };
+    
+    const result = await db.insert(services).values(processedService).returning();
     const [newService] = result as any[];
     return newService;
   }
 
   async updateService(id: string, service: Partial<InsertService>): Promise<Service> {
+    let processedService = { ...service };
+    
+    if ('isVatService' in service) {
+      const isVatService = (service as any).isVatService === true;
+      const existingService = await this.getServiceById(id);
+      const currentUdfs = existingService?.udfDefinitions || [];
+      const newUdfs = service.udfDefinitions ?? currentUdfs;
+      
+      processedService = {
+        ...service,
+        udfDefinitions: this.ensureVatUdf(newUdfs as any[], isVatService),
+      };
+    }
+    
     const [updatedService] = await db
       .update(services)
-      .set(service)
+      .set(processedService)
       .where(eq(services.id, id))
       .returning();
     

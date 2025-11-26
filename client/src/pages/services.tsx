@@ -448,6 +448,7 @@ export default function Services() {
       isCompaniesHouseConnected: false,
       chStartDateField: "",
       chDueDateField: "",
+      isVatService: false,
     },
   });
 
@@ -689,6 +690,7 @@ export default function Services() {
       chDueDateField: service.chDueDateField ?? "",
       isPersonalService: service.isPersonalService ?? false,
       isStaticService: service.isStaticService ?? false,
+      isVatService: (service as any).isVatService ?? false,
     });
     setViewMode('edit-service');
   };
@@ -909,6 +911,15 @@ export default function Services() {
                                       data-testid={`static-status-${service.id}`}
                                     >
                                       Static
+                                    </Badge>
+                                  )}
+                                  {(service as any).isVatService && (
+                                    <Badge 
+                                      variant="secondary" 
+                                      className="bg-emerald-500 text-white"
+                                      data-testid={`vat-status-${service.id}`}
+                                    >
+                                      VAT
                                     </Badge>
                                   )}
                                 </div>
@@ -1148,6 +1159,47 @@ export default function Services() {
                                     </FormItem>
                                   )}
                                 />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* VAT Service Section */}
+                          <div className="border rounded-lg p-5 space-y-5 bg-muted/50">
+                            <div className="flex items-center space-x-2">
+                              <h3 className="text-sm font-medium">HMRC VAT Integration</h3>
+                            </div>
+                            
+                            <FormField
+                              control={serviceForm.control}
+                              name="isVatService"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm bg-background">
+                                  <div className="space-y-1">
+                                    <FormLabel htmlFor="vat-service-switch-create">Enable VAT Service</FormLabel>
+                                    <div className="text-sm text-muted-foreground">
+                                      Auto-creates a VAT Number field with format validation and optional HMRC verification
+                                    </div>
+                                  </div>
+                                  <FormControl>
+                                    <Switch
+                                      id="vat-service-switch-create"
+                                      checked={field.value || false}
+                                      onCheckedChange={field.onChange}
+                                      data-testid="switch-vat-service"
+                                      aria-describedby="vat-service-description"
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                            
+                            {serviceForm.watch("isVatService") && (
+                              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4">
+                                <p className="text-sm text-amber-800 dark:text-amber-200">
+                                  <strong>Note:</strong> When enabled, a "VAT Number" field will be automatically added to this service. 
+                                  The field includes UK VAT number format validation. When clients enter a VAT number, staff can 
+                                  optionally verify it against HMRC records.
+                                </p>
                               </div>
                             )}
                           </div>
@@ -1400,6 +1452,47 @@ export default function Services() {
                                     </FormItem>
                                   )}
                                 />
+                              </div>
+                            )}
+                          </div>
+
+                          {/* VAT Service Section */}
+                          <div className="border rounded-lg p-5 space-y-5 bg-muted/50">
+                            <div className="flex items-center space-x-2">
+                              <h3 className="text-sm font-medium">HMRC VAT Integration</h3>
+                            </div>
+                            
+                            <FormField
+                              control={serviceForm.control}
+                              name="isVatService"
+                              render={({ field }) => (
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm bg-background">
+                                  <div className="space-y-1">
+                                    <FormLabel htmlFor="vat-service-switch-edit">Enable VAT Service</FormLabel>
+                                    <div className="text-sm text-muted-foreground">
+                                      Auto-creates a VAT Number field with format validation and optional HMRC verification
+                                    </div>
+                                  </div>
+                                  <FormControl>
+                                    <Switch
+                                      id="vat-service-switch-edit"
+                                      checked={field.value || false}
+                                      onCheckedChange={field.onChange}
+                                      data-testid="switch-vat-service-edit"
+                                      aria-describedby="vat-service-description"
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                            
+                            {serviceForm.watch("isVatService") && (
+                              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4">
+                                <p className="text-sm text-amber-800 dark:text-amber-200">
+                                  <strong>Note:</strong> When enabled, a "VAT Number" field will be automatically added to this service. 
+                                  The field includes UK VAT number format validation. When clients enter a VAT number, staff can 
+                                  optionally verify it against HMRC records.
+                                </p>
                               </div>
                             )}
                           </div>
