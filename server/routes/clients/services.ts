@@ -470,6 +470,71 @@ export function registerClientServicesRoutes(
     }
   });
 
+  // PATCH /api/client-services/:id - Partial update client service (for UDF values)
+  app.patch("/api/client-services/:id", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
+    try {
+      const paramValidation = z.object({
+        id: z.string().min(1, "Client service ID is required").uuid("Invalid client service ID format")
+      }).safeParse(req.params);
+
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid client service ID format",
+          errors: paramValidation.error.issues
+        });
+      }
+
+      const { id } = paramValidation.data;
+
+      const existingClientService = await storage.getClientServiceById(id);
+      if (!existingClientService) {
+        return res.status(404).json({ message: "Client service not found" });
+      }
+
+      // Only allow udfValues to be updated via PATCH
+      const { udfValues } = req.body;
+      if (!udfValues || typeof udfValues !== 'object') {
+        return res.status(400).json({ message: "udfValues object is required for PATCH requests" });
+      }
+
+      // Get the service to whitelist valid UDF keys
+      const service = await storage.getServiceById(existingClientService.serviceId);
+      const validUdfKeys = new Set<string>();
+      
+      if (service?.udfDefinitions && Array.isArray(service.udfDefinitions)) {
+        (service.udfDefinitions as any[]).forEach((def: any) => {
+          if (def.id) {
+            validUdfKeys.add(def.id);
+            // Also allow validation metadata for VAT and similar fields
+            validUdfKeys.add(`${def.id}_validation`);
+          }
+        });
+      }
+
+      // Filter to only allow known UDF keys (prevent malicious overwrites)
+      const filteredUdfValues: Record<string, any> = {};
+      for (const [key, value] of Object.entries(udfValues)) {
+        if (validUdfKeys.has(key)) {
+          filteredUdfValues[key] = value;
+        }
+      }
+
+      // Merge existing UDF values with filtered new ones (preserve validation metadata)
+      const existingUdfValues = (existingClientService.udfValues || {}) as Record<string, any>;
+      const mergedUdfValues = { ...existingUdfValues, ...filteredUdfValues };
+
+      // Update only the UDF values
+      await storage.updateClientService(id, { udfValues: mergedUdfValues });
+
+      const updatedClientService = await storage.getClientServiceById(id);
+      return res.json(updatedClientService);
+
+    } catch (error) {
+      console.error("Error patching client service:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to update client service" });
+    }
+  });
+
   // DELETE /api/client-services/:id - Delete client service (admin only)
   app.delete("/api/client-services/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {

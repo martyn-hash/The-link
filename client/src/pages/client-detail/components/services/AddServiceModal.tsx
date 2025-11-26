@@ -47,6 +47,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
   const [roleAssignments, setRoleAssignments] = useState<Record<string, string>>({});
   const [selectedPersonId, setSelectedPersonId] = useState<string>("");
   const [udfValues, setUdfValues] = useState<Record<string, any>>({});
+  const [udfErrors, setUdfErrors] = useState<Record<string, string>>({});
   const { toast } = useToast();
   
   // Helper function to determine field state for visual indicators
@@ -129,10 +130,11 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
     
     setSelectedService(service);
     
-    // Reset assignments and UDF values when service changes
+    // Reset assignments, UDF values, and errors when service changes
     setRoleAssignments({});
     setSelectedPersonId("");
     setUdfValues({});
+    setUdfErrors({});
     
     // Clear fields for static services (they don't need frequency, dates, or owner)
     if (service.isStaticService) {
@@ -297,6 +299,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
       setSelectedService(null);
       setRoleAssignments({});
       setUdfValues({});
+      setUdfErrors({});
       setIsOpen(false);
       onSuccess?.();
     },
@@ -309,7 +312,61 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
     },
   });
 
+  // Validate UDF values (including required fields and regex patterns)
+  const validateUdfValues = (): boolean => {
+    if (!selectedService?.udfDefinitions || !Array.isArray(selectedService.udfDefinitions)) {
+      return true;
+    }
+
+    const errors: Record<string, string> = {};
+    let hasErrors = false;
+
+    (selectedService.udfDefinitions as any[]).forEach((field: any) => {
+      const value = udfValues[field.id];
+      const isEmpty = value === undefined || value === null || value === '' || 
+                      (typeof value === 'string' && value.trim() === '');
+
+      // Check required fields
+      if (field.required && isEmpty && field.type !== 'boolean') {
+        errors[field.id] = `${field.name} is required`;
+        hasErrors = true;
+        return;
+      }
+
+      // Check regex pattern if defined and value is not empty
+      if (field.regex && !isEmpty) {
+        try {
+          const regex = new RegExp(field.regex);
+          if (!regex.test(String(value))) {
+            errors[field.id] = field.regexError || `Invalid format for ${field.name}`;
+            hasErrors = true;
+          }
+        } catch {
+          // Invalid regex pattern - skip validation
+        }
+      }
+    });
+
+    setUdfErrors(errors);
+
+    if (hasErrors) {
+      const firstError = Object.values(errors)[0];
+      toast({
+        title: "Invalid Service Details",
+        description: firstError,
+        variant: "destructive",
+      });
+    }
+
+    return !hasErrors;
+  };
+
   const onSubmit = (data: AddServiceData) => {
+    // Validate UDF values first (for both personal and client services)
+    if (!validateUdfValues()) {
+      return;
+    }
+
     // Handle personal services vs client services
     if (isPersonalService) {
       // Validate person selection for personal services
@@ -764,84 +821,126 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
                     Service-Specific Details
                   </h3>
                   <div className="space-y-4">
-                    {(selectedService?.udfDefinitions as any[])?.map((field: any) => (
-                      <div key={field.id} className="space-y-2">
-                        <label className="text-sm font-medium flex items-center gap-1">
-                          {field.name}
-                          {field.required && <span className="text-red-500">*</span>}
-                        </label>
-                        
-                        {field.type === 'number' && (
-                          <Input
-                            type="number"
-                            value={udfValues[field.id] ?? ''}
-                            onChange={(e) => setUdfValues({ ...udfValues, [field.id]: e.target.value ? Number(e.target.value) : null })}
-                            placeholder={field.placeholder || `Enter ${field.name.toLowerCase()}`}
-                            data-testid={`input-udf-${field.id}`}
-                          />
-                        )}
-                        
-                        {field.type === 'date' && (
-                          <Input
-                            type="date"
-                            value={udfValues[field.id] ?? ''}
-                            onChange={(e) => setUdfValues({ ...udfValues, [field.id]: e.target.value })}
-                            data-testid={`input-udf-${field.id}`}
-                          />
-                        )}
-                        
-                        {field.type === 'boolean' && (
-                          <div className="flex items-center space-x-2 h-10">
-                            <Switch
-                              checked={udfValues[field.id] ?? false}
-                              onCheckedChange={(checked) => setUdfValues({ ...udfValues, [field.id]: checked })}
-                              data-testid={`switch-udf-${field.id}`}
+                    {(selectedService?.udfDefinitions as any[])?.map((field: any) => {
+                      const hasError = !!udfErrors[field.id];
+                      const errorMessage = udfErrors[field.id];
+                      const inputClassName = hasError ? "border-red-500 focus-visible:ring-red-500" : "";
+                      
+                      return (
+                        <div key={field.id} className="space-y-2">
+                          <label className="text-sm font-medium flex items-center gap-1">
+                            {field.name}
+                            {field.required && <span className="text-red-500">*</span>}
+                          </label>
+                          
+                          {field.type === 'number' && (
+                            <Input
+                              type="number"
+                              value={udfValues[field.id] ?? ''}
+                              onChange={(e) => {
+                                setUdfValues({ ...udfValues, [field.id]: e.target.value ? Number(e.target.value) : null });
+                                if (udfErrors[field.id]) {
+                                  setUdfErrors({ ...udfErrors, [field.id]: '' });
+                                }
+                              }}
+                              placeholder={field.placeholder || `Enter ${field.name.toLowerCase()}`}
+                              className={inputClassName}
+                              data-testid={`input-udf-${field.id}`}
                             />
-                            <span className="text-sm text-muted-foreground">
-                              {udfValues[field.id] ? 'Yes' : 'No'}
-                            </span>
-                          </div>
-                        )}
-                        
-                        {field.type === 'short_text' && (
-                          <Input
-                            type="text"
-                            value={udfValues[field.id] ?? ''}
-                            onChange={(e) => setUdfValues({ ...udfValues, [field.id]: e.target.value })}
-                            placeholder={field.placeholder || `Enter ${field.name.toLowerCase()}`}
-                            data-testid={`input-udf-${field.id}`}
-                          />
-                        )}
-                        
-                        {field.type === 'long_text' && (
-                          <textarea
-                            value={udfValues[field.id] ?? ''}
-                            onChange={(e) => setUdfValues({ ...udfValues, [field.id]: e.target.value })}
-                            placeholder={field.placeholder || `Enter ${field.name.toLowerCase()}`}
-                            className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                            data-testid={`textarea-udf-${field.id}`}
-                          />
-                        )}
-                        
-                        {field.type === 'select' && field.options && (
-                          <Select 
-                            value={udfValues[field.id] ?? ''} 
-                            onValueChange={(value) => setUdfValues({ ...udfValues, [field.id]: value })}
-                          >
-                            <SelectTrigger data-testid={`select-udf-${field.id}`}>
-                              <SelectValue placeholder={`Select ${field.name.toLowerCase()}`} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {field.options.map((option: string) => (
-                                <SelectItem key={option} value={option}>
-                                  {option}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
-                      </div>
-                    ))}
+                          )}
+                          
+                          {field.type === 'date' && (
+                            <Input
+                              type="date"
+                              value={udfValues[field.id] ?? ''}
+                              onChange={(e) => {
+                                setUdfValues({ ...udfValues, [field.id]: e.target.value });
+                                if (udfErrors[field.id]) {
+                                  setUdfErrors({ ...udfErrors, [field.id]: '' });
+                                }
+                              }}
+                              className={inputClassName}
+                              data-testid={`input-udf-${field.id}`}
+                            />
+                          )}
+                          
+                          {field.type === 'boolean' && (
+                            <div className="flex items-center space-x-2 h-10">
+                              <Switch
+                                checked={udfValues[field.id] ?? false}
+                                onCheckedChange={(checked) => setUdfValues({ ...udfValues, [field.id]: checked })}
+                                data-testid={`switch-udf-${field.id}`}
+                              />
+                              <span className="text-sm text-muted-foreground">
+                                {udfValues[field.id] ? 'Yes' : 'No'}
+                              </span>
+                            </div>
+                          )}
+                          
+                          {field.type === 'short_text' && (
+                            <Input
+                              type="text"
+                              value={udfValues[field.id] ?? ''}
+                              onChange={(e) => {
+                                setUdfValues({ ...udfValues, [field.id]: e.target.value });
+                                if (udfErrors[field.id]) {
+                                  setUdfErrors({ ...udfErrors, [field.id]: '' });
+                                }
+                              }}
+                              placeholder={field.placeholder || `Enter ${field.name.toLowerCase()}`}
+                              className={inputClassName}
+                              data-testid={`input-udf-${field.id}`}
+                            />
+                          )}
+                          
+                          {field.type === 'long_text' && (
+                            <textarea
+                              value={udfValues[field.id] ?? ''}
+                              onChange={(e) => {
+                                setUdfValues({ ...udfValues, [field.id]: e.target.value });
+                                if (udfErrors[field.id]) {
+                                  setUdfErrors({ ...udfErrors, [field.id]: '' });
+                                }
+                              }}
+                              placeholder={field.placeholder || `Enter ${field.name.toLowerCase()}`}
+                              className={`flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${hasError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+                              data-testid={`textarea-udf-${field.id}`}
+                            />
+                          )}
+                          
+                          {field.type === 'select' && field.options && (
+                            <Select 
+                              value={udfValues[field.id] ?? ''} 
+                              onValueChange={(value) => {
+                                setUdfValues({ ...udfValues, [field.id]: value });
+                                if (udfErrors[field.id]) {
+                                  setUdfErrors({ ...udfErrors, [field.id]: '' });
+                                }
+                              }}
+                            >
+                              <SelectTrigger 
+                                className={inputClassName}
+                                data-testid={`select-udf-${field.id}`}
+                              >
+                                <SelectValue placeholder={`Select ${field.name.toLowerCase()}`} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {field.options.map((option: string) => (
+                                  <SelectItem key={option} value={option}>
+                                    {option}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          )}
+                          
+                          {/* Error message display */}
+                          {hasError && (
+                            <p className="text-xs text-red-500">{errorMessage}</p>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
