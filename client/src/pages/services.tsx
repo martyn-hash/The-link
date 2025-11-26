@@ -55,7 +55,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Settings, Edit, Trash2, Users, Briefcase, ArrowLeft, X } from "lucide-react";
+import { Plus, Settings, Edit, Trash2, Users, Briefcase, ArrowLeft, X, Copy, Check } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { nanoid } from "nanoid";
@@ -112,6 +112,8 @@ function UDFEditor({ control, name }: UDFEditorProps) {
     control,
     name,
   });
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const addUDF = () => {
     append({
@@ -124,6 +126,24 @@ function UDFEditor({ control, name }: UDFEditorProps) {
       regex: "",
       regexError: "",
     });
+  };
+
+  const copyFieldId = async (fieldId: string) => {
+    try {
+      await navigator.clipboard.writeText(fieldId);
+      setCopiedId(fieldId);
+      toast({
+        title: "Field ID copied",
+        description: `Use "${fieldId}" in your Excel import file`,
+      });
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {
+      toast({
+        title: "Copy failed",
+        description: "Please manually copy the field ID",
+        variant: "destructive",
+      });
+    }
   };
 
   const udfTypes = [
@@ -165,9 +185,42 @@ function UDFEditor({ control, name }: UDFEditorProps) {
             const showRegex = fieldType === "short_text" || fieldType === "number";
             
             return (
-              <Card key={field.id} className="p-4" data-testid={`card-udf-${index}`}>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <Card key={field.id} className="p-5" data-testid={`card-udf-${index}`}>
+                <div className="space-y-5">
+                  <div className="flex items-center justify-between pb-3 border-b">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Field ID:</span>
+                      <code className="bg-muted px-2 py-1 rounded text-xs font-mono" data-testid={`text-udf-id-${index}`}>
+                        {field.id}
+                      </code>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2"
+                        onClick={() => copyFieldId(field.id)}
+                        data-testid={`button-copy-udf-id-${index}`}
+                      >
+                        {copiedId === field.id ? (
+                          <Check className="w-3.5 h-3.5 text-green-500" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </Button>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 text-destructive hover:text-destructive"
+                      onClick={() => remove(index)}
+                      data-testid={`button-remove-udf-${index}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                     <FormField
                       control={control}
                       name={`${name}.${index}.name`}
@@ -230,37 +283,24 @@ function UDFEditor({ control, name }: UDFEditorProps) {
                       )}
                     />
 
-                    <div className="flex items-center space-x-4">
-                      <FormField
-                        control={control}
-                        name={`${name}.${index}.required`}
-                        render={({ field }) => (
-                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                                data-testid={`checkbox-udf-required-${index}`}
-                              />
-                            </FormControl>
-                            <div className="space-y-1 leading-none">
-                              <FormLabel>Required</FormLabel>
-                            </div>
-                          </FormItem>
-                        )}
-                      />
-                      
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        onClick={() => remove(index)}
-                        data-testid={`button-remove-udf-${index}`}
-                        className="shrink-0"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
+                    <FormField
+                      control={control}
+                      name={`${name}.${index}.required`}
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-center space-x-3 space-y-0 pt-7">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid={`checkbox-udf-required-${index}`}
+                            />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel>Required</FormLabel>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
                   </div>
 
                   {showOptions && (
@@ -289,7 +329,7 @@ function UDFEditor({ control, name }: UDFEditorProps) {
                   )}
 
                   {showRegex && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                       <FormField
                         control={control}
                         name={`${name}.${index}.regex`}
@@ -939,14 +979,14 @@ export default function Services() {
                       <p className="text-muted-foreground">Add a new service with associated project type and roles</p>
                     </div>
                   </div>
-                  <Card className="max-w-2xl">
+                  <Card className="max-w-4xl">
                     <CardHeader>
                       <CardTitle>Service Details</CardTitle>
                       <CardDescription>Enter the information for your new service</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <Form {...serviceForm}>
-                        <form onSubmit={serviceForm.handleSubmit(handleCreateService)} className="space-y-4">
+                        <form onSubmit={serviceForm.handleSubmit(handleCreateService)} className="space-y-6">
                           <FormField
                             control={serviceForm.control}
                             name="name"
@@ -988,8 +1028,8 @@ export default function Services() {
                             control={serviceForm.control}
                             name="isPersonalService"
                             render={({ field }) => (
-                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                                <div className="space-y-0.5">
+                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm">
+                                <div className="space-y-1">
                                   <FormLabel htmlFor="personal-service-switch">Personal Service</FormLabel>
                                   <div className="text-sm text-muted-foreground">
                                     Mark this service as being for individuals rather than companies (e.g., Self-Assessments)
@@ -1013,8 +1053,8 @@ export default function Services() {
                             control={serviceForm.control}
                             name="isStaticService"
                             render={({ field }) => (
-                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                                <div className="space-y-0.5">
+                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm">
+                                <div className="space-y-1">
                                   <FormLabel htmlFor="static-service-switch">Static Service</FormLabel>
                                   <div className="text-sm text-muted-foreground">
                                     Mark this service as static (display only, cannot be mapped to project types)
@@ -1034,7 +1074,7 @@ export default function Services() {
                           />
 
                           {/* Companies House Connection Section */}
-                          <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
+                          <div className="border rounded-lg p-5 space-y-5 bg-muted/50">
                             <div className="flex items-center space-x-2">
                               <h3 className="text-sm font-medium">Companies House Integration</h3>
                             </div>
@@ -1043,8 +1083,8 @@ export default function Services() {
                               control={serviceForm.control}
                               name="isCompaniesHouseConnected"
                               render={({ field }) => (
-                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                                  <div className="space-y-0.5">
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm bg-background">
+                                  <div className="space-y-1">
                                     <FormLabel htmlFor="ch-connection-switch">Enable Companies House Connection</FormLabel>
                                     <div className="text-sm text-muted-foreground">
                                       Auto-populate dates from client Companies House data (accounts and confirmation statement deadlines)
@@ -1064,7 +1104,7 @@ export default function Services() {
                             />
                             
                             {serviceForm.watch("isCompaniesHouseConnected") && (
-                              <div className="grid grid-cols-2 gap-4">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                 <FormField
                                   control={serviceForm.control}
                                   name="chStartDateField"
@@ -1191,14 +1231,14 @@ export default function Services() {
                       <p className="text-muted-foreground">Update the service information</p>
                     </div>
                   </div>
-                  <Card className="max-w-2xl">
+                  <Card className="max-w-4xl">
                     <CardHeader>
                       <CardTitle>Edit Service: {editingService.name}</CardTitle>
                       <CardDescription>Modify the service details below</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <Form {...serviceForm}>
-                        <form onSubmit={serviceForm.handleSubmit(handleUpdateService)} className="space-y-4">
+                        <form onSubmit={serviceForm.handleSubmit(handleUpdateService)} className="space-y-6">
                           <FormField
                             control={serviceForm.control}
                             name="name"
@@ -1240,8 +1280,8 @@ export default function Services() {
                             control={serviceForm.control}
                             name="isPersonalService"
                             render={({ field }) => (
-                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                                <div className="space-y-0.5">
+                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm">
+                                <div className="space-y-1">
                                   <FormLabel htmlFor="personal-service-switch">Personal Service</FormLabel>
                                   <div className="text-sm text-muted-foreground">
                                     Mark this service as being for individuals rather than companies (e.g., Self-Assessments)
@@ -1265,8 +1305,8 @@ export default function Services() {
                             control={serviceForm.control}
                             name="isStaticService"
                             render={({ field }) => (
-                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                                <div className="space-y-0.5">
+                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm">
+                                <div className="space-y-1">
                                   <FormLabel htmlFor="static-service-switch">Static Service</FormLabel>
                                   <div className="text-sm text-muted-foreground">
                                     Mark this service as static (display only, cannot be mapped to project types)
@@ -1286,7 +1326,7 @@ export default function Services() {
                           />
 
                           {/* Companies House Connection Section */}
-                          <div className="border rounded-lg p-4 space-y-4 bg-muted/50">
+                          <div className="border rounded-lg p-5 space-y-5 bg-muted/50">
                             <div className="flex items-center space-x-2">
                               <h3 className="text-sm font-medium">Companies House Integration</h3>
                             </div>
@@ -1295,8 +1335,8 @@ export default function Services() {
                               control={serviceForm.control}
                               name="isCompaniesHouseConnected"
                               render={({ field }) => (
-                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                                  <div className="space-y-0.5">
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm bg-background">
+                                  <div className="space-y-1">
                                     <FormLabel htmlFor="ch-connection-switch">Enable Companies House Connection</FormLabel>
                                     <div className="text-sm text-muted-foreground">
                                       Auto-populate dates from client Companies House data (accounts and confirmation statement deadlines)
@@ -1316,7 +1356,7 @@ export default function Services() {
                             />
                             
                             {serviceForm.watch("isCompaniesHouseConnected") && (
-                              <div className="grid grid-cols-2 gap-4">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                 <FormField
                                   control={serviceForm.control}
                                   name="chStartDateField"
@@ -1533,7 +1573,7 @@ export default function Services() {
                       <p className="text-muted-foreground">Add a new work role that can be assigned to services</p>
                     </div>
                   </div>
-                  <Card className="max-w-2xl">
+                  <Card className="max-w-4xl">
                     <CardHeader>
                       <CardTitle>Role Details</CardTitle>
                       <CardDescription>Enter the information for your new work role</CardDescription>
@@ -1617,7 +1657,7 @@ export default function Services() {
                       <p className="text-muted-foreground">Update the work role information</p>
                     </div>
                   </div>
-                  <Card className="max-w-2xl">
+                  <Card className="max-w-4xl">
                     <CardHeader>
                       <CardTitle>Edit Role: {editingRole.name}</CardTitle>
                       <CardDescription>Modify the role details below</CardDescription>
