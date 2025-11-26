@@ -109,7 +109,7 @@ Added 3 indexes to improve notification-related query performance:
 **Before starting development work, please read:** `read_me_before_developing.md`
 
 This document contains:
-- Test login credentials (georgewandhe@gmail.com / TestPassword123 via Password tab)
+- Test login credentials (admin@example.com / admin123 via Password tab)
 - Critical development rules and forbidden file modifications
 - Code patterns and best practices
 - Import path quick reference

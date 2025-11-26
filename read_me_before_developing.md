@@ -17,10 +17,10 @@ To test the application with full access:
 1. Navigate to the root page (`/`)
 2. Click on the **Password** tab
 3. Login with these credentials:
-   - **Email:** `georgewandhe@gmail.com`
-   - **Password:** `TestPassword123`
+   - **Email:** `admin@example.com`
+   - **Password:** `admin123`
 
-For detailed test user credentials including portal users, see `DOCS/TEST_USER_CREDENTIALS.md`.
+For additional test user credentials including portal users, see `DOCS/TEST_USER_CREDENTIALS.md`.
 
 ---
 
@@ -301,7 +301,7 @@ import { cn } from '@/lib/utils';
 
 ## Final Reminders
 
-1. **Test login:** Use `georgewandhe@gmail.com` / `TestPassword123` via Password tab
+1. **Test login:** Use `admin@example.com` / `admin123` via Password tab
 2. **Check types:** Run LSP diagnostics before completing work
 3. **Don't modify:** Vite config, package.json, drizzle.config.ts
 4. **Use storage facade:** Never query database directly in routes
