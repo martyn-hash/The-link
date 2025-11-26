@@ -58,7 +58,7 @@ export function useClientData(clientId: string | undefined): UseClientDataResult
   } = useQuery<ClientPersonWithPerson[]>({
     queryKey: ['/api/clients', clientId, 'people'],
     queryFn: getQueryFn({ on401: "throw" }),
-    enabled: !!clientId && !!client,
+    enabled: !!clientId,
     retry: 1,
   });
 
@@ -70,7 +70,7 @@ export function useClientData(clientId: string | undefined): UseClientDataResult
   } = useQuery<EnhancedClientService[]>({
     queryKey: [`/api/client-services/client/${clientId}`],
     queryFn: getQueryFn({ on401: "throw" }),
-    enabled: !!clientId && !!client,
+    enabled: !!clientId,
   });
 
   const { 
@@ -81,13 +81,13 @@ export function useClientData(clientId: string | undefined): UseClientDataResult
   } = useQuery<PeopleServiceWithRelations[]>({
     queryKey: [`/api/people-services/client/${clientId}`],
     queryFn: getQueryFn({ on401: "throw" }),
-    enabled: !!clientId && !!client,
+    enabled: !!clientId,
   });
 
   const { data: servicesWithRoles } = useQuery<(Service & { roles: WorkRole[] })[]>({
     queryKey: ['/api/services'],
     queryFn: getQueryFn({ on401: "throw" }),
-    enabled: !!clientId && !!client,
+    enabled: !!clientId,
   });
 
   const { 
@@ -97,7 +97,7 @@ export function useClientData(clientId: string | undefined): UseClientDataResult
   } = useQuery<ProjectWithRelations[]>({
     queryKey: [`/api/clients/${clientId}/projects`],
     queryFn: getQueryFn({ on401: "throw" }),
-    enabled: !!clientId && !!client,
+    enabled: !!clientId,
     staleTime: 5 * 60 * 1000,
     refetchOnMount: "always",
   });
@@ -107,7 +107,7 @@ export function useClientData(clientId: string | undefined): UseClientDataResult
     isLoading: taskInstancesLoading 
   } = useQuery<any[]>({
     queryKey: [`/api/task-instances/client/${clientId}`],
-    enabled: !!clientId && !!client,
+    enabled: !!clientId,
   });
 
   const { 
