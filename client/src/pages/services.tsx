@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, useFormContext } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/hooks/useAuth";
@@ -120,6 +120,9 @@ function UDFEditor({ control, name }: UDFEditorProps) {
       type: "short_text" as const,
       required: false,
       placeholder: "",
+      options: [],
+      regex: "",
+      regexError: "",
     });
   };
 
@@ -127,8 +130,11 @@ function UDFEditor({ control, name }: UDFEditorProps) {
     { value: "short_text", label: "Short Text" },
     { value: "number", label: "Number" },
     { value: "date", label: "Date" },
-    { value: "boolean", label: "Boolean" },
+    { value: "boolean", label: "Yes/No" },
+    { value: "dropdown", label: "Dropdown List" },
   ];
+
+  const { watch } = useFormContext();
 
   return (
     <div className="space-y-4">
@@ -153,105 +159,181 @@ function UDFEditor({ control, name }: UDFEditorProps) {
 
       {fields.length > 0 && (
         <div className="space-y-3">
-          {fields.map((field, index) => (
-            <Card key={field.id} className="p-4" data-testid={`card-udf-${index}`}>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <FormField
-                  control={control}
-                  name={`${name}.${index}.name`}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Field Name</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="e.g., Tax ID"
-                          data-testid={`input-udf-name-${index}`}
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+          {fields.map((field, index) => {
+            const fieldType = watch(`${name}.${index}.type`);
+            const showOptions = fieldType === "dropdown";
+            const showRegex = fieldType === "short_text" || fieldType === "number";
+            
+            return (
+              <Card key={field.id} className="p-4" data-testid={`card-udf-${index}`}>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <FormField
+                      control={control}
+                      name={`${name}.${index}.name`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Field Name</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="e.g., VAT Number"
+                              data-testid={`input-udf-name-${index}`}
+                              {...field}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                <FormField
-                  control={control}
-                  name={`${name}.${index}.type`}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Field Type</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value} data-testid={`select-udf-type-${index}`}>
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select type" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {udfTypes.map((type) => (
-                            <SelectItem key={type.value} value={type.value}>
-                              {type.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                    <FormField
+                      control={control}
+                      name={`${name}.${index}.type`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Field Type</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value} data-testid={`select-udf-type-${index}`}>
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select type" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {udfTypes.map((type) => (
+                                <SelectItem key={type.value} value={type.value}>
+                                  {type.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                <FormField
-                  control={control}
-                  name={`${name}.${index}.placeholder`}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Placeholder</FormLabel>
-                      <FormControl>
-                        <Input
-                          placeholder="e.g., Enter tax ID..."
-                          data-testid={`input-udf-placeholder-${index}`}
-                          {...field}
-                          value={field.value || ""}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                    <FormField
+                      control={control}
+                      name={`${name}.${index}.placeholder`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Placeholder</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="e.g., Enter VAT number..."
+                              data-testid={`input-udf-placeholder-${index}`}
+                              {...field}
+                              value={field.value || ""}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                <div className="flex items-center space-x-4">
-                  <FormField
-                    control={control}
-                    name={`${name}.${index}.required`}
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                        <FormControl>
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                            data-testid={`checkbox-udf-required-${index}`}
-                          />
-                        </FormControl>
-                        <div className="space-y-1 leading-none">
-                          <FormLabel>Required</FormLabel>
-                        </div>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => remove(index)}
-                    data-testid={`button-remove-udf-${index}`}
-                    className="shrink-0"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                    <div className="flex items-center space-x-4">
+                      <FormField
+                        control={control}
+                        name={`${name}.${index}.required`}
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                                data-testid={`checkbox-udf-required-${index}`}
+                              />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>Required</FormLabel>
+                            </div>
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => remove(index)}
+                        data-testid={`button-remove-udf-${index}`}
+                        className="shrink-0"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {showOptions && (
+                    <FormField
+                      control={control}
+                      name={`${name}.${index}.options`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Dropdown Options</FormLabel>
+                          <FormControl>
+                            <Input
+                              placeholder="Enter options separated by commas (e.g., Option A, Option B, Option C)"
+                              data-testid={`input-udf-options-${index}`}
+                              value={(field.value || []).join(", ")}
+                              onChange={(e) => {
+                                const options = e.target.value.split(",").map(o => o.trim()).filter(o => o);
+                                field.onChange(options);
+                              }}
+                            />
+                          </FormControl>
+                          <p className="text-xs text-muted-foreground">Separate each option with a comma</p>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
+                  {showRegex && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <FormField
+                        control={control}
+                        name={`${name}.${index}.regex`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Validation Pattern (Regex)</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="e.g., ^GB[0-9]{9}$ for VAT numbers"
+                                data-testid={`input-udf-regex-${index}`}
+                                {...field}
+                                value={field.value || ""}
+                              />
+                            </FormControl>
+                            <p className="text-xs text-muted-foreground">Optional: Enter a regex pattern to validate input</p>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={control}
+                        name={`${name}.${index}.regexError`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Validation Error Message</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="e.g., Please enter a valid UK VAT number"
+                                data-testid={`input-udf-regex-error-${index}`}
+                                {...field}
+                                value={field.value || ""}
+                              />
+                            </FormControl>
+                            <p className="text-xs text-muted-foreground">Error message shown when validation fails</p>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
                 </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       )}
 

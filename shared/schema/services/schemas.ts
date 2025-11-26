@@ -13,10 +13,15 @@ import {
 export const udfDefinitionSchema = z.object({
   id: z.string(),
   name: z.string().min(1, "Field name is required"),
-  type: z.enum(["number", "date", "boolean", "short_text"]),
+  type: z.enum(["number", "date", "boolean", "short_text", "dropdown"]),
   required: z.boolean(),
   placeholder: z.string().optional(),
+  options: z.array(z.string()).optional(),
+  regex: z.string().optional(),
+  regexError: z.string().optional(),
 });
+
+export type UdfDefinition = z.infer<typeof udfDefinitionSchema>;
 
 export const baseInsertServiceSchema = z.object({
   name: z.string().min(1, "Name is required"),
