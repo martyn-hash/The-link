@@ -32,7 +32,7 @@ The client-detail.tsx page (originally 9,347 lines) has been refactored into a m
 - **Stage 10 Extractions:** ClientModalsContainer component, barrel exports for all directories
 - **Key Patterns:** Prop drilling over Context for explicit dependencies, mutations in parent, grouped props, discriminated union types
 - **Location:** `client/src/pages/client-detail/` with subdirectories: `components/tabs/`, `components/services/`, `components/modals/`, `dialogs/`, `forms/`, `hooks/`, `utils/`
-- **Documentation:** See `client-detail_refactor.md` and stage-specific `.md` files for detailed architecture
+- **Architecture:** See `client/src/pages/client-detail/` directory structure for component organization
 
 **Client Routes Refactoring (Completed November 25, 2025):**
 The monolithic server/routes/clients.ts (2,348 lines) has been refactored into a modular structure:
@@ -41,7 +41,7 @@ The monolithic server/routes/clients.ts (2,348 lines) has been refactored into a
 - **Module breakdown:** companiesHouse.ts (698 lines), services.ts (837 lines), documents.ts (242 lines), people.ts (151 lines), portalUsers.ts (117 lines), riskAssessments.ts (62 lines), index.ts (31 lines)
 - **Pattern:** Each module exports a `register*Routes` function with consistent middleware parameters
 - **Backward compatible** - main registerClientRoutes function delegates to all modules
-- **Documentation:** See `clients_refactor.md` for detailed plan and results
+- **Structure:** See `server/routes/clients/` directory for module organization
 
 **Schema Layer Migration (COMPLETED, November 26, 2025):**
 The monolithic shared/schema.ts (3,928 lines) has been fully migrated to domain-focused modules:
@@ -50,7 +50,7 @@ The monolithic shared/schema.ts (3,928 lines) has been fully migrated to domain-
 - **Barrel export** at `shared/schema/index.ts` re-exports all 388+ schema exports from domain modules
 - **Drizzle integration** via `shared/schema/drizzle.ts` for tables-only imports (avoids relation config null prototype issues)
 - **Circular dependencies resolved** using `shared/schema/projects/base.ts` pattern
-- **Documentation:** See `SCHEMA_MIGRATION_EXECUTION_PLAN.md` for complete migration history
+- **Structure:** See `shared/schema/` directory for domain module organization
 
 **Database Performance Optimization (Completed November 25, 2025):**
 Comprehensive database indexing strategy implemented to improve query performance:
@@ -118,11 +118,8 @@ Comprehensive review of the application covering:
 |----------|---------|
 | `read_me_before_developing.md` | Developer onboarding and rules |
 | `app_observations.md` | Architecture review and recommendations |
-| `SCHEMA_MIGRATION_EXECUTION_PLAN.md` | **ACTIVE** - Complete schema migration steps |
+| `APP_EXECUTION_PLAN.md` | Active work plan and phase tracking |
 | `speed_time.md` | Performance optimization history |
 | `database_optimisations.md` | Database indexing strategy |
-| `refactor_storage.md` | Storage layer architecture |
-| `client-detail_refactor.md` | Client page decomposition |
-| `clients_refactor.md` | Route modularization |
-| `schema_refactor.md` | Schema modularization (original plan) |
+| `DOCS/` | Feature-specific documentation (scheduling, emails, etc.) |
 | `server/storage/CROSS_DOMAIN_PATTERN.md` | Cross-domain dependency patterns |

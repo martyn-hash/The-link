@@ -6,7 +6,7 @@
 **Related Documentation:**
 - Architecture review: `app_observations.md`
 - High-level architecture: `replit.md`
-- Schema migration plan: `SCHEMA_MIGRATION_EXECUTION_PLAN.md`
+- Active work plan: `APP_EXECUTION_PLAN.md`
 
 ---
 
@@ -276,17 +276,11 @@ Always provide:
 |----------|---------|
 | `replit.md` | High-level architecture and features |
 | `app_observations.md` | Detailed review and recommendations |
+| `APP_EXECUTION_PLAN.md` | Active work plan and phase tracking |
 | `speed_time.md` | Performance optimization history |
 | `database_optimisations.md` | Database indexing strategy |
-| `refactor_storage.md` | Storage layer architecture |
-
-### Architecture Decisions
-
-Major refactoring decisions are documented in:
-- `client-detail_refactor.md` - Client page decomposition
-- `clients_refactor.md` - Route modularization
-- `schema_refactor.md` - Schema modularization
-- `server/storage/CROSS_DOMAIN_PATTERN.md` - Cross-domain dependencies
+| `server/storage/CROSS_DOMAIN_PATTERN.md` | Cross-domain dependencies |
+| `DOCS/` | Feature-specific documentation (scheduling, emails, etc.) |
 
 ---
 

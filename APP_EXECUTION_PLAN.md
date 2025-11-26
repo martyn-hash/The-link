@@ -158,16 +158,18 @@ These improvements enhance performance and maintainability.
 **Current State:** Multiple fragmented refactoring documents
 
 **Tasks:**
-- [ ] Review all existing `.md` documentation files
-- [ ] Merge refactoring docs into single architecture document
-- [ ] Update `replit.md` with final architecture
-- [ ] Remove redundant stage-specific `.md` files in `client/src/pages/client-detail/`
-- [ ] Ensure all documentation is current and accurate
+- [x] Review all existing `.md` documentation files
+- [x] Delete redundant stage-specific `.md` files in `client/src/pages/client-detail/` (7 files)
+- [x] Delete root-level STAGE_* prompt files (4 files)
+- [x] Delete historical refactoring docs (10 files: client-detail_refactor.md, clients_refactor.md, etc.)
+- [x] Update `replit.md` Key Documentation Index to reflect current state
+
+**Status:** ✅ COMPLETED (November 26, 2025)
 
 **Acceptance Criteria:**
-- Single authoritative architecture document
-- `replit.md` reflects current system state
-- No orphaned or outdated documentation files
+- ✅ Reduced from 21+ docs to 6 core docs
+- ✅ `replit.md` reflects current system state with accurate document references
+- ✅ No orphaned documentation files referencing deleted content
 
 ---
 
@@ -273,7 +275,7 @@ These are strategic improvements for production readiness.
 | Phase | Items | Completed | Status |
 |-------|-------|-----------|--------|
 | Phase 1 - Critical | 3 | 3 | ✅ Complete |
-| Phase 2 - Short-term | 4 | 1 | 🔄 In Progress |
+| Phase 2 - Short-term | 4 | 2 | 🔄 In Progress |
 | Phase 3 - Database | 1 | 0 | Not Started |
 | Phase 4 - Long-term | 4 | 0 | Not Started |
 
@@ -281,8 +283,8 @@ These are strategic improvements for production readiness.
 
 ## Notes
 
-- **LSP Diagnostics:** Currently showing 3 errors (reduced from 13 mentioned in review)
-- **Schema Migration Plan:** See `SCHEMA_MIGRATION_EXECUTION_PLAN.md` for detailed migration steps
+- **LSP Diagnostics:** All resolved in Phase 1.1
+- **Schema Migration:** Complete - modular structure in `shared/schema/`
 - **Performance Baseline:** See `speed_time.md` for resolved performance issues
 - **Database Optimization Details:** See `database_optimisations.md` for index strategy
 
@@ -293,7 +295,6 @@ These are strategic improvements for production readiness.
 **Key Files:**
 - Storage facade: `server/storage/index.ts`
 - Storage interface: `server/storage/base/IStorage.ts`
-- Legacy schema: `shared/schema.ts` (to be deleted)
 - Modular schema: `shared/schema/index.ts`
 - Frontend routing: `client/src/App.tsx`
 - Query client: `client/src/lib/queryClient.ts`

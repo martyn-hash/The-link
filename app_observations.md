@@ -6,7 +6,7 @@
 **Related Documentation:**
 - Developer guide: `read_me_before_developing.md`
 - High-level architecture: `replit.md`
-- Schema migration plan: `SCHEMA_MIGRATION_EXECUTION_PLAN.md`
+- Active work plan: `APP_EXECUTION_PLAN.md`
 
 ---
 
@@ -308,7 +308,6 @@ Health check endpoints are available:
 | Route registration | `server/routes.ts` |
 | Frontend routing | `client/src/App.tsx` |
 | Query client config | `client/src/lib/queryClient.ts` |
-| Legacy schema | `shared/schema.ts` |
 | Modular schema | `shared/schema/index.ts` |
 | Performance docs | `speed_time.md`, `database_optimisations.md` |
-| Refactoring docs | `refactor_storage.md`, `client-detail_refactor.md` |
+| Work plan | `APP_EXECUTION_PLAN.md` |
