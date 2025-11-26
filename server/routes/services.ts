@@ -8,6 +8,14 @@ import {
   insertServiceRoleSchema,
   insertClientServiceRoleAssignmentSchema,
 } from "@shared/schema";
+import { 
+  validateVatNumber, 
+  isHmrcConfigured,
+  VAT_NUMBER_REGEX,
+  VAT_NUMBER_REGEX_ERROR,
+  VAT_UDF_FIELD_ID,
+  VAT_UDF_FIELD_NAME
+} from "../hmrc-vat-service";
 
 // Parameter validation schemas
 const paramUuidSchema = z.object({
@@ -508,6 +516,104 @@ export function registerServiceRoutes(
       }
 
       res.status(500).json({ message: "Failed to deactivate role assignment" });
+    }
+  });
+
+  // ==================================================
+  // HMRC VAT VALIDATION ROUTES
+  // ==================================================
+
+  // GET /api/vat/status - Check if HMRC VAT validation is configured
+  app.get("/api/vat/status", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    res.json({ 
+      configured: isHmrcConfigured(),
+      vatUdfFieldId: VAT_UDF_FIELD_ID,
+      vatUdfFieldName: VAT_UDF_FIELD_NAME,
+      vatNumberRegex: VAT_NUMBER_REGEX,
+      vatNumberRegexError: VAT_NUMBER_REGEX_ERROR,
+    });
+  });
+
+  // POST /api/vat/validate - Validate a UK VAT number
+  app.post("/api/vat/validate", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { vatNumber } = req.body;
+      
+      if (!vatNumber) {
+        return res.status(400).json({ message: "VAT number is required" });
+      }
+
+      const result = await validateVatNumber(vatNumber);
+      res.json(result);
+    } catch (error) {
+      console.error("Error validating VAT number:", error instanceof Error ? error.message : error);
+      res.status(500).json({ 
+        isValid: false,
+        error: "Failed to validate VAT number",
+        errorCode: "SERVER_ERROR"
+      });
+    }
+  });
+
+  // POST /api/client-services/:clientServiceId/validate-vat - Validate VAT for a client service and store result
+  app.post("/api/client-services/:clientServiceId/validate-vat", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { clientServiceId } = req.params;
+      
+      // Get the client service
+      const clientService = await storage.getClientServiceById(clientServiceId);
+      if (!clientService) {
+        return res.status(404).json({ message: "Client service not found" });
+      }
+
+      // Get the service to check if it's a VAT service
+      const service = await storage.getServiceById(clientService.serviceId);
+      if (!service) {
+        return res.status(404).json({ message: "Service not found" });
+      }
+
+      if (!service.isVatService) {
+        return res.status(400).json({ message: "This service is not configured as a VAT service" });
+      }
+
+      // Get the VAT number from UDF values
+      const udfValues = (clientService.udfValues || {}) as Record<string, any>;
+      const vatNumber = udfValues[VAT_UDF_FIELD_ID];
+      
+      if (!vatNumber) {
+        return res.status(400).json({ message: "No VAT number found for this client service" });
+      }
+
+      // Validate with HMRC
+      const result = await validateVatNumber(vatNumber);
+
+      // Update the UDF values with validation metadata
+      const updatedUdfValues = {
+        ...udfValues,
+        [`${VAT_UDF_FIELD_ID}_validation`]: {
+          isValid: result.isValid,
+          validatedAt: result.validatedAt || new Date().toISOString(),
+          companyName: result.companyName,
+          error: result.error,
+          errorCode: result.errorCode,
+        }
+      };
+
+      // Update the client service with validation results
+      await storage.updateClientService(clientServiceId, { udfValues: updatedUdfValues });
+
+      res.json({
+        ...result,
+        clientServiceId,
+        vatNumber,
+      });
+    } catch (error) {
+      console.error("Error validating VAT for client service:", error instanceof Error ? error.message : error);
+      res.status(500).json({ 
+        isValid: false,
+        error: "Failed to validate VAT number",
+        errorCode: "SERVER_ERROR"
+      });
     }
   });
 }
