@@ -1031,4 +1031,301 @@ export function registerExcelImportRoutes(
       }
     }
   );
+
+  // Generate template Excel file for import
+  app.get(
+    "/api/excel-import/template",
+    isAuthenticated,
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        // Fetch all services with UDF definitions
+        const services = await storage.getAllServices();
+        const workRoles = await storage.getAllWorkRoles();
+
+        // Create workbook
+        const workbook = XLSX.utils.book_new();
+
+        // ===== CLIENT SHEET =====
+        const clientHeaders = [
+          "Client",
+          "Client Type",
+          "Creation Date",
+          "Manager",
+          "Company Number",
+          "Company Status",
+          "Incorporation Date",
+          "Registered Address",
+          "SIC Code",
+          "HMRC Year End",
+          "Company Email",
+          "Monthly Charge Quote",
+          "Company UTR",
+          "Companies House Authentication Code",
+          "Company Telephone",
+          "Company Postal Address",
+          "Company Email Domain",
+          "Notes",
+          "Trading As"
+        ];
+        
+        // Instructions row with format guidance
+        const clientInstructions = [
+          "(Company name)",
+          "(Company/Individual)",
+          "(dd/mm/yyyy)",
+          "(user@email.com)",
+          "(8 digits, padded)",
+          "(Active/Dormant/etc)",
+          "(dd/mm/yyyy)",
+          "(Multi-line address)",
+          "(SIC code)",
+          "(dd/mm/yyyy)",
+          "(Company email)",
+          "(Monthly fee)",
+          "(10 digits)",
+          "(Auth code)",
+          "(UK phone number)",
+          "(Multi-line address)",
+          "(Domain only)",
+          "(Free text notes)",
+          "(Trading name)"
+        ];
+        
+        const clientExample = [
+          "EXAMPLE - DELETE THIS ROW",
+          "Company",
+          "01/01/2024",
+          "manager@example.com",
+          "12345678",
+          "Active",
+          "01/06/2020",
+          "123 Business Street\nLondon\nEC1A 1AA",
+          "62020",
+          "31/03/2025",
+          "info@example.com",
+          "500",
+          "1234567890",
+          "ABC123",
+          "07700900123",
+          "123 Postal Street\nLondon\nEC1B 2BB",
+          "example.com",
+          "Important client notes here",
+          "Example Trading Name"
+        ];
+        
+        const clientSheet = XLSX.utils.aoa_to_sheet([clientHeaders, clientInstructions, clientExample]);
+        
+        // Set column widths
+        clientSheet["!cols"] = clientHeaders.map((h: string) => ({ wch: Math.max(h.length + 2, 15) }));
+        
+        XLSX.utils.book_append_sheet(workbook, clientSheet, "Clients");
+
+        // ===== PEOPLE SHEET =====
+        const peopleHeaders = [
+          "Client",
+          "Client Type",
+          "First Name",
+          "Last Name",
+          "Full Name",
+          "Email",
+          "Date of Birth",
+          "Initial Contact",
+          "Invoice Address",
+          "Postal Address",
+          "Address Verified",
+          "Photo ID Verified",
+          "Money Laundering Complete",
+          "NI Number",
+          "Mobile Number"
+        ];
+        
+        // Instructions row with format guidance
+        const peopleInstructions = [
+          "(Client company name)",
+          "(Company/Individual)",
+          "(First name)",
+          "(Last name)",
+          "(Full name)",
+          "(Email address)",
+          "(dd/mm/yyyy)",
+          "(dd/mm/yyyy)",
+          "(Registered/Other)",
+          "(Multi-line address)",
+          "(Yes/No)",
+          "(Yes/No)",
+          "(Yes/No)",
+          "(e.g., AB123456C)",
+          "(UK mobile number)"
+        ];
+        
+        const peopleExample = [
+          "EXAMPLE - DELETE THIS ROW",
+          "Company",
+          "John",
+          "Smith",
+          "John Smith",
+          "john.smith@example.com",
+          "15/06/1985",
+          "01/01/2024",
+          "Registered",
+          "456 Home Street\nManchester\nM1 1AA",
+          "Yes",
+          "Yes",
+          "Yes",
+          "AB123456C",
+          "07700900456"
+        ];
+        
+        const peopleSheet = XLSX.utils.aoa_to_sheet([peopleHeaders, peopleInstructions, peopleExample]);
+        peopleSheet["!cols"] = peopleHeaders.map((h: string) => ({ wch: Math.max(h.length + 2, 15) }));
+        
+        XLSX.utils.book_append_sheet(workbook, peopleSheet, "People");
+
+        // ===== SERVICE DATA SHEET =====
+        // This sheet uses a normalized format: one row per UDF value
+        // Users copy the template rows for each client they want to import
+        
+        const activeServices = services.filter((s: any) => s.isActive !== false);
+        
+        // Role columns - these are always included
+        const roleHeaders = workRoles.map((role: any) => `Role: ${role.name}`);
+        
+        // Base headers for the normalized format
+        const serviceDataHeaders = [
+          "Client Company Number",
+          "Client Name", 
+          "Service Name",
+          "Field ID",
+          "Field Name (reference only)",
+          "Value",
+          "Frequency",
+          "Next Start Date",
+          "Next Due Date",
+          "Service Owner",
+          ...roleHeaders
+        ];
+        
+        // Instructions row explaining each column
+        const instructionRow = [
+          "8-digit padded number",
+          "Use if no company number",
+          "Must match exactly",
+          "From UDF Reference sheet",
+          "For your reference only",
+          "The value to set",
+          "Monthly/Quarterly/Annual",
+          "dd/mm/yyyy",
+          "dd/mm/yyyy",
+          "user@email.com",
+          ...roleHeaders.map(() => "user@email.com")
+        ];
+        
+        // Create template rows - one for each service/UDF combination
+        // Users will duplicate and fill in for each client
+        const serviceDataRows: any[][] = [];
+        
+        for (const service of activeServices) {
+          const udfs = (service.udfDefinitions || []) as Array<{id: string; name: string; type: string}>;
+          
+          if (udfs.length > 0) {
+            // Create a template row for each UDF (users copy for each client)
+            for (const udf of udfs) {
+              const row = [
+                "",  // Client Company Number - user fills in
+                "",  // Client Name - user fills in
+                service.name,  // Service Name (pre-filled)
+                udf.id,  // Field ID (pre-filled)
+                udf.name,  // Field Name for reference (pre-filled)
+                "",  // Value - user fills in
+                "",  // Frequency - user fills in (optional)
+                "",  // Next Start Date - user fills in (optional)
+                "",  // Next Due Date - user fills in (optional)
+                "",  // Service Owner - user fills in (optional)
+                ...roleHeaders.map(() => "")  // Role assignments - user fills in (optional)
+              ];
+              serviceDataRows.push(row);
+            }
+          } else {
+            // Service without UDFs - still include for config/roles
+            const row = [
+              "",  // Client Company Number
+              "",  // Client Name
+              service.name,  // Service Name
+              "",  // No Field ID
+              "(No custom fields)",  // Indicates no UDFs
+              "",  // No Value needed
+              "",  // Frequency
+              "",  // Next Start Date
+              "",  // Next Due Date
+              "",  // Service Owner
+              ...roleHeaders.map(() => "")
+            ];
+            serviceDataRows.push(row);
+          }
+        }
+        
+        // Build the sheet with headers, instructions, then template rows
+        const serviceSheetData = [
+          serviceDataHeaders,
+          instructionRow,
+          ["--- TEMPLATE ROWS BELOW (copy and fill for each client) ---", ...Array(serviceDataHeaders.length - 1).fill("")],
+          ...serviceDataRows
+        ];
+        
+        const serviceDataSheet = XLSX.utils.aoa_to_sheet(serviceSheetData);
+        
+        // Set column widths
+        serviceDataSheet["!cols"] = serviceDataHeaders.map((h: string) => ({ 
+          wch: Math.max(String(h).length + 2, 22) 
+        }));
+        
+        XLSX.utils.book_append_sheet(workbook, serviceDataSheet, "Service Data");
+
+        // ===== UDF REFERENCE SHEET =====
+        // Add a reference sheet with all UDFs organized by service
+        const udfRefHeaders = [
+          "Service Name",
+          "Field ID (use this in import)",
+          "Field Name",
+          "Field Type",
+          "Required"
+        ];
+        
+        const udfRefRows: any[][] = [];
+        for (const service of activeServices) {
+          const udfs = (service.udfDefinitions || []) as Array<{id: string; name: string; type: string; required?: boolean}>;
+          for (const udf of udfs) {
+            udfRefRows.push([
+              service.name,
+              udf.id,
+              udf.name,
+              udf.type,
+              udf.required ? "Yes" : "No"
+            ]);
+          }
+        }
+        
+        if (udfRefRows.length === 0) {
+          udfRefRows.push(["No UDF fields defined in any service", "", "", "", ""]);
+        }
+        
+        const udfRefSheet = XLSX.utils.aoa_to_sheet([udfRefHeaders, ...udfRefRows]);
+        udfRefSheet["!cols"] = udfRefHeaders.map((h: string) => ({ wch: Math.max(h.length + 2, 25) }));
+        
+        XLSX.utils.book_append_sheet(workbook, udfRefSheet, "UDF Reference");
+
+        // Generate buffer
+        const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+        // Send file
+        res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        res.setHeader("Content-Disposition", "attachment; filename=import_template.xlsx");
+        res.send(buffer);
+      } catch (error: any) {
+        console.error("Template generation error:", error);
+        res.status(500).json({ error: error.message });
+      }
+    }
+  );
 }

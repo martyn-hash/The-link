@@ -26,7 +26,8 @@ import {
   User,
   Building2,
   ArrowRight,
-  RefreshCw
+  RefreshCw,
+  Download
 } from "lucide-react";
 
 interface TransformedClient {
@@ -403,11 +404,47 @@ export default function ExcelImport() {
               </AccordionItem>
             </Accordion>
 
+            <Card className="border-primary/20 bg-primary/5">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Download className="w-5 h-5" />
+                  Download Import Template
+                </CardTitle>
+                <CardDescription>
+                  Get a pre-formatted Excel template with all column headers, example data, and your service UDF Field IDs already filled in
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    The template includes 4 sheets:
+                  </p>
+                  <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                    <li><strong>Clients</strong> - All client columns with example data</li>
+                    <li><strong>People</strong> - All person columns with example data</li>
+                    <li><strong>Service Data</strong> - Pre-populated with your services and their UDF Field IDs</li>
+                    <li><strong>UDF Reference</strong> - Quick lookup table of all Field IDs by service</li>
+                  </ul>
+                  <Button
+                    onClick={() => {
+                      window.location.href = "/api/excel-import/template";
+                    }}
+                    variant="default"
+                    className="w-full"
+                    data-testid="button-download-template"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download Template (.xlsx)
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <FileSpreadsheet className="w-5 h-5" />
-                  Upload Excel File
+                  <Upload className="w-5 h-5" />
+                  Upload Your Excel File
                 </CardTitle>
                 <CardDescription>
                   Select your Excel file (.xlsx) containing the Client and Person sheets
