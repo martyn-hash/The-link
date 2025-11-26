@@ -76,6 +76,12 @@ Short-term improvements for performance and maintainability:
 - **Documentation Consolidation:** Reduced from 21+ fragmented docs to 6 core documentation files
 - **Orphaned File Cleanup:** Removed legacy backup files; documented 4 production assets vs 287 dev screenshots in attached_assets
 
+**Phase 3 Database Optimizations (Completed November 26, 2025):**
+Added 3 indexes to improve notification-related query performance:
+- `idx_scheduled_notifications_status_scheduled_for` - Optimizes cron job queries for pending notifications
+- `idx_project_type_notifications_client_request_template_id` - Optimizes FK lookups for project notifications
+- `idx_notification_history_client_created` - Optimizes client notification timeline queries
+
 ### Key Features
 -   **Automated Project & Service Management**: Includes automatic schema migrations, service scheduling, project automation, and client service role assignment with task cascading.
 -   **Communication & Collaboration**: Features push notification template management, an internal tasks system, standalone staff-to-staff messaging, email threading and deduplication via Microsoft Graph, and a multi-channel client notification and reminder system. This includes a rich-text Tiptap editor for messages, file attachments, Office document conversion for in-app preview, and intelligent message expand/collapse functionality. Email notifications support rich HTML formatting with DOMPurify sanitization and dual HTML/plain text formats. Project message thread creation permissions have been refined.
