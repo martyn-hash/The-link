@@ -69,6 +69,13 @@ Comprehensive performance review identifying optimization opportunities:
 - **Frontend Polling:** Multiple endpoints polled every 10-30s from multiple components - needs deduplication and increased intervals
 - **Documentation:** See `speed_time.md` for full analysis, code examples, and implementation plan
 
+**Phase 2 Improvements (Completed November 26, 2025):**
+Short-term improvements for performance and maintainability:
+- **Route-Level Code Splitting:** All 60+ page components now use React.lazy() with Suspense boundaries for smaller initial bundle
+- **Query Waterfall Optimization:** Client detail page queries now run in parallel (10 concurrent vs sequential requests)
+- **Documentation Consolidation:** Reduced from 21+ fragmented docs to 6 core documentation files
+- **Orphaned File Cleanup:** Removed legacy backup files; documented 4 production assets vs 287 dev screenshots in attached_assets
+
 ### Key Features
 -   **Automated Project & Service Management**: Includes automatic schema migrations, service scheduling, project automation, and client service role assignment with task cascading.
 -   **Communication & Collaboration**: Features push notification template management, an internal tasks system, standalone staff-to-staff messaging, email threading and deduplication via Microsoft Graph, and a multi-channel client notification and reminder system. This includes a rich-text Tiptap editor for messages, file attachments, Office document conversion for in-app preview, and intelligent message expand/collapse functionality. Email notifications support rich HTML formatting with DOMPurify sanitization and dual HTML/plain text formats. Project message thread creation permissions have been refined.
