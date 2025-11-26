@@ -17,6 +17,7 @@ export const services = pgTable("services", {
   chDueDateField: varchar("ch_due_date_field"),
   isPersonalService: boolean("is_personal_service").default(false),
   isStaticService: boolean("is_static_service").default(false),
+  isVatService: boolean("is_vat_service").default(false),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });

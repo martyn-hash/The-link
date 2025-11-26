@@ -33,6 +33,7 @@ export const baseInsertServiceSchema = z.object({
   chDueDateField: z.string().optional().nullable(),
   isPersonalService: z.boolean().optional().default(false),
   isStaticService: z.boolean().optional().default(false),
+  isVatService: z.boolean().optional().default(false),
   isActive: z.boolean().optional().default(true),
 });
 
