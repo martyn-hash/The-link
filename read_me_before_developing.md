@@ -1,11 +1,11 @@
 # Developer Guide - Read Before Making Changes
 
-**Last Updated:** November 25, 2025  
+**Last Updated:** November 26, 2025  
 **Application:** The Link - CRM & Project Management
 
 **Related Documentation:**
-- Architecture review: `app_observations.md`
 - High-level architecture: `replit.md`
+- Architecture review: `app_observations.md`
 - Active work plan: `APP_EXECUTION_PLAN.md`
 
 ---
@@ -17,8 +17,10 @@ To test the application with full access:
 1. Navigate to the root page (`/`)
 2. Click on the **Password** tab
 3. Login with these credentials:
-   - **Email:** `admin@example.com`
-   - **Password:** `admin123`
+   - **Email:** `georgewandhe@gmail.com`
+   - **Password:** `TestPassword123`
+
+For detailed test user credentials including portal users, see `DOCS/TEST_USER_CREDENTIALS.md`.
 
 ---
 
@@ -32,7 +34,7 @@ To test the application with full access:
 | Backend | Express.js + TypeScript |
 | Database | PostgreSQL (Neon) via Drizzle ORM |
 | Storage | Google Cloud Storage (Replit Object Storage) |
-| Auth | Replit OIDC (staff) + Magic Links (portal) |
+| Auth | Replit OIDC (staff) + Magic Links + Password (portal) |
 
 ### Key Directories
 
@@ -40,18 +42,24 @@ To test the application with full access:
 client/src/
 ├── components/ui/    # shadcn primitives - don't modify directly
 ├── components/       # Shared app components
-├── pages/            # Route components
+├── pages/            # Route components (lazy-loaded)
 ├── hooks/            # Custom React hooks
 └── lib/              # Utilities (queryClient, utils, etc.)
 
 server/
-├── routes/           # API endpoints (modular)
-├── storage/          # Data access layer (domain modules)
+├── routes/           # API endpoints (modular by domain)
+│   └── clients/      # Client-specific route modules
+├── storage/          # Data access layer (52 domain modules)
+│   └── base/         # IStorage interface & types
 ├── core/             # Business logic (project creation, scheduling)
 └── services/         # External integrations
 
 shared/
-└── schema/           # Database schema (domain modules)
+└── schema/           # Database schema (10 domain modules)
+    ├── users/        # User management, sessions
+    ├── clients/      # Client entities
+    ├── projects/     # Project management
+    └── ...           # Other domains
 ```
 
 ---
@@ -69,7 +77,7 @@ shared/
 
 ### 2. Schema and Types
 
-**Always define types in `shared/schema/` first.** The data model drives everything:
+**All schemas are now modular** in `shared/schema/` (10 domain modules). The legacy `shared/schema.ts` is just a compatibility shim for Drizzle Kit.
 
 ```typescript
 // In shared/schema/[domain]/tables.ts
@@ -84,9 +92,18 @@ export type InsertMyTable = z.infer<typeof insertMyTableSchema>;
 export type MyTable = typeof myTable.$inferSelect;
 ```
 
+**Import paths:**
+```typescript
+// Preferred: Import from barrel export
+import { users, type User, insertUserSchema } from '@shared/schema';
+
+// Alternative: Import from specific domain
+import { users, type User } from '@shared/schema/users';
+```
+
 ### 3. Storage Layer Pattern
 
-All database operations go through the storage facade:
+The storage layer uses a **facade pattern** with 52 domain-focused modules. All database operations go through the storage facade:
 
 ```typescript
 // ✓ CORRECT - Use storage facade
@@ -176,30 +193,6 @@ const form = useForm<InsertMyType>({
 
 ---
 
-## Known Issues & Workarounds
-
-### 1. Type Mismatches in Storage Facade
-
-**Issue:** 13 type errors exist between `DatabaseStorage` and `IStorage` interface.
-
-**Workaround:** When adding new methods, ensure the implementation matches the interface exactly. Check return types include all required properties.
-
-### 2. Dual Schema System
-
-**Issue:** Both `shared/schema.ts` (legacy) and `shared/schema/` (modular) exist.
-
-**Guidance:** 
-- New code should import from domain modules: `import { users } from '@shared/schema/users'`
-- Some files still import from legacy `@shared/schema` - this is acceptable until migration complete
-
-### 3. OldDatabaseStorage References
-
-**Issue:** Some cross-domain helpers still use legacy storage.
-
-**Guidance:** When modifying storage modules, prefer using the typed helper interfaces defined in the module's `registerHelpers()` method.
-
----
-
 ## Testing Checklist
 
 Before submitting changes, verify:
@@ -235,7 +228,7 @@ Always provide:
 
 ### Frontend
 
-1. **Polling intervals:** Use 60s for background status, 30s for active conversations
+1. **Lazy loading:** All 60+ page components use React.lazy() with Suspense
 2. **Query keys:** Use arrays for proper cache invalidation: `['/api/clients', id]`
 3. **Loading states:** Always show skeleton/loading UI during queries
 
@@ -254,7 +247,7 @@ Always provide:
 ### Adding a New Page
 
 1. Create page component in `client/src/pages/`
-2. Register route in `client/src/App.tsx`
+2. Register route in `client/src/App.tsx` with React.lazy()
 3. Add navigation link if needed (sidebar/menu)
 4. Implement with proper loading and error states
 
@@ -275,12 +268,14 @@ Always provide:
 | Document | Purpose |
 |----------|---------|
 | `replit.md` | High-level architecture and features |
-| `app_observations.md` | Detailed review and recommendations |
+| `app_observations.md` | Architecture review and recommendations |
 | `APP_EXECUTION_PLAN.md` | Active work plan and phase tracking |
 | `speed_time.md` | Performance optimization history |
 | `database_optimisations.md` | Database indexing strategy |
-| `server/storage/CROSS_DOMAIN_PATTERN.md` | Cross-domain dependencies |
-| `DOCS/` | Feature-specific documentation (scheduling, emails, etc.) |
+| `server/storage/CROSS_DOMAIN_PATTERN.md` | Cross-domain dependency patterns |
+| `DOCS/TEST_USER_CREDENTIALS.md` | Test user accounts and login details |
+| `DOCS/scheduling.md` | Service scheduling documentation |
+| `DOCS/Service_and_Project_Logic.md` | Service/project business logic |
 
 ---
 
@@ -295,10 +290,8 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { storage } from './storage/index';
 
-// Schema & Types
+// Schema & Types (modular architecture)
 import { users, type User, insertUserSchema } from '@shared/schema';
-// Or from specific domain:
-import { users, type User } from '@shared/schema/users';
 
 // Utilities
 import { cn } from '@/lib/utils';
@@ -308,8 +301,9 @@ import { cn } from '@/lib/utils';
 
 ## Final Reminders
 
-1. **Test login:** Use `admin@example.com` / `admin123` via Password tab
+1. **Test login:** Use `georgewandhe@gmail.com` / `TestPassword123` via Password tab
 2. **Check types:** Run LSP diagnostics before completing work
 3. **Don't modify:** Vite config, package.json, drizzle.config.ts
 4. **Use storage facade:** Never query database directly in routes
 5. **Document changes:** Update `replit.md` for significant architecture changes
+6. **Modular schema:** All schemas in `shared/schema/` - legacy file is just a shim
