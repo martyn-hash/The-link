@@ -13,6 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { 
   Upload, 
   FileSpreadsheet, 
@@ -337,10 +338,11 @@ export default function ExcelImport() {
               <Info className="h-4 w-4" />
               <AlertTitle>Excel File Requirements</AlertTitle>
               <AlertDescription>
-                <p className="mb-2">Your Excel file should have two sheets:</p>
+                <p className="mb-2">Your Excel file can have the following sheets:</p>
                 <ul className="list-disc list-inside space-y-1 text-sm">
                   <li><strong>Client sheet:</strong> Company information, manager, contact details, UTR, etc.</li>
                   <li><strong>Person sheet:</strong> Individual people linked to clients with their personal details</li>
+                  <li><strong>Service Data sheet (optional):</strong> Service-specific data including UDF values, configuration, and role assignments</li>
                 </ul>
                 <p className="mt-2 text-sm">The system will automatically:</p>
                 <ul className="list-disc list-inside space-y-1 text-sm">
@@ -350,6 +352,56 @@ export default function ExcelImport() {
                 </ul>
               </AlertDescription>
             </Alert>
+
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="service-data">
+                <AccordionTrigger className="text-sm font-medium">
+                  <div className="flex items-center gap-2">
+                    <FileSpreadsheet className="w-4 h-4" />
+                    Service Data Sheet Reference
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-4 text-sm">
+                    <div>
+                      <p className="font-medium mb-2">Required Columns:</p>
+                      <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                        <li><strong>Client Company Number</strong> or <strong>Client Name</strong> - to identify the client</li>
+                        <li><strong>Service Name</strong> - exact name of the service (e.g., "Annual Accounts")</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="font-medium mb-2">UDF (Custom Field) Columns:</p>
+                      <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                        <li><strong>Field ID</strong> - the unique ID of the custom field (find this on the Services page)</li>
+                        <li><strong>Value</strong> - the value to set for this field</li>
+                      </ul>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Tip: Navigate to <strong>Services</strong> page, click on a service, and view its UDF definitions to find the Field IDs.
+                      </p>
+                    </div>
+                    <div>
+                      <p className="font-medium mb-2">Service Configuration Columns (Optional):</p>
+                      <ul className="list-disc list-inside space-y-1 text-muted-foreground">
+                        <li><strong>Frequency</strong> - service frequency (e.g., "Monthly", "Quarterly", "Annual")</li>
+                        <li><strong>Next Start Date</strong> - when the next service period starts</li>
+                        <li><strong>Next Due Date</strong> - when the next service is due</li>
+                        <li><strong>Service Owner</strong> - email address of the user who owns this service</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="font-medium mb-2">Role Assignment Columns (Optional):</p>
+                      <p className="text-muted-foreground mb-2">
+                        Add columns with the header format <strong>Role: [Role Name]</strong> and set the value to the user's email address.
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Example: Column header "Role: Manager" with value "john@company.com" assigns the Manager role to that user.
+                      </p>
+                    </div>
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
 
             <Card>
               <CardHeader>
