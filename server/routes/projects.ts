@@ -237,6 +237,7 @@ export function registerProjectRoutes(
         month: normalize(req.query.month),
         archived: req.query.archived === 'true' ? true : req.query.archived === 'false' ? false : undefined,
         showArchived: req.query.showArchived === 'true' ? true : req.query.showArchived === 'false' ? false : undefined,
+        showCompletedRegardless: req.query.showCompletedRegardless === 'true' ? true : req.query.showCompletedRegardless === 'false' ? false : undefined,
         inactive: req.query.inactive === 'true' ? true : req.query.inactive === 'false' ? false : undefined,
         serviceId: normalize(req.query.serviceId),
         assigneeId: normalize(req.query.assigneeId),

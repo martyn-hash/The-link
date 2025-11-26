@@ -1,9 +1,7 @@
-import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { type ProjectView, type User } from "@shared/schema";
+import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { type User } from "@shared/schema";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -25,22 +23,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar";
 import { Separator } from "@/components/ui/separator";
 import { 
   Filter, 
   Calendar as CalendarIcon, 
-  Save, 
-  Trash2, 
-  Star,
   X,
   Users,
   Briefcase,
@@ -66,6 +53,8 @@ interface FilterPanelProps {
   setUserFilter: (value: string) => void;
   showArchived: boolean;
   setShowArchived: (value: boolean) => void;
+  showCompletedRegardless: boolean;
+  setShowCompletedRegardless: (value: boolean) => void;
   behindScheduleOnly: boolean;
   setBehindScheduleOnly: (value: boolean) => void;
   dynamicDateFilter: "all" | "overdue" | "today" | "next7days" | "next14days" | "next30days" | "custom";
@@ -98,6 +87,8 @@ export default function FilterPanel({
   setUserFilter,
   showArchived,
   setShowArchived,
+  showCompletedRegardless,
+  setShowCompletedRegardless,
   behindScheduleOnly,
   setBehindScheduleOnly,
   dynamicDateFilter,
@@ -114,66 +105,10 @@ export default function FilterPanel({
   serviceOwners,
   isManagerOrAdmin,
 }: FilterPanelProps) {
-  const [saveViewDialogOpen, setSaveViewDialogOpen] = useState(false);
-  const [viewName, setViewName] = useState("");
-
-  // Fetch saved views
-  const { data: savedViews = [] } = useQuery<ProjectView[]>({
-    queryKey: ["/api/project-views"],
-  });
-
   // Fetch unique due dates for selected service
   const { data: serviceDueDates = [] } = useQuery<string[]>({
     queryKey: ['/api/services', serviceFilter, 'due-dates'],
     enabled: serviceFilter !== "all",
-  });
-
-  // Save view mutation
-  const saveViewMutation = useMutation({
-    mutationFn: async (name: string) => {
-      const filters = {
-        serviceFilter,
-        taskAssigneeFilter,
-        serviceOwnerFilter,
-        userFilter,
-        showArchived,
-        behindScheduleOnly,
-        dynamicDateFilter,
-        customDateRange: customDateRange.from && customDateRange.to ? {
-          from: customDateRange.from.toISOString(),
-          to: customDateRange.to.toISOString(),
-        } : null,
-        serviceDueDateFilter,
-      };
-
-      return await apiRequest(
-        "POST",
-        "/api/project-views",
-        { name, filters: JSON.stringify(filters), viewMode }
-      );
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/project-views"] });
-      setSaveViewDialogOpen(false);
-      setViewName("");
-    },
-  });
-
-  // Delete view mutation
-  const deleteViewMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await apiRequest(
-        "DELETE",
-        `/api/project-views/${id}`
-      );
-      return id;
-    },
-    onSuccess: (deletedId) => {
-      // Eagerly update the cache by removing the deleted view
-      queryClient.setQueryData<ProjectView[]>(["/api/project-views"], (oldData) => {
-        return oldData ? oldData.filter(view => view.id !== deletedId) : oldData;
-      });
-    },
   });
 
   const handleClearAll = () => {
@@ -182,38 +117,11 @@ export default function FilterPanel({
     setServiceOwnerFilter("all");
     setUserFilter("all");
     setShowArchived(false);
+    setShowCompletedRegardless(true);
     setBehindScheduleOnly(false);
     setDynamicDateFilter("all");
     setCustomDateRange({ from: undefined, to: undefined });
     setServiceDueDateFilter("all");
-  };
-
-  const handleLoadView = (view: ProjectView) => {
-    const filters = typeof view.filters === 'string' 
-      ? JSON.parse(view.filters) 
-      : view.filters as any;
-    
-    setServiceFilter(filters.serviceFilter || "all");
-    setTaskAssigneeFilter(filters.taskAssigneeFilter || "all");
-    setServiceOwnerFilter(filters.serviceOwnerFilter || "all");
-    setUserFilter(filters.userFilter || "all");
-    setShowArchived(filters.showArchived || false);
-    setBehindScheduleOnly(filters.behindScheduleOnly || false);
-    setDynamicDateFilter(filters.dynamicDateFilter || "all");
-    setServiceDueDateFilter(filters.serviceDueDateFilter || "all");
-    
-    if (filters.customDateRange) {
-      setCustomDateRange({
-        from: new Date(filters.customDateRange.from),
-        to: new Date(filters.customDateRange.to),
-      });
-    } else {
-      setCustomDateRange({ from: undefined, to: undefined });
-    }
-    
-    if (view.viewMode) {
-      setViewMode(view.viewMode as "kanban" | "list");
-    }
   };
 
   // Mutual exclusivity wrapper for dynamic date filter
@@ -247,6 +155,7 @@ export default function FilterPanel({
     if (serviceOwnerFilter !== "all") count++;
     if (userFilter !== "all" && isManagerOrAdmin) count++;
     if (showArchived) count++;
+    if (!showCompletedRegardless) count++;
     if (behindScheduleOnly) count++;
     // Count only the active date filter (mutual exclusivity)
     if (dynamicDateFilter !== "all" || serviceDueDateFilter !== "all") count++;
@@ -260,10 +169,10 @@ export default function FilterPanel({
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2">
               <Filter className="w-5 h-5" />
-              Filters & Views
+              Filters
             </SheetTitle>
             <SheetDescription>
-              Apply filters to narrow down projects, or save your current view for quick access.
+              Apply filters to narrow down the projects displayed.
             </SheetDescription>
           </SheetHeader>
 
@@ -563,99 +472,27 @@ export default function FilterPanel({
 
             <Separator />
 
-            {/* Saved Views */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label className="flex items-center gap-2">
-                  <Star className="w-4 h-4" />
-                  Saved Views
+            {/* Show Completed Projects Toggle */}
+            <div className="flex items-center justify-between">
+              <div className="flex-1 pr-4">
+                <Label htmlFor="show-completed-filter" className="flex items-center gap-2 cursor-pointer">
+                  <Archive className="w-4 h-4" />
+                  Include Completed Projects
                 </Label>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setSaveViewDialogOpen(true)}
-                  data-testid="button-save-current-view"
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Current
-                </Button>
-              </div>
-
-              {savedViews.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">
-                  No saved views yet. Save your current filters for quick access.
+                <p className="text-xs text-muted-foreground mt-1">
+                  When on, completed projects appear regardless of archived/inactive status
                 </p>
-              ) : (
-                <div className="space-y-2">
-                  {savedViews.map((view) => (
-                    <div
-                      key={view.id}
-                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-accent group"
-                    >
-                      <button
-                        onClick={() => handleLoadView(view)}
-                        className="flex-1 text-left text-sm font-medium"
-                        data-testid={`button-load-view-${view.id}`}
-                      >
-                        {view.name}
-                      </button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => deleteViewMutation.mutate(view.id)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity"
-                        data-testid={`button-delete-view-${view.id}`}
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              </div>
+              <Switch
+                id="show-completed-filter"
+                checked={showCompletedRegardless}
+                onCheckedChange={setShowCompletedRegardless}
+                data-testid="switch-show-completed-filter"
+              />
             </div>
           </div>
         </SheetContent>
       </Sheet>
-
-      {/* Save View Dialog */}
-      <Dialog open={saveViewDialogOpen} onOpenChange={setSaveViewDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Save Current View</DialogTitle>
-            <DialogDescription>
-              Give your current filter configuration a name for easy access later.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="view-name">View Name</Label>
-              <Input
-                id="view-name"
-                value={viewName}
-                onChange={(e) => setViewName(e.target.value)}
-                placeholder="e.g., Overdue VAT Returns"
-                data-testid="input-view-name"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setSaveViewDialogOpen(false)}
-              data-testid="button-cancel-save-view"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => saveViewMutation.mutate(viewName)}
-              disabled={!viewName.trim() || saveViewMutation.isPending}
-              data-testid="button-confirm-save-view"
-            >
-              {saveViewMutation.isPending ? "Saving..." : "Save View"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }

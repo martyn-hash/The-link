@@ -256,7 +256,55 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
 
   // Calculate project status (On Track, Behind Schedule, Late / Overdue)
   // Priority: 1) Late/Overdue if past due date, 2) Behind Schedule if over stage time, 3) On Track
+  // For COMPLETED projects: freeze the color based on status at completion time
   const projectStatus = useMemo(() => {
+    // For completed projects, determine status at completion time (not current time)
+    if (project.completionStatus) {
+      // Find the completion timestamp from chronology
+      // Look for the LAST status change entry (entry with toStatus field), which indicates
+      // when the project was moved to its final completed stage
+      // This ignores post-completion notes or other non-status-change entries
+      let completionDate: Date | null = null;
+      
+      if (project.chronology && Array.isArray(project.chronology) && project.chronology.length > 0) {
+        // Iterate backwards to find the last status change entry (has toStatus field)
+        for (let i = project.chronology.length - 1; i >= 0; i--) {
+          const entry = project.chronology[i] as any;
+          // Status change entries have toStatus field
+          if (entry?.toStatus && entry?.timestamp) {
+            completionDate = new Date(entry.timestamp);
+            break;
+          }
+        }
+      }
+      
+      // Fallback to updatedAt if no chronology timestamp found
+      if (!completionDate && project.updatedAt) {
+        completionDate = new Date(project.updatedAt);
+      }
+      
+      // If we have a due date, compare completion date against it
+      if (project.dueDate && completionDate) {
+        const dueDate = new Date(project.dueDate);
+        if (completionDate > dueDate) {
+          // Completed AFTER due date = Late / Overdue (red)
+          return { 
+            status: 'Late / Overdue' as const, 
+            color: 'bg-red-600 text-white' as const,
+            bgColor: 'bg-red-50 dark:bg-red-950/30' as const
+          };
+        }
+      }
+      
+      // Completed on time or before due date = On Track (green)
+      return { 
+        status: 'On Track' as const, 
+        color: 'bg-green-600 text-white' as const,
+        bgColor: 'bg-green-50 dark:bg-green-950/30' as const
+      };
+    }
+    
+    // For active (non-completed) projects, use current time for status calculation
     const now = new Date();
     
     // Priority 1: Check if project is past its overall due date
@@ -288,7 +336,7 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
       color: 'bg-green-600 text-white' as const,
       bgColor: 'bg-green-50 dark:bg-green-950/30' as const
     };
-  }, [currentBusinessHours, effectiveStageConfig?.maxInstanceTime, project.dueDate]);
+  }, [currentBusinessHours, effectiveStageConfig?.maxInstanceTime, project.dueDate, project.completionStatus, project.chronology, project.updatedAt]);
 
   // Calculate time remaining until stage is due
   // This shows: max instance time for current stage - time already spent in this stage

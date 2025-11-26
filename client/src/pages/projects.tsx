@@ -105,6 +105,7 @@ export default function Projects() {
   }, [serviceFilter, viewMode]);
   const [userFilter, setUserFilter] = useState("all");
   const [showArchived, setShowArchived] = useState<boolean>(false);
+  const [showCompletedRegardless, setShowCompletedRegardless] = useState<boolean>(true);
   
   // Date filter state
   const [dynamicDateFilter, setDynamicDateFilter] = useState<"all" | "overdue" | "today" | "next7days" | "next14days" | "next30days" | "custom">("all");
@@ -146,6 +147,7 @@ export default function Projects() {
   const [dashboardServiceOwnerFilter, setDashboardServiceOwnerFilter] = useState("all");
   const [dashboardUserFilter, setDashboardUserFilter] = useState("all");
   const [dashboardShowArchived, setDashboardShowArchived] = useState<boolean>(false);
+  const [dashboardShowCompletedRegardless, setDashboardShowCompletedRegardless] = useState<boolean>(true);
   const [dashboardDynamicDateFilter, setDashboardDynamicDateFilter] = useState<"all" | "overdue" | "today" | "next7days" | "next14days" | "next30days" | "custom">("all");
   const [dashboardCustomDateRange, setDashboardCustomDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
     from: undefined,
@@ -208,6 +210,7 @@ export default function Projects() {
   const { data: projects, isLoading: projectsLoading, error } = useQuery<ProjectWithRelations[]>({
     queryKey: ["/api/projects", { 
       showArchived,
+      showCompletedRegardless,
       dueDate: serviceDueDateFilter !== "all" ? serviceDueDateFilter : undefined,
     }],
     enabled: isAuthenticated && !!user,
@@ -1412,6 +1415,8 @@ export default function Projects() {
         setUserFilter={setUserFilter}
         showArchived={showArchived}
         setShowArchived={setShowArchived}
+        showCompletedRegardless={showCompletedRegardless}
+        setShowCompletedRegardless={setShowCompletedRegardless}
         behindScheduleOnly={behindScheduleOnly}
         setBehindScheduleOnly={setBehindScheduleOnly}
         dynamicDateFilter={dynamicDateFilter}

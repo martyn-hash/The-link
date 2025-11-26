@@ -338,52 +338,81 @@ export class ProjectStorage extends BaseStorage {
 
   // ==================== Complex Project Query Operations ====================
 
-  async getAllProjects(filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string; dueDate?: string }): Promise<ProjectWithRelations[]> {
+  async getAllProjects(filters?: { month?: string; archived?: boolean; showArchived?: boolean; showCompletedRegardless?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string; dueDate?: string }): Promise<ProjectWithRelations[]> {
     let whereConditions = [];
     
     if (filters?.month) {
       whereConditions.push(eq(projects.projectMonth, filters.month));
     }
     
-    // Handle archived filtering: always include completed projects regardless of archived status
-    // The archived filter only applies to active (non-completed) projects
+    // Determine whether to include completed projects regardless of archived/inactive status
+    // When showCompletedRegardless is EXPLICITLY false, completed projects are excluded entirely
+    // When showCompletedRegardless is true OR undefined (default), completed projects are always included
+    // This ensures backward compatibility - existing callers without this parameter maintain current behavior
+    const excludeCompletedProjects = filters?.showCompletedRegardless === false;
+    
+    // Handle archived filtering
     if (filters?.archived !== undefined) {
-      // Explicit archived filter: match archived status OR include completed projects
-      whereConditions.push(
-        or(
-          eq(projects.archived, filters.archived),
-          isNotNull(projects.completionStatus)
-        )!
-      );
+      if (!excludeCompletedProjects) {
+        // Explicit archived filter: match archived status OR include completed projects
+        whereConditions.push(
+          or(
+            eq(projects.archived, filters.archived),
+            isNotNull(projects.completionStatus)
+          )!
+        );
+      } else {
+        // Don't include completed projects automatically
+        whereConditions.push(eq(projects.archived, filters.archived));
+      }
     } else if (filters?.showArchived !== true) {
-      // Default behavior (undefined or false): exclude archived projects BUT always include completed projects
-      whereConditions.push(
-        or(
-          eq(projects.archived, false),
-          isNotNull(projects.completionStatus)
-        )!
-      );
+      if (!excludeCompletedProjects) {
+        // Default behavior (undefined or false): exclude archived projects BUT always include completed projects
+        whereConditions.push(
+          or(
+            eq(projects.archived, false),
+            isNotNull(projects.completionStatus)
+          )!
+        );
+      } else {
+        // Exclude archived projects and do not include completed projects automatically
+        whereConditions.push(eq(projects.archived, false));
+      }
     }
     // When showArchived is explicitly true, don't filter by archived status (show all)
     
-    // Handle inactive filtering: always include completed projects regardless of inactive status
-    // The inactive filter only applies to active (non-completed) projects
+    // Handle inactive filtering
     if (filters?.inactive !== undefined) {
-      // Explicit inactive filter: match inactive status OR include completed projects
-      whereConditions.push(
-        or(
-          eq(projects.inactive, filters.inactive),
-          isNotNull(projects.completionStatus)
-        )!
-      );
+      if (!excludeCompletedProjects) {
+        // Explicit inactive filter: match inactive status OR include completed projects
+        whereConditions.push(
+          or(
+            eq(projects.inactive, filters.inactive),
+            isNotNull(projects.completionStatus)
+          )!
+        );
+      } else {
+        // Don't include completed projects automatically
+        whereConditions.push(eq(projects.inactive, filters.inactive));
+      }
     } else {
-      // Default: exclude inactive projects BUT always include completed projects
-      whereConditions.push(
-        or(
-          eq(projects.inactive, false),
-          isNotNull(projects.completionStatus)
-        )!
-      );
+      if (!excludeCompletedProjects) {
+        // Default: exclude inactive projects BUT always include completed projects
+        whereConditions.push(
+          or(
+            eq(projects.inactive, false),
+            isNotNull(projects.completionStatus)
+          )!
+        );
+      } else {
+        // Exclude inactive projects and do not include completed projects automatically
+        whereConditions.push(eq(projects.inactive, false));
+      }
+    }
+    
+    // If showCompletedRegardless is explicitly false, exclude completed projects
+    if (excludeCompletedProjects) {
+      whereConditions.push(isNull(projects.completionStatus));
     }
     
     if (filters?.assigneeId) {

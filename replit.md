@@ -82,6 +82,12 @@ Added 3 indexes to improve notification-related query performance:
 - `idx_project_type_notifications_client_request_template_id` - Optimizes FK lookups for project notifications
 - `idx_notification_history_client_created` - Optimizes client notification timeline queries
 
+**Project Filter Improvements (Completed November 26, 2025):**
+Three improvements to the project management filter system:
+- **Include Completed Projects Toggle:** Added toggle filter in FilterPanel that defaults to ON (maintaining current behavior). When OFF, completed projects are excluded from the view. Backend filtering uses explicit `showCompletedRegardless=false` check to ensure backward compatibility.
+- **Removed Saved Views from Filter Panel:** Saved views list and save functionality moved to view menu - filter panel now focused purely on filtering.
+- **Kanban Card Color Freeze for Completed Projects:** Project card status coloring now "frozen" at completion time for completed projects. Uses the last status change chronology entry (with `toStatus` field) instead of current date to determine if project was on-time (green) or late/overdue (red) at completion.
+
 ### Key Features
 -   **Automated Project & Service Management**: Includes automatic schema migrations, service scheduling, project automation, and client service role assignment with task cascading.
 -   **Communication & Collaboration**: Features push notification template management, an internal tasks system, standalone staff-to-staff messaging, email threading and deduplication via Microsoft Graph, and a multi-channel client notification and reminder system. This includes a rich-text Tiptap editor for messages, file attachments, Office document conversion for in-app preview, and intelligent message expand/collapse functionality. Email notifications support rich HTML formatting with DOMPurify sanitization and dual HTML/plain text formats. Project message thread creation permissions have been refined.
