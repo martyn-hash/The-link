@@ -98,12 +98,23 @@ interface TransformedServiceData {
     clientId: string | null;
     serviceName: string;
     serviceId: string | null;
-    fieldId: string;
+    fieldId: string | null;
     fieldName: string | null;
     fieldType: string | null;
     value: any;
     clientServiceId: string | null;
     isInFileClient?: boolean;
+    frequency?: string | null;
+    nextStartDate?: string | null;
+    nextDueDate?: string | null;
+    serviceOwnerId?: string | null;
+    serviceOwnerEmail?: string | null;
+    roleAssignments?: Array<{
+      roleName: string;
+      roleId: string | null;
+      userEmail: string;
+      userId: string | null;
+    }>;
   };
   warnings: string[];
   errors: string[];
@@ -717,71 +728,102 @@ export default function ExcelImport() {
                             <TableRow>
                               <TableHead>Client</TableHead>
                               <TableHead>Service</TableHead>
-                              <TableHead>Field</TableHead>
-                              <TableHead>Value</TableHead>
+                              <TableHead>Data Type</TableHead>
+                              <TableHead>Details</TableHead>
                               <TableHead>Status</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {parseResult.serviceData.map((item, idx) => (
-                              <TableRow key={idx} className={item.errors.length > 0 ? 'bg-red-50 dark:bg-red-950/20' : ''}>
-                                <TableCell className="font-medium">
-                                  {item.transformed.clientName}
-                                  {item.transformed.clientId && (
-                                    <CheckCircle className="w-3 h-3 text-green-500 inline ml-1" />
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-sm">
-                                  {item.transformed.serviceName}
-                                  {item.transformed.serviceId && (
-                                    <CheckCircle className="w-3 h-3 text-green-500 inline ml-1" />
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-sm">
-                                  {item.transformed.fieldName || item.transformed.fieldId}
-                                  {item.transformed.fieldType && (
-                                    <span className="text-xs text-muted-foreground ml-1">({item.transformed.fieldType})</span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="font-mono text-sm max-w-[200px] truncate">
-                                  {String(item.transformed.value ?? '')}
-                                </TableCell>
-                                <TableCell>
-                                  {item.errors.length > 0 ? (
-                                    <Tooltip>
-                                      <TooltipTrigger>
-                                        <Badge variant="destructive">Error</Badge>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        {item.errors.join(', ')}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  ) : item.warnings.length > 0 ? (
-                                    <Tooltip>
-                                      <TooltipTrigger>
-                                        <Badge variant="outline" className="border-yellow-500 text-yellow-600">Warning</Badge>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        {item.warnings.join(', ')}
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  ) : item.transformed.clientServiceId ? (
-                                    <Badge variant="outline" className="border-green-500 text-green-600">Ready</Badge>
-                                  ) : item.transformed.isInFileClient ? (
-                                    <Tooltip>
-                                      <TooltipTrigger>
-                                        <Badge variant="outline" className="border-blue-500 text-blue-600">New Client</Badge>
-                                      </TooltipTrigger>
-                                      <TooltipContent>
-                                        Client will be created during import - service must be assigned first for data to apply
-                                      </TooltipContent>
-                                    </Tooltip>
-                                  ) : (
-                                    <Badge variant="outline" className="border-yellow-500 text-yellow-600">No Service Link</Badge>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            ))}
+                            {parseResult.serviceData.map((item, idx) => {
+                              const hasConfig = item.transformed.frequency || item.transformed.nextStartDate || item.transformed.nextDueDate || item.transformed.serviceOwnerEmail;
+                              const hasRoles = (item.transformed.roleAssignments?.length ?? 0) > 0;
+                              const hasUdf = item.transformed.fieldId;
+                              
+                              return (
+                                <TableRow key={idx} className={item.errors.length > 0 ? 'bg-red-50 dark:bg-red-950/20' : ''}>
+                                  <TableCell className="font-medium">
+                                    {item.transformed.clientName}
+                                    {item.transformed.clientId && (
+                                      <CheckCircle className="w-3 h-3 text-green-500 inline ml-1" />
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-sm">
+                                    {item.transformed.serviceName}
+                                    {item.transformed.serviceId && (
+                                      <CheckCircle className="w-3 h-3 text-green-500 inline ml-1" />
+                                    )}
+                                  </TableCell>
+                                  <TableCell className="text-xs">
+                                    <div className="flex flex-wrap gap-1">
+                                      {hasUdf && <Badge variant="secondary" className="text-xs">UDF</Badge>}
+                                      {hasConfig && <Badge variant="secondary" className="text-xs">Config</Badge>}
+                                      {hasRoles && <Badge variant="secondary" className="text-xs">Roles</Badge>}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell className="text-sm max-w-[300px]">
+                                    <div className="space-y-1">
+                                      {hasUdf && (
+                                        <div className="truncate">
+                                          <span className="text-muted-foreground">{item.transformed.fieldName || item.transformed.fieldId}:</span>{' '}
+                                          <span className="font-mono">{String(item.transformed.value ?? '')}</span>
+                                        </div>
+                                      )}
+                                      {item.transformed.frequency && (
+                                        <div className="text-xs text-muted-foreground">Frequency: {item.transformed.frequency}</div>
+                                      )}
+                                      {item.transformed.nextStartDate && (
+                                        <div className="text-xs text-muted-foreground">Start: {item.transformed.nextStartDate}</div>
+                                      )}
+                                      {item.transformed.nextDueDate && (
+                                        <div className="text-xs text-muted-foreground">Due: {item.transformed.nextDueDate}</div>
+                                      )}
+                                      {item.transformed.serviceOwnerEmail && (
+                                        <div className="text-xs text-muted-foreground">Owner: {item.transformed.serviceOwnerEmail}</div>
+                                      )}
+                                      {hasRoles && item.transformed.roleAssignments && (
+                                        <div className="text-xs text-muted-foreground">
+                                          Roles: {item.transformed.roleAssignments.map((r: any) => `${r.roleName}→${r.userEmail}`).join(', ')}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </TableCell>
+                                  <TableCell>
+                                    {item.errors.length > 0 ? (
+                                      <Tooltip>
+                                        <TooltipTrigger>
+                                          <Badge variant="destructive">Error</Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          {item.errors.join(', ')}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    ) : item.warnings.length > 0 ? (
+                                      <Tooltip>
+                                        <TooltipTrigger>
+                                          <Badge variant="outline" className="border-yellow-500 text-yellow-600">Warning</Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          {item.warnings.join(', ')}
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    ) : item.transformed.clientServiceId ? (
+                                      <Badge variant="outline" className="border-green-500 text-green-600">Ready</Badge>
+                                    ) : item.transformed.isInFileClient ? (
+                                      <Tooltip>
+                                        <TooltipTrigger>
+                                          <Badge variant="outline" className="border-blue-500 text-blue-600">New Client</Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                          Client will be created during import - service must be assigned first for data to apply
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    ) : (
+                                      <Badge variant="outline" className="border-yellow-500 text-yellow-600">No Service Link</Badge>
+                                    )}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })}
                           </TableBody>
                         </Table>
                       </ScrollArea>

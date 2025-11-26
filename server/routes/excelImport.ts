@@ -164,8 +164,13 @@ interface ServiceDataRow {
   "Client Company Number"?: string | number;
   "Client Name"?: string;
   "Service Name": string;
-  "Field ID": string;
-  "Value": string | number | boolean;
+  "Field ID"?: string;
+  "Value"?: string | number | boolean;
+  "Frequency"?: string;
+  "Next Start Date"?: string | number;
+  "Next Due Date"?: string | number;
+  "Service Owner"?: string;
+  [key: string]: string | number | boolean | undefined;
 }
 
 interface TransformedServiceData {
@@ -464,6 +469,13 @@ export function registerExcelImportRoutes(
           }
         }
         
+        const allWorkRoles = await storage.getAllWorkRoles();
+        const workRoleMap = new Map<string, any>();
+        for (const role of allWorkRoles) {
+          workRoleMap.set(role.name.toLowerCase(), role);
+        }
+        
+        
         for (const row of serviceDataRows) {
           const warnings: string[] = [];
           const errors: string[] = [];
@@ -474,11 +486,68 @@ export function registerExcelImportRoutes(
           const fieldId = String(row["Field ID"] || "");
           const rawValue = row["Value"];
           
+          const frequency = row["Frequency"] ? String(row["Frequency"]) : null;
+          const serviceOwnerEmail = row["Service Owner"] ? String(row["Service Owner"]).trim() : null;
+          
+          let nextStartDate: string | null = null;
+          if (row["Next Start Date"]) {
+            if (typeof row["Next Start Date"] === "number") {
+              nextStartDate = excelSerialToDate(row["Next Start Date"]);
+            } else {
+              nextStartDate = String(row["Next Start Date"]);
+            }
+          }
+          
+          let nextDueDate: string | null = null;
+          if (row["Next Due Date"]) {
+            if (typeof row["Next Due Date"] === "number") {
+              nextDueDate = excelSerialToDate(row["Next Due Date"]);
+            } else {
+              nextDueDate = String(row["Next Due Date"]);
+            }
+          }
+          
+          const roleAssignments: { roleName: string; roleId: string | null; userEmail: string; userId: string | null }[] = [];
+          for (const key of Object.keys(row)) {
+            if (key.startsWith("Role: ") && row[key]) {
+              const roleName = key.substring(6).trim();
+              const userEmail = String(row[key]).trim();
+              const matchedRole = workRoleMap.get(roleName.toLowerCase());
+              const matchedUser = userEmailMap.get(userEmail.toLowerCase());
+              
+              if (!matchedRole) {
+                warnings.push(`Role "${roleName}" not found in system`);
+              }
+              if (!matchedUser) {
+                warnings.push(`User with email "${userEmail}" not found`);
+              }
+              
+              roleAssignments.push({
+                roleName,
+                roleId: matchedRole?.id || null,
+                userEmail,
+                userId: matchedUser?.id || null,
+              });
+            }
+          }
+          
+          let serviceOwnerId: string | null = null;
+          if (serviceOwnerEmail) {
+            const matchedOwner = userEmailMap.get(serviceOwnerEmail.toLowerCase());
+            if (matchedOwner) {
+              serviceOwnerId = matchedOwner.id;
+            } else {
+              warnings.push(`Service owner with email "${serviceOwnerEmail}" not found`);
+            }
+          }
+          
           if (!serviceName) {
             errors.push("Service Name is required");
           }
-          if (!fieldId) {
-            errors.push("Field ID is required");
+          const hasServiceConfig = frequency || nextStartDate || nextDueDate || serviceOwnerEmail || roleAssignments.length > 0;
+          const hasUdfData = fieldId && rawValue !== undefined && rawValue !== null && rawValue !== "";
+          if (!hasServiceConfig && !hasUdfData) {
+            errors.push("Row must have either service configuration (Frequency, Dates, Roles) or UDF data (Field ID + Value)");
           }
           if (!clientCompanyNumber && !clientName) {
             errors.push("Either Client Company Number or Client Name is required");
@@ -520,23 +589,25 @@ export function registerExcelImportRoutes(
           let clientServiceId: string | null = null;
           
           if (matchedService) {
-            const udfDefs = (matchedService.udfDefinitions as any[] || []);
-            const udfDef = udfDefs.find((d: any) => d.id === fieldId || d.name === fieldId);
-            
-            if (udfDef) {
-              fieldName = udfDef.name;
-              fieldType = udfDef.type;
+            if (fieldId) {
+              const udfDefs = (matchedService.udfDefinitions as any[] || []);
+              const udfDef = udfDefs.find((d: any) => d.id === fieldId || d.name === fieldId);
               
-              if (udfDef.regex && rawValue !== undefined && rawValue !== null && rawValue !== "") {
-                try {
-                  const regex = new RegExp(udfDef.regex);
-                  if (!regex.test(String(rawValue))) {
-                    errors.push(udfDef.regexError || `Value "${rawValue}" does not match required format for ${udfDef.name}`);
-                  }
-                } catch {}
+              if (udfDef) {
+                fieldName = udfDef.name;
+                fieldType = udfDef.type;
+                
+                if (udfDef.regex && rawValue !== undefined && rawValue !== null && rawValue !== "") {
+                  try {
+                    const regex = new RegExp(udfDef.regex);
+                    if (!regex.test(String(rawValue))) {
+                      errors.push(udfDef.regexError || `Value "${rawValue}" does not match required format for ${udfDef.name}`);
+                    }
+                  } catch {}
+                }
+              } else {
+                errors.push(`Field "${fieldId}" not found in service "${serviceName}" UDF definitions`);
               }
-            } else {
-              errors.push(`Field "${fieldId}" not found in service "${serviceName}" UDF definitions`);
             }
             
             if (matchedClient) {
@@ -560,13 +631,19 @@ export function registerExcelImportRoutes(
               clientId: matchedClient?.id || null,
               serviceName,
               serviceId: matchedService?.id || null,
-              fieldId,
+              fieldId: fieldId || null,
               fieldName,
               fieldType,
               value: rawValue,
               clientServiceId,
               isInFileClient,
-            },
+              frequency,
+              nextStartDate,
+              nextDueDate,
+              serviceOwnerId,
+              serviceOwnerEmail,
+              roleAssignments,
+            } as any,
             warnings,
             errors,
           });
@@ -812,7 +889,11 @@ export function registerExcelImportRoutes(
         }
 
         if (serviceData && serviceData.length > 0) {
-          const clientServiceUpdates = new Map<string, Record<string, any>>();
+          const clientServiceUpdates = new Map<string, {
+            udfValues: Record<string, any>;
+            configUpdates: { frequency?: string; nextStartDate?: string; nextDueDate?: string; serviceOwnerId?: string };
+            roleAssignments: { roleId: string; userId: string }[];
+          }>();
           
           for (const item of serviceData) {
             try {
@@ -832,7 +913,7 @@ export function registerExcelImportRoutes(
                 
                 if (resolvedClientId) {
                   const clientServices = await storage.getClientServicesByClientId(resolvedClientId);
-                  let matchedClientService = clientServices.find((cs: any) => cs.serviceId === t.serviceId);
+                  let matchedClientService: any = clientServices.find((cs: any) => cs.serviceId === t.serviceId);
                   
                   if (!matchedClientService) {
                     try {
@@ -858,22 +939,80 @@ export function registerExcelImportRoutes(
                 continue;
               }
               
-              const currentValues = clientServiceUpdates.get(clientServiceId) || {};
-              currentValues[t.fieldId] = t.value;
-              clientServiceUpdates.set(clientServiceId, currentValues);
+              const existing = clientServiceUpdates.get(clientServiceId) || {
+                udfValues: {},
+                configUpdates: {},
+                roleAssignments: [],
+              };
+              
+              if (t.fieldId && t.value !== undefined && t.value !== null && t.value !== "") {
+                existing.udfValues[t.fieldId] = t.value;
+              }
+              
+              if (t.frequency) existing.configUpdates.frequency = t.frequency;
+              if (t.nextStartDate) existing.configUpdates.nextStartDate = t.nextStartDate;
+              if (t.nextDueDate) existing.configUpdates.nextDueDate = t.nextDueDate;
+              if (t.serviceOwnerId) existing.configUpdates.serviceOwnerId = t.serviceOwnerId;
+              
+              if (t.roleAssignments && Array.isArray(t.roleAssignments)) {
+                for (const ra of t.roleAssignments) {
+                  if (ra.roleId && ra.userId) {
+                    if (!existing.roleAssignments.some(r => r.roleId === ra.roleId)) {
+                      existing.roleAssignments.push({ roleId: ra.roleId, userId: ra.userId });
+                    }
+                  }
+                }
+              }
+              
+              clientServiceUpdates.set(clientServiceId, existing);
             } catch (error: any) {
               results.errors.push(`Service Data for ${item.transformed.clientName}/${item.transformed.serviceName}: ${error.message}`);
             }
           }
           
           const updateEntries = Array.from(clientServiceUpdates.entries());
-          for (const [clientServiceId, newUdfValues] of updateEntries) {
+          for (const [clientServiceId, updates] of updateEntries) {
             try {
               const clientService = await storage.getClientServiceById(clientServiceId);
               if (clientService) {
-                const existingValues = (clientService.udfValues as Record<string, any>) || {};
-                const mergedValues = { ...existingValues, ...newUdfValues };
-                await storage.updateClientService(clientServiceId, { udfValues: mergedValues });
+                const updateData: any = {};
+                
+                if (Object.keys(updates.udfValues).length > 0) {
+                  const existingValues = (clientService.udfValues as Record<string, any>) || {};
+                  updateData.udfValues = { ...existingValues, ...updates.udfValues };
+                }
+                
+                if (updates.configUpdates.frequency) updateData.frequency = updates.configUpdates.frequency;
+                if (updates.configUpdates.nextStartDate) updateData.nextStartDate = updates.configUpdates.nextStartDate;
+                if (updates.configUpdates.nextDueDate) updateData.nextDueDate = updates.configUpdates.nextDueDate;
+                if (updates.configUpdates.serviceOwnerId) updateData.serviceOwnerId = updates.configUpdates.serviceOwnerId;
+                
+                if (Object.keys(updateData).length > 0) {
+                  await storage.updateClientService(clientServiceId, updateData);
+                }
+                
+                for (const roleAssignment of updates.roleAssignments) {
+                  try {
+                    const existingAssignments = await storage.getClientServiceRoleAssignments(clientServiceId);
+                    const existingForRole = existingAssignments.find((a: any) => a.workRoleId === roleAssignment.roleId && a.isActive);
+                    
+                    if (existingForRole) {
+                      if (existingForRole.userId !== roleAssignment.userId) {
+                        await storage.updateClientServiceRoleAssignment(existingForRole.id, { userId: roleAssignment.userId });
+                      }
+                    } else {
+                      await storage.createClientServiceRoleAssignment({
+                        clientServiceId,
+                        workRoleId: roleAssignment.roleId,
+                        userId: roleAssignment.userId,
+                        isActive: true,
+                      });
+                    }
+                  } catch (roleError: any) {
+                    results.errors.push(`Role assignment for ${clientServiceId}: ${roleError.message}`);
+                  }
+                }
+                
                 results.serviceDataUpdated++;
               }
             } catch (error: any) {
