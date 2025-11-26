@@ -673,6 +673,14 @@ export class DatabaseStorage implements IStorage {
     return this.peopleStorage.getPersonByPersonNumber(personNumber);
   }
 
+  async getPersonByEmail(email: string) {
+    return this.peopleStorage.getPersonByEmail(email);
+  }
+
+  async getPersonByFullName(fullName: string) {
+    return this.peopleStorage.getPersonByFullName(fullName);
+  }
+
   async getAllPeople() {
     return this.peopleStorage.getAllPeople();
   }
@@ -704,6 +712,10 @@ export class DatabaseStorage implements IStorage {
   // Client-People relationship operations
   async createClientPerson(relationship: any) {
     return this.clientPeopleStorage.createClientPerson(relationship);
+  }
+
+  async getClientPerson(clientId: string, personId: string) {
+    return this.clientPeopleStorage.getClientPerson(clientId, personId);
   }
 
   async getClientPeopleByClientId(clientId: string) {

@@ -50,6 +50,16 @@ export class PeopleStorage extends BaseStorage {
     return person;
   }
 
+  async getPersonByEmail(email: string): Promise<Person | undefined> {
+    const [person] = await db.select().from(people).where(eq(people.email, email));
+    return person;
+  }
+
+  async getPersonByFullName(fullName: string): Promise<Person | undefined> {
+    const [person] = await db.select().from(people).where(eq(people.fullName, fullName));
+    return person;
+  }
+
   async getAllPeople(): Promise<Person[]> {
     return await db.select().from(people);
   }

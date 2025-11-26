@@ -30,6 +30,14 @@ export class ClientPeopleStorage extends BaseStorage {
     return clientPerson;
   }
 
+  async getClientPerson(clientId: string, personId: string): Promise<ClientPerson | undefined> {
+    const [clientPerson] = await db
+      .select()
+      .from(clientPeople)
+      .where(and(eq(clientPeople.clientId, clientId), eq(clientPeople.personId, personId)));
+    return clientPerson;
+  }
+
   async getClientPeopleByClientId(clientId: string): Promise<(ClientPerson & { person: Person })[]> {
     const result = await db
       .select({
