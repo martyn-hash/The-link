@@ -1190,13 +1190,13 @@ export function registerExcelImportRoutes(
         // Role columns - one per role in the system
         const roleHeaders = workRoles.map((role: any) => role.name);
         
-        // Collect all UDFs across all services - 2 columns each (Field ID, Field Name)
-        interface UdfPair {
+        // Collect all UDFs across all services - 1 column each with combined header
+        interface UdfInfo {
           serviceName: string;
           fieldId: string;
           fieldName: string;
         }
-        const allUdfs: UdfPair[] = [];
+        const allUdfs: UdfInfo[] = [];
         
         for (const service of activeServices) {
           const udfs = (service.udfDefinitions || []) as Array<{id: string; name: string; type: string}>;
@@ -1209,12 +1209,8 @@ export function registerExcelImportRoutes(
           }
         }
         
-        // Build UDF column headers - 2 columns per UDF
-        const udfHeaders: string[] = [];
-        for (const udf of allUdfs) {
-          udfHeaders.push(udf.fieldId);      // Column 1: Field ID
-          udfHeaders.push(udf.fieldName);    // Column 2: Field Name
-        }
+        // Build UDF column headers - 1 column per UDF with Field Name + ID
+        const udfHeaders: string[] = allUdfs.map(udf => `${udf.fieldName} (${udf.fieldId})`);
         
         // Build all headers
         const serviceDataHeaders = [
@@ -1239,7 +1235,7 @@ export function registerExcelImportRoutes(
           "dd/mm/yyyy",
           "user@email.com",
           ...roleHeaders.map(() => "user@email.com"),
-          ...allUdfs.flatMap(() => ["(Field ID)", "(Field Name)"])
+          ...allUdfs.map(() => "Enter value")
         ];
         
         // Create one template row per service
@@ -1255,7 +1251,7 @@ export function registerExcelImportRoutes(
             "",  // Next Due Date
             "",  // Service Owner
             ...roleHeaders.map(() => ""),  // All role columns empty
-            ...allUdfs.flatMap(() => ["", ""])  // All UDF columns empty (2 per UDF)
+            ...allUdfs.map(() => "")  // All UDF columns empty (1 per UDF)
           ];
           
           serviceDataRows.push(row);
