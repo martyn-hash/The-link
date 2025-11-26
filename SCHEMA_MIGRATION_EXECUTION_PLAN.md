@@ -124,7 +124,16 @@ export * from './clients';
 
 ### Phase 1: Parity Verification (4-6 hours)
 
-**STATUS: ⚠️ PARTIALLY COMPLETE - Verification script not re-run after fixes**
+**STATUS: ✅ COMPLETE (November 26, 2025)**
+
+Parity verification script executed successfully:
+```
+Legacy exports: 530
+Modular exports (unique): 629
+✓ All legacy exports present in modular schema
+```
+
+The 99 extra exports in modular are additional helpers and re-exports (sql, relations, pgTable, etc.) which are fine.
 
 **Objective:** Confirm modular domain modules export everything the legacy schema exports.
 
