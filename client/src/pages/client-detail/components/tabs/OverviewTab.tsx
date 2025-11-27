@@ -213,7 +213,13 @@ export function OverviewTab({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {relatedPeople.map((clientPerson) => (
+                    {[...relatedPeople]
+                      .sort((a, b) => {
+                        if (a.isPrimaryContact && !b.isPrimaryContact) return -1;
+                        if (!a.isPrimaryContact && b.isPrimaryContact) return 1;
+                        return 0;
+                      })
+                      .map((clientPerson) => (
                       <RelatedPersonRow
                         key={clientPerson.person.id}
                         clientPerson={clientPerson}

@@ -185,7 +185,7 @@ export function CompaniesHouseClientModal({
   const [clientType, setClientType] = useState<'company' | 'individual'>('company');
   const [step, setStep] = useState<'ch-search' | 'ch-confirm' | 'officer-matching' | 'individual-details'>('ch-search');
   const [selectedCompany, setSelectedCompany] = useState<CompanyProfile | null>(null);
-  const [selectedOfficers, setSelectedOfficers] = useState<number[]>([]);
+  const [primaryContactIndex, setPrimaryContactIndex] = useState<number | null>(null);
   const [officerMatches, setOfficerMatches] = useState<{
     index: number;
     officer: CompanyOfficer & { parsedFirstName?: string; parsedLastName?: string };
@@ -229,7 +229,7 @@ export function CompaniesHouseClientModal({
       setClientType('company'); // Default to company mode
       setStep('ch-search'); // Start on CH search for creation
       setSelectedCompany(null);
-      setSelectedOfficers([]);
+      setPrimaryContactIndex(null);
       setOfficerMatches([]);
       setOfficerDecisions({});
       searchForm.reset();
@@ -394,12 +394,15 @@ export function CompaniesHouseClientModal({
 
   // Create client from Companies House data
   const createClientFromCHMutation = useMutation({
-    mutationFn: async (options?: { officerDecisions?: { [key: number]: { action: 'create' | 'link', personId?: string } } }) => {
+    mutationFn: async (options?: { officerDecisions?: { [key: number]: { action: 'create' | 'link', personId?: string } }, primaryContactIdx?: number | null }) => {
       if (!selectedCompany) throw new Error("No company selected");
+      
+      const contactIdx = options?.primaryContactIdx !== undefined ? options.primaryContactIdx : primaryContactIndex;
+      console.log("📋 Creating client with primaryContactIndex:", contactIdx);
       
       const response = await apiRequest("POST", "/api/clients/from-companies-house", {
         companyNumber: selectedCompany.company_number,
-        selectedOfficers,
+        primaryContactIndex: contactIdx,
         ...(options?.officerDecisions && { officerDecisions: options.officerDecisions })
       });
       
@@ -460,7 +463,8 @@ export function CompaniesHouseClientModal({
       } else {
         // No officers have duplicates - proceed directly to client creation
         console.log("✨ No duplicate officers found - proceeding directly to client creation");
-        createClientFromCHMutation.mutate({});
+        console.log("📋 Primary contact index at mutation call:", primaryContactIndex);
+        createClientFromCHMutation.mutate({ primaryContactIdx: primaryContactIndex });
       }
     },
     onError: (error: any) => {
@@ -472,17 +476,13 @@ export function CompaniesHouseClientModal({
         variant: "destructive",
       });
       // Skip to direct client creation if matching fails
-      createClientFromCHMutation.mutate({});
+      createClientFromCHMutation.mutate({ primaryContactIdx: primaryContactIndex });
     },
   });
 
-  // Handle officer selection
-  const toggleOfficerSelection = (index: number) => {
-    setSelectedOfficers(prev => 
-      prev.includes(index) 
-        ? prev.filter(i => i !== index)
-        : [...prev, index]
-    );
+  // Handle primary contact selection
+  const selectPrimaryContact = (index: number) => {
+    setPrimaryContactIndex(prev => prev === index ? null : index);
   };
 
 
@@ -655,25 +655,37 @@ export function CompaniesHouseClientModal({
                 Company Officers
               </CardTitle>
               <CardDescription>
-                Select officers to add as related people for this client
+                All officers will be added as related people. Select one as the primary contact (optional).
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {companyOfficers.map((officer, index) => (
                 <div 
                   key={index} 
-                  className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50"
+                  className={`flex items-center space-x-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                    primaryContactIndex === index 
+                      ? 'border-blue-500 bg-blue-50' 
+                      : 'hover:bg-gray-50'
+                  }`}
+                  onClick={() => selectPrimaryContact(index)}
                   data-testid={`officer-item-${index}`}
                 >
-                  <Checkbox
-                    checked={selectedOfficers.includes(index)}
-                    onCheckedChange={() => toggleOfficerSelection(index)}
-                    data-testid={`checkbox-officer-${index}`}
-                  />
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                    primaryContactIndex === index 
+                      ? 'border-blue-600 bg-blue-600' 
+                      : 'border-gray-300'
+                  }`}>
+                    {primaryContactIndex === index && (
+                      <div className="w-2 h-2 rounded-full bg-white" />
+                    )}
+                  </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <h5 className="font-medium">{officer.name}</h5>
                       <Badge variant="outline">{officer.officer_role}</Badge>
+                      {primaryContactIndex === index && (
+                        <Badge className="bg-blue-600">Primary Contact</Badge>
+                      )}
                     </div>
                     {officer.nationality && (
                       <p className="text-sm text-gray-600">Nationality: {officer.nationality}</p>
@@ -706,7 +718,7 @@ export function CompaniesHouseClientModal({
                 findOfficerMatchesMutation.mutate(companyOfficers);
               } else {
                 // No officers exist, proceed directly to creation
-                createClientFromCHMutation.mutate({});
+                createClientFromCHMutation.mutate({ primaryContactIdx: primaryContactIndex });
               }
             }}
             disabled={createClientFromCHMutation.isPending || findOfficerMatchesMutation.isPending}
@@ -1133,7 +1145,7 @@ export function CompaniesHouseClientModal({
             Back to Review
           </Button>
           <Button 
-            onClick={() => createClientFromCHMutation.mutate({ officerDecisions })}
+            onClick={() => createClientFromCHMutation.mutate({ officerDecisions, primaryContactIdx: primaryContactIndex })}
             disabled={!canProceed || createClientFromCHMutation.isPending}
             data-testid="button-proceed-create-client"
           >
@@ -1181,7 +1193,7 @@ export function CompaniesHouseClientModal({
             }
             // Reset any previous state
             setSelectedCompany(null);
-            setSelectedOfficers([]);
+            setPrimaryContactIndex(null);
             searchForm.reset();
             individualForm.reset();
           }} className="w-full">

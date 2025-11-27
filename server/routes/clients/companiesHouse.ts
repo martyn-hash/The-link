@@ -130,7 +130,7 @@ export function registerCompaniesHouseRoutes(
     try {
       const bodySchema = z.object({
         companyNumber: z.string().min(1, "Company number is required").regex(/^[A-Z0-9]{6,8}$/, "Invalid UK company number format"),
-        selectedOfficers: z.array(z.number().int().min(0)).optional().default([]),
+        primaryContactIndex: z.number().int().min(0).nullable().optional(),
         officerDecisions: z.record(z.object({
           action: z.enum(['create', 'link']),
           personId: z.string().optional()
@@ -145,7 +145,7 @@ export function registerCompaniesHouseRoutes(
         });
       }
 
-      const { companyNumber, selectedOfficers, officerDecisions } = bodyValidation.data;
+      const { companyNumber, primaryContactIndex, officerDecisions } = bodyValidation.data;
 
       const companyData = await companiesHouseService.getCompanyProfile(companyNumber);
 
@@ -194,38 +194,43 @@ export function registerCompaniesHouseRoutes(
               person = await storage.createPerson(validatedData);
             }
 
+            const isPrimary = primaryContactIndex === index;
             await storage.linkPersonToClient(
               client.id,
               person.id,
               officer.officer_role,
-              false
+              isPrimary
             );
 
             createdPeople.push({
               ...person,
-              officerRole: officer.officer_role
+              officerRole: officer.officer_role,
+              isPrimaryContact: isPrimary
             });
           } catch (personError) {
             console.warn(`Failed to process officer ${officer.name}:`, personError);
           }
         }
       } else {
-        for (const officer of directors) {
+        for (let index = 0; index < directors.length; index++) {
+          const officer = directors[index];
           try {
             const personData = companiesHouseService.transformOfficerToPerson(officer, companyNumber);
             const validatedData = insertPersonSchema.parse(personData);
             const person = await storage.upsertPersonFromCH(validatedData);
 
+            const isPrimary = primaryContactIndex === index;
             await storage.linkPersonToClient(
               client.id,
               person.id,
               officer.officer_role,
-              false
+              isPrimary
             );
 
             createdPeople.push({
               ...person,
-              officerRole: officer.officer_role
+              officerRole: officer.officer_role,
+              isPrimaryContact: isPrimary
             });
           } catch (personError) {
             console.warn(`Failed to create person for officer ${officer.name}:`, personError);

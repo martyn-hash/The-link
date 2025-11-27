@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Check, ChevronDown, Eye, Mail, QrCode } from "lucide-react";
+import { Check, ChevronDown, Eye, Mail, QrCode, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { TableCell, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -107,8 +108,16 @@ export function RelatedPersonRow({
       <TableRow data-testid={`person-row-${clientPerson.person.id}`}>
         <TableCell className="font-medium">
           <div>
-            <div data-testid={`text-person-name-${clientPerson.person.id}`}>
-              {formatPersonName(clientPerson.person.fullName)}
+            <div className="flex items-center gap-2">
+              <span data-testid={`text-person-name-${clientPerson.person.id}`}>
+                {formatPersonName(clientPerson.person.fullName)}
+              </span>
+              {clientPerson.isPrimaryContact && (
+                <Badge className="bg-blue-600 text-white" data-testid={`badge-primary-contact-${clientPerson.person.id}`}>
+                  <Star className="h-3 w-3 mr-1" />
+                  Primary
+                </Badge>
+              )}
             </div>
             {clientPerson.officerRole && (
               <div className="text-xs text-muted-foreground mt-1">
