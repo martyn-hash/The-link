@@ -47,6 +47,7 @@ const Admin = lazy(() => import("@/pages/admin"));
 const AdminTaskTypes = lazy(() => import("@/pages/admin-task-types"));
 const DataImport = lazy(() => import("@/pages/data-import"));
 const ExcelImport = lazy(() => import("@/pages/excel-import"));
+const ServiceImport = lazy(() => import("@/pages/service-import"));
 const PushDiagnostics = lazy(() => import("@/pages/push-diagnostics"));
 const PushNotificationTemplates = lazy(() => import("@/pages/push-notification-templates"));
 const ScheduledNotifications = lazy(() => import("@/pages/scheduled-notifications"));
@@ -204,6 +205,7 @@ function Router() {
         <Route path="/push-notification-templates" component={PushNotificationTemplates} />
         <Route path="/data-import" component={DataImport} />
         <Route path="/excel-import" component={ExcelImport} />
+        <Route path="/service-import" component={ServiceImport} />
         <Route path="/push-diagnostics" component={PushDiagnostics} />
         <Route path="/admin/scheduled-notifications" component={ScheduledNotifications} />
         <Route path="/scheduled-notifications" component={ScheduledNotifications} />
