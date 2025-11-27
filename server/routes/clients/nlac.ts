@@ -233,6 +233,19 @@ export function registerNlacRoutes(
           .set({ companyStatus: "active" })
           .where(eq(clients.id, clientId));
 
+        const portalUsersResult = await db
+          .update(clientPortalUsers)
+          .set({ isActive: true })
+          .where(
+            and(
+              eq(clientPortalUsers.clientId, clientId),
+              eq(clientPortalUsers.isActive, false)
+            )
+          )
+          .returning({ id: clientPortalUsers.id });
+
+        const portalUsersReactivated = portalUsersResult.length;
+
         await db.insert(nlacAuditLogs).values({
           clientId,
           clientName: client.name,
@@ -241,12 +254,13 @@ export function registerNlacRoutes(
           performedByUserName: user.fullName || user.email,
           projectsDeactivated: 0,
           servicesDeactivated: 0,
-          portalUsersDeactivated: 0,
+          portalUsersDeactivated: -portalUsersReactivated,
         });
 
         res.json({
           success: true,
           message: `Client ${client.name} has been reactivated`,
+          portalUsersReactivated,
         });
       } catch (error) {
         console.error("Error reactivating client:", error);

@@ -104,10 +104,13 @@ export function NlacModal({ open, onOpenChange, client }: NlacModalProps) {
     mutationFn: async () => {
       return await apiRequest("POST", `/api/clients/${client.id}/reactivate`, {});
     },
-    onSuccess: () => {
+    onSuccess: (response: any) => {
+      const portalText = response.portalUsersReactivated > 0 
+        ? ` ${response.portalUsersReactivated} portal user${response.portalUsersReactivated > 1 ? 's' : ''} restored.`
+        : '';
       toast({
         title: "Client reactivated",
-        description: `${client.name} has been reactivated successfully.`,
+        description: `${client.name} has been reactivated successfully.${portalText}`,
       });
       queryClient.invalidateQueries({ queryKey: [`/api/clients/${client.id}`] });
       queryClient.invalidateQueries({ queryKey: [`/api/clients/${client.id}/nlac-logs`] });
@@ -519,7 +522,10 @@ export function NlacModal({ open, onOpenChange, client }: NlacModalProps) {
                       </TableCell>
                       <TableCell className="text-right text-sm text-muted-foreground">
                         {log.reason === 'reactivated' ? (
-                          <span className="text-green-600 dark:text-green-400">Client reactivated</span>
+                          <span className="text-green-600 dark:text-green-400">
+                            Client reactivated
+                            {(log as any).portalUsersDeactivated < 0 && `, ${Math.abs((log as any).portalUsersDeactivated)} portal users restored`}
+                          </span>
                         ) : (
                           <>
                             {log.projectsDeactivated} projects, {log.servicesDeactivated} services
