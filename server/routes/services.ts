@@ -14,7 +14,9 @@ import {
   VAT_NUMBER_REGEX,
   VAT_NUMBER_REGEX_ERROR,
   VAT_UDF_FIELD_ID,
-  VAT_UDF_FIELD_NAME
+  VAT_UDF_FIELD_NAME,
+  VAT_ADDRESS_UDF_FIELD_ID,
+  VAT_ADDRESS_UDF_FIELD_NAME
 } from "../hmrc-vat-service";
 
 // Parameter validation schemas
@@ -529,6 +531,8 @@ export function registerServiceRoutes(
       configured: isHmrcConfigured(),
       vatUdfFieldId: VAT_UDF_FIELD_ID,
       vatUdfFieldName: VAT_UDF_FIELD_NAME,
+      vatAddressUdfFieldId: VAT_ADDRESS_UDF_FIELD_ID,
+      vatAddressUdfFieldName: VAT_ADDRESS_UDF_FIELD_NAME,
       vatNumberRegex: VAT_NUMBER_REGEX,
       vatNumberRegexError: VAT_NUMBER_REGEX_ERROR,
     });
@@ -587,16 +591,28 @@ export function registerServiceRoutes(
       // Validate with HMRC
       const result = await validateVatNumber(vatNumber);
 
-      // Update the UDF values with validation metadata
+      // Format the full address with postcode for multi-line display
+      let fullAddress = '';
+      if (result.isValid && result.address) {
+        fullAddress = result.address;
+        if (result.postcode) {
+          fullAddress += '\n' + result.postcode;
+        }
+      }
+
+      // Update the UDF values with validation metadata and address
       const updatedUdfValues = {
         ...udfValues,
         [`${VAT_UDF_FIELD_ID}_validation`]: {
           isValid: result.isValid,
           validatedAt: result.validatedAt || new Date().toISOString(),
           companyName: result.companyName,
+          address: result.address,
+          postcode: result.postcode,
           error: result.error,
           errorCode: result.errorCode,
-        }
+        },
+        [VAT_ADDRESS_UDF_FIELD_ID]: result.isValid ? fullAddress : '',
       };
 
       // Update the client service with validation results

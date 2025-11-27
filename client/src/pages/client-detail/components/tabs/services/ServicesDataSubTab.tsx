@@ -16,6 +16,7 @@ import type { UDFDefinition, Service, ClientService } from "@shared/schema";
 import type { EnhancedClientService } from "../../../utils/types";
 
 const VAT_UDF_FIELD_ID = 'vat_number_auto';
+const VAT_ADDRESS_UDF_FIELD_ID = 'vat_address_auto';
 
 interface VatValidationStatus {
   status: 'validated' | 'invalid' | 'unvalidated' | 'validating';
@@ -121,6 +122,21 @@ function UdfField({ definition, value, onChange, disabled, error }: UdfFieldProp
         </Select>
       );
 
+    case "long_text":
+      return (
+        <div className="space-y-1">
+          <textarea
+            value={value ?? ""}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={definition.placeholder || `Enter ${definition.name}`}
+            disabled={disabled}
+            className={`flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${error ? 'border-red-500' : ''}`}
+            data-testid={`textarea-udf-${definition.id}`}
+          />
+          {error && <p className="text-xs text-red-500">{error}</p>}
+        </div>
+      );
+
     default:
       return (
         <Input
@@ -187,8 +203,7 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
         await onSave(clientService.id, editedValues);
       }
       
-      const response = await apiRequest("POST", `/api/client-services/${clientService.id}/validate-vat`, {});
-      return response.json();
+      return await apiRequest("POST", `/api/client-services/${clientService.id}/validate-vat`, {});
     },
     onSuccess: (data: any) => {
       if (data.isValid) {
@@ -389,6 +404,7 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
           {udfDefinitions.map((def) => {
             const displayValue = isEditing ? editedValues[def.id] : currentValues[def.id];
             const isVatField = def.id === VAT_UDF_FIELD_ID;
+            const isVatAddressField = def.id === VAT_ADDRESS_UDF_FIELD_ID;
             
             return (
               <div key={def.id} className="space-y-1.5">
@@ -483,11 +499,13 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
                 ) : (
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <div className="text-sm text-muted-foreground p-2 bg-muted/30 rounded-md min-h-[2.5rem] flex items-center flex-1">
+                      <div className={`text-sm text-muted-foreground p-2 rounded-md min-h-[2.5rem] flex items-center flex-1 ${isVatAddressField && vatStatus.status === 'validated' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-muted/30'}`}>
                         {def.type === "boolean" ? (
                           displayValue ? "Yes" : "No"
                         ) : def.type === "date" && displayValue ? (
                           new Date(displayValue).toLocaleDateString('en-GB')
+                        ) : isVatAddressField && displayValue ? (
+                          <span className="whitespace-pre-line">{displayValue}</span>
                         ) : (
                           displayValue || <span className="text-muted-foreground/50 italic">Not set</span>
                         )}
@@ -543,6 +561,13 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
                     {isVatField && vatStatus.status === 'validated' && vatStatus.companyName && (
                       <p className="text-xs text-green-600" data-testid="text-vat-company-name">
                         Registered to: {vatStatus.companyName}
+                      </p>
+                    )}
+                    
+                    {/* VAT address auto-populated note */}
+                    {isVatAddressField && vatStatus.status === 'validated' && displayValue && (
+                      <p className="text-xs text-muted-foreground" data-testid="text-vat-address-note">
+                        Address from HMRC VAT records
                       </p>
                     )}
                   </div>

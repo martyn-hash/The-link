@@ -30,7 +30,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Plus, User as UserIcon, FileText } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Plus, User as UserIcon, FileText, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { formatPersonName } from "../../utils/formatters";
 import { 
   AddServiceData, 
@@ -41,6 +42,16 @@ import {
 } from "../../utils/types";
 import type { User, Client } from "@shared/schema";
 
+const VAT_UDF_FIELD_ID = 'vat_number_auto';
+const VAT_ADDRESS_UDF_FIELD_ID = 'vat_address_auto';
+
+interface VatValidationStatus {
+  status: 'idle' | 'validating' | 'valid' | 'invalid';
+  companyName?: string;
+  address?: string;
+  error?: string;
+}
+
 export function AddServiceModal({ clientId, clientType = 'company', onSuccess }: AddServiceModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedService, setSelectedService] = useState<ServiceWithDetails | null>(null);
@@ -48,6 +59,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
   const [selectedPersonId, setSelectedPersonId] = useState<string>("");
   const [udfValues, setUdfValues] = useState<Record<string, any>>({});
   const [udfErrors, setUdfErrors] = useState<Record<string, string>>({});
+  const [vatValidation, setVatValidation] = useState<VatValidationStatus>({ status: 'idle' });
   const { toast } = useToast();
   
   // Helper function to determine field state for visual indicators
@@ -130,11 +142,12 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
     
     setSelectedService(service);
     
-    // Reset assignments, UDF values, and errors when service changes
+    // Reset assignments, UDF values, errors, and VAT validation when service changes
     setRoleAssignments({});
     setSelectedPersonId("");
     setUdfValues({});
     setUdfErrors({});
+    setVatValidation({ status: 'idle' });
     
     // Clear fields for static services (they don't need frequency, dates, or owner)
     if (service.isStaticService) {
@@ -231,6 +244,9 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
       setSelectedService(null);
       setSelectedPersonId("");
       setRoleAssignments({});
+      setUdfValues({});
+      setUdfErrors({});
+      setVatValidation({ status: 'idle' });
       setIsOpen(false);
       onSuccess?.();
     },
@@ -300,6 +316,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
       setRoleAssignments({});
       setUdfValues({});
       setUdfErrors({});
+      setVatValidation({ status: 'idle' });
       setIsOpen(false);
       onSuccess?.();
     },
@@ -311,6 +328,86 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
       });
     },
   });
+
+  // VAT validation mutation
+  const validateVatMutation = useMutation({
+    mutationFn: async (vatNumber: string) => {
+      return await apiRequest("POST", "/api/vat/validate", { vatNumber });
+    },
+    onSuccess: (data: any) => {
+      if (data.isValid) {
+        setVatValidation({
+          status: 'valid',
+          companyName: data.companyName,
+          address: data.address,
+        });
+        // Auto-populate the VAT address field
+        if (data.address) {
+          let fullAddress = data.address;
+          if (data.postcode) {
+            fullAddress += '\n' + data.postcode;
+          }
+          setUdfValues(prev => ({ ...prev, [VAT_ADDRESS_UDF_FIELD_ID]: fullAddress }));
+        }
+        toast({
+          title: "VAT Number Validated",
+          description: `VAT is registered to: ${data.companyName}`,
+        });
+      } else {
+        setVatValidation({
+          status: 'invalid',
+          error: data.error || 'VAT number not found in HMRC records',
+        });
+        toast({
+          title: "Invalid VAT Number",
+          description: data.error || "This VAT number was not found in HMRC records. Please check and try again.",
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (error: any) => {
+      setVatValidation({
+        status: 'invalid',
+        error: error?.message || 'Failed to validate VAT number',
+      });
+      toast({
+        title: "VAT Validation Failed",
+        description: error?.message || "Could not connect to HMRC API. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Check if the selected service is a VAT service
+  const isVatService = (selectedService as any)?.isVatService === true;
+
+  // Handle VAT number validation
+  const handleValidateVat = () => {
+    const vatNumber = udfValues[VAT_UDF_FIELD_ID];
+    if (!vatNumber) {
+      toast({
+        title: "No VAT Number",
+        description: "Please enter a VAT number first",
+        variant: "destructive",
+      });
+      return;
+    }
+    setVatValidation({ status: 'validating' });
+    validateVatMutation.mutate(vatNumber);
+  };
+
+  // Handle VAT number change - reset validation when number changes
+  const handleVatNumberChange = (value: string) => {
+    setUdfValues(prev => ({ ...prev, [VAT_UDF_FIELD_ID]: value }));
+    // Reset validation status when VAT number changes
+    if (vatValidation.status !== 'idle') {
+      setVatValidation({ status: 'idle' });
+    }
+    // Clear error for this field
+    if (udfErrors[VAT_UDF_FIELD_ID]) {
+      setUdfErrors(prev => ({ ...prev, [VAT_UDF_FIELD_ID]: '' }));
+    }
+  };
 
   // Validate UDF values (including required fields and regex patterns)
   const validateUdfValues = (): boolean => {
@@ -365,6 +462,26 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
     // Validate UDF values first (for both personal and client services)
     if (!validateUdfValues()) {
       return;
+    }
+
+    // For VAT services, check that VAT has been validated successfully
+    if (isVatService && udfValues[VAT_UDF_FIELD_ID]) {
+      if (vatValidation.status === 'idle' || vatValidation.status === 'validating') {
+        toast({
+          title: "VAT Validation Required",
+          description: "Please validate the VAT number before adding this service.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (vatValidation.status === 'invalid') {
+        toast({
+          title: "Invalid VAT Number",
+          description: "The VAT number is invalid. Please correct it or remove it before continuing.",
+          variant: "destructive",
+        });
+        return;
+      }
     }
 
     // Handle personal services vs client services
@@ -877,7 +994,64 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
                             </div>
                           )}
                           
-                          {field.type === 'short_text' && (
+                          {field.type === 'short_text' && field.id === VAT_UDF_FIELD_ID && isVatService && (
+                            <div className="space-y-2">
+                              <div className="flex gap-2">
+                                <Input
+                                  type="text"
+                                  value={udfValues[field.id] ?? ''}
+                                  onChange={(e) => handleVatNumberChange(e.target.value)}
+                                  placeholder={field.placeholder || "e.g. GB123456789"}
+                                  className={`flex-1 ${hasError ? 'border-red-500 focus-visible:ring-red-500' : vatValidation.status === 'valid' ? 'border-green-500' : vatValidation.status === 'invalid' ? 'border-red-500' : ''}`}
+                                  data-testid="input-vat-number"
+                                />
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant={vatValidation.status === 'valid' ? 'outline' : 'default'}
+                                      size="sm"
+                                      onClick={handleValidateVat}
+                                      disabled={vatValidation.status === 'validating' || !udfValues[field.id]}
+                                      className="whitespace-nowrap"
+                                      data-testid="button-validate-vat"
+                                    >
+                                      {vatValidation.status === 'validating' ? (
+                                        <><Loader2 className="h-4 w-4 animate-spin mr-1" />Checking</>
+                                      ) : vatValidation.status === 'valid' ? (
+                                        <><CheckCircle2 className="h-4 w-4 text-green-600 mr-1" />Valid</>
+                                      ) : vatValidation.status === 'invalid' ? (
+                                        <><AlertCircle className="h-4 w-4 text-red-600 mr-1" />Retry</>
+                                      ) : (
+                                        'Validate'
+                                      )}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>Validate VAT number with HMRC</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </div>
+                              {vatValidation.status === 'valid' && vatValidation.companyName && (
+                                <div className="p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
+                                  <p className="text-sm text-green-800 dark:text-green-200">
+                                    <CheckCircle2 className="h-4 w-4 inline mr-1" />
+                                    Registered to: <strong>{vatValidation.companyName}</strong>
+                                  </p>
+                                </div>
+                              )}
+                              {vatValidation.status === 'invalid' && (
+                                <div className="p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                                  <p className="text-sm text-red-800 dark:text-red-200">
+                                    <AlertCircle className="h-4 w-4 inline mr-1" />
+                                    {vatValidation.error || 'VAT number not found'}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          
+                          {field.type === 'short_text' && !(field.id === VAT_UDF_FIELD_ID && isVatService) && (
                             <Input
                               type="text"
                               value={udfValues[field.id] ?? ''}
@@ -893,7 +1067,30 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
                             />
                           )}
                           
-                          {field.type === 'long_text' && (
+                          {field.type === 'long_text' && field.id === VAT_ADDRESS_UDF_FIELD_ID && isVatService && (
+                            <div className="space-y-1">
+                              <textarea
+                                value={udfValues[field.id] ?? ''}
+                                onChange={(e) => {
+                                  setUdfValues({ ...udfValues, [field.id]: e.target.value });
+                                  if (udfErrors[field.id]) {
+                                    setUdfErrors({ ...udfErrors, [field.id]: '' });
+                                  }
+                                }}
+                                readOnly={vatValidation.status === 'valid'}
+                                placeholder={vatValidation.status === 'valid' ? '' : 'Validate VAT number to auto-populate address'}
+                                className={`flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${hasError ? 'border-red-500 focus-visible:ring-red-500' : vatValidation.status === 'valid' ? 'border-green-300 bg-green-50 dark:bg-green-900/20' : ''}`}
+                                data-testid="textarea-vat-address"
+                              />
+                              {vatValidation.status === 'valid' && (
+                                <p className="text-xs text-muted-foreground">
+                                  Address auto-populated from HMRC VAT records
+                                </p>
+                              )}
+                            </div>
+                          )}
+                          
+                          {field.type === 'long_text' && !(field.id === VAT_ADDRESS_UDF_FIELD_ID && isVatService) && (
                             <textarea
                               value={udfValues[field.id] ?? ''}
                               onChange={(e) => {

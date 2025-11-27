@@ -13,7 +13,7 @@ import {
 export const udfDefinitionSchema = z.object({
   id: z.string(),
   name: z.string().min(1, "Field name is required"),
-  type: z.enum(["number", "date", "boolean", "short_text", "dropdown"]),
+  type: z.enum(["number", "date", "boolean", "short_text", "long_text", "dropdown"]),
   required: z.boolean(),
   placeholder: z.string().optional(),
   options: z.array(z.string()).optional(),

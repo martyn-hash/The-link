@@ -4,6 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ServiceCard } from "./ServiceCard";
 import { ClientServiceRow } from "../../services";
 import { AddServiceModal } from "../../services/AddServiceModal";
+import { Settings2 } from "lucide-react";
 import type { EnhancedClientService } from "../../../utils/types";
 
 interface ClientServicesListProps {
@@ -51,9 +52,27 @@ export function ClientServicesList({
 
   if (!services || services.length === 0) {
     return (
-      <div className="text-center py-8">
-        <p className="text-muted-foreground mb-4">No client services have been added yet.</p>
-      </div>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>Client Services</CardTitle>
+            <AddServiceModal 
+              clientId={clientId} 
+              clientType={effectiveClientType} 
+              onSuccess={onRefetch} 
+            />
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8">
+            <Settings2 className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+            <p className="text-muted-foreground mb-2">No client services found</p>
+            <p className="text-sm text-muted-foreground">
+              Services will appear here when they are added to this client.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 

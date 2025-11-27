@@ -436,9 +436,12 @@ export class ServiceStorage extends BaseStorage {
     const VAT_UDF_FIELD_NAME = 'VAT Number';
     const VAT_NUMBER_REGEX = '^(GB)?\\s?\\d{3}\\s?\\d{4}\\s?\\d{2}(\\s?\\d{3})?$';
     const VAT_NUMBER_REGEX_ERROR = 'Please enter a valid UK VAT number (e.g., 123456789 or GB123456789)';
+    const VAT_ADDRESS_UDF_FIELD_ID = 'vat_address_auto';
+    const VAT_ADDRESS_UDF_FIELD_NAME = 'VAT Address';
 
     const udfs = Array.isArray(udfDefinitions) ? [...udfDefinitions] : [];
     const existingVatUdfIndex = udfs.findIndex(udf => udf.id === VAT_UDF_FIELD_ID);
+    const existingVatAddressUdfIndex = udfs.findIndex(udf => udf.id === VAT_ADDRESS_UDF_FIELD_ID);
 
     if (isVatService) {
       if (existingVatUdfIndex === -1) {
@@ -450,6 +453,17 @@ export class ServiceStorage extends BaseStorage {
           placeholder: 'e.g., GB123456789',
           regex: VAT_NUMBER_REGEX,
           regexError: VAT_NUMBER_REGEX_ERROR,
+        });
+      }
+      if (existingVatAddressUdfIndex === -1) {
+        const insertIndex = udfs.findIndex(udf => udf.id === VAT_UDF_FIELD_ID);
+        udfs.splice(insertIndex + 1, 0, {
+          id: VAT_ADDRESS_UDF_FIELD_ID,
+          name: VAT_ADDRESS_UDF_FIELD_NAME,
+          type: 'long_text',
+          required: false,
+          placeholder: 'Auto-populated from HMRC validation',
+          readOnly: true,
         });
       }
     }

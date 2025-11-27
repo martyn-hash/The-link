@@ -305,3 +305,6 @@ export const VAT_NUMBER_REGEX_ERROR = 'Please enter a valid UK VAT number (e.g.,
 
 export const VAT_UDF_FIELD_ID = 'vat_number_auto';
 export const VAT_UDF_FIELD_NAME = 'VAT Number';
+
+export const VAT_ADDRESS_UDF_FIELD_ID = 'vat_address_auto';
+export const VAT_ADDRESS_UDF_FIELD_NAME = 'VAT Address';

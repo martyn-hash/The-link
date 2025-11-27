@@ -4,32 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Eye } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
-
-interface ServiceOwner {
-  firstName?: string | null;
-  lastName?: string | null;
-}
-
-interface Service {
-  name?: string;
-  description?: string;
-  isStaticService?: boolean;
-  isPersonalService?: boolean;
-  isCompaniesHouseConnected?: boolean;
-}
-
-interface ClientService {
-  id: string;
-  frequency?: string | null;
-  nextStartDate?: string | Date | null;
-  nextDueDate?: string | Date | null;
-  isActive?: boolean | null;
-  service?: Service | null;
-  serviceOwner?: ServiceOwner | null;
-}
+import type { EnhancedClientService } from "../../../utils/types";
 
 interface ServiceCardProps {
-  clientService: ClientService;
+  clientService: EnhancedClientService;
 }
 
 function formatDate(date: string | Date | null | undefined): string {
