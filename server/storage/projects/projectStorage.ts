@@ -1305,11 +1305,18 @@ export class ProjectStorage extends BaseStorage {
           
           // Create initial message with stage change notes and/or attachments if provided
           if ((update.notesHtml && update.notesHtml.trim()) || (update.attachments && update.attachments.length > 0)) {
+            // Transform attachments to include URL for stage-change-attachments endpoint
+            // so AttachmentList can fetch them correctly (not from project-messages endpoint)
+            const messageAttachments = update.attachments?.map(att => ({
+              ...att,
+              url: `/api/projects/${update.projectId}/stage-change-attachments${att.objectPath}`,
+            }));
+            
             await this.projectHelpers.createProjectMessage({
               threadId: newThread.id,
               content: update.notesHtml?.trim() || 'Stage change attachments',
               userId: userId,
-              attachments: update.attachments,
+              attachments: messageAttachments,
             });
           }
           

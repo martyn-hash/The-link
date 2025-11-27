@@ -16,10 +16,9 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertCircle, Loader2, Upload, X, FileText } from "lucide-react";
+import { AlertCircle, Loader2, X, FileText, Paperclip } from "lucide-react";
 import StageApprovalModal from "@/components/StageApprovalModal";
 import { TiptapEditor } from "@/components/TiptapEditor";
-import { FileUploadZone } from "@/components/attachments";
 import type { 
   ProjectWithRelations, 
   User, 
@@ -742,65 +741,91 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
             />
           </div>
 
-          {/* File Attachments Section */}
-          <div className="space-y-3">
-            <Label>Attachments (optional):</Label>
-            <FileUploadZone
-              onFilesSelected={handleFilesSelected}
-              maxFiles={10}
-              compact={true}
-              disabled={isUploadingFiles}
+          {/* File Attachments - Compact Button */}
+          <div className="flex items-center gap-3">
+            <input
+              type="file"
+              multiple
+              accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
+              onChange={(e) => {
+                const files = Array.from(e.target.files || []);
+                if (files.length > 0) {
+                  handleFilesSelected(files);
+                }
+                e.target.value = '';
+              }}
+              style={{ display: 'none' }}
+              id="status-form-file-upload"
+              data-testid="input-status-form-file"
             />
-            
-            {/* Selected files list */}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={isUploadingFiles}
+              onClick={() => document.getElementById('status-form-file-upload')?.click()}
+              data-testid="button-attach-file"
+            >
+              <Paperclip className="w-4 h-4 mr-2" />
+              Attach
+            </Button>
             {selectedFiles.length > 0 && (
-              <div className="space-y-2" data-testid="selected-files-list">
-                {selectedFiles.map((file, index) => (
-                  <div 
-                    key={`${file.name}-${index}`} 
-                    className="flex items-center justify-between p-2 bg-muted rounded-md"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                      <span className="text-sm truncate">{file.name}</span>
-                      <span className="text-xs text-muted-foreground flex-shrink-0">
-                        ({formatFileSize(file.size)})
-                      </span>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRemoveFile(index)}
-                      disabled={isUploadingFiles}
-                      data-testid={`button-remove-file-${index}`}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
+              <span className="text-sm text-muted-foreground">
+                {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''} selected
+              </span>
             )}
-
-            {/* Already uploaded attachments */}
-            {attachments.length > 0 && (
-              <div className="space-y-2" data-testid="uploaded-attachments-list">
-                <span className="text-xs text-muted-foreground">Uploaded:</span>
-                {attachments.map((attachment, index) => (
-                  <div 
-                    key={`${attachment.objectPath}-${index}`} 
-                    className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950 rounded-md"
-                  >
-                    <FileText className="h-4 w-4 flex-shrink-0 text-green-600" />
-                    <span className="text-sm truncate">{attachment.fileName}</span>
-                    <span className="text-xs text-muted-foreground">
-                      ({formatFileSize(attachment.fileSize)})
-                    </span>
-                  </div>
-                ))}
-              </div>
+            {isUploadingFiles && (
+              <span className="text-sm text-muted-foreground flex items-center gap-1">
+                <Loader2 className="w-3 h-3 animate-spin" />
+                Uploading...
+              </span>
             )}
           </div>
+          {selectedFiles.length > 0 && (
+            <div className="space-y-1 mt-2" data-testid="selected-files-list">
+              {selectedFiles.map((file, index) => (
+                <div 
+                  key={`${file.name}-${index}`} 
+                  className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md text-sm"
+                  data-testid={`selected-file-${index}`}
+                >
+                  <FileText className="w-4 h-4 text-muted-foreground" />
+                  <span className="flex-1 truncate max-w-[200px]">{file.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    ({formatFileSize(file.size)})
+                  </span>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-5 w-5 p-0"
+                    onClick={() => handleRemoveFile(index)}
+                    disabled={isUploadingFiles}
+                    data-testid={`button-remove-file-${index}`}
+                  >
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          {attachments.length > 0 && (
+            <div className="space-y-1 mt-2" data-testid="uploaded-attachments-list">
+              <span className="text-xs text-muted-foreground">Uploaded:</span>
+              {attachments.map((attachment, index) => (
+                <div 
+                  key={`${attachment.objectPath}-${index}`} 
+                  className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-950 rounded-md text-sm"
+                >
+                  <FileText className="w-4 h-4 text-green-600" />
+                  <span className="flex-1 truncate">{attachment.fileName}</span>
+                  <span className="text-xs text-muted-foreground">
+                    ({formatFileSize(attachment.fileSize)})
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
           
           <Button
             onClick={handleUpdateStatus}

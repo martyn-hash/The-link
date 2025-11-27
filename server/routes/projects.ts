@@ -658,7 +658,16 @@ export function registerProjectRoutes(
 
       // Extract the object path from the URL (everything after /stage-change-attachments/)
       const urlPath = req.path;
-      const pathAfterProject = urlPath.replace(`/api/projects/${projectId}/stage-change-attachments`, '');
+      let pathAfterProject = urlPath.replace(`/api/projects/${projectId}/stage-change-attachments`, '');
+      
+      // Handle backward compatibility: old objectPaths included the full path with /stage-change-attachments/{projectId}/
+      // New objectPaths are just the filename portion like /timestamp_filename
+      // Normalize to just the filename portion to avoid duplication
+      const legacyPrefix = `/stage-change-attachments/${projectId}`;
+      if (pathAfterProject.startsWith(legacyPrefix)) {
+        pathAfterProject = pathAfterProject.substring(legacyPrefix.length);
+      }
+      
       const objectPath = `/objects/stage-change-attachments/${projectId}${pathAfterProject}`;
 
       // Serve the file
