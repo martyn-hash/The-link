@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,35 +6,23 @@ import { Search, MapPin, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 
-// Debounce utility function
-function debounce<T extends (...args: any[]) => any>(
-  func: T,
-  wait: number
-): (...args: Parameters<T>) => void {
-  let timeout: NodeJS.Timeout;
-  return (...args: Parameters<T>) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func(...args), wait);
-  };
-}
-
-interface GetAddressAutocompleteResponse {
-  suggestions: {
-    address: string;
-    url: string;
-    id: string;
-  }[];
-}
-
 interface AddressResult {
+  id: string;
   formatted: string;
   line1: string;
   line2?: string;
+  line3?: string;
   city: string;
   county?: string;
-  region?: string;
   postcode: string;
   country: string;
+}
+
+interface PostcodeFindResponse {
+  postcode: string;
+  latitude?: number;
+  longitude?: number;
+  addresses: AddressResult[];
 }
 
 interface AddressLookupProps {
@@ -57,91 +45,65 @@ interface AddressLookupProps {
 }
 
 export default function AddressLookup({ onAddressSelect, value }: AddressLookupProps) {
-  const [searchTerm, setSearchTerm] = useState("");
+  const [postcode, setPostcode] = useState("");
   const [addresses, setAddresses] = useState<AddressResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const { toast } = useToast();
 
-  // Debounced search function
-  const debouncedSearch = useCallback(
-    debounce(async (term: string) => {
-      if (term.trim().length >= 3) {
-        await searchAddresses(term);
-      } else {
-        setAddresses([]);
-        setHasSearched(false);
-      }
-    }, 500),
-    []
-  );
-
-  // Effect to trigger search when searchTerm changes
-  useEffect(() => {
-    if (searchTerm) {
-      debouncedSearch(searchTerm);
-    } else {
-      setAddresses([]);
-      setHasSearched(false);
-    }
-  }, [searchTerm, debouncedSearch]);
-
-  const searchAddresses = async (term?: string) => {
-    const searchValue = term || searchTerm;
-    
-    if (!searchValue.trim()) {
+  const findAddresses = async () => {
+    if (!postcode.trim()) {
+      setErrorMessage("Please enter a postcode");
       return;
     }
 
     setIsLoading(true);
     setHasSearched(false);
+    setErrorMessage(null);
+    setAddresses([]);
 
     try {
-      const response = await fetch(`/api/address-lookup/${encodeURIComponent(searchValue.trim())}`);
+      const response = await fetch(`/api/address-find/${encodeURIComponent(postcode.trim())}`);
       
-      if (!response.ok) {
-        if (response.status === 404) {
-          setAddresses([]);
-          setHasSearched(true);
-        } else {
-          throw new Error(`HTTP ${response.status}`);
-        }
+      if (response.status === 404) {
+        setErrorMessage("No addresses found for this postcode. Please check and try again.");
+        setHasSearched(true);
         return;
       }
 
-      const data: GetAddressAutocompleteResponse = await response.json();
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data: PostcodeFindResponse = await response.json();
       
-      // Transform getaddress.io autocomplete response to our format
-      const transformedAddresses: AddressResult[] = (data.suggestions || []).map((suggestion) => {
-        const parts = suggestion.address.split(', ');
-        return {
-          formatted: suggestion.address,
-          line1: parts[0] || '',
-          line2: parts[1] || undefined,
-          city: parts[parts.length - 3] || '',
-          county: parts[parts.length - 2] || '',
-          region: parts[parts.length - 2] || '',
-          postcode: parts[parts.length - 1] || '',
-          country: 'United Kingdom'
-        };
-      });
-      
-      setAddresses(transformedAddresses);
-      setHasSearched(true);
+      if (data.addresses && data.addresses.length > 0) {
+        setAddresses(data.addresses);
+        setHasSearched(true);
+      } else {
+        setErrorMessage("No addresses found for this postcode.");
+        setHasSearched(true);
+      }
     } catch (error) {
-      console.error("Address lookup error:", error);
-      setAddresses([]);
+      console.error("Postcode lookup error:", error);
+      setErrorMessage("Address lookup failed. Please try again or enter the address manually.");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleAddressSelect = (selectedAddress: AddressResult) => {
+    // Build address line 1 from line1 and line2 if present
+    const addressLine1 = [selectedAddress.line1, selectedAddress.line2]
+      .filter(Boolean)
+      .join(', ');
+
     const formattedAddress = {
-      addressLine1: selectedAddress.line1,
-      addressLine2: selectedAddress.line2 || "",
+      addressLine1: addressLine1 || selectedAddress.line1,
+      addressLine2: selectedAddress.line3 || "",
       locality: selectedAddress.city,
-      region: selectedAddress.county || selectedAddress.region || "",
+      region: selectedAddress.county || "",
       postalCode: selectedAddress.postcode,
       country: selectedAddress.country,
     };
@@ -152,42 +114,68 @@ export default function AddressLookup({ onAddressSelect, value }: AddressLookupP
       title: "Address selected",
       description: "Address has been populated in the form",
     });
+
+    // Clear the lookup state after selection
+    setAddresses([]);
+    setPostcode("");
+    setHasSearched(false);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      searchAddresses();
+      findAddresses();
     }
   };
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="searchTerm">Address or Postcode</Label>
-        <div className="relative">
-          <Input
-            id="searchTerm"
-            placeholder="Start typing address (e.g., 11 Primrose Crescent, Worcester...)"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            data-testid="input-address-search"
-            className="pr-10"
-          />
-          {isLoading && (
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            </div>
-          )}
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Type at least 3 characters to see suggestions
-        </p>
+    <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+      <div className="flex items-center gap-2 mb-2">
+        <MapPin className="h-4 w-4 text-muted-foreground" />
+        <Label className="text-sm font-medium">Postcode Lookup</Label>
       </div>
+      
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <Input
+            placeholder="Enter postcode (e.g. SW1A 1AA)"
+            value={postcode}
+            onChange={(e) => {
+              setPostcode(e.target.value.toUpperCase());
+              setErrorMessage(null);
+            }}
+            onKeyPress={handleKeyPress}
+            data-testid="input-postcode-lookup"
+            className="uppercase"
+          />
+        </div>
+        <Button
+          type="button"
+          onClick={findAddresses}
+          disabled={isLoading || !postcode.trim()}
+          data-testid="button-find-address"
+          className="min-w-[100px]"
+        >
+          {isLoading ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <>
+              <Search className="h-4 w-4 mr-2" />
+              Find
+            </>
+          )}
+        </Button>
+      </div>
+
+      {errorMessage && (
+        <p className="text-sm text-destructive" data-testid="postcode-error">
+          {errorMessage}
+        </p>
+      )}
 
       {hasSearched && addresses.length > 0 && (
         <div className="space-y-2">
-          <Label>Select Address</Label>
+          <Label className="text-sm">Select your address ({addresses.length} found)</Label>
           <Select onValueChange={(value) => {
             const selectedAddress = addresses[parseInt(value)];
             if (selectedAddress) {
@@ -195,15 +183,15 @@ export default function AddressLookup({ onAddressSelect, value }: AddressLookupP
             }
           }}>
             <SelectTrigger data-testid="select-address">
-              <SelectValue placeholder="Choose an address" />
+              <SelectValue placeholder="Choose your address from the list" />
             </SelectTrigger>
             <SelectContent>
               {addresses.map((address, index) => (
-                <SelectItem key={index} value={index.toString()}>
-                  <div className="flex items-center space-x-2">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <span>
-                      {[
+                <SelectItem key={address.id || index} value={index.toString()}>
+                  <div className="flex items-start gap-2">
+                    <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <span className="text-left">
+                      {address.formatted || [
                         address.line1,
                         address.line2,
                         address.city,
@@ -218,11 +206,10 @@ export default function AddressLookup({ onAddressSelect, value }: AddressLookupP
         </div>
       )}
 
-      {hasSearched && addresses.length === 0 && searchTerm.length >= 3 && (
-        <div className="text-sm text-muted-foreground">
-          No addresses found for "{searchTerm}". Try a different search term.
-        </div>
-      )}
+      <p className="text-xs text-muted-foreground">
+        Enter your postcode and click Find, then select your address from the list. 
+        You can also enter the address manually in the fields below.
+      </p>
     </div>
   );
 }

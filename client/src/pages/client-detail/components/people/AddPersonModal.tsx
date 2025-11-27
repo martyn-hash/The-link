@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { 
@@ -9,13 +9,15 @@ import {
   ChevronDown,
   ChevronUp,
   Globe,
-  Check
+  Check,
+  Circle,
+  Plus,
+  Mail
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -37,6 +39,11 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import AddressLookup from "@/components/address-lookup";
 import { InsertPersonData, addPersonSchema } from "../../utils/types";
 
@@ -56,9 +63,9 @@ export function AddPersonModal({
   isSaving 
 }: AddPersonModalProps) {
   const [activeTab, setActiveTab] = useState("personal");
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set(["personal"]));
   const [showSecondaryContacts, setShowSecondaryContacts] = useState(false);
   const [showSocialLinks, setShowSocialLinks] = useState(false);
-  const [showComplianceFields, setShowComplianceFields] = useState(false);
 
   const form = useForm<InsertPersonData>({
     resolver: zodResolver(addPersonSchema),
@@ -92,6 +99,16 @@ export function AddPersonModal({
     },
   });
 
+  useEffect(() => {
+    if (isOpen) {
+      setVisitedTabs(new Set(["personal"]));
+      setActiveTab("personal");
+      setShowSecondaryContacts(false);
+      setShowSocialLinks(false);
+      form.reset();
+    }
+  }, [isOpen, form]);
+
   const handleSubmit = (data: InsertPersonData) => {
     if (data.primaryPhone) {
       if (data.primaryPhone.startsWith('07')) {
@@ -124,7 +141,15 @@ export function AddPersonModal({
 
   const handleTabChange = (value: string) => {
     setActiveTab(value);
+    setVisitedTabs(prev => {
+      const newSet = new Set(prev);
+      newSet.add(value);
+      return newSet;
+    });
   };
+
+  const allTabsVisited = visitedTabs.has("personal") && visitedTabs.has("contact") && visitedTabs.has("address");
+  const unvisitedCount = 3 - visitedTabs.size;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -132,7 +157,7 @@ export function AddPersonModal({
         <DialogHeader>
           <DialogTitle className="text-xl">Add Related Person</DialogTitle>
           <DialogDescription>
-            Add a new person to this client. Fill in the essential details first, then add more information as needed.
+            Add a new person to this client. Please review each tab to ensure all relevant information is captured.
           </DialogDescription>
         </DialogHeader>
         
@@ -140,25 +165,49 @@ export function AddPersonModal({
           <form onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-col flex-1 overflow-hidden">
             <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col flex-1 overflow-hidden">
               <TabsList className="grid w-full grid-cols-3 mb-4">
-                <TabsTrigger value="personal" className="flex items-center gap-2" data-testid="tab-personal">
+                <TabsTrigger value="personal" className="flex items-center gap-2 relative" data-testid="tab-personal">
                   <UserIcon className="h-4 w-4" />
                   <span className="hidden sm:inline">Personal</span>
-                  {hasPersonalData && <Check className="h-3 w-3 text-green-600" />}
+                  {visitedTabs.has("personal") ? (
+                    hasPersonalData ? (
+                      <Check className="h-3 w-3 text-green-600" />
+                    ) : (
+                      <Check className="h-3 w-3 text-muted-foreground" />
+                    )
+                  ) : (
+                    <Circle className="h-2 w-2 fill-orange-500 text-orange-500" />
+                  )}
                 </TabsTrigger>
-                <TabsTrigger value="contact" className="flex items-center gap-2" data-testid="tab-contact">
+                <TabsTrigger value="contact" className="flex items-center gap-2 relative" data-testid="tab-contact">
                   <Phone className="h-4 w-4" />
                   <span className="hidden sm:inline">Contact</span>
-                  {hasContactData && <Check className="h-3 w-3 text-green-600" />}
+                  {visitedTabs.has("contact") ? (
+                    hasContactData ? (
+                      <Check className="h-3 w-3 text-green-600" />
+                    ) : (
+                      <Check className="h-3 w-3 text-muted-foreground" />
+                    )
+                  ) : (
+                    <Circle className="h-2 w-2 fill-orange-500 text-orange-500" />
+                  )}
                 </TabsTrigger>
-                <TabsTrigger value="address" className="flex items-center gap-2" data-testid="tab-address">
+                <TabsTrigger value="address" className="flex items-center gap-2 relative" data-testid="tab-address">
                   <MapPin className="h-4 w-4" />
                   <span className="hidden sm:inline">Address</span>
-                  {hasAddressData && <Check className="h-3 w-3 text-green-600" />}
+                  {visitedTabs.has("address") ? (
+                    hasAddressData ? (
+                      <Check className="h-3 w-3 text-green-600" />
+                    ) : (
+                      <Check className="h-3 w-3 text-muted-foreground" />
+                    )
+                  ) : (
+                    <Circle className="h-2 w-2 fill-orange-500 text-orange-500" />
+                  )}
                 </TabsTrigger>
               </TabsList>
 
               <div className="flex-1 overflow-y-auto pr-2">
-                {/* Personal Details Tab */}
+                {/* Personal Details Tab - Now includes compliance fields */}
                 <TabsContent value="personal" className="mt-0 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <FormField
@@ -226,6 +275,7 @@ export function AddPersonModal({
                           <FormControl>
                             <Input 
                               {...field} 
+                              value={field.value || ""}
                               placeholder="e.g. British"
                               data-testid="input-nationality" 
                             />
@@ -275,6 +325,97 @@ export function AddPersonModal({
                         </FormItem>
                       )}
                     />
+                  </div>
+
+                  {/* Compliance & Verification - Moved to Personal tab, no accordion */}
+                  <div className="border-t pt-6 mt-6">
+                    <div className="flex items-center gap-2 mb-4">
+                      <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                      <h4 className="text-sm font-medium">Compliance & Verification</h4>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <FormField
+                        control={form.control}
+                        name="niNumber"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>National Insurance Number</FormLabel>
+                            <FormControl>
+                              <Input 
+                                {...field} 
+                                value={field.value || ""} 
+                                placeholder="e.g. QQ 12 34 56 C"
+                                data-testid="input-niNumber" 
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="personalUtrNumber"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Personal UTR Number</FormLabel>
+                            <FormControl>
+                              <Input 
+                                {...field} 
+                                value={field.value || ""} 
+                                placeholder="10-digit number"
+                                data-testid="input-personalUtrNumber" 
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="photoIdVerified"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value || false}
+                                onCheckedChange={field.onChange}
+                                data-testid="input-photoIdVerified"
+                              />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>Photo ID Verified</FormLabel>
+                              <FormDescription>
+                                Passport or driving licence checked
+                              </FormDescription>
+                            </div>
+                          </FormItem>
+                        )}
+                      />
+                      
+                      <FormField
+                        control={form.control}
+                        name="addressVerified"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value || false}
+                                onCheckedChange={field.onChange}
+                                data-testid="input-addressVerified"
+                              />
+                            </FormControl>
+                            <div className="space-y-1 leading-none">
+                              <FormLabel>Address Verified</FormLabel>
+                              <FormDescription>
+                                Proof of address document checked
+                              </FormDescription>
+                            </div>
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                   </div>
                 </TabsContent>
 
@@ -328,27 +469,24 @@ export function AddPersonModal({
                       />
                     </div>
 
-                    {/* Secondary Contacts - Collapsible */}
+                    {/* Secondary Contacts - Improved accordion styling */}
                     <Collapsible open={showSecondaryContacts} onOpenChange={setShowSecondaryContacts}>
                       <CollapsibleTrigger asChild>
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          className="w-full justify-between p-0 h-auto hover:bg-transparent"
+                        <button
+                          type="button"
+                          className="w-full flex items-center justify-between p-3 rounded-lg border bg-muted/40 hover:bg-muted/60 transition-colors"
                           data-testid="toggle-secondary-contacts"
                         >
-                          <span className="text-sm font-medium text-muted-foreground">
-                            Additional Contact Details
-                          </span>
-                          {showSecondaryContacts ? (
-                            <ChevronUp className="h-4 w-4" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
+                          <div className="flex items-center gap-2">
+                            <Plus className={`h-4 w-4 transition-transform ${showSecondaryContacts ? 'rotate-45' : ''}`} />
+                            <Mail className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">Additional Contact Details</span>
+                          </div>
+                          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showSecondaryContacts ? 'rotate-180' : ''}`} />
+                        </button>
                       </CollapsibleTrigger>
-                      <CollapsibleContent className="pt-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-muted/30 rounded-lg">
+                      <CollapsibleContent className="pt-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 border rounded-lg bg-background">
                           <FormField
                             control={form.control}
                             name="email"
@@ -428,28 +566,24 @@ export function AddPersonModal({
                       </CollapsibleContent>
                     </Collapsible>
 
-                    {/* Social Links - Collapsible */}
+                    {/* Social Links - Improved accordion styling */}
                     <Collapsible open={showSocialLinks} onOpenChange={setShowSocialLinks}>
                       <CollapsibleTrigger asChild>
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          className="w-full justify-between p-0 h-auto hover:bg-transparent"
+                        <button
+                          type="button"
+                          className="w-full flex items-center justify-between p-3 rounded-lg border bg-muted/40 hover:bg-muted/60 transition-colors"
                           data-testid="toggle-social-links"
                         >
-                          <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <Globe className="h-4 w-4" />
-                            Social & Professional Links
-                          </span>
-                          {showSocialLinks ? (
-                            <ChevronUp className="h-4 w-4" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
+                          <div className="flex items-center gap-2">
+                            <Plus className={`h-4 w-4 transition-transform ${showSocialLinks ? 'rotate-45' : ''}`} />
+                            <Globe className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">Social & Professional Links</span>
+                          </div>
+                          <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showSocialLinks ? 'rotate-180' : ''}`} />
+                        </button>
                       </CollapsibleTrigger>
-                      <CollapsibleContent className="pt-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg">
+                      <CollapsibleContent className="pt-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-background">
                           <FormField
                             control={form.control}
                             name="linkedinUrl"
@@ -545,17 +679,11 @@ export function AddPersonModal({
                   </div>
                 </TabsContent>
 
-                {/* Address & Verification Tab */}
+                {/* Address Tab - Now simpler without compliance accordion */}
                 <TabsContent value="address" className="mt-0 space-y-6">
                   <div className="space-y-6">
                     {/* Address Lookup */}
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium">Address Lookup</label>
-                      <AddressLookup onAddressSelect={handleAddressSelect} />
-                      <p className="text-xs text-muted-foreground">
-                        Start typing a postcode or address to search, or enter manually below
-                      </p>
-                    </div>
+                    <AddressLookup onAddressSelect={handleAddressSelect} />
 
                     {/* Manual Address Fields */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -652,113 +780,6 @@ export function AddPersonModal({
                         )}
                       />
                     </div>
-
-                    {/* Compliance & Verification - Collapsible */}
-                    <Collapsible open={showComplianceFields} onOpenChange={setShowComplianceFields}>
-                      <CollapsibleTrigger asChild>
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          className="w-full justify-between p-0 h-auto hover:bg-transparent"
-                          data-testid="toggle-compliance"
-                        >
-                          <span className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                            <ShieldCheck className="h-4 w-4" />
-                            Compliance & Verification
-                          </span>
-                          {showComplianceFields ? (
-                            <ChevronUp className="h-4 w-4" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </CollapsibleTrigger>
-                      <CollapsibleContent className="pt-4">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-muted/30 rounded-lg">
-                          <FormField
-                            control={form.control}
-                            name="niNumber"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>National Insurance Number</FormLabel>
-                                <FormControl>
-                                  <Input 
-                                    {...field} 
-                                    value={field.value || ""} 
-                                    placeholder="e.g. QQ 12 34 56 C"
-                                    data-testid="input-niNumber" 
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          
-                          <FormField
-                            control={form.control}
-                            name="personalUtrNumber"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Personal UTR Number</FormLabel>
-                                <FormControl>
-                                  <Input 
-                                    {...field} 
-                                    value={field.value || ""} 
-                                    placeholder="10-digit number"
-                                    data-testid="input-personalUtrNumber" 
-                                  />
-                                </FormControl>
-                                <FormMessage />
-                              </FormItem>
-                            )}
-                          />
-                          
-                          <FormField
-                            control={form.control}
-                            name="photoIdVerified"
-                            render={({ field }) => (
-                              <FormItem className="flex flex-row items-center space-x-3 space-y-0">
-                                <FormControl>
-                                  <Checkbox
-                                    checked={field.value || false}
-                                    onCheckedChange={field.onChange}
-                                    data-testid="input-photoIdVerified"
-                                  />
-                                </FormControl>
-                                <div className="space-y-1 leading-none">
-                                  <FormLabel>Photo ID Verified</FormLabel>
-                                  <FormDescription>
-                                    Passport or driving licence checked
-                                  </FormDescription>
-                                </div>
-                              </FormItem>
-                            )}
-                          />
-                          
-                          <FormField
-                            control={form.control}
-                            name="addressVerified"
-                            render={({ field }) => (
-                              <FormItem className="flex flex-row items-center space-x-3 space-y-0">
-                                <FormControl>
-                                  <Checkbox
-                                    checked={field.value || false}
-                                    onCheckedChange={field.onChange}
-                                    data-testid="input-addressVerified"
-                                  />
-                                </FormControl>
-                                <div className="space-y-1 leading-none">
-                                  <FormLabel>Address Verified</FormLabel>
-                                  <FormDescription>
-                                    Proof of address document checked
-                                  </FormDescription>
-                                </div>
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
                   </div>
                 </TabsContent>
               </div>
@@ -769,6 +790,11 @@ export function AddPersonModal({
                 {activeTab === "personal" && "Step 1 of 3"}
                 {activeTab === "contact" && "Step 2 of 3"}
                 {activeTab === "address" && "Step 3 of 3"}
+                {!allTabsVisited && (
+                  <span className="ml-2 text-orange-600">
+                    ({unvisitedCount} tab{unvisitedCount > 1 ? 's' : ''} not reviewed)
+                  </span>
+                )}
               </div>
               <div className="flex gap-2">
                 <Button 
@@ -779,13 +805,24 @@ export function AddPersonModal({
                 >
                   Cancel
                 </Button>
-                <Button 
-                  type="submit" 
-                  disabled={isSaving}
-                  data-testid="button-save-add-person"
-                >
-                  {isSaving ? "Adding..." : "Add Person"}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button 
+                        type="submit" 
+                        disabled={isSaving || !allTabsVisited}
+                        data-testid="button-save-add-person"
+                      >
+                        {isSaving ? "Adding..." : "Add Person"}
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {!allTabsVisited && (
+                    <TooltipContent>
+                      <p>Please review all tabs before adding</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
               </div>
             </div>
           </form>

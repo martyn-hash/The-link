@@ -2568,4 +2568,68 @@ export async function registerAuthAndMiscRoutes(
       res.status(500).json({ error: 'Internal server error' });
     }
   });
+
+  // Postcode Find endpoint using getaddress.io Find API
+  // Returns list of addresses at a given postcode for user to select
+  app.get('/api/address-find/:postcode', isAuthenticated, async (req: any, res) => {
+    try {
+      const { postcode } = req.params;
+
+      if (!postcode || postcode.trim().length === 0) {
+        return res.status(400).json({ error: 'Postcode is required' });
+      }
+
+      const apiKey = process.env.GETADDRESS_API_KEY;
+      if (!apiKey) {
+        console.error('GETADDRESS_API_KEY not found in environment variables');
+        return res.status(500).json({ error: 'Address lookup service not configured' });
+      }
+
+      // Clean the postcode - remove spaces and uppercase
+      const cleanPostcode = postcode.trim().replace(/\s+/g, '').toUpperCase();
+      const url = `https://api.getaddress.io/find/${encodeURIComponent(cleanPostcode)}?api-key=${apiKey}&expand=true`;
+
+      const response = await fetch(url);
+
+      if (response.status === 404) {
+        return res.status(404).json({ 
+          error: 'No addresses found for this postcode',
+          postcode: cleanPostcode 
+        });
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('getaddress.io Find API error:', response.status, errorText);
+        return res.status(500).json({ error: 'Address lookup service unavailable' });
+      }
+
+      const data = await response.json() as any;
+      
+      // Transform the response - getaddress.io Find returns addresses array
+      const addresses = (data.addresses || []).map((addr: any, index: number) => ({
+        id: `${cleanPostcode}-${index}`,
+        formatted: addr.formatted_address ? 
+          addr.formatted_address.filter((line: string) => line.trim()).join(', ') :
+          [addr.line_1, addr.line_2, addr.line_3, addr.town_or_city, addr.county].filter(Boolean).join(', '),
+        line1: addr.line_1 || '',
+        line2: addr.line_2 || '',
+        line3: addr.line_3 || '',
+        city: addr.town_or_city || '',
+        county: addr.county || '',
+        postcode: data.postcode || cleanPostcode,
+        country: 'United Kingdom'
+      }));
+
+      res.json({
+        postcode: data.postcode || cleanPostcode,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        addresses
+      });
+    } catch (error) {
+      console.error('Postcode find error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
 }
