@@ -1,10 +1,15 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { MessageSquare, PhoneCall, Send, Mail, FileText, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -84,6 +89,22 @@ export function CommunicationsTimeline({ clientId, user }: CommunicationsTimelin
   const emailThreads = emailThreadsData?.threads || [];
   const showMakeCall = featureFlags?.ringCentralLive ?? false;
   const showInstantMessage = featureFlags?.appIsLive ?? false;
+  
+  // Check if any contacts have actionable contact details
+  const peopleWithMobile = useMemo(() => 
+    (clientPeople || []).filter((cp: any) => 
+      cp.person?.primaryPhone && cp.person.primaryPhone.trim() !== ''
+    ), [clientPeople]
+  );
+  
+  const peopleWithEmail = useMemo(() => 
+    (clientPeople || []).filter((cp: any) => 
+      cp.person?.primaryEmail && cp.person.primaryEmail.trim() !== ''
+    ), [clientPeople]
+  );
+  
+  const hasMobileContacts = peopleWithMobile.length > 0;
+  const hasEmailContacts = peopleWithEmail.length > 0;
   
   const formatDate = (date: string | Date | null | undefined): string => {
     if (!date) return '';
@@ -219,13 +240,23 @@ export function CommunicationsTimeline({ clientId, user }: CommunicationsTimelin
                     Make Call
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem onClick={() => setIsSendingSMS(true)} data-testid="menu-send-sms">
+                <DropdownMenuItem 
+                  onClick={() => setIsSendingSMS(true)} 
+                  disabled={!hasMobileContacts}
+                  data-testid="menu-send-sms"
+                >
                   <Send className="h-4 w-4 mr-2" />
                   Send SMS
+                  {!hasMobileContacts && <span className="ml-auto text-xs text-muted-foreground">(No mobiles)</span>}
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setIsSendingEmail(true)} data-testid="menu-send-email">
+                <DropdownMenuItem 
+                  onClick={() => setIsSendingEmail(true)} 
+                  disabled={!hasEmailContacts}
+                  data-testid="menu-send-email"
+                >
                   <Mail className="h-4 w-4 mr-2" />
                   Send Email
+                  {!hasEmailContacts && <span className="ml-auto text-xs text-muted-foreground">(No emails)</span>}
                 </DropdownMenuItem>
                 {showInstantMessage && (
                   <DropdownMenuItem onClick={() => setIsCreatingMessage(true)} data-testid="menu-instant-message">
@@ -252,24 +283,48 @@ export function CommunicationsTimeline({ clientId, user }: CommunicationsTimelin
                   Make Call
                 </Button>
               )}
-              <Button
-                onClick={() => setIsSendingSMS(true)}
-                size="sm"
-                variant="outline"
-                data-testid="button-send-sms"
-              >
-                <Send className="h-4 w-4 mr-2" />
-                Send SMS
-              </Button>
-              <Button
-                onClick={() => setIsSendingEmail(true)}
-                size="sm"
-                variant="outline"
-                data-testid="button-send-email"
-              >
-                <Mail className="h-4 w-4 mr-2" />
-                Send Email
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button
+                      onClick={() => setIsSendingSMS(true)}
+                      size="sm"
+                      variant="outline"
+                      disabled={!hasMobileContacts}
+                      data-testid="button-send-sms"
+                    >
+                      <Send className="h-4 w-4 mr-2" />
+                      Send SMS
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!hasMobileContacts && (
+                  <TooltipContent>
+                    <p>No contacts have a mobile phone number on their profile</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button
+                      onClick={() => setIsSendingEmail(true)}
+                      size="sm"
+                      variant="outline"
+                      disabled={!hasEmailContacts}
+                      data-testid="button-send-email"
+                    >
+                      <Mail className="h-4 w-4 mr-2" />
+                      Send Email
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!hasEmailContacts && (
+                  <TooltipContent>
+                    <p>No contacts have an email address on their profile</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
               {showInstantMessage && (
                 <Button
                   onClick={() => setIsCreatingMessage(true)}

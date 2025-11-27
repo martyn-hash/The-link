@@ -42,6 +42,10 @@ export default function CompanySettingsPage() {
   const [ringCentralLive, setRingCentralLive] = useState(false);
   const [appIsLive, setAppIsLive] = useState(false);
   
+  // AI System Prompts
+  const [aiSystemPromptNotes, setAiSystemPromptNotes] = useState("");
+  const [aiSystemPromptEmails, setAiSystemPromptEmails] = useState("");
+  
   // Post-signature redirect URLs
   const [redirectUrls, setRedirectUrls] = useState<RedirectUrl[]>([]);
   const [newRedirectName, setNewRedirectName] = useState("");
@@ -78,6 +82,8 @@ export default function CompanySettingsPage() {
       setRedirectUrls((settings.postSignatureRedirectUrls as RedirectUrl[]) || []);
       setRingCentralLive(settings.ringCentralLive || false);
       setAppIsLive(settings.appIsLive || false);
+      setAiSystemPromptNotes(settings.aiSystemPromptNotes || "");
+      setAiSystemPromptEmails(settings.aiSystemPromptEmails || "");
       setLogoObjectPath(settings.logoObjectPath || null);
       
       // If logo exists, fetch preview URL
@@ -268,6 +274,8 @@ export default function CompanySettingsPage() {
       postSignatureRedirectUrls: redirectUrls,
       ringCentralLive,
       appIsLive,
+      aiSystemPromptNotes: aiSystemPromptNotes || null,
+      aiSystemPromptEmails: aiSystemPromptEmails || null,
     };
     
     // Only include nlacPassword if a new password was entered
@@ -532,6 +540,65 @@ export default function CompanySettingsPage() {
                   onClick={handleSave}
                   disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim()}
                   data-testid="button-save-feature-flags"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* AI System Prompts Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="w-5 h-5" />
+                AI System Prompts
+              </CardTitle>
+              <CardDescription>
+                Configure the AI assistant's behavior for voice-to-note transcription and email drafting. These prompts tell the AI how to format and style its outputs.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="ai-system-prompt-notes">Notes System Prompt</Label>
+                <Textarea
+                  id="ai-system-prompt-notes"
+                  data-testid="textarea-ai-system-prompt-notes"
+                  value={aiSystemPromptNotes}
+                  onChange={(e) => setAiSystemPromptNotes(e.target.value)}
+                  placeholder="e.g., You are a professional assistant that converts spoken audio into clear, well-structured notes. Use bullet points for key information and summarize the main points concisely."
+                  disabled={settingsLoading || updateSettingsMutation.isPending}
+                  rows={5}
+                  className="font-mono text-sm"
+                />
+                <p className="text-sm text-muted-foreground">
+                  This prompt guides the AI when transcribing and summarizing voice recordings into notes.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="ai-system-prompt-emails">Email System Prompt</Label>
+                <Textarea
+                  id="ai-system-prompt-emails"
+                  data-testid="textarea-ai-system-prompt-emails"
+                  value={aiSystemPromptEmails}
+                  onChange={(e) => setAiSystemPromptEmails(e.target.value)}
+                  placeholder="e.g., You are a professional assistant that drafts emails on behalf of an accounting firm. Use a friendly but professional tone. Keep emails concise and actionable."
+                  disabled={settingsLoading || updateSettingsMutation.isPending}
+                  rows={5}
+                  className="font-mono text-sm"
+                />
+                <p className="text-sm text-muted-foreground">
+                  This prompt guides the AI when helping staff draft client emails.
+                </p>
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSave}
+                  disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim()}
+                  data-testid="button-save-ai-settings"
                 >
                   <Save className="w-4 h-4 mr-2" />
                   {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}

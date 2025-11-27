@@ -139,11 +139,10 @@ export function CommunicationFilters({ selectedFilters, onFilterChange, items }:
                     id={`filter-${option.value}`}
                     checked={isFilterSelected(option.value)}
                     onCheckedChange={() => handleToggleFilter(option.value)}
-                    disabled={isAllSelected}
                   />
                   <Label
                     htmlFor={`filter-${option.value}`}
-                    className={`flex-1 cursor-pointer text-sm font-normal flex items-center justify-between ${isAllSelected ? 'text-muted-foreground' : ''}`}
+                    className="flex-1 cursor-pointer text-sm font-normal flex items-center justify-between"
                   >
                     <span className="flex items-center gap-2">
                       <Icon className="h-3.5 w-3.5" />

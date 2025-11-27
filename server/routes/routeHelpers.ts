@@ -2,6 +2,14 @@ import multer from "multer";
 import { storage } from "../storage/index";
 import { z } from "zod";
 
+// Email attachment schema
+export const emailAttachmentSchema = z.object({
+  filename: z.string().min(1, "Filename is required"),
+  contentType: z.string().min(1, "Content type is required"),
+  content: z.string().min(1, "Content is required"), // Base64 encoded
+  size: z.number().positive("Size must be positive"),
+});
+
 // Email sending schema
 export const sendEmailSchema = z.object({
   to: z.string().email("Invalid email address"),
@@ -10,6 +18,7 @@ export const sendEmailSchema = z.object({
   clientId: z.string().optional(),
   personId: z.string().optional(),
   isHtml: z.boolean().optional(),
+  attachments: z.array(emailAttachmentSchema).optional(),
 });
 
 // Push notification schemas

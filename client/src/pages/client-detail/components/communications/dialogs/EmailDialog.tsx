@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Mail } from "lucide-react";
+import { Mail, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,11 +17,39 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { TiptapEditor } from "@/components/TiptapEditor";
+import { FileUploadZone, AttachmentList } from "@/components/attachments";
 import { formatPersonName } from "../../../utils/formatters";
 import type { EmailDialogProps } from "../types";
+
+interface EmailAttachment {
+  filename: string;
+  contentType: string;
+  content: string; // Base64 encoded
+  size: number;
+}
+
+// Helper function to convert file to base64
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      // Remove the data:mime/type;base64, prefix
+      const result = reader.result as string;
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = error => reject(error);
+  });
+}
 
 export function EmailDialog({ 
   clientId, 
@@ -34,9 +62,53 @@ export function EmailDialog({
   const { toast } = useToast();
   const [emailPersonId, setEmailPersonId] = useState<string | undefined>();
   const [emailContent, setEmailContent] = useState<string>('');
+  const [attachments, setAttachments] = useState<EmailAttachment[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [isAttachmentsOpen, setIsAttachmentsOpen] = useState(false);
+  
+  // Filter to only show people with email addresses
+  const peopleWithEmail = (clientPeople || []).filter((cp: any) => 
+    cp.person?.primaryEmail && cp.person.primaryEmail.trim() !== ''
+  );
+
+  // Handle files being selected
+  const handleFilesSelected = useCallback(async (files: File[]) => {
+    const newAttachments: EmailAttachment[] = [];
+    const newPendingFiles: File[] = [];
+    
+    for (const file of files) {
+      try {
+        const base64 = await fileToBase64(file);
+        newAttachments.push({
+          filename: file.name,
+          contentType: file.type || 'application/octet-stream',
+          content: base64,
+          size: file.size,
+        });
+        newPendingFiles.push(file);
+      } catch (error) {
+        console.error('Error converting file to base64:', error);
+        toast({
+          title: 'Error processing file',
+          description: `Could not process ${file.name}`,
+          variant: 'destructive',
+        });
+      }
+    }
+    
+    setAttachments(prev => [...prev, ...newAttachments]);
+    setPendingFiles(prev => [...prev, ...newPendingFiles]);
+    setIsAttachmentsOpen(true);
+  }, [toast]);
+
+  // Remove an attachment
+  const handleRemoveAttachment = useCallback((index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+    setPendingFiles(prev => prev.filter((_, i) => i !== index));
+  }, []);
 
   const sendEmailMutation = useMutation({
-    mutationFn: (data: { to: string; subject: string; content: string; clientId: string; personId?: string; isHtml?: boolean }) => 
+    mutationFn: (data: { to: string; subject: string; content: string; clientId: string; personId?: string; isHtml?: boolean; attachments?: EmailAttachment[] }) => 
       apiRequest('POST', '/api/email/send', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/communications/client', clientId] });
@@ -59,6 +131,9 @@ export function EmailDialog({
   const handleClose = () => {
     setEmailPersonId(undefined);
     setEmailContent('');
+    setAttachments([]);
+    setPendingFiles([]);
+    setIsAttachmentsOpen(false);
     onClose();
   };
 
@@ -102,6 +177,7 @@ export function EmailDialog({
       isHtml: true,
       clientId: clientId,
       personId: emailPersonId,
+      attachments: attachments.length > 0 ? attachments : undefined,
     });
   };
 
@@ -113,6 +189,9 @@ export function EmailDialog({
       if (open) {
         setEmailContent('');
         setEmailPersonId(undefined);
+        setAttachments([]);
+        setPendingFiles([]);
+        setIsAttachmentsOpen(false);
       }
     }}>
       <DialogContent className="max-w-5xl w-full max-h-[90vh] overflow-y-auto">
@@ -133,9 +212,9 @@ export function EmailDialog({
                 <SelectValue placeholder="Select person" />
               </SelectTrigger>
               <SelectContent>
-                {(clientPeople || []).map((cp: any) => (
+                {peopleWithEmail.map((cp: any) => (
                   <SelectItem key={cp.person.id} value={cp.person.id}>
-                    {formatPersonName(cp.person.fullName)}
+                    {formatPersonName(cp.person.fullName)} - {cp.person.primaryEmail}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -168,6 +247,42 @@ export function EmailDialog({
             </div>
             <p className="text-xs text-muted-foreground">Uses the person's Primary Email address</p>
           </div>
+          
+          {/* Attachments Section */}
+          <Collapsible open={isAttachmentsOpen} onOpenChange={setIsAttachmentsOpen}>
+            <CollapsibleTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                data-testid="button-toggle-attachments"
+              >
+                <Paperclip className="h-4 w-4" />
+                Attachments
+                {attachments.length > 0 && (
+                  <span className="bg-primary text-primary-foreground px-1.5 py-0.5 rounded text-xs">
+                    {attachments.length}
+                  </span>
+                )}
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-3 space-y-3">
+              <FileUploadZone
+                onFilesSelected={handleFilesSelected}
+                maxFiles={5}
+                maxSize={10 * 1024 * 1024} // 10MB per file
+                acceptedTypes={['image/*', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv']}
+                compact
+              />
+              {pendingFiles.length > 0 && (
+                <AttachmentList
+                  attachments={pendingFiles}
+                  onRemove={handleRemoveAttachment}
+                />
+              )}
+            </CollapsibleContent>
+          </Collapsible>
           
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={handleClose}>

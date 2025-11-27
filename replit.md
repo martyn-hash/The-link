@@ -6,6 +6,11 @@ The Link is a comprehensive full-stack CRM and project management application fo
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Testing Credentials
+For testing, login via the root page using the password tab:
+- Email: admin@example.com
+- Password: admin123
+
 ## System Architecture
 
 ### UI/UX

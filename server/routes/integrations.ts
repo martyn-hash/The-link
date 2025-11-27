@@ -1079,10 +1079,10 @@ export function registerIntegrationRoutes(
         });
       }
 
-      const { to, subject, content, clientId, personId, isHtml } = bodyValidation.data;
+      const { to, subject, content, clientId, personId, isHtml, attachments } = bodyValidation.data;
 
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
-      console.log('[EMAIL SEND] User ID:', effectiveUserId, 'Client ID:', clientId || 'none');
+      console.log('[EMAIL SEND] User ID:', effectiveUserId, 'Client ID:', clientId || 'none', 'Attachments:', attachments?.length || 0);
 
       // Check if user has access to this client (only if clientId is provided)
       if (clientId) {
@@ -1097,8 +1097,8 @@ export function registerIntegrationRoutes(
       const { sendEmail } = await import('../utils/outlookClient');
 
       console.log('[EMAIL SEND] Attempting to send email via Outlook connector...');
-      // Send email via Microsoft Graph API
-      const emailResult = await sendEmail(to, subject, content, isHtml || false);
+      // Send email via Microsoft Graph API with attachments
+      const emailResult = await sendEmail(to, subject, content, isHtml || false, attachments || []);
       console.log('[EMAIL SEND] Email sent successfully via Outlook:', { to, subject, result: emailResult });
 
       // Log the email as a communication record (only if linked to a client)

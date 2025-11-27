@@ -31,6 +31,11 @@ export function SMSDialog({
 }: SMSDialogProps) {
   const { toast } = useToast();
   const [smsPersonId, setSmsPersonId] = useState<string | undefined>();
+  
+  // Filter to only show people with mobile numbers
+  const peopleWithMobile = (clientPeople || []).filter((cp: any) => 
+    cp.person?.primaryPhone && cp.person.primaryPhone.trim() !== ''
+  );
 
   const sendSmsMutation = useMutation({
     mutationFn: (data: { to: string; message: string; clientId: string; personId?: string }) => 
@@ -109,9 +114,9 @@ export function SMSDialog({
                 <SelectValue placeholder="Select person" />
               </SelectTrigger>
               <SelectContent>
-                {(clientPeople || []).map((cp: any) => (
+                {peopleWithMobile.map((cp: any) => (
                   <SelectItem key={cp.person.id} value={cp.person.id}>
-                    {formatPersonName(cp.person.fullName)}
+                    {formatPersonName(cp.person.fullName)} - {cp.person.primaryPhone}
                   </SelectItem>
                 ))}
               </SelectContent>

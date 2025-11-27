@@ -49,14 +49,27 @@ export async function getUncachableOutlookClient() {
   });
 }
 
+interface EmailAttachment {
+  filename: string;
+  contentType: string;
+  content: string; // Base64 encoded content
+  size: number;
+}
+
 // Helper function to send email via Microsoft Graph API
-export async function sendEmail(to: string, subject: string, content: string, isHtml: boolean = false) {
+export async function sendEmail(
+  to: string, 
+  subject: string, 
+  content: string, 
+  isHtml: boolean = false,
+  attachments: EmailAttachment[] = []
+) {
   try {
     console.log('[Outlook Client] Getting Outlook client...');
     const graphClient = await getUncachableOutlookClient();
     console.log('[Outlook Client] Client obtained successfully');
     
-    const message = {
+    const message: any = {
       subject,
       body: {
         contentType: isHtml ? 'HTML' : 'Text',
@@ -70,6 +83,17 @@ export async function sendEmail(to: string, subject: string, content: string, is
         }
       ]
     };
+
+    // Add attachments if provided
+    if (attachments && attachments.length > 0) {
+      message.attachments = attachments.map(att => ({
+        '@odata.type': '#microsoft.graph.fileAttachment',
+        name: att.filename,
+        contentType: att.contentType,
+        contentBytes: att.content // Already base64 encoded
+      }));
+      console.log('[Outlook Client] Adding', attachments.length, 'attachment(s) to email');
+    }
 
     console.log('[Outlook Client] Sending email via Graph API to:', to, 'Subject:', subject);
     const result = await graphClient.api('/me/sendMail').post({
