@@ -167,14 +167,18 @@ export function registerWebhookRoutes(
         
         const webhooks = await storage.getEnabledWebhookConfigs();
         
-        const webhooksWithStatus = webhooks.map(webhook => {
+        const webhooksWithStatus = await Promise.all(webhooks.map(async (webhook) => {
           const { isAvailable, missingFields } = checkRequiredFields(clientWithPeople, webhook);
+          const hasPriorSuccess = await storage.hasSuccessfulWebhookForClient(clientId, webhook.id);
+          const willUseUpdateUrl = hasPriorSuccess && !!webhook.updateWebhookUrl;
           return {
             ...webhook,
             isAvailable,
-            unavailableReason: isAvailable ? undefined : `Missing required fields: ${missingFields.join(', ')}`
+            unavailableReason: isAvailable ? undefined : `Missing required fields: ${missingFields.join(', ')}`,
+            hasPriorSuccess,
+            willUseUpdateUrl,
           };
-        });
+        }));
         
         res.json(webhooksWithStatus);
       } catch (error) {
@@ -271,6 +275,10 @@ export function registerWebhookRoutes(
           
           const payload = buildWebhookPayload(clientWithPeople, webhook, req.user.id, userName);
           
+          const hasPriorSuccess = await storage.hasSuccessfulWebhookForClient(clientId, webhookId);
+          const shouldUseUpdateUrl = hasPriorSuccess && !!webhook.updateWebhookUrl;
+          const targetUrl = shouldUseUpdateUrl ? webhook.updateWebhookUrl! : webhook.webhookUrl;
+          
           const log = await storage.createWebhookLog({
             webhookConfigId: webhookId,
             clientId,
@@ -279,7 +287,7 @@ export function registerWebhookRoutes(
             status: 'pending'
           });
           
-          const sendResult = await sendToWebhook(webhook.webhookUrl, payload);
+          const sendResult = await sendToWebhook(targetUrl, payload);
           
           await storage.updateWebhookLogStatus(
             log.id,

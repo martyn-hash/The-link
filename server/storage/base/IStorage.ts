@@ -861,4 +861,5 @@ export interface IStorage {
   getWebhookLogsByClientId(clientId: string, limit?: number): Promise<WebhookLogWithDetails[]>;
   getWebhookLogsByWebhookId(webhookConfigId: string, limit?: number): Promise<WebhookLogWithDetails[]>;
   getRecentWebhookLogs(limit?: number): Promise<WebhookLogWithDetails[]>;
+  hasSuccessfulWebhookForClient(clientId: string, webhookConfigId: string): Promise<boolean>;
 }

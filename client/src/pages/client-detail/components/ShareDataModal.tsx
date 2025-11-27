@@ -28,6 +28,8 @@ import type { Client, ClientPerson, WebhookConfig, WebhookLogWithDetails } from 
 interface AvailableWebhook extends WebhookConfig {
   isAvailable: boolean;
   missingFields?: string[];
+  hasPriorSuccess?: boolean;
+  willUseUpdateUrl?: boolean;
 }
 
 interface ShareDataModalProps {
@@ -177,9 +179,16 @@ export function ShareDataModal({ open, onOpenChange, client, people }: ShareData
                                 </CardDescription>
                               )}
                             </div>
-                            <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                              Ready
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                              {webhook.willUseUpdateUrl && (
+                                <Badge variant="outline" className="text-blue-600 border-blue-200 dark:text-blue-400 dark:border-blue-800">
+                                  Update mode
+                                </Badge>
+                              )}
+                              <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                                Ready
+                              </Badge>
+                            </div>
                           </div>
                         </CardHeader>
                       </Card>

@@ -6,7 +6,7 @@ import {
   users,
   clients
 } from '@shared/schema';
-import { eq, desc, sql } from 'drizzle-orm';
+import { eq, desc, sql, and } from 'drizzle-orm';
 import type { 
   WebhookConfig, 
   InsertWebhookConfig, 
@@ -173,5 +173,19 @@ export class WebhookStorage extends BaseStorage {
       webhookName: log.webhookName || 'Unknown Webhook',
       triggeredByName: [log.userFirstName, log.userLastName].filter(Boolean).join(' ') || 'Unknown User',
     }));
+  }
+
+  async hasSuccessfulWebhookForClient(clientId: string, webhookConfigId: string): Promise<boolean> {
+    const [result] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(webhookLogs)
+      .where(
+        and(
+          eq(webhookLogs.clientId, clientId),
+          eq(webhookLogs.webhookConfigId, webhookConfigId),
+          eq(webhookLogs.status, 'success')
+        )
+      );
+    return (result?.count || 0) > 0;
   }
 }

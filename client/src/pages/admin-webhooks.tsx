@@ -68,6 +68,7 @@ export default function AdminWebhooks() {
     name: "",
     description: "",
     webhookUrl: "",
+    updateWebhookUrl: "",
     isEnabled: true,
     requiredClientFields: [] as string[],
     requiredPersonFields: [] as string[],
@@ -133,6 +134,7 @@ export default function AdminWebhooks() {
       name: "",
       description: "",
       webhookUrl: "",
+      updateWebhookUrl: "",
       isEnabled: true,
       requiredClientFields: [],
       requiredPersonFields: [],
@@ -146,6 +148,7 @@ export default function AdminWebhooks() {
       name: webhook.name,
       description: webhook.description || "",
       webhookUrl: webhook.webhookUrl,
+      updateWebhookUrl: webhook.updateWebhookUrl || "",
       isEnabled: webhook.isEnabled,
       requiredClientFields: webhook.requiredClientFields || [],
       requiredPersonFields: webhook.requiredPersonFields || [],
@@ -285,11 +288,19 @@ export default function AdminWebhooks() {
                   )}
                   <div className="text-sm space-y-2">
                     <div>
-                      <span className="font-medium">URL:</span>{" "}
+                      <span className="font-medium">Create URL:</span>{" "}
                       <code className="text-xs bg-muted px-2 py-1 rounded">
-                        {webhook.webhookUrl.substring(0, 60)}...
+                        {webhook.webhookUrl.substring(0, 50)}...
                       </code>
                     </div>
+                    {webhook.updateWebhookUrl && (
+                      <div>
+                        <span className="font-medium">Update URL:</span>{" "}
+                        <code className="text-xs bg-muted px-2 py-1 rounded">
+                          {webhook.updateWebhookUrl.substring(0, 50)}...
+                        </code>
+                      </div>
+                    )}
                     {((webhook.requiredClientFields?.length ?? 0) > 0 || (webhook.requiredPersonFields?.length ?? 0) > 0) && (
                       <div>
                         <span className="font-medium">Required Fields:</span>{" "}
@@ -347,6 +358,22 @@ export default function AdminWebhooks() {
                 onChange={(e) => setFormData({ ...formData, webhookUrl: e.target.value })}
                 data-testid="input-webhook-url"
               />
+              <p className="text-xs text-muted-foreground">
+                This URL is used when first sharing data for a client
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="updateWebhookUrl">Update Webhook URL (optional)</Label>
+              <Input
+                id="updateWebhookUrl"
+                placeholder="https://hooks.zapier.com/hooks/catch/..."
+                value={formData.updateWebhookUrl}
+                onChange={(e) => setFormData({ ...formData, updateWebhookUrl: e.target.value })}
+                data-testid="input-update-webhook-url"
+              />
+              <p className="text-xs text-muted-foreground">
+                If set, this URL is used for subsequent shares after the first successful send
+              </p>
             </div>
             <div className="flex items-center justify-between">
               <Label htmlFor="isEnabled">Enabled</Label>
@@ -443,6 +470,21 @@ export default function AdminWebhooks() {
                 value={formData.webhookUrl}
                 onChange={(e) => setFormData({ ...formData, webhookUrl: e.target.value })}
               />
+              <p className="text-xs text-muted-foreground">
+                This URL is used when first sharing data for a client
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-updateWebhookUrl">Update Webhook URL (optional)</Label>
+              <Input
+                id="edit-updateWebhookUrl"
+                placeholder="https://hooks.zapier.com/hooks/catch/..."
+                value={formData.updateWebhookUrl}
+                onChange={(e) => setFormData({ ...formData, updateWebhookUrl: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                If set, this URL is used for subsequent shares after the first successful send
+              </p>
             </div>
             <div className="flex items-center justify-between">
               <Label htmlFor="edit-isEnabled">Enabled</Label>

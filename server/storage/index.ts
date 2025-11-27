@@ -3153,6 +3153,10 @@ export class DatabaseStorage implements IStorage {
     return this.webhookStorage.getRecentWebhookLogs(limit);
   }
 
+  async hasSuccessfulWebhookForClient(clientId: string, webhookConfigId: string) {
+    return this.webhookStorage.hasSuccessfulWebhookForClient(clientId, webhookConfigId);
+  }
+
 }
 
 // Export storage instance for backward compatibility
