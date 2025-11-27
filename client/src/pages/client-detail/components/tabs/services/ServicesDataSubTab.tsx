@@ -19,7 +19,7 @@ const VAT_UDF_FIELD_ID = 'vat_number_auto';
 const VAT_ADDRESS_UDF_FIELD_ID = 'vat_address_auto';
 
 interface VatValidationStatus {
-  status: 'validated' | 'invalid' | 'unvalidated' | 'validating';
+  status: 'validated' | 'invalid' | 'unvalidated' | 'validating' | 'bypassed';
   companyName?: string;
   validatedAt?: string;
   error?: string;
@@ -171,6 +171,13 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
     const validationData = currentValues[validationKey];
     
     if (validationData?.isValid !== undefined) {
+      // Check if validation was bypassed
+      if (validationData.bypassed) {
+        return {
+          status: 'bypassed',
+          validatedAt: validationData.validatedAt,
+        };
+      }
       return {
         status: validationData.isValid ? 'validated' : 'invalid',
         companyName: validationData.companyName,
@@ -207,15 +214,27 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
     },
     onSuccess: (data: any) => {
       if (data.isValid) {
-        setVatStatus({
-          status: 'validated',
-          companyName: data.companyName,
-          validatedAt: data.validatedAt,
-        });
-        toast({
-          title: "VAT Validated",
-          description: `VAT number is registered to ${data.companyName}`,
-        });
+        // Check if validation was bypassed (HMRC API disabled)
+        if (data.bypassed) {
+          setVatStatus({
+            status: 'bypassed',
+            validatedAt: data.validatedAt,
+          });
+          toast({
+            title: "VAT Validation Bypassed",
+            description: "HMRC validation is temporarily unavailable. VAT number accepted without verification.",
+          });
+        } else {
+          setVatStatus({
+            status: 'validated',
+            companyName: data.companyName,
+            validatedAt: data.validatedAt,
+          });
+          toast({
+            title: "VAT Validated",
+            description: `VAT number is registered to ${data.companyName}`,
+          });
+        }
       } else {
         setVatStatus({
           status: 'invalid',
@@ -473,7 +492,19 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
                             <Loader2 className="h-5 w-5 text-blue-500 animate-spin flex-shrink-0" data-testid="icon-vat-validating" />
                           )}
                           
-                          {displayValue && vatStatus.status !== 'validated' && vatStatus.status !== 'validating' && (
+                          {vatStatus.status === 'bypassed' && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <CheckCircle2 className="h-5 w-5 text-amber-500 flex-shrink-0" data-testid="icon-vat-bypassed" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>VAT Accepted (Unverified)</p>
+                                <p className="text-xs text-muted-foreground">HMRC validation temporarily unavailable</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                          
+                          {displayValue && vatStatus.status !== 'validated' && vatStatus.status !== 'validating' && vatStatus.status !== 'bypassed' && (
                             <Button
                               type="button"
                               size="sm"
@@ -553,6 +584,18 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
                               </TooltipContent>
                             </Tooltip>
                           )}
+                          
+                          {vatStatus.status === 'bypassed' && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <CheckCircle2 className="h-5 w-5 text-amber-500 flex-shrink-0" data-testid="icon-vat-bypassed" />
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>VAT Accepted (Unverified)</p>
+                                <p className="text-xs text-muted-foreground">HMRC validation temporarily unavailable</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
                         </>
                       )}
                     </div>
@@ -561,6 +604,13 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
                     {isVatField && vatStatus.status === 'validated' && vatStatus.companyName && (
                       <p className="text-xs text-green-600" data-testid="text-vat-company-name">
                         Registered to: {vatStatus.companyName}
+                      </p>
+                    )}
+                    
+                    {/* VAT bypassed note */}
+                    {isVatField && vatStatus.status === 'bypassed' && (
+                      <p className="text-xs text-amber-600" data-testid="text-vat-bypassed-note">
+                        Accepted without HMRC verification
                       </p>
                     )}
                     

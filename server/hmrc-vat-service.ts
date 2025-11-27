@@ -30,6 +30,7 @@ interface VatValidationResult {
   consultationNumber?: string;
   error?: string;
   errorCode?: string;
+  bypassed?: boolean;
 }
 
 interface HMRCAccessToken {
@@ -118,6 +119,17 @@ export async function validateVatNumber(vatNumber: string): Promise<VatValidatio
       isValid: false,
       error: 'Invalid VAT number format. Must be 9 or 12 digits.',
       errorCode: 'INVALID_FORMAT',
+    };
+  }
+
+  // Check if HMRC VAT validation is enabled (defaults to true if not set)
+  // Set HMRC_VAT_VALIDATION_ENABLED=false in production to bypass HMRC API calls
+  if (!isVatValidationEnabled()) {
+    console.log('[HMRC] VAT validation is disabled via HMRC_VAT_VALIDATION_ENABLED=false, bypassing API call');
+    return {
+      isValid: true,
+      bypassed: true,
+      validatedAt: new Date().toISOString(),
     };
   }
 
@@ -298,6 +310,19 @@ export async function validateVatNumberWithReference(
 
 export function isHmrcConfigured(): boolean {
   return !!(process.env.HMRC_CLIENT_ID && process.env.HMRC_CLIENT_SECRET);
+}
+
+// Check if HMRC VAT validation is enabled
+// Set HMRC_VAT_VALIDATION_ENABLED=false to temporarily bypass HMRC API calls
+// Defaults to true if not set
+export function isVatValidationEnabled(): boolean {
+  const enabled = process.env.HMRC_VAT_VALIDATION_ENABLED;
+  // If not set, default to true (enabled)
+  if (enabled === undefined || enabled === '') {
+    return true;
+  }
+  // Only 'false' (case-insensitive) disables it
+  return enabled.toLowerCase() !== 'false';
 }
 
 export const VAT_NUMBER_REGEX = '^(GB)?\\s?\\d{3}\\s?\\d{4}\\s?\\d{2}(\\s?\\d{3})?$';

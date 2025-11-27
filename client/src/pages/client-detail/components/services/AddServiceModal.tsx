@@ -46,7 +46,7 @@ const VAT_UDF_FIELD_ID = 'vat_number_auto';
 const VAT_ADDRESS_UDF_FIELD_ID = 'vat_address_auto';
 
 interface VatValidationStatus {
-  status: 'idle' | 'validating' | 'valid' | 'invalid';
+  status: 'idle' | 'validating' | 'valid' | 'invalid' | 'bypassed';
   companyName?: string;
   address?: string;
   error?: string;
@@ -336,23 +336,34 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
     },
     onSuccess: (data: any) => {
       if (data.isValid) {
-        setVatValidation({
-          status: 'valid',
-          companyName: data.companyName,
-          address: data.address,
-        });
-        // Auto-populate the VAT address field
-        if (data.address) {
-          let fullAddress = data.address;
-          if (data.postcode) {
-            fullAddress += '\n' + data.postcode;
+        // Check if validation was bypassed (HMRC API disabled)
+        if (data.bypassed) {
+          setVatValidation({
+            status: 'bypassed',
+          });
+          toast({
+            title: "VAT Validation Bypassed",
+            description: "HMRC validation is temporarily unavailable. You can continue with the VAT number entered.",
+          });
+        } else {
+          setVatValidation({
+            status: 'valid',
+            companyName: data.companyName,
+            address: data.address,
+          });
+          // Auto-populate the VAT address field
+          if (data.address) {
+            let fullAddress = data.address;
+            if (data.postcode) {
+              fullAddress += '\n' + data.postcode;
+            }
+            setUdfValues(prev => ({ ...prev, [VAT_ADDRESS_UDF_FIELD_ID]: fullAddress }));
           }
-          setUdfValues(prev => ({ ...prev, [VAT_ADDRESS_UDF_FIELD_ID]: fullAddress }));
+          toast({
+            title: "VAT Number Validated",
+            description: `VAT is registered to: ${data.companyName}`,
+          });
         }
-        toast({
-          title: "VAT Number Validated",
-          description: `VAT is registered to: ${data.companyName}`,
-        });
       } else {
         setVatValidation({
           status: 'invalid',
@@ -465,6 +476,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
     }
 
     // For VAT services, check that VAT has been validated successfully
+    // Allow 'valid' or 'bypassed' status to proceed
     if (isVatService && udfValues[VAT_UDF_FIELD_ID]) {
       if (vatValidation.status === 'idle' || vatValidation.status === 'validating') {
         toast({
@@ -482,6 +494,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
         });
         return;
       }
+      // 'valid' and 'bypassed' statuses allow submission
     }
 
     // Handle personal services vs client services
@@ -1002,14 +1015,14 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
                                   value={udfValues[field.id] ?? ''}
                                   onChange={(e) => handleVatNumberChange(e.target.value)}
                                   placeholder={field.placeholder || "e.g. GB123456789"}
-                                  className={`flex-1 ${hasError ? 'border-red-500 focus-visible:ring-red-500' : vatValidation.status === 'valid' ? 'border-green-500' : vatValidation.status === 'invalid' ? 'border-red-500' : ''}`}
+                                  className={`flex-1 ${hasError ? 'border-red-500 focus-visible:ring-red-500' : vatValidation.status === 'valid' ? 'border-green-500' : vatValidation.status === 'bypassed' ? 'border-amber-500' : vatValidation.status === 'invalid' ? 'border-red-500' : ''}`}
                                   data-testid="input-vat-number"
                                 />
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Button
                                       type="button"
-                                      variant={vatValidation.status === 'valid' ? 'outline' : 'default'}
+                                      variant={vatValidation.status === 'valid' || vatValidation.status === 'bypassed' ? 'outline' : 'default'}
                                       size="sm"
                                       onClick={handleValidateVat}
                                       disabled={vatValidation.status === 'validating' || !udfValues[field.id]}
@@ -1020,6 +1033,8 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
                                         <><Loader2 className="h-4 w-4 animate-spin mr-1" />Checking</>
                                       ) : vatValidation.status === 'valid' ? (
                                         <><CheckCircle2 className="h-4 w-4 text-green-600 mr-1" />Valid</>
+                                      ) : vatValidation.status === 'bypassed' ? (
+                                        <><CheckCircle2 className="h-4 w-4 text-amber-600 mr-1" />Accepted</>
                                       ) : vatValidation.status === 'invalid' ? (
                                         <><AlertCircle className="h-4 w-4 text-red-600 mr-1" />Retry</>
                                       ) : (
@@ -1037,6 +1052,14 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
                                   <p className="text-sm text-green-800 dark:text-green-200">
                                     <CheckCircle2 className="h-4 w-4 inline mr-1" />
                                     Registered to: <strong>{vatValidation.companyName}</strong>
+                                  </p>
+                                </div>
+                              )}
+                              {vatValidation.status === 'bypassed' && (
+                                <div className="p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
+                                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                                    <AlertCircle className="h-4 w-4 inline mr-1" />
+                                    HMRC validation temporarily unavailable. VAT number accepted without verification.
                                   </p>
                                 </div>
                               )}

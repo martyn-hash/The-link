@@ -104,3 +104,8 @@ waitForPort = 5000
 
 [objectStorage]
 defaultBucketID = "replit-objstore-fb4ebf31-d972-4a71-8d64-00fd32c62d4e"
+
+[userenv]
+
+[userenv.development]
+HMRC_VAT_VALIDATION_ENABLED = "false"

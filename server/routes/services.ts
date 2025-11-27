@@ -11,6 +11,7 @@ import {
 import { 
   validateVatNumber, 
   isHmrcConfigured,
+  isVatValidationEnabled,
   VAT_NUMBER_REGEX,
   VAT_NUMBER_REGEX_ERROR,
   VAT_UDF_FIELD_ID,
@@ -529,6 +530,7 @@ export function registerServiceRoutes(
   app.get("/api/vat/status", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     res.json({ 
       configured: isHmrcConfigured(),
+      validationEnabled: isVatValidationEnabled(),
       vatUdfFieldId: VAT_UDF_FIELD_ID,
       vatUdfFieldName: VAT_UDF_FIELD_NAME,
       vatAddressUdfFieldId: VAT_ADDRESS_UDF_FIELD_ID,
@@ -605,6 +607,7 @@ export function registerServiceRoutes(
         ...udfValues,
         [`${VAT_UDF_FIELD_ID}_validation`]: {
           isValid: result.isValid,
+          bypassed: result.bypassed,
           validatedAt: result.validatedAt || new Date().toISOString(),
           companyName: result.companyName,
           address: result.address,
@@ -612,7 +615,7 @@ export function registerServiceRoutes(
           error: result.error,
           errorCode: result.errorCode,
         },
-        [VAT_ADDRESS_UDF_FIELD_ID]: result.isValid ? fullAddress : '',
+        [VAT_ADDRESS_UDF_FIELD_ID]: result.isValid && !result.bypassed ? fullAddress : (udfValues[VAT_ADDRESS_UDF_FIELD_ID] || ''),
       };
 
       // Update the client service with validation results
