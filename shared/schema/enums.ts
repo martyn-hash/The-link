@@ -79,5 +79,6 @@ export const nlacReasonEnum = pgEnum("nlac_reason", [
   "ceasing_trading",
   "no_longer_using_accountant",
   "taking_accounts_in_house",
-  "other"
+  "other",
+  "reactivated"
 ]);

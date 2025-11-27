@@ -20,6 +20,7 @@ const nlacReasonSchema = z.enum([
   "no_longer_using_accountant",
   "taking_accounts_in_house",
   "other",
+  "reactivated",
 ]);
 
 const nlacRequestSchema = z.object({
@@ -194,6 +195,62 @@ export function registerNlacRoutes(
       } catch (error) {
         console.error("Error fetching NLAC logs:", error);
         res.status(500).json({ message: "Failed to fetch NLAC logs" });
+      }
+    }
+  );
+
+  app.post(
+    "/api/clients/:id/reactivate",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireAdmin,
+    async (req: any, res: any) => {
+      try {
+        const paramValidation = validateParams(clientIdSchema, req.params);
+        if (!paramValidation.success) {
+          return res.status(400).json({
+            message: "Invalid path parameters",
+            errors: paramValidation.errors,
+          });
+        }
+
+        const { id: clientId } = paramValidation.data;
+        const user = req.user;
+
+        const client = await storage.getClientById(clientId);
+        if (!client) {
+          return res.status(404).json({ message: "Client not found" });
+        }
+
+        if (client.companyStatus !== "inactive") {
+          return res
+            .status(400)
+            .json({ message: "Client is not currently inactive" });
+        }
+
+        await db
+          .update(clients)
+          .set({ companyStatus: "active" })
+          .where(eq(clients.id, clientId));
+
+        await db.insert(nlacAuditLogs).values({
+          clientId,
+          clientName: client.name,
+          reason: "reactivated",
+          performedByUserId: user.id,
+          performedByUserName: user.fullName || user.email,
+          projectsDeactivated: 0,
+          servicesDeactivated: 0,
+          portalUsersDeactivated: 0,
+        });
+
+        res.json({
+          success: true,
+          message: `Client ${client.name} has been reactivated`,
+        });
+      } catch (error) {
+        console.error("Error reactivating client:", error);
+        res.status(500).json({ message: "Failed to reactivate client" });
       }
     }
   );

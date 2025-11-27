@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Building2, Calendar, MoreVertical, Share2, UserX } from "lucide-react";
+import { Building2, Calendar, MoreVertical, Share2, UserX, UserCheck } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,14 +70,25 @@ export function ClientHeader({ client, people = [] }: ClientHeaderProps) {
                     Share Data
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem 
-                    onClick={() => setShowNlacModal(true)}
-                    data-testid="menu-nlac"
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <UserX className="h-4 w-4 mr-2" />
-                    Mark as NLAC
-                  </DropdownMenuItem>
+                  {client.companyStatus === 'inactive' ? (
+                    <DropdownMenuItem 
+                      onClick={() => setShowNlacModal(true)}
+                      data-testid="menu-reactivate"
+                      className="text-green-600 focus:text-green-600"
+                    >
+                      <UserCheck className="h-4 w-4 mr-2" />
+                      Re-activate Client
+                    </DropdownMenuItem>
+                  ) : (
+                    <DropdownMenuItem 
+                      onClick={() => setShowNlacModal(true)}
+                      data-testid="menu-nlac"
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <UserX className="h-4 w-4 mr-2" />
+                      Mark as NLAC
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
