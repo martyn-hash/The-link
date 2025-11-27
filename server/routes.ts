@@ -31,6 +31,8 @@ import { registerNotificationRoutes } from "./routes/notifications";
 import { registerSignatureRoutes } from "./routes/signatures";
 import { registerExcelImportRoutes } from "./routes/excelImport";
 import { registerServiceImportRoutes } from "./routes/serviceImport";
+import { registerClientsImportRoutes } from "./routes/clientsImport";
+import { registerPeopleImportRoutes } from "./routes/peopleImport";
 
 /**
  * Register all application routes
@@ -106,6 +108,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerSignatureRoutes(app, isAuthenticated, resolveEffectiveUser);
   registerExcelImportRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin);
   registerServiceImportRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin);
+  registerClientsImportRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin);
+  registerPeopleImportRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin);
 
   const httpServer = createServer(app);
   return httpServer;
