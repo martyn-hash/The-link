@@ -139,6 +139,16 @@ interface ParseResult {
   availableManagers: { id: string; email: string; name: string }[];
 }
 
+interface AuditEntry {
+  row: number;
+  recordType: string;
+  identifier: string;
+  action: string;
+  status: string;
+  changes?: string[];
+  errorMessage?: string;
+}
+
 interface ImportResult {
   success: boolean;
   clientsCreated: number;
@@ -149,6 +159,7 @@ interface ImportResult {
   serviceDataUpdated: number;
   serviceDataSkipped: number;
   errors: string[];
+  auditEntries?: AuditEntry[];
 }
 
 export default function ExcelImport() {
@@ -289,6 +300,78 @@ export default function ExcelImport() {
     setImportResult(null);
     setCurrentStep('upload');
     setImportProgress(0);
+  };
+
+  const downloadAuditReport = () => {
+    if (!importResult || !parseResult) return;
+
+    const entries: AuditEntry[] = [];
+    let rowNum = 1;
+
+    parseResult.clients.forEach((client) => {
+      const isNew = !importResult.clientsUpdated || importResult.clientsCreated > 0;
+      entries.push({
+        row: rowNum++,
+        recordType: 'Client',
+        identifier: client.transformed.companyNumber || client.transformed.name,
+        action: client.errors.length > 0 ? 'skipped' : (isNew ? 'created' : 'updated'),
+        status: client.errors.length > 0 ? 'failed' : 'success',
+        changes: [],
+        errorMessage: client.errors.join('; ') || client.warnings.join('; ') || undefined,
+      });
+    });
+
+    parseResult.people.forEach((person) => {
+      entries.push({
+        row: rowNum++,
+        recordType: 'Person',
+        identifier: person.transformed.email || person.transformed.fullName,
+        action: person.errors.length > 0 ? 'skipped' : 'created_or_updated',
+        status: person.errors.length > 0 ? 'failed' : 'success',
+        changes: [],
+        errorMessage: person.errors.join('; ') || person.warnings.join('; ') || undefined,
+      });
+    });
+
+    parseResult.serviceData?.forEach((sd) => {
+      entries.push({
+        row: rowNum++,
+        recordType: 'Service Data',
+        identifier: `${sd.transformed.clientName} - ${sd.transformed.serviceName}`,
+        action: sd.errors.length > 0 ? 'skipped' : 'updated',
+        status: sd.errors.length > 0 ? 'failed' : (sd.transformed.clientServiceId ? 'success' : 'skipped'),
+        changes: [sd.transformed.fieldName ? `${sd.transformed.fieldName}=${sd.transformed.value}` : ''],
+        errorMessage: sd.errors.join('; ') || sd.warnings.join('; ') || undefined,
+      });
+    });
+
+    const csvContent = [
+      ['Row', 'Record Type', 'Identifier', 'Action', 'Status', 'Changes', 'Error/Warning'].join(','),
+      ...entries.map(e => [
+        e.row,
+        e.recordType,
+        `"${(e.identifier || '').replace(/"/g, '""')}"`,
+        e.action,
+        e.status,
+        `"${(e.changes || []).join('; ').replace(/"/g, '""')}"`,
+        `"${(e.errorMessage || '').replace(/"/g, '""')}"`,
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `import-audit-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    toast({
+      title: "Audit Report Downloaded",
+      description: "The audit report has been saved as a CSV file.",
+    });
   };
 
   if (authLoading) {
@@ -1014,6 +1097,29 @@ export default function ExcelImport() {
                 </AlertDescription>
               </Alert>
             )}
+
+            <Card className="border-blue-200 bg-blue-50 dark:bg-blue-950/20">
+              <CardHeader className="py-4">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Download className="w-4 h-4" />
+                  Audit Report
+                </CardTitle>
+                <CardDescription>
+                  Download a detailed CSV report of all import actions and results
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="py-2">
+                <Button 
+                  variant="outline" 
+                  onClick={downloadAuditReport} 
+                  className="w-full"
+                  data-testid="button-download-audit"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Download Audit Report (CSV)
+                </Button>
+              </CardContent>
+            </Card>
 
             <div className="flex gap-4">
               <Button variant="outline" onClick={resetImport} className="flex-1" data-testid="button-import-more">

@@ -49,6 +49,7 @@ interface ParseResult {
   headers: string[];
   importType: ImportType;
   sampleData: Record<string, any>[];
+  allData: Record<string, any>[];
   availableServices: { id: string; name: string; isPersonalService: boolean }[];
   availableUsers: { id: string; email: string; name: string }[];
   availableWorkRoles: { id: string; name: string }[];
@@ -108,17 +109,7 @@ export default function ServiceImport() {
 
       const result: ParseResult = await response.json();
       setParseResult(result);
-      setParsedRows(result.sampleData);
-      
-      const fullDataResponse = await fetch('/api/service-import/parse', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include',
-      });
-      const fullData = await fullDataResponse.json();
-      if (fullData.sampleData) {
-        setParsedRows(fullData.sampleData);
-      }
+      setParsedRows(result.allData || result.sampleData);
 
       setCurrentStep('mapping');
 

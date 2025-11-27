@@ -141,6 +141,7 @@ export function registerServiceImportRoutes(
           headers,
           importType,
           sampleData: data.slice(0, 5),
+          allData: data,
           availableServices: allServices.map((s: any) => ({
             id: s.id,
             name: s.name,
