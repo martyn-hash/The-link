@@ -227,6 +227,8 @@ export const companySettings = pgTable("company_settings", {
   pushNotificationsEnabled: boolean("push_notifications_enabled").default(false).notNull(),
   postSignatureRedirectUrls: jsonb("post_signature_redirect_urls").default(sql`'[]'::jsonb`),
   logoObjectPath: varchar("logo_object_path"),
+  maintenanceMode: boolean("maintenance_mode").default(false).notNull(),
+  maintenanceMessage: text("maintenance_message"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

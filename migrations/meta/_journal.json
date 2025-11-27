@@ -36,6 +36,13 @@
       "when": 1763485103070,
       "tag": "0004_add_rich_text_notes_and_attachments_to_chronology",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1764278887024,
+      "tag": "0005_late_shinko_yamashiro",
+      "breakpoints": true
     }
   ]
 }
