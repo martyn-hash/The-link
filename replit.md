@@ -25,6 +25,7 @@ PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, sof
 -   **Client & People Management**: Unified Clients page with tabbed interfaces for "Companies" (Companies House data) and "People" (contacts), featuring pagination and customizable columns.
 -   **Navigation**: Streamlined navigation with unread messages badges and improved messaging page tabs.
 -   **Webhook Data Sharing**: Zapier integration for sharing client data with legacy systems via configurable webhooks with conditional activation rules and audit logging.
+-   **Enhanced Data Import System**: Comprehensive import capabilities including standalone service imports (matching by company number/name for clients, email/full name for people), interactive field mapping UI for CSV files with auto-matching, and detailed audit reporting with downloadable CSV showing created/updated/skipped/failed records with reasons.
 
 ## External Dependencies
 
