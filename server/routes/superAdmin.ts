@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { storage } from "../storage/index";
-import { updateCompanySettingsSchema } from "@shared/schema";
+import { updateCompanySettingsSchema, insertWebhookConfigSchema, updateWebhookConfigSchema } from "@shared/schema";
 import multer from "multer";
 import { ObjectStorageService, objectStorageClient, parseObjectPath } from "../objectStorage";
 
@@ -548,6 +548,149 @@ export function registerSuperAdminRoutes(
           message: 'Failed to get slow query stats',
           error: error.message 
         });
+      }
+    }
+  );
+
+  // ============================================================================
+  // WEBHOOKS MANAGEMENT (Super Admin)
+  // ============================================================================
+
+  app.get(
+    "/api/super-admin/webhooks",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const webhooks = await storage.getAllWebhookConfigs();
+        res.json(webhooks);
+      } catch (error) {
+        console.error("Error fetching webhooks:", error);
+        res.status(500).json({ message: "Failed to fetch webhooks" });
+      }
+    }
+  );
+
+  app.get(
+    "/api/super-admin/webhooks/:id",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const webhook = await storage.getWebhookConfigById(req.params.id);
+        if (!webhook) {
+          return res.status(404).json({ message: "Webhook not found" });
+        }
+        res.json(webhook);
+      } catch (error) {
+        console.error("Error fetching webhook:", error);
+        res.status(500).json({ message: "Failed to fetch webhook" });
+      }
+    }
+  );
+
+  app.post(
+    "/api/super-admin/webhooks",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const validationResult = insertWebhookConfigSchema.safeParse(req.body);
+        if (!validationResult.success) {
+          return res.status(400).json({ 
+            message: "Invalid webhook data", 
+            errors: validationResult.error.errors 
+          });
+        }
+
+        const webhook = await storage.createWebhookConfig({
+          ...validationResult.data,
+          createdBy: req.user.id,
+        });
+        res.status(201).json(webhook);
+      } catch (error) {
+        console.error("Error creating webhook:", error);
+        res.status(500).json({ message: "Failed to create webhook" });
+      }
+    }
+  );
+
+  app.patch(
+    "/api/super-admin/webhooks/:id",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const validationResult = updateWebhookConfigSchema.safeParse(req.body);
+        if (!validationResult.success) {
+          return res.status(400).json({ 
+            message: "Invalid webhook data", 
+            errors: validationResult.error.errors 
+          });
+        }
+
+        const webhook = await storage.updateWebhookConfig(req.params.id, validationResult.data);
+        res.json(webhook);
+      } catch (error: any) {
+        console.error("Error updating webhook:", error);
+        if (error.message === 'Webhook config not found') {
+          return res.status(404).json({ message: "Webhook not found" });
+        }
+        res.status(500).json({ message: "Failed to update webhook" });
+      }
+    }
+  );
+
+  app.delete(
+    "/api/super-admin/webhooks/:id",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        await storage.deleteWebhookConfig(req.params.id);
+        res.status(204).send();
+      } catch (error) {
+        console.error("Error deleting webhook:", error);
+        res.status(500).json({ message: "Failed to delete webhook" });
+      }
+    }
+  );
+
+  app.get(
+    "/api/super-admin/webhooks/:id/logs",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
+        const logs = await storage.getWebhookLogsByWebhookId(req.params.id, limit);
+        res.json(logs);
+      } catch (error) {
+        console.error("Error fetching webhook logs:", error);
+        res.status(500).json({ message: "Failed to fetch webhook logs" });
+      }
+    }
+  );
+
+  app.get(
+    "/api/super-admin/webhook-logs",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
+        const logs = await storage.getRecentWebhookLogs(limit);
+        res.json(logs);
+      } catch (error) {
+        console.error("Error fetching webhook logs:", error);
+        res.status(500).json({ message: "Failed to fetch webhook logs" });
       }
     }
   );

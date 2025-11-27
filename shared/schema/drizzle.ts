@@ -148,3 +148,10 @@ export {
   notificationHistory,
   clientRequestReminders,
 } from './notifications/tables';
+
+// Webhooks domain tables
+export {
+  webhookConfigs,
+  webhookLogs,
+  webhookStatusEnum,
+} from './webhooks/tables';

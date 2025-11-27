@@ -88,6 +88,7 @@ import {
   UserPreferencesStorage,
   CompanySettingsStorage
 } from './settings/index.js';
+import { WebhookStorage } from './webhooks/index.js';
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -154,6 +155,7 @@ export class DatabaseStorage implements IStorage {
   private dashboardStorage: DashboardStorage;
   private userPreferencesStorage: UserPreferencesStorage;
   private companySettingsStorage: CompanySettingsStorage;
+  private webhookStorage: WebhookStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -247,6 +249,9 @@ export class DatabaseStorage implements IStorage {
     this.dashboardStorage = new DashboardStorage();
     this.userPreferencesStorage = new UserPreferencesStorage();
     this.companySettingsStorage = new CompanySettingsStorage();
+    
+    // Initialize webhooks domain storage
+    this.webhookStorage = new WebhookStorage();
     
     // Register cross-domain helpers
     this.registerClientHelpers();
@@ -3093,6 +3098,60 @@ export class DatabaseStorage implements IStorage {
   // - ServiceStorage: 13 methods (services CRUD, scheduled services, service owner resolution)
   // - WorkRoleStorage: 10 methods (work roles CRUD, service-role mappings)
   // - ServiceAssignmentStorage: 30 methods (client services, role assignments, people services, validation)
+
+  // ============================================================================
+  // WEBHOOKS DOMAIN - Delegated to WebhookStorage
+  // ============================================================================
+
+  async getAllWebhookConfigs() {
+    return this.webhookStorage.getAllWebhookConfigs();
+  }
+
+  async getEnabledWebhookConfigs() {
+    return this.webhookStorage.getEnabledWebhookConfigs();
+  }
+
+  async getWebhookConfigById(id: string) {
+    return this.webhookStorage.getWebhookConfigById(id);
+  }
+
+  async createWebhookConfig(config: Parameters<typeof this.webhookStorage.createWebhookConfig>[0]) {
+    return this.webhookStorage.createWebhookConfig(config);
+  }
+
+  async updateWebhookConfig(id: string, config: Parameters<typeof this.webhookStorage.updateWebhookConfig>[1]) {
+    return this.webhookStorage.updateWebhookConfig(id, config);
+  }
+
+  async deleteWebhookConfig(id: string) {
+    return this.webhookStorage.deleteWebhookConfig(id);
+  }
+
+  async createWebhookLog(log: Parameters<typeof this.webhookStorage.createWebhookLog>[0]) {
+    return this.webhookStorage.createWebhookLog(log);
+  }
+
+  async updateWebhookLogStatus(
+    id: string,
+    status: 'pending' | 'success' | 'failed',
+    responseCode?: string,
+    responseBody?: string,
+    errorMessage?: string
+  ) {
+    return this.webhookStorage.updateWebhookLogStatus(id, status, responseCode, responseBody, errorMessage);
+  }
+
+  async getWebhookLogsByClientId(clientId: string, limit?: number) {
+    return this.webhookStorage.getWebhookLogsByClientId(clientId, limit);
+  }
+
+  async getWebhookLogsByWebhookId(webhookConfigId: string, limit?: number) {
+    return this.webhookStorage.getWebhookLogsByWebhookId(webhookConfigId, limit);
+  }
+
+  async getRecentWebhookLogs(limit?: number) {
+    return this.webhookStorage.getRecentWebhookLogs(limit);
+  }
 
 }
 

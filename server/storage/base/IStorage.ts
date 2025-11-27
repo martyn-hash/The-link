@@ -83,6 +83,12 @@ import {
   type SchedulingRunLogs,
   type InsertSchedulingRunLogs,
   type ProjectWithRelations,
+  type WebhookConfig,
+  type InsertWebhookConfig,
+  type UpdateWebhookConfig,
+  type WebhookLog,
+  type InsertWebhookLog,
+  type WebhookLogWithDetails,
   type UpdateProjectStatus,
   type UpdateProjectType,
   type Communication,
@@ -843,4 +849,16 @@ export interface IStorage {
 
   setFallbackUser(userId: string): Promise<void>;
   logTaskActivityToProject(projectId: string, taskType: string, taskDescription: string, userId?: string): Promise<void>;
+
+  getAllWebhookConfigs(): Promise<WebhookConfig[]>;
+  getEnabledWebhookConfigs(): Promise<WebhookConfig[]>;
+  getWebhookConfigById(id: string): Promise<WebhookConfig | undefined>;
+  createWebhookConfig(config: InsertWebhookConfig): Promise<WebhookConfig>;
+  updateWebhookConfig(id: string, config: UpdateWebhookConfig): Promise<WebhookConfig>;
+  deleteWebhookConfig(id: string): Promise<void>;
+  createWebhookLog(log: InsertWebhookLog): Promise<WebhookLog>;
+  updateWebhookLogStatus(id: string, status: 'pending' | 'success' | 'failed', responseCode?: string, responseBody?: string, errorMessage?: string): Promise<WebhookLog>;
+  getWebhookLogsByClientId(clientId: string, limit?: number): Promise<WebhookLogWithDetails[]>;
+  getWebhookLogsByWebhookId(webhookConfigId: string, limit?: number): Promise<WebhookLogWithDetails[]>;
+  getRecentWebhookLogs(limit?: number): Promise<WebhookLogWithDetails[]>;
 }

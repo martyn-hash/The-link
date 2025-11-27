@@ -162,7 +162,7 @@ export default function ClientDetail() {
     <div className="min-h-screen bg-background flex flex-col">
       {user && <TopNavigation user={user} />}
       <div className="flex-1" style={{ paddingBottom: isMobile ? '4rem' : '0' }}>
-        <ClientHeader client={client} />
+        <ClientHeader client={client} people={relatedPeople} />
 
         {/* Main Content */}
         <div className="page-container py-6 md:py-8">

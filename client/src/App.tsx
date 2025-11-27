@@ -53,6 +53,7 @@ const ScheduledNotifications = lazy(() => import("@/pages/scheduled-notification
 const ActivityLogs = lazy(() => import("@/pages/activity-logs"));
 const UserActivityTracking = lazy(() => import("@/pages/user-activity-tracking"));
 const CompanySettingsPage = lazy(() => import("@/pages/company-settings"));
+const AdminWebhooks = lazy(() => import("@/pages/admin-webhooks"));
 const PortalLogin = lazy(() => import("@/pages/portal/PortalLogin"));
 const PortalVerify = lazy(() => import("@/pages/portal/PortalVerify"));
 const PortalInstall = lazy(() => import("@/pages/portal/PortalInstall"));
@@ -208,6 +209,7 @@ function Router() {
         <Route path="/scheduled-notifications" component={ScheduledNotifications} />
         <Route path="/super-admin/activity-logs" component={ActivityLogs} />
         <Route path="/super-admin/user-activity-tracking" component={UserActivityTracking} />
+        <Route path="/super-admin/webhooks" component={AdminWebhooks} />
         <Route path="/company-settings" component={CompanySettingsPage} />
         
         {/* Catch-all NotFound route */}
