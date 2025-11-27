@@ -6,6 +6,7 @@ import { registerCompaniesHouseRoutes } from "./companiesHouse";
 import { registerPortalUserRoutes } from "./portalUsers";
 import { registerRiskAssessmentRoutes } from "./riskAssessments";
 import { registerWebhookRoutes } from "./webhooks";
+import { registerNlacRoutes } from "./nlac";
 
 export function registerAllClientRoutes(
   app: Express,
@@ -21,6 +22,7 @@ export function registerAllClientRoutes(
   registerPortalUserRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
   registerRiskAssessmentRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
   registerWebhookRoutes(app, isAuthenticated, resolveEffectiveUser);
+  registerNlacRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
 }
 
 export {
@@ -31,4 +33,5 @@ export {
   registerPortalUserRoutes,
   registerRiskAssessmentRoutes,
   registerWebhookRoutes,
+  registerNlacRoutes,
 };

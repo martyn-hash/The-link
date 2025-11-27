@@ -1,14 +1,16 @@
 import { useState } from "react";
-import { Building2, Calendar, MoreVertical, Share2 } from "lucide-react";
+import { Building2, Calendar, MoreVertical, Share2, UserX } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ShareDataModal } from "./ShareDataModal";
+import { NlacModal } from "./NlacModal";
 import type { Client, ClientPerson } from "@shared/schema";
 
 export interface ClientHeaderProps {
@@ -18,6 +20,7 @@ export interface ClientHeaderProps {
 
 export function ClientHeader({ client, people = [] }: ClientHeaderProps) {
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showNlacModal, setShowNlacModal] = useState(false);
 
   return (
     <>
@@ -66,6 +69,15 @@ export function ClientHeader({ client, people = [] }: ClientHeaderProps) {
                     <Share2 className="h-4 w-4 mr-2" />
                     Share Data
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    onClick={() => setShowNlacModal(true)}
+                    data-testid="menu-nlac"
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <UserX className="h-4 w-4 mr-2" />
+                    Mark as NLAC
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -78,6 +90,12 @@ export function ClientHeader({ client, people = [] }: ClientHeaderProps) {
         onOpenChange={setShowShareModal}
         client={client}
         people={people}
+      />
+      
+      <NlacModal
+        open={showNlacModal}
+        onOpenChange={setShowNlacModal}
+        client={client}
       />
     </>
   );

@@ -73,3 +73,11 @@ export const taskInstanceStatusEnum = pgEnum("task_instance_status", [
   "approved",
   "cancelled"
 ]);
+
+export const nlacReasonEnum = pgEnum("nlac_reason", [
+  "moving_to_new_accountant",
+  "ceasing_trading",
+  "no_longer_using_accountant",
+  "taking_accounts_in_house",
+  "other"
+]);

@@ -3,6 +3,7 @@ import { storage } from "../storage/index";
 import { updateCompanySettingsSchema, insertWebhookConfigSchema, updateWebhookConfigSchema } from "@shared/schema";
 import multer from "multer";
 import { ObjectStorageService, objectStorageClient, parseObjectPath } from "../objectStorage";
+import bcrypt from "bcrypt";
 
 /**
  * Super Admin routes for activity logs and login attempts
@@ -249,7 +250,14 @@ export function registerSuperAdminRoutes(
           return;
         }
         
-        res.json(settings);
+        // Mask the NLAC password - only indicate if it's set
+        const sanitizedSettings = {
+          ...settings,
+          nlacPassword: settings.nlacPassword ? "**********" : null,
+          hasNlacPassword: !!settings.nlacPassword,
+        };
+        
+        res.json(sanitizedSettings);
       } catch (error) {
         console.error("Error fetching company settings:", error);
         res.status(500).json({ message: "Failed to fetch company settings" });
@@ -276,8 +284,26 @@ export function registerSuperAdminRoutes(
           return;
         }
         
-        const updatedSettings = await storage.updateCompanySettings(validationResult.data);
-        res.json(updatedSettings);
+        // Hash NLAC password if provided and not already hashed
+        const settingsData = { ...validationResult.data };
+        if (settingsData.nlacPassword) {
+          // Check if already hashed (bcrypt hashes start with $2b$ or $2a$)
+          if (!settingsData.nlacPassword.startsWith('$2')) {
+            const saltRounds = 10;
+            settingsData.nlacPassword = await bcrypt.hash(settingsData.nlacPassword, saltRounds);
+          }
+        }
+        
+        const updatedSettings = await storage.updateCompanySettings(settingsData);
+        
+        // Sanitize response - never expose the password hash
+        const sanitizedSettings = {
+          ...updatedSettings,
+          nlacPassword: updatedSettings.nlacPassword ? "**********" : null,
+          hasNlacPassword: !!updatedSettings.nlacPassword,
+        };
+        
+        res.json(sanitizedSettings);
       } catch (error) {
         console.error("Error updating company settings:", error);
         res.status(500).json({ message: "Failed to update company settings" });

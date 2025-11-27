@@ -1,7 +1,7 @@
 import { pgTable, varchar, text, timestamp, boolean, index, unique, jsonb, integer, decimal } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from '../users/tables';
-import { nationalityEnum } from '../enums';
+import { nationalityEnum, nlacReasonEnum } from '../enums';
 import { emailMatchConfidenceEnum } from '../email/tables';
 
 export const clients = pgTable("clients", {
@@ -173,6 +173,7 @@ export const clientPortalUsers = pgTable("client_portal_users", {
   lastLogin: timestamp("last_login"),
   pushNotificationsEnabled: boolean("push_notifications_enabled").default(false),
   notificationPreferences: jsonb("notification_preferences"),
+  isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -229,6 +230,25 @@ export const companySettings = pgTable("company_settings", {
   logoObjectPath: varchar("logo_object_path"),
   maintenanceMode: boolean("maintenance_mode").default(false).notNull(),
   maintenanceMessage: text("maintenance_message"),
+  nlacPassword: varchar("nlac_password"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+export const nlacAuditLogs = pgTable("nlac_audit_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  clientName: varchar("client_name").notNull(),
+  reason: nlacReasonEnum("reason").notNull(),
+  performedByUserId: varchar("performed_by_user_id").notNull().references(() => users.id),
+  performedByUserName: varchar("performed_by_user_name").notNull(),
+  projectsDeactivated: integer("projects_deactivated").default(0),
+  servicesDeactivated: integer("services_deactivated").default(0),
+  portalUsersDeactivated: integer("portal_users_deactivated").default(0),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_nlac_audit_logs_client_id").on(table.clientId),
+  index("idx_nlac_audit_logs_performed_by").on(table.performedByUserId),
+  index("idx_nlac_audit_logs_created_at").on(table.createdAt),
+]);

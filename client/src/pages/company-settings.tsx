@@ -13,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Save, Bell, Link2, Plus, Trash2, ExternalLink, Upload, Image as ImageIcon, AlertTriangle } from "lucide-react";
+import { Settings, Save, Bell, Link2, Plus, Trash2, ExternalLink, Upload, Image as ImageIcon, AlertTriangle, Lock, Eye, EyeOff } from "lucide-react";
 import type { CompanySettings, UpdateCompanySettings } from "@shared/schema";
 
 interface RedirectUrl {
@@ -32,6 +32,11 @@ export default function CompanySettingsPage() {
   // Maintenance mode
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState("");
+  
+  // NLAC password
+  const [nlacPassword, setNlacPassword] = useState("");
+  const [showNlacPassword, setShowNlacPassword] = useState(false);
+  const [hasExistingNlacPassword, setHasExistingNlacPassword] = useState(false);
   
   // Post-signature redirect URLs
   const [redirectUrls, setRedirectUrls] = useState<RedirectUrl[]>([]);
@@ -64,6 +69,8 @@ export default function CompanySettingsPage() {
       setPushNotificationsEnabled(settings.pushNotificationsEnabled || false);
       setMaintenanceMode(settings.maintenanceMode || false);
       setMaintenanceMessage(settings.maintenanceMessage || "");
+      setNlacPassword("");
+      setHasExistingNlacPassword(!!(settings as any).hasNlacPassword);
       setRedirectUrls((settings.postSignatureRedirectUrls as RedirectUrl[]) || []);
       setLogoObjectPath(settings.logoObjectPath || null);
       
@@ -246,14 +253,21 @@ export default function CompanySettingsPage() {
   };
 
   const handleSave = () => {
-    updateSettingsMutation.mutate({
+    const data: UpdateCompanySettings = {
       emailSenderName,
       firmName,
       pushNotificationsEnabled,
       maintenanceMode,
       maintenanceMessage: maintenanceMessage || null,
       postSignatureRedirectUrls: redirectUrls,
-    });
+    };
+    
+    // Only include nlacPassword if a new password was entered
+    if (nlacPassword) {
+      data.nlacPassword = nlacPassword;
+    }
+    
+    updateSettingsMutation.mutate(data);
   };
 
   // Show loading state while checking auth
@@ -512,6 +526,84 @@ export default function CompanySettingsPage() {
                   onClick={handleSave}
                   disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim()}
                   data-testid="button-save-maintenance-settings"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* NLAC Password Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lock className="w-5 h-5" />
+                NLAC Password
+              </CardTitle>
+              <CardDescription>
+                Set a password required to mark clients as "No Longer a Client" (NLAC). This password protects against accidental client deactivation.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="nlac-password">
+                  {hasExistingNlacPassword ? "Change NLAC Password" : "Set NLAC Password"}
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="nlac-password"
+                    data-testid="input-nlac-password"
+                    type={showNlacPassword ? "text" : "password"}
+                    value={nlacPassword}
+                    onChange={(e) => setNlacPassword(e.target.value)}
+                    placeholder={hasExistingNlacPassword ? "Enter new password to change" : "Enter password for NLAC protection"}
+                    disabled={settingsLoading || updateSettingsMutation.isPending}
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => setShowNlacPassword(!showNlacPassword)}
+                    data-testid="button-toggle-nlac-password"
+                  >
+                    {showNlacPassword ? (
+                      <EyeOff className="w-4 h-4 text-muted-foreground" />
+                    ) : (
+                      <Eye className="w-4 h-4 text-muted-foreground" />
+                    )}
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {hasExistingNlacPassword 
+                    ? "A password is currently set. Enter a new password to change it, or leave blank to keep the existing password."
+                    : "Users will be required to enter this password when marking a client as inactive."}
+                </p>
+              </div>
+
+              {hasExistingNlacPassword ? (
+                <div className="p-4 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
+                  <p className="text-sm text-green-800 dark:text-green-200">
+                    <Lock className="w-4 h-4 inline mr-2" />
+                    NLAC password protection is active. Users must enter the password to mark clients as inactive.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    <AlertTriangle className="w-4 h-4 inline mr-2" />
+                    No NLAC password is set. Users will not be able to mark clients as inactive until a password is configured.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSave}
+                  disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim()}
+                  data-testid="button-save-nlac-settings"
                 >
                   <Save className="w-4 h-4 mr-2" />
                   {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}

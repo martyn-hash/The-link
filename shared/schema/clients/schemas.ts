@@ -13,6 +13,7 @@ import {
   clientEmailAliases,
   clientDomainAllowlist,
   companySettings,
+  nlacAuditLogs,
 } from './tables';
 
 const niNumberRegex = /^[A-CEGHJ-PR-TW-Z]{2}\s?\d{2}\s?\d{2}\s?\d{2}\s?[A-D]?$/i;
@@ -86,3 +87,8 @@ export const insertCompanySettingsSchema = createInsertSchema(companySettings).o
 });
 
 export const updateCompanySettingsSchema = insertCompanySettingsSchema.partial();
+
+export const insertNlacAuditLogSchema = createInsertSchema(nlacAuditLogs).omit({
+  id: true,
+  createdAt: true,
+});
