@@ -2606,6 +2606,42 @@ export async function registerAuthAndMiscRoutes(
 
       const data = await response.json() as any;
       
+      // Helper function to extract house number from address for sorting
+      // Handles: "12 High St", "12A High St", "Flat 4, 21 Baker St", "Unit 3, 15 Main Rd"
+      const extractHouseNumber = (line1: string): { primary: number; secondary: string } => {
+        if (!line1) return { primary: Infinity, secondary: '' };
+        
+        // Pattern 1: Leading number with optional letter suffix (e.g., "12A High St")
+        const leadingMatch = line1.match(/^(\d+)([A-Za-z])?/);
+        if (leadingMatch) {
+          return { 
+            primary: parseInt(leadingMatch[1], 10), 
+            secondary: leadingMatch[2] || '' 
+          };
+        }
+        
+        // Pattern 2: "Flat X, Y Street" or "Unit X, Y Street" - extract the building number Y
+        const flatMatch = line1.match(/^(?:Flat|Unit|Apartment|Suite)\s+\d+[A-Za-z]?,?\s+(\d+)([A-Za-z])?/i);
+        if (flatMatch) {
+          return { 
+            primary: parseInt(flatMatch[1], 10), 
+            secondary: flatMatch[2] || '' 
+          };
+        }
+        
+        // Pattern 3: Any number in the string as fallback
+        const anyNumberMatch = line1.match(/(\d+)([A-Za-z])?/);
+        if (anyNumberMatch) {
+          return { 
+            primary: parseInt(anyNumberMatch[1], 10), 
+            secondary: anyNumberMatch[2] || '' 
+          };
+        }
+        
+        // No number found - sort alphabetically at the end
+        return { primary: Infinity, secondary: '' };
+      };
+      
       // Transform the response - getaddress.io Find returns addresses array
       const addresses = (data.addresses || []).map((addr: any, index: number) => ({
         id: `${cleanPostcode}-${index}`,
@@ -2620,6 +2656,21 @@ export async function registerAuthAndMiscRoutes(
         postcode: data.postcode || cleanPostcode,
         country: 'United Kingdom'
       }));
+      
+      // Sort addresses numerically by house number (smallest first)
+      addresses.sort((a: any, b: any) => {
+        const numA = extractHouseNumber(a.line1);
+        const numB = extractHouseNumber(b.line1);
+        
+        // Sort by primary number first
+        if (numA.primary !== numB.primary) return numA.primary - numB.primary;
+        
+        // If same primary number, sort by secondary (letter suffix)
+        if (numA.secondary !== numB.secondary) return numA.secondary.localeCompare(numB.secondary);
+        
+        // Fallback to alphabetical sort on full line1
+        return a.line1.localeCompare(b.line1);
+      });
 
       res.json({
         postcode: data.postcode || cleanPostcode,

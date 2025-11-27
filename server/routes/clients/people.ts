@@ -115,6 +115,7 @@ export function registerClientPeopleRoutes(
       const validationResult = insertPersonSchema.safeParse(req.body);
 
       if (!validationResult.success) {
+        console.error("Person validation failed:", JSON.stringify(validationResult.error.issues, null, 2));
         return res.status(400).json({
           message: "Invalid person data",
           errors: validationResult.error.issues
