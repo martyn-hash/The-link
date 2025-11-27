@@ -14,6 +14,7 @@ export const webhookConfigs = pgTable("webhook_configs", {
   name: varchar("name").notNull(),
   description: text("description"),
   webhookUrl: text("webhook_url").notNull(),
+  updateWebhookUrl: text("update_webhook_url"),
   isEnabled: boolean("is_enabled").default(true).notNull(),
   requiredClientFields: text("required_client_fields").array().default(sql`'{}'::text[]`),
   requiredPersonFields: text("required_person_fields").array().default(sql`'{}'::text[]`),
