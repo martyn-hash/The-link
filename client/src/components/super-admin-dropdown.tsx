@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Users, ChevronDown, Bell, Activity, Eye, Settings, FileSpreadsheet, Briefcase, Building2, UserPlus } from "lucide-react";
+import { Users, ChevronDown, Bell, Activity, Eye, Settings, FileSpreadsheet, Briefcase, Building2, UserPlus, Share2 } from "lucide-react";
 import type { User } from "@shared/schema";
 
 interface SuperAdminDropdownProps {
@@ -41,6 +41,11 @@ export default function SuperAdminDropdown({ user }: SuperAdminDropdownProps) {
       label: "Push Notifications",
       href: "/admin/push-templates",
       icon: Bell,
+    },
+    {
+      label: "Webhooks",
+      href: "/super-admin/webhooks",
+      icon: Share2,
     },
     {
       label: "User Management",
