@@ -25,6 +25,8 @@ PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, sof
 -   **NLAC (No Longer a Client)**: Secure multi-step process for marking clients as inactive, with password protection (configurable by Super Admins in Company Settings), reason selection (moving to new accountant, ceasing trading, no longer using accountant, taking accounts in house, or other), automatic deactivation of associated projects, services, and portal users, and comprehensive audit logging.
 -   **Client & People Management**: Unified Clients page with tabbed interfaces for "Companies" (Companies House data) and "People" (contacts), featuring pagination and customizable columns.
 -   **Navigation**: Streamlined navigation with unread messages badges and improved messaging page tabs.
+-   **Feature Flags**: Company settings include toggleable feature flags (Ring Central Live, App Is Live) that control visibility of communication features. Super Admins can manage these via the Company Settings page.
+-   **Communications UI**: Refactored communication filters to use a compact dropdown popover with multi-select checkboxes. The Add Communication dialog uses a TipTap rich text editor for content entry.
 -   **Webhook Data Sharing**: Zapier integration for sharing client data with legacy systems via configurable webhooks with conditional activation rules and audit logging.
 -   **Enhanced Data Import System**: Comprehensive import capabilities including standalone service imports (matching by company number/name for clients, email/full name for people), interactive field mapping UI for CSV files with auto-matching, and detailed audit reporting with downloadable CSV showing created/updated/skipped/failed records with reasons.
 
