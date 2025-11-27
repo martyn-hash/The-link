@@ -13,7 +13,10 @@ import {
   Circle,
   Plus,
   Mail,
-  ChevronsUpDown
+  ChevronsUpDown,
+  AlertCircle,
+  AlertTriangle,
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,9 +61,63 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
+import { apiRequest } from "@/lib/queryClient";
 import AddressLookup from "@/components/address-lookup";
 import { InsertPersonData, addPersonSchema } from "../../utils/types";
+
+// Fixed list of titles
+const TITLES = [
+  { value: "Mr", label: "Mr" },
+  { value: "Mrs", label: "Mrs" },
+  { value: "Ms", label: "Ms" },
+  { value: "Miss", label: "Miss" },
+  { value: "Dr", label: "Dr" },
+  { value: "Prof", label: "Prof" },
+  { value: "Rev", label: "Rev" },
+  { value: "Sir", label: "Sir" },
+  { value: "Dame", label: "Dame" },
+  { value: "Lord", label: "Lord" },
+  { value: "Lady", label: "Lady" },
+  { value: "Mx", label: "Mx" },
+];
+
+// Fixed list of occupations
+const OCCUPATIONS = [
+  { value: "Director", label: "Director" },
+  { value: "Manager", label: "Manager" },
+  { value: "Advisor", label: "Advisor" },
+  { value: "Consultant", label: "Consultant" },
+  { value: "Employee", label: "Employee" },
+  { value: "Contractor", label: "Contractor" },
+  { value: "Supplier", label: "Supplier" },
+  { value: "Family Member", label: "Family Member" },
+  { value: "Billing Contact", label: "Billing Contact" },
+  { value: "Decision Maker", label: "Decision Maker" },
+  { value: "Technical Contact", label: "Technical Contact" },
+  { value: "Legal Representative", label: "Legal Representative" },
+  { value: "Accountant / Bookkeeper", label: "Accountant / Bookkeeper" },
+  { value: "Auditor", label: "Auditor" },
+  { value: "Trustee", label: "Trustee" },
+  { value: "Beneficiary", label: "Beneficiary" },
+  { value: "Other", label: "Other" },
+];
+
+// Duplicate check result type
+interface DuplicateResult {
+  type: 'email' | 'phone';
+  value: string;
+  foundIn: 'person' | 'client';
+  name: string;
+}
 
 const NATIONALITIES = [
   { value: "afghan", label: "Afghan" },
@@ -277,6 +334,10 @@ export function AddPersonModal({
   const [showSecondaryContacts, setShowSecondaryContacts] = useState(true);
   const [showSocialLinks, setShowSocialLinks] = useState(false);
   const [nationalityOpen, setNationalityOpen] = useState(false);
+  const [occupationOpen, setOccupationOpen] = useState(false);
+  const [showValidationErrors, setShowValidationErrors] = useState(false);
+  const [duplicates, setDuplicates] = useState<DuplicateResult[]>([]);
+  const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
 
   const form = useForm<InsertPersonData>({
     resolver: zodResolver(addPersonSchema),
@@ -317,11 +378,74 @@ export function AddPersonModal({
       setShowSecondaryContacts(true);
       setShowSocialLinks(false);
       setNationalityOpen(false);
+      setOccupationOpen(false);
+      setShowValidationErrors(false);
+      setDuplicates([]);
       form.reset();
     }
   }, [isOpen, form]);
 
-  const handleSubmit = (data: InsertPersonData) => {
+  // Get validation errors organized by tab
+  const getErrorsByTab = () => {
+    const errors = form.formState.errors;
+    const personalFields = ['fullName', 'title', 'dateOfBirth', 'nationality', 'occupation', 'isMainContact', 'niNumber', 'personalUtrNumber', 'photoIdVerified', 'addressVerified'];
+    const contactFields = ['primaryEmail', 'primaryPhone', 'email2', 'telephone2', 'linkedinUrl', 'twitterUrl', 'facebookUrl', 'instagramUrl', 'tiktokUrl'];
+    const addressFields = ['addressLine1', 'postalCode', 'locality', 'region', 'country'];
+
+    const errorsByTab: { personal: string[]; contact: string[]; address: string[] } = {
+      personal: [],
+      contact: [],
+      address: [],
+    };
+
+    Object.entries(errors).forEach(([field, error]) => {
+      const message = (error as any)?.message || `Invalid ${field}`;
+      if (personalFields.includes(field)) {
+        errorsByTab.personal.push(message);
+      } else if (contactFields.includes(field)) {
+        errorsByTab.contact.push(message);
+      } else if (addressFields.includes(field)) {
+        errorsByTab.address.push(message);
+      }
+    });
+
+    return errorsByTab;
+  };
+
+  const errorsByTab = getErrorsByTab();
+  const hasErrors = Object.keys(form.formState.errors).length > 0;
+  const totalErrors = Object.keys(form.formState.errors).length;
+
+  // Check for duplicates before submission
+  const checkDuplicates = async (data: InsertPersonData): Promise<DuplicateResult[]> => {
+    const emails = [data.primaryEmail, data.email2].filter(Boolean) as string[];
+    const phones = [data.primaryPhone, data.telephone2].filter(Boolean) as string[];
+
+    if (emails.length === 0 && phones.length === 0) {
+      return [];
+    }
+
+    try {
+      const result = await apiRequest('POST', '/api/people/check-duplicates', { emails, phones });
+      return result?.duplicates || [];
+    } catch (error) {
+      console.error('Error checking duplicates:', error);
+      return [];
+    }
+  };
+
+  const handleSubmit = async (data: InsertPersonData) => {
+    // First check for duplicates
+    setIsCheckingDuplicates(true);
+    const foundDuplicates = await checkDuplicates(data);
+    setIsCheckingDuplicates(false);
+
+    if (foundDuplicates.length > 0) {
+      setDuplicates(foundDuplicates);
+      return; // Don't proceed with save
+    }
+
+    // Format phone number
     if (data.primaryPhone) {
       if (data.primaryPhone.startsWith('07')) {
         data.primaryPhone = '+447' + data.primaryPhone.slice(2);
@@ -338,6 +462,11 @@ export function AddPersonModal({
     }
     onSave(data);
   };
+
+  // Handle form validation errors on submit attempt
+  const handleFormSubmit = form.handleSubmit(handleSubmit, () => {
+    setShowValidationErrors(true);
+  });
 
   const handleAddressSelect = (addressData: any) => {
     form.setValue("addressLine1", addressData.addressLine1 || "");
@@ -374,7 +503,101 @@ export function AddPersonModal({
         </DialogHeader>
         
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="flex flex-col flex-1 overflow-hidden">
+          <form onSubmit={handleFormSubmit} className="flex flex-col flex-1 overflow-hidden">
+            {/* Validation Error Summary */}
+            {showValidationErrors && hasErrors && (
+              <Alert variant="destructive" className="mb-4" data-testid="alert-validation-errors">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle className="flex items-center justify-between">
+                  <span>Please fix {totalErrors} error{totalErrors > 1 ? 's' : ''} before submitting</span>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 w-6 p-0" 
+                    onClick={() => setShowValidationErrors(false)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </AlertTitle>
+                <AlertDescription>
+                  <div className="mt-2 space-y-2">
+                    {errorsByTab.personal.length > 0 && (
+                      <div className="flex items-start gap-2">
+                        <button 
+                          type="button"
+                          onClick={() => setActiveTab("personal")}
+                          className="flex items-center gap-1 text-destructive hover:underline font-medium min-w-fit"
+                        >
+                          <UserIcon className="h-3 w-3" />
+                          Personal:
+                        </button>
+                        <span className="text-sm">{errorsByTab.personal.join(', ')}</span>
+                      </div>
+                    )}
+                    {errorsByTab.contact.length > 0 && (
+                      <div className="flex items-start gap-2">
+                        <button 
+                          type="button"
+                          onClick={() => setActiveTab("contact")}
+                          className="flex items-center gap-1 text-destructive hover:underline font-medium min-w-fit"
+                        >
+                          <Phone className="h-3 w-3" />
+                          Contact:
+                        </button>
+                        <span className="text-sm">{errorsByTab.contact.join(', ')}</span>
+                      </div>
+                    )}
+                    {errorsByTab.address.length > 0 && (
+                      <div className="flex items-start gap-2">
+                        <button 
+                          type="button"
+                          onClick={() => setActiveTab("address")}
+                          className="flex items-center gap-1 text-destructive hover:underline font-medium min-w-fit"
+                        >
+                          <MapPin className="h-3 w-3" />
+                          Address:
+                        </button>
+                        <span className="text-sm">{errorsByTab.address.join(', ')}</span>
+                      </div>
+                    )}
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Duplicate Contact Warning */}
+            {duplicates.length > 0 && (
+              <Alert variant="destructive" className="mb-4 border-amber-500 bg-amber-50 dark:bg-amber-950/20" data-testid="alert-duplicate-contacts">
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                <AlertTitle className="flex items-center justify-between text-amber-800 dark:text-amber-200">
+                  <span>Duplicate Contact Information Found</span>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 w-6 p-0" 
+                    onClick={() => setDuplicates([])}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </AlertTitle>
+                <AlertDescription className="text-amber-700 dark:text-amber-300">
+                  <p className="mb-2">The following contact details already exist in the system:</p>
+                  <ul className="list-disc list-inside space-y-1">
+                    {duplicates.map((dup, idx) => (
+                      <li key={idx} className="text-sm">
+                        <span className="font-medium capitalize">{dup.type}</span>: {dup.value} is already used by{' '}
+                        <span className="font-medium">{dup.name}</span>{' '}
+                        ({dup.foundIn === 'person' ? 'Person' : 'Client'})
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-sm">Please use different contact information or verify this is intentional.</p>
+                </AlertDescription>
+              </Alert>
+            )}
+
             <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col flex-1 overflow-hidden">
               <TabsList className="grid w-full grid-cols-3 mb-4">
                 <TabsTrigger value="personal" className="flex items-center gap-2 relative" data-testid="tab-personal">
@@ -446,14 +669,23 @@ export function AddPersonModal({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel>Title</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              value={field.value || ""} 
-                              placeholder="Mr, Mrs, Dr, etc."
-                              data-testid="input-title" 
-                            />
-                          </FormControl>
+                          <Select
+                            value={field.value || ""}
+                            onValueChange={field.onChange}
+                          >
+                            <FormControl>
+                              <SelectTrigger data-testid="input-title">
+                                <SelectValue placeholder="Select title..." />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              {TITLES.map((title) => (
+                                <SelectItem key={title.value} value={title.value}>
+                                  {title.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -544,16 +776,59 @@ export function AddPersonModal({
                       control={form.control}
                       name="occupation"
                       render={({ field }) => (
-                        <FormItem>
+                        <FormItem className="flex flex-col">
                           <FormLabel>Occupation</FormLabel>
-                          <FormControl>
-                            <Input 
-                              {...field} 
-                              value={field.value || ""} 
-                              placeholder="e.g. Director"
-                              data-testid="input-occupation" 
-                            />
-                          </FormControl>
+                          <Popover open={occupationOpen} onOpenChange={setOccupationOpen}>
+                            <PopoverTrigger asChild>
+                              <FormControl>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={occupationOpen}
+                                  className={cn(
+                                    "w-full justify-between font-normal",
+                                    !field.value && "text-muted-foreground"
+                                  )}
+                                  data-testid="input-occupation"
+                                >
+                                  {field.value
+                                    ? OCCUPATIONS.find((o) => o.value === field.value)?.label || field.value
+                                    : "Select occupation..."}
+                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                              </FormControl>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[300px] p-0" align="start">
+                              <Command>
+                                <CommandInput placeholder="Search occupation..." />
+                                <CommandList>
+                                  <CommandEmpty>No occupation found.</CommandEmpty>
+                                  <CommandGroup>
+                                    {OCCUPATIONS.map((occupation) => (
+                                      <CommandItem
+                                        key={occupation.value}
+                                        value={occupation.label}
+                                        onSelect={() => {
+                                          field.onChange(occupation.value);
+                                          setOccupationOpen(false);
+                                        }}
+                                      >
+                                        <Check
+                                          className={cn(
+                                            "mr-2 h-4 w-4",
+                                            field.value === occupation.value
+                                              ? "opacity-100"
+                                              : "opacity-0"
+                                          )}
+                                        />
+                                        {occupation.label}
+                                      </CommandItem>
+                                    ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
                           <FormMessage />
                         </FormItem>
                       )}
@@ -1065,10 +1340,10 @@ export function AddPersonModal({
                     <span>
                       <Button 
                         type="submit" 
-                        disabled={isSaving || !allTabsVisited}
+                        disabled={isSaving || isCheckingDuplicates || !allTabsVisited}
                         data-testid="button-save-add-person"
                       >
-                        {isSaving ? "Adding..." : "Add Person"}
+                        {isCheckingDuplicates ? "Checking..." : isSaving ? "Adding..." : "Add Person"}
                       </Button>
                     </span>
                   </TooltipTrigger>
