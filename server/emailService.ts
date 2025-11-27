@@ -280,7 +280,8 @@ export async function sendStageChangeNotificationEmail(
   projectCreatedAt?: string,
   changeReason?: string,
   notes?: string,
-  fieldResponses?: Array<{ fieldName: string; fieldType: string; value: string | number | string[] }>
+  fieldResponses?: Array<{ fieldName: string; fieldType: string; value: string | number | string[] }>,
+  attachments?: Array<{ fileName: string; fileSize: number; fileType: string; objectPath: string }>
 ): Promise<boolean> {
   const baseUrl = 'https://flow.growth.accountants';
   const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
@@ -418,6 +419,20 @@ export async function sendStageChangeNotificationEmail(
           </div>
           ` : ''}
           
+          ${attachments && attachments.length > 0 ? `
+          <div style="background-color: #fdf4ff; padding: 25px; border-radius: 12px; margin: 25px 0; border: 2px solid #e879f9;">
+            <h3 style="margin-top: 0; color: #a21caf; font-size: 18px;">📎 Attachments (${attachments.length})</h3>
+            <p style="margin-bottom: 12px; color: #374151;">The following files were attached to this stage change. Please log in to The Link to view and download them.</p>
+            <ul style="margin: 0; padding-left: 20px;">
+              ${attachments.map(att => `
+                <li style="margin-bottom: 8px; color: #374151;">
+                  <strong>${att.fileName}</strong> <span style="color: #6b7280; font-size: 12px;">(${(att.fileSize / 1024).toFixed(1)} KB)</span>
+                </li>
+              `).join('')}
+            </ul>
+          </div>
+          ` : ''}
+          
           <div style="text-align: center; margin: 30px 0;">
             <a href="${baseUrl}/projects${projectId ? `/${projectId}` : ''}" 
                style="display: inline-block; background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(10, 123, 191, 0.3);">
@@ -467,6 +482,13 @@ ${fieldResponses && fieldResponses.length > 0 ? `
 Additional Information:
 ${fieldResponses.map(fr => `  - ${fr.fieldName}: ${formatFieldValue(fr.fieldType, fr.value)}`).join('\n')}
 ` : ''}
+` : ''}
+
+${attachments && attachments.length > 0 ? `
+📎 ATTACHMENTS (${attachments.length}):
+${attachments.map(att => `  - ${att.fileName} (${(att.fileSize / 1024).toFixed(1)} KB)`).join('\n')}
+
+Please log in to The Link to view and download these files.
 ` : ''}
 
 Please log into The Link system to review the project and take the necessary action.

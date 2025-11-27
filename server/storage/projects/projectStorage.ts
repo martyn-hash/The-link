@@ -1303,12 +1303,13 @@ export class ProjectStorage extends BaseStorage {
             userId: newAssigneeId,
           });
           
-          // Create initial message with stage change notes if provided
-          if (update.notesHtml && update.notesHtml.trim()) {
+          // Create initial message with stage change notes and/or attachments if provided
+          if ((update.notesHtml && update.notesHtml.trim()) || (update.attachments && update.attachments.length > 0)) {
             await this.projectHelpers.createProjectMessage({
               threadId: newThread.id,
-              content: update.notesHtml,
+              content: update.notesHtml?.trim() || 'Stage change attachments',
               userId: userId,
+              attachments: update.attachments,
             });
           }
           

@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Eye, MessageSquare, CheckCircle, Mail, Phone, FileText, StickyNote, MessageCircle, Filter, Clock, User as UserIcon, ArrowRight } from "lucide-react";
+import { Eye, MessageSquare, CheckCircle, Mail, Phone, FileText, StickyNote, MessageCircle, Filter, Clock, User as UserIcon, ArrowRight, Paperclip, Download, ExternalLink } from "lucide-react";
 import DOMPurify from "isomorphic-dompurify";
 
 interface ProjectChronologyProps {
@@ -773,6 +773,45 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                     ) : (
                       <p className="text-sm whitespace-pre-wrap" data-testid="text-modal-notes">{selectedStageChange.notes}</p>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* Attachments */}
+              {selectedStageChange.attachments && selectedStageChange.attachments.length > 0 && (
+                <div>
+                  <span className="text-xs text-muted-foreground font-medium flex items-center gap-1">
+                    <Paperclip className="w-3 h-3" />
+                    Attachments ({selectedStageChange.attachments.length})
+                  </span>
+                  <div className="mt-2 space-y-2">
+                    {selectedStageChange.attachments.map((attachment: any, index: number) => (
+                      <div
+                        key={index}
+                        className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors"
+                        data-testid={`attachment-${index}`}
+                      >
+                        <FileText className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate" data-testid={`attachment-name-${index}`}>
+                            {attachment.fileName}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {attachment.fileType} · {(attachment.fileSize / 1024).toFixed(1)} KB
+                          </p>
+                        </div>
+                        <a
+                          href={`/api/projects/${project.id}/stage-change-attachments${attachment.objectPath}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-sm text-primary hover:underline"
+                          data-testid={`attachment-download-${index}`}
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          <span className="hidden sm:inline">View</span>
+                        </a>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

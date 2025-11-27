@@ -32,8 +32,11 @@ import {
   CheckCircle, 
   ChevronDown, 
   ChevronUp, 
-  Equal 
+  Equal,
+  X,
+  FileText
 } from "lucide-react";
+import { FileUploadZone } from "@/components/attachments";
 import type {
   ProjectWithRelations,
   User,
@@ -140,6 +143,14 @@ export default function ChangeStatusModal({
   const [showApprovalForm, setShowApprovalForm] = useState(false);
   const [notificationPreview, setNotificationPreview] = useState<StageChangeNotificationPreview | null>(null);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [uploadedAttachments, setUploadedAttachments] = useState<Array<{
+    fileName: string;
+    fileSize: number;
+    fileType: string;
+    objectPath: string;
+  }>>([]);
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -320,6 +331,9 @@ export default function ChangeStatusModal({
       setCustomFieldResponses({});
       setShowApprovalForm(false);
       approvalForm.reset();
+      setSelectedFiles([]);
+      setUploadedAttachments([]);
+      setIsUploadingFiles(false);
     }
   }, [isOpen, approvalForm]);
 
@@ -351,6 +365,7 @@ export default function ChangeStatusModal({
         newStatus,
         changeReason,
         notesHtml: notesHtml.trim() || undefined,
+        attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
         fieldResponses: formatFieldResponses(),
       });
     },
@@ -368,6 +383,12 @@ export default function ChangeStatusModal({
       newStatus: string;
       changeReason: string;
       notesHtml?: string;
+      attachments?: Array<{
+        fileName: string;
+        fileSize: number;
+        fileType: string;
+        objectPath: string;
+      }>;
       fieldResponses?: Array<{
         customFieldId: string;
         fieldType: "number" | "short_text" | "long_text" | "multi_select";
@@ -669,14 +690,102 @@ export default function ChangeStatusModal({
         newStatus,
         changeReason,
         notesHtml: notesHtml.trim() || undefined,
+        attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
         fieldResponses: formatFieldResponses(),
       });
     }
   };
 
+  // File upload helper function
+  const uploadFilesToObjectStorage = async (files: File[]): Promise<Array<{
+    fileName: string;
+    fileSize: number;
+    fileType: string;
+    objectPath: string;
+  }>> => {
+    const uploadedFiles: Array<{
+      fileName: string;
+      fileSize: number;
+      fileType: string;
+      objectPath: string;
+    }> = [];
+
+    for (const file of files) {
+      // Get signed URL for uploading
+      const urlResponse = await apiRequest(
+        "POST",
+        `/api/projects/${project.id}/stage-change-attachments/upload-url`,
+        {
+          fileName: file.name,
+          fileType: file.type || 'application/octet-stream',
+          fileSize: file.size,
+        }
+      );
+
+      const { url: uploadUrl, objectPath } = urlResponse;
+
+      // Upload to object storage
+      const uploadResponse = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": file.type || 'application/octet-stream',
+        },
+        body: file,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Failed to upload file: ${file.name}`);
+      }
+
+      uploadedFiles.push({
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type || 'application/octet-stream',
+        objectPath,
+      });
+    }
+
+    return uploadedFiles;
+  };
+
+  // Handle file selection and upload
+  const handleFilesSelected = async (files: File[]) => {
+    if (files.length === 0) return;
+
+    setSelectedFiles((prev) => [...prev, ...files]);
+    setIsUploadingFiles(true);
+
+    try {
+      const uploaded = await uploadFilesToObjectStorage(files);
+      setUploadedAttachments((prev) => [...prev, ...uploaded]);
+      toast({
+        title: "Files Uploaded",
+        description: `${files.length} file(s) uploaded successfully`,
+      });
+    } catch (error: any) {
+      // Remove the files from selected since upload failed
+      setSelectedFiles((prev) =>
+        prev.filter((f) => !files.some((newFile) => newFile.name === f.name))
+      );
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to upload one or more files",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingFiles(false);
+    }
+  };
+
+  // Handle file removal
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+    setUploadedAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const availableStatuses = getAvailableStatuses();
   const isSubmitting =
-    updateStatusMutation.isPending || submitApprovalResponsesMutation.isPending;
+    updateStatusMutation.isPending || submitApprovalResponsesMutation.isPending || isUploadingFiles;
 
   return (
     <>
@@ -872,6 +981,44 @@ export default function ChangeStatusModal({
                 onChange={setNotesHtml}
                 placeholder="Add notes explaining the status change..."
               />
+            </div>
+
+            {/* File Attachments */}
+            <div className="space-y-2">
+              <Label>Attachments</Label>
+              <FileUploadZone
+                onFilesSelected={handleFilesSelected}
+                isUploading={isUploadingFiles}
+                accept="*/*"
+                maxSize={50 * 1024 * 1024}
+                multiple
+              />
+              {selectedFiles.length > 0 && (
+                <div className="space-y-2 mt-2">
+                  {selectedFiles.map((file, index) => (
+                    <div
+                      key={`${file.name}-${index}`}
+                      className="flex items-center gap-2 p-2 border rounded bg-muted/30"
+                    >
+                      <FileText className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm flex-1 truncate">{file.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {(file.size / 1024).toFixed(1)} KB
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveFile(index)}
+                        className="h-6 w-6 p-0"
+                        data-testid={`btn-remove-file-${index}`}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 

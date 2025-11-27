@@ -16,9 +16,10 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, Loader2, Upload, X, FileText } from "lucide-react";
 import StageApprovalModal from "@/components/StageApprovalModal";
 import { TiptapEditor } from "@/components/TiptapEditor";
+import { FileUploadZone } from "@/components/attachments";
 import type { 
   ProjectWithRelations, 
   User, 
@@ -71,6 +72,8 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
     fileType: string;
     objectPath: string;
   }>>([]);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const [customFieldResponses, setCustomFieldResponses] = useState<Record<string, any>>({});
   
   // Stage approval modal state
@@ -358,7 +361,60 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
     });
   };
 
-  const handleUpdateStatus = () => {
+  // Helper function to format file size for display
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  // Upload files to object storage - throws on any failure
+  const uploadFiles = async (files: File[]): Promise<typeof attachments> => {
+    const uploadedAttachments: typeof attachments = [];
+    
+    for (const file of files) {
+      // Get upload URL - let errors propagate
+      const uploadUrlResponse = await apiRequest('POST', `/api/projects/${project.id}/stage-change-attachments/upload-url`, {
+        fileName: file.name,
+        fileType: file.type,
+      });
+      
+      // Upload the file to object storage
+      const uploadResponse = await fetch(uploadUrlResponse.url, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+        },
+      });
+      
+      if (!uploadResponse.ok) {
+        throw new Error(`Failed to upload file: ${file.name}`);
+      }
+      
+      // Add to uploaded attachments
+      uploadedAttachments.push({
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        objectPath: uploadUrlResponse.objectPath,
+      });
+    }
+    
+    return uploadedAttachments;
+  };
+
+  // Handle file selection
+  const handleFilesSelected = (files: File[]) => {
+    setSelectedFiles(prev => [...prev, ...files]);
+  };
+
+  // Remove a selected file
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleUpdateStatus = async () => {
     if (!newStatus || !changeReason) {
       toast({
         title: "Validation Error",
@@ -384,11 +440,33 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
     // Prepare field responses
     const fieldResponses = customFields.length > 0 ? formatFieldResponses() : undefined;
 
+    // Upload any selected files before proceeding
+    let uploadedAttachments = [...attachments];
+    if (selectedFiles.length > 0) {
+      setIsUploadingFiles(true);
+      try {
+        const newAttachments = await uploadFiles(selectedFiles);
+        uploadedAttachments = [...uploadedAttachments, ...newAttachments];
+        setAttachments(uploadedAttachments);
+        setSelectedFiles([]);
+      } catch (error: any) {
+        console.error('Failed to upload files:', error);
+        toast({
+          title: "Upload Failed",
+          description: error.message || "Failed to upload one or more files. Please try again.",
+          variant: "destructive",
+        });
+        setIsUploadingFiles(false);
+        return;
+      }
+      setIsUploadingFiles(false);
+    }
+
     const statusChangeData = {
       newStatus,
       changeReason,
       notesHtml: notesHtml.trim() || undefined,
-      attachments: attachments.length > 0 ? attachments : undefined,
+      attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
       fieldResponses,
     };
 
@@ -663,14 +741,74 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
               placeholder="Add notes explaining the status change (supports formatting and tables)..."
             />
           </div>
+
+          {/* File Attachments Section */}
+          <div className="space-y-3">
+            <Label>Attachments (optional):</Label>
+            <FileUploadZone
+              onFilesSelected={handleFilesSelected}
+              maxFiles={10}
+              compact={true}
+              disabled={isUploadingFiles}
+            />
+            
+            {/* Selected files list */}
+            {selectedFiles.length > 0 && (
+              <div className="space-y-2" data-testid="selected-files-list">
+                {selectedFiles.map((file, index) => (
+                  <div 
+                    key={`${file.name}-${index}`} 
+                    className="flex items-center justify-between p-2 bg-muted rounded-md"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                      <span className="text-sm truncate">{file.name}</span>
+                      <span className="text-xs text-muted-foreground flex-shrink-0">
+                        ({formatFileSize(file.size)})
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRemoveFile(index)}
+                      disabled={isUploadingFiles}
+                      data-testid={`button-remove-file-${index}`}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Already uploaded attachments */}
+            {attachments.length > 0 && (
+              <div className="space-y-2" data-testid="uploaded-attachments-list">
+                <span className="text-xs text-muted-foreground">Uploaded:</span>
+                {attachments.map((attachment, index) => (
+                  <div 
+                    key={`${attachment.objectPath}-${index}`} 
+                    className="flex items-center gap-2 p-2 bg-green-50 dark:bg-green-950 rounded-md"
+                  >
+                    <FileText className="h-4 w-4 flex-shrink-0 text-green-600" />
+                    <span className="text-sm truncate">{attachment.fileName}</span>
+                    <span className="text-xs text-muted-foreground">
+                      ({formatFileSize(attachment.fileSize)})
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           
           <Button
             onClick={handleUpdateStatus}
-            disabled={updateStatusMutation.isPending || submitApprovalResponsesMutation.isPending || !newStatus || !changeReason}
+            disabled={updateStatusMutation.isPending || submitApprovalResponsesMutation.isPending || isUploadingFiles || !newStatus || !changeReason}
             className="w-full"
             data-testid="button-update-status"
           >
-            {updateStatusMutation.isPending || submitApprovalResponsesMutation.isPending ? "Updating..." : "Update Status"}
+            {isUploadingFiles ? "Uploading files..." : updateStatusMutation.isPending || submitApprovalResponsesMutation.isPending ? "Updating..." : "Update Status"}
           </Button>
         </div>
       </div>

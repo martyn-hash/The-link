@@ -161,10 +161,25 @@ export const completeProjectSchema = z.object({
 });
 
 export const updateProjectStatusSchema = z.object({
-  status: z.string(),
+  projectId: z.string(),
+  newStatus: z.string(),
   notes: z.string().optional(),
   notesHtml: z.string().optional(),
   changeReason: z.string().optional(),
+  attachments: z.array(z.object({
+    fileName: z.string(),
+    fileSize: z.number(),
+    fileType: z.string(),
+    objectPath: z.string(),
+  })).optional(),
+  fieldResponses: z.array(z.object({
+    customFieldId: z.string(),
+    fieldType: z.enum(["number", "short_text", "long_text", "multi_select"]),
+    valueNumber: z.number().optional(),
+    valueShortText: z.string().optional(),
+    valueLongText: z.string().optional(),
+    valueMultiSelect: z.array(z.string()).optional(),
+  })).optional(),
 });
 
 export function normalizeProjectMonth(input: string): string {

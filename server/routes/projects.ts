@@ -20,6 +20,7 @@ import {
   resetTestData,
   buildSchedulingPreview,
 } from "../project-scheduler";
+import { ObjectStorageService, ObjectNotFoundError } from "../objectStorage";
 
 // Parameter validation schema
 const paramUuidSchema = z.object({
@@ -561,7 +562,8 @@ export function registerProjectRoutes(
               projectWithDetails.createdAt?.toISOString(),
               updateData.changeReason,
               notesForEmail,
-              undefined // fieldResponses - different structure, not needed for notification email
+              undefined, // fieldResponses - different structure, not needed for notification email
+              updateData.attachments // attachments from stage change
             );
 
             if (emailSent) {
@@ -599,6 +601,81 @@ export function registerProjectRoutes(
       } else {
         res.status(500).json({ message: "Failed to update project status" });
       }
+    }
+  });
+
+  // Generate upload URL for stage change attachments
+  app.post("/api/projects/:id/stage-change-attachments/upload-url", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { fileName, fileType } = req.body;
+      const projectId = req.params.id;
+
+      if (!fileName || !fileType) {
+        return res.status(400).json({ message: "fileName and fileType are required" });
+      }
+
+      // Verify project exists
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Generate a unique object path in the private directory
+      const timestamp = Date.now();
+      const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const privateDir = process.env.PRIVATE_OBJECT_DIR || "";
+      const fullPath = `${privateDir}/stage-change-attachments/${projectId}/${timestamp}_${sanitizedFileName}`;
+
+      const objectStorageService = new ObjectStorageService();
+      const uploadURL = await objectStorageService.getUploadURLForPath(fullPath);
+
+      // Return just the filename part for later retrieval
+      // The download route will prepend the project-specific path
+      const objectPath = `/${timestamp}_${sanitizedFileName}`;
+
+      res.json({
+        url: uploadURL,
+        objectPath,
+        fileName,
+        fileType,
+      });
+    } catch (error) {
+      console.error("Error generating upload URL for stage change attachment:", error);
+      res.status(500).json({ message: "Failed to generate upload URL" });
+    }
+  });
+
+  // Serve stage change attachments with project access check
+  app.get("/api/projects/:id/stage-change-attachments/*", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const projectId = req.params.id;
+
+      // Verify project exists
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Extract the object path from the URL (everything after /stage-change-attachments/)
+      const urlPath = req.path;
+      const pathAfterProject = urlPath.replace(`/api/projects/${projectId}/stage-change-attachments`, '');
+      const objectPath = `/objects/stage-change-attachments/${projectId}${pathAfterProject}`;
+
+      // Serve the file
+      const objectStorageService = new ObjectStorageService();
+      try {
+        const objectFile = await objectStorageService.getObjectEntityFile(objectPath);
+        objectStorageService.downloadObject(objectFile, res);
+      } catch (error) {
+        console.error("Error serving stage change attachment:", error);
+        if (error instanceof ObjectNotFoundError) {
+          return res.status(404).json({ message: "Attachment not found" });
+        }
+        return res.status(500).json({ message: "Error serving attachment" });
+      }
+    } catch (error) {
+      console.error("Error serving stage change attachment:", error);
+      res.status(500).json({ message: "Failed to serve attachment" });
     }
   });
 
