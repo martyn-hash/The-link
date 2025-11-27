@@ -43,6 +43,13 @@
       "when": 1764278887024,
       "tag": "0005_late_shinko_yamashiro",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1764284636761,
+      "tag": "0006_deep_enchantress",
+      "breakpoints": true
     }
   ]
 }

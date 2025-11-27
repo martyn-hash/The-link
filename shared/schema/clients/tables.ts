@@ -231,6 +231,8 @@ export const companySettings = pgTable("company_settings", {
   maintenanceMode: boolean("maintenance_mode").default(false).notNull(),
   maintenanceMessage: text("maintenance_message"),
   nlacPassword: varchar("nlac_password"),
+  ringCentralLive: boolean("ring_central_live").default(false).notNull(),
+  appIsLive: boolean("app_is_live").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

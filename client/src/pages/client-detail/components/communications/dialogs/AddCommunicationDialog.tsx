@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { TiptapEditor } from "@/components/TiptapEditor";
 import {
   Dialog,
   DialogContent,
@@ -178,12 +178,14 @@ export function AddCommunicationDialog({
                 <FormItem>
                   <FormLabel>Content</FormLabel>
                   <FormControl>
-                    <Textarea
-                      placeholder="Enter communication details, call notes, or message content..."
-                      className="min-h-32"
-                      data-testid="textarea-content"
-                      {...field}
-                    />
+                    <div data-testid="editor-content">
+                      <TiptapEditor
+                        content={field.value || ''}
+                        onChange={field.onChange}
+                        placeholder="Enter communication details, call notes, or message content..."
+                        editorHeight="min-h-[200px]"
+                      />
+                    </div>
                   </FormControl>
                   <FormDescription>
                     Record detailed notes about the communication

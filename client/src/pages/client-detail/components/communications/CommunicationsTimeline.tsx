@@ -25,7 +25,7 @@ import {
 } from "./dialogs";
 import type { 
   CommunicationWithRelations, 
-  CommunicationFilterType, 
+  CommunicationFilterSelection, 
   TimelineItem, 
   EmailThread,
   MessageThread,
@@ -52,7 +52,7 @@ export function CommunicationsTimeline({ clientId, user }: CommunicationsTimelin
   const [callPhoneNumber, setCallPhoneNumber] = useState<string | undefined>();
   const [emailThreadViewerOpen, setEmailThreadViewerOpen] = useState(false);
   const [selectedEmailThreadId, setSelectedEmailThreadId] = useState<string | null>(null);
-  const [commTypeFilter, setCommTypeFilter] = useState<CommunicationFilterType>('all');
+  const [selectedFilters, setSelectedFilters] = useState<CommunicationFilterSelection>(['all']);
   const [projectCache, setProjectCache] = useState<Record<string, any>>({});
 
   const { data: communications, isLoading } = useQuery<CommunicationWithRelations[]>({
@@ -77,7 +77,13 @@ export function CommunicationsTimeline({ clientId, user }: CommunicationsTimelin
     enabled: !!clientId,
   });
 
+  const { data: featureFlags } = useQuery<{ ringCentralLive: boolean; appIsLive: boolean }>({
+    queryKey: ['/api/feature-flags'],
+  });
+
   const emailThreads = emailThreadsData?.threads || [];
+  const showMakeCall = featureFlags?.ringCentralLive ?? false;
+  const showInstantMessage = featureFlags?.appIsLive ?? false;
   
   const formatDate = (date: string | Date | null | undefined): string => {
     if (!date) return '';
@@ -135,10 +141,13 @@ export function CommunicationsTimeline({ clientId, user }: CommunicationsTimelin
   ].sort((a, b) => b.sortDate.getTime() - a.sortDate.getTime());
 
   const filteredItems = allItems.filter(item => {
-    if (commTypeFilter === 'all') return true;
-    if (commTypeFilter === 'sms') return item.type === 'sms_sent' || item.type === 'sms_received';
-    if (commTypeFilter === 'email') return item.type === 'email_sent' || item.type === 'email_received';
-    return item.type === commTypeFilter;
+    if (selectedFilters.includes('all') || selectedFilters.length === 0) return true;
+    
+    return selectedFilters.some(filter => {
+      if (filter === 'sms') return item.type === 'sms_sent' || item.type === 'sms_received';
+      if (filter === 'email') return item.type === 'email_sent' || item.type === 'email_received';
+      return item.type === filter;
+    });
   });
 
   const handleViewCommunication = (communication: CommunicationWithRelations) => {
@@ -204,10 +213,12 @@ export function CommunicationsTimeline({ clientId, user }: CommunicationsTimelin
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem onClick={() => setIsCallingPerson(true)} data-testid="menu-make-call">
-                  <PhoneCall className="h-4 w-4 mr-2" />
-                  Make Call
-                </DropdownMenuItem>
+                {showMakeCall && (
+                  <DropdownMenuItem onClick={() => setIsCallingPerson(true)} data-testid="menu-make-call">
+                    <PhoneCall className="h-4 w-4 mr-2" />
+                    Make Call
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={() => setIsSendingSMS(true)} data-testid="menu-send-sms">
                   <Send className="h-4 w-4 mr-2" />
                   Send SMS
@@ -216,10 +227,12 @@ export function CommunicationsTimeline({ clientId, user }: CommunicationsTimelin
                   <Mail className="h-4 w-4 mr-2" />
                   Send Email
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setIsCreatingMessage(true)} data-testid="menu-instant-message">
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  Instant Message
-                </DropdownMenuItem>
+                {showInstantMessage && (
+                  <DropdownMenuItem onClick={() => setIsCreatingMessage(true)} data-testid="menu-instant-message">
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    Instant Message
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={() => setIsAddingCommunication(true)} data-testid="menu-add-communication">
                   <FileText className="h-4 w-4 mr-2" />
                   Add Note
@@ -228,15 +241,17 @@ export function CommunicationsTimeline({ clientId, user }: CommunicationsTimelin
             </DropdownMenu>
           ) : (
             <div className="flex gap-2">
-              <Button
-                onClick={() => setIsCallingPerson(true)}
-                size="sm"
-                variant="outline"
-                data-testid="button-make-call"
-              >
-                <PhoneCall className="h-4 w-4 mr-2" />
-                Make Call
-              </Button>
+              {showMakeCall && (
+                <Button
+                  onClick={() => setIsCallingPerson(true)}
+                  size="sm"
+                  variant="outline"
+                  data-testid="button-make-call"
+                >
+                  <PhoneCall className="h-4 w-4 mr-2" />
+                  Make Call
+                </Button>
+              )}
               <Button
                 onClick={() => setIsSendingSMS(true)}
                 size="sm"
@@ -255,15 +270,17 @@ export function CommunicationsTimeline({ clientId, user }: CommunicationsTimelin
                 <Mail className="h-4 w-4 mr-2" />
                 Send Email
               </Button>
-              <Button
-                onClick={() => setIsCreatingMessage(true)}
-                size="sm"
-                variant="default"
-                data-testid="button-instant-message"
-              >
-                <MessageSquare className="h-4 w-4 mr-2" />
-                Instant Message
-              </Button>
+              {showInstantMessage && (
+                <Button
+                  onClick={() => setIsCreatingMessage(true)}
+                  size="sm"
+                  variant="default"
+                  data-testid="button-instant-message"
+                >
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Instant Message
+                </Button>
+              )}
               <Button
                 onClick={() => setIsAddingCommunication(true)}
                 size="sm"
@@ -277,8 +294,8 @@ export function CommunicationsTimeline({ clientId, user }: CommunicationsTimelin
         </div>
         
         <CommunicationFilters
-          filter={commTypeFilter}
-          onFilterChange={setCommTypeFilter}
+          selectedFilters={selectedFilters}
+          onFilterChange={setSelectedFilters}
           items={allItems}
         />
       </CardHeader>

@@ -13,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Save, Bell, Link2, Plus, Trash2, ExternalLink, Upload, Image as ImageIcon, AlertTriangle, Lock, Eye, EyeOff } from "lucide-react";
+import { Settings, Save, Bell, Link2, Plus, Trash2, ExternalLink, Upload, Image as ImageIcon, AlertTriangle, Lock, Eye, EyeOff, Phone, MessageSquare } from "lucide-react";
 import type { CompanySettings, UpdateCompanySettings } from "@shared/schema";
 
 interface RedirectUrl {
@@ -37,6 +37,10 @@ export default function CompanySettingsPage() {
   const [nlacPassword, setNlacPassword] = useState("");
   const [showNlacPassword, setShowNlacPassword] = useState(false);
   const [hasExistingNlacPassword, setHasExistingNlacPassword] = useState(false);
+  
+  // Feature flags
+  const [ringCentralLive, setRingCentralLive] = useState(false);
+  const [appIsLive, setAppIsLive] = useState(false);
   
   // Post-signature redirect URLs
   const [redirectUrls, setRedirectUrls] = useState<RedirectUrl[]>([]);
@@ -72,6 +76,8 @@ export default function CompanySettingsPage() {
       setNlacPassword("");
       setHasExistingNlacPassword(!!(settings as any).hasNlacPassword);
       setRedirectUrls((settings.postSignatureRedirectUrls as RedirectUrl[]) || []);
+      setRingCentralLive(settings.ringCentralLive || false);
+      setAppIsLive(settings.appIsLive || false);
       setLogoObjectPath(settings.logoObjectPath || null);
       
       // If logo exists, fetch preview URL
@@ -260,6 +266,8 @@ export default function CompanySettingsPage() {
       maintenanceMode,
       maintenanceMessage: maintenanceMessage || null,
       postSignatureRedirectUrls: redirectUrls,
+      ringCentralLive,
+      appIsLive,
     };
     
     // Only include nlacPassword if a new password was entered
@@ -461,6 +469,69 @@ export default function CompanySettingsPage() {
                   onClick={handleSave}
                   disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim()}
                   data-testid="button-save-push-settings"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Feature Flags Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="w-5 h-5" />
+                Feature Flags
+              </CardTitle>
+              <CardDescription>
+                Control which features are enabled for staff users in the system
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between space-x-4">
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="ring-central-live" className="flex items-center gap-2">
+                    <Phone className="w-4 h-4" />
+                    Ring Central Live
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    When enabled, the "Make Call" button will be visible in the communications timeline. Enable this once the Ring Central integration is fully configured.
+                  </p>
+                </div>
+                <Switch
+                  id="ring-central-live"
+                  data-testid="switch-ring-central-live"
+                  checked={ringCentralLive}
+                  onCheckedChange={setRingCentralLive}
+                  disabled={settingsLoading || updateSettingsMutation.isPending}
+                />
+              </div>
+
+              <div className="flex items-center justify-between space-x-4">
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="app-is-live" className="flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4" />
+                    App Is Live
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    When enabled, the "Instant Message" button will be visible in the communications timeline. Enable this once client users are actively using the app.
+                  </p>
+                </div>
+                <Switch
+                  id="app-is-live"
+                  data-testid="switch-app-is-live"
+                  checked={appIsLive}
+                  onCheckedChange={setAppIsLive}
+                  disabled={settingsLoading || updateSettingsMutation.isPending}
+                />
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSave}
+                  disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim()}
+                  data-testid="button-save-feature-flags"
                 >
                   <Save className="w-4 h-4 mr-2" />
                   {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}

@@ -94,6 +94,22 @@ export async function registerAuthAndMiscRoutes(
     });
   });
 
+  // ===== FEATURE FLAGS ENDPOINT (Authenticated - Any User) =====
+  // Returns feature flags that control UI visibility
+  app.get('/api/feature-flags', isAuthenticated, async (req: any, res: any) => {
+    try {
+      const settings = await storage.getCompanySettings();
+      
+      res.json({
+        ringCentralLive: settings?.ringCentralLive ?? false,
+        appIsLive: settings?.appIsLive ?? false,
+      });
+    } catch (error) {
+      console.error("Error fetching feature flags:", error);
+      res.status(500).json({ message: "Failed to fetch feature flags" });
+    }
+  });
+
   // ===== AUTH ROUTES =====
 
   // Get current user (with impersonation support)

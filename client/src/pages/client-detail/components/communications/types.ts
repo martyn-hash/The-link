@@ -2,6 +2,8 @@ import type { Communication, Person, User } from "@shared/schema";
 
 export type CommunicationFilterType = 'all' | 'phone_call' | 'sms' | 'email' | 'message_thread' | 'note' | 'email_thread';
 
+export type CommunicationFilterSelection = CommunicationFilterType[];
+
 export interface CommunicationWithRelations extends Communication {
   user: User;
   person?: Person | null;
@@ -129,8 +131,8 @@ export interface CallDialogProps {
 export interface CreateMessageDialogProps extends DialogBaseProps {}
 
 export interface CommunicationFiltersProps {
-  filter: CommunicationFilterType;
-  onFilterChange: (filter: CommunicationFilterType) => void;
+  selectedFilters: CommunicationFilterSelection;
+  onFilterChange: (filters: CommunicationFilterSelection) => void;
   items: TimelineItem[];
 }
 
