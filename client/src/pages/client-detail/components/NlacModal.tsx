@@ -8,18 +8,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,7 +29,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, History, UserX, Loader2, Eye, EyeOff, Clock, User } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { AlertTriangle, History, UserX, Loader2, Eye, EyeOff, Clock, User, ChevronRight, X } from "lucide-react";
 import { format } from "date-fns";
 import type { Client, NlacAuditLog } from "@shared/schema";
 
@@ -63,8 +53,7 @@ interface NlacModalProps {
 export function NlacModal({ open, onOpenChange, client }: NlacModalProps) {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("action");
-  const [showWarningDialog, setShowWarningDialog] = useState(false);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showConfirmForm, setShowConfirmForm] = useState(false);
   const [selectedReason, setSelectedReason] = useState<NlacReason | "">("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -108,8 +97,7 @@ export function NlacModal({ open, onOpenChange, client }: NlacModalProps) {
   });
 
   const resetAndClose = () => {
-    setShowWarningDialog(false);
-    setShowConfirmDialog(false);
+    setShowConfirmForm(false);
     setSelectedReason("");
     setPassword("");
     setPasswordError("");
@@ -118,12 +106,14 @@ export function NlacModal({ open, onOpenChange, client }: NlacModalProps) {
   };
 
   const handleInitiateNlac = () => {
-    setShowWarningDialog(true);
+    setShowConfirmForm(true);
   };
 
-  const handleWarningConfirm = () => {
-    setShowWarningDialog(false);
-    setShowConfirmDialog(true);
+  const handleCancelConfirm = () => {
+    setShowConfirmForm(false);
+    setSelectedReason("");
+    setPassword("");
+    setPasswordError("");
   };
 
   const handleConfirmNlac = () => {
@@ -148,33 +138,36 @@ export function NlacModal({ open, onOpenChange, client }: NlacModalProps) {
     return found ? found.label : reason;
   };
 
+  const isClientInactive = client.companyStatus === 'inactive';
+
   return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <UserX className="h-5 w-5" />
-              Client Status - {client.name}
-            </DialogTitle>
-            <DialogDescription>
-              Manage client status and view NLAC history
-            </DialogDescription>
-          </DialogHeader>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className={`max-h-[85vh] overflow-hidden flex flex-col transition-all duration-300 ${showConfirmForm ? 'max-w-4xl' : 'max-w-2xl'}`}>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserX className="h-5 w-5" />
+            Client Status - {client.name}
+          </DialogTitle>
+          <DialogDescription>
+            Manage client status and view NLAC history
+          </DialogDescription>
+        </DialogHeader>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 overflow-hidden flex flex-col">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="action" data-testid="tab-nlac-action">
-                <UserX className="h-4 w-4 mr-2" />
-                Mark as NLAC
-              </TabsTrigger>
-              <TabsTrigger value="history" data-testid="tab-nlac-history">
-                <History className="h-4 w-4 mr-2" />
-                History
-              </TabsTrigger>
-            </TabsList>
+        <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); if (v === 'history') setShowConfirmForm(false); }} className="flex-1 overflow-hidden flex flex-col">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="action" data-testid="tab-nlac-action">
+              <UserX className="h-4 w-4 mr-2" />
+              Mark as NLAC
+            </TabsTrigger>
+            <TabsTrigger value="history" data-testid="tab-nlac-history">
+              <History className="h-4 w-4 mr-2" />
+              History
+            </TabsTrigger>
+          </TabsList>
 
-            <TabsContent value="action" className="flex-1 overflow-auto mt-4">
+          <TabsContent value="action" className="flex-1 overflow-auto mt-4">
+            <div className={`grid gap-6 transition-all duration-300 ${showConfirmForm ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              {/* Left Column - Warning and Action */}
               <div className="space-y-6">
                 <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
                   <div className="flex items-start gap-3">
@@ -191,209 +184,206 @@ export function NlacModal({ open, onOpenChange, client }: NlacModalProps) {
                   </div>
                 </div>
 
-                <div className="flex justify-center">
-                  <Button
-                    variant="destructive"
-                    onClick={handleInitiateNlac}
-                    data-testid="button-initiate-nlac"
-                    disabled={client.companyStatus === 'inactive'}
-                  >
-                    <UserX className="h-4 w-4 mr-2" />
-                    {client.companyStatus === 'inactive' ? 'Client is already inactive' : 'Mark Client as Inactive'}
-                  </Button>
-                </div>
-              </div>
-            </TabsContent>
+                {!showConfirmForm && (
+                  <div className="flex justify-center">
+                    <Button
+                      variant="destructive"
+                      onClick={handleInitiateNlac}
+                      data-testid="button-initiate-nlac"
+                      disabled={isClientInactive}
+                    >
+                      <UserX className="h-4 w-4 mr-2" />
+                      {isClientInactive ? 'Client is already inactive' : 'Mark Client as Inactive'}
+                      {!isClientInactive && <ChevronRight className="h-4 w-4 ml-2" />}
+                    </Button>
+                  </div>
+                )}
 
-            <TabsContent value="history" className="flex-1 overflow-auto mt-4">
-              {logsLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                {showConfirmForm && (
+                  <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 flex-shrink-0" />
+                      <div>
+                        <h4 className="font-medium text-destructive">
+                          Warning: This action cannot be undone
+                        </h4>
+                        <p className="text-sm text-destructive/80 mt-1">
+                          Marking a client as inactive will make any services & projects inactive. 
+                          If the client returns, or is made inactive in error, you will need to 
+                          apply new services to the client.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column - Confirmation Form (appears when showConfirmForm is true) */}
+              {showConfirmForm && (
+                <div className="space-y-4 border-l pl-6">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-lg flex items-center gap-2">
+                      <UserX className="h-5 w-5 text-destructive" />
+                      Confirm NLAC
+                    </h3>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCancelConfirm}
+                      className="h-8 w-8 p-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="nlac-reason">Reason for NLAC</Label>
+                      <Select
+                        value={selectedReason}
+                        onValueChange={(value) => setSelectedReason(value as NlacReason)}
+                      >
+                        <SelectTrigger data-testid="select-nlac-reason">
+                          <SelectValue placeholder="Select a reason" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {NLAC_REASONS.map((reason) => (
+                            <SelectItem key={reason.value} value={reason.value}>
+                              {reason.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="nlac-password">NLAC Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="nlac-password"
+                          data-testid="input-nlac-confirm-password"
+                          type={showPassword ? "text" : "password"}
+                          value={password}
+                          onChange={(e) => {
+                            setPassword(e.target.value);
+                            setPasswordError("");
+                          }}
+                          placeholder="Enter NLAC password"
+                          className={passwordError ? "border-destructive pr-10" : "pr-10"}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                          onClick={() => setShowPassword(!showPassword)}
+                        >
+                          {showPassword ? (
+                            <EyeOff className="w-4 h-4 text-muted-foreground" />
+                          ) : (
+                            <Eye className="w-4 h-4 text-muted-foreground" />
+                          )}
+                        </Button>
+                      </div>
+                      {passwordError && (
+                        <p className="text-sm text-destructive">{passwordError}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-4">
+                    <Button
+                      variant="outline"
+                      onClick={handleCancelConfirm}
+                      className="flex-1"
+                      data-testid="button-cancel-nlac-confirm"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={handleConfirmNlac}
+                      disabled={nlacMutation.isPending || !selectedReason || !password}
+                      className="flex-1"
+                      data-testid="button-submit-nlac"
+                    >
+                      {nlacMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <UserX className="h-4 w-4 mr-2" />
+                          Confirm NLAC
+                        </>
+                      )}
+                    </Button>
+                  </div>
                 </div>
-              ) : auditLogs.length === 0 ? (
-                <div className="text-center py-8">
-                  <History className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-medium mb-2">No NLAC history</h3>
-                  <p className="text-muted-foreground">
-                    This client has never been marked as inactive
-                  </p>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Reason</TableHead>
-                      <TableHead>Performed By</TableHead>
-                      <TableHead className="text-right">Impact</TableHead>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="history" className="flex-1 overflow-auto mt-4">
+            {logsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : auditLogs.length === 0 ? (
+              <div className="text-center py-8">
+                <History className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="text-lg font-medium mb-2">No NLAC history</h3>
+                <p className="text-muted-foreground">
+                  This client has never been marked as inactive
+                </p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Reason</TableHead>
+                    <TableHead>Performed By</TableHead>
+                    <TableHead className="text-right">Impact</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {auditLogs.map((log) => (
+                    <TableRow key={log.id} data-testid={`nlac-log-row-${log.id}`}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">
+                            {log.createdAt && format(new Date(log.createdAt), 'MMM d, yyyy h:mm a')}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {formatReasonLabel(log.reason)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span>{log.performedByUserName}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right text-sm text-muted-foreground">
+                        {log.projectsDeactivated} projects, {log.servicesDeactivated} services
+                        {(log as any).portalUsersDeactivated > 0 && `, ${(log as any).portalUsersDeactivated} portal users`}
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {auditLogs.map((log) => (
-                      <TableRow key={log.id} data-testid={`nlac-log-row-${log.id}`}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm">
-                              {log.createdAt && format(new Date(log.createdAt), 'MMM d, yyyy h:mm a')}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">
-                            {formatReasonLabel(log.reason)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-muted-foreground" />
-                            <span>{log.performedByUserName}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right text-sm text-muted-foreground">
-                          {log.projectsDeactivated} projects, {log.servicesDeactivated} services
-                          {(log as any).portalUsersDeactivated > 0 && `, ${(log as any).portalUsersDeactivated} portal users`}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </TabsContent>
-          </Tabs>
-        </DialogContent>
-      </Dialog>
-
-      {/* Warning Dialog */}
-      <AlertDialog open={showWarningDialog} onOpenChange={setShowWarningDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-amber-500" />
-              Warning: This action cannot be undone
-            </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-3">
-              <p>
-                Marking a client as inactive will make any services & projects inactive. 
-                This process cannot be undone.
-              </p>
-              <p>
-                If the client returns, or is made inactive in error, you will need to 
-                apply new services to the client.
-              </p>
-              <p className="font-medium">Are you sure you wish to proceed?</p>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-nlac-warning">No, cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleWarningConfirm}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              data-testid="button-confirm-nlac-warning"
-            >
-              Yes, proceed
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Confirmation Dialog with reason and password */}
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <UserX className="h-5 w-5 text-destructive" />
-              Confirm NLAC for {client.name}
-            </DialogTitle>
-            <DialogDescription>
-              Please provide the reason and password to complete this action.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="nlac-reason">Reason for NLAC</Label>
-              <Select
-                value={selectedReason}
-                onValueChange={(value) => setSelectedReason(value as NlacReason)}
-              >
-                <SelectTrigger data-testid="select-nlac-reason">
-                  <SelectValue placeholder="Select a reason" />
-                </SelectTrigger>
-                <SelectContent>
-                  {NLAC_REASONS.map((reason) => (
-                    <SelectItem key={reason.value} value={reason.value}>
-                      {reason.label}
-                    </SelectItem>
                   ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="nlac-password">NLAC Password</Label>
-              <div className="relative">
-                <Input
-                  id="nlac-password"
-                  data-testid="input-nlac-confirm-password"
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => {
-                    setPassword(e.target.value);
-                    setPasswordError("");
-                  }}
-                  placeholder="Enter NLAC password"
-                  className={passwordError ? "border-destructive pr-10" : "pr-10"}
-                />
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
-                  onClick={() => setShowPassword(!showPassword)}
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-4 h-4 text-muted-foreground" />
-                  ) : (
-                    <Eye className="w-4 h-4 text-muted-foreground" />
-                  )}
-                </Button>
-              </div>
-              {passwordError && (
-                <p className="text-sm text-destructive">{passwordError}</p>
-              )}
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowConfirmDialog(false)}
-              data-testid="button-cancel-nlac-confirm"
-            >
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleConfirmNlac}
-              disabled={nlacMutation.isPending || !selectedReason || !password}
-              data-testid="button-submit-nlac"
-            >
-              {nlacMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <UserX className="h-4 w-4 mr-2" />
-                  Confirm NLAC
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+                </TableBody>
+              </Table>
+            )}
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
   );
 }
