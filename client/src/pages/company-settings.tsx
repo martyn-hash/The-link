@@ -10,9 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Save, Bell, Link2, Plus, Trash2, ExternalLink, Upload, Image as ImageIcon } from "lucide-react";
+import { Settings, Save, Bell, Link2, Plus, Trash2, ExternalLink, Upload, Image as ImageIcon, AlertTriangle } from "lucide-react";
 import type { CompanySettings, UpdateCompanySettings } from "@shared/schema";
 
 interface RedirectUrl {
@@ -27,6 +28,10 @@ export default function CompanySettingsPage() {
   const [emailSenderName, setEmailSenderName] = useState("");
   const [firmName, setFirmName] = useState("");
   const [pushNotificationsEnabled, setPushNotificationsEnabled] = useState(false);
+  
+  // Maintenance mode
+  const [maintenanceMode, setMaintenanceMode] = useState(false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState("");
   
   // Post-signature redirect URLs
   const [redirectUrls, setRedirectUrls] = useState<RedirectUrl[]>([]);
@@ -57,6 +62,8 @@ export default function CompanySettingsPage() {
       setEmailSenderName(settings.emailSenderName || "The Link Team");
       setFirmName(settings.firmName || "The Link");
       setPushNotificationsEnabled(settings.pushNotificationsEnabled || false);
+      setMaintenanceMode(settings.maintenanceMode || false);
+      setMaintenanceMessage(settings.maintenanceMessage || "");
       setRedirectUrls((settings.postSignatureRedirectUrls as RedirectUrl[]) || []);
       setLogoObjectPath(settings.logoObjectPath || null);
       
@@ -243,6 +250,8 @@ export default function CompanySettingsPage() {
       emailSenderName,
       firmName,
       pushNotificationsEnabled,
+      maintenanceMode,
+      maintenanceMessage: maintenanceMessage || null,
       postSignatureRedirectUrls: redirectUrls,
     });
   };
@@ -438,6 +447,71 @@ export default function CompanySettingsPage() {
                   onClick={handleSave}
                   disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim()}
                   data-testid="button-save-push-settings"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Maintenance Mode Card */}
+          <Card className={maintenanceMode ? "border-amber-500 dark:border-amber-600" : ""}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertTriangle className={`w-5 h-5 ${maintenanceMode ? "text-amber-500" : ""}`} />
+                Maintenance Mode
+              </CardTitle>
+              <CardDescription>
+                When enabled, only Super Admins can log in. All other users will see a maintenance message.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="flex items-center justify-between space-x-4">
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="maintenance-mode-enabled">Enable Maintenance Mode</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Prevent non-Super Admin users from logging in while you perform system maintenance.
+                  </p>
+                </div>
+                <Switch
+                  id="maintenance-mode-enabled"
+                  data-testid="switch-maintenance-mode"
+                  checked={maintenanceMode}
+                  onCheckedChange={setMaintenanceMode}
+                  disabled={settingsLoading || updateSettingsMutation.isPending}
+                />
+              </div>
+
+              {maintenanceMode && (
+                <div className="p-4 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                  <p className="text-sm text-amber-800 dark:text-amber-200 font-medium">
+                    Maintenance mode is currently active. Only users with Super Admin access can log in.
+                  </p>
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="maintenance-message">Maintenance Message</Label>
+                <Textarea
+                  id="maintenance-message"
+                  data-testid="textarea-maintenance-message"
+                  value={maintenanceMessage}
+                  onChange={(e) => setMaintenanceMessage(e.target.value)}
+                  placeholder="e.g., We're working on some important updates. We plan to be back online at 12:30."
+                  disabled={settingsLoading || updateSettingsMutation.isPending}
+                  rows={3}
+                />
+                <p className="text-sm text-muted-foreground">
+                  This message will be displayed to users when they try to log in during maintenance.
+                </p>
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSave}
+                  disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim()}
+                  data-testid="button-save-maintenance-settings"
                 >
                   <Save className="w-4 h-4 mr-2" />
                   {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}

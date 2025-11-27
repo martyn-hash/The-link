@@ -3,11 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LogIn } from "lucide-react";
+import { LogIn, ArrowLeft } from "lucide-react";
 import MagicLinkLoginForm from "@/components/magic-link-login-form";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import logoPath from "@assets/full_logo_transparent_600_1761924125378.png";
+import maintenanceImagePath from "@assets/image_1764278395182.png";
 
 export default function Landing() {
   const [loginFormData, setLoginFormData] = useState({
@@ -15,6 +16,8 @@ export default function Landing() {
     password: ''
   });
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [showMaintenance, setShowMaintenance] = useState(false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState("");
   const { toast } = useToast();
 
   const handleLoginInputChange = (field: string, value: string) => {
@@ -43,6 +46,10 @@ export default function Landing() {
         });
         // Refresh the page to trigger auth state update
         window.location.reload();
+      } else if (response.status === 503 && data.maintenanceMode) {
+        // Show maintenance mode screen
+        setMaintenanceMessage(data.maintenanceMessage || "The system is currently undergoing maintenance. Please try again later.");
+        setShowMaintenance(true);
       } else {
         toast({
           title: "Error",
@@ -60,6 +67,45 @@ export default function Landing() {
       setIsLoggingIn(false);
     }
   };
+
+  const handleBackToLogin = () => {
+    setShowMaintenance(false);
+    setMaintenanceMessage("");
+  };
+
+  // Maintenance Mode Screen
+  if (showMaintenance) {
+    return (
+      <div className="min-h-screen bg-[#f5f0e6] flex flex-col items-center justify-center px-4">
+        <div className="max-w-md w-full text-center space-y-6">
+          <img 
+            src={maintenanceImagePath} 
+            alt="Maintenance Mode" 
+            className="w-full max-w-sm mx-auto"
+            data-testid="img-maintenance"
+          />
+          
+          {maintenanceMessage && (
+            <div className="bg-white rounded-lg p-6 shadow-md">
+              <p className="text-gray-700 text-lg" data-testid="text-maintenance-message">
+                {maintenanceMessage}
+              </p>
+            </div>
+          )}
+          
+          <Button
+            variant="outline"
+            onClick={handleBackToLogin}
+            className="mt-4"
+            data-testid="button-back-to-login"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Login
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-background dark:to-secondary">

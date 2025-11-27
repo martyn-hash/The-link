@@ -10,8 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, CheckCircle, AlertCircle, Loader2, KeyRound } from "lucide-react";
+import { Mail, CheckCircle, AlertCircle, Loader2, KeyRound, ArrowLeft } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import maintenanceImagePath from "@assets/image_1764278395182.png";
 
 const manualVerifySchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -21,7 +22,7 @@ const manualVerifySchema = z.object({
 type ManualVerifyFormData = z.infer<typeof manualVerifySchema>;
 
 interface VerificationState {
-  status: "loading" | "token_success" | "manual_form" | "error";
+  status: "loading" | "token_success" | "manual_form" | "error" | "maintenance";
   message?: string;
   error?: string;
 }
@@ -29,6 +30,7 @@ interface VerificationState {
 export default function MagicLinkVerify() {
   const [, setLocation] = useLocation();
   const [verificationState, setVerificationState] = useState<VerificationState>({ status: "loading" });
+  const [maintenanceMessage, setMaintenanceMessage] = useState("");
   const { toast } = useToast();
 
   const form = useForm<ManualVerifyFormData>({
@@ -64,6 +66,14 @@ export default function MagicLinkVerify() {
     },
     onError: (error: any) => {
       console.error("Token verification error:", error);
+      
+      // Check if it's a maintenance mode response
+      if (error.maintenanceMode) {
+        setMaintenanceMessage(error.maintenanceMessage || "The system is currently undergoing maintenance. Please try again later.");
+        setVerificationState({ status: "maintenance" });
+        return;
+      }
+      
       setVerificationState({
         status: "error",
         error: "The magic link is invalid, expired, or has already been used. Please request a new one or try manual verification below.",
@@ -99,6 +109,14 @@ export default function MagicLinkVerify() {
     },
     onError: (error: any) => {
       console.error("Manual verification error:", error);
+      
+      // Check if it's a maintenance mode response
+      if (error.maintenanceMode) {
+        setMaintenanceMessage(error.maintenanceMessage || "The system is currently undergoing maintenance. Please try again later.");
+        setVerificationState({ status: "maintenance" });
+        return;
+      }
+      
       const errorMessage = error.message || "Invalid verification code or email. Please check your details and try again.";
       toast({
         title: "Verification Failed",
@@ -173,6 +191,40 @@ export default function MagicLinkVerify() {
             </CardDescription>
           </CardHeader>
         </Card>
+      </div>
+    );
+  }
+
+  // Maintenance mode screen
+  if (verificationState.status === "maintenance") {
+    return (
+      <div className="min-h-screen bg-[#f5f0e6] flex flex-col items-center justify-center px-4">
+        <div className="max-w-md w-full text-center space-y-6">
+          <img 
+            src={maintenanceImagePath} 
+            alt="Maintenance Mode" 
+            className="w-full max-w-sm mx-auto"
+            data-testid="img-maintenance"
+          />
+          
+          {maintenanceMessage && (
+            <div className="bg-white rounded-lg p-6 shadow-md">
+              <p className="text-gray-700 text-lg" data-testid="text-maintenance-message">
+                {maintenanceMessage}
+              </p>
+            </div>
+          )}
+          
+          <Button
+            variant="outline"
+            onClick={() => setLocation("/")}
+            className="mt-4"
+            data-testid="button-back-to-login"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Login
+          </Button>
+        </div>
       </div>
     );
   }

@@ -107,6 +107,16 @@ export async function setupAuth(app: Express) {
         return res.status(401).json({ message: "Invalid email or password" });
       }
 
+      // Check if maintenance mode is active and user is not a super admin
+      const companySettings = await storage.getCompanySettings();
+      if (companySettings?.maintenanceMode && !user.superAdmin) {
+        return res.status(503).json({ 
+          message: "System is currently in maintenance mode",
+          maintenanceMode: true,
+          maintenanceMessage: companySettings.maintenanceMessage || "The system is currently undergoing maintenance. Please try again later."
+        });
+      }
+
       // Update last login timestamp
       await storage.updateUser(user.id, { lastLoginAt: new Date() } as any);
 
@@ -386,6 +396,16 @@ export async function setupAuth(app: Express) {
           os: metadata.os,
         });
         return res.status(404).json({ message: "User not found" });
+      }
+
+      // Check if maintenance mode is active and user is not a super admin
+      const companySettings = await storage.getCompanySettings();
+      if (companySettings?.maintenanceMode && !user.superAdmin) {
+        return res.status(503).json({ 
+          message: "System is currently in maintenance mode",
+          maintenanceMode: true,
+          maintenanceMessage: companySettings.maintenanceMessage || "The system is currently undergoing maintenance. Please try again later."
+        });
       }
 
       // Update last login timestamp
