@@ -55,8 +55,8 @@ function buildWebhookPayload(
   const includedPersonFields = webhook.includedPersonFields || [];
   
   const clientData: Record<string, any> = {
-    id: client.id,
-    name: client.name,
+    client_id: client.id,
+    client_name: client.name,
   };
   
   const allClientFields = [
@@ -70,45 +70,60 @@ function buildWebhookPayload(
   
   const fieldsToInclude = includedClientFields.length > 0 ? includedClientFields : allClientFields;
   for (const field of fieldsToInclude) {
-    if ((client as any)[field] !== undefined) {
-      clientData[field] = (client as any)[field];
+    const value = (client as any)[field];
+    clientData[`client_${field}`] = value !== undefined && value !== null ? value : '';
+  }
+
+  const allPersonFields = [
+    'firstName', 'lastName', 'email', 'telephone', 'primaryPhone', 'primaryEmail',
+    'addressLine1', 'addressLine2', 'locality', 'region', 'postalCode', 'country',
+    'dateOfBirth', 'niNumber', 'personalUtrNumber', 'nationality', 'countryOfResidence'
+  ];
+  
+  const personFieldsToInclude = includedPersonFields.length > 0 ? includedPersonFields : allPersonFields;
+  
+  const flattenedPeopleData: Record<string, any> = {};
+  const MAX_PEOPLE = 4;
+  const people = client.people || [];
+  
+  flattenedPeopleData['person_count'] = Math.min(people.length, MAX_PEOPLE);
+  
+  for (let i = 0; i < MAX_PEOPLE; i++) {
+    const personNum = i + 1;
+    const prefix = `person_${personNum}_`;
+    
+    if (i < people.length) {
+      const cp = people[i];
+      const person = cp.person;
+      
+      flattenedPeopleData[`${prefix}id`] = person.id;
+      flattenedPeopleData[`${prefix}fullName`] = person.fullName;
+      flattenedPeopleData[`${prefix}officerRole`] = cp.officerRole || '';
+      flattenedPeopleData[`${prefix}isPrimaryContact`] = cp.isPrimaryContact || false;
+      
+      for (const field of personFieldsToInclude) {
+        const value = (person as any)[field];
+        flattenedPeopleData[`${prefix}${field}`] = value !== undefined && value !== null ? value : '';
+      }
+    } else {
+      flattenedPeopleData[`${prefix}id`] = '';
+      flattenedPeopleData[`${prefix}fullName`] = '';
+      flattenedPeopleData[`${prefix}officerRole`] = '';
+      flattenedPeopleData[`${prefix}isPrimaryContact`] = false;
+      
+      for (const field of personFieldsToInclude) {
+        flattenedPeopleData[`${prefix}${field}`] = '';
+      }
     }
   }
 
-  const peopleData = (client.people || []).map(cp => {
-    const person = cp.person;
-    const personData: Record<string, any> = {
-      id: person.id,
-      fullName: person.fullName,
-      officerRole: cp.officerRole,
-      isPrimaryContact: cp.isPrimaryContact,
-    };
-    
-    const allPersonFields = [
-      'firstName', 'lastName', 'email', 'telephone', 'primaryPhone', 'primaryEmail',
-      'addressLine1', 'addressLine2', 'locality', 'region', 'postalCode', 'country',
-      'dateOfBirth', 'niNumber', 'personalUtrNumber', 'nationality', 'countryOfResidence'
-    ];
-    
-    const personFieldsToInclude = includedPersonFields.length > 0 ? includedPersonFields : allPersonFields;
-    for (const field of personFieldsToInclude) {
-      if ((person as any)[field] !== undefined) {
-        personData[field] = (person as any)[field];
-      }
-    }
-    
-    return personData;
-  });
-
   return {
-    client: clientData,
-    people: peopleData,
-    metadata: {
-      sentAt: new Date().toISOString(),
-      sentBy: userName,
-      webhookName: webhook.name,
-      source: 'The Link'
-    }
+    ...clientData,
+    ...flattenedPeopleData,
+    metadata_sentAt: new Date().toISOString(),
+    metadata_sentBy: userName,
+    metadata_webhookName: webhook.name,
+    metadata_source: 'The Link'
   };
 }
 
