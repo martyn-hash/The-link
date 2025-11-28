@@ -435,6 +435,88 @@ export function registerCompaniesHouseRoutes(
     }
   });
 
+  // POST /api/ch-change-requests/bulk-approve - Bulk approve CH change requests for multiple clients (admin only)
+  app.post("/api/ch-change-requests/bulk-approve", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const bodySchema = z.object({
+        clientIds: z.array(z.string().uuid()).min(1, "At least one client ID is required"),
+        notes: z.string().optional(),
+      });
+
+      const bodyValidation = bodySchema.safeParse(req.body);
+      if (!bodyValidation.success) {
+        return res.status(400).json({
+          message: "Invalid request data",
+          errors: bodyValidation.error.issues
+        });
+      }
+
+      const { clientIds, notes } = bodyValidation.data;
+
+      const currentUser = req.user;
+      if (!currentUser?.id) {
+        return res.status(401).json({ message: "User identification required" });
+      }
+
+      const { applyChChanges } = await import('../../ch-update-logic');
+
+      let totalApproved = 0;
+      let clientsWithChanges = 0;
+      let totalServices = 0;
+      let totalProjects = 0;
+      const errors: string[] = [];
+      const skippedClients: string[] = [];
+
+      for (const clientId of clientIds) {
+        try {
+          const clientRequests = await storage.getChChangeRequestsByClientId(clientId);
+          const pendingRequests = clientRequests.filter(r => r.status === 'pending');
+
+          if (pendingRequests.length === 0) {
+            skippedClients.push(clientId);
+            continue;
+          }
+
+          const requestIds = pendingRequests.map(r => r.id);
+          const result = await applyChChanges(
+            clientId,
+            requestIds,
+            currentUser.id,
+            notes
+          );
+
+          totalApproved += requestIds.length;
+          clientsWithChanges++;
+          totalServices += result.updatedServices;
+          totalProjects += result.updatedProjects;
+
+          console.log(`[CH Bulk Approve] Approved ${requestIds.length} changes for client ${clientId}`);
+        } catch (clientError) {
+          const errorMsg = `Failed to approve changes for client ${clientId}: ${clientError instanceof Error ? clientError.message : 'Unknown error'}`;
+          errors.push(errorMsg);
+          console.error(`[CH Bulk Approve] ${errorMsg}`);
+        }
+      }
+
+      console.log(`[CH Bulk Approve] Completed: ${totalApproved} requests across ${clientsWithChanges} clients (${skippedClients.length} skipped with no pending changes)`);
+
+      res.json({
+        message: totalApproved > 0 
+          ? `Successfully approved ${totalApproved} change requests for ${clientsWithChanges} clients`
+          : `No pending changes found for the selected clients`,
+        approvedCount: totalApproved,
+        clientsProcessed: clientsWithChanges,
+        clientsSkipped: skippedClients.length,
+        updatedServices: totalServices,
+        updatedProjects: totalProjects,
+        errors: errors.length > 0 ? errors : undefined,
+      });
+    } catch (error) {
+      console.error("Error bulk approving CH change requests:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to bulk approve CH change requests" });
+    }
+  });
+
   // GET /api/ch-change-requests/grouped - Get pending CH change requests grouped by client (admin only)
   app.get("/api/ch-change-requests/grouped", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {

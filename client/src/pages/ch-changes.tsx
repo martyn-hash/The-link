@@ -36,7 +36,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { CheckCircle, XCircle, Eye, FileCheck, Building, TrendingUp, AlertCircle } from "lucide-react";
+import { CheckCircle, XCircle, Eye, FileCheck, Building, TrendingUp, AlertCircle, CheckSquare } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { format } from "date-fns";
 
 type GroupedChangeRequest = {
@@ -61,7 +62,9 @@ export default function ChChanges() {
   const [selectedGroup, setSelectedGroup] = useState<GroupedChangeRequest | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showApproveDialog, setShowApproveDialog] = useState(false);
+  const [showBulkApproveDialog, setShowBulkApproveDialog] = useState(false);
   const [actionNotes, setActionNotes] = useState("");
+  const [selectedClientIds, setSelectedClientIds] = useState<Set<string>>(new Set());
 
   // Redirect non-admin users
   useEffect(() => {
@@ -83,7 +86,7 @@ export default function ChChanges() {
     retry: false,
   });
 
-  // Bulk approve mutation
+  // Single client approve mutation
   const approveAllMutation = useMutation({
     mutationFn: async ({ clientId, notes }: { clientId: string; notes?: string }) => {
       return await apiRequest("POST", `/api/ch-change-requests/client/${clientId}/approve-all`, { notes });
@@ -108,6 +111,39 @@ export default function ChChanges() {
     },
   });
 
+  // Bulk approve mutation for multiple clients
+  const bulkApproveMutation = useMutation({
+    mutationFn: async ({ clientIds, notes }: { clientIds: string[]; notes?: string }) => {
+      return await apiRequest("POST", `/api/ch-change-requests/bulk-approve`, { clientIds, notes });
+    },
+    onSuccess: (data) => {
+      if (data.approvedCount > 0) {
+        toast({ 
+          title: "Success", 
+          description: `Approved ${data.approvedCount} change requests for ${data.clientsProcessed} clients. Updated ${data.updatedServices} services${data.updatedProjects > 0 ? ` and ${data.updatedProjects} projects` : ''}.`
+        });
+      } else {
+        toast({ 
+          title: "No Changes", 
+          description: "No pending changes found for the selected clients.",
+          variant: "default",
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/ch-change-requests/grouped"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      setShowBulkApproveDialog(false);
+      setActionNotes("");
+      setSelectedClientIds(new Set());
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to bulk approve change requests",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleViewDetails = (group: GroupedChangeRequest) => {
     setSelectedGroup(group);
     setShowDetailsModal(true);
@@ -122,6 +158,34 @@ export default function ChChanges() {
     if (!selectedGroup) return;
     approveAllMutation.mutate({ clientId: selectedGroup.client.id, notes: actionNotes });
   };
+
+  const handleConfirmBulkApprove = () => {
+    if (selectedClientIds.size === 0) return;
+    bulkApproveMutation.mutate({ clientIds: Array.from(selectedClientIds), notes: actionNotes });
+  };
+
+  const toggleClientSelection = (clientId: string) => {
+    setSelectedClientIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(clientId)) {
+        newSet.delete(clientId);
+      } else {
+        newSet.add(clientId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (!groupedRequests) return;
+    if (selectedClientIds.size === groupedRequests.length) {
+      setSelectedClientIds(new Set());
+    } else {
+      setSelectedClientIds(new Set(groupedRequests.map(g => g.client.id)));
+    }
+  };
+
+  const isAllSelected = groupedRequests && groupedRequests.length > 0 && selectedClientIds.size === groupedRequests.length;
 
   const formatValue = (value: any) => {
     if (!value) return "—";
@@ -219,9 +283,23 @@ export default function ChChanges() {
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
                 <span>Pending Changes - Detailed View</span>
-                <Badge variant="outline" data-testid="text-clients-count">
-                  {groupedRequests?.length || 0} Clients with Changes
-                </Badge>
+                <div className="flex items-center gap-3">
+                  {selectedClientIds.size > 0 && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => setShowBulkApproveDialog(true)}
+                      className="bg-green-600 hover:bg-green-700 text-white"
+                      data-testid="button-bulk-approve"
+                    >
+                      <CheckSquare className="w-4 h-4 mr-2" />
+                      Approve Selected ({selectedClientIds.size})
+                    </Button>
+                  )}
+                  <Badge variant="outline" data-testid="text-clients-count">
+                    {groupedRequests?.length || 0} Clients with Changes
+                  </Badge>
+                </div>
               </CardTitle>
               <CardDescription>
                 Each row shows a specific field change with old and new values for verification
@@ -246,6 +324,14 @@ export default function ChChanges() {
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-12">
+                          <Checkbox
+                            checked={isAllSelected}
+                            onCheckedChange={toggleSelectAll}
+                            aria-label="Select all"
+                            data-testid="checkbox-select-all"
+                          />
+                        </TableHead>
                         <TableHead className="w-56">Client</TableHead>
                         <TableHead className="w-40">Change Type</TableHead>
                         <TableHead className="w-56">Field</TableHead>
@@ -273,6 +359,14 @@ export default function ChChanges() {
                             <TableRow key={change.id} data-testid={`row-change-${change.id}`}>
                               {isFirstRow && (
                                 <>
+                                  <TableCell rowSpan={rowSpan} className="align-top">
+                                    <Checkbox
+                                      checked={selectedClientIds.has(group.client.id)}
+                                      onCheckedChange={() => toggleClientSelection(group.client.id)}
+                                      aria-label={`Select ${group.client.name}`}
+                                      data-testid={`checkbox-client-${group.client.id}`}
+                                    />
+                                  </TableCell>
                                   <TableCell rowSpan={rowSpan} className="font-medium align-top border-r-2">
                                     <div className="flex items-center space-x-2">
                                       <Building className="w-4 h-4 text-muted-foreground" />
@@ -555,6 +649,39 @@ export default function ChChanges() {
               data-testid="button-confirm-approve-all"
             >
               {approveAllMutation.isPending ? "Approving..." : "Approve All Changes"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Approve Dialog */}
+      <AlertDialog open={showBulkApproveDialog} onOpenChange={setShowBulkApproveDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Approve Changes for {selectedClientIds.size} Client{selectedClientIds.size !== 1 ? 's' : ''}</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will approve all pending Companies House changes for the selected clients and automatically update their records, services, and projects.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="bulk-approve-notes">Notes (optional)</Label>
+            <Textarea
+              id="bulk-approve-notes"
+              placeholder="Add any notes about this bulk approval..."
+              value={actionNotes}
+              onChange={(e) => setActionNotes(e.target.value)}
+              data-testid="textarea-bulk-approve-notes"
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setActionNotes("")}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmBulkApprove}
+              disabled={bulkApproveMutation.isPending}
+              className="bg-green-600 hover:bg-green-700"
+              data-testid="button-confirm-bulk-approve"
+            >
+              {bulkApproveMutation.isPending ? "Approving..." : `Approve All (${selectedClientIds.size} clients)`}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

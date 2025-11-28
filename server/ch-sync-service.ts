@@ -150,9 +150,30 @@ async function syncClientData(client: Client): Promise<number> {
     
     console.log(`[CH Sync] Detected ${changes.length} changes for ${client.name}:`, changes);
     
-    // Create change requests for detected changes
+    // Separate changes into first-time imports (oldValue is null) and actual changes
+    const firstTimeImports = changes.filter(c => c.oldValue === null);
+    const actualChanges = changes.filter(c => c.oldValue !== null);
+    
+    // For first-time imports (oldValue is null), apply directly without creating change requests
+    // This handles cases where clients are imported and we're just setting initial data
+    if (firstTimeImports.length > 0) {
+      const directUpdates: Record<string, Date> = {};
+      for (const change of firstTimeImports) {
+        if (change.newValue) {
+          directUpdates[change.fieldName] = new Date(change.newValue);
+          console.log(`[CH Sync] First import - applying ${change.fieldName} directly for ${client.name}: null → ${change.newValue}`);
+        }
+      }
+      
+      if (Object.keys(directUpdates).length > 0) {
+        await storage.updateClient(client.id, directUpdates);
+        console.log(`[CH Sync] Applied ${Object.keys(directUpdates).length} first-time field(s) directly for ${client.name}`);
+      }
+    }
+    
+    // Create change requests only for actual changes (where we had a previous value)
     let createdRequests = 0;
-    for (const change of changes) {
+    for (const change of actualChanges) {
       // VALIDATION: Skip if newValue is null or empty
       // This is a safety net - detectChanges should already filter these out
       if (!change.newValue || change.newValue.trim() === '') {
