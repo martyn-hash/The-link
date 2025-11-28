@@ -41,7 +41,8 @@ export function PersonalServicesList({
   onEditService,
   onRefetch,
 }: PersonalServicesListProps) {
-  const title = clientType === 'individual' ? 'Services' : 'Personal Services';
+  const clientTypeLower = clientType?.toLowerCase();
+  const title = clientTypeLower === 'individual' ? 'Services' : 'Personal Services';
   
   if (isLoading) {
     return (
@@ -92,7 +93,7 @@ export function PersonalServicesList({
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className={clientType === 'individual' ? '' : 'text-red-500'}>
+            <CardTitle className={clientTypeLower === 'individual' ? '' : 'text-red-500'}>
               {title}
             </CardTitle>
           </div>

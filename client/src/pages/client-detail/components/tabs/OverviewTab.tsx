@@ -245,7 +245,7 @@ export function OverviewTab({
       </Card>
 
       {/* Company Connections Section - Only show for individual clients */}
-      {client.clientType === 'individual' && (
+      {client.clientType?.toLowerCase() === 'individual' && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">

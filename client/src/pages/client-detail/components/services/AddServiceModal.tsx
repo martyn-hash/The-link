@@ -106,7 +106,8 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
   });
 
   // Fetch available services based on client type
-  const servicesQueryKey = clientType === 'individual' 
+  const clientTypeLower = clientType?.toLowerCase();
+  const servicesQueryKey = clientTypeLower === 'individual' 
     ? ['/api/services'] // All services (will filter to personal services only)
     : ['/api/services/client-assignable']; // Client assignable services only
     
@@ -117,7 +118,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
   });
   
   // Filter services based on client type
-  const services = clientType === 'individual' 
+  const services = clientTypeLower === 'individual' 
     ? allServices?.filter(service => service.isPersonalService) 
     : allServices;
 

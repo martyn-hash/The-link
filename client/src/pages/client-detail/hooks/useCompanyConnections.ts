@@ -43,6 +43,7 @@ export function useCompanyConnections(
   callbacks: UseCompanyConnectionsCallbacks = {}
 ): UseCompanyConnectionsResult {
   const { toast } = useToast();
+  const clientTypeLower = clientType?.toLowerCase();
   
   const [showCompanySelection, setShowCompanySelection] = useState(false);
   const [showCompanyCreation, setShowCompanyCreation] = useState(false);
@@ -50,14 +51,14 @@ export function useCompanyConnections(
   const { data: companyConnections = [], isLoading: connectionsLoading } = useQuery<CompanyConnection[]>({
     queryKey: [`/api/people/${clientId}/companies`],
     queryFn: getQueryFn({ on401: "throw" }),
-    enabled: !!clientId && clientType === 'individual',
+    enabled: !!clientId && clientTypeLower === 'individual',
   });
 
   const companyServicesQueries = useQuery<ClientServiceWithService[]>({
     queryKey: ['connected-company-services', companyConnections.map(conn => conn.client.id)],
     queryFn: async () => {
       const connectedCompanyIds = companyConnections.map(conn => conn.client.id);
-      if (clientType !== 'individual' || connectedCompanyIds.length === 0) {
+      if (clientTypeLower !== 'individual' || connectedCompanyIds.length === 0) {
         return [];
       }
       
@@ -79,7 +80,7 @@ export function useCompanyConnections(
       const allServices = await Promise.all(servicesPromises);
       return allServices.flat();
     },
-    enabled: clientType === 'individual' && companyConnections.length > 0,
+    enabled: clientTypeLower === 'individual' && companyConnections.length > 0,
   });
 
   const { data: companyClients } = useQuery<Client[]>({
@@ -165,7 +166,7 @@ export function useCompanyConnections(
 
   const connectedCompanyIds = companyConnections.map(conn => conn.client.id);
   const availableCompanies = companyClients?.filter(
-    c => c.clientType === 'company' && c.id !== clientId && !connectedCompanyIds.includes(c.id)
+    c => c.clientType?.toLowerCase() === 'company' && c.id !== clientId && !connectedCompanyIds.includes(c.id)
   ) || [];
 
   return {

@@ -260,7 +260,7 @@ export function PersonTabbedView({
   const availableCompanies = useMemo(() => {
     if (!allClients || !personCompanies) return [];
     return allClients.filter(client => 
-      client.clientType === 'company' && 
+      client.clientType?.toLowerCase() === 'company' && 
       client.id !== clientId &&
       !personCompanies.some(pc => pc.client.id === client.id)
     );

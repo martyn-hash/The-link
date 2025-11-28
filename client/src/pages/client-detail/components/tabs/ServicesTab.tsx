@@ -67,9 +67,10 @@ export function ServicesTab({
 }: ServicesTabProps) {
   const [activeSubTab, setActiveSubTab] = useState("list");
   
-  const isCompany = client?.clientType === 'company' || 
+  const clientTypeLower = client?.clientType?.toLowerCase();
+  const isCompany = clientTypeLower === 'company' || 
                     (client?.clientType === null && client?.companyNumber);
-  const isIndividualWithConnections = client?.clientType === 'individual' && (companyConnections?.length ?? 0) > 0;
+  const isIndividualWithConnections = clientTypeLower === 'individual' && (companyConnections?.length ?? 0) > 0;
   const showClientServices = isCompany || isIndividualWithConnections;
 
   const displayServices = isIndividualWithConnections ? companyServices : clientServices;
