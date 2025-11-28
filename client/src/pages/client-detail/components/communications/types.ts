@@ -91,6 +91,8 @@ export interface PersonOption {
     fullName?: string;
     primaryPhone?: string;
     primaryEmail?: string;
+    telephone?: string;  // Fallback phone field
+    email?: string;      // Fallback email field
   };
 }
 

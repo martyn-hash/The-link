@@ -66,10 +66,11 @@ export function EmailDialog({
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isAttachmentsOpen, setIsAttachmentsOpen] = useState(false);
   
-  // Filter to only show people with email addresses
-  const peopleWithEmail = (clientPeople || []).filter((cp: any) => 
-    cp.person?.primaryEmail && cp.person.primaryEmail.trim() !== ''
-  );
+  // Filter to only show people with email addresses (check primaryEmail first, fallback to email)
+  const peopleWithEmail = (clientPeople || []).filter((cp: any) => {
+    const email = cp.person?.primaryEmail || cp.person?.email;
+    return email && email.trim() !== '';
+  });
 
   // Handle files being selected
   const handleFilesSelected = useCallback(async (files: File[]) => {
@@ -147,7 +148,7 @@ export function EmailDialog({
       return;
     }
     const selected = (clientPeople || []).find((cp: any) => cp.person.id === emailPersonId);
-    const to = selected?.person?.primaryEmail;
+    const to = selected?.person?.primaryEmail || selected?.person?.email;
 
     if (!to) {
       toast({ title: 'No email address', description: 'The selected person has no Primary Email saved.', variant: 'destructive' });
@@ -214,14 +215,14 @@ export function EmailDialog({
               <SelectContent>
                 {peopleWithEmail.map((cp: any) => (
                   <SelectItem key={cp.person.id} value={cp.person.id}>
-                    {formatPersonName(cp.person.fullName)} - {cp.person.primaryEmail}
+                    {formatPersonName(cp.person.fullName)} - {cp.person.primaryEmail || cp.person.email}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             {emailPersonId && (
               <p className="text-xs text-muted-foreground">
-                Email: {selectedPerson?.person?.primaryEmail || '—'}
+                Email: {selectedPerson?.person?.primaryEmail || selectedPerson?.person?.email || '—'}
               </p>
             )}
           </div>

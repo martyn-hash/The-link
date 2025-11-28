@@ -32,10 +32,11 @@ export function SMSDialog({
   const { toast } = useToast();
   const [smsPersonId, setSmsPersonId] = useState<string | undefined>();
   
-  // Filter to only show people with mobile numbers
-  const peopleWithMobile = (clientPeople || []).filter((cp: any) => 
-    cp.person?.primaryPhone && cp.person.primaryPhone.trim() !== ''
-  );
+  // Filter to only show people with mobile numbers (check primaryPhone first, fallback to telephone)
+  const peopleWithMobile = (clientPeople || []).filter((cp: any) => {
+    const phone = cp.person?.primaryPhone || cp.person?.telephone;
+    return phone && phone.trim() !== '';
+  });
 
   const sendSmsMutation = useMutation({
     mutationFn: (data: { to: string; message: string; clientId: string; personId?: string }) => 
@@ -73,7 +74,7 @@ export function SMSDialog({
       return;
     }
     const selected = (clientPeople || []).find((cp: any) => cp.person.id === smsPersonId);
-    const to = selected?.person?.primaryPhone;
+    const to = selected?.person?.primaryPhone || selected?.person?.telephone;
 
     if (!to) {
       toast({ title: 'No mobile number', description: 'The selected person has no Primary Mobile saved.', variant: 'destructive' });
@@ -116,14 +117,14 @@ export function SMSDialog({
               <SelectContent>
                 {peopleWithMobile.map((cp: any) => (
                   <SelectItem key={cp.person.id} value={cp.person.id}>
-                    {formatPersonName(cp.person.fullName)} - {cp.person.primaryPhone}
+                    {formatPersonName(cp.person.fullName)} - {cp.person.primaryPhone || cp.person.telephone}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             {smsPersonId && (
               <p className="text-xs text-muted-foreground">
-                Mobile: {selectedPerson?.person?.primaryPhone || '—'}
+                Mobile: {selectedPerson?.person?.primaryPhone || selectedPerson?.person?.telephone || '—'}
               </p>
             )}
           </div>

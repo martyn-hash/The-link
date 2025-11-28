@@ -29,13 +29,42 @@ import type {
  * - Duplicate detection by name and birth date
  */
 export class PeopleStorage extends BaseStorage {
+  // ==================== Contact Normalization ====================
+  
+  /**
+   * Normalizes contact fields by copying fallback values to primary fields.
+   * This ensures email/telephone data is always in primary_email/primary_phone
+   * regardless of which field the user fills in.
+   */
+  private normalizeContactFields(data: any): any {
+    const normalized = { ...data };
+    
+    // If primary_email is empty but email has a value, copy to primary_email
+    if ((!normalized.primaryEmail || normalized.primaryEmail.trim() === '') && 
+        normalized.email && normalized.email.trim() !== '') {
+      normalized.primaryEmail = normalized.email.trim();
+    }
+    
+    // If primary_phone is empty but telephone has a value, copy to primary_phone
+    if ((!normalized.primaryPhone || normalized.primaryPhone.trim() === '') && 
+        normalized.telephone && normalized.telephone.trim() !== '') {
+      normalized.primaryPhone = normalized.telephone.trim();
+    }
+    
+    return normalized;
+  }
+
   // ==================== People CRUD Operations ====================
   
   async createPerson(personData: InsertPerson): Promise<Person> {
     // Strip any inbound id field to ensure database generates UUID
     const { id, ...dataWithoutId } = personData as any;
+    
+    // Normalize contact fields (copy email→primaryEmail, telephone→primaryPhone if primary is empty)
+    const normalizedData = this.normalizeContactFields(dataWithoutId);
+    
     console.log('[PeopleStorage.createPerson] Stripped id field, delegating to DB UUID generation');
-    const [person] = await db.insert(people).values(dataWithoutId).returning();
+    const [person] = await db.insert(people).values(normalizedData).returning();
     console.log('[PeopleStorage.createPerson] DB generated UUID:', person.id);
     return person;
   }
@@ -151,15 +180,34 @@ export class PeopleStorage extends BaseStorage {
       updateData.nationality = null;
     }
     
+    // Fetch current person data to merge with update for proper normalization
+    const currentPerson = await this.getPersonById(id);
+    if (!currentPerson) {
+      throw new Error(`Person with ID '${id}' not found`);
+    }
+    
+    // Merge current contact fields with update data, then normalize
+    const mergedContactData = {
+      primaryEmail: updateData.primaryEmail ?? currentPerson.primaryEmail,
+      email: updateData.email ?? currentPerson.email,
+      primaryPhone: updateData.primaryPhone ?? currentPerson.primaryPhone,
+      telephone: updateData.telephone ?? currentPerson.telephone,
+    };
+    
+    // Normalize contact fields (copy email→primaryEmail, telephone→primaryPhone if primary is empty)
+    const normalizedContact = this.normalizeContactFields(mergedContactData);
+    
+    // Apply normalized contact fields to update data (sync all contact fields)
+    updateData.primaryEmail = normalizedContact.primaryEmail;
+    updateData.primaryPhone = normalizedContact.primaryPhone;
+    updateData.email = normalizedContact.email;
+    updateData.telephone = normalizedContact.telephone;
+    
     const [person] = await db
       .update(people)
       .set(updateData)
       .where(eq(people.id, id))
       .returning();
-    
-    if (!person) {
-      throw new Error(`Person with ID '${id}' not found`);
-    }
     
     return person;
   }
