@@ -187,7 +187,7 @@ export function FieldMappingUI({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[60vh] max-h-[600px] pr-4">
+          <ScrollArea className="h-[calc(100vh-400px)] min-h-[400px] pr-4">
             <div className="space-y-4">
               {sourceHeaders.map((header, index) => {
                 const currentMapping = mappings[header];
