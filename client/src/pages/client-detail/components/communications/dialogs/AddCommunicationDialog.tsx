@@ -5,6 +5,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TiptapEditor } from "@/components/TiptapEditor";
+import { AudioRecorder } from "@/components/AudioRecorder";
 import {
   Dialog,
   DialogContent,
@@ -194,6 +195,19 @@ export function AddCommunicationDialog({
                 </FormItem>
               )}
             />
+
+            <div className="flex items-center gap-2 pt-2 border-t">
+              <AudioRecorder
+                mode="notes"
+                disabled={addCommunicationMutation.isPending}
+                onResult={(result) => {
+                  form.setValue('content', result.content);
+                }}
+              />
+              <span className="text-xs text-muted-foreground">
+                Record voice notes and AI will create a summary
+              </span>
+            </div>
 
             <div className="flex justify-end gap-2 pt-4">
               <Button

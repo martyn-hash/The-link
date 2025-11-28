@@ -1,8 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Mail, Paperclip } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AudioRecorder } from "@/components/AudioRecorder";
 import {
   Dialog,
   DialogContent,
@@ -65,6 +66,7 @@ export function EmailDialog({
   const [attachments, setAttachments] = useState<EmailAttachment[]>([]);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isAttachmentsOpen, setIsAttachmentsOpen] = useState(false);
+  const subjectInputRef = useRef<HTMLInputElement>(null);
   
   // Filter to only show people with email addresses (check primaryEmail first, fallback to email)
   const peopleWithEmail = (clientPeople || []).filter((cp: any) => {
@@ -230,6 +232,7 @@ export function EmailDialog({
           <div className="space-y-2">
             <label className="text-sm font-medium">Subject</label>
             <Input
+              ref={subjectInputRef}
               name="subject"
               placeholder="Message from CRM"
               data-testid="input-email-subject-dialog"
@@ -247,6 +250,24 @@ export function EmailDialog({
               />
             </div>
             <p className="text-xs text-muted-foreground">Uses the person's Primary Email address</p>
+          </div>
+
+          <div className="flex items-center gap-2 pt-2 border-t">
+            <AudioRecorder
+              mode="email"
+              disabled={sendEmailMutation.isPending}
+              onResult={(result) => {
+                if (result.subject && subjectInputRef.current) {
+                  subjectInputRef.current.value = result.subject;
+                }
+                if (result.content) {
+                  setEmailContent(result.content);
+                }
+              }}
+            />
+            <span className="text-xs text-muted-foreground">
+              Record what you want to say and AI will draft the email
+            </span>
           </div>
           
           {/* Attachments Section */}

@@ -32,6 +32,7 @@ PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, sof
 -   **Navigation**: Streamlined navigation with unread messages badges and improved messaging page tabs.
 -   **Feature Flags**: Company settings include toggleable feature flags (Ring Central Live, App Is Live) that control visibility of communication features. Super Admins can manage these via the Company Settings page.
 -   **Communications UI**: Refactored communication filters to use a compact dropdown popover with multi-select checkboxes. The Add Communication dialog uses a TipTap rich text editor for content entry.
+-   **AI Audio Transcription**: Voice-to-text feature in the Comms tab powered by OpenAI. Users can record audio which is transcribed via Whisper and processed by GPT-4o-mini for low latency. Two modes: (1) Notes mode creates summarized bullet-point notes from voice recordings, (2) Email mode drafts professional emails with subject and body from spoken content. System prompts are configurable in Company Settings by Super Admins.
 -   **Webhook Data Sharing**: Zapier integration for sharing client data with legacy systems via configurable webhooks with conditional activation rules and audit logging.
 -   **Enhanced Data Import System**: Comprehensive import capabilities including standalone service imports (matching by company number/name for clients, email/full name for people), interactive field mapping UI for CSV files with auto-matching, and detailed audit reporting with downloadable CSV showing created/updated/skipped/failed records with reasons.
 
@@ -43,6 +44,7 @@ PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, sof
 -   **RingCentral**: For VoIP phone system integration.
 -   **SendGrid**: For transactional email delivery.
 -   **VoodooSMS**: Planned for client SMS services.
+-   **OpenAI API**: Whisper for audio transcription and GPT-4o-mini for AI text processing (notes summarization and email drafting).
 -   **Replit Platform Services**: For object storage, authentication, and deployment.
 
 ### Frontend Libraries

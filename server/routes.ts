@@ -33,6 +33,7 @@ import { registerExcelImportRoutes } from "./routes/excelImport";
 import { registerServiceImportRoutes } from "./routes/serviceImport";
 import { registerClientsImportRoutes } from "./routes/clientsImport";
 import { registerPeopleImportRoutes } from "./routes/peopleImport";
+import { registerAIRoutes } from "./routes/ai";
 
 /**
  * Register all application routes
@@ -110,6 +111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerServiceImportRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin);
   registerClientsImportRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin);
   registerPeopleImportRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin);
+  registerAIRoutes(app, isAuthenticated, resolveEffectiveUser);
 
   const httpServer = createServer(app);
   return httpServer;
