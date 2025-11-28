@@ -1294,6 +1294,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Client Service Role Assignments CRUD
+  async getAllClientServiceRoleAssignments() {
+    return this.serviceAssignmentStorage.getAllClientServiceRoleAssignments();
+  }
+
   async getClientServiceRoleAssignments(clientServiceId: string) {
     return this.serviceAssignmentStorage.getClientServiceRoleAssignments(clientServiceId);
   }

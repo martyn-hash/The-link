@@ -615,6 +615,10 @@ export class ServiceAssignmentStorage extends BaseStorage {
 
   // ==================== Client Service Role Assignments CRUD operations ====================
 
+  async getAllClientServiceRoleAssignments(): Promise<ClientServiceRoleAssignment[]> {
+    return await db.select().from(clientServiceRoleAssignments);
+  }
+
   async getClientServiceRoleAssignments(clientServiceId: string): Promise<(ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[]> {
     // Validate clientServiceId to prevent undefined/null being passed to query builder
     if (!clientServiceId || clientServiceId.trim() === '') {

@@ -416,6 +416,7 @@ export function registerServiceImportRoutes(
           return res.status(400).json({ error: "Missing rows or mappings" });
         }
 
+        console.log(`[Service Import] Starting import of ${rows.length} rows`);
         const importId = nanoid(12);
         const startedAt = new Date().toISOString();
 
@@ -423,14 +424,15 @@ export function registerServiceImportRoutes(
         const serviceNameMap = new Map(allServices.map((s: any) => [s.name.toLowerCase(), s]));
         const serviceIdMap = new Map(allServices.map((s: any) => [s.id, s]));
 
-        // Get the pre-selected service if provided
         const preSelectedService = selectedServiceId ? serviceIdMap.get(selectedServiceId) : null;
 
         const allClients = await storage.getAllClients();
         const clientNameMap = new Map<string, any>();
         const clientCompanyNumberMap = new Map<string, any>();
+        const clientIdMap = new Map<string, any>();
         for (const c of allClients) {
           clientNameMap.set(c.name.toLowerCase(), c);
+          clientIdMap.set(c.id, c);
           if (c.companyNumber) {
             clientCompanyNumberMap.set(c.companyNumber.padStart(8, "0"), c);
           }
@@ -439,10 +441,12 @@ export function registerServiceImportRoutes(
         const allPeople = await storage.getAllPeople();
         const personEmailMap = new Map<string, any>();
         const personNameMap = new Map<string, any>();
+        const personIdMap = new Map<string, any>();
         for (const p of allPeople) {
           if (p.email) personEmailMap.set(p.email.toLowerCase(), p);
           if (p.primaryEmail) personEmailMap.set(p.primaryEmail.toLowerCase(), p);
           if (p.fullName) personNameMap.set(p.fullName.toLowerCase(), p);
+          personIdMap.set(p.id, p);
         }
 
         const users = await storage.getAllUsers();
@@ -450,6 +454,38 @@ export function registerServiceImportRoutes(
 
         const workRoles = await storage.getAllWorkRoles();
         const roleNameMap = new Map(workRoles.map((r: any) => [r.name.toLowerCase(), r]));
+
+        const allClientServices = await storage.getAllClientServices();
+        const clientServiceMap = new Map<string, any[]>();
+        for (const cs of allClientServices) {
+          const key = cs.clientId;
+          if (!clientServiceMap.has(key)) {
+            clientServiceMap.set(key, []);
+          }
+          clientServiceMap.get(key)!.push(cs);
+        }
+
+        const allPeopleServices = await storage.getAllPeopleServices();
+        const peopleServiceMap = new Map<string, any[]>();
+        for (const ps of allPeopleServices) {
+          const key = ps.personId;
+          if (!peopleServiceMap.has(key)) {
+            peopleServiceMap.set(key, []);
+          }
+          peopleServiceMap.get(key)!.push(ps);
+        }
+
+        const allRoleAssignments = await storage.getAllClientServiceRoleAssignments();
+        const roleAssignmentMap = new Map<string, any[]>();
+        for (const ra of allRoleAssignments) {
+          const key = ra.clientServiceId;
+          if (!roleAssignmentMap.has(key)) {
+            roleAssignmentMap.set(key, []);
+          }
+          roleAssignmentMap.get(key)!.push(ra);
+        }
+
+        console.log(`[Service Import] Pre-loaded data: ${allClientServices.length} client services, ${allPeopleServices.length} people services, ${allRoleAssignments.length} role assignments`);
 
         const summary = {
           clientServicesCreated: 0,
@@ -536,7 +572,7 @@ export function registerServiceImportRoutes(
                 continue;
               }
 
-              const personServices = await storage.getPeopleServicesByPersonId(matchedPerson.id);
+              const personServices = peopleServiceMap.get(matchedPerson.id) || [];
               let existingService = personServices.find((ps: any) => ps.serviceId === matchedService.id);
               
               const serviceData: any = {
@@ -613,7 +649,7 @@ export function registerServiceImportRoutes(
                 continue;
               }
 
-              const clientServices = await storage.getClientServicesByClientId(matchedClient.id);
+              const clientServices = clientServiceMap.get(matchedClient.id) || [];
               let existingService = clientServices.find((cs: any) => cs.serviceId === matchedService.id);
 
               const serviceData: any = {
@@ -676,7 +712,7 @@ export function registerServiceImportRoutes(
 
                   if (matchedRole && matchedUser && clientServiceId) {
                     try {
-                      const existingAssignments = await storage.getClientServiceRoleAssignments(clientServiceId);
+                      const existingAssignments = roleAssignmentMap.get(clientServiceId) || [];
                       const existingForRole = existingAssignments.find(
                         (a: any) => a.workRoleId === matchedRole.id && a.isActive
                       );
