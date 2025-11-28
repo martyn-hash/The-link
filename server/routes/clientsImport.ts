@@ -350,6 +350,22 @@ export function registerClientsImportRoutes(
               }
             }
 
+            // Parse and clean monthly charge (strip non-numeric characters like "+VAT")
+            let monthlyChargeQuote = null;
+            if (mapped.monthlyChargeQuote) {
+              const originalValue = String(mapped.monthlyChargeQuote);
+              // Extract just the numeric value (including decimal)
+              const numericMatch = originalValue.replace(/[^0-9.]/g, '');
+              if (numericMatch && !isNaN(parseFloat(numericMatch))) {
+                monthlyChargeQuote = numericMatch;
+                if (originalValue !== numericMatch) {
+                  recordWarnings.push(`Monthly charge "${originalValue}" cleaned to "${numericMatch}"`);
+                }
+              } else {
+                recordWarnings.push(`Monthly charge "${originalValue}" could not be parsed and was cleared`);
+              }
+            }
+
             // Check for existing client
             let existingClient = null;
             if (companyNumber && companyNumber !== "00000000") {
@@ -381,7 +397,7 @@ export function registerClientsImportRoutes(
               postalAddressPostcode: postalAddr.postcode || null,
               postalAddressCountry: postalAddr.country || null,
               managerId,
-              monthlyChargeQuote: mapped.monthlyChargeQuote || null,
+              monthlyChargeQuote,
               clientOnboardedDate,
               notes: mapped.notes || null,
             };

@@ -367,11 +367,23 @@ export function registerPeopleImportRoutes(
             // Parse address
             const postalAddr = parseAddress(mapped.postalAddress);
 
-            // Validate NI number
+            // Validate NI number - clear if invalid
+            let validatedNiNumber = mapped.niNumber || null;
             if (mapped.niNumber) {
               const niCheck = validateNINumber(mapped.niNumber);
               if (!niCheck.valid) {
-                recordWarnings.push(niCheck.warning || "NI number format may be invalid");
+                recordWarnings.push(`NI Number "${mapped.niNumber}" was invalid and cleared from import`);
+                validatedNiNumber = null;
+              }
+            }
+
+            // Validate email - clear if invalid
+            let validatedEmail = mapped.email || null;
+            if (mapped.email) {
+              const emailCheck = validateEmail(mapped.email);
+              if (!emailCheck.valid) {
+                recordWarnings.push(`Email "${mapped.email}" was invalid and cleared from import`);
+                validatedEmail = null;
               }
             }
 
@@ -394,10 +406,10 @@ export function registerPeopleImportRoutes(
               }
             }
 
-            // Check for existing person
+            // Check for existing person (use validated email for lookup)
             let existingPerson = null;
-            if (mapped.email) {
-              existingPerson = peopleByEmail.get(mapped.email.toLowerCase());
+            if (validatedEmail) {
+              existingPerson = peopleByEmail.get(validatedEmail.toLowerCase());
             }
             if (!existingPerson && fullName) {
               existingPerson = peopleByName.get(fullName.toLowerCase());
@@ -414,16 +426,16 @@ export function registerPeopleImportRoutes(
               matchedClient = clientsByName.get(mapped.clientName.toLowerCase());
             }
 
-            // Build person data
+            // Build person data (using validated values)
             const personData: any = {
-              fullName: fullName || mapped.email,
+              fullName: fullName || validatedEmail,
               firstName: mapped.firstName || null,
               lastName: mapped.lastName || null,
-              email: mapped.email || null,
-              primaryEmail: mapped.email || null,
+              email: validatedEmail,
+              primaryEmail: validatedEmail,
               primaryPhone: formattedMobile || null,
               dateOfBirth,
-              niNumber: mapped.niNumber || null,
+              niNumber: validatedNiNumber,
               personalUtrNumber: mapped.utr || null,
               addressLine1: postalAddr.line1 || null,
               addressLine2: postalAddr.line2 || null,
@@ -481,8 +493,8 @@ export function registerPeopleImportRoutes(
                 });
 
                 // Update cache
-                if (mapped.email) {
-                  peopleByEmail.set(mapped.email.toLowerCase(), { ...existingPerson, ...updateData });
+                if (validatedEmail) {
+                  peopleByEmail.set(validatedEmail.toLowerCase(), { ...existingPerson, ...updateData });
                 }
                 if (fullName) {
                   peopleByName.set(fullName.toLowerCase(), { ...existingPerson, ...updateData });
@@ -560,8 +572,8 @@ export function registerPeopleImportRoutes(
               });
 
               // Update cache
-              if (mapped.email) {
-                peopleByEmail.set(mapped.email.toLowerCase(), newPerson);
+              if (validatedEmail) {
+                peopleByEmail.set(validatedEmail.toLowerCase(), newPerson);
               }
               if (fullName) {
                 peopleByName.set(fullName.toLowerCase(), newPerson);
