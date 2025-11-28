@@ -86,6 +86,48 @@ export function registerServiceImportRoutes(
   resolveEffectiveUser: any,
   requireAdmin: any
 ) {
+  // GET /api/service-import/services - Get all services with their roles and UDF definitions
+  app.get(
+    "/api/service-import/services",
+    isAuthenticated,
+    requireAdmin,
+    async (req: Request, res: Response) => {
+      try {
+        const allServices = await storage.getAllServices();
+        const users = await storage.getAllUsers();
+        
+        // For each service, get its assigned roles
+        const servicesWithRoles = await Promise.all(
+          allServices.map(async (service: any) => {
+            const serviceRoles = await storage.getWorkRolesByServiceId(service.id);
+            return {
+              id: service.id,
+              name: service.name,
+              isPersonalService: service.isPersonalService || false,
+              udfDefinitions: service.udfDefinitions || [],
+              roles: serviceRoles.map((role: any) => ({
+                id: role.id,
+                name: role.name,
+              })),
+            };
+          })
+        );
+
+        res.json({
+          services: servicesWithRoles,
+          users: users.map((u: any) => ({
+            id: u.id,
+            email: u.email,
+            name: u.fullName,
+          })),
+        });
+      } catch (error: any) {
+        console.error("Error fetching services:", error);
+        res.status(500).json({ error: error.message });
+      }
+    }
+  );
+
   app.post(
     "/api/service-import/parse",
     isAuthenticated,
@@ -171,10 +213,11 @@ export function registerServiceImportRoutes(
     requireAdmin,
     async (req: any, res: Response) => {
       try {
-        const { rows, mappings, importType } = req.body as {
+        const { rows, mappings, importType, selectedServiceId } = req.body as {
           rows: Record<string, any>[];
           mappings: FieldMapping[];
           importType: "client_services" | "people_services" | "mixed";
+          selectedServiceId?: string;
         };
 
         if (!rows || !mappings) {
@@ -183,6 +226,10 @@ export function registerServiceImportRoutes(
 
         const allServices = await storage.getAllServices();
         const serviceNameMap = new Map(allServices.map((s: any) => [s.name.toLowerCase(), s]));
+        const serviceIdMap = new Map(allServices.map((s: any) => [s.id, s]));
+
+        // Get the pre-selected service if provided
+        const preSelectedService = selectedServiceId ? serviceIdMap.get(selectedServiceId) : null;
 
         const allClients = await storage.getAllClients();
         const clientNameMap = new Map<string, any>();
@@ -222,20 +269,22 @@ export function registerServiceImportRoutes(
           const rawRow = rows[i];
           const mappedRow = applyMappings(rawRow, mappings);
 
-          const serviceName = mappedRow.serviceName;
-          if (!serviceName) {
-            errors.push({ row: rowNum, field: "serviceName", message: "Service name is required" });
-            continue;
+          // Use pre-selected service or look up by name
+          let matchedService = preSelectedService;
+          if (!matchedService) {
+            const serviceName = mappedRow.serviceName;
+            if (!serviceName) {
+              errors.push({ row: rowNum, field: "serviceName", message: "Service name is required" });
+              continue;
+            }
+            matchedService = serviceNameMap.get(String(serviceName).toLowerCase());
+            if (!matchedService) {
+              servicesNotFound++;
+              errors.push({ row: rowNum, field: "serviceName", message: `Service "${serviceName}" not found in system` });
+              continue;
+            }
           }
-
-          const matchedService = serviceNameMap.get(String(serviceName).toLowerCase());
-          if (matchedService) {
-            servicesMatched++;
-          } else {
-            servicesNotFound++;
-            errors.push({ row: rowNum, field: "serviceName", message: `Service "${serviceName}" not found in system` });
-            continue;
-          }
+          servicesMatched++;
 
           let matchedClient: any = null;
           let matchedPerson: any = null;
@@ -356,10 +405,11 @@ export function registerServiceImportRoutes(
     requireAdmin,
     async (req: any, res: Response) => {
       try {
-        const { rows, mappings, importType } = req.body as {
+        const { rows, mappings, importType, selectedServiceId } = req.body as {
           rows: Record<string, any>[];
           mappings: FieldMapping[];
           importType: "client_services" | "people_services" | "mixed";
+          selectedServiceId?: string;
         };
 
         if (!rows || !mappings) {
@@ -371,6 +421,10 @@ export function registerServiceImportRoutes(
 
         const allServices = await storage.getAllServices();
         const serviceNameMap = new Map(allServices.map((s: any) => [s.name.toLowerCase(), s]));
+        const serviceIdMap = new Map(allServices.map((s: any) => [s.id, s]));
+
+        // Get the pre-selected service if provided
+        const preSelectedService = selectedServiceId ? serviceIdMap.get(selectedServiceId) : null;
 
         const allClients = await storage.getAllClients();
         const clientNameMap = new Map<string, any>();
@@ -420,34 +474,38 @@ export function registerServiceImportRoutes(
           const mappedRow = applyMappings(rawRow, mappings);
 
           try {
-            const serviceName = mappedRow.serviceName;
-            if (!serviceName) {
-              auditRecords.push({
-                rowNumber: rowNum,
-                status: "failed",
-                recordType: "client_service",
-                identifier: "(unknown)",
-                details: "Missing service name",
-                sourceData: rawRow,
-                errorMessage: "Service name is required",
-              });
-              summary.errors++;
-              continue;
-            }
-
-            const matchedService = serviceNameMap.get(String(serviceName).toLowerCase());
+            // Use pre-selected service or look up by name
+            let matchedService = preSelectedService;
             if (!matchedService) {
-              auditRecords.push({
-                rowNumber: rowNum,
-                status: "failed",
-                recordType: "client_service",
-                identifier: serviceName,
-                details: `Service not found`,
-                sourceData: rawRow,
-                errorMessage: `Service "${serviceName}" not found in system`,
-              });
-              summary.errors++;
-              continue;
+              const serviceName = mappedRow.serviceName;
+              if (!serviceName) {
+                auditRecords.push({
+                  rowNumber: rowNum,
+                  status: "failed",
+                  recordType: "client_service",
+                  identifier: "(unknown)",
+                  details: "Missing service name",
+                  sourceData: rawRow,
+                  errorMessage: "Service name is required",
+                });
+                summary.errors++;
+                continue;
+              }
+
+              matchedService = serviceNameMap.get(String(serviceName).toLowerCase());
+              if (!matchedService) {
+                auditRecords.push({
+                  rowNumber: rowNum,
+                  status: "failed",
+                  recordType: "client_service",
+                  identifier: serviceName,
+                  details: `Service not found`,
+                  sourceData: rawRow,
+                  errorMessage: `Service "${serviceName}" not found in system`,
+                });
+                summary.errors++;
+                continue;
+              }
             }
 
             const isPersonalService = importType === "people_services" || matchedService.isPersonalService;
@@ -469,7 +527,7 @@ export function registerServiceImportRoutes(
                   rowNumber: rowNum,
                   status: "failed",
                   recordType: "people_service",
-                  identifier: `${personEmail || personName} / ${serviceName}`,
+                  identifier: `${personEmail || personName} / ${matchedService.name}`,
                   details: "Person not found",
                   sourceData: rawRow,
                   errorMessage: `Person not found: ${personEmail || personName}`,
@@ -546,7 +604,7 @@ export function registerServiceImportRoutes(
                   rowNumber: rowNum,
                   status: "failed",
                   recordType: "client_service",
-                  identifier: `${companyNumber || clientName} / ${serviceName}`,
+                  identifier: `${companyNumber || clientName} / ${matchedService.name}`,
                   details: "Client not found",
                   sourceData: rawRow,
                   errorMessage: `Client not found: ${companyNumber || clientName}`,
@@ -641,6 +699,45 @@ export function registerServiceImportRoutes(
                       globalWarnings.push(`Row ${rowNum}: Role assignment error - ${roleError.message}`);
                     }
                   }
+                }
+              }
+
+              // Handle UDF values
+              const udfValues: Record<string, any> = {};
+              const serviceUdfDefinitions = matchedService.udfDefinitions || [];
+              
+              for (const key of Object.keys(mappedRow)) {
+                if (key.startsWith("udf_") && mappedRow[key] !== undefined && mappedRow[key] !== null && mappedRow[key] !== "") {
+                  const udfId = key.substring(4);
+                  let value = mappedRow[key];
+                  
+                  // Find the UDF definition to get the type
+                  const udfDef = serviceUdfDefinitions.find((u: any) => u.id === udfId);
+                  if (udfDef) {
+                    // Convert value based on type
+                    if (udfDef.type === 'date') {
+                      const parsedDate = parseDate(value);
+                      value = parsedDate ? parsedDate.toISOString() : value;
+                    } else if (udfDef.type === 'boolean') {
+                      value = normalizeBoolean(value);
+                    } else if (udfDef.type === 'number') {
+                      value = parseFloat(String(value).replace(/[^0-9.-]/g, '')) || 0;
+                    }
+                    udfValues[udfId] = value;
+                  }
+                }
+              }
+
+              // Update client service with UDF values if any were found
+              if (Object.keys(udfValues).length > 0 && clientServiceId) {
+                try {
+                  // Merge with existing UDF values
+                  const existingUdfValues = existingService?.udfValues || {};
+                  const mergedUdfValues = { ...existingUdfValues, ...udfValues };
+                  await storage.updateClientService(clientServiceId, { udfValues: mergedUdfValues });
+                  summary.udfValuesUpdated++;
+                } catch (udfError: any) {
+                  globalWarnings.push(`Row ${rowNum}: UDF update error - ${udfError.message}`);
                 }
               }
             }
