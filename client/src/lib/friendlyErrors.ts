@@ -261,8 +261,8 @@ export interface FriendlyErrorOptions {
 export async function showFriendlyError(options: FriendlyErrorOptions): Promise<void> {
   const {
     error,
-    fallbackTitle = "Something Went Wrong",
-    fallbackDescription = "Please try again. If the problem continues, contact support.",
+    fallbackTitle = "Couldn't Complete That",
+    fallbackDescription,
     showWittyOpener = true
   } = options;
   
@@ -270,7 +270,11 @@ export async function showFriendlyError(options: FriendlyErrorOptions): Promise<
   const mapping = matchError(errorMessage);
   
   let title = mapping?.title || fallbackTitle;
-  let description = mapping?.description || fallbackDescription;
+  let description = mapping?.description || fallbackDescription || getActionableGuidance(errorMessage);
+  
+  if (!mapping) {
+    console.warn('[FriendlyError] No mapping for:', errorMessage);
+  }
   
   if (showWittyOpener) {
     try {
@@ -288,19 +292,49 @@ export async function showFriendlyError(options: FriendlyErrorOptions): Promise<
   });
 }
 
+function getActionableGuidance(errorMessage: string): string {
+  const lowerMsg = errorMessage.toLowerCase();
+  
+  if (lowerMsg.includes('network') || lowerMsg.includes('fetch') || lowerMsg.includes('connection')) {
+    return "Check your internet connection and try again. If the problem continues, refresh the page.";
+  }
+  if (lowerMsg.includes('500') || lowerMsg.includes('server')) {
+    return "The server is having trouble. Please wait a moment and try again.";
+  }
+  if (lowerMsg.includes('400') || lowerMsg.includes('bad request')) {
+    return "Please check the information you entered and try again.";
+  }
+  if (lowerMsg.includes('401') || lowerMsg.includes('unauthorized')) {
+    return "Your session may have expired. Please refresh the page or log in again.";
+  }
+  if (lowerMsg.includes('403') || lowerMsg.includes('forbidden')) {
+    return "You don't have permission for this action. Contact your administrator if you need access.";
+  }
+  if (lowerMsg.includes('404') || lowerMsg.includes('not found')) {
+    return "That item couldn't be found. It may have been removed or moved.";
+  }
+  if (lowerMsg.includes('timeout')) {
+    return "The request took too long. Please try again.";
+  }
+  
+  return "Please try again. If this keeps happening, refresh the page or contact support.";
+}
+
 export function showFriendlyErrorSync(options: FriendlyErrorOptions): void {
   const {
     error,
-    fallbackTitle = "Something Went Wrong",
-    fallbackDescription = "Please try again. If the problem continues, contact support.",
+    fallbackTitle = "Couldn't Complete That",
+    fallbackDescription,
   } = options;
   
   const errorMessage = extractErrorMessage(error);
   const mapping = matchError(errorMessage);
   
+  const description = mapping?.description || fallbackDescription || getActionableGuidance(errorMessage);
+  
   toast({
     title: mapping?.title || fallbackTitle,
-    description: mapping?.description || fallbackDescription,
+    description,
     variant: "friendly" as const,
     duration: 8000,
   });
@@ -313,8 +347,8 @@ export function getFriendlyErrorDetails(error: unknown): { title: string; descri
   const mapping = matchError(errorMessage);
   
   return {
-    title: mapping?.title || "Something Went Wrong",
-    description: mapping?.description || "Please try again. If the problem continues, contact support."
+    title: mapping?.title || "Couldn't Complete That",
+    description: mapping?.description || getActionableGuidance(errorMessage)
   };
 }
 
