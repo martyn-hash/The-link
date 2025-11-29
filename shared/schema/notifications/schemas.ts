@@ -92,6 +92,8 @@ export const stageChangeNotificationRecipientSchema = z.object({
   userId: z.string(),
   name: z.string(),
   email: z.string(),
+  mobile: z.string().nullable().optional(), // For SMS notifications
+  hasPushSubscription: z.boolean().optional(), // Whether user has push notifications enabled
 });
 
 export const stageChangeNotificationPreviewSchema = z.object({
@@ -121,4 +123,13 @@ export const sendStageChangeNotificationSchema = z.object({
   pushTitle: z.string().nullable(),
   pushBody: z.string().nullable(),
   suppress: z.boolean().default(false),
+  // Per-channel send controls (default to true for backward compatibility)
+  sendEmail: z.boolean().default(true),
+  sendPush: z.boolean().default(true),
+  sendSms: z.boolean().default(false), // SMS off by default until configured
+  smsBody: z.string().nullable().optional(),
+  // Optional: specify recipient IDs for each channel
+  emailRecipientIds: z.array(z.string()).optional(),
+  pushRecipientIds: z.array(z.string()).optional(),
+  smsRecipientIds: z.array(z.string()).optional(),
 });

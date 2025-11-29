@@ -738,40 +738,62 @@ export function registerProjectRoutes(
         return res.status(400).json({ message: "Invalid dedupe key - notification may have already been processed" });
       }
 
-      // Send emails to all recipients with user-edited content
-      const { sendEmail } = await import("../emailService");
-      
-      const emailPromises = preview.recipients.map(async (recipient) => {
-        try {
-          const emailSent = await sendEmail({
-            to: recipient.email,
-            subject: notificationData.emailSubject,  // Use edited subject
-            html: notificationData.emailBody,        // Use edited body (as HTML)
-          });
+      // Track statistics for each channel
+      const stats = {
+        email: { successful: 0, failed: 0 },
+        push: { successful: 0, failed: 0 },
+        sms: { successful: 0, failed: 0 }
+      };
 
-          if (emailSent) {
-            console.log(`Stage change notification sent to ${recipient.email} for project ${projectId}`);
-            return { success: true, email: recipient.email };
-          } else {
-            console.warn(`Failed to send stage change notification to ${recipient.email} for project ${projectId}`);
-            return { success: false, email: recipient.email, error: 'Email sending failed' };
+      // Filter recipients based on provided recipient IDs (if specified)
+      const emailRecipients = notificationData.emailRecipientIds?.length 
+        ? preview.recipients.filter(r => notificationData.emailRecipientIds!.includes(r.userId))
+        : preview.recipients;
+      const pushRecipients = notificationData.pushRecipientIds?.length
+        ? preview.recipients.filter(r => notificationData.pushRecipientIds!.includes(r.userId))
+        : preview.recipients;
+      const smsRecipients = notificationData.smsRecipientIds?.length
+        ? preview.recipients.filter(r => notificationData.smsRecipientIds!.includes(r.userId))
+        : preview.recipients;
+
+      // Send emails if channel is enabled
+      if (notificationData.sendEmail !== false && emailRecipients.length > 0) {  // Default to true for backward compatibility
+        const { sendEmail } = await import("../emailService");
+        
+        const emailPromises = emailRecipients.map(async (recipient) => {
+          try {
+            const emailSent = await sendEmail({
+              to: recipient.email,
+              subject: notificationData.emailSubject,  // Use edited subject
+              html: notificationData.emailBody,        // Use edited body (as HTML)
+            });
+
+            if (emailSent) {
+              console.log(`Stage change notification sent to ${recipient.email} for project ${projectId}`);
+              return { success: true, email: recipient.email };
+            } else {
+              console.warn(`Failed to send stage change notification to ${recipient.email} for project ${projectId}`);
+              return { success: false, email: recipient.email, error: 'Email sending failed' };
+            }
+          } catch (error) {
+            console.error(`Error sending stage change notification to ${recipient.email}:`, error);
+            return { success: false, email: recipient.email, error: error instanceof Error ? error.message : 'Unknown error' };
           }
-        } catch (error) {
-          console.error(`Error sending stage change notification to ${recipient.email}:`, error);
-          return { success: false, email: recipient.email, error: error instanceof Error ? error.message : 'Unknown error' };
-        }
-      });
+        });
 
-      const results = await Promise.allSettled(emailPromises);
-      const successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
-      const failed = results.length - successful;
+        const results = await Promise.allSettled(emailPromises);
+        stats.email.successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+        stats.email.failed = results.length - stats.email.successful;
+      } else {
+        console.log(`[Notification] Email channel disabled for project ${projectId}`);
+      }
 
-      // Send push notifications if provided
-      if (notificationData.pushTitle && notificationData.pushBody) {
+      // Send push notifications if channel is enabled and content provided
+      if (notificationData.sendPush !== false && notificationData.pushTitle && notificationData.pushBody && pushRecipients.length > 0) {
         try {
           const { sendProjectStageChangeNotification } = await import('../notification-template-service');
           
-          for (const recipient of preview.recipients) {
+          for (const recipient of pushRecipients) {
             try {
               await sendProjectStageChangeNotification(
                 projectId,
@@ -783,20 +805,37 @@ export function registerProjectRoutes(
                 recipient.name,
                 preview.metadata.dueDate
               );
+              stats.push.successful++;
             } catch (pushError) {
               console.error(`Failed to send push notification to user ${recipient.userId}:`, pushError);
+              stats.push.failed++;
             }
           }
         } catch (error) {
           console.error(`Error sending push notifications for project ${projectId}:`, error);
+          stats.push.failed = preview.recipients.length;
         }
+      } else if (!notificationData.sendPush) {
+        console.log(`[Notification] Push channel disabled for project ${projectId}`);
       }
+
+      // SMS notifications - placeholder for future implementation
+      if (notificationData.sendSms && notificationData.smsBody && smsRecipients.length > 0) {
+        console.log(`[Notification] SMS channel enabled but not yet implemented for project ${projectId}`);
+        // TODO: Implement SMS sending via VoodooSMS or similar service
+        // For now, just log that SMS was requested
+        stats.sms.failed = smsRecipients.length;
+      }
+
+      // Calculate overall stats
+      const totalSuccessful = stats.email.successful + stats.push.successful + stats.sms.successful;
+      const totalFailed = stats.email.failed + stats.push.failed + stats.sms.failed;
 
       res.json({ 
         success: true, 
-        message: `Notifications sent: ${successful} successful, ${failed} failed`,
-        sent: true,
-        stats: { successful, failed }
+        message: `Notifications sent: ${totalSuccessful} successful, ${totalFailed} failed`,
+        sent: totalSuccessful > 0,
+        stats
       });
     } catch (error) {
       console.error("[POST /api/projects/:id/send-stage-change-notification] Error:", error instanceof Error ? error.message : error);

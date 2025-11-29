@@ -6,6 +6,7 @@ import {
   projectTypes,
   kanbanStages,
   userNotificationPreferences,
+  pushSubscriptions,
   type User,
   type Project,
   type StageChangeNotificationPreview,
@@ -224,10 +225,19 @@ export class StageChangeNotificationStorage {
       const pushTitle = `${newStageName}: ${projectWithClient.description}`;
       const pushBody = `${clientData.name}${formattedDueDate ? ` | Due: ${formattedDueDate}` : ''}`;
 
+      // Check which users have push subscriptions
+      const pushSubscriptionUserIds = await db
+        .select({ userId: pushSubscriptions.userId })
+        .from(pushSubscriptions)
+        .where(inArray(pushSubscriptions.userId, userIds));
+      const usersWithPush = new Set(pushSubscriptionUserIds.map(p => p.userId));
+
       const recipients = finalUsersToNotify.map(user => ({
         userId: user.id,
         name: `${user.firstName} ${user.lastName || ''}`.trim(),
         email: user.email!,
+        mobile: null, // Staff users don't have mobile numbers in schema yet; SMS is for future client portal use
+        hasPushSubscription: usersWithPush.has(user.id),
       }));
 
       return {
