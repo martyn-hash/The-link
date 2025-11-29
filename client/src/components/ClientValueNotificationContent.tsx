@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -62,6 +62,13 @@ export function ClientValueNotificationContent({
   const [emailSubject, setEmailSubject] = useState(preview.emailSubject);
   const [emailBody, setEmailBody] = useState(preview.emailBody);
   
+  // Store the original template to allow re-resolving when recipients change
+  const emailBodyTemplateRef = useRef(preview.emailBody);
+  const emailSubjectTemplateRef = useRef(preview.emailSubject);
+  
+  // Track the last resolved names to enable smart replacement
+  const lastResolvedNamesRef = useRef<string>("");
+  
   const [sendEmail, setSendEmail] = useState(true);
   const [sendSms, setSendSms] = useState(false);
   const [smsBody, setSmsBody] = useState("");
@@ -78,15 +85,29 @@ export function ClientValueNotificationContent({
   const emailEligibleRecipients = preview.recipients.filter(r => r.email);
   const smsEligibleRecipients = preview.recipients.filter(r => r.mobile);
   
+  // Helper function to extract first name from various formats
+  const extractFirstName = (fullName: string): string => {
+    if (!fullName) return "";
+    
+    // Handle "LASTNAME, Firstname" format (common in UK/formal systems)
+    if (fullName.includes(",")) {
+      const parts = fullName.split(",");
+      if (parts.length >= 2) {
+        // Take the part after the comma, trim whitespace, and get first word
+        const afterComma = parts[1].trim();
+        return afterComma.split(/\s+/)[0] || "";
+      }
+    }
+    
+    // Handle "Firstname Lastname" format
+    return fullName.split(/\s+/)[0] || "";
+  };
+  
   // Helper function to format recipient first names for personalization
   const formatRecipientFirstNames = (recipientIds: Set<string>): string => {
     const names = preview.recipients
       .filter(r => recipientIds.has(r.personId))
-      .map(r => {
-        // Extract first name from full name
-        const fullName = r.fullName || "";
-        return fullName.split(/\s+/)[0] || "";
-      })
+      .map(r => extractFirstName(r.fullName || ""))
       .filter(name => name.length > 0);
     
     if (names.length === 0) return "";
@@ -98,6 +119,42 @@ export function ClientValueNotificationContent({
     const rest = names.slice(0, -2);
     return [...rest, lastTwo].join(", ");
   };
+  
+  // Get current recipient names
+  const recipientNames = formatRecipientFirstNames(emailRecipients);
+  
+  // Effect to update email content when recipients change
+  useEffect(() => {
+    const newNames = recipientNames;
+    const oldNames = lastResolvedNamesRef.current;
+    const template = emailBodyTemplateRef.current;
+    const subjectTemplate = emailSubjectTemplateRef.current;
+    
+    // Only update if names have changed
+    if (newNames === oldNames) return;
+    
+    // Update email body
+    if (template.includes("{recipient_first_names}")) {
+      if (oldNames && emailBody.includes(oldNames)) {
+        // Replace old names with new names
+        setEmailBody(prev => prev.replace(oldNames, newNames || "{recipient_first_names}"));
+      } else if (emailBody.includes("{recipient_first_names}")) {
+        // Variable is still in content, replace it
+        setEmailBody(prev => prev.replace(/\{recipient_first_names\}/g, newNames || "{recipient_first_names}"));
+      }
+    }
+    
+    // Update email subject
+    if (subjectTemplate.includes("{recipient_first_names}")) {
+      if (oldNames && emailSubject.includes(oldNames)) {
+        setEmailSubject(prev => prev.replace(oldNames, newNames || "{recipient_first_names}"));
+      } else if (emailSubject.includes("{recipient_first_names}")) {
+        setEmailSubject(prev => prev.replace(/\{recipient_first_names\}/g, newNames || "{recipient_first_names}"));
+      }
+    }
+    
+    lastResolvedNamesRef.current = newNames;
+  }, [recipientNames, emailBody, emailSubject]);
   
   const toggleRecipient = (
     personId: string, 
@@ -170,14 +227,10 @@ export function ClientValueNotificationContent({
     (sendSms && smsRecipients.size > 0);
 
   const handleSend = async (suppress: boolean) => {
-    // Process recipient_first_names variable before sending
-    const recipientNames = formatRecipientFirstNames(emailRecipients);
-    const processedEmailBody = emailBody.replace(/\{recipient_first_names\}/g, recipientNames);
-    const processedEmailSubject = emailSubject.replace(/\{recipient_first_names\}/g, recipientNames);
-    
+    // Send the current email state (recipient names already resolved by useEffect)
     await onSend({
-      emailSubject: processedEmailSubject,
-      emailBody: processedEmailBody,
+      emailSubject,
+      emailBody,
       suppress,
       sendEmail: sendEmail && emailRecipients.size > 0,
       sendSms: sendSms && smsRecipients.size > 0,
@@ -416,16 +469,11 @@ export function ClientValueNotificationContent({
                   editorHeight="250px"
                 />
               </div>
-              {/* Preview hint for recipient_first_names variable */}
-              {(emailBody.includes("{recipient_first_names}") || emailSubject.includes("{recipient_first_names}")) && (
-                <div className="text-xs bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 px-2 py-1.5 rounded border border-blue-200 dark:border-blue-800" data-testid="preview-recipient-names">
-                  <span className="font-medium">{"{recipient_first_names}"}</span>
-                  {" → "}
-                  {emailRecipients.size > 0 ? (
-                    <span className="italic">{formatRecipientFirstNames(emailRecipients)}</span>
-                  ) : (
-                    <span className="text-muted-foreground italic">Select recipients to preview</span>
-                  )}
+              {/* Show hint when template has variable but no recipients selected */}
+              {emailBodyTemplateRef.current.includes("{recipient_first_names}") && emailRecipients.size === 0 && (
+                <div className="text-xs bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 px-2 py-1.5 rounded border border-amber-200 dark:border-amber-800" data-testid="preview-recipient-names">
+                  <span className="font-medium">Tip:</span>
+                  {" Select recipients above to personalize the greeting with their names."}
                 </div>
               )}
             </div>
