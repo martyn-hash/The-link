@@ -725,10 +725,14 @@ export function registerSuperAdminRoutes(
   // DATA CLEANUP (Super Admin) - Batch delete test/import data
   // ============================================================================
 
-  // Helper function to validate clientIds are valid UUIDs to prevent injection
-  const isValidUUID = (id: string): boolean => {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    return typeof id === 'string' && uuidRegex.test(id);
+  // Helper function to validate clientIds are safe strings
+  // Since we use Drizzle's inArray with parameterized queries, we're protected from SQL injection
+  // This just ensures IDs are reasonable strings (alphanumeric with hyphens/underscores)
+  const isValidClientId = (id: string): boolean => {
+    if (typeof id !== 'string' || id.length === 0 || id.length > 100) return false;
+    // Allow UUIDs and other alphanumeric IDs with hyphens and underscores
+    const validIdRegex = /^[a-zA-Z0-9_-]+$/;
+    return validIdRegex.test(id);
   };
 
   // List clients with their createdAt and counts of related data
@@ -796,8 +800,8 @@ export function registerSuperAdminRoutes(
           return res.status(400).json({ message: "clientIds array is required" });
         }
 
-        // Validate all clientIds are valid UUIDs to prevent SQL injection
-        const invalidIds = clientIds.filter((id: string) => !isValidUUID(id));
+        // Validate all clientIds are valid ID strings
+        const invalidIds = clientIds.filter((id: string) => !isValidClientId(id));
         if (invalidIds.length > 0) {
           console.log("[Data Cleanup Preview] Invalid IDs detected:", JSON.stringify(invalidIds));
           return res.status(400).json({ message: "Invalid client ID format detected", invalidIds });
@@ -900,8 +904,8 @@ export function registerSuperAdminRoutes(
           return res.status(400).json({ message: "clientIds array is required" });
         }
 
-        // Validate all clientIds are valid UUIDs to prevent SQL injection
-        const invalidIds = clientIds.filter((id: string) => !isValidUUID(id));
+        // Validate all clientIds are valid ID strings
+        const invalidIds = clientIds.filter((id: string) => !isValidClientId(id));
         if (invalidIds.length > 0) {
           return res.status(400).json({ message: "Invalid client ID format detected" });
         }
