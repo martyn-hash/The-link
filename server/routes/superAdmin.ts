@@ -790,6 +790,8 @@ export function registerSuperAdminRoutes(
       try {
         const { clientIds } = req.body;
         
+        console.log("[Data Cleanup Preview] Received clientIds:", JSON.stringify(clientIds));
+        
         if (!clientIds || !Array.isArray(clientIds) || clientIds.length === 0) {
           return res.status(400).json({ message: "clientIds array is required" });
         }
@@ -797,7 +799,8 @@ export function registerSuperAdminRoutes(
         // Validate all clientIds are valid UUIDs to prevent SQL injection
         const invalidIds = clientIds.filter((id: string) => !isValidUUID(id));
         if (invalidIds.length > 0) {
-          return res.status(400).json({ message: "Invalid client ID format detected" });
+          console.log("[Data Cleanup Preview] Invalid IDs detected:", JSON.stringify(invalidIds));
+          return res.status(400).json({ message: "Invalid client ID format detected", invalidIds });
         }
 
         const { db } = await import("../db.js");
@@ -967,9 +970,7 @@ export function registerSuperAdminRoutes(
             const approvalResult = await tx.delete(stageApprovalResponses).where(inArray(stageApprovalResponses.projectId, projectIds));
             deletionLog['stageApprovalResponses'] = approvalResult.rowCount || 0;
 
-            // Scheduling exceptions (references projects)
-            const schedExResult = await tx.delete(schedulingExceptions).where(inArray(schedulingExceptions.projectId, projectIds));
-            deletionLog['schedulingExceptions'] = schedExResult.rowCount || 0;
+            // Note: Scheduling exceptions use clientServiceId not projectId - handled in client services section
 
             // Project scheduling history
             const schedHistResult = await tx.delete(projectSchedulingHistory).where(inArray(projectSchedulingHistory.projectId, projectIds));
@@ -997,9 +998,7 @@ export function registerSuperAdminRoutes(
             const schedNotifResult = await tx.delete(scheduledNotifications).where(inArray(scheduledNotifications.projectId, projectIds));
             deletionLog['scheduledNotifications'] = schedNotifResult.rowCount || 0;
 
-            // Notification history for projects
-            const notifHistResult = await tx.delete(notificationHistory).where(inArray(notificationHistory.projectId, projectIds));
-            deletionLog['notificationHistory'] = notifHistResult.rowCount || 0;
+            // Notification history uses clientId - will be cascade deleted with clients
 
             // Now delete projects
             const projectsResult = await tx.delete(projects).where(inArray(projects.clientId, clientIds));
