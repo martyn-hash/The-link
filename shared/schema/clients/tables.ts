@@ -236,6 +236,7 @@ export const companySettings = pgTable("company_settings", {
   // AI Assistant system prompts
   aiSystemPromptNotes: text("ai_system_prompt_notes"),
   aiSystemPromptEmails: text("ai_system_prompt_emails"),
+  aiSystemPromptStageNotifications: text("ai_system_prompt_stage_notifications"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

@@ -46,6 +46,7 @@ export default function CompanySettingsPage() {
   // AI System Prompts
   const [aiSystemPromptNotes, setAiSystemPromptNotes] = useState("");
   const [aiSystemPromptEmails, setAiSystemPromptEmails] = useState("");
+  const [aiSystemPromptStageNotifications, setAiSystemPromptStageNotifications] = useState("");
   
   // Post-signature redirect URLs
   const [redirectUrls, setRedirectUrls] = useState<RedirectUrl[]>([]);
@@ -85,6 +86,7 @@ export default function CompanySettingsPage() {
       setAppIsLive(settings.appIsLive || false);
       setAiSystemPromptNotes(settings.aiSystemPromptNotes || "");
       setAiSystemPromptEmails(settings.aiSystemPromptEmails || "");
+      setAiSystemPromptStageNotifications(settings.aiSystemPromptStageNotifications || "");
       setLogoObjectPath(settings.logoObjectPath || null);
       
       // If logo exists, fetch preview URL
@@ -249,6 +251,7 @@ export default function CompanySettingsPage() {
       appIsLive,
       aiSystemPromptNotes: aiSystemPromptNotes || null,
       aiSystemPromptEmails: aiSystemPromptEmails || null,
+      aiSystemPromptStageNotifications: aiSystemPromptStageNotifications || null,
     };
     
     // Only include nlacPassword if a new password was entered
@@ -564,6 +567,23 @@ export default function CompanySettingsPage() {
                 />
                 <p className="text-sm text-muted-foreground">
                   This prompt guides the AI when helping staff draft client emails.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="ai-system-prompt-stage-notifications">Stage Change Notification System Prompt</Label>
+                <Textarea
+                  id="ai-system-prompt-stage-notifications"
+                  data-testid="textarea-ai-system-prompt-stage-notifications"
+                  value={aiSystemPromptStageNotifications}
+                  onChange={(e) => setAiSystemPromptStageNotifications(e.target.value)}
+                  placeholder="e.g., You are a professional assistant drafting client notifications about project progress. Include a summary of completed work items when provided. Use a friendly, professional tone that celebrates progress."
+                  disabled={settingsLoading || updateSettingsMutation.isPending}
+                  rows={5}
+                  className="font-mono text-sm"
+                />
+                <p className="text-sm text-muted-foreground">
+                  This prompt guides the AI when drafting stage change notifications. The AI will also receive a list of completed quality control items to incorporate into the message.
                 </p>
               </div>
 
