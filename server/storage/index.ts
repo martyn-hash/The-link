@@ -2938,13 +2938,17 @@ export class DatabaseStorage implements IStorage {
     return this.notificationHistoryStorage.getNotificationHistoryByProjectId(projectId);
   }
 
-  // Stage Change Notification operations (3 methods) - StageChangeNotificationStorage
+  // Stage Change Notification operations (4 methods) - StageChangeNotificationStorage
   async prepareStageChangeNotification(projectId: string, newStageName: string, oldStageName?: string) {
     return this.stageChangeNotificationStorage.prepareStageChangeNotification(projectId, newStageName, oldStageName);
   }
 
   async sendStageChangeNotifications(projectId: string, newStageName: string, oldStageName?: string) {
     return this.stageChangeNotificationStorage.sendStageChangeNotifications(projectId, newStageName, oldStageName);
+  }
+
+  async prepareClientValueNotification(projectId: string, newStageName: string, sendingUserId: string, oldStageName?: string) {
+    return this.stageChangeNotificationStorage.prepareClientValueNotification(projectId, newStageName, sendingUserId, oldStageName);
   }
 
   // ============================================================================

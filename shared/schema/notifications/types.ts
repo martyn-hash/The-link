@@ -25,6 +25,9 @@ import {
   stageChangeNotificationRecipientSchema,
   stageChangeNotificationPreviewSchema,
   sendStageChangeNotificationSchema,
+  clientValueNotificationRecipientSchema,
+  clientValueNotificationPreviewSchema,
+  sendClientValueNotificationSchema,
 } from "./schemas";
 
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
@@ -60,3 +63,8 @@ export type PreviewCandidatesResponse = z.infer<typeof previewCandidatesResponse
 export type StageChangeNotificationRecipient = z.infer<typeof stageChangeNotificationRecipientSchema>;
 export type StageChangeNotificationPreview = z.infer<typeof stageChangeNotificationPreviewSchema>;
 export type SendStageChangeNotification = z.infer<typeof sendStageChangeNotificationSchema>;
+
+// Client value notification types (client-facing notifications)
+export type ClientValueNotificationRecipient = z.infer<typeof clientValueNotificationRecipientSchema>;
+export type ClientValueNotificationPreview = z.infer<typeof clientValueNotificationPreviewSchema>;
+export type SendClientValueNotification = z.infer<typeof sendClientValueNotificationSchema>;

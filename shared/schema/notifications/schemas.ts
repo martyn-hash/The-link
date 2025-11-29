@@ -87,13 +87,24 @@ export const previewCandidatesResponseSchema = z.object({
   message: z.string().optional(),
 });
 
-// Stage change notification schemas
+// Stage change notification schemas (internal staff notifications - legacy)
 export const stageChangeNotificationRecipientSchema = z.object({
   userId: z.string(),
   name: z.string(),
   email: z.string(),
   mobile: z.string().nullable().optional(), // For SMS notifications
   hasPushSubscription: z.boolean().optional(), // Whether user has push notifications enabled
+});
+
+// Client Value Notification schemas (client-facing notifications sent via Outlook)
+export const clientValueNotificationRecipientSchema = z.object({
+  personId: z.string(),
+  fullName: z.string(),
+  email: z.string().nullable(),
+  mobile: z.string().nullable(), // From people.telephone or people.primaryPhone
+  role: z.string().nullable(), // Officer role from clientPeople
+  isPrimaryContact: z.boolean(),
+  receiveNotifications: z.boolean(), // From people.receiveNotifications
 });
 
 export const stageChangeNotificationPreviewSchema = z.object({
@@ -106,6 +117,26 @@ export const stageChangeNotificationPreviewSchema = z.object({
   emailBody: z.string(),
   pushTitle: z.string().nullable(),
   pushBody: z.string().nullable(),
+  metadata: z.object({
+    projectName: z.string(),
+    clientName: z.string(),
+    dueDate: z.string().optional(),
+    changeReason: z.string().optional(),
+    notes: z.string().optional(),
+  }),
+});
+
+// Client Value Notification preview (for client-facing notifications)
+export const clientValueNotificationPreviewSchema = z.object({
+  projectId: z.string(),
+  newStageName: z.string(),
+  oldStageName: z.string().optional(),
+  dedupeKey: z.string(),
+  recipients: z.array(clientValueNotificationRecipientSchema),
+  emailSubject: z.string(),
+  emailBody: z.string(),
+  senderHasOutlook: z.boolean(), // Whether the current staff user has Microsoft Graph configured
+  senderEmail: z.string().nullable(), // Staff user's email for sending
   metadata: z.object({
     projectName: z.string(),
     clientName: z.string(),
@@ -131,5 +162,21 @@ export const sendStageChangeNotificationSchema = z.object({
   // Optional: specify recipient IDs for each channel
   emailRecipientIds: z.array(z.string()).optional(),
   pushRecipientIds: z.array(z.string()).optional(),
+  smsRecipientIds: z.array(z.string()).optional(),
+});
+
+// Client Value Notification send schema (client-facing via Outlook)
+export const sendClientValueNotificationSchema = z.object({
+  projectId: z.string(),
+  dedupeKey: z.string(),
+  emailSubject: z.string(),
+  emailBody: z.string(),
+  suppress: z.boolean().default(false),
+  // Per-channel send controls
+  sendEmail: z.boolean().default(true),
+  sendSms: z.boolean().default(false), // SMS off by default until VoodooSMS configured
+  smsBody: z.string().nullable().optional(),
+  // Recipient person IDs for each channel (from people table)
+  emailRecipientIds: z.array(z.string()).optional(),
   smsRecipientIds: z.array(z.string()).optional(),
 });

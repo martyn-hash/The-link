@@ -54,7 +54,9 @@ import type {
   StageApprovalField,
   InsertStageApprovalResponse,
   StageChangeNotificationPreview,
+  ClientValueNotificationPreview,
 } from "@shared/schema";
+import { ClientValueNotificationContent } from "./ClientValueNotificationContent";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -612,6 +614,8 @@ export default function ChangeStatusModal({
   const [customFieldResponses, setCustomFieldResponses] = useState<Record<string, any>>({});
   const [showApprovalForm, setShowApprovalForm] = useState(false);
   const [notificationPreview, setNotificationPreview] = useState<StageChangeNotificationPreview | null>(null);
+  const [clientNotificationPreview, setClientNotificationPreview] = useState<ClientValueNotificationPreview | null>(null);
+  const [notificationType, setNotificationType] = useState<'staff' | 'client' | null>(null);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [uploadedAttachments, setUploadedAttachments] = useState<Array<{
@@ -888,9 +892,10 @@ export default function ChangeStatusModal({
       return { previousProjects };
     },
     onSuccess: (data: any) => {
-      // Handle new response format: { project, notificationPreview }
+      // Handle response format: { project, clientNotificationPreview, notificationType }
       const updatedProject = data.project || data;
-      const preview = data.notificationPreview;
+      const clientPreview = data.clientNotificationPreview;
+      const type = data.notificationType;
 
       // ALWAYS show success immediately - stage change is committed
       toast({
@@ -911,10 +916,11 @@ export default function ChangeStatusModal({
       setSelectedFiles([]);
       setUploadedAttachments([]);
 
-      if (preview) {
-        // Show notification approval modal AFTER confirming stage change
+      if (clientPreview && type === 'client') {
+        // Show client notification approval modal AFTER confirming stage change
         // Closing this modal will NOT affect the stage change
-        setNotificationPreview(preview);
+        setClientNotificationPreview(clientPreview);
+        setNotificationType('client');
         setShowNotificationModal(true);
       } else {
         // No notification to send, close the modal
@@ -930,7 +936,49 @@ export default function ChangeStatusModal({
     },
   });
 
-  // Mutation for sending stage change notification after user approval
+  // Mutation for sending client value notification after user approval
+  const sendClientNotificationMutation = useMutation({
+    mutationFn: async (data: {
+      emailSubject: string;
+      emailBody: string;
+      suppress: boolean;
+      sendEmail: boolean;
+      sendSms: boolean;
+      smsBody: string | null;
+      emailRecipientIds: string[];
+      smsRecipientIds: string[];
+    }) => {
+      if (!clientNotificationPreview) throw new Error("No client notification preview available");
+      
+      return await apiRequest("POST", `/api/projects/${project.id}/send-client-value-notification`, {
+        projectId: project.id,
+        dedupeKey: clientNotificationPreview.dedupeKey,
+        ...data,
+      });
+    },
+    onSuccess: (data: any) => {
+      const wasSent = !data.suppress && data.sent;
+      
+      if (wasSent) {
+        toast({
+          title: "Notification sent",
+          description: "Client contacts have been notified of the stage change",
+        });
+      }
+      // If suppressed, no need for another toast - stage success was already shown
+      
+      // Close notification modal and main modal
+      setShowNotificationModal(false);
+      setClientNotificationPreview(null);
+      setNotificationType(null);
+      onClose();
+    },
+    onError: (error: any) => {
+      showFriendlyError({ error });
+    },
+  });
+
+  // Legacy mutation for sending internal staff stage change notification (kept for compatibility)
   const sendNotificationMutation = useMutation({
     mutationFn: async (data: {
       emailSubject: string;
@@ -960,7 +1008,7 @@ export default function ChangeStatusModal({
       if (wasSent) {
         toast({
           title: "Notification sent",
-          description: "Client has been notified of the stage change",
+          description: "Staff has been notified of the stage change",
         });
       }
       // If suppressed, no need for another toast - stage success was already shown
@@ -1253,6 +1301,8 @@ export default function ChangeStatusModal({
   const handleFullClose = () => {
     setShowNotificationModal(false);
     setNotificationPreview(null);
+    setClientNotificationPreview(null);
+    setNotificationType(null);
     onClose();
   };
 
@@ -1270,8 +1320,27 @@ export default function ChangeStatusModal({
         data-testid="dialog-change-status"
         onInteractOutside={(e) => e.preventDefault()}
       >
-        {/* Show notification content if stage change succeeded and there's a preview */}
-        {showNotificationModal && notificationPreview ? (
+        {/* Show client notification content if stage change succeeded and there's a client preview */}
+        {showNotificationModal && clientNotificationPreview && notificationType === 'client' ? (
+          <>
+            <DialogHeader>
+              <DialogTitle data-testid="text-notification-title">Notify Client of Stage Change?</DialogTitle>
+              <DialogDescription data-testid="text-notification-description">
+                The stage has been updated successfully. Would you like to notify the client contacts?
+              </DialogDescription>
+            </DialogHeader>
+
+            <ClientValueNotificationContent
+              preview={clientNotificationPreview}
+              projectId={project.id}
+              onSend={async (editedData) => {
+                await sendClientNotificationMutation.mutateAsync(editedData);
+              }}
+              onClose={handleFullClose}
+              isSending={sendClientNotificationMutation.isPending}
+            />
+          </>
+        ) : showNotificationModal && notificationPreview && notificationType === 'staff' ? (
           <>
             <DialogHeader>
               <DialogTitle data-testid="text-notification-title">Send Stage Change Notification?</DialogTitle>

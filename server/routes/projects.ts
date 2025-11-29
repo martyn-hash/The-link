@@ -578,16 +578,19 @@ export function registerProjectRoutes(
         console.error("[Stage Change Email] Error sending automatic notifications:", emailError);
       }
 
-      // Prepare stage change notification preview (for client reminders system - separate feature)
-      const notificationPreview = await storage.prepareStageChangeNotification(
+      // Prepare client value notification preview (for client-facing notifications)
+      // This replaces the internal staff notification with client-facing notification
+      const clientNotificationPreview = await storage.prepareClientValueNotification(
         updatedProject.id,
         updateData.newStatus,
+        effectiveUserId,
         project.currentStatus
       );
 
       res.json({ 
         project: updatedProject, 
-        notificationPreview 
+        clientNotificationPreview,
+        notificationType: 'client' as const
       });
     } catch (error) {
       console.error("[PATCH /api/projects/:id/status] Error updating project status:", error instanceof Error ? error.message : error);
@@ -845,6 +848,216 @@ export function registerProjectRoutes(
         res.status(400).json({ message: error.message });
       } else {
         res.status(500).json({ message: "Failed to send stage change notification" });
+      }
+    }
+  });
+
+  // Prepare client value notification preview (client-facing notifications)
+  app.post("/api/projects/:id/prepare-client-value-notification", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      const effectiveUser = req.user?.effectiveUser;
+
+      if (!effectiveUserId || !effectiveUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const projectId = req.params.id;
+      const { newStageName, oldStageName } = req.body;
+
+      if (!newStageName) {
+        return res.status(400).json({ message: "newStageName is required" });
+      }
+
+      // Verify project exists
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Prepare the client value notification preview (fetches client contacts)
+      const preview = await storage.prepareClientValueNotification(
+        projectId,
+        newStageName,
+        effectiveUserId,
+        oldStageName
+      );
+
+      if (!preview) {
+        return res.status(200).json({ 
+          message: "No client contacts found or notifications disabled for this project type",
+          preview: null
+        });
+      }
+
+      res.json({ preview });
+    } catch (error) {
+      console.error("[POST /api/projects/:id/prepare-client-value-notification] Error:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to prepare client value notification" });
+    }
+  });
+
+  // Send client value notification via Outlook (with SendGrid fallback)
+  app.post("/api/projects/:id/send-client-value-notification", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      const effectiveUser = req.user?.effectiveUser;
+
+      if (!effectiveUserId || !effectiveUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const projectId = req.params.id;
+      
+      // Validate request body
+      const { sendClientValueNotificationSchema } = await import("@shared/schema");
+      const notificationData = sendClientValueNotificationSchema.parse({
+        ...req.body,
+        projectId,
+      });
+
+      // Verify project exists
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // If suppress flag is true, don't send the notification
+      if (notificationData.suppress) {
+        console.log(`[Client Value Notification] User suppressed notification for project ${projectId}`);
+        return res.json({ 
+          success: true, 
+          message: "Notification suppressed",
+          sent: false 
+        });
+      }
+
+      // Get the notification preview to find recipients
+      const preview = await storage.prepareClientValueNotification(
+        projectId,
+        project.currentStatus,
+        effectiveUserId
+      );
+
+      if (!preview) {
+        return res.status(400).json({ message: "No notification preview available" });
+      }
+
+      // Verify dedupe key matches (security check)
+      if (preview.dedupeKey !== notificationData.dedupeKey) {
+        return res.status(400).json({ message: "Invalid dedupe key - notification may have already been processed" });
+      }
+
+      // Track statistics for each channel
+      const stats = {
+        email: { successful: 0, failed: 0 },
+        sms: { successful: 0, failed: 0 }
+      };
+
+      // Filter recipients based on provided recipient IDs (if specified)
+      const emailRecipients = notificationData.emailRecipientIds?.length 
+        ? preview.recipients.filter(r => notificationData.emailRecipientIds!.includes(r.personId) && r.email)
+        : preview.recipients.filter(r => r.email);
+      const smsRecipients = notificationData.smsRecipientIds?.length
+        ? preview.recipients.filter(r => notificationData.smsRecipientIds!.includes(r.personId) && r.mobile)
+        : preview.recipients.filter(r => r.mobile);
+
+      // Helper function for SendGrid fallback
+      const sendViaSendGrid = async () => {
+        const { sendEmail } = await import("../emailService");
+        
+        const emailPromises = emailRecipients.map(async (recipient) => {
+          try {
+            const emailSent = await sendEmail({
+              to: recipient.email!,
+              subject: notificationData.emailSubject,
+              html: notificationData.emailBody,
+            });
+
+            if (emailSent) {
+              console.log(`[Client Value Notification] Email sent via SendGrid to ${recipient.email} for project ${projectId}`);
+              return { success: true, email: recipient.email };
+            } else {
+              console.warn(`[Client Value Notification] Failed to send via SendGrid to ${recipient.email}`);
+              return { success: false, email: recipient.email, error: 'Email sending failed' };
+            }
+          } catch (error) {
+            console.error(`[Client Value Notification] Error sending via SendGrid to ${recipient.email}:`, error);
+            return { success: false, email: recipient.email, error: error instanceof Error ? error.message : 'Unknown error' };
+          }
+        });
+
+        const results = await Promise.allSettled(emailPromises);
+        stats.email.successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+        stats.email.failed = results.length - stats.email.successful;
+      };
+
+      // Send emails if channel is enabled
+      if (notificationData.sendEmail !== false && emailRecipients.length > 0) {
+        // Try to send via Outlook if user has it configured
+        if (preview.senderHasOutlook) {
+          try {
+            const { sendEmailAsUser } = await import("../utils/userOutlookClient");
+            
+            const emailPromises = emailRecipients.map(async (recipient) => {
+              try {
+                await sendEmailAsUser(
+                  effectiveUserId,
+                  recipient.email!,
+                  notificationData.emailSubject,
+                  notificationData.emailBody,
+                  true // isHtml
+                );
+                console.log(`[Client Value Notification] Email sent via Outlook to ${recipient.email} for project ${projectId}`);
+                return { success: true, email: recipient.email };
+              } catch (error) {
+                console.error(`[Client Value Notification] Failed to send via Outlook to ${recipient.email}:`, error);
+                return { success: false, email: recipient.email, error: error instanceof Error ? error.message : 'Unknown error' };
+              }
+            });
+
+            const results = await Promise.allSettled(emailPromises);
+            stats.email.successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+            stats.email.failed = results.length - stats.email.successful;
+          } catch (outlookError) {
+            console.error(`[Client Value Notification] Outlook send error, falling back to SendGrid:`, outlookError);
+            // Fall back to SendGrid if Outlook fails
+            await sendViaSendGrid();
+          }
+        } else {
+          // No Outlook configured, use SendGrid
+          await sendViaSendGrid();
+        }
+      } else {
+        console.log(`[Client Value Notification] Email channel disabled for project ${projectId}`);
+      }
+
+      // SMS notifications - placeholder for future implementation
+      if (notificationData.sendSms && notificationData.smsBody && smsRecipients.length > 0) {
+        console.log(`[Client Value Notification] SMS channel enabled but not yet implemented for project ${projectId}`);
+        // TODO: Implement SMS sending via VoodooSMS or similar service
+        stats.sms.failed = smsRecipients.length;
+      }
+
+      // Calculate overall stats
+      const totalSuccessful = stats.email.successful + stats.sms.successful;
+      const totalFailed = stats.email.failed + stats.sms.failed;
+
+      res.json({ 
+        success: true, 
+        message: `Notifications sent: ${totalSuccessful} successful, ${totalFailed} failed`,
+        sent: totalSuccessful > 0,
+        sentViaOutlook: preview.senderHasOutlook,
+        stats
+      });
+    } catch (error) {
+      console.error("[POST /api/projects/:id/send-client-value-notification] Error:", error instanceof Error ? error.message : error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        res.status(400).json({ message: "Validation failed", errors: (error as any).issues });
+      } else if (error instanceof Error && error.message) {
+        res.status(400).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: "Failed to send client value notification" });
       }
     }
   });

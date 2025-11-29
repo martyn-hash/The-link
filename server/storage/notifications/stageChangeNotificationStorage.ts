@@ -7,12 +7,19 @@ import {
   kanbanStages,
   userNotificationPreferences,
   pushSubscriptions,
+  people,
+  clientPeople,
   type User,
   type Project,
   type StageChangeNotificationPreview,
   type UserNotificationPreferences,
 } from "@shared/schema";
 import { sendStageChangeNotificationEmail, sendBulkProjectAssignmentSummaryEmail } from "../../emailService";
+import { z } from "zod";
+import { clientValueNotificationPreviewSchema, clientValueNotificationRecipientSchema } from "@shared/schema/notifications/schemas";
+
+export type ClientValueNotificationPreview = z.infer<typeof clientValueNotificationPreviewSchema>;
+export type ClientValueNotificationRecipient = z.infer<typeof clientValueNotificationRecipientSchema>;
 
 type GetUserFn = (id: string) => Promise<User | undefined>;
 type GetProjectFn = (id: string) => Promise<Project | undefined>;
@@ -260,6 +267,201 @@ export class StageChangeNotificationStorage {
       };
     } catch (error) {
       console.error(`Error preparing stage change notification for project ${projectId}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Prepare a client value notification (client-facing notification sent via staff's Outlook)
+   * This fetches client contacts (people linked to the project's client) instead of internal staff
+   */
+  async prepareClientValueNotification(
+    projectId: string,
+    newStageName: string,
+    sendingUserId: string,
+    oldStageName?: string
+  ): Promise<ClientValueNotificationPreview | null> {
+    try {
+      if (oldStageName && oldStageName === newStageName) {
+        return null;
+      }
+
+      const project = await this.getProject(projectId);
+      if (!project) {
+        console.warn(`Project ${projectId} not found for client value notification preview`);
+        return null;
+      }
+
+      // Check if notifications are enabled for this project type
+      const [projectType] = await db
+        .select({ notificationsActive: projectTypes.notificationsActive })
+        .from(projectTypes)
+        .where(eq(projectTypes.id, project.projectTypeId));
+
+      if (projectType && projectType.notificationsActive === false) {
+        console.log(`Notifications disabled for project type ${project.projectTypeId}, skipping notification preview`);
+        return null;
+      }
+
+      // Get project with client data and chronology for context
+      const projectWithClient = await db.query.projects.findFirst({
+        where: eq(projects.id, projectId),
+        with: {
+          client: true,
+          chronology: {
+            orderBy: (chronology: any, { desc }: { desc: any }) => [desc(chronology.timestamp)],
+            with: {
+              fieldResponses: {
+                with: {
+                  customField: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!projectWithClient || !projectWithClient.client) {
+        console.warn(`Project with client data not found for ${projectId}`);
+        return null;
+      }
+
+      const clientData = projectWithClient.client as any;
+      const clientId = project.clientId;
+
+      // Fetch all people linked to this client via clientPeople
+      const clientContactsData = await db
+        .select({
+          personId: people.id,
+          fullName: people.fullName,
+          email: people.email,
+          primaryEmail: people.primaryEmail,
+          telephone: people.telephone,
+          primaryPhone: people.primaryPhone,
+          receiveNotifications: people.receiveNotifications,
+          officerRole: clientPeople.officerRole,
+          isPrimaryContact: clientPeople.isPrimaryContact,
+        })
+        .from(clientPeople)
+        .innerJoin(people, eq(clientPeople.personId, people.id))
+        .where(eq(clientPeople.clientId, clientId));
+
+      if (clientContactsData.length === 0) {
+        console.log(`No client contacts found for client ${clientId}, skipping notification preview`);
+        return null;
+      }
+
+      // Map to client value notification recipients
+      const recipients: ClientValueNotificationRecipient[] = clientContactsData.map(contact => ({
+        personId: contact.personId,
+        fullName: contact.fullName,
+        email: contact.email || contact.primaryEmail || null,
+        mobile: contact.telephone || contact.primaryPhone || null,
+        role: contact.officerRole || null,
+        isPrimaryContact: contact.isPrimaryContact || false,
+        receiveNotifications: contact.receiveNotifications !== false, // Default to true
+      }));
+
+      // Get the sending user to check if they have Outlook configured
+      const sendingUser = await this.getUser(sendingUserId);
+      if (!sendingUser) {
+        console.warn(`Sending user ${sendingUserId} not found`);
+        return null;
+      }
+
+      // Check if the user has Outlook connected via storage
+      const { storage } = await import('../index');
+      const outlookAccount = await storage.getUserOauthAccount(sendingUserId, 'outlook');
+      const senderHasOutlook = !!outlookAccount;
+      const senderEmail = sendingUser.email || null;
+
+      // Get chronology for context
+      const chronologyEntries = (projectWithClient.chronology || []) as any[];
+      const mostRecentChronologyEntry = chronologyEntries.length > 0 
+        ? chronologyEntries[0] 
+        : null;
+      
+      const changeReason = mostRecentChronologyEntry?.changeReason || undefined;
+      const notes = mostRecentChronologyEntry?.notes || undefined;
+
+      // Calculate due date if available
+      const [newStage] = await db
+        .select()
+        .from(kanbanStages)
+        .where(eq(kanbanStages.name, newStageName));
+
+      let formattedDueDate: string | undefined = undefined;
+      if (newStage?.maxInstanceTime) {
+        const { addBusinessHours } = await import('@shared/businessTime');
+        const chronologyForEmail = chronologyEntries.map((entry: any) => ({
+          toStatus: entry.toStatus,
+          timestamp: entry.timestamp instanceof Date ? entry.timestamp.toISOString() : entry.timestamp,
+        }));
+        
+        const sortedChronology = [...chronologyForEmail].sort((a, b) => 
+          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+        );
+        const stageEntry = sortedChronology.find(entry => entry.toStatus === newStageName);
+        
+        let assignedTimestamp: string | null = null;
+        if (stageEntry) {
+          assignedTimestamp = stageEntry.timestamp;
+        } else if (projectWithClient.createdAt) {
+          assignedTimestamp = projectWithClient.createdAt instanceof Date 
+            ? projectWithClient.createdAt.toISOString() 
+            : projectWithClient.createdAt;
+        }
+        
+        if (assignedTimestamp && newStage.maxInstanceTime > 0) {
+          const deadlineDate = addBusinessHours(assignedTimestamp, newStage.maxInstanceTime);
+          formattedDueDate = deadlineDate.toLocaleString('en-GB', { 
+            weekday: 'short',
+            day: 'numeric',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZoneName: 'short'
+          });
+        }
+      }
+
+      // Create dedupe key based on recipient person IDs
+      const recipientIds = recipients.map(r => r.personId).sort().join(',');
+      const dedupeKey = `client:${projectId}:${newStageName}:${changeReason || 'none'}:${recipientIds}`;
+
+      // Create email content tailored for clients
+      const emailSubject = `Update: ${projectWithClient.description} - ${newStageName}`;
+      
+      const emailBody = `
+        <p>Dear Client,</p>
+        <p>We wanted to let you know that work on "${projectWithClient.description}" has progressed to: <strong>${newStageName}</strong></p>
+        ${oldStageName ? `<p>Previous stage: ${oldStageName}</p>` : ''}
+        ${notes ? `<p>Notes: ${notes}</p>` : ''}
+        <p>If you have any questions, please don't hesitate to get in touch.</p>
+        <p>Kind regards,<br/>${sendingUser.firstName || 'The Team'}</p>
+      `.trim();
+
+      return {
+        projectId,
+        newStageName,
+        oldStageName,
+        dedupeKey,
+        recipients,
+        emailSubject,
+        emailBody,
+        senderHasOutlook,
+        senderEmail,
+        metadata: {
+          projectName: projectWithClient.description,
+          clientName: clientData.name,
+          dueDate: formattedDueDate,
+          changeReason,
+          notes,
+        },
+      };
+    } catch (error) {
+      console.error(`Error preparing client value notification for project ${projectId}:`, error);
       return null;
     }
   }
