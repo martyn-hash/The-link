@@ -62,13 +62,11 @@ export function ClientValueNotificationContent({
   
   const [aiPrompt, setAiPrompt] = useState("");
   const [isRefining, setIsRefining] = useState(false);
+  const [showPromptField, setShowPromptField] = useState(false);
   
-  const [emailRecipients, setEmailRecipients] = useState<Set<string>>(
-    new Set(preview.recipients.filter(r => r.email && r.receiveNotifications).map(r => r.personId))
-  );
-  const [smsRecipients, setSmsRecipients] = useState<Set<string>>(
-    new Set(preview.recipients.filter(r => r.mobile && r.receiveNotifications).map(r => r.personId))
-  );
+  // Start with zero recipients selected by default
+  const [emailRecipients, setEmailRecipients] = useState<Set<string>>(new Set());
+  const [smsRecipients, setSmsRecipients] = useState<Set<string>>(new Set());
   
   const emailEligibleRecipients = preview.recipients.filter(r => r.email);
   const smsEligibleRecipients = preview.recipients.filter(r => r.mobile);
@@ -264,37 +262,51 @@ export function ClientValueNotificationContent({
                 <Label className="text-sm font-medium">AI Assist</Label>
               </div>
               
-              {/* Voice Recording */}
-              <div className="space-y-1">
-                <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                  <Mic className="h-3 w-3" /> Record
-                </Label>
-                <StageNotificationAudioRecorder
-                  projectId={projectId}
-                  onResult={handleVoiceResult}
-                  disabled={isSending}
-                  existingSubject={emailSubject}
-                  existingBody={emailBody}
-                  compact
-                />
+              {/* Two-button row: Record and Prompt */}
+              <div className="flex gap-2">
+                {/* Voice Recording */}
+                <div className="flex-1">
+                  <Label className="text-xs text-muted-foreground mb-1 block">Record</Label>
+                  <StageNotificationAudioRecorder
+                    projectId={projectId}
+                    onResult={handleVoiceResult}
+                    disabled={isSending}
+                    existingSubject={emailSubject}
+                    existingBody={emailBody}
+                    compact
+                  />
+                </div>
+
+                {/* Prompt Button */}
+                {onAiRefine && (
+                  <div className="flex-1">
+                    <Label className="text-xs text-muted-foreground mb-1 block">Refine</Label>
+                    <Button
+                      variant={showPromptField ? "secondary" : "outline"}
+                      size="sm"
+                      className="w-full h-8 text-xs gap-1"
+                      onClick={() => setShowPromptField(!showPromptField)}
+                      disabled={isSending}
+                      data-testid="button-toggle-prompt"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      Prompt
+                    </Button>
+                  </div>
+                )}
               </div>
 
-              {/* Text Prompt for Refinement */}
-              {onAiRefine && (
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Sparkles className="h-3 w-3" /> Refine
-                  </Label>
-                  <div className="flex gap-1">
-                    <Textarea
-                      value={aiPrompt}
-                      onChange={(e) => setAiPrompt(e.target.value)}
-                      placeholder="e.g., Make it more concise..."
-                      className="text-xs min-h-[60px] resize-none"
-                      data-testid="input-ai-prompt"
-                      disabled={isRefining || isSending}
-                    />
-                  </div>
+              {/* Expanded Prompt Field */}
+              {showPromptField && onAiRefine && (
+                <div className="space-y-2 pt-1">
+                  <Textarea
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    placeholder="Provide direction about what you want your email to say. It will also include any information currently in the body of the email."
+                    className="text-xs min-h-[80px] resize-none"
+                    data-testid="input-ai-prompt"
+                    disabled={isRefining || isSending}
+                  />
                   <Button
                     size="sm"
                     variant="secondary"
@@ -448,22 +460,13 @@ export function ClientValueNotificationContent({
 
       <DialogFooter className="flex gap-2 sm:gap-2 pt-4 border-t">
         <Button
-          variant="ghost"
-          onClick={onClose}
-          disabled={isSending}
-          data-testid="button-skip"
-          size="sm"
-        >
-          Skip
-        </Button>
-        <Button
           variant="outline"
           onClick={() => handleSend(true)}
           disabled={isSending}
-          data-testid="button-dont-send"
+          data-testid="button-dont-notify"
           size="sm"
         >
-          Don't Send (Log as Suppressed)
+          Don't Notify
         </Button>
         <Button
           onClick={() => handleSend(false)}
