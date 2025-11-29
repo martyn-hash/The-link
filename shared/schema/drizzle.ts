@@ -156,3 +156,9 @@ export {
   webhookLogs,
   webhookStatusEnum,
 } from './webhooks/tables';
+
+// Errors domain tables
+export {
+  funnyErrorPhrases,
+  userSeenPhrases,
+} from './errors/tables';
