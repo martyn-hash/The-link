@@ -7,7 +7,14 @@ import { TiptapEditor } from "@/components/TiptapEditor";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { DialogFooter } from "@/components/ui/dialog";
+import { 
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { 
   Mail, 
@@ -141,6 +148,7 @@ export function ClientValueNotificationContent({
       if (result.subject) setEmailSubject(result.subject);
       if (result.body) setEmailBody(result.body);
       setAiPrompt("");
+      setShowPromptField(false);
       toast({
         title: "Email refined",
         description: "The AI has updated your email content.",
@@ -288,10 +296,10 @@ export function ClientValueNotificationContent({
                 <Label className="text-sm font-medium">AI Assist</Label>
               </div>
               
-              {/* Two-button row: Record and Prompt */}
-              <div className="flex gap-2">
+              {/* Two-button row: Record and Prompt - equal width */}
+              <div className="grid grid-cols-2 gap-2">
                 {/* Voice Recording */}
-                <div className="flex-1">
+                <div>
                   <Label className="text-xs text-muted-foreground mb-1 block">Record</Label>
                   <StageNotificationAudioRecorder
                     projectId={projectId}
@@ -303,15 +311,15 @@ export function ClientValueNotificationContent({
                   />
                 </div>
 
-                {/* Prompt Button */}
+                {/* Prompt Button - opens modal */}
                 {onAiRefine && (
-                  <div className="flex-1">
+                  <div>
                     <Label className="text-xs text-muted-foreground mb-1 block">Refine</Label>
                     <Button
-                      variant={showPromptField ? "secondary" : "outline"}
+                      variant="outline"
                       size="sm"
-                      className="w-full h-8 text-xs gap-1"
-                      onClick={() => setShowPromptField(!showPromptField)}
+                      className="w-full h-7 text-xs px-2 gap-1"
+                      onClick={() => setShowPromptField(true)}
                       disabled={isSending}
                       data-testid="button-toggle-prompt"
                     >
@@ -321,31 +329,51 @@ export function ClientValueNotificationContent({
                   </div>
                 )}
               </div>
+            </div>
 
-              {/* Expanded Prompt Field */}
-              {showPromptField && onAiRefine && (
-                <div className="space-y-2 pt-1">
+            {/* AI Prompt Modal */}
+            <Dialog open={showPromptField} onOpenChange={setShowPromptField}>
+              <DialogContent className="sm:max-w-md" data-testid="dialog-ai-prompt">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-blue-600" />
+                    AI Email Assistant
+                  </DialogTitle>
+                  <DialogDescription>
+                    Describe what you'd like your email to say. The AI will refine the current content based on your direction.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3 py-2">
                   <Textarea
                     value={aiPrompt}
                     onChange={(e) => setAiPrompt(e.target.value)}
                     placeholder="Provide direction about what you want your email to say. It will also include any information currently in the body of the email."
-                    className="text-xs min-h-[80px] resize-none"
+                    className="min-h-[120px] resize-none"
                     data-testid="input-ai-prompt"
-                    disabled={isRefining || isSending}
+                    disabled={isRefining}
+                    autoFocus
                   />
+                </div>
+                <DialogFooter className="gap-2 sm:gap-2">
                   <Button
-                    size="sm"
-                    variant="secondary"
-                    className="w-full h-7 text-xs"
-                    onClick={handleAiRefine}
-                    disabled={!aiPrompt.trim() || isRefining || isSending}
-                    data-testid="button-ai-refine"
+                    variant="outline"
+                    onClick={() => setShowPromptField(false)}
+                    disabled={isRefining}
                   >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleAiRefine}
+                    disabled={!aiPrompt.trim() || isRefining}
+                    data-testid="button-ai-refine"
+                    className="gap-1"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
                     {isRefining ? "Refining..." : "Apply"}
                   </Button>
-                </div>
-              )}
-            </div>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
 
             {/* Context Info */}
             <div className="text-xs text-muted-foreground space-y-0.5 px-1">
