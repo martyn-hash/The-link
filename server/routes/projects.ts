@@ -1101,11 +1101,74 @@ export function registerProjectRoutes(
         console.log(`[Client Value Notification] Email channel disabled for project ${projectId}`);
       }
 
-      // SMS notifications - placeholder for future implementation
+      // SMS notifications via VoodooSMS
       if (notificationData.sendSms && notificationData.smsBody && smsRecipients.length > 0) {
-        console.log(`[Client Value Notification] SMS channel enabled but not yet implemented for project ${projectId}`);
-        // TODO: Implement SMS sending via VoodooSMS or similar service
-        stats.sms.failed = smsRecipients.length;
+        const apiKey = process.env.VOODOO_SMS_API_KEY;
+        
+        if (!apiKey) {
+          console.warn(`[Client Value Notification] VOODOO_SMS_API_KEY not configured - cannot send SMS for project ${projectId}`);
+          stats.sms.failed = smsRecipients.length;
+        } else {
+          // Format phone number for VoodooSMS API
+          const formatPhoneForVoodooSMS = (phone: string): string => {
+            const cleanPhone = phone.replace(/[^\d]/g, '');
+            if (cleanPhone.startsWith('07') && cleanPhone.length === 11) {
+              return `+447${cleanPhone.slice(2)}`;
+            } else if (cleanPhone.startsWith('447') && cleanPhone.length === 12) {
+              return `+${cleanPhone}`;
+            } else if (phone.startsWith('+447') && cleanPhone.length === 12) {
+              return phone;
+            } else {
+              return phone.startsWith('+') ? phone : `+${cleanPhone}`;
+            }
+          };
+
+          const smsPromises = smsRecipients.map(async (recipient) => {
+            try {
+              // Process merge fields for this recipient
+              const context = buildMergeFieldContext(recipient);
+              const processedSmsBody = processNotificationVariables(notificationData.smsBody!, context);
+              
+              const formattedPhone = formatPhoneForVoodooSMS(recipient.mobile!);
+              
+              const smsData = {
+                to: formattedPhone,
+                from: "GrowthAcc",
+                msg: processedSmsBody,
+                external_reference: `project-${projectId}-${recipient.personId}-${Date.now()}`
+              };
+
+              console.log(`[Client Value Notification] Sending SMS via VoodooSMS to ${formattedPhone}`);
+
+              const response = await fetch('https://api.voodoosms.com/sendsms', {
+                method: 'POST',
+                headers: {
+                  'Authorization': apiKey,
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(smsData)
+              });
+
+              if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`[Client Value Notification] VoodooSMS API error for ${recipient.mobile}:`, response.status, errorText);
+                return { success: false, mobile: recipient.mobile, error: `API error: ${response.status}` };
+              }
+
+              const smsResponse = await response.json();
+              console.log(`[Client Value Notification] SMS sent successfully to ${recipient.mobile}:`, smsResponse);
+              
+              return { success: true, mobile: recipient.mobile };
+            } catch (error) {
+              console.error(`[Client Value Notification] Error sending SMS to ${recipient.mobile}:`, error);
+              return { success: false, mobile: recipient.mobile, error: error instanceof Error ? error.message : 'Unknown error' };
+            }
+          });
+
+          const smsResults = await Promise.allSettled(smsPromises);
+          stats.sms.successful = smsResults.filter(r => r.status === 'fulfilled' && r.value.success).length;
+          stats.sms.failed = smsResults.length - stats.sms.successful;
+        }
       }
 
       // Calculate overall stats

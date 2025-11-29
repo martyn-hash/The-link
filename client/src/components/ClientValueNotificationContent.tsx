@@ -487,7 +487,6 @@ export function ClientValueNotificationContent({
               <div className="flex items-center gap-2">
                 <MessageSquare className="h-3.5 w-3.5" />
                 <span className="text-xs">SMS Notification</span>
-                <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">Coming Soon</Badge>
               </div>
               {smsOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
             </Button>
@@ -500,7 +499,6 @@ export function ClientValueNotificationContent({
                   checked={sendSms}
                   onCheckedChange={setSendSms}
                   data-testid="switch-send-sms"
-                  disabled
                 />
               </div>
 

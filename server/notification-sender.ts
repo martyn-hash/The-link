@@ -241,20 +241,93 @@ async function sendEmailNotification(
 }
 
 /**
- * Send an SMS notification via VoodooSMS (placeholder)
+ * Format phone number to E.164 international format for VoodooSMS API
+ */
+function formatPhoneForVoodooSMS(phone: string): string {
+  // Clean the phone number - remove all non-digits
+  const cleanPhone = phone.replace(/[^\d]/g, '');
+
+  // Check if it's a UK mobile number (starts with 07 and has 11 digits)
+  if (cleanPhone.startsWith('07') && cleanPhone.length === 11) {
+    // Convert UK mobile (07xxxxxxxx) to international format (+447xxxxxxx)
+    return `+447${cleanPhone.slice(2)}`;
+  } else if (cleanPhone.startsWith('447') && cleanPhone.length === 12) {
+    // Already in UK international format without +, just add the +
+    return `+${cleanPhone}`;
+  } else if (phone.startsWith('+447') && cleanPhone.length === 12) {
+    // Already in correct international format
+    return phone;
+  } else {
+    // For other formats, try to use as-is but ensure it starts with +
+    return phone.startsWith('+') ? phone : `+${cleanPhone}`;
+  }
+}
+
+/**
+ * Send an SMS notification via VoodooSMS
  */
 async function sendSMSNotification(
   recipientPhone: string,
   content: string
 ): Promise<SendNotificationResult> {
-  // TODO: Implement VoodooSMS integration
-  // For now, this is a placeholder that logs the SMS
-  console.log(`[NotificationSender] SMS placeholder - would send to ${recipientPhone}: ${content}`);
+  try {
+    const apiKey = process.env.VOODOO_SMS_API_KEY;
+    
+    if (!apiKey) {
+      console.error('[NotificationSender] VOODOO_SMS_API_KEY not configured');
+      return {
+        success: false,
+        error: 'SMS service not configured - missing API key',
+      };
+    }
 
-  return {
-    success: true,
-    externalId: `sms-placeholder-${Date.now()}`,
-  };
+    // Format phone number for VoodooSMS API
+    const formattedPhone = formatPhoneForVoodooSMS(recipientPhone);
+
+    // Prepare SMS data for VoodooSMS API
+    const smsData = {
+      to: formattedPhone,
+      from: "GrowthAcc",
+      msg: content,
+      external_reference: `notification-${Date.now()}`
+    };
+
+    console.log(`[NotificationSender] Sending SMS via VoodooSMS to ${formattedPhone}`);
+
+    // Send SMS via VoodooSMS API
+    const response = await fetch('https://api.voodoosms.com/sendsms', {
+      method: 'POST',
+      headers: {
+        'Authorization': apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(smsData)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[NotificationSender] VoodooSMS API error:', response.status, errorText);
+      return {
+        success: false,
+        error: `VoodooSMS API error: ${response.status}`,
+      };
+    }
+
+    const smsResponse = await response.json() as { message_id?: string; status?: string };
+
+    console.log(`[NotificationSender] SMS sent successfully to ${formattedPhone}:`, smsResponse);
+
+    return {
+      success: true,
+      externalId: smsResponse.message_id || `sms-${Date.now()}`,
+    };
+  } catch (error: any) {
+    console.error(`[NotificationSender] Failed to send SMS to ${recipientPhone}:`, error);
+    return {
+      success: false,
+      error: error.message || 'Unknown error sending SMS',
+    };
+  }
 }
 
 /**
