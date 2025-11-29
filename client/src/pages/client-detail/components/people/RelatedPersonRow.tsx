@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import type { ClientPortalUser } from "@shared/schema";
 import { ClientPersonWithPerson } from "../../utils/types";
 import { formatPersonName, formatBirthDate } from "../../utils/formatters";
@@ -65,10 +66,10 @@ export function RelatedPersonRow({
       refetch();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to send invitation",
-        variant: "destructive",
+      showFriendlyError({
+        error,
+        fallbackTitle: "Couldn't Send Invitation",
+        fallbackDescription: "Something went wrong while sending the portal invitation. Please check the email address and try again."
       });
     },
   });
@@ -91,10 +92,10 @@ export function RelatedPersonRow({
       });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to generate QR code",
-        variant: "destructive",
+      showFriendlyError({
+        error,
+        fallbackTitle: "Couldn't Generate QR Code",
+        fallbackDescription: "Something went wrong while creating the QR code. Please try again in a moment."
       });
     },
   });

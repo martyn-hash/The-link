@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import {
   Dialog,
   DialogContent,
@@ -174,10 +175,10 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
       setCustomFieldResponses({});
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update project status",
-        variant: "destructive",
+      showFriendlyError({
+        error,
+        fallbackTitle: "Couldn't Update Project Status",
+        fallbackDescription: "Something went wrong while updating the project status. Please try again."
       });
     },
   });
@@ -331,9 +332,10 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
   const handleUpdateStatus = () => {
     if (!newStatus || !changeReason) {
       toast({
-        title: "Validation Error",
-        description: "Please select both a new stage and change reason",
-        variant: "destructive",
+        title: "Almost There!",
+        description: "Please select both a new stage and change reason before updating.",
+        variant: "friendly" as const,
+        duration: 5000,
       });
       return;
     }
@@ -343,9 +345,10 @@ export default function ProjectModal({ project, user, isOpen, onClose }: Project
       const fieldValidation = validateCustomFields();
       if (!fieldValidation.isValid) {
         toast({
-          title: "Validation Error",
+          title: "A Few Fields Need Attention",
           description: fieldValidation.errors.join(', '),
-          variant: "destructive",
+          variant: "friendly" as const,
+          duration: 8000,
         });
         return;
       }

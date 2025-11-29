@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { type Client, type Service, type WorkRole, type User, type ClientService, type ClientServiceRoleAssignment, insertClientSchema } from "@shared/schema";
 import {
   Dialog,
@@ -286,10 +287,10 @@ export function ClientManagementModal({
       onOpenChange(false);
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create client",
-        variant: "destructive",
+      showFriendlyError({
+        error,
+        fallbackTitle: "Couldn't Create Client",
+        fallbackDescription: "Something went wrong while creating the client. Please check the details and try again."
       });
     },
   });
@@ -320,10 +321,10 @@ export function ClientManagementModal({
       onOpenChange(false);
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update client",
-        variant: "destructive",
+      showFriendlyError({
+        error,
+        fallbackTitle: "Couldn't Update Client",
+        fallbackDescription: "Something went wrong while updating the client. Please check the details and try again."
       });
     },
   });
@@ -342,9 +343,10 @@ export function ClientManagementModal({
       if (incompleteServices.length > 0) {
         setValidationErrors(incompleteServices);
         toast({
-          title: "Incomplete Role Assignments",
-          description: `${incompleteServices.length} service(s) have incomplete role assignments. Please assign all required roles before saving.`,
-          variant: "destructive",
+          title: "Almost There!",
+          description: `${incompleteServices.length} service(s) still need role assignments. Please assign all required roles before saving.`,
+          variant: "friendly" as const,
+          duration: 8000,
         });
         return false;
       }
@@ -357,9 +359,10 @@ export function ClientManagementModal({
     if (!validation.isValid) {
       setValidationErrors(validation.errors);
       toast({
-        title: "Incomplete Role Assignments",
-        description: `${validation.errors.length} service(s) have incomplete role assignments. Please assign all required roles before saving.`,
-        variant: "destructive",
+        title: "Almost There!",
+        description: `${validation.errors.length} service(s) still need role assignments. Please assign all required roles before saving.`,
+        variant: "friendly" as const,
+        duration: 8000,
       });
       return false;
     }

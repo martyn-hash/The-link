@@ -38,6 +38,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import AddressLookup from "@/components/address-lookup";
 import type { Client, Person, Service, User, PeopleService } from "@shared/schema";
 import { 
@@ -280,10 +281,10 @@ export function PersonTabbedView({
       setIsLinkModalOpen(false);
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to connect person to company. Please try again.",
-        variant: "destructive",
+      showFriendlyError({
+        error,
+        fallbackTitle: "Couldn't Add Connection",
+        fallbackDescription: "Something went wrong while connecting this person to the company. Please try again."
       });
     },
   });
@@ -300,10 +301,10 @@ export function PersonTabbedView({
       queryClient.invalidateQueries({ queryKey: [`/api/people/${clientPerson.person.id}/companies`] });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to remove connection. Please try again.",
-        variant: "destructive",
+      showFriendlyError({
+        error,
+        fallbackTitle: "Couldn't Remove Connection",
+        fallbackDescription: "Something went wrong while removing the connection. The link may still be in use."
       });
     },
   });

@@ -34,6 +34,7 @@ import { registerServiceImportRoutes } from "./routes/serviceImport";
 import { registerClientsImportRoutes } from "./routes/clientsImport";
 import { registerPeopleImportRoutes } from "./routes/peopleImport";
 import { registerAIRoutes } from "./routes/ai";
+import { registerFriendlyErrorRoutes } from "./routes/friendlyErrors";
 
 /**
  * Register all application routes
@@ -112,6 +113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerClientsImportRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin);
   registerPeopleImportRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin);
   registerAIRoutes(app, isAuthenticated, resolveEffectiveUser);
+  registerFriendlyErrorRoutes(app, isAuthenticated);
 
   const httpServer = createServer(app);
   return httpServer;

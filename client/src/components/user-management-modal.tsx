@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { Users, Plus, Edit, Trash2, Mail, Calendar } from "lucide-react";
 import type { User } from "@shared/schema";
 
@@ -128,10 +129,10 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
       form.reset();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create user",
-        variant: "destructive",
+      showFriendlyError({
+        error,
+        fallbackTitle: "Couldn't Create User",
+        fallbackDescription: "Something went wrong while creating the user. Please check the details and try again."
       });
     },
   });
@@ -160,10 +161,10 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
       form.reset();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update user",
-        variant: "destructive",
+      showFriendlyError({
+        error,
+        fallbackTitle: "Couldn't Update User",
+        fallbackDescription: "Something went wrong while updating the user. Please check the details and try again."
       });
     },
   });
@@ -181,10 +182,10 @@ export default function UserManagementModal({ isOpen, onClose }: UserManagementM
       setSelectedUser(null);
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete user",
-        variant: "destructive",
+      showFriendlyError({
+        error,
+        fallbackTitle: "Couldn't Delete User",
+        fallbackDescription: "Something went wrong while deleting the user. The user may have associated data that needs to be removed first."
       });
     },
   });

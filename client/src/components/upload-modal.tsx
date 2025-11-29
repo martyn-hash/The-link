@@ -1,6 +1,7 @@
 import { useState, useRef } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import {
   Dialog,
   DialogContent,
@@ -89,7 +90,8 @@ export default function UploadModal({ isOpen, onClose }: UploadModalProps) {
       toast({
         title,
         description,
-        variant: "destructive",
+        variant: "friendly" as const,
+        duration: 10000,
       });
     },
   });
@@ -116,9 +118,10 @@ export default function UploadModal({ isOpen, onClose }: UploadModalProps) {
         setSelectedFile(file);
       } else {
         toast({
-          title: "Invalid File",
-          description: "Please select a CSV file",
-          variant: "destructive",
+          title: "Wrong File Type",
+          description: "Please select a CSV file - that's the spreadsheet format we need.",
+          variant: "friendly" as const,
+          duration: 5000,
         });
       }
     }
@@ -135,8 +138,9 @@ export default function UploadModal({ isOpen, onClose }: UploadModalProps) {
     if (!selectedFile) {
       toast({
         title: "No File Selected",
-        description: "Please select a CSV file to upload",
-        variant: "destructive",
+        description: "Please choose a CSV file first, then click upload.",
+        variant: "friendly" as const,
+        duration: 5000,
       });
       return;
     }

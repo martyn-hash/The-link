@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import type { UpdatePersonData, InsertPersonData } from "../utils/types";
 
 export interface UseClientMutationsCallbacks {
@@ -28,10 +29,10 @@ export function useClientMutations(
       });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to update person details",
-        variant: "destructive",
+      showFriendlyError({
+        error,
+        fallbackTitle: "Couldn't Update Person",
+        fallbackDescription: "Something went wrong while updating the person details. Please check the information and try again."
       });
     },
   });
@@ -49,10 +50,10 @@ export function useClientMutations(
       });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to add person",
-        variant: "destructive",
+      showFriendlyError({
+        error,
+        fallbackTitle: "Couldn't Add Person",
+        fallbackDescription: "Something went wrong while adding the person. Please check the information and try again."
       });
     },
   });
@@ -69,11 +70,11 @@ export function useClientMutations(
         description: 'Document deleted successfully',
       });
     },
-    onError: () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to delete document',
-        variant: 'destructive',
+    onError: (error: any) => {
+      showFriendlyError({
+        error,
+        fallbackTitle: "Couldn't Delete Document",
+        fallbackDescription: "Something went wrong while deleting the document. It may still be in use or connected to other items."
       });
     },
   });

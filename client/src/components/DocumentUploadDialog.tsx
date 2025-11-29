@@ -7,6 +7,7 @@ import { Upload, AlertCircle, CheckCircle2 } from "lucide-react";
 import { ObjectUploader } from "@/components/ObjectUploader";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface DocumentUploadDialogProps {
@@ -55,9 +56,10 @@ export function DocumentUploadDialog({ clientId, source = "direct upload", folde
 
     if (uploadedFiles.length === 0) {
       toast({
-        title: "Error",
-        description: "Please upload at least one file",
-        variant: "destructive",
+        title: "No Files Selected",
+        description: "Please select at least one file to upload before saving.",
+        variant: "friendly" as const,
+        duration: 5000,
       });
       return;
     }
@@ -129,20 +131,19 @@ export function DocumentUploadDialog({ clientId, source = "direct upload", folde
         setUploadNameError("");
         fileObjectPathsRef.current.clear();
       } else {
-        toast({
-          title: 'Error',
-          description: 'Failed to save document metadata',
-          variant: 'destructive',
+        showFriendlyError({
+          error: new Error('Failed to save document metadata'),
+          fallbackTitle: "Couldn't Save Documents",
+          fallbackDescription: "Something went wrong while saving the document information. The files may have uploaded but weren't saved properly."
         });
       }
     } catch (error) {
       console.error('Error saving documents:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to save documents';
       setIsSaving(false);
-      toast({
-        title: 'Error',
-        description: errorMessage,
-        variant: 'destructive',
+      showFriendlyError({
+        error,
+        fallbackTitle: "Couldn't Save Documents",
+        fallbackDescription: "Something went wrong while uploading the documents. Please try again."
       });
     }
   };

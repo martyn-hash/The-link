@@ -405,9 +405,25 @@ export async function registerAuthAndMiscRoutes(
       // Remove password hash from response
       const { passwordHash: _, ...userResponse } = user;
       res.json(userResponse);
-    } catch (error) {
-      console.error("Error creating user:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
-      res.status(400).json({ message: "Failed to create user" });
+    } catch (error: any) {
+      console.error("Error creating user:", error instanceof Error ? error.message : error);
+      
+      let errorMessage = "Failed to create user";
+      let statusCode = 400;
+      
+      if (error?.message?.includes('unique constraint') || error?.message?.includes('duplicate key')) {
+        if (error.message.includes('email')) {
+          errorMessage = "That email address is already registered. Please use a different email.";
+          statusCode = 409;
+        } else {
+          errorMessage = "A user with these details already exists.";
+          statusCode = 409;
+        }
+      } else if (error?.message?.includes('validation')) {
+        errorMessage = error.message;
+      }
+      
+      res.status(statusCode).json({ message: errorMessage });
     }
   });
 
