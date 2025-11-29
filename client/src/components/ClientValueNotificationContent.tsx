@@ -4,20 +4,25 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { TiptapEditor } from "@/components/TiptapEditor";
-import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { DialogFooter } from "@/components/ui/dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { 
   Mail, 
   MessageSquare, 
-  Mic,
   Check,
   AlertCircle,
-  User
+  User,
+  ChevronDown,
+  ChevronRight,
+  Sparkles,
+  Mic,
+  Send
 } from "lucide-react";
 import { StageNotificationAudioRecorder } from "./StageNotificationAudioRecorder";
+import { useToast } from "@/hooks/use-toast";
 import type { ClientValueNotificationPreview } from "@shared/schema";
 
 interface ClientValueNotificationContentProps {
@@ -35,6 +40,7 @@ interface ClientValueNotificationContentProps {
   }) => Promise<void>;
   onClose: () => void;
   isSending: boolean;
+  onAiRefine?: (prompt: string, currentSubject: string, currentBody: string) => Promise<{ subject: string; body: string }>;
 }
 
 export function ClientValueNotificationContent({
@@ -43,16 +49,20 @@ export function ClientValueNotificationContent({
   onSend,
   onClose,
   isSending,
+  onAiRefine,
 }: ClientValueNotificationContentProps) {
+  const { toast } = useToast();
   const [emailSubject, setEmailSubject] = useState(preview.emailSubject);
   const [emailBody, setEmailBody] = useState(preview.emailBody);
   
-  // Per-channel send controls
   const [sendEmail, setSendEmail] = useState(true);
   const [sendSms, setSendSms] = useState(false);
   const [smsBody, setSmsBody] = useState("");
+  const [smsOpen, setSmsOpen] = useState(false);
   
-  // Per-channel recipient selection (default to all recipients with valid contact info who accept notifications)
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [isRefining, setIsRefining] = useState(false);
+  
   const [emailRecipients, setEmailRecipients] = useState<Set<string>>(
     new Set(preview.recipients.filter(r => r.email && r.receiveNotifications).map(r => r.personId))
   );
@@ -60,11 +70,9 @@ export function ClientValueNotificationContent({
     new Set(preview.recipients.filter(r => r.mobile && r.receiveNotifications).map(r => r.personId))
   );
   
-  // Recipients filtered by available contact method
   const emailEligibleRecipients = preview.recipients.filter(r => r.email);
   const smsEligibleRecipients = preview.recipients.filter(r => r.mobile);
   
-  // Toggle a recipient for a channel
   const toggleRecipient = (
     personId: string, 
     channel: 'email' | 'sms'
@@ -81,7 +89,6 @@ export function ClientValueNotificationContent({
     setFn(newSet);
   };
   
-  // Toggle all recipients for a channel
   const toggleAllRecipients = (
     channel: 'email' | 'sms',
     eligible: typeof preview.recipients,
@@ -95,7 +102,6 @@ export function ClientValueNotificationContent({
     }
   };
 
-  // Handle AI-generated content from voice recording
   const handleVoiceResult = (result: {
     subject: string;
     body: string;
@@ -105,10 +111,33 @@ export function ClientValueNotificationContent({
   }) => {
     if (result.subject) setEmailSubject(result.subject);
     if (result.body) setEmailBody(result.body);
-    // Push fields ignored for client notifications
   };
 
-  // Check if at least one channel is enabled with recipients
+  const handleAiRefine = async () => {
+    if (!aiPrompt.trim() || !onAiRefine) return;
+    
+    setIsRefining(true);
+    try {
+      const result = await onAiRefine(aiPrompt, emailSubject, emailBody);
+      if (result.subject) setEmailSubject(result.subject);
+      if (result.body) setEmailBody(result.body);
+      setAiPrompt("");
+      toast({
+        title: "Email refined",
+        description: "The AI has updated your email content.",
+      });
+    } catch (error) {
+      console.error("AI refinement failed:", error);
+      toast({
+        title: "Refinement failed",
+        description: "Unable to refine email. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRefining(false);
+    }
+  };
+
   const hasEnabledChannel = 
     (sendEmail && emailRecipients.size > 0) || 
     (sendSms && smsRecipients.size > 0);
@@ -126,7 +155,6 @@ export function ClientValueNotificationContent({
     });
   };
 
-  // Format role for display
   const formatRole = (role: string | null): string => {
     if (!role) return "";
     return role
@@ -137,273 +165,294 @@ export function ClientValueNotificationContent({
 
   return (
     <>
-      <div className="space-y-6 max-h-[60vh] overflow-y-auto">
-        {/* Sender Status */}
-        <div className={`p-3 rounded-lg border ${preview.senderHasOutlook ? 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-900' : 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-900'}`}>
-          <div className="flex items-center gap-2">
-            {preview.senderHasOutlook ? (
-              <>
-                <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
-                <span className="text-sm font-medium text-green-700 dark:text-green-300">
-                  Email will be sent from your Outlook account
-                </span>
-                {preview.senderEmail && (
-                  <span className="text-sm text-green-600 dark:text-green-400">({preview.senderEmail})</span>
-                )}
-              </>
-            ) : (
-              <>
-                <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                <span className="text-sm font-medium text-amber-700 dark:text-amber-300">
-                  Outlook not connected - email will be sent via system mailer
-                </span>
-              </>
-            )}
-          </div>
+      <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+        {/* Compact Sender Status */}
+        <div className={`flex items-center gap-2 text-sm px-3 py-2 rounded-md ${preview.senderHasOutlook ? 'bg-green-50 dark:bg-green-950/30' : 'bg-amber-50 dark:bg-amber-950/30'}`}>
+          {preview.senderHasOutlook ? (
+            <>
+              <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+              <span className="text-green-700 dark:text-green-300">
+                Sending from Outlook {preview.senderEmail && <span className="text-green-600 dark:text-green-400">({preview.senderEmail})</span>}
+              </span>
+            </>
+          ) : (
+            <>
+              <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+              <span className="text-amber-700 dark:text-amber-300">Outlook not connected - using system mailer</span>
+            </>
+          )}
         </div>
 
-        {/* Voice Recording for AI-assisted drafting */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 p-4 rounded-lg border border-blue-100 dark:border-blue-900">
-          <div className="flex items-start gap-3">
-            <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
-              <Mic className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+        {/* Two-Column Layout */}
+        <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-4">
+          {/* Left Column: Recipients & AI */}
+          <div className="space-y-4">
+            {/* Email Toggle & Recipients */}
+            <div className="bg-muted/30 rounded-lg p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <Label className="text-sm font-medium">Email</Label>
+                </div>
+                <Switch
+                  checked={sendEmail}
+                  onCheckedChange={setSendEmail}
+                  data-testid="switch-send-email"
+                />
+              </div>
+
+              {sendEmail && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs text-muted-foreground">Recipients</Label>
+                    {emailEligibleRecipients.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 text-xs px-1"
+                        onClick={() => toggleAllRecipients('email', emailEligibleRecipients, emailRecipients, setEmailRecipients)}
+                        data-testid="button-toggle-all-email"
+                      >
+                        {emailRecipients.size === emailEligibleRecipients.length ? 'None' : 'All'}
+                      </Button>
+                    )}
+                  </div>
+                  {emailEligibleRecipients.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">No contacts with email</p>
+                  ) : (
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {emailEligibleRecipients.map((recipient) => (
+                        <div key={recipient.personId} className="flex items-center gap-2">
+                          <Checkbox
+                            id={`email-${recipient.personId}`}
+                            checked={emailRecipients.has(recipient.personId)}
+                            onCheckedChange={() => toggleRecipient(recipient.personId, 'email')}
+                            data-testid={`checkbox-email-${recipient.personId}`}
+                            className="h-3.5 w-3.5"
+                          />
+                          <label
+                            htmlFor={`email-${recipient.personId}`}
+                            className="text-xs cursor-pointer flex-1 flex items-center gap-1 truncate"
+                          >
+                            <span className="font-medium truncate">{recipient.fullName}</span>
+                            {recipient.role && (
+                              <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                                {formatRole(recipient.role)}
+                              </Badge>
+                            )}
+                            {!recipient.receiveNotifications && (
+                              <Badge variant="destructive" className="text-[10px] px-1 py-0 h-4">Opted out</Badge>
+                            )}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {emailRecipients.size > 0 && (
+                    <div className="text-xs text-muted-foreground">
+                      {emailRecipients.size} selected
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            <div className="flex-1">
-              <h4 className="text-sm font-medium mb-1">AI-Assisted Message Drafting</h4>
-              <p className="text-xs text-muted-foreground mb-3">
-                Record a voice message and let AI draft your client notification. Your completed work items will be automatically included.
-              </p>
-              <StageNotificationAudioRecorder
-                projectId={projectId}
-                onResult={handleVoiceResult}
-                disabled={isSending}
-                existingSubject={emailSubject}
-                existingBody={emailBody}
+
+            {/* AI Assistance Section */}
+            <div className="bg-gradient-to-br from-blue-50/50 to-indigo-50/50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-lg p-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <Label className="text-sm font-medium">AI Assist</Label>
+              </div>
+              
+              {/* Voice Recording */}
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Mic className="h-3 w-3" /> Record
+                </Label>
+                <StageNotificationAudioRecorder
+                  projectId={projectId}
+                  onResult={handleVoiceResult}
+                  disabled={isSending}
+                  existingSubject={emailSubject}
+                  existingBody={emailBody}
+                  compact
+                />
+              </div>
+
+              {/* Text Prompt for Refinement */}
+              {onAiRefine && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Sparkles className="h-3 w-3" /> Refine
+                  </Label>
+                  <div className="flex gap-1">
+                    <Textarea
+                      value={aiPrompt}
+                      onChange={(e) => setAiPrompt(e.target.value)}
+                      placeholder="e.g., Make it more concise..."
+                      className="text-xs min-h-[60px] resize-none"
+                      data-testid="input-ai-prompt"
+                      disabled={isRefining || isSending}
+                    />
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="w-full h-7 text-xs"
+                    onClick={handleAiRefine}
+                    disabled={!aiPrompt.trim() || isRefining || isSending}
+                    data-testid="button-ai-refine"
+                  >
+                    {isRefining ? "Refining..." : "Apply"}
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Context Info */}
+            <div className="text-xs text-muted-foreground space-y-0.5 px-1">
+              <div className="truncate" data-testid="text-project-name">
+                <span className="font-medium">Project:</span> {preview.metadata.projectName}
+              </div>
+              <div className="truncate" data-testid="text-client-name">
+                <span className="font-medium">Client:</span> {preview.metadata.clientName}
+              </div>
+              <div data-testid="text-stage-change">
+                <span className="font-medium">Stage:</span>{" "}
+                {preview.oldStageName ? `${preview.oldStageName} → ` : ""}
+                {preview.newStageName}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Subject & Body */}
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="email-subject" className="text-sm">Subject</Label>
+              <Input
+                id="email-subject"
+                data-testid="input-email-subject"
+                value={emailSubject}
+                onChange={(e) => setEmailSubject(e.target.value)}
+                placeholder="Email subject"
+                className="h-9"
               />
             </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="email-body" className="text-sm">Message</Label>
+              <div data-testid="editor-email-body" className="border rounded-md">
+                <TiptapEditor
+                  content={emailBody}
+                  onChange={setEmailBody}
+                  placeholder="Email body content..."
+                  editorHeight="250px"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
-        <Separator />
-
-        {/* Email Notification */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Mail className="h-4 w-4 text-muted-foreground" />
-              <Label className="text-sm font-medium">Email Notification</Label>
-              {sendEmail && emailRecipients.size > 0 && (
-                <Badge variant="secondary" className="text-xs">
-                  {emailRecipients.size} recipient{emailRecipients.size !== 1 ? 's' : ''}
-                </Badge>
-              )}
-            </div>
-            <Switch
-              checked={sendEmail}
-              onCheckedChange={setSendEmail}
-              data-testid="switch-send-email"
-            />
-          </div>
-
-          {sendEmail && (
-            <>
-              {/* Email Recipients */}
-              <div className="bg-muted/30 p-3 rounded-md space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs text-muted-foreground">Select Client Contacts</Label>
-                  {emailEligibleRecipients.length > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 text-xs"
-                      onClick={() => toggleAllRecipients('email', emailEligibleRecipients, emailRecipients, setEmailRecipients)}
-                      data-testid="button-toggle-all-email"
-                    >
-                      {emailRecipients.size === emailEligibleRecipients.length ? 'Deselect All' : 'Select All'}
-                    </Button>
-                  )}
-                </div>
-                {emailEligibleRecipients.length === 0 ? (
-                  <p className="text-xs text-muted-foreground italic">No client contacts with email addresses</p>
-                ) : (
-                  <div className="space-y-1">
-                    {emailEligibleRecipients.map((recipient) => (
-                      <div key={recipient.personId} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`email-${recipient.personId}`}
-                          checked={emailRecipients.has(recipient.personId)}
-                          onCheckedChange={() => toggleRecipient(recipient.personId, 'email')}
-                          data-testid={`checkbox-email-${recipient.personId}`}
-                        />
-                        <label
-                          htmlFor={`email-${recipient.personId}`}
-                          className="text-sm cursor-pointer flex-1 flex items-center gap-2"
-                        >
-                          <User className="h-3 w-3 text-muted-foreground" />
-                          <span className="font-medium">{recipient.fullName}</span>
-                          {recipient.role && (
-                            <Badge variant="outline" className="text-xs">
-                              {formatRole(recipient.role)}
-                            </Badge>
-                          )}
-                          {recipient.isPrimaryContact && (
-                            <Badge variant="secondary" className="text-xs">Primary</Badge>
-                          )}
-                          <span className="text-muted-foreground">({recipient.email})</span>
-                          {!recipient.receiveNotifications && (
-                            <Badge variant="destructive" className="text-xs">Opted out</Badge>
-                          )}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                )}
+        {/* SMS Section (Collapsible) */}
+        <Collapsible open={smsOpen} onOpenChange={setSmsOpen}>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" size="sm" className="w-full justify-between h-8 text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <MessageSquare className="h-3.5 w-3.5" />
+                <span className="text-xs">SMS Notification</span>
+                <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">Coming Soon</Badge>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="email-subject">Subject</Label>
-                <Input
-                  id="email-subject"
-                  data-testid="input-email-subject"
-                  value={emailSubject}
-                  onChange={(e) => setEmailSubject(e.target.value)}
-                  placeholder="Email subject"
+              {smsOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="pt-2">
+            <div className="bg-muted/30 rounded-lg p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">Enable SMS</Label>
+                <Switch
+                  checked={sendSms}
+                  onCheckedChange={setSendSms}
+                  data-testid="switch-send-sms"
+                  disabled
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="email-body">Body</Label>
-                <div data-testid="editor-email-body" className="border rounded-md">
-                  <TiptapEditor
-                    content={emailBody}
-                    onChange={setEmailBody}
-                    placeholder="Email body content..."
-                    editorHeight="200px"
-                  />
-                </div>
-              </div>
-            </>
-          )}
-        </div>
+              {sendSms && (
+                <>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs text-muted-foreground">Recipients (with mobile)</Label>
+                      {smsEligibleRecipients.length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-5 text-xs px-1"
+                          onClick={() => toggleAllRecipients('sms', smsEligibleRecipients, smsRecipients, setSmsRecipients)}
+                          data-testid="button-toggle-all-sms"
+                        >
+                          {smsRecipients.size === smsEligibleRecipients.length ? 'None' : 'All'}
+                        </Button>
+                      )}
+                    </div>
+                    {smsEligibleRecipients.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic">No contacts with mobile</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {smsEligibleRecipients.map((recipient) => (
+                          <div key={recipient.personId} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`sms-${recipient.personId}`}
+                              checked={smsRecipients.has(recipient.personId)}
+                              onCheckedChange={() => toggleRecipient(recipient.personId, 'sms')}
+                              data-testid={`checkbox-sms-${recipient.personId}`}
+                              className="h-3.5 w-3.5"
+                            />
+                            <label
+                              htmlFor={`sms-${recipient.personId}`}
+                              className="text-xs cursor-pointer flex-1 flex items-center gap-1"
+                            >
+                              <span className="font-medium">{recipient.fullName}</span>
+                              {recipient.role && (
+                                <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                                  {formatRole(recipient.role)}
+                                </Badge>
+                              )}
+                              <span className="text-muted-foreground">({recipient.mobile})</span>
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
-        <Separator />
-
-        {/* SMS Notification */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-muted-foreground" />
-              <Label className="text-sm font-medium">SMS Notification</Label>
-              <Badge variant="outline" className="text-xs">Coming Soon</Badge>
-              {sendSms && smsRecipients.size > 0 && (
-                <Badge variant="secondary" className="text-xs">
-                  {smsRecipients.size} recipient{smsRecipients.size !== 1 ? 's' : ''}
-                </Badge>
+                  <div className="space-y-1">
+                    <Label htmlFor="sms-body" className="text-xs">Message (max 160)</Label>
+                    <Textarea
+                      id="sms-body"
+                      data-testid="input-sms-body"
+                      value={smsBody}
+                      onChange={(e) => setSmsBody(e.target.value.slice(0, 160))}
+                      placeholder="SMS message..."
+                      maxLength={160}
+                      rows={2}
+                      className="text-sm"
+                    />
+                    <p className="text-[10px] text-muted-foreground">{smsBody.length}/160</p>
+                  </div>
+                </>
               )}
             </div>
-            <Switch
-              checked={sendSms}
-              onCheckedChange={setSendSms}
-              data-testid="switch-send-sms"
-              disabled // Disabled until SMS is configured
-            />
-          </div>
-
-          {sendSms && (
-            <>
-              {/* SMS Recipients */}
-              <div className="bg-muted/30 p-3 rounded-md space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs text-muted-foreground">Select Client Contacts (with mobile number)</Label>
-                  {smsEligibleRecipients.length > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 text-xs"
-                      onClick={() => toggleAllRecipients('sms', smsEligibleRecipients, smsRecipients, setSmsRecipients)}
-                      data-testid="button-toggle-all-sms"
-                    >
-                      {smsRecipients.size === smsEligibleRecipients.length ? 'Deselect All' : 'Select All'}
-                    </Button>
-                  )}
-                </div>
-                {smsEligibleRecipients.length === 0 ? (
-                  <p className="text-xs text-muted-foreground italic">No client contacts with mobile numbers</p>
-                ) : (
-                  <div className="space-y-1">
-                    {smsEligibleRecipients.map((recipient) => (
-                      <div key={recipient.personId} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`sms-${recipient.personId}`}
-                          checked={smsRecipients.has(recipient.personId)}
-                          onCheckedChange={() => toggleRecipient(recipient.personId, 'sms')}
-                          data-testid={`checkbox-sms-${recipient.personId}`}
-                        />
-                        <label
-                          htmlFor={`sms-${recipient.personId}`}
-                          className="text-sm cursor-pointer flex-1 flex items-center gap-2"
-                        >
-                          <span className="font-medium">{recipient.fullName}</span>
-                          {recipient.role && (
-                            <Badge variant="outline" className="text-xs">
-                              {formatRole(recipient.role)}
-                            </Badge>
-                          )}
-                          <span className="text-muted-foreground">({recipient.mobile})</span>
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="sms-body">Message (max 160 chars)</Label>
-                <Textarea
-                  id="sms-body"
-                  data-testid="input-sms-body"
-                  value={smsBody}
-                  onChange={(e) => setSmsBody(e.target.value.slice(0, 160))}
-                  placeholder="SMS message content..."
-                  maxLength={160}
-                  rows={2}
-                />
-                <p className="text-xs text-muted-foreground">{smsBody.length}/160 characters</p>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Metadata Info */}
-        <div className="bg-muted/20 p-4 rounded-md">
-          <h4 className="text-sm font-medium mb-2">Notification Details</h4>
-          <div className="space-y-1 text-sm text-muted-foreground">
-            <div data-testid="text-project-name">
-              <span className="font-medium">Project:</span> {preview.metadata.projectName}
-            </div>
-            <div data-testid="text-client-name">
-              <span className="font-medium">Client:</span> {preview.metadata.clientName}
-            </div>
-            <div data-testid="text-stage-change">
-              <span className="font-medium">Stage Update:</span>{" "}
-              {preview.oldStageName ? `${preview.oldStageName} → ` : ""}
-              {preview.newStageName}
-            </div>
-            {preview.metadata.dueDate && (
-              <div data-testid="text-due-date">
-                <span className="font-medium">Due Date:</span> {preview.metadata.dueDate}
-              </div>
-            )}
-          </div>
-        </div>
+          </CollapsibleContent>
+        </Collapsible>
       </div>
 
-      <DialogFooter className="flex gap-2 sm:gap-2">
+      <DialogFooter className="flex gap-2 sm:gap-2 pt-4 border-t">
         <Button
           variant="ghost"
           onClick={onClose}
           disabled={isSending}
           data-testid="button-skip"
+          size="sm"
         >
           Skip
         </Button>
@@ -412,6 +461,7 @@ export function ClientValueNotificationContent({
           onClick={() => handleSend(true)}
           disabled={isSending}
           data-testid="button-dont-send"
+          size="sm"
         >
           Don't Send (Log as Suppressed)
         </Button>
@@ -419,8 +469,11 @@ export function ClientValueNotificationContent({
           onClick={() => handleSend(false)}
           disabled={isSending || !hasEnabledChannel}
           data-testid="button-send"
+          size="sm"
+          className="gap-1"
         >
-          {isSending ? "Sending..." : hasEnabledChannel ? "Send to Client" : "Select a Channel"}
+          <Send className="h-3.5 w-3.5" />
+          {isSending ? "Sending..." : hasEnabledChannel ? "Send" : "Select Recipients"}
         </Button>
       </DialogFooter>
     </>

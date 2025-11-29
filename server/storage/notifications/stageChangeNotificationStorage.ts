@@ -10,6 +10,9 @@ import {
   people,
   clientPeople,
   projectTypeNotifications,
+  stageApprovals,
+  stageApprovalFields,
+  stageApprovalResponses,
   type User,
   type Project,
   type StageChangeNotificationPreview,
@@ -18,6 +21,7 @@ import {
 import { sendStageChangeNotificationEmail, sendBulkProjectAssignmentSummaryEmail } from "../../emailService";
 import { z } from "zod";
 import { clientValueNotificationPreviewSchema, clientValueNotificationRecipientSchema } from "@shared/schema/notifications/schemas";
+import { processNotificationVariables, type NotificationVariableContext, type StageApprovalData } from "../../notification-variables";
 
 export type ClientValueNotificationPreview = z.infer<typeof clientValueNotificationPreviewSchema>;
 export type ClientValueNotificationRecipient = z.infer<typeof clientValueNotificationRecipientSchema>;
@@ -475,14 +479,96 @@ export class StageChangeNotificationStorage {
         }
       }
 
+      // Fetch stage approval responses for this project and build the approval map
+      // This allows templates to use {stage_approval:ApprovalName} variables
+      const stageApprovalsMap = new Map<string, StageApprovalData>();
+      
+      try {
+        // Get all approval responses for this project with their field and approval info
+        const approvalResponses = await db
+          .select({
+            approvalId: stageApprovals.id,
+            approvalName: stageApprovals.name,
+            fieldId: stageApprovalFields.id,
+            fieldName: stageApprovalFields.fieldName,
+            fieldType: stageApprovalFields.fieldType,
+            valueBoolean: stageApprovalResponses.valueBoolean,
+            valueNumber: stageApprovalResponses.valueNumber,
+            valueLongText: stageApprovalResponses.valueLongText,
+            valueMultiSelect: stageApprovalResponses.valueMultiSelect,
+          })
+          .from(stageApprovalResponses)
+          .innerJoin(stageApprovalFields, eq(stageApprovalResponses.fieldId, stageApprovalFields.id))
+          .innerJoin(stageApprovals, eq(stageApprovalFields.stageApprovalId, stageApprovals.id))
+          .where(eq(stageApprovalResponses.projectId, projectId));
+
+        // Group responses by approval name
+        for (const resp of approvalResponses) {
+          if (!stageApprovalsMap.has(resp.approvalName)) {
+            stageApprovalsMap.set(resp.approvalName, {
+              approvalName: resp.approvalName,
+              responses: [],
+            });
+          }
+          
+          // Determine the value based on field type
+          let value: boolean | number | string | string[] | null = null;
+          if (resp.fieldType === 'boolean') {
+            value = resp.valueBoolean;
+          } else if (resp.fieldType === 'number') {
+            value = resp.valueNumber;
+          } else if (resp.fieldType === 'long_text') {
+            value = resp.valueLongText;
+          } else if (resp.fieldType === 'multi_select') {
+            value = resp.valueMultiSelect;
+          }
+          
+          stageApprovalsMap.get(resp.approvalName)!.responses.push({
+            fieldName: resp.fieldName,
+            fieldType: resp.fieldType as 'boolean' | 'number' | 'long_text' | 'multi_select',
+            value,
+          });
+        }
+        
+        console.log(`[ClientValueNotification] Found ${stageApprovalsMap.size} stage approvals for project ${projectId}`);
+      } catch (approvalError) {
+        console.warn(`[ClientValueNotification] Failed to fetch stage approvals:`, approvalError);
+        // Continue without approval data
+      }
+
+      // Process notification variables including stage approvals
+      const variableContext: NotificationVariableContext = {
+        client: {
+          id: clientId,
+          name: clientData.name,
+          email: clientData.email || null,
+          clientType: clientData.clientType || null,
+          financialYearEnd: clientData.financialYearEnd || null,
+        },
+        project: {
+          id: projectId,
+          description: projectWithClient.description,
+          projectTypeName: '', // Could be fetched if needed
+          currentStatus: newStageName,
+          startDate: null, // Not available in this context
+          dueDate: projectWithClient.dueDate || null,
+        },
+        assignedStaff: sendingUser,
+        stageApprovals: stageApprovalsMap.size > 0 ? stageApprovalsMap : undefined,
+      };
+
+      // Process variables in subject and body
+      const processedEmailSubject = processNotificationVariables(emailSubject, variableContext);
+      const processedEmailBody = processNotificationVariables(emailBody, variableContext);
+
       return {
         projectId,
         newStageName,
         oldStageName,
         dedupeKey,
         recipients,
-        emailSubject,
-        emailBody,
+        emailSubject: processedEmailSubject,
+        emailBody: processedEmailBody,
         senderHasOutlook,
         senderEmail,
         metadata: {

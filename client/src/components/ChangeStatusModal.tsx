@@ -1338,6 +1338,24 @@ export default function ChangeStatusModal({
               }}
               onClose={handleFullClose}
               isSending={sendClientNotificationMutation.isPending}
+              onAiRefine={async (prompt, currentSubject, currentBody) => {
+                const response = await fetch("/api/ai/refine-email", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    projectId: project.id,
+                    prompt,
+                    currentSubject,
+                    currentBody,
+                  }),
+                  credentials: "include",
+                });
+                if (!response.ok) {
+                  throw new Error("Failed to refine email");
+                }
+                const result = await response.json();
+                return { subject: result.subject, body: result.body };
+              }}
             />
           </>
         ) : showNotificationModal && notificationPreview && notificationType === 'staff' ? (

@@ -323,6 +323,123 @@ Incorporate elements from this template into your response if appropriate.`;
     }
   );
 
+  // Text-based email refinement for stage notifications
+  // This allows users to refine existing email content with a simple text prompt
+  router.post(
+    "/refine-email",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: Request, res: Response) => {
+      try {
+        const { projectId, prompt, currentSubject, currentBody } = req.body;
+        
+        if (!prompt || !prompt.trim()) {
+          return res.status(400).json({ error: "Refinement prompt is required" });
+        }
+        
+        if (!currentBody) {
+          return res.status(400).json({ error: "Current email body is required" });
+        }
+
+        console.log("[AI] Refining email with text prompt for project:", projectId);
+        console.log("[AI] Prompt:", prompt);
+
+        // Fetch stage approval context if project ID provided
+        let stageApprovalContext = null;
+        if (projectId) {
+          stageApprovalContext = await getStageApprovalContext(projectId);
+        }
+
+        // Get system prompt from company settings
+        const settings = await storage.getCompanySettings();
+        const basePrompt = settings?.aiSystemPromptStageNotifications ||
+          `You are a professional assistant helping to refine client notification emails for an accounting/bookkeeping firm.`;
+
+        // Build the full system prompt
+        let fullSystemPrompt = `${basePrompt}
+
+You are helping a staff member refine an existing email. They will provide:
+1. The current email subject and body
+2. Instructions on how to modify it
+
+Apply their requested changes while maintaining a professional, friendly tone appropriate for client communications.
+Preserve any merge fields like {client_company_name}, {client_first_name}, {project_name}, {due_date} in the output.
+
+You must respond with valid JSON in this exact format:
+{
+  "subject": "The refined email subject line",
+  "body": "The refined email body with proper HTML formatting (paragraphs, etc.)"
+}
+Do not include any text outside the JSON object.`;
+
+        if (stageApprovalContext) {
+          fullSystemPrompt += `\n\n--- COMPLETED WORK ITEMS (Available for context) ---\n${stageApprovalContext}\n--- END OF COMPLETED WORK ITEMS ---`;
+        }
+
+        // Build the user message with current content and refinement instructions
+        let userMessage = `--- CURRENT EMAIL ---
+Subject: ${currentSubject || "(No subject)"}
+Body: ${currentBody}
+--- END OF CURRENT EMAIL ---
+
+--- REFINEMENT REQUEST ---
+${prompt}
+--- END OF REQUEST ---
+
+Please refine the email according to the request above.`;
+
+        // Call GPT
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: [
+              { role: "system", content: fullSystemPrompt },
+              { role: "user", content: userMessage },
+            ],
+            temperature: 0.7,
+            max_tokens: 2000,
+            response_format: { type: "json_object" },
+          }),
+        });
+
+        if (!response.ok) {
+          const error = await response.text();
+          console.error("[AI] GPT API error:", error);
+          throw new Error(`AI processing failed: ${response.status}`);
+        }
+
+        const gptResult = await response.json();
+        const content = gptResult.choices[0]?.message?.content || "";
+
+        let parsed;
+        try {
+          parsed = JSON.parse(content);
+        } catch (e) {
+          console.error("[AI] Failed to parse refinement JSON:", e);
+          parsed = { subject: currentSubject, body: content };
+        }
+
+        console.log("[AI] Email refinement complete");
+
+        res.json({
+          success: true,
+          subject: parsed.subject || currentSubject,
+          body: parsed.body || currentBody,
+        });
+      } catch (error: any) {
+        console.error("[AI] Error refining email:", error);
+        res.status(500).json({
+          error: error.message || "Failed to refine email",
+        });
+      }
+    }
+  );
+
   app.use("/api/ai", router);
 }
 

@@ -8,6 +8,15 @@ import type { User, Client, Project, Service } from "@shared/schema";
  * It supports multiple variable categories: client, project, date, service, firm, and action links.
  */
 
+export interface StageApprovalData {
+  approvalName: string;
+  responses: Array<{
+    fieldName: string;
+    fieldType: 'boolean' | 'number' | 'long_text' | 'multi_select';
+    value: boolean | number | string | string[] | null;
+  }>;
+}
+
 export interface NotificationVariableContext {
   // Client data
   client?: {
@@ -55,6 +64,9 @@ export interface NotificationVariableContext {
     firmEmail: string | null;
     portalUrl: string | null;
   };
+  
+  // Stage approval data (keyed by approval name)
+  stageApprovals?: Map<string, StageApprovalData>;
 }
 
 /**
@@ -105,6 +117,47 @@ function getLastName(name: string): string {
     return parts.slice(1).join(" ");
   }
   return "";
+}
+
+/**
+ * Format stage approval data into a readable summary
+ * This generates a nice HTML/text representation of approval responses
+ */
+function formatStageApprovalSummary(approval: StageApprovalData): string {
+  if (!approval.responses || approval.responses.length === 0) {
+    return "";
+  }
+  
+  const lines: string[] = [];
+  
+  for (const response of approval.responses) {
+    let formattedValue: string;
+    
+    switch (response.fieldType) {
+      case 'boolean':
+        formattedValue = response.value === true ? 'Yes' : response.value === false ? 'No' : 'N/A';
+        break;
+      case 'number':
+        formattedValue = response.value !== null && response.value !== undefined 
+          ? String(response.value) 
+          : 'N/A';
+        break;
+      case 'multi_select':
+        formattedValue = Array.isArray(response.value) 
+          ? response.value.join(', ') 
+          : 'N/A';
+        break;
+      case 'long_text':
+      default:
+        formattedValue = response.value !== null && response.value !== undefined 
+          ? String(response.value) 
+          : 'N/A';
+    }
+    
+    lines.push(`<strong>${response.fieldName}:</strong> ${formattedValue}`);
+  }
+  
+  return lines.join('<br/>');
 }
 
 /**
@@ -264,6 +317,28 @@ export function processNotificationVariables(
   processed = processed.replace(/\{portal_link\}/g, actionLinks.portalLink);
   processed = processed.replace(/\{project_link\}/g, actionLinks.projectLink);
   processed = processed.replace(/\{document_upload_link\}/g, actionLinks.documentUploadLink);
+  
+  // Stage approval variables - pattern: {stage_approval:ApprovalName}
+  // This allows templates to include approval data from specific named approvals
+  if (context.stageApprovals && context.stageApprovals.size > 0) {
+    // Find all {stage_approval:...} patterns in the template
+    const approvalPattern = /\{stage_approval:([^}]+)\}/g;
+    let match;
+    
+    while ((match = approvalPattern.exec(processed)) !== null) {
+      const approvalName = match[1].trim();
+      const approval = context.stageApprovals.get(approvalName);
+      
+      if (approval) {
+        const formattedApproval = formatStageApprovalSummary(approval);
+        // Use a new regex for replacement to avoid infinite loop
+        processed = processed.replace(
+          new RegExp(`\\{stage_approval:${approvalName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\}`, 'g'),
+          formattedApproval
+        );
+      }
+    }
+  }
   
   // Remove any remaining unreplaced variables (graceful degradation)
   // This prevents showing {variable_name} to end users if data is missing

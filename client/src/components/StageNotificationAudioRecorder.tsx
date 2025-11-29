@@ -19,6 +19,7 @@ interface StageNotificationAudioRecorderProps {
   className?: string;
   existingSubject?: string;
   existingBody?: string;
+  compact?: boolean;
 }
 
 export function StageNotificationAudioRecorder({
@@ -28,6 +29,7 @@ export function StageNotificationAudioRecorder({
   className,
   existingSubject,
   existingBody,
+  compact,
 }: StageNotificationAudioRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -172,31 +174,35 @@ export function StageNotificationAudioRecorder({
       <Button
         type="button"
         variant={isRecording ? "destructive" : "outline"}
-        size="sm"
+        size={compact ? "sm" : "sm"}
         onClick={handleClick}
         disabled={disabled || isProcessing}
-        className={cn("gap-2 transition-all", isRecording && "animate-pulse")}
+        className={cn(
+          "gap-1.5 transition-all",
+          isRecording && "animate-pulse",
+          compact && "h-7 text-xs px-2"
+        )}
         data-testid="button-audio-stage-notification"
       >
         {isProcessing ? (
           <>
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Processing...
+            <Loader2 className={cn("animate-spin", compact ? "h-3 w-3" : "h-4 w-4")} />
+            {compact ? "..." : "Processing..."}
           </>
         ) : isRecording ? (
           <>
-            <Square className="h-4 w-4" />
-            Stop ({formatTime(recordingTime)})
+            <Square className={cn(compact ? "h-3 w-3" : "h-4 w-4")} />
+            {compact ? formatTime(recordingTime) : `Stop (${formatTime(recordingTime)})`}
           </>
         ) : (
           <>
-            <Mic className="h-4 w-4" />
-            Record Message
+            <Mic className={cn(compact ? "h-3 w-3" : "h-4 w-4")} />
+            {compact ? "Record" : "Record Message"}
           </>
         )}
       </Button>
 
-      {isRecording && (
+      {isRecording && !compact && (
         <div className="flex items-center gap-1.5">
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>

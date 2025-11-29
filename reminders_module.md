@@ -110,18 +110,37 @@ Key flow:
 - ✅ Stage change commits immediately with success toast before notification decision
 - ✅ **Multi-recipient selection** - Select multiple client contacts with role badges
 - ✅ **AI-assisted message drafting** - Voice recording with OpenAI Whisper + GPT-4o-mini
+- ✅ **AI text refinement** - Quick text prompts to refine email content (added Nov 29, 2025)
 - ✅ **Client-facing notifications** - Sends to directors, shareholders, contacts (not staff)
 - ✅ **Outlook integration** - Sends from staff's connected Outlook account
 - ✅ **SendGrid fallback** - Falls back to SendGrid if no Outlook
 - ✅ TiptapEditor for rich text editing of email body
 - ✅ Editable subject line with merge field support
 - ✅ **Comprehensive merge fields** - 25+ variables ({client_company_name}, {project_name}, etc.)
+- ✅ **Stage approval variables** - `{stage_approval:ApprovalName}` syntax for referencing approval data (added Nov 29, 2025)
 - ✅ Per-channel controls (Email enabled, SMS marked "Coming Soon")
 - ✅ Template lookup from project_type_notifications table
 - ✅ Stage lookup scoped by projectTypeId (avoids cross-type conflicts)
 - ✅ Recipients show role badges, primary contact indicators, opt-out status
 - ✅ Sender status indicator showing Outlook connection
 - ✅ Skip, Don't Send (Log as Suppressed), and Select a Channel options
+- ✅ **2-column layout** - Recipients/AI on left (35%), email content on right (65%) (added Nov 29, 2025)
+
+**AI Text Refinement (Added Nov 29, 2025):**
+Alongside voice recording, users can enter quick text prompts like "Make it more formal" or "Add a thank you at the end" to refine the email content. The `/api/ai/refine-email` endpoint processes these requests with stage approval context.
+
+**Stage Approval Variables (Added Nov 29, 2025):**
+Notification templates can now reference stage approval data from any stage using the `{stage_approval:ApprovalName}` syntax. The system:
+- Fetches all approval responses for the project
+- Groups them by approval name
+- Formats the data as a readable list showing field names and values
+- Supports boolean, number, long_text, and multi_select field types
+
+Example usage in template:
+```
+{stage_approval:Quality Control Review}
+```
+This renders all fields from the "Quality Control Review" approval as formatted text.
 
 **SMS Status:** UI shows "Coming Soon" - VoodooSMS integration not yet implemented
 

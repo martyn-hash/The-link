@@ -275,11 +275,10 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
 
   // Callback when status is successfully updated
   const handleStatusUpdated = () => {
-    // Modal already handles query invalidation and optimistic updates
-    // Just close the modal and reset state
-    setShowChangeStatusModal(false);
-    setSelectedProject(null);
-    setTargetStatus(null);
+    // Modal handles its own closing (including showing client notification if needed)
+    // Only reset the selected project/target state when modal closes via handleModalClose
+    // Don't close the modal here - let ChangeStatusModal control that based on whether
+    // there's a client notification to show
   };
 
   // Callback when modal is closed without updating
