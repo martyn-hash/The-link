@@ -216,28 +216,32 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
       // Handle new response format: { project, notificationPreview }
       const preview = data.notificationPreview;
       
-      // If there's a notification preview, show the modal for staff approval
+      // ALWAYS show success immediately - stage change is committed
+      toast({
+        title: "Success",
+        description: "Stage updated successfully",
+      });
+      
+      // Refresh data immediately so user sees the change
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      onStatusUpdated?.();
+      
+      // Reset form and pending state
+      setNewStatus("");
+      setChangeReason("");
+      setNotesHtml("");
+      setAttachments([]);
+      setCustomFieldResponses({});
+      setPendingStatusChange(null);
+      setShowApprovalModal(false);
+      setTargetStageApproval(null);
+      setTargetStageApprovalFields([]);
+      
+      // If there's a notification preview, show the modal AFTER confirming stage change
+      // Closing this modal will NOT affect the stage change
       if (preview) {
         setNotificationPreview(preview);
         setShowNotificationModal(true);
-      } else {
-        // No notification to send, complete the flow
-        toast({
-          title: "Success",
-          description: "Project status updated successfully",
-        });
-        queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-        onStatusUpdated?.();
-        // Reset form and pending state
-        setNewStatus("");
-        setChangeReason("");
-        setNotesHtml("");
-        setAttachments([]);
-        setCustomFieldResponses({});
-        setPendingStatusChange(null);
-        setShowApprovalModal(false);
-        setTargetStageApproval(null);
-        setTargetStageApprovalFields([]);
       }
     },
     onError: (error: any) => {
@@ -267,28 +271,17 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
     onSuccess: (data: any) => {
       const wasSent = !data.suppress && data.sent;
       
-      toast({
-        title: "Success",
-        description: wasSent 
-          ? "Status updated and notification sent" 
-          : "Status updated (notification suppressed)",
-      });
+      if (wasSent) {
+        toast({
+          title: "Notification sent",
+          description: "Client has been notified of the stage change",
+        });
+      }
+      // If suppressed, no need for another toast - stage success was already shown
       
-      // Complete the flow: invalidate cache, call callbacks, close modals
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      // Just close the notification modal
       setShowNotificationModal(false);
       setNotificationPreview(null);
-      onStatusUpdated?.();
-      // Reset form
-      setNewStatus("");
-      setChangeReason("");
-      setNotesHtml("");
-      setAttachments([]);
-      setCustomFieldResponses({});
-      setPendingStatusChange(null);
-      setShowApprovalModal(false);
-      setTargetStageApproval(null);
-      setTargetStageApprovalFields([]);
     },
     onError: (error: any) => {
       showFriendlyError({ error });

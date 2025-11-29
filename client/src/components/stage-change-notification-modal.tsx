@@ -74,9 +74,9 @@ export function StageChangeNotificationModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" data-testid="dialog-stage-change-notification">
         <DialogHeader>
-          <DialogTitle data-testid="text-notification-title">Stage Change Notification</DialogTitle>
+          <DialogTitle data-testid="text-notification-title">Send Stage Change Notification?</DialogTitle>
           <DialogDescription data-testid="text-notification-description">
-            Review and edit the notification before sending it to assignees.
+            The stage has been updated successfully. Would you like to notify the assignees?
           </DialogDescription>
         </DialogHeader>
 
@@ -193,12 +193,20 @@ export function StageChangeNotificationModal({
 
         <DialogFooter className="flex gap-2 sm:gap-2">
           <Button
+            variant="ghost"
+            onClick={onClose}
+            disabled={isSending}
+            data-testid="button-skip"
+          >
+            Skip
+          </Button>
+          <Button
             variant="outline"
             onClick={() => handleSend(true)}
             disabled={isSending}
             data-testid="button-dont-send"
           >
-            Don't Send
+            Don't Send (Log as Suppressed)
           </Button>
           <Button
             onClick={() => handleSend(false)}

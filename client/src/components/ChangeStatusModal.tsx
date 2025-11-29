@@ -36,7 +36,10 @@ import {
   Equal,
   X,
   FileText,
-  Paperclip
+  Paperclip,
+  Mail,
+  Bell,
+  Users
 } from "lucide-react";
 import type {
   ProjectWithRelations,
@@ -49,7 +52,6 @@ import type {
   InsertStageApprovalResponse,
   StageChangeNotificationPreview,
 } from "@shared/schema";
-import { StageChangeNotificationModal } from "./stage-change-notification-modal";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -128,6 +130,181 @@ const getComparisonIcon = (
       return null;
   }
 };
+
+// Inline notification content component (used when stage change succeeds with notification preview)
+function NotificationContent({
+  preview,
+  onSend,
+  onClose,
+  isSending,
+}: {
+  preview: StageChangeNotificationPreview;
+  onSend: (data: {
+    emailSubject: string;
+    emailBody: string;
+    pushTitle: string | null;
+    pushBody: string | null;
+    suppress: boolean;
+  }) => Promise<void>;
+  onClose: () => void;
+  isSending: boolean;
+}) {
+  const [emailSubject, setEmailSubject] = useState(preview.emailSubject);
+  const [emailBody, setEmailBody] = useState(preview.emailBody);
+  const [pushTitle, setPushTitle] = useState(preview.pushTitle || "");
+  const [pushBody, setPushBody] = useState(preview.pushBody || "");
+
+  const handleSend = async (suppress: boolean) => {
+    await onSend({
+      emailSubject,
+      emailBody,
+      pushTitle: pushTitle || null,
+      pushBody: pushBody || null,
+      suppress,
+    });
+  };
+
+  return (
+    <>
+      <div className="space-y-6 max-h-[60vh] overflow-y-auto">
+        {/* Recipients */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <Label className="text-sm font-medium">Recipients ({preview.recipients.length})</Label>
+          </div>
+          <div className="bg-muted/30 p-3 rounded-md space-y-1">
+            {preview.recipients.map((recipient) => (
+              <div key={recipient.userId} className="text-sm" data-testid={`text-recipient-${recipient.userId}`}>
+                <span className="font-medium">{recipient.name}</span>
+                <span className="text-muted-foreground ml-2">({recipient.email})</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Email Notification */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Mail className="h-4 w-4 text-muted-foreground" />
+            <Label className="text-sm font-medium">Email Notification</Label>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="email-subject">Subject</Label>
+            <Input
+              id="email-subject"
+              data-testid="input-email-subject"
+              value={emailSubject}
+              onChange={(e) => setEmailSubject(e.target.value)}
+              placeholder="Email subject"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="email-body">Body</Label>
+            <div data-testid="editor-email-body" className="border rounded-md">
+              <TiptapEditor
+                content={emailBody}
+                onChange={setEmailBody}
+                placeholder="Email body content..."
+                editorHeight="200px"
+              />
+            </div>
+          </div>
+        </div>
+
+        <Separator />
+
+        {/* Push Notification */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Bell className="h-4 w-4 text-muted-foreground" />
+            <Label className="text-sm font-medium">Push Notification (Optional)</Label>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="push-title">Title</Label>
+            <Input
+              id="push-title"
+              data-testid="input-push-title"
+              value={pushTitle}
+              onChange={(e) => setPushTitle(e.target.value)}
+              placeholder="Push notification title"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="push-body">Body</Label>
+            <Input
+              id="push-body"
+              data-testid="input-push-body"
+              value={pushBody}
+              onChange={(e) => setPushBody(e.target.value)}
+              placeholder="Push notification body"
+            />
+          </div>
+        </div>
+
+        {/* Metadata Info */}
+        <div className="bg-muted/20 p-4 rounded-md">
+          <h4 className="text-sm font-medium mb-2">Notification Details</h4>
+          <div className="space-y-1 text-sm text-muted-foreground">
+            <div data-testid="text-project-name">
+              <span className="font-medium">Project:</span> {preview.metadata.projectName}
+            </div>
+            <div data-testid="text-client-name">
+              <span className="font-medium">Client:</span> {preview.metadata.clientName}
+            </div>
+            <div data-testid="text-stage-change">
+              <span className="font-medium">Stage Change:</span>{" "}
+              {preview.oldStageName ? `${preview.oldStageName} → ` : ""}
+              {preview.newStageName}
+            </div>
+            {preview.metadata.dueDate && (
+              <div data-testid="text-due-date">
+                <span className="font-medium">Due Date:</span> {preview.metadata.dueDate}
+              </div>
+            )}
+            {preview.metadata.changeReason && (
+              <div data-testid="text-change-reason">
+                <span className="font-medium">Reason:</span> {preview.metadata.changeReason}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <DialogFooter className="flex gap-2 sm:gap-2">
+        <Button
+          variant="ghost"
+          onClick={onClose}
+          disabled={isSending}
+          data-testid="button-skip"
+        >
+          Skip
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => handleSend(true)}
+          disabled={isSending}
+          data-testid="button-dont-send"
+        >
+          Don't Send (Log as Suppressed)
+        </Button>
+        <Button
+          onClick={() => handleSend(false)}
+          disabled={isSending}
+          data-testid="button-send"
+        >
+          {isSending ? "Sending..." : "Send Notification"}
+        </Button>
+      </DialogFooter>
+    </>
+  );
+}
 
 export default function ChangeStatusModal({
   isOpen,
@@ -423,18 +600,32 @@ export default function ChangeStatusModal({
       const updatedProject = data.project || data;
       const preview = data.notificationPreview;
 
+      // ALWAYS show success immediately - stage change is committed
+      toast({
+        title: "Success",
+        description: "Stage updated successfully",
+      });
+      
+      // Refresh data immediately so user sees the change
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      onStatusUpdated?.();
+      
+      // Reset form state - stage change is complete
+      setNewStatus("");
+      setChangeReason("");
+      setNotesHtml("");
+      setCustomFieldResponses({});
+      setShowApprovalForm(false);
+      setSelectedFiles([]);
+      setUploadedAttachments([]);
+
       if (preview) {
-        // Show notification approval modal
+        // Show notification approval modal AFTER confirming stage change
+        // Closing this modal will NOT affect the stage change
         setNotificationPreview(preview);
         setShowNotificationModal(true);
       } else {
-        // No notification to send, complete the flow
-        toast({
-          title: "Success",
-          description: "Project status updated successfully",
-        });
-        queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-        onStatusUpdated?.();
+        // No notification to send, close the modal
         onClose();
       }
     },
@@ -467,18 +658,17 @@ export default function ChangeStatusModal({
     onSuccess: (data: any) => {
       const wasSent = !data.suppress && data.sent;
       
-      toast({
-        title: "Success",
-        description: wasSent 
-          ? "Notification sent successfully" 
-          : "Notification suppressed",
-      });
+      if (wasSent) {
+        toast({
+          title: "Notification sent",
+          description: "Client has been notified of the stage change",
+        });
+      }
+      // If suppressed, no need for another toast - stage success was already shown
       
-      // Complete the flow: invalidate cache, call callbacks, close modals
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      // Close notification modal and main modal
       setShowNotificationModal(false);
       setNotificationPreview(null);
-      onStatusUpdated?.();
       onClose();
     },
     onError: (error: any) => {
@@ -760,20 +950,54 @@ export default function ChangeStatusModal({
   const isSubmitting =
     updateStatusMutation.isPending || submitApprovalResponsesMutation.isPending || isUploadingFiles;
 
+  // Handle closing the entire modal (both stage change and notification)
+  const handleFullClose = () => {
+    setShowNotificationModal(false);
+    setNotificationPreview(null);
+    onClose();
+  };
+
+  // Determine modal size based on current view
+  const getModalClassName = () => {
+    if (showNotificationModal) return "max-w-4xl";
+    if (showApprovalForm) return "max-w-6xl";
+    return "max-w-2xl";
+  };
+
   return (
-    <>
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleFullClose}>
       <DialogContent 
-        className={showApprovalForm ? "max-w-6xl" : "max-w-2xl"} 
+        className={getModalClassName()} 
         data-testid="dialog-change-status"
         onInteractOutside={(e) => e.preventDefault()}
       >
-        <DialogHeader>
-          <DialogTitle>Change Project Status</DialogTitle>
-          <DialogDescription>
-            Move this project to a different stage in the workflow
-          </DialogDescription>
-        </DialogHeader>
+        {/* Show notification content if stage change succeeded and there's a preview */}
+        {showNotificationModal && notificationPreview ? (
+          <>
+            <DialogHeader>
+              <DialogTitle data-testid="text-notification-title">Send Stage Change Notification?</DialogTitle>
+              <DialogDescription data-testid="text-notification-description">
+                The stage has been updated successfully. Would you like to notify the assignees?
+              </DialogDescription>
+            </DialogHeader>
+
+            <NotificationContent
+              preview={notificationPreview}
+              onSend={async (editedData) => {
+                await sendNotificationMutation.mutateAsync(editedData);
+              }}
+              onClose={handleFullClose}
+              isSending={sendNotificationMutation.isPending}
+            />
+          </>
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle>Change Project Status</DialogTitle>
+              <DialogDescription>
+                Move this project to a different stage in the workflow
+              </DialogDescription>
+            </DialogHeader>
 
         <div className={`max-h-[70vh] overflow-y-auto ${showApprovalForm ? "grid grid-cols-2 gap-6" : ""}`}>
           {/* Left column: Status change form */}
@@ -1185,42 +1409,33 @@ export default function ChangeStatusModal({
           )}
         </div>
 
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={onClose}
-            disabled={isSubmitting}
-            data-testid="button-cancel-status-change"
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSubmit}
-            disabled={isSubmitting || !newStatus || !changeReason}
-            data-testid="button-submit-status-change"
-          >
-            {isSubmitting ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Updating...
-              </>
-            ) : (
-              "Update Status"
-            )}
-          </Button>
-        </DialogFooter>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={handleFullClose}
+                disabled={isSubmitting}
+                data-testid="button-cancel-status-change"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                disabled={isSubmitting || !newStatus || !changeReason}
+                data-testid="button-submit-status-change"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  "Update Status"
+                )}
+              </Button>
+            </DialogFooter>
+          </>
+        )}
       </DialogContent>
     </Dialog>
-
-    {/* Stage Change Notification Approval Modal */}
-    <StageChangeNotificationModal
-      isOpen={showNotificationModal}
-      onClose={() => setShowNotificationModal(false)}
-      preview={notificationPreview}
-      onSend={async (editedData) => {
-        await sendNotificationMutation.mutateAsync(editedData);
-      }}
-    />
-    </>
   );
 }
