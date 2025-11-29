@@ -359,6 +359,7 @@ export function ClientValueNotificationContent({
                     variant="outline"
                     onClick={() => setShowPromptField(false)}
                     disabled={isRefining}
+                    data-testid="button-ai-cancel"
                   >
                     Cancel
                   </Button>
