@@ -20,6 +20,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { AlertCircle, Loader2, X, FileText, Paperclip } from "lucide-react";
 import StageApprovalModal from "@/components/StageApprovalModal";
 import { TiptapEditor } from "@/components/TiptapEditor";
+import { StageChangeNotificationModal } from "./stage-change-notification-modal";
 import type { 
   ProjectWithRelations, 
   User, 
@@ -28,7 +29,8 @@ import type {
   ReasonCustomField, 
   StageApproval,
   StageApprovalField,
-  InsertStageApprovalResponse
+  InsertStageApprovalResponse,
+  StageChangeNotificationPreview
 } from "@shared/schema";
 
 interface StatusChangeFormProps {
@@ -92,6 +94,10 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
     }>;
     fieldResponses?: any[];
   } | null>(null);
+  
+  // Notification modal state
+  const [notificationPreview, setNotificationPreview] = useState<StageChangeNotificationPreview | null>(null);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -210,31 +216,70 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
       // Handle new response format: { project, notificationPreview }
       const preview = data.notificationPreview;
       
-      // If there's a notification preview, automatically send it without user approval
+      // If there's a notification preview, show the modal for staff approval
       if (preview) {
-        try {
-          await apiRequest("POST", `/api/projects/${project.id}/send-stage-change-notification`, {
-            projectId: project.id,
-            dedupeKey: preview.dedupeKey,
-            emailSubject: preview.emailSubject,
-            emailBody: preview.emailBody,
-            pushTitle: preview.pushTitle,
-            pushBody: preview.pushBody,
-            suppress: false,
-          });
-        } catch (error) {
-          console.error("Failed to send stage change notification:", error);
-          // Don't fail the whole flow if notification fails
-        }
+        setNotificationPreview(preview);
+        setShowNotificationModal(true);
+      } else {
+        // No notification to send, complete the flow
+        toast({
+          title: "Success",
+          description: "Project status updated successfully",
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+        onStatusUpdated?.();
+        // Reset form and pending state
+        setNewStatus("");
+        setChangeReason("");
+        setNotesHtml("");
+        setAttachments([]);
+        setCustomFieldResponses({});
+        setPendingStatusChange(null);
+        setShowApprovalModal(false);
+        setTargetStageApproval(null);
+        setTargetStageApprovalFields([]);
       }
+    },
+    onError: (error: any) => {
+      showFriendlyError({ error });
+      // Reset pending state on error
+      setPendingStatusChange(null);
+    },
+  });
+
+  // Mutation for sending stage change notification after user approval
+  const sendNotificationMutation = useMutation({
+    mutationFn: async (data: {
+      emailSubject: string;
+      emailBody: string;
+      pushTitle: string | null;
+      pushBody: string | null;
+      suppress: boolean;
+    }) => {
+      if (!notificationPreview) throw new Error("No notification preview available");
+      
+      return await apiRequest("POST", `/api/projects/${project.id}/send-stage-change-notification`, {
+        projectId: project.id,
+        dedupeKey: notificationPreview.dedupeKey,
+        ...data,
+      });
+    },
+    onSuccess: (data: any) => {
+      const wasSent = !data.suppress && data.sent;
       
       toast({
         title: "Success",
-        description: "Project status updated successfully",
+        description: wasSent 
+          ? "Status updated and notification sent" 
+          : "Status updated (notification suppressed)",
       });
+      
+      // Complete the flow: invalidate cache, call callbacks, close modals
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      setShowNotificationModal(false);
+      setNotificationPreview(null);
       onStatusUpdated?.();
-      // Reset form and pending state
+      // Reset form
       setNewStatus("");
       setChangeReason("");
       setNotesHtml("");
@@ -247,8 +292,6 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
     },
     onError: (error: any) => {
       showFriendlyError({ error });
-      // Reset pending state on error
-      setPendingStatusChange(null);
     },
   });
 
@@ -822,6 +865,16 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
           onSubmit={handleApprovalSubmit}
         />
       )}
+
+      {/* Stage Change Notification Approval Modal */}
+      <StageChangeNotificationModal
+        isOpen={showNotificationModal}
+        onClose={() => setShowNotificationModal(false)}
+        preview={notificationPreview}
+        onSend={async (editedData) => {
+          await sendNotificationMutation.mutateAsync(editedData);
+        }}
+      />
     </div>
   );
 }

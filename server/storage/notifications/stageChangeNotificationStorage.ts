@@ -104,7 +104,7 @@ export class StageChangeNotificationStorage {
         with: {
           client: true,
           chronology: {
-            orderBy: (chronology, { desc }) => [desc(chronology.timestamp)],
+            orderBy: (chronology: any, { desc }: { desc: any }) => [desc(chronology.timestamp)],
             with: {
               fieldResponses: {
                 with: {
@@ -121,8 +121,9 @@ export class StageChangeNotificationStorage {
         return null;
       }
       
-      const mostRecentChronologyEntry = projectWithClient.chronology && projectWithClient.chronology.length > 0 
-        ? projectWithClient.chronology[0] 
+      const chronologyEntries = (projectWithClient.chronology || []) as any[];
+      const mostRecentChronologyEntry = chronologyEntries.length > 0 
+        ? chronologyEntries[0] 
         : null;
       
       const changeReason = mostRecentChronologyEntry?.changeReason || undefined;
@@ -161,7 +162,7 @@ export class StageChangeNotificationStorage {
         return null;
       }
 
-      const chronologyForEmail = (projectWithClient.chronology || []).map(entry => ({
+      const chronologyForEmail = chronologyEntries.map((entry: any) => ({
         toStatus: entry.toStatus,
         timestamp: entry.timestamp instanceof Date ? entry.timestamp.toISOString() : entry.timestamp,
       }));
@@ -332,7 +333,7 @@ export class StageChangeNotificationStorage {
         with: {
           client: true,
           chronology: {
-            orderBy: (chronology, { desc }) => [desc(chronology.timestamp)],
+            orderBy: (chronology: any, { desc }: { desc: any }) => [desc(chronology.timestamp)],
             with: {
               fieldResponses: {
                 with: {
@@ -350,9 +351,10 @@ export class StageChangeNotificationStorage {
       }
       
       const clientData2 = projectWithClient.client as any;
+      const chronologyEntries2 = (projectWithClient.chronology || []) as any[];
       
-      const mostRecentChronologyEntry = projectWithClient.chronology && projectWithClient.chronology.length > 0 
-        ? projectWithClient.chronology[0] 
+      const mostRecentChronologyEntry = chronologyEntries2.length > 0 
+        ? chronologyEntries2[0] 
         : null;
       
       const changeReason = mostRecentChronologyEntry?.changeReason || undefined;
@@ -400,7 +402,7 @@ export class StageChangeNotificationStorage {
         return;
       }
 
-      const chronologyForEmail = (projectWithClient.chronology || []).map(entry => ({
+      const chronologyForEmail = chronologyEntries2.map((entry: any) => ({
         toStatus: entry.toStatus,
         timestamp: entry.timestamp instanceof Date ? entry.timestamp.toISOString() : entry.timestamp,
       }));

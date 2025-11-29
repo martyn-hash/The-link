@@ -9,10 +9,10 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Mail, Bell, Users } from "lucide-react";
+import { TiptapEditor } from "@/components/TiptapEditor";
 import type { StageChangeNotificationPreview } from "@shared/schema";
 
 interface StageChangeNotificationModalProps {
@@ -119,14 +119,14 @@ export function StageChangeNotificationModal({
 
             <div className="space-y-2">
               <Label htmlFor="email-body">Body</Label>
-              <Textarea
-                id="email-body"
-                data-testid="textarea-email-body"
-                value={emailBody}
-                onChange={(e) => setEmailBody(e.target.value)}
-                placeholder="Email body (HTML supported)"
-                className="min-h-[200px] font-mono text-sm"
-              />
+              <div data-testid="editor-email-body" className="border rounded-md">
+                <TiptapEditor
+                  content={emailBody}
+                  onChange={setEmailBody}
+                  placeholder="Email body content..."
+                  editorHeight="200px"
+                />
+              </div>
             </div>
           </div>
 
