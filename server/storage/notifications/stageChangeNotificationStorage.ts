@@ -1,5 +1,5 @@
 import { db } from "../../db";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and } from "drizzle-orm";
 import {
   users,
   projects,
@@ -9,6 +9,7 @@ import {
   pushSubscriptions,
   people,
   clientPeople,
+  projectTypeNotifications,
   type User,
   type Project,
   type StageChangeNotificationPreview,
@@ -386,11 +387,16 @@ export class StageChangeNotificationStorage {
       const changeReason = mostRecentChronologyEntry?.changeReason || undefined;
       const notes = mostRecentChronologyEntry?.notes || undefined;
 
-      // Calculate due date if available
+      // Calculate due date if available - lookup stage by name AND projectTypeId to avoid cross-type conflicts
       const [newStage] = await db
         .select()
         .from(kanbanStages)
-        .where(eq(kanbanStages.name, newStageName));
+        .where(
+          and(
+            eq(kanbanStages.name, newStageName),
+            eq(kanbanStages.projectTypeId, project.projectTypeId)
+          )
+        );
 
       let formattedDueDate: string | undefined = undefined;
       if (newStage?.maxInstanceTime) {
@@ -432,10 +438,9 @@ export class StageChangeNotificationStorage {
       const recipientIds = recipients.map(r => r.personId).sort().join(',');
       const dedupeKey = `client:${projectId}:${newStageName}:${changeReason || 'none'}:${recipientIds}`;
 
-      // Create email content tailored for clients
-      const emailSubject = `Update: ${projectWithClient.description} - ${newStageName}`;
-      
-      const emailBody = `
+      // Look up stage notification template from project_type_notifications
+      let emailSubject = `Update: ${projectWithClient.description} - ${newStageName}`;
+      let emailBody = `
         <p>Dear Client,</p>
         <p>We wanted to let you know that work on "${projectWithClient.description}" has progressed to: <strong>${newStageName}</strong></p>
         ${oldStageName ? `<p>Previous stage: ${oldStageName}</p>` : ''}
@@ -443,6 +448,32 @@ export class StageChangeNotificationStorage {
         <p>If you have any questions, please don't hesitate to get in touch.</p>
         <p>Kind regards,<br/>${sendingUser.firstName || 'The Team'}</p>
       `.trim();
+
+      // Try to find a matching notification template for this stage
+      if (newStage?.id) {
+        const [stageTemplate] = await db
+          .select()
+          .from(projectTypeNotifications)
+          .where(
+            and(
+              eq(projectTypeNotifications.projectTypeId, project.projectTypeId),
+              eq(projectTypeNotifications.stageId, newStage.id),
+              eq(projectTypeNotifications.stageTrigger, 'entry'),
+              eq(projectTypeNotifications.isActive, true)
+            )
+          )
+          .limit(1);
+
+        if (stageTemplate?.emailTitle || stageTemplate?.emailBody) {
+          console.log(`[ClientValueNotification] Using template from project_type_notifications for stage ${newStageName}`);
+          if (stageTemplate.emailTitle) {
+            emailSubject = stageTemplate.emailTitle;
+          }
+          if (stageTemplate.emailBody) {
+            emailBody = stageTemplate.emailBody;
+          }
+        }
+      }
 
       return {
         projectId,

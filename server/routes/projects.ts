@@ -964,16 +964,78 @@ export function registerProjectRoutes(
         ? preview.recipients.filter(r => notificationData.smsRecipientIds!.includes(r.personId) && r.mobile)
         : preview.recipients.filter(r => r.mobile);
 
+      // Import merge field processing
+      const { processNotificationVariables } = await import("../notification-variables");
+
+      // Get client and project details for merge field context
+      const projectWithDetails = await storage.getProjectById(projectId);
+      
+      // Guard against missing data
+      if (!projectWithDetails) {
+        console.warn(`[Client Value Notification] Could not load project details for ${projectId}`);
+        return res.status(400).json({ message: "Could not load project details for merge field processing" });
+      }
+      
+      const client = projectWithDetails.client;
+      const companySettings = await storage.getCompanySettings();
+
+      // Build base merge field context - handles both company clients and individual contacts
+      const buildMergeFieldContext = (recipient: typeof emailRecipients[0]) => {
+        // For merge fields, prioritize the recipient's personal details for {client_first_name}
+        // but use the client company name for {client_company_name}
+        const recipientName = recipient.fullName || '';
+        const clientName = client?.name || recipientName;
+        
+        return {
+          // Client context uses company name for {client_company_name}, but person name for first/last name
+          client: {
+            id: client?.id || '',
+            name: clientName,  // Company name for {client_company_name} and {client_full_name}
+            email: client?.email || recipient.email || null,
+            clientType: client?.clientType || null,
+            financialYearEnd: (client as any)?.financialYearEnd || null,
+          },
+          // Person context for recipient-specific merge fields like {client_first_name}
+          // The notification-variables.ts prefers person data when available
+          person: {
+            id: recipient.personId,
+            fullName: recipientName,  // Used for {client_first_name} and {client_last_name}
+            email: recipient.email || null,
+          },
+          project: {
+            id: project.id,
+            description: project.description || '',
+            projectTypeName: projectWithDetails.projectType?.name || '',
+            currentStatus: project.currentStatus || '',
+            startDate: (project as any).startDate || null,
+            dueDate: project.dueDate || null,
+          },
+          projectOwner: effectiveUser,
+          assignedStaff: effectiveUser,
+          firmSettings: companySettings ? {
+            firmName: companySettings.firmName || 'The Link',
+            firmPhone: companySettings.firmPhone || null,
+            firmEmail: companySettings.firmEmail || null,
+            portalUrl: companySettings.portalUrl || null,
+          } : undefined,
+        };
+      };
+
       // Helper function for SendGrid fallback
       const sendViaSendGrid = async () => {
         const { sendEmail } = await import("../emailService");
         
         const emailPromises = emailRecipients.map(async (recipient) => {
           try {
+            // Process merge fields for this recipient
+            const context = buildMergeFieldContext(recipient);
+            const processedSubject = processNotificationVariables(notificationData.emailSubject, context);
+            const processedBody = processNotificationVariables(notificationData.emailBody, context);
+            
             const emailSent = await sendEmail({
               to: recipient.email!,
-              subject: notificationData.emailSubject,
-              html: notificationData.emailBody,
+              subject: processedSubject,
+              html: processedBody,
             });
 
             if (emailSent) {
@@ -1003,11 +1065,16 @@ export function registerProjectRoutes(
             
             const emailPromises = emailRecipients.map(async (recipient) => {
               try {
+                // Process merge fields for this recipient
+                const context = buildMergeFieldContext(recipient);
+                const processedSubject = processNotificationVariables(notificationData.emailSubject, context);
+                const processedBody = processNotificationVariables(notificationData.emailBody, context);
+                
                 await sendEmailAsUser(
                   effectiveUserId,
                   recipient.email!,
-                  notificationData.emailSubject,
-                  notificationData.emailBody,
+                  processedSubject,
+                  processedBody,
                   true // isHtml
                 );
                 console.log(`[Client Value Notification] Email sent via Outlook to ${recipient.email} for project ${projectId}`);
@@ -1186,7 +1253,7 @@ export function registerProjectRoutes(
       }
 
       // Validate request body
-      const { completionStatus, notes } = completeProjectSchema.parse(req.body);
+      const { completionStatus, chronologyNotes } = completeProjectSchema.parse(req.body);
 
       // Verify project exists
       const project = await storage.getProject(req.params.id);
@@ -1249,7 +1316,7 @@ export function registerProjectRoutes(
         toStatus: 'Archived',
         assigneeId: effectiveUserId,
         changeReason: completionNotes,
-        notes: notes || `Project manually marked as ${completionStatus === 'completed_successfully' ? 'successfully completed' : 'unsuccessfully completed'} by ${effectiveUser.name}. Completion status: ${completionStatus}`
+        notes: chronologyNotes || `Project manually marked as ${completionStatus === 'completed_successfully' ? 'successfully completed' : 'unsuccessfully completed'} by ${effectiveUser.name}. Completion status: ${completionStatus}`
       });
 
       res.json(updatedProject);
