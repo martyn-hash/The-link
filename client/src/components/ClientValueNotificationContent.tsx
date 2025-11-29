@@ -71,6 +71,27 @@ export function ClientValueNotificationContent({
   const emailEligibleRecipients = preview.recipients.filter(r => r.email);
   const smsEligibleRecipients = preview.recipients.filter(r => r.mobile);
   
+  // Helper function to format recipient first names for personalization
+  const formatRecipientFirstNames = (recipientIds: Set<string>): string => {
+    const names = preview.recipients
+      .filter(r => recipientIds.has(r.personId))
+      .map(r => {
+        // Extract first name from full name
+        const fullName = r.fullName || "";
+        return fullName.split(/\s+/)[0] || "";
+      })
+      .filter(name => name.length > 0);
+    
+    if (names.length === 0) return "";
+    if (names.length === 1) return names[0];
+    if (names.length === 2) return `${names[0]} and ${names[1]}`;
+    
+    // For 3+ names: "John, Sarah and Mike"
+    const lastTwo = names.slice(-2).join(" and ");
+    const rest = names.slice(0, -2);
+    return [...rest, lastTwo].join(", ");
+  };
+  
   const toggleRecipient = (
     personId: string, 
     channel: 'email' | 'sms'
@@ -141,9 +162,14 @@ export function ClientValueNotificationContent({
     (sendSms && smsRecipients.size > 0);
 
   const handleSend = async (suppress: boolean) => {
+    // Process recipient_first_names variable before sending
+    const recipientNames = formatRecipientFirstNames(emailRecipients);
+    const processedEmailBody = emailBody.replace(/\{recipient_first_names\}/g, recipientNames);
+    const processedEmailSubject = emailSubject.replace(/\{recipient_first_names\}/g, recipientNames);
+    
     await onSend({
-      emailSubject,
-      emailBody,
+      emailSubject: processedEmailSubject,
+      emailBody: processedEmailBody,
       suppress,
       sendEmail: sendEmail && emailRecipients.size > 0,
       sendSms: sendSms && smsRecipients.size > 0,
@@ -361,6 +387,18 @@ export function ClientValueNotificationContent({
                   editorHeight="250px"
                 />
               </div>
+              {/* Preview hint for recipient_first_names variable */}
+              {(emailBody.includes("{recipient_first_names}") || emailSubject.includes("{recipient_first_names}")) && (
+                <div className="text-xs bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 px-2 py-1.5 rounded border border-blue-200 dark:border-blue-800" data-testid="preview-recipient-names">
+                  <span className="font-medium">{"{recipient_first_names}"}</span>
+                  {" → "}
+                  {emailRecipients.size > 0 ? (
+                    <span className="italic">{formatRecipientFirstNames(emailRecipients)}</span>
+                  ) : (
+                    <span className="text-muted-foreground italic">Select recipients to preview</span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
