@@ -9,7 +9,7 @@ export interface NotificationVariable {
   id: string;
   token: string; // The actual variable placeholder, e.g., "{client_first_name}"
   label: string; // Display name
-  category: "Client" | "Project" | "Dates" | "Service" | "Firm" | "Links";
+  category: "Client" | "Project" | "Dates" | "Service" | "Firm" | "Links" | "Recipients" | "Stage";
   description: string; // What the variable represents
   example?: string; // Example output
   channels?: ("email" | "sms" | "push")[]; // Which channels support this variable (undefined = all)
@@ -242,6 +242,28 @@ export const NOTIFICATION_VARIABLES: NotificationVariable[] = [
     category: "Links",
     description: "Link to upload documents for this client",
     example: "https://yourfirm.replit.app/clients/123/documents"
+  },
+  
+  // Recipient Variables
+  {
+    id: "recipient_first_names",
+    token: "{recipient_first_names}",
+    label: "Recipient First Names",
+    category: "Recipients",
+    description: "First names of all selected recipients, joined naturally (e.g., 'John and Sarah' or 'John, Sarah and Mike')",
+    example: "John and Sarah",
+    channels: ["email"]
+  },
+  
+  // Stage Approval Variables
+  {
+    id: "stage_approval",
+    token: "{stage_approval:ApprovalName}",
+    label: "Stage Approval Data",
+    category: "Stage",
+    description: "Completed items from a specific stage approval. Replace 'ApprovalName' with the exact name of the approval questionnaire (e.g., {stage_approval:Quality Control Review})",
+    example: "• VAT reconciled: Yes\\n• Accounts reviewed: Yes",
+    channels: ["email"]
   },
 ];
 
