@@ -161,6 +161,91 @@ if (preview) {
 
 ---
 
+### 9. Client Detail UI - Notifications Tab ✅ COMPLETE
+
+**Location:** `client/src/pages/client-detail/components/tabs/RiskTab.tsx`
+
+The client detail page includes a comprehensive notifications view accessible via the Risk/Notifications tab toggle:
+
+**Component:** `ClientNotificationsView` (`client/src/components/ClientNotificationsView.tsx`)
+
+**Features:**
+- **Tab-based view** with Active, Cancelled, Sent, and Failed sections
+- **Filtering capabilities:**
+  - Category filter (project, stage, service)
+  - Type filter (email, SMS, push)
+  - Recipient filter (specific contact)
+  - Status filter
+  - Date range (from/to)
+- **Bulk selection** for batch cancel operations
+- **Preview dialog** to view notification content before sending
+- **Table view** showing:
+  - Notification type and category
+  - Recipient name and contact info
+  - Scheduled date/time
+  - Status with color-coded badges
+  - Project type association
+- **Client-specific API endpoint:** `/api/scheduled-notifications/client/{clientId}`
+
+**UI Location:** Client Detail Page → Risk Tab → Toggle to "Notifications" view
+
+---
+
+### 10. Calendar View UI Access ✅ NOW LINKED (Super Admin Only)
+
+**Status:** The calendar page is fully built and now accessible via the Super Admin dropdown menu.
+
+**Routes:**
+- `/scheduled-notifications` (primary)
+- `/admin/scheduled-notifications` (alternate)
+
+**UI Access:** Super Admin dropdown → "Scheduled Notifications" (with Calendar icon)
+
+**Future:** Move to main logo menu for all staff access once testing is complete.
+
+---
+
+## Stage Change Notifications - Detailed Completion Checklist
+
+This section provides a comprehensive breakdown of what's needed to fully complete the stage change notification feature.
+
+### Currently Working ✅
+- [ ] Template creation in project type settings (via StageNotificationForm with TiptapEditor)
+- [ ] Template variable replacement ({{client.name}}, {{project.name}}, etc.)
+- [ ] Stage trigger configuration (on_entry, on_exit)
+- [ ] Notification preview generation on stage change
+- [ ] Backend endpoint to send stage change notifications
+- [ ] Database schema for tracking sent notifications
+
+### Needs Fixing ⚠️
+- [ ] **Show modal to staff before sending** - Currently auto-sends without review
+- [ ] **TiptapEditor in edit modal** - Currently plain textarea
+- [ ] **LSP errors in storage file** - 16 TypeScript errors to fix
+
+### Not Implemented ❌
+- [ ] **Multi-recipient selection** - Can only send to single assigned user
+- [ ] **AI voice recording** - Speak to draft, OpenAI rewrites to template
+- [ ] **Client-facing stage notifications** - Currently only notifies staff
+- [ ] **Notification suppression toggle** - Quick bypass for routine changes
+
+### Backend Components
+| Component | Status | File |
+|-----------|--------|------|
+| Stage notification storage | ⚠️ Has LSP errors | `stageChangeNotificationStorage.ts` |
+| Notification preview generation | ✅ Working | `notification-sender.ts` |
+| Send notification endpoint | ✅ Working | `server/routes.ts` |
+| Variable replacement | ✅ Working | `notification-variables.ts` |
+
+### Frontend Components
+| Component | Status | File |
+|-----------|--------|------|
+| StageChangeNotificationModal | ⚠️ Not shown to users | `stage-change-notification-modal.tsx` |
+| ChangeStatusModal | ⚠️ Auto-sends | `ChangeStatusModal.tsx` |
+| StatusChangeForm | ⚠️ Auto-sends | `status-change-form.tsx` |
+| StageNotificationForm (template) | ✅ Working | `StageNotificationForm.tsx` |
+
+---
+
 ## Implementation Roadmap
 
 ### Stage 1: Critical Fixes (High Impact, Medium Complexity)
@@ -320,18 +405,24 @@ These are nice-to-have improvements.
 
 | File | Purpose |
 |------|---------|
-| `scheduled-notifications.tsx` | Calendar view UI |
+| `scheduled-notifications.tsx` | Calendar view UI (global scheduled notifications) |
+| `ClientNotificationsView.tsx` | Client-specific notifications view (in client detail) |
 | `stage-change-notification-modal.tsx` | Modal for stage change notification review |
+| `ChangeStatusModal.tsx` | Modal for changing project stage (triggers notifications) |
+| `status-change-form.tsx` | Form for status changes (also triggers notifications) |
 | `notification-scheduler.ts` | Schedules notifications for services/projects |
 | `notification-sender.ts` | Sends notifications via email/SMS/push |
 | `notification-cron.ts` | Hourly cron job for processing due notifications |
 | `StageNotificationForm.tsx` | Form for creating stage notification templates |
+| `ProjectNotificationForm.tsx` | Form for creating project notification templates |
 | `TiptapEditor.tsx` | Rich text editor component |
 | `ClientPersonSelectionModal.tsx` | Person selection for notification preview |
 | `stageChangeNotificationStorage.ts` | Database operations for stage change notifications |
 | `shared/schema/notifications/tables.ts` | Notification database schema |
 | `notification-variables.ts` | Variable replacement logic |
+| `NotificationVariableGuide.tsx` | UI guide showing available template variables |
 | `userNotificationPreferencesStorage.ts` | User opt-in/out preferences |
+| `super-admin-dropdown.tsx` | Super admin menu (now includes calendar link) |
 
 ---
 
