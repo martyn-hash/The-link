@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Users, ChevronDown, Bell, Activity, Eye, Settings, FileSpreadsheet, Briefcase, Building2, UserPlus, Share2 } from "lucide-react";
+import { Users, ChevronDown, Bell, Activity, Eye, Settings, FileSpreadsheet, Share2 } from "lucide-react";
 import type { User } from "@shared/schema";
 
 interface SuperAdminDropdownProps {
@@ -53,24 +53,9 @@ export default function SuperAdminDropdown({ user }: SuperAdminDropdownProps) {
       icon: Users,
     },
     {
-      label: "Excel Import",
-      href: "/excel-import",
+      label: "Data Import",
+      href: "/import",
       icon: FileSpreadsheet,
-    },
-    {
-      label: "Service Import",
-      href: "/service-import",
-      icon: Briefcase,
-    },
-    {
-      label: "Clients Import",
-      href: "/clients-import",
-      icon: Building2,
-    },
-    {
-      label: "People Import",
-      href: "/people-import",
-      icon: UserPlus,
     },
   ];
 

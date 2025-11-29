@@ -46,6 +46,7 @@ const TaskInstanceDetail = lazy(() => import("@/pages/task-instance-detail"));
 const Admin = lazy(() => import("@/pages/admin"));
 const AdminTaskTypes = lazy(() => import("@/pages/admin-task-types"));
 const DataImport = lazy(() => import("@/pages/data-import"));
+const Import = lazy(() => import("@/pages/import"));
 const ExcelImport = lazy(() => import("@/pages/excel-import"));
 const ServiceImport = lazy(() => import("@/pages/service-import"));
 const ClientsImport = lazy(() => import("@/pages/clients-import"));
@@ -206,6 +207,7 @@ function Router() {
         <Route path="/admin/push-templates" component={PushNotificationTemplates} />
         <Route path="/push-notification-templates" component={PushNotificationTemplates} />
         <Route path="/data-import" component={DataImport} />
+        <Route path="/import" component={Import} />
         <Route path="/excel-import" component={ExcelImport} />
         <Route path="/service-import" component={ServiceImport} />
         <Route path="/clients-import" component={ClientsImport} />
