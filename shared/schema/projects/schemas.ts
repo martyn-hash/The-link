@@ -14,6 +14,7 @@ import {
   reasonFieldResponses,
   projectSchedulingHistory,
   schedulingRunLogs,
+  schedulingExceptions,
 } from './tables';
 
 export const insertProjectSchema = createInsertSchema(projects).omit({
@@ -153,6 +154,11 @@ export const insertSchedulingRunLogSchema = createInsertSchema(schedulingRunLogs
 
 // Backward compatibility alias (legacy used plural name)
 export const insertSchedulingRunLogsSchema = insertSchedulingRunLogSchema;
+
+export const insertSchedulingExceptionSchema = createInsertSchema(schedulingExceptions).omit({
+  id: true,
+  createdAt: true,
+});
 
 export const completeProjectSchema = z.object({
   projectId: z.string(),

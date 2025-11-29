@@ -72,6 +72,7 @@ export {
   changeReasons,
   projectSchedulingHistory,
   schedulingRunLogs,
+  schedulingExceptions,
 } from './projects/tables';
 
 // Communications domain tables

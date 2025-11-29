@@ -82,6 +82,8 @@ import {
   type InsertProjectSchedulingHistory,
   type SchedulingRunLogs,
   type InsertSchedulingRunLogs,
+  type SchedulingException,
+  type InsertSchedulingException,
   type ProjectWithRelations,
   type WebhookConfig,
   type InsertWebhookConfig,
@@ -517,6 +519,13 @@ export interface IStorage {
   
   createSchedulingRunLog(log: InsertSchedulingRunLogs): Promise<SchedulingRunLogs>;
   getLatestSchedulingRuns(limit?: number): Promise<SchedulingRunLogs[]>;
+  
+  createSchedulingException(exception: InsertSchedulingException): Promise<SchedulingException>;
+  getSchedulingExceptions(filters?: { runLogId?: string; errorType?: string; resolved?: boolean; serviceType?: string; limit?: number }): Promise<SchedulingException[]>;
+  getUnresolvedSchedulingExceptions(): Promise<SchedulingException[]>;
+  resolveSchedulingException(exceptionId: string, resolvedByUserId: string, notes?: string): Promise<SchedulingException | undefined>;
+  resolveAllExceptionsForService(serviceId: string, serviceType: 'client' | 'people', resolvedByUserId: string, notes?: string): Promise<number>;
+  getSchedulingExceptionsByRunLog(runLogId: string): Promise<SchedulingException[]>;
   
   getAllCommunications(): Promise<Communication[]>;
   getCommunicationsByClientId(clientId: string): Promise<Communication[]>;

@@ -69,6 +69,24 @@ function normalizeBoolean(value: any): boolean {
   return ["yes", "true", "1", "y", "active"].includes(str);
 }
 
+const VALID_FREQUENCIES = ['daily', 'weekly', 'fortnightly', 'monthly', 'quarterly', 'annually'] as const;
+type ValidFrequency = typeof VALID_FREQUENCIES[number];
+
+function normalizeFrequency(value: any): { frequency: ValidFrequency | null; error: string | null } {
+  if (!value) return { frequency: null, error: null };
+  
+  const normalized = String(value).toLowerCase().trim();
+  
+  if (VALID_FREQUENCIES.includes(normalized as ValidFrequency)) {
+    return { frequency: normalized as ValidFrequency, error: null };
+  }
+  
+  return { 
+    frequency: null, 
+    error: `Invalid frequency "${value}". Must be one of: ${VALID_FREQUENCIES.join(', ')}` 
+  };
+}
+
 function applyMappings(row: Record<string, any>, mappings: FieldMapping[]): Record<string, any> {
   const result: Record<string, any> = {};
   for (const mapping of mappings) {
@@ -581,7 +599,23 @@ export function registerServiceImportRoutes(
                 isActive: mappedRow.isActive !== undefined ? normalizeBoolean(mappedRow.isActive) : true,
               };
 
-              if (mappedRow.frequency) serviceData.frequency = mappedRow.frequency;
+              if (mappedRow.frequency) {
+                const { frequency, error } = normalizeFrequency(mappedRow.frequency);
+                if (error) {
+                  auditRecords.push({
+                    rowNumber: rowNum,
+                    status: "failed",
+                    recordType: "people_service",
+                    identifier: `${matchedPerson.fullName} / ${matchedService.name}`,
+                    details: "Invalid frequency",
+                    sourceData: rawRow,
+                    errorMessage: error,
+                  });
+                  summary.errors++;
+                  continue;
+                }
+                if (frequency) serviceData.frequency = frequency;
+              }
               if (mappedRow.nextStartDate) serviceData.nextStartDate = parseDate(mappedRow.nextStartDate);
               if (mappedRow.nextDueDate) serviceData.nextDueDate = parseDate(mappedRow.nextDueDate);
               if (mappedRow.serviceOwnerEmail) {
@@ -658,7 +692,23 @@ export function registerServiceImportRoutes(
                 isActive: mappedRow.isActive !== undefined ? normalizeBoolean(mappedRow.isActive) : true,
               };
 
-              if (mappedRow.frequency) serviceData.frequency = mappedRow.frequency;
+              if (mappedRow.frequency) {
+                const { frequency, error } = normalizeFrequency(mappedRow.frequency);
+                if (error) {
+                  auditRecords.push({
+                    rowNumber: rowNum,
+                    status: "failed",
+                    recordType: "client_service",
+                    identifier: `${matchedClient.name} / ${matchedService.name}`,
+                    details: "Invalid frequency",
+                    sourceData: rawRow,
+                    errorMessage: error,
+                  });
+                  summary.errors++;
+                  continue;
+                }
+                if (frequency) serviceData.frequency = frequency;
+              }
               if (mappedRow.nextStartDate) serviceData.nextStartDate = parseDate(mappedRow.nextStartDate);
               if (mappedRow.nextDueDate) serviceData.nextDueDate = parseDate(mappedRow.nextDueDate);
               if (mappedRow.serviceOwnerEmail) {

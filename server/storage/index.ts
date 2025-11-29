@@ -1577,6 +1577,30 @@ export class DatabaseStorage implements IStorage {
     return this.projectSchedulingStorage.getLatestSchedulingRunLog();
   }
 
+  async createSchedulingException(data: any) {
+    return this.projectSchedulingStorage.createSchedulingException(data);
+  }
+
+  async getSchedulingExceptions(filters?: { runLogId?: string; errorType?: string; resolved?: boolean; serviceType?: string; limit?: number }) {
+    return this.projectSchedulingStorage.getSchedulingExceptions(filters);
+  }
+
+  async getUnresolvedSchedulingExceptions() {
+    return this.projectSchedulingStorage.getUnresolvedSchedulingExceptions();
+  }
+
+  async resolveSchedulingException(exceptionId: string, resolvedByUserId: string, notes?: string) {
+    return this.projectSchedulingStorage.resolveSchedulingException(exceptionId, resolvedByUserId, notes);
+  }
+
+  async resolveAllExceptionsForService(serviceId: string, serviceType: 'client' | 'people', resolvedByUserId: string, notes?: string) {
+    return this.projectSchedulingStorage.resolveAllExceptionsForService(serviceId, serviceType, resolvedByUserId, notes);
+  }
+
+  async getSchedulingExceptionsByRunLog(runLogId: string) {
+    return this.projectSchedulingStorage.getSchedulingExceptionsByRunLog(runLogId);
+  }
+
   // ============================================================================
   // INTEGRATIONS DOMAIN - Delegated to Integration Storage Modules (Stage 8)
   // ============================================================================

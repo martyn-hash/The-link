@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { Upload, Settings, Users, FileText, BarChart, Trash2, Clock, PlayCircle, TestTube, Activity, CheckCircle, AlertCircle, TrendingUp, Eye, Calendar, Mail, Send } from "lucide-react";
+import { Upload, Settings, Users, FileText, BarChart, Trash2, Clock, PlayCircle, TestTube, Activity, CheckCircle, AlertCircle, TrendingUp, Eye, Calendar, Mail, Send, Wrench, AlertTriangle } from "lucide-react";
 
 export default function Admin() {
   const { user, isLoading, isAuthenticated } = useAuth();
@@ -36,6 +36,10 @@ export default function Admin() {
   const [showSchedulingPreview, setShowSchedulingPreview] = useState(false);
   const [previewTargetDate, setPreviewTargetDate] = useState(new Date().toISOString().split('T')[0]);
   const [previewData, setPreviewData] = useState<any>(null);
+  const [showFrequencyFix, setShowFrequencyFix] = useState(false);
+  const [frequencyIssues, setFrequencyIssues] = useState<any>(null);
+  const [showSchedulingExceptions, setShowSchedulingExceptions] = useState(false);
+  const [schedulingExceptions, setSchedulingExceptions] = useState<any>(null);
 
   const { data: projects, isLoading: projectsLoading } = useQuery({
     queryKey: ["/api/projects"],
@@ -184,6 +188,91 @@ export default function Admin() {
     queryKey: ["/api/project-scheduling/monitoring"],
     enabled: false, // Only fetch when manually triggered
     retry: false,
+  });
+
+  const fetchFrequencyIssuesMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/admin/frequency-issues", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch frequency issues");
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      setFrequencyIssues(data);
+      setShowFrequencyFix(true);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to fetch frequency issues.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const fixFrequenciesMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/admin/fix-frequencies", {});
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Frequencies Fixed",
+        description: data.message || `Fixed ${data.clientServicesFixed + data.peopleServicesFixed} services.`,
+        variant: "default",
+      });
+      setShowFrequencyFix(false);
+      setFrequencyIssues(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Fix Failed",
+        description: error.message || "Failed to fix frequency issues.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const fetchSchedulingExceptionsMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/admin/scheduling-exceptions/unresolved", {
+        credentials: "include"
+      });
+      if (!response.ok) throw new Error("Failed to fetch scheduling exceptions");
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      setSchedulingExceptions(data);
+      setShowSchedulingExceptions(true);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to fetch scheduling exceptions.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resolveExceptionMutation = useMutation({
+    mutationFn: async ({ exceptionId, notes }: { exceptionId: string; notes?: string }) => {
+      return await apiRequest("POST", `/api/admin/scheduling-exceptions/${exceptionId}/resolve`, { notes });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Exception Resolved",
+        description: "The scheduling exception has been marked as resolved.",
+        variant: "default",
+      });
+      fetchSchedulingExceptionsMutation.mutate();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to resolve exception.",
+        variant: "destructive",
+      });
+    },
   });
 
   const handleDeleteTestData = () => {
@@ -493,6 +582,28 @@ export default function Admin() {
                         </div>
                       </div>
                     )}
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full justify-start"
+                      onClick={() => fetchFrequencyIssuesMutation.mutate()}
+                      disabled={fetchFrequencyIssuesMutation.isPending}
+                      data-testid="button-fix-frequencies"
+                    >
+                      <Wrench className="w-3 h-3 mr-2" />
+                      {fetchFrequencyIssuesMutation.isPending ? "Checking..." : "Fix Frequency Data"}
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full justify-start"
+                      onClick={() => fetchSchedulingExceptionsMutation.mutate()}
+                      disabled={fetchSchedulingExceptionsMutation.isPending}
+                      data-testid="button-view-scheduling-exceptions"
+                    >
+                      <AlertCircle className="w-3 h-3 mr-2" />
+                      {fetchSchedulingExceptionsMutation.isPending ? "Loading..." : "View Scheduling Errors"}
+                    </Button>
                     <Button 
                       variant="destructive" 
                       size="sm" 
@@ -1086,6 +1197,208 @@ export default function Admin() {
             >
               {deleteTestDataMutation.isPending ? "Deleting..." : "Delete Test Data"}
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Frequency Fix Dialog */}
+      <AlertDialog open={showFrequencyFix} onOpenChange={setShowFrequencyFix}>
+        <AlertDialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Wrench className="h-5 w-5" />
+              Fix Service Frequency Data
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This tool will normalize frequency values to lowercase (e.g., "Quarterly" → "quarterly").
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          {frequencyIssues && (
+            <div className="my-4 space-y-4">
+              <div className="flex items-center gap-4 p-3 bg-muted rounded-lg">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className={`h-4 w-4 ${frequencyIssues.totalIssues > 0 ? 'text-amber-500' : 'text-green-500'}`} />
+                  <span className="font-medium">
+                    {frequencyIssues.totalIssues === 0 
+                      ? "No frequency issues found!" 
+                      : `${frequencyIssues.totalIssues} issue${frequencyIssues.totalIssues !== 1 ? 's' : ''} found`}
+                  </span>
+                </div>
+                {frequencyIssues.autoFixableIssues > 0 && (
+                  <Badge variant="secondary">
+                    {frequencyIssues.autoFixableIssues} can be auto-fixed
+                  </Badge>
+                )}
+              </div>
+
+              {frequencyIssues.clientServiceIssues?.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium mb-2">Client Services:</h4>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {frequencyIssues.clientServiceIssues.map((issue: any) => (
+                      <div key={issue.id} className="text-sm p-2 bg-muted/50 rounded flex justify-between items-center">
+                        <span className="truncate flex-1">{issue.clientName} / {issue.serviceName}</span>
+                        <div className="flex items-center gap-2 ml-2">
+                          <Badge variant="destructive">{issue.currentFrequency}</Badge>
+                          <span>→</span>
+                          <Badge variant="default">{issue.suggestedFrequency}</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {frequencyIssues.peopleServiceIssues?.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-medium mb-2">People Services:</h4>
+                  <div className="space-y-2 max-h-40 overflow-y-auto">
+                    {frequencyIssues.peopleServiceIssues.map((issue: any) => (
+                      <div key={issue.id} className="text-sm p-2 bg-muted/50 rounded flex justify-between items-center">
+                        <span className="truncate flex-1">{issue.personName} / {issue.serviceName}</span>
+                        <div className="flex items-center gap-2 ml-2">
+                          <Badge variant="destructive">{issue.currentFrequency}</Badge>
+                          <span>→</span>
+                          <Badge variant="default">{issue.suggestedFrequency}</Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="text-xs text-muted-foreground">
+                Valid frequencies: {frequencyIssues.validFrequencies?.join(', ')}
+              </div>
+            </div>
+          )}
+          
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              onClick={() => {
+                setShowFrequencyFix(false);
+                setFrequencyIssues(null);
+              }}
+              data-testid="button-cancel-frequency-fix"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => fixFrequenciesMutation.mutate()}
+              disabled={!frequencyIssues?.autoFixableIssues || fixFrequenciesMutation.isPending}
+              data-testid="button-confirm-frequency-fix"
+            >
+              {fixFrequenciesMutation.isPending ? "Fixing..." : `Fix ${frequencyIssues?.autoFixableIssues || 0} Issues`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Scheduling Exceptions Dialog */}
+      <AlertDialog open={showSchedulingExceptions} onOpenChange={setShowSchedulingExceptions}>
+        <AlertDialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-500" />
+              Scheduling Exceptions
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Review and resolve scheduling errors that occurred during automated project scheduling.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          {schedulingExceptions && (
+            <div className="my-4 space-y-4">
+              <div className="flex items-center gap-4 p-3 bg-muted rounded-lg">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className={`h-4 w-4 ${schedulingExceptions.total > 0 ? 'text-amber-500' : 'text-green-500'}`} />
+                  <span className="font-medium">
+                    {schedulingExceptions.total === 0 
+                      ? "No unresolved scheduling exceptions!" 
+                      : `${schedulingExceptions.total} unresolved exception${schedulingExceptions.total !== 1 ? 's' : ''}`}
+                  </span>
+                </div>
+              </div>
+
+              {schedulingExceptions.byErrorType && Object.keys(schedulingExceptions.byErrorType).length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(schedulingExceptions.byErrorType).map(([errorType, count]: [string, any]) => (
+                    <Badge key={errorType} variant="outline">
+                      {errorType.replace(/_/g, ' ')}: {count}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
+              {schedulingExceptions.exceptions?.length > 0 && (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {schedulingExceptions.exceptions.map((exception: any) => (
+                    <div key={exception.id} className="p-3 bg-muted/50 rounded-lg border">
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex-1">
+                          <div className="font-medium text-sm">
+                            {exception.clientOrPersonName || 'Unknown'} / {exception.serviceName || 'Unknown Service'}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">
+                            {exception.serviceType === 'client' ? 'Client Service' : 'People Service'}
+                            {exception.frequency && ` • ${exception.frequency}`}
+                          </div>
+                        </div>
+                        <Badge variant="destructive" className="text-xs">
+                          {exception.errorType?.replace(/_/g, ' ') || 'error'}
+                        </Badge>
+                      </div>
+                      <div className="text-sm text-muted-foreground bg-destructive/10 p-2 rounded mt-2">
+                        {exception.errorMessage}
+                      </div>
+                      <div className="flex justify-between items-center mt-3">
+                        <div className="text-xs text-muted-foreground">
+                          {exception.createdAt && new Date(exception.createdAt).toLocaleString()}
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => resolveExceptionMutation.mutate({ exceptionId: exception.id, notes: 'Resolved manually' })}
+                          disabled={resolveExceptionMutation.isPending}
+                          data-testid={`button-resolve-exception-${exception.id}`}
+                        >
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Mark Resolved
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {schedulingExceptions.total === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  <CheckCircle className="h-12 w-12 mx-auto mb-3 text-green-500" />
+                  <p>All scheduling exceptions have been resolved!</p>
+                </div>
+              )}
+            </div>
+          )}
+          
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              onClick={() => {
+                setShowSchedulingExceptions(false);
+                setSchedulingExceptions(null);
+              }}
+              data-testid="button-close-scheduling-exceptions"
+            >
+              Close
+            </AlertDialogCancel>
+            <Button
+              variant="outline"
+              onClick={() => fetchSchedulingExceptionsMutation.mutate()}
+              disabled={fetchSchedulingExceptionsMutation.isPending}
+              data-testid="button-refresh-scheduling-exceptions"
+            >
+              Refresh
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

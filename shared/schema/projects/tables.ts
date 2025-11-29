@@ -246,3 +246,32 @@ export const schedulingRunLogs = pgTable("scheduling_run_logs", {
   index("idx_scheduling_run_logs_status").on(table.status),
   index("idx_scheduling_run_logs_run_type").on(table.runType),
 ]);
+
+export const schedulingExceptions = pgTable("scheduling_exceptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  runLogId: varchar("run_log_id").references(() => schedulingRunLogs.id, { onDelete: "cascade" }),
+  serviceType: varchar("service_type").notNull(),
+  clientServiceId: varchar("client_service_id").references(() => clientServices.id, { onDelete: "set null" }),
+  peopleServiceId: varchar("people_service_id").references(() => peopleServices.id, { onDelete: "set null" }),
+  clientId: varchar("client_id").references(() => clients.id, { onDelete: "set null" }),
+  serviceName: varchar("service_name"),
+  clientOrPersonName: varchar("client_or_person_name"),
+  errorType: varchar("error_type").notNull(),
+  errorMessage: text("error_message").notNull(),
+  frequency: varchar("frequency"),
+  nextStartDate: timestamp("next_start_date"),
+  nextDueDate: timestamp("next_due_date"),
+  resolved: boolean("resolved").default(false),
+  resolvedAt: timestamp("resolved_at"),
+  resolvedByUserId: varchar("resolved_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_scheduling_exceptions_run_log_id").on(table.runLogId),
+  index("idx_scheduling_exceptions_service_type").on(table.serviceType),
+  index("idx_scheduling_exceptions_client_service_id").on(table.clientServiceId),
+  index("idx_scheduling_exceptions_people_service_id").on(table.peopleServiceId),
+  index("idx_scheduling_exceptions_error_type").on(table.errorType),
+  index("idx_scheduling_exceptions_resolved").on(table.resolved),
+  index("idx_scheduling_exceptions_created_at").on(table.createdAt),
+]);

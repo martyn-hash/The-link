@@ -13,6 +13,7 @@ import {
   reasonFieldResponses,
   projectSchedulingHistory,
   schedulingRunLogs,
+  schedulingExceptions,
 } from './tables';
 import {
   insertProjectSchema,
@@ -34,6 +35,7 @@ import {
   insertReasonFieldResponseSchema,
   insertProjectSchedulingHistorySchema,
   insertSchedulingRunLogSchema,
+  insertSchedulingExceptionSchema,
   completeProjectSchema,
   updateProjectStatusSchema,
   csvProjectSchema,
@@ -86,6 +88,9 @@ export type InsertProjectSchedulingHistory = z.infer<typeof insertProjectSchedul
 
 export type SchedulingRunLog = typeof schedulingRunLogs.$inferSelect;
 export type InsertSchedulingRunLog = z.infer<typeof insertSchedulingRunLogSchema>;
+
+export type SchedulingException = typeof schedulingExceptions.$inferSelect;
+export type InsertSchedulingException = z.infer<typeof insertSchedulingExceptionSchema>;
 
 export type CompleteProject = z.infer<typeof completeProjectSchema>;
 export type UpdateProjectStatus = z.infer<typeof updateProjectStatusSchema>;

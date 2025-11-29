@@ -19,7 +19,8 @@ import type {
   KanbanStage,
   InsertProject,
   InsertProjectSchedulingHistory,
-  InsertSchedulingRunLogs 
+  InsertSchedulingRunLogs,
+  InsertSchedulingException
 } from "@shared/schema";
 
 export interface SchedulingRunResult {
@@ -794,7 +795,7 @@ export async function runProjectSchedulingEnhanced(
   // Log the run result (skip in test mode to avoid cluttering logs)
   if (!dryRun) {
     try {
-      await storage.createSchedulingRunLog({
+      const runLog = await storage.createSchedulingRunLog({
         runDate,
         runType,
         status: result.status,
@@ -808,6 +809,11 @@ export async function runProjectSchedulingEnhanced(
         summary: result.summary,
         errorDetails: result.errors.length > 0 ? result.errors : null
       });
+
+      // Log individual exceptions to the scheduling_exceptions table
+      if (result.errors.length > 0 && runLog?.id) {
+        await logSchedulingExceptions(runLog.id, result.errors);
+      }
     } catch (error) {
       console.error('[Project Scheduler] Failed to log enhanced scheduling run:', error);
     }
@@ -1442,6 +1448,118 @@ function formatProjectMonth(date: Date): string {
   const year = date.getUTCFullYear();
   const dateString = `${day}/${month}/${year}`;
   return normalizeProjectMonth(dateString);
+}
+
+/**
+ * Helper function to log scheduling exceptions to the database
+ */
+async function logSchedulingExceptions(
+  runLogId: string,
+  errors: Array<{
+    serviceId: string;
+    serviceType: 'client' | 'people';
+    error: string;
+    timestamp?: Date;
+  }>
+): Promise<void> {
+  console.log(`[Project Scheduler] Logging ${errors.length} exceptions for run ${runLogId}`);
+  
+  for (const error of errors) {
+    try {
+      // Skip system-level errors (they don't have a real service ID)
+      if (error.serviceId === 'system') {
+        await storage.createSchedulingException({
+          runLogId,
+          serviceType: 'client',
+          errorType: 'system_error',
+          errorMessage: error.error,
+          resolved: false,
+        });
+        continue;
+      }
+
+      // Try to get service details for better context
+      let serviceName: string | undefined;
+      let clientOrPersonName: string | undefined;
+      let clientId: string | undefined;
+      let clientServiceId: string | undefined;
+      let peopleServiceId: string | undefined;
+      let frequency: string | undefined;
+      let nextStartDate: Date | undefined;
+      let nextDueDate: Date | undefined;
+
+      if (error.serviceType === 'client') {
+        try {
+          const clientService = await storage.getClientServiceById(error.serviceId);
+          if (clientService) {
+            clientServiceId = clientService.id;
+            clientId = clientService.clientId;
+            frequency = clientService.frequency || undefined;
+            nextStartDate = clientService.nextStartDate || undefined;
+            nextDueDate = clientService.nextDueDate || undefined;
+            
+            const service = await storage.getServiceById(clientService.serviceId);
+            serviceName = service?.name;
+            
+            const client = await storage.getClientById(clientService.clientId);
+            clientOrPersonName = client?.name;
+          }
+        } catch (lookupError) {
+          console.warn(`[Project Scheduler] Could not look up client service ${error.serviceId}:`, lookupError);
+        }
+      } else {
+        try {
+          const peopleService = await storage.getPeopleServiceById(error.serviceId);
+          if (peopleService) {
+            peopleServiceId = peopleService.id;
+            
+            const service = await storage.getServiceById(peopleService.serviceId);
+            serviceName = service?.name;
+            
+            const person = await storage.getPersonById(peopleService.personId);
+            clientOrPersonName = person?.firstName && person?.lastName 
+              ? `${person.firstName} ${person.lastName}` 
+              : person?.firstName || undefined;
+          }
+        } catch (lookupError) {
+          console.warn(`[Project Scheduler] Could not look up people service ${error.serviceId}:`, lookupError);
+        }
+      }
+
+      // Determine error type from error message
+      let errorType = 'unknown';
+      const errorLower = error.error.toLowerCase();
+      if (errorLower.includes('frequency') || errorLower.includes('invalid')) {
+        errorType = 'invalid_frequency';
+      } else if (errorLower.includes('project type') || errorLower.includes('configuration')) {
+        errorType = 'configuration_error';
+      } else if (errorLower.includes('date') || errorLower.includes('schedule')) {
+        errorType = 'scheduling_error';
+      } else if (errorLower.includes('duplicate') || errorLower.includes('already exists')) {
+        errorType = 'duplicate_project';
+      }
+
+      await storage.createSchedulingException({
+        runLogId,
+        serviceType: error.serviceType,
+        clientServiceId: clientServiceId || undefined,
+        peopleServiceId: peopleServiceId || undefined,
+        clientId: clientId || undefined,
+        serviceName: serviceName || undefined,
+        clientOrPersonName: clientOrPersonName || undefined,
+        errorType,
+        errorMessage: error.error,
+        frequency: frequency || undefined,
+        nextStartDate: nextStartDate || undefined,
+        nextDueDate: nextDueDate || undefined,
+        resolved: false,
+      });
+    } catch (exceptionError) {
+      console.error(`[Project Scheduler] Failed to log exception for service ${error.serviceId}:`, exceptionError);
+    }
+  }
+  
+  console.log(`[Project Scheduler] Finished logging exceptions`);
 }
 
 /**
