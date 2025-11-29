@@ -37,6 +37,7 @@ PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, sof
 -   **Webhook Data Sharing**: Zapier integration for sharing client data with legacy systems via configurable webhooks with conditional activation rules and audit logging.
 -   **Enhanced Data Import System**: Comprehensive import capabilities including standalone service imports (matching by company number/name for clients, email/full name for people), interactive field mapping UI for CSV files with auto-matching, and detailed audit reporting with downloadable CSV showing created/updated/skipped/failed records with reasons.
 -   **Friendly Error Handling System**: Comprehensive user-friendly error messaging that replaces technical errors with personality-filled messages. Features: (1) 200 witty/sarcastic opening phrases stored in database across 4 categories (dry_british, one_liner, dramatic, meta), (2) per-user phrase tracking to keep messages fresh, (3) error mapping system translating technical errors to specific actionable guidance, (4) custom amber/orange "friendly" toast styling replacing scary red destructive toasts. Database tables: `funny_error_phrases`, `user_seen_phrases`. Frontend utility: `showFriendlyError()` in `client/src/lib/friendlyErrors.ts`.
+-   **Scheduled Notifications Calendar**: Comprehensive calendar view for automated notifications with vertical slide-out filter panel (Sheet-based, similar to Projects page). Features: (1) Calendar and List view toggle, (2) Color-coded notification types (email=blue, SMS=green, push=amber), (3) Advanced filtering by status, notification channel, project type, client, project, source, and date range, (4) 60-second polling for real-time status updates, (5) Quick actions for retry/cancel. New endpoint `/api/project-types` provides read-only access for non-admin users.
 
 ## External Dependencies
 
@@ -45,7 +46,7 @@ PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, sof
 -   **Microsoft Graph API**: For staff email integration.
 -   **RingCentral**: For VoIP phone system integration.
 -   **SendGrid**: For transactional email delivery.
--   **VoodooSMS**: Planned for client SMS services.
+-   **VoodooSMS**: For client SMS delivery with UK phone formatting (+44).
 -   **OpenAI API**: Whisper for audio transcription and GPT-4o-mini for AI text processing (notes summarization and email drafting).
 -   **Replit Platform Services**: For object storage, authentication, and deployment.
 
