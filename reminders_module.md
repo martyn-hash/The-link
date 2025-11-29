@@ -83,20 +83,34 @@ A fully functional calendar view has been built with:
 ### 5. Stage Change Notifications ✅ CORE COMPLETE (Stage 1 Done)
 
 **Key Files:**
-- `client/src/components/stage-change-notification-modal.tsx`
-- `client/src/components/status-change-form.tsx`
-- `client/src/components/ChangeStatusModal.tsx`
+- `client/src/components/stage-change-notification-modal.tsx` - Used in status-change-form.tsx
+- `client/src/components/status-change-form.tsx` - Alternative status change form
+- `client/src/components/ChangeStatusModal.tsx` - Main status modal with single-dialog UX
 - `server/storage/notifications/stageChangeNotificationStorage.ts`
 
 **Current Behavior (Fixed Nov 29, 2025):**
-When a stage change occurs, staff are now shown the `StageChangeNotificationModal` for review before sending. Notifications are no longer auto-sent.
+When a stage change occurs, staff are now shown notification approval controls for review before sending. Notifications are no longer auto-sent.
+
+**Single-Modal UX (Implemented Nov 29, 2025):**
+The ChangeStatusModal uses a single Dialog that transitions between two views:
+1. **Stage Change Form** - User selects new stage, reason, notes, etc.
+2. **Notification Content** - After stage change succeeds, same dialog shows notification approval
+
+This eliminates stacked modals. Key flow:
+- User submits stage change → API call commits immediately
+- Success toast appears confirming stage change
+- Same modal transitions to show notification content (recipients, email, push fields)
+- User can: Skip (close without sending), Don't Send (suppress & log), or Send Notification
+- All actions close the entire modal
 
 **What Works:**
-- ✅ Modal shown to staff for approval before sending
+- ✅ Single-modal UX (no stacked dialogs)
+- ✅ Stage change commits immediately with success toast before notification decision
 - ✅ TiptapEditor for rich text editing of email body
 - ✅ Editable subject line and push notification fields
-- ✅ "Send Notification" and "Don't Send" (suppress) options
+- ✅ "Skip", "Don't Send" (suppress), and "Send Notification" options
 - ✅ Recipients list display
+- ✅ Form state properly resets after successful submission
 - ✅ LSP errors fixed in stageChangeNotificationStorage.ts
 
 **What's Still Missing (Stage 2+):**
