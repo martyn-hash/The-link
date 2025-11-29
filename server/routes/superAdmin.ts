@@ -720,4 +720,347 @@ export function registerSuperAdminRoutes(
       }
     }
   );
+
+  // ============================================================================
+  // DATA CLEANUP (Super Admin) - Batch delete test/import data
+  // ============================================================================
+
+  // Helper function to validate clientIds are valid UUIDs to prevent injection
+  const isValidUUID = (id: string): boolean => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return typeof id === 'string' && uuidRegex.test(id);
+  };
+
+  // List clients with their createdAt and counts of related data
+  app.get(
+    "/api/super-admin/data-cleanup/clients",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const { dateFrom, dateTo, limit = 100 } = req.query;
+        const { db } = await import("../db.js");
+        const { sql } = await import("drizzle-orm");
+
+        // Build date filter conditions using parameterized queries
+        let dateFilter = sql`1=1`;
+        if (dateFrom) {
+          dateFilter = sql`${dateFilter} AND c.created_at >= ${new Date(dateFrom as string)}`;
+        }
+        if (dateTo) {
+          dateFilter = sql`${dateFilter} AND c.created_at <= ${new Date(dateTo as string)}`;
+        }
+
+        const clientsWithCounts = await db.execute(sql`
+          SELECT 
+            c.id,
+            c.name,
+            c.email,
+            c.created_at as "createdAt",
+            c.client_type as "clientType",
+            (SELECT COUNT(*) FROM projects p WHERE p.client_id = c.id) as "projectCount",
+            (SELECT COUNT(*) FROM client_people cp WHERE cp.client_id = c.id) as "peopleCount",
+            (SELECT COUNT(*) FROM client_services cs WHERE cs.client_id = c.id) as "serviceCount",
+            (SELECT COUNT(*) FROM documents d WHERE d.client_id = c.id) as "documentCount",
+            (SELECT COUNT(*) FROM message_threads mt WHERE mt.client_id = c.id) as "messageThreadCount",
+            (SELECT COUNT(*) FROM communications com WHERE com.client_id = c.id) as "communicationCount",
+            (SELECT COUNT(*) FROM task_instances ti WHERE ti.client_id = c.id) as "taskCount"
+          FROM clients c
+          WHERE ${dateFilter}
+          ORDER BY c.created_at DESC
+          LIMIT ${parseInt(limit as string, 10)}
+        `);
+
+        res.json(clientsWithCounts.rows);
+      } catch (error) {
+        console.error("Error fetching clients for cleanup:", error);
+        res.status(500).json({ message: "Failed to fetch clients for cleanup" });
+      }
+    }
+  );
+
+  // Preview deletion impact for selected clients
+  app.post(
+    "/api/super-admin/data-cleanup/preview",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const { clientIds } = req.body;
+        
+        if (!clientIds || !Array.isArray(clientIds) || clientIds.length === 0) {
+          return res.status(400).json({ message: "clientIds array is required" });
+        }
+
+        // Validate all clientIds are valid UUIDs to prevent SQL injection
+        const invalidIds = clientIds.filter((id: string) => !isValidUUID(id));
+        if (invalidIds.length > 0) {
+          return res.status(400).json({ message: "Invalid client ID format detected" });
+        }
+
+        const { db } = await import("../db.js");
+        const { sql, inArray } = await import("drizzle-orm");
+        const { clients, projects, clientPeople, clientServices, documents, documentFolders, 
+                signatureRequests, messageThreads, communications, taskInstances, 
+                clientPortalUsers, clientChronology, projectChronology, people } = await import("@shared/schema");
+
+        // Use Drizzle's inArray for safe parameterized queries
+        const [clientCount] = await db.select({ count: sql<number>`count(*)` }).from(clients).where(inArray(clients.id, clientIds));
+        const [projectCount] = await db.select({ count: sql<number>`count(*)` }).from(projects).where(inArray(projects.clientId, clientIds));
+        const [peopleLinkedCount] = await db.select({ count: sql<number>`count(DISTINCT ${clientPeople.personId})` }).from(clientPeople).where(inArray(clientPeople.clientId, clientIds));
+        const [clientServiceCount] = await db.select({ count: sql<number>`count(*)` }).from(clientServices).where(inArray(clientServices.clientId, clientIds));
+        const [documentCount] = await db.select({ count: sql<number>`count(*)` }).from(documents).where(inArray(documents.clientId, clientIds));
+        const [folderCount] = await db.select({ count: sql<number>`count(*)` }).from(documentFolders).where(inArray(documentFolders.clientId, clientIds));
+        const [signatureRequestCount] = await db.select({ count: sql<number>`count(*)` }).from(signatureRequests).where(inArray(signatureRequests.clientId, clientIds));
+        const [messageThreadCount] = await db.select({ count: sql<number>`count(*)` }).from(messageThreads).where(inArray(messageThreads.clientId, clientIds));
+        const [communicationCount] = await db.select({ count: sql<number>`count(*)` }).from(communications).where(inArray(communications.clientId, clientIds));
+        const [taskInstanceCount] = await db.select({ count: sql<number>`count(*)` }).from(taskInstances).where(inArray(taskInstances.clientId, clientIds));
+        const [portalUserCount] = await db.select({ count: sql<number>`count(*)` }).from(clientPortalUsers).where(inArray(clientPortalUsers.clientId, clientIds));
+        const [chronologyCount] = await db.select({ count: sql<number>`count(*)` }).from(clientChronology).where(inArray(clientChronology.clientId, clientIds));
+        
+        // Get project IDs for these clients to count project chronology
+        const clientProjects = await db.select({ id: projects.id }).from(projects).where(inArray(projects.clientId, clientIds));
+        const projectIds = clientProjects.map(p => p.id);
+        let projectChronologyCount = { count: 0 };
+        if (projectIds.length > 0) {
+          [projectChronologyCount] = await db.select({ count: sql<number>`count(*)` }).from(projectChronology).where(inArray(projectChronology.projectId, projectIds));
+        }
+
+        // Get list of people who will be orphaned (only linked to these clients)
+        const linkedPersonIds = await db.selectDistinct({ personId: clientPeople.personId }).from(clientPeople).where(inArray(clientPeople.clientId, clientIds));
+        const linkedIds = linkedPersonIds.map(p => p.personId);
+        
+        let orphanedPeopleList: Array<{ id: string; full_name: string; email: string | null }> = [];
+        if (linkedIds.length > 0) {
+          // Find people linked to these clients who have NO links to clients outside the selection
+          // First get all client IDs they're linked to, then check if any are NOT in our selection
+          const orphanedPeople = await db
+            .select({ id: people.id, full_name: people.fullName, email: people.email })
+            .from(people)
+            .where(inArray(people.id, linkedIds))
+            .then(async (linkedPeople) => {
+              // For each linked person, check if they have any other client links
+              const orphaned: typeof linkedPeople = [];
+              for (const person of linkedPeople) {
+                const otherLinks = await db
+                  .select({ clientId: clientPeople.clientId })
+                  .from(clientPeople)
+                  .where(sql`${clientPeople.personId} = ${person.id} AND NOT (${inArray(clientPeople.clientId, clientIds)})`);
+                if (otherLinks.length === 0) {
+                  orphaned.push(person);
+                }
+              }
+              return orphaned;
+            });
+          orphanedPeopleList = orphanedPeople as any;
+        }
+
+        res.json({
+          summary: {
+            clientCount: clientCount.count.toString(),
+            projectCount: projectCount.count.toString(),
+            peopleLinkedCount: peopleLinkedCount.count.toString(),
+            clientServiceCount: clientServiceCount.count.toString(),
+            documentCount: documentCount.count.toString(),
+            folderCount: folderCount.count.toString(),
+            signatureRequestCount: signatureRequestCount.count.toString(),
+            messageThreadCount: messageThreadCount.count.toString(),
+            communicationCount: communicationCount.count.toString(),
+            taskInstanceCount: taskInstanceCount.count.toString(),
+            portalUserCount: portalUserCount.count.toString(),
+            chronologyCount: chronologyCount.count.toString(),
+            projectChronologyCount: projectChronologyCount.count.toString()
+          },
+          orphanedPeople: orphanedPeopleList,
+          clientIds
+        });
+      } catch (error) {
+        console.error("Error generating cleanup preview:", error);
+        res.status(500).json({ message: "Failed to generate cleanup preview" });
+      }
+    }
+  );
+
+  // Execute batch delete with cascading
+  app.delete(
+    "/api/super-admin/data-cleanup/batch",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const { clientIds, deleteOrphanedPeople = true } = req.body;
+        
+        if (!clientIds || !Array.isArray(clientIds) || clientIds.length === 0) {
+          return res.status(400).json({ message: "clientIds array is required" });
+        }
+
+        // Validate all clientIds are valid UUIDs to prevent SQL injection
+        const invalidIds = clientIds.filter((id: string) => !isValidUUID(id));
+        if (invalidIds.length > 0) {
+          return res.status(400).json({ message: "Invalid client ID format detected" });
+        }
+
+        const { db } = await import("../db.js");
+        const { sql, inArray } = await import("drizzle-orm");
+        const { 
+          clients, projects, clientPeople, clientServices, people,
+          projectChronology, stageApprovalResponses, schedulingExceptions,
+          projectSchedulingHistory, projectMessageThreads, projectMessages,
+          projectMessageParticipants, scheduledNotifications, notificationHistory,
+          clientServiceRoleAssignments, peopleServices, peopleTagAssignments
+        } = await import("@shared/schema");
+
+        // Track deletion counts
+        const deletionLog: Record<string, number> = {};
+
+        // Execute deletions in the correct order within a transaction
+        await db.transaction(async (tx) => {
+          // 1. Get all project IDs for these clients
+          const projectRows = await tx.select({ id: projects.id }).from(projects).where(inArray(projects.clientId, clientIds));
+          const projectIds = projectRows.map(p => p.id);
+
+          // 2. Get all client service IDs
+          const serviceRows = await tx.select({ id: clientServices.id }).from(clientServices).where(inArray(clientServices.clientId, clientIds));
+          const serviceIds = serviceRows.map(s => s.id);
+
+          // 3. Get people IDs that will be orphaned
+          const linkedPersonIds = await tx.selectDistinct({ personId: clientPeople.personId }).from(clientPeople).where(inArray(clientPeople.clientId, clientIds));
+          const linkedIds = linkedPersonIds.map(p => p.personId);
+          
+          let orphanedPeopleIds: string[] = [];
+          if (linkedIds.length > 0) {
+            // Find people linked to these clients who have NO links to clients outside the selection
+            const linkedPeople = await tx.select({ id: people.id }).from(people).where(inArray(people.id, linkedIds));
+            for (const person of linkedPeople) {
+              const otherLinks = await tx
+                .select({ clientId: clientPeople.clientId })
+                .from(clientPeople)
+                .where(sql`${clientPeople.personId} = ${person.id} AND NOT (${inArray(clientPeople.clientId, clientIds)})`);
+              if (otherLinks.length === 0) {
+                orphanedPeopleIds.push(person.id);
+              }
+            }
+          }
+
+          // Delete in dependency order:
+          
+          // Project-related tables (no cascade from projects)
+          if (projectIds.length > 0) {
+            // Reason field responses (depends on project_chronology) - get chronology IDs first
+            const chronologyIds = await tx.select({ id: projectChronology.id }).from(projectChronology).where(inArray(projectChronology.projectId, projectIds));
+            if (chronologyIds.length > 0) {
+              const { reasonFieldResponses } = await import("@shared/schema");
+              const reasonResult = await tx.delete(reasonFieldResponses).where(inArray(reasonFieldResponses.chronologyId, chronologyIds.map(c => c.id)));
+              deletionLog['reasonFieldResponses'] = reasonResult.rowCount || 0;
+            } else {
+              deletionLog['reasonFieldResponses'] = 0;
+            }
+
+            // Project chronology
+            const chronResult = await tx.delete(projectChronology).where(inArray(projectChronology.projectId, projectIds));
+            deletionLog['projectChronology'] = chronResult.rowCount || 0;
+
+            // Stage approval responses
+            const approvalResult = await tx.delete(stageApprovalResponses).where(inArray(stageApprovalResponses.projectId, projectIds));
+            deletionLog['stageApprovalResponses'] = approvalResult.rowCount || 0;
+
+            // Scheduling exceptions (references projects)
+            const schedExResult = await tx.delete(schedulingExceptions).where(inArray(schedulingExceptions.projectId, projectIds));
+            deletionLog['schedulingExceptions'] = schedExResult.rowCount || 0;
+
+            // Project scheduling history
+            const schedHistResult = await tx.delete(projectSchedulingHistory).where(inArray(projectSchedulingHistory.projectId, projectIds));
+            deletionLog['projectSchedulingHistory'] = schedHistResult.rowCount || 0;
+
+            // Get project message thread IDs
+            const pmThreadRows = await tx.select({ id: projectMessageThreads.id }).from(projectMessageThreads).where(inArray(projectMessageThreads.projectId, projectIds));
+            const pmThreadIds = pmThreadRows.map(t => t.id);
+
+            if (pmThreadIds.length > 0) {
+              // Project message participants
+              const pmParticipantsResult = await tx.delete(projectMessageParticipants).where(inArray(projectMessageParticipants.threadId, pmThreadIds));
+              deletionLog['projectMessageParticipants'] = pmParticipantsResult.rowCount || 0;
+
+              // Project messages
+              const pmMessagesResult = await tx.delete(projectMessages).where(inArray(projectMessages.threadId, pmThreadIds));
+              deletionLog['projectMessages'] = pmMessagesResult.rowCount || 0;
+            }
+
+            // Project message threads
+            const pmThreadsResult = await tx.delete(projectMessageThreads).where(inArray(projectMessageThreads.projectId, projectIds));
+            deletionLog['projectMessageThreads'] = pmThreadsResult.rowCount || 0;
+
+            // Scheduled notifications for projects
+            const schedNotifResult = await tx.delete(scheduledNotifications).where(inArray(scheduledNotifications.projectId, projectIds));
+            deletionLog['scheduledNotifications'] = schedNotifResult.rowCount || 0;
+
+            // Notification history for projects
+            const notifHistResult = await tx.delete(notificationHistory).where(inArray(notificationHistory.projectId, projectIds));
+            deletionLog['notificationHistory'] = notifHistResult.rowCount || 0;
+
+            // Now delete projects
+            const projectsResult = await tx.delete(projects).where(inArray(projects.clientId, clientIds));
+            deletionLog['projects'] = projectsResult.rowCount || 0;
+          }
+
+          // Client service role assignments
+          if (serviceIds.length > 0) {
+            const roleResult = await tx.delete(clientServiceRoleAssignments).where(inArray(clientServiceRoleAssignments.clientServiceId, serviceIds));
+            deletionLog['clientServiceRoleAssignments'] = roleResult.rowCount || 0;
+
+            // Project scheduling history for client services
+            const csHistResult = await tx.delete(projectSchedulingHistory).where(inArray(projectSchedulingHistory.clientServiceId, serviceIds));
+            deletionLog['clientServiceSchedulingHistory'] = csHistResult.rowCount || 0;
+
+            // Scheduling exceptions for client services
+            const csExResult = await tx.delete(schedulingExceptions).where(inArray(schedulingExceptions.clientServiceId, serviceIds));
+            deletionLog['clientServiceSchedulingExceptions'] = csExResult.rowCount || 0;
+          }
+
+          // Client services (cascade will handle some)
+          const csResult = await tx.delete(clientServices).where(inArray(clientServices.clientId, clientIds));
+          deletionLog['clientServices'] = csResult.rowCount || 0;
+
+          // People services for orphaned people
+          if (deleteOrphanedPeople && orphanedPeopleIds.length > 0) {
+            const psResult = await tx.delete(peopleServices).where(inArray(peopleServices.personId, orphanedPeopleIds));
+            deletionLog['peopleServices'] = psResult.rowCount || 0;
+
+            const ptaResult = await tx.delete(peopleTagAssignments).where(inArray(peopleTagAssignments.personId, orphanedPeopleIds));
+            deletionLog['peopleTagAssignments'] = ptaResult.rowCount || 0;
+          }
+
+          // Delete client people links explicitly for the orphaned people count
+          const cpResult = await tx.delete(clientPeople).where(inArray(clientPeople.clientId, clientIds));
+          deletionLog['clientPeopleLinks'] = cpResult.rowCount || 0;
+
+          // Delete orphaned people if requested
+          if (deleteOrphanedPeople && orphanedPeopleIds.length > 0) {
+            const peopleResult = await tx.delete(people).where(inArray(people.id, orphanedPeopleIds));
+            deletionLog['people'] = peopleResult.rowCount || 0;
+          }
+
+          // Finally delete clients (cascades will handle remaining dependencies)
+          const clientsResult = await tx.delete(clients).where(inArray(clients.id, clientIds));
+          deletionLog['clients'] = clientsResult.rowCount || 0;
+        });
+
+        res.json({
+          success: true,
+          message: `Successfully deleted ${deletionLog['clients'] || 0} clients and related data`,
+          deletionLog
+        });
+      } catch (error: any) {
+        console.error("Error during batch cleanup:", error);
+        res.status(500).json({ 
+          message: "Failed to complete batch cleanup", 
+          error: error.message,
+          hint: "Some records may have foreign key constraints. Check the error details."
+        });
+      }
+    }
+  );
 }
