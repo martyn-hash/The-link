@@ -39,8 +39,10 @@ import {
   Paperclip,
   Mail,
   Bell,
-  Users
+  Users,
+  Mic
 } from "lucide-react";
+import { StageNotificationAudioRecorder } from "./StageNotificationAudioRecorder";
 import type {
   ProjectWithRelations,
   User,
@@ -134,11 +136,13 @@ const getComparisonIcon = (
 // Inline notification content component (used when stage change succeeds with notification preview)
 function NotificationContent({
   preview,
+  projectId,
   onSend,
   onClose,
   isSending,
 }: {
   preview: StageChangeNotificationPreview;
+  projectId: string;
   onSend: (data: {
     emailSubject: string;
     emailBody: string;
@@ -154,6 +158,20 @@ function NotificationContent({
   const [pushTitle, setPushTitle] = useState(preview.pushTitle || "");
   const [pushBody, setPushBody] = useState(preview.pushBody || "");
 
+  // Handle AI-generated content from voice recording
+  const handleVoiceResult = (result: {
+    subject: string;
+    body: string;
+    pushTitle: string;
+    pushBody: string;
+    transcription: string;
+  }) => {
+    if (result.subject) setEmailSubject(result.subject);
+    if (result.body) setEmailBody(result.body);
+    if (result.pushTitle) setPushTitle(result.pushTitle);
+    if (result.pushBody) setPushBody(result.pushBody);
+  };
+
   const handleSend = async (suppress: boolean) => {
     await onSend({
       emailSubject,
@@ -167,6 +185,28 @@ function NotificationContent({
   return (
     <>
       <div className="space-y-6 max-h-[60vh] overflow-y-auto">
+        {/* Voice Recording for AI-assisted drafting */}
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 p-4 rounded-lg border border-blue-100 dark:border-blue-900">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded-lg">
+              <Mic className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-medium mb-1">AI-Assisted Message Drafting</h4>
+              <p className="text-xs text-muted-foreground mb-3">
+                Record a voice message and let AI draft your notification. Your completed work items will be automatically included.
+              </p>
+              <StageNotificationAudioRecorder
+                projectId={projectId}
+                onResult={handleVoiceResult}
+                disabled={isSending}
+              />
+            </div>
+          </div>
+        </div>
+
+        <Separator />
+
         {/* Recipients */}
         <div>
           <div className="flex items-center gap-2 mb-3">
@@ -983,6 +1023,7 @@ export default function ChangeStatusModal({
 
             <NotificationContent
               preview={notificationPreview}
+              projectId={project.id}
               onSend={async (editedData) => {
                 await sendNotificationMutation.mutateAsync(editedData);
               }}
