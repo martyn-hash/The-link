@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import type { Person, Client, ClientPerson, ClientPortalUser } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import BottomNav from "@/components/bottom-nav";
@@ -341,31 +342,23 @@ export default function People() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [isAuthenticated, authLoading, toast]);
+  }, [isAuthenticated, authLoading]);
 
   useEffect(() => {
     if (error && isUnauthorizedError(error)) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [error, toast]);
+  }, [error]);
 
   const filteredPeople = people?.filter(person =>
     person.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||

@@ -13,6 +13,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { formatPersonName } from "../utils/formatters";
 import type { ClientPersonWithPerson } from "../utils/types";
@@ -85,11 +86,7 @@ export function NewClientRequestDialog({
       onSuccess?.("tasks");
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to create client request",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -112,11 +109,7 @@ export function NewClientRequestDialog({
       navigate(`/custom-requests/${data.id}/edit`);
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to create custom request",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import {
   Dialog,
   DialogContent,
@@ -171,11 +172,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       setEditingProjectType(null);
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create project type",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -208,11 +205,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           duration: 8000, // Show longer for detailed message
         });
       } else {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update project type",
-          variant: "destructive",
-        });
+        showFriendlyError({ error });
       }
     },
   });
@@ -230,11 +223,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       }
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete project type",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -262,11 +251,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       }));
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to get dependency summary",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
       setForceDeleteDialog(prev => ({ ...prev, open: false }));
     },
   });
@@ -293,11 +278,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       setForceDeleteDialog({ open: false, projectType: null, dependencies: null, confirmName: '' });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to force delete project type",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -333,11 +314,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       setEditingStage(null);
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create stage",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -352,11 +329,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       setEditingStage(null);
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update stage",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -370,11 +343,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/config/project-types", selectedProjectTypeId, "stages"] });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete stage",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -391,11 +360,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       setEditingReason(null);
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create change reason",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -410,11 +375,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       setEditingReason(null);
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update change reason",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -428,11 +389,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/config/project-types", selectedProjectTypeId, "reasons"] });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete change reason",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -441,11 +398,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     if (!editingProjectType) return;
 
     if (!editingProjectType.name) {
-      toast({
-        title: "Validation Error",
-        description: "Please enter a project type name",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please enter a project type name" });
       return;
     }
 
@@ -478,20 +431,12 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const handleSaveStage = () => {
     if (!editingStage) return;
     if (!selectedProjectTypeId) {
-      toast({
-        title: "Validation Error",
-        description: "Please select a project type first",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please select a project type first" });
       return;
     }
 
     if (!editingStage.name) {
-      toast({
-        title: "Validation Error",
-        description: "Please enter a stage name",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please enter a stage name" });
       return;
     }
 
@@ -505,11 +450,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       stageData.assignedUserId = undefined;
       
       if (!stageData.assignedWorkRoleId) {
-        toast({
-          title: "Validation Error",
-          description: "Please select a service role",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: "Please select a service role" });
         return;
       }
     } else {
@@ -518,11 +459,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       stageData.assignedWorkRoleId = undefined;
       
       if (!stageData.assignedUserId) {
-        toast({
-          title: "Validation Error",
-          description: "Please select a user",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: "Please select a user" });
         return;
       }
     }
@@ -579,20 +516,12 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   const handleSaveReason = () => {
     if (!editingReason) return;
     if (!selectedProjectTypeId) {
-      toast({
-        title: "Validation Error",
-        description: "Please select a project type first",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please select a project type first" });
       return;
     }
 
     if (!editingReason.reason) {
-      toast({
-        title: "Validation Error",
-        description: "Please fill in all required fields",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please fill in all required fields" });
       return;
     }
 

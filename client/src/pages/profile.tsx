@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { insertUserSchema, updateUserNotificationPreferencesSchema } from "@shared/schema";
 import { usePushNotifications } from "@/hooks/usePushNotifications";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 
 // Components
 import TopNavigation from "@/components/top-navigation";
@@ -75,11 +76,7 @@ function PushNotificationsCard() {
         description: 'You will receive push notifications for important updates.',
       });
     } else {
-      toast({
-        title: 'Failed to enable push notifications',
-        description: 'Please check your browser permissions.',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error: 'Failed to enable push notifications. Please check your browser permissions.' });
     }
   };
 
@@ -91,11 +88,7 @@ function PushNotificationsCard() {
         description: 'You will no longer receive push notifications.',
       });
     } else {
-      toast({
-        title: 'Failed to disable push notifications',
-        description: 'Please try again later.',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error: 'Failed to disable push notifications. Please try again later.' });
     }
   };
 
@@ -254,11 +247,7 @@ export default function Profile() {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update profile",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -275,11 +264,7 @@ export default function Profile() {
       passwordForm.reset();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update password",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -293,11 +278,7 @@ export default function Profile() {
       queryClient.invalidateQueries({ queryKey: ["/api/users/notifications"] });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update notification preferences",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -311,11 +292,7 @@ export default function Profile() {
       queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update email signature",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -329,11 +306,7 @@ export default function Profile() {
       refetchOutlookStatus();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to disconnect Outlook account",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -347,11 +320,7 @@ export default function Profile() {
       refetchRingCentralStatus();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to disconnect RingCentral account",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -383,18 +352,10 @@ export default function Profile() {
       if (data.authUrl) {
         window.location.href = data.authUrl;
       } else {
-        toast({
-          title: "Error",
-          description: "Failed to generate authentication URL",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: "Failed to generate authentication URL" });
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to connect to Outlook",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     }
   };
 
@@ -411,18 +372,10 @@ export default function Profile() {
       if (data.authUrl) {
         window.location.href = data.authUrl;
       } else {
-        toast({
-          title: "Error",
-          description: "Failed to generate authentication URL",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: "Failed to generate authentication URL" });
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to connect to RingCentral",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     }
   };
 

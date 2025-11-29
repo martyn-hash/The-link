@@ -11,6 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { AttachmentList, AttachmentPreview, FileUploadZone, type AttachmentData } from '@/components/attachments';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { showFriendlyError } from '@/lib/friendlyErrors';
 import { 
   ChevronDown, 
   ChevronUp, 
@@ -217,11 +218,7 @@ export function EmailThreadViewer({ threadId, open, onOpenChange }: EmailThreadV
       queryClient.invalidateQueries({ queryKey: ['/api/emails/client'] });
     },
     onError: (error: Error) => {
-      toast({
-        title: 'Failed to send reply',
-        description: error.message,
-        variant: 'destructive',
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -235,11 +232,7 @@ export function EmailThreadViewer({ threadId, open, onOpenChange }: EmailThreadV
   const handleSendReply = () => {
     if (!threadData?.messages || threadData.messages.length === 0) return;
     if (!replyBody.trim()) {
-      toast({
-        title: 'Email body required',
-        description: 'Please enter a message before sending.',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error: "Please enter a message before sending." });
       return;
     }
 

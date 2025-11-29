@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
@@ -186,11 +187,7 @@ export default function ProjectDetail() {
         setCompletionType(null);
       } else {
         // Show generic error for other cases
-        toast({
-          title: "Failed to complete project",
-          description: error.message || "An unexpected error occurred",
-          variant: "destructive",
-        });
+        showFriendlyError({ error });
       }
     }
   });
@@ -223,11 +220,7 @@ export default function ProjectDetail() {
       inactiveForm.reset();
     },
     onError: (error: any) => {
-      toast({
-        title: "Failed to mark project inactive",
-        description: error.message || "An unexpected error occurred",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
   
@@ -239,32 +232,24 @@ export default function ProjectDetail() {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [isAuthenticated, authLoading, toast]);
+  }, [isAuthenticated, authLoading]);
 
   // Handle query errors
   useEffect(() => {
     if (projectError && isUnauthorizedError(projectError)) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [projectError, toast]);
+  }, [projectError]);
 
   const handleBack = () => {
     // Check if we came from a client detail page

@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import TopNavigation from "@/components/top-navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -116,11 +117,7 @@ export default function CompanySettingsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/super-admin/company-settings"] });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to save company settings. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -158,11 +155,7 @@ export default function CompanySettingsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/super-admin/company-settings"] });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to upload logo. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -194,11 +187,7 @@ export default function CompanySettingsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/super-admin/company-settings"] });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete logo. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -208,21 +197,13 @@ export default function CompanySettingsPage() {
     
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      toast({
-        title: "Invalid file type",
-        description: "Please upload an image file (PNG, JPG, etc.)",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please upload an image file (PNG, JPG, etc.)" });
       return;
     }
     
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: "File too large",
-        description: "Please upload an image smaller than 5MB",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please upload an image smaller than 5MB" });
       return;
     }
     
@@ -235,11 +216,7 @@ export default function CompanySettingsPage() {
 
   const handleAddRedirectUrl = () => {
     if (!newRedirectName.trim() || !newRedirectUrl.trim()) {
-      toast({
-        title: "Invalid input",
-        description: "Please provide both a name and URL",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please provide both a name and URL" });
       return;
     }
 
@@ -247,11 +224,7 @@ export default function CompanySettingsPage() {
     try {
       new URL(newRedirectUrl);
     } catch {
-      toast({
-        title: "Invalid URL",
-        description: "Please provide a valid URL (e.g., https://example.com)",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please provide a valid URL (e.g., https://example.com)" });
       return;
     }
 

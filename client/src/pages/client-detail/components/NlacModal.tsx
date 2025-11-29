@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import {
   Dialog,
   DialogContent,
@@ -91,11 +92,7 @@ export function NlacModal({ open, onOpenChange, client }: NlacModalProps) {
       if (error.message?.includes("password")) {
         setPasswordError(error.message);
       } else {
-        toast({
-          title: "Failed to mark client as inactive",
-          description: error.message || "An error occurred while processing the NLAC request.",
-          variant: "destructive",
-        });
+        showFriendlyError({ error });
       }
     },
   });
@@ -118,11 +115,7 @@ export function NlacModal({ open, onOpenChange, client }: NlacModalProps) {
       resetAndClose();
     },
     onError: (error: any) => {
-      toast({
-        title: "Failed to reactivate client",
-        description: error.message || "An error occurred while reactivating the client.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -154,11 +147,7 @@ export function NlacModal({ open, onOpenChange, client }: NlacModalProps) {
 
   const handleConfirmNlac = () => {
     if (!selectedReason) {
-      toast({
-        title: "Please select a reason",
-        description: "You must select a reason for marking this client as inactive.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: 'You must select a reason for marking this client as inactive.' });
       return;
     }
     if (!password) {

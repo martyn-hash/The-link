@@ -3,6 +3,7 @@ import { useParams, useLocation, Redirect } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -270,11 +271,7 @@ export default function SignatureRequestBuilder() {
     if (!file) return;
 
     if (!file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf')) {
-      toast({
-        title: "Invalid file type",
-        description: "Please select a PDF file",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please select a PDF file" });
       return;
     }
 
@@ -324,11 +321,7 @@ export default function SignatureRequestBuilder() {
       });
     } catch (error) {
       console.error('Error uploading PDF:', error);
-      toast({
-        title: "Upload failed",
-        description: error instanceof Error ? error.message : "Failed to upload PDF",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     } finally {
       setIsUploading(false);
       setUploadingFile(null);
@@ -354,11 +347,7 @@ export default function SignatureRequestBuilder() {
   // Handle placing field on PDF
   const handlePdfClick = (pageNumber: number, xPercent: number, yPercent: number) => {
     if (!selectedRecipientForField) {
-      toast({
-        title: "Select a recipient",
-        description: "Please select a recipient before placing signature fields",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please select a recipient before placing signature fields" });
       return;
     }
 
@@ -368,11 +357,7 @@ export default function SignatureRequestBuilder() {
     );
 
     if (existingField) {
-      toast({
-        title: "Duplicate field",
-        description: `${peopleWithEmails.find(p => p.id === selectedRecipientForField)?.fullName} already has a ${selectedFieldType === "signature" ? "signature" : "typed name"} field. Move the existing field instead.`,
-        variant: "destructive",
-      });
+      showFriendlyError({ error: `${peopleWithEmails.find(p => p.id === selectedRecipientForField)?.fullName} already has a ${selectedFieldType === "signature" ? "signature" : "typed name"} field. Move the existing field instead.` });
       return;
     }
 
@@ -500,11 +485,7 @@ export default function SignatureRequestBuilder() {
       navigate(`/clients/${clientId}`);
     },
     onError: (error) => {
-      toast({
-        title: "Failed to send request",
-        description: error instanceof Error ? error.message : "An error occurred",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

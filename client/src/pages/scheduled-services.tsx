@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import TopNavigation from "@/components/top-navigation";
 import BottomNav from "@/components/bottom-nav";
@@ -59,28 +60,20 @@ export default function ScheduledServices() {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [isAuthenticated, authLoading, toast]);
+  }, [isAuthenticated, authLoading]);
 
   // Check admin access
   useEffect(() => {
     if (user && !user.isAdmin && !user.canSeeAdminMenu) {
-      toast({
-        title: "Access Denied",
-        description: "You don't have permission to access this page.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You don't have permission to access this page." });
     }
-  }, [user, toast]);
+  }, [user]);
 
   // Fetch scheduled services data (placeholder for now)
   const { 
@@ -97,17 +90,13 @@ export default function ScheduledServices() {
   // Handle query errors
   useEffect(() => {
     if (servicesError && isUnauthorizedError(servicesError)) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [servicesError, toast]);
+  }, [servicesError]);
 
   // Filter services based on current settings
   const filteredServices = scheduledServices.filter(service => {
@@ -184,11 +173,7 @@ export default function ScheduledServices() {
       // Refresh the data
       refetchServices();
     } catch (error) {
-      toast({
-        title: "Error Creating Projects",
-        description: "Failed to create projects. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Failed to create projects. Please try again." });
     }
   };
 

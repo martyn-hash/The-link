@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { ProjectView } from "@shared/schema";
 import type { Dashboard } from "@/pages/projects";
@@ -60,12 +61,8 @@ export default function ViewMegaMenu({
         description: "The saved view has been removed.",
       });
     },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to delete view",
-        variant: "destructive",
-      });
+    onError: (error) => {
+      showFriendlyError({ error });
     },
   });
 
@@ -81,12 +78,8 @@ export default function ViewMegaMenu({
         description: "The dashboard has been removed.",
       });
     },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to delete dashboard",
-        variant: "destructive",
-      });
+    onError: (error) => {
+      showFriendlyError({ error });
     },
   });
 

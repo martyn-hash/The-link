@@ -25,6 +25,7 @@ import TopNavigation from "@/components/top-navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import type { ClientRequestTemplate, ClientRequestTemplateSection, ClientRequestTemplateCategory, InsertClientRequestTemplateSection, ClientRequestTemplateQuestion, InsertClientRequestTemplateQuestion } from "@shared/schema";
 
 const templateSchema = z.object({
@@ -380,11 +381,7 @@ function SectionModal({
       form.reset();
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to save section",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -492,11 +489,7 @@ function DeleteSectionDialog({
       setOpen(false);
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete section",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -613,11 +606,7 @@ export default function TaskTemplateEditPage() {
       setEditTemplateDialogOpen(false);
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update template",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -626,11 +615,7 @@ export default function TaskTemplateEditPage() {
       return apiRequest("POST", "/api/task-template-sections/reorder", { sections: orderedSections });
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to reorder sections",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
       // Reload sections on error
       queryClient.invalidateQueries({ queryKey: ["/api/client-request-templates", id, "sections"] });
     },
@@ -648,11 +633,7 @@ export default function TaskTemplateEditPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/client-request-templates", id, "sections"] });
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create section",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -683,11 +664,7 @@ export default function TaskTemplateEditPage() {
       setCreateQuestionOptions([]);
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to add question",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -720,11 +697,7 @@ export default function TaskTemplateEditPage() {
       setEditQuestionOptions([]);
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update question",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -748,11 +721,7 @@ export default function TaskTemplateEditPage() {
       });
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete question",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -766,11 +735,7 @@ export default function TaskTemplateEditPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", variables.sectionId, "questions"] });
     },
     onError: (error, variables) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to reorder questions",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
       // Call rollback callback if provided
       if (variables.onError) {
         variables.onError();
@@ -1153,11 +1118,7 @@ export default function TaskTemplateEditPage() {
                       setEditingSection(null);
                     })
                     .catch((error) => {
-                      toast({
-                        title: "Error",
-                        description: error instanceof Error ? error.message : "Failed to update section",
-                        variant: "destructive",
-                      });
+                      showFriendlyError({ error });
                     });
                 }}
                 className="space-y-4"
@@ -1241,11 +1202,7 @@ export default function TaskTemplateEditPage() {
                         setDeletingSection(null);
                       })
                       .catch((error) => {
-                        toast({
-                          title: "Error",
-                          description: error instanceof Error ? error.message : "Failed to delete section",
-                          variant: "destructive",
-                        });
+                        showFriendlyError({ error });
                       });
                   }}
                   data-testid="button-confirm-delete-section-dialog"
@@ -1365,22 +1322,14 @@ export default function TaskTemplateEditPage() {
                     const isRequired = (document.getElementById("question-required") as HTMLInputElement)?.checked;
                     
                     if (!label) {
-                      toast({
-                        title: "Error",
-                        description: "Question label is required",
-                        variant: "destructive",
-                      });
+                      showFriendlyError({ error: "Question label is required" });
                       return;
                     }
 
                     // Validate options for choice questions
                     if (["single_choice", "multi_choice", "dropdown"].includes(creatingQuestion.questionType)) {
                       if (!createQuestionOptions || createQuestionOptions.length === 0 || createQuestionOptions.every(o => !o.trim())) {
-                        toast({
-                          title: "Error",
-                          description: "At least one option is required for choice questions",
-                          variant: "destructive",
-                        });
+                        showFriendlyError({ error: "At least one option is required for choice questions" });
                         return;
                       }
                     }
@@ -1519,22 +1468,14 @@ export default function TaskTemplateEditPage() {
                       const isRequired = (document.getElementById("edit-question-required") as HTMLInputElement)?.checked;
                       
                       if (!label) {
-                        toast({
-                          title: "Error",
-                          description: "Question label is required",
-                          variant: "destructive",
-                        });
+                        showFriendlyError({ error: "Question label is required" });
                         return;
                       }
 
                       // Validate options for choice questions
                       if (["single_choice", "multi_choice", "dropdown"].includes(editQuestion.questionType)) {
                         if (!editQuestionOptions || editQuestionOptions.length === 0 || editQuestionOptions.every(o => !o.trim())) {
-                          toast({
-                            title: "Error",
-                            description: "At least one option is required for choice questions",
-                            variant: "destructive",
-                          });
+                          showFriendlyError({ error: "At least one option is required for choice questions" });
                           return;
                         }
                       }

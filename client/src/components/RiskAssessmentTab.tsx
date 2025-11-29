@@ -15,6 +15,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { AlertCircle, CheckCircle, Plus, Calendar, Eye, Trash2, Shield } from "lucide-react";
 import { insertRiskAssessmentSchema } from "@shared/schema";
@@ -127,8 +128,8 @@ export function RiskAssessmentTab({ clientId }: RiskAssessmentTabProps) {
       setIsCreateDialogOpen(false);
       createForm.reset();
     },
-    onError: () => {
-      toast({ title: "Failed to create risk assessment", variant: "destructive" });
+    onError: (error) => {
+      showFriendlyError({ error });
     },
   });
 
@@ -140,8 +141,8 @@ export function RiskAssessmentTab({ clientId }: RiskAssessmentTabProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "risk-assessments"] });
       toast({ title: "Risk assessment deleted successfully" });
     },
-    onError: () => {
-      toast({ title: "Failed to delete risk assessment", variant: "destructive" });
+    onError: (error) => {
+      showFriendlyError({ error });
     },
   });
 
@@ -153,8 +154,8 @@ export function RiskAssessmentTab({ clientId }: RiskAssessmentTabProps) {
       queryClient.invalidateQueries({ queryKey: ["/api/risk-assessments", selectedAssessmentId] });
       toast({ title: "Responses saved successfully" });
     },
-    onError: () => {
-      toast({ title: "Failed to save responses", variant: "destructive" });
+    onError: (error) => {
+      showFriendlyError({ error });
     },
   });
 

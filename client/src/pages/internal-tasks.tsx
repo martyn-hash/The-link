@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -326,11 +327,7 @@ export default function InternalTasks() {
       setSelectedAssignee("");
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to reassign tasks",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error.message || error || "Failed to reassign tasks" });
     },
   });
 
@@ -358,11 +355,7 @@ export default function InternalTasks() {
       setSelectedStatus("");
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update task status",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error.message || error || "Failed to update task status" });
     },
   });
 
@@ -398,11 +391,7 @@ export default function InternalTasks() {
       });
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to complete task",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error.message || error || "Failed to complete task" });
     },
   });
 
@@ -425,11 +414,7 @@ export default function InternalTasks() {
       setDeleteTaskId(null);
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete task",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error.message || error || "Failed to delete task" });
       setDeleteTaskId(null);
     },
   });
@@ -452,11 +437,7 @@ export default function InternalTasks() {
       });
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to archive task",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error.message || error || "Failed to archive task" });
     },
   });
 

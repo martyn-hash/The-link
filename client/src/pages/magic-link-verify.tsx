@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { Mail, CheckCircle, AlertCircle, Loader2, KeyRound, ArrowLeft } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import maintenanceImagePath from "@assets/image_1764278395182.png";
@@ -117,12 +118,7 @@ export default function MagicLinkVerify() {
         return;
       }
       
-      const errorMessage = error.message || "Invalid verification code or email. Please check your details and try again.";
-      toast({
-        title: "Verification Failed",
-        description: errorMessage,
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error.message || "Invalid verification code or email. Please check your details and try again." });
     },
   });
 

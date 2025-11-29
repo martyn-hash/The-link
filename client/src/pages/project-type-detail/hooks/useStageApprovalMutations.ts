@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import type { EditingStageApproval } from "../utils/types";
 
 interface StageApprovalMutationCallbacks {
@@ -31,11 +32,7 @@ export function useStageApprovalMutations(
       callbacks.onApprovalCreated?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create stage approval",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -49,11 +46,7 @@ export function useStageApprovalMutations(
       callbacks.onApprovalUpdated?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update stage approval",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -67,11 +60,7 @@ export function useStageApprovalMutations(
       callbacks.onApprovalDeleted?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete stage approval",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { useQuery } from "@tanstack/react-query";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
@@ -105,16 +106,12 @@ export default function ServiceImport() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
     }
-  }, [isAuthenticated, authLoading, toast]);
+  }, [isAuthenticated, authLoading]);
 
   useEffect(() => {
     if (selectedServiceId && servicesData?.services) {
@@ -127,11 +124,7 @@ export default function ServiceImport() {
 
   const handleServiceSelect = () => {
     if (!selectedService) {
-      toast({
-        title: "No Service Selected",
-        description: "Please select a service to import data for.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please select a service to import data for." });
       return;
     }
     setCurrentStep('upload');
@@ -139,11 +132,7 @@ export default function ServiceImport() {
 
   const handleFileUpload = async () => {
     if (!selectedFile) {
-      toast({
-        title: "No File Selected",
-        description: "Please select a file to upload.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please select a file to upload." });
       return;
     }
 
@@ -173,11 +162,7 @@ export default function ServiceImport() {
         description: `Found ${result.totalRows} rows with ${result.headers.length} columns.`,
       });
     } catch (error: any) {
-      toast({
-        title: "Parse Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     }
   };
 
@@ -187,11 +172,7 @@ export default function ServiceImport() {
 
   const handleValidate = async () => {
     if (!parseResult || mappings.length === 0 || !selectedService) {
-      toast({
-        title: "Missing Data",
-        description: "Please complete field mapping before validating.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please complete field mapping before validating." });
       return;
     }
 
@@ -220,11 +201,7 @@ export default function ServiceImport() {
       setCurrentStep('preview');
 
       if (result.errors.length > 0) {
-        toast({
-          title: "Validation Issues Found",
-          description: `${result.errors.length} errors need to be addressed before import.`,
-          variant: "destructive",
-        });
+        showFriendlyError({ error: `${result.errors.length} errors need to be addressed before import.` });
       } else if (result.warnings.length > 0) {
         toast({
           title: "Validation Complete with Warnings",
@@ -237,11 +214,7 @@ export default function ServiceImport() {
         });
       }
     } catch (error: any) {
-      toast({
-        title: "Validation Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     }
   };
 
@@ -280,17 +253,16 @@ export default function ServiceImport() {
       setImportProgress(100);
       setCurrentStep('complete');
 
-      toast({
-        title: result.success ? "Import Complete" : "Import Completed with Errors",
-        description: `Created ${result.summary.clientServicesCreated + result.summary.peopleServicesCreated} services, updated ${result.summary.clientServicesUpdated + result.summary.peopleServicesUpdated}.`,
-        variant: result.success ? "default" : "destructive",
-      });
+      if (result.success) {
+        toast({
+          title: "Import Complete",
+          description: `Created ${result.summary.clientServicesCreated + result.summary.peopleServicesCreated} services, updated ${result.summary.clientServicesUpdated + result.summary.peopleServicesUpdated}.`,
+        });
+      } else {
+        showFriendlyError({ error: `Import completed with errors. Created ${result.summary.clientServicesCreated + result.summary.peopleServicesCreated} services, updated ${result.summary.clientServicesUpdated + result.summary.peopleServicesUpdated}.` });
+      }
     } catch (error: any) {
-      toast({
-        title: "Import Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
       setCurrentStep('preview');
     }
   };

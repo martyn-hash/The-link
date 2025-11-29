@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 
 interface StageReasonMapMutationCallbacks {
   onMappingCreated?: () => void;
@@ -11,7 +11,6 @@ export function useStageReasonMapMutations(
   callbacks: StageReasonMapMutationCallbacks = {}
 ) {
   const queryClient = useQueryClient();
-  const { toast } = useToast();
 
   const invalidateMaps = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/config/stage-reason-maps"] });
@@ -26,11 +25,7 @@ export function useStageReasonMapMutations(
       callbacks.onMappingCreated?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create stage-reason mapping",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -43,11 +38,7 @@ export function useStageReasonMapMutations(
       callbacks.onMappingDeleted?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete stage-reason mapping",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

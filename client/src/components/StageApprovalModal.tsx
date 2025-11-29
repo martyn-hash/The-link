@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import {
   Dialog,
   DialogContent,
@@ -245,11 +246,7 @@ export default function StageApprovalModal({
       form.reset();
       onClose();
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to submit stage approval",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     } finally {
       setIsSubmitting(false);
     }

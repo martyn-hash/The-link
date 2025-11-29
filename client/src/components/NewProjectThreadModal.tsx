@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { X, Check, Paperclip, File as FileIcon, Table as TableIcon } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { showFriendlyError } from '@/lib/friendlyErrors';
 import DOMPurify from 'isomorphic-dompurify';
 import { TiptapEditor } from '@/components/TiptapEditor';
 
@@ -155,11 +156,7 @@ export default function NewProjectThreadModal({
       handleClose();
     },
     onError: (error: any) => {
-      toast({
-        title: "Failed to create thread",
-        description: error.message || "An error occurred",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -178,20 +175,12 @@ export default function NewProjectThreadModal({
 
   const handleCreate = async () => {
     if (!topic.trim()) {
-      toast({
-        title: "Topic required",
-        description: "Please enter a topic for the thread",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please enter a topic for the thread" });
       return;
     }
 
     if (selectedParticipants.length === 0) {
-      toast({
-        title: "Participants required",
-        description: "Please select at least one participant",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please select at least one participant" });
       return;
     }
 
@@ -205,11 +194,7 @@ export default function NewProjectThreadModal({
     const hasContent = textContent.length > 0 || hasTables || hasImages || hasLists;
     
     if (!hasContent && selectedFiles.length === 0) {
-      toast({
-        title: "Message required",
-        description: "Please enter an initial message or attach files",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please enter an initial message or attach files" });
       return;
     }
 
@@ -270,33 +255,21 @@ export default function NewProjectThreadModal({
       }
     } catch (error: any) {
       setUploadingFiles(false);
-      toast({
-        title: "Failed to create thread",
-        description: error.message || "An error occurred",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (selectedFiles.length + files.length > 5) {
-      toast({
-        title: "Too many files",
-        description: "You can only attach up to 5 files per message",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You can only attach up to 5 files per message" });
       return;
     }
 
     const validFiles = files.filter(file => {
       const isValid = file.size <= 25 * 1024 * 1024; // 25MB limit
       if (!isValid) {
-        toast({
-          title: "File too large",
-          description: `${file.name} exceeds 25MB limit`,
-          variant: "destructive",
-        });
+        showFriendlyError({ error: `${file.name} exceeds 25MB limit` });
       }
       return isValid;
     });

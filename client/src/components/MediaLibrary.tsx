@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Trash2, Upload, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -108,11 +109,7 @@ export function MediaLibrary({ mode = "gallery", selectedIconId, onSelectIcon }:
       });
     },
     onError: (error: Error) => {
-      toast({
-        title: "Upload failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -130,11 +127,7 @@ export function MediaLibrary({ mode = "gallery", selectedIconId, onSelectIcon }:
       });
     },
     onError: (error: Error) => {
-      toast({
-        title: "Delete failed",
-        description: error.message,
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -144,21 +137,13 @@ export function MediaLibrary({ mode = "gallery", selectedIconId, onSelectIcon }:
 
     // Validate file type
     if (!file.type.startsWith("image/")) {
-      toast({
-        title: "Invalid file",
-        description: "Please select an image file",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please select an image file" });
       return;
     }
 
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: "File too large",
-        description: "Please select an image smaller than 5MB",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please select an image smaller than 5MB" });
       return;
     }
 

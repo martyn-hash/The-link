@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import type { Client } from "@shared/schema";
 import type { ClientServiceWithService } from "../utils/types";
 
@@ -107,11 +108,7 @@ export function useCompanyConnections(
       });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to link to company",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -128,11 +125,7 @@ export function useCompanyConnections(
       });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to remove company connection",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -156,11 +149,7 @@ export function useCompanyConnections(
       });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to create company",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

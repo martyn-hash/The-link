@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import type { 
   InsertProjectTypeNotification,
   UpdateProjectTypeNotification,
@@ -40,11 +41,7 @@ export function useNotificationMutations(
       callbacks.onNotificationCreated?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create notification",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -58,11 +55,7 @@ export function useNotificationMutations(
       callbacks.onNotificationUpdated?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update notification",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -76,11 +69,7 @@ export function useNotificationMutations(
       callbacks.onNotificationDeleted?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete notification",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -104,11 +93,7 @@ export function useNotificationMutations(
       callbacks.onRescheduleComplete?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Re-schedule failed",
-        description: error.message || "Failed to re-schedule notifications",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
       callbacks.onRescheduleComplete?.();
     },
   });
@@ -123,11 +108,7 @@ export function useNotificationMutations(
       callbacks.onReminderCreated?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create reminder",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -141,11 +122,7 @@ export function useNotificationMutations(
       callbacks.onReminderUpdated?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update reminder",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -159,11 +136,7 @@ export function useNotificationMutations(
       callbacks.onReminderDeleted?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete reminder",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

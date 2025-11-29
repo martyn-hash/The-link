@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -131,11 +132,7 @@ export function EditableServiceDetails({
             error: data.error || 'Invalid VAT number',
           }
         }));
-        toast({
-          title: "Invalid VAT Number",
-          description: data.error || "The VAT number could not be validated with HMRC",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: data.error || "The VAT number could not be validated with HMRC" });
       }
       onUpdate();
       queryClient.invalidateQueries({ queryKey: [`/api/client-services/client/${clientService.clientId}`] });
@@ -148,22 +145,14 @@ export function EditableServiceDetails({
           error: error instanceof Error ? error.message : 'Validation failed',
         }
       }));
-      toast({
-        title: "Validation Error",
-        description: error instanceof Error ? error.message : "Could not connect to HMRC API",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error instanceof Error ? error : "Could not connect to HMRC API" });
     },
   });
 
   const handleValidateVat = (fieldId: string) => {
     const vatNumber = udfValues[fieldId];
     if (!vatNumber) {
-      toast({
-        title: "No VAT Number",
-        description: "Please enter a VAT number first",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please enter a VAT number first" });
       return;
     }
     setVatValidationStatus(prev => ({
@@ -220,11 +209,7 @@ export function EditableServiceDetails({
       queryClient.invalidateQueries({ queryKey: [`/api/client-services/client/${clientService.clientId}`] });
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update service details",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

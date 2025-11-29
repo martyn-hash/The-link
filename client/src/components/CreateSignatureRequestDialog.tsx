@@ -15,6 +15,7 @@ import { FileText, Upload, MousePointer, Send, UserPlus, Trash2, PenTool, Type, 
 import type { Document as DocumentType, Person } from "@shared/schema";
 import { PdfSignatureViewer } from "@/components/PdfSignatureViewer";
 import { FileUploadZone } from "@/components/attachments/FileUploadZone";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 
 interface CreateSignatureRequestDialogProps {
   clientId: string;
@@ -82,11 +83,7 @@ export function CreateSignatureRequestDialog({
 
     // Validate PDF
     if (!file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf')) {
-      toast({
-        title: "Invalid file type",
-        description: "Please select a PDF file",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please select a PDF file" });
       return;
     }
 
@@ -140,11 +137,7 @@ export function CreateSignatureRequestDialog({
       });
     } catch (error) {
       console.error('Error uploading PDF:', error);
-      toast({
-        title: "Upload failed",
-        description: error instanceof Error ? error.message : "Failed to upload PDF",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error instanceof Error ? error : "Failed to upload PDF" });
     } finally {
       setIsUploading(false);
       setUploadingFile(null);
@@ -174,11 +167,7 @@ export function CreateSignatureRequestDialog({
         
         // Check if document has object storage path
         if (!doc.objectPath) {
-          toast({
-            title: "Document unavailable",
-            description: "This document file is not available in storage. Please upload a new document.",
-            variant: "destructive",
-          });
+          showFriendlyError({ error: "This document file is not available in storage. Please upload a new document." });
           setPdfPreviewUrl("");
           return;
         }
@@ -193,11 +182,7 @@ export function CreateSignatureRequestDialog({
   // Handle adding a field by clicking on the PDF preview
   const handlePdfClick = (pageNumber: number, xPercent: number, yPercent: number) => {
     if (!selectedRecipientForField) {
-      toast({
-        title: "Select a recipient",
-        description: "Please select a recipient before placing signature fields",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please select a recipient before placing signature fields" });
       return;
     }
 
@@ -238,20 +223,12 @@ export function CreateSignatureRequestDialog({
 
     const email = person.primaryEmail || person.email;
     if (!email) {
-      toast({
-        title: "No email found",
-        description: "This person doesn't have an email address",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "This person doesn't have an email address" });
       return;
     }
 
     if (recipients.some(r => r.personId === personId)) {
-      toast({
-        title: "Already added",
-        description: "This person is already a recipient",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "This person is already a recipient" });
       return;
     }
 
@@ -300,11 +277,7 @@ export function CreateSignatureRequestDialog({
       handleClose();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create signature request",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -321,11 +294,7 @@ export function CreateSignatureRequestDialog({
       queryClient.invalidateQueries({ queryKey: ['/api/signature-requests/client', clientId] });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send signature request",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

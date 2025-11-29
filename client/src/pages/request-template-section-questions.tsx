@@ -16,6 +16,7 @@ import { CSS } from "@dnd-kit/utilities";
 import TopNavigation from "@/components/top-navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 import type { ClientRequestTemplateQuestion, ClientRequestTemplateSection, ClientRequestTemplate } from "@shared/schema";
 
@@ -170,11 +171,7 @@ export default function TaskTemplateSectionQuestionsPage() {
       return apiRequest("POST", "/api/task-template-questions/reorder", { questions: orderedQuestions });
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to reorder questions",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
       queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", sectionId, "questions"] });
     },
   });
@@ -237,22 +234,14 @@ export default function TaskTemplateSectionQuestionsPage() {
 
   const handleSaveQuestion = async () => {
     if (!formData.label.trim()) {
-      toast({
-        title: "Error",
-        description: "Question label is required",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Question label is required" });
       return;
     }
 
     // Validate options for choice questions
     if (["single_choice", "multi_choice", "dropdown"].includes(formData.questionType)) {
       if (!formData.options || formData.options.length === 0 || formData.options.every(o => !o.trim())) {
-        toast({
-          title: "Error",
-          description: "At least one option is required for choice questions",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: "At least one option is required for choice questions" });
         return;
       }
     }
@@ -294,11 +283,7 @@ export default function TaskTemplateSectionQuestionsPage() {
       setEditingQuestion(null);
       resetForm();
     } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to save question",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     }
   };
 
@@ -314,11 +299,7 @@ export default function TaskTemplateSectionQuestionsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", sectionId, "questions"] });
       setDeletingQuestion(null);
     } catch (error) {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete question",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     }
   };
 

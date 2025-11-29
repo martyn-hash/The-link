@@ -6,6 +6,7 @@ import { Label } from "@/components/ui/label";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { Lock, CheckCircle } from "lucide-react";
 
 export function FirstLoginPasswordDialog() {
@@ -44,11 +45,7 @@ export function FirstLoginPasswordDialog() {
       setConfirmPassword("");
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to set password",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -56,20 +53,12 @@ export function FirstLoginPasswordDialog() {
     e.preventDefault();
     
     if (password.length < 8) {
-      toast({
-        title: "Password too short",
-        description: "Password must be at least 8 characters long",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Password must be at least 8 characters long" });
       return;
     }
     
     if (password !== confirmPassword) {
-      toast({
-        title: "Passwords don't match",
-        description: "Please make sure both passwords are the same",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Passwords don't match. Please make sure both passwords are the same." });
       return;
     }
     

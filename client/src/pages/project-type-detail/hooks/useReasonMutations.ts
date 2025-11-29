@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import type { EditingReason } from "../utils/types";
 
 interface ReasonMutationCallbacks {
@@ -31,11 +32,7 @@ export function useReasonMutations(
       callbacks.onReasonCreated?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create reason",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -49,11 +46,7 @@ export function useReasonMutations(
       callbacks.onReasonUpdated?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update reason",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -67,11 +60,7 @@ export function useReasonMutations(
       callbacks.onReasonDeleted?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete reason",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

@@ -7,6 +7,7 @@ import { z } from "zod";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { apiRequest } from "@/lib/queryClient";
 import { type Service, type WorkRole, type UDFDefinition, baseInsertServiceSchema, insertWorkRoleSchema } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
@@ -137,12 +138,8 @@ function UDFEditor({ control, name }: UDFEditorProps) {
         description: `Use "${fieldId}" in your Excel import file`,
       });
       setTimeout(() => setCopiedId(null), 2000);
-    } catch {
-      toast({
-        title: "Copy failed",
-        description: "Please manually copy the field ID",
-        variant: "destructive",
-      });
+    } catch (error) {
+      showFriendlyError({ error: "Please manually copy the field ID" });
     }
   };
 
@@ -400,30 +397,22 @@ export default function Services() {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [isAuthenticated, authLoading, toast]);
+  }, [isAuthenticated, authLoading]);
 
   // Redirect non-admin users
   useEffect(() => {
     if (user && !user.isAdmin) {
-      toast({
-        title: "Access Denied",
-        description: "You don't have permission to access this page.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You don't have permission to access this page." });
       setLocation('/');
       return;
     }
-  }, [user, toast, setLocation]);
+  }, [user, setLocation]);
   const queryClient = useQueryClient();
   
   // View state management
@@ -529,11 +518,7 @@ export default function Services() {
       serviceForm.reset();
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create service",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -578,11 +563,7 @@ export default function Services() {
       serviceForm.reset();
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update service",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -597,11 +578,7 @@ export default function Services() {
       setDeleteServiceId(null);
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete service",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -617,11 +594,7 @@ export default function Services() {
       roleForm.reset();
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create work role",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -640,11 +613,7 @@ export default function Services() {
       roleForm.reset();
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update work role",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -660,11 +629,7 @@ export default function Services() {
       setDeleteRoleId(null);
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete work role",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -735,32 +700,24 @@ export default function Services() {
   // Auth and error handling
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [isAuthenticated, authLoading, toast]);
+  }, [isAuthenticated, authLoading]);
 
   useEffect(() => {
     const error = servicesError || rolesError;
     if (error && isUnauthorizedError(error)) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [servicesError, rolesError, toast]);
+  }, [servicesError, rolesError]);
 
   if (authLoading || !user) {
     return (

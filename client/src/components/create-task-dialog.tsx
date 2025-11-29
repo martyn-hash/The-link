@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import {
   Dialog,
   DialogContent,
@@ -286,11 +287,7 @@ export function CreateTaskDialog({
       onSuccess?.();
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create task",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

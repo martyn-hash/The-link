@@ -16,6 +16,7 @@ import TopNavigation from "@/components/top-navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import type { ClientTag, PeopleTag, InsertClientTag, InsertPeopleTag } from "@shared/schema";
 
 // Color options for tags
@@ -83,11 +84,7 @@ function CreateTagModal({
       form.reset();
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create tag",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error instanceof Error ? error.message : error || "Failed to create tag" });
     },
   });
 
@@ -219,11 +216,7 @@ function TagList({
       });
     },
     onError: (error) => {
-      toast({
-        title: "Error", 
-        description: error instanceof Error ? error.message : "Failed to delete tag",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error instanceof Error ? error.message : error || "Failed to delete tag" });
     },
   });
 

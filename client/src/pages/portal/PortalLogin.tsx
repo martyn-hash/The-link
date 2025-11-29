@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { MessageCircle, Send, Mail } from 'lucide-react';
 import { portalApi } from '@/lib/portalApi';
 import { useToast } from '@/hooks/use-toast';
+import { showFriendlyError } from '@/lib/friendlyErrors';
 import {
   InputOTP,
   InputOTPGroup,
@@ -93,11 +94,7 @@ export default function PortalLogin() {
 
   const handleRequestCode = async () => {
     if (!email) {
-      toast({
-        title: 'Email required',
-        description: 'Please enter your email address',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error: 'Please enter your email address' });
       return;
     }
 
@@ -116,11 +113,7 @@ export default function PortalLogin() {
         description: 'Check your email for your 6-digit login code.',
       });
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to send code. Please try again.',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error: error instanceof Error ? error : 'Failed to send code. Please try again.' });
     } finally {
       setIsSendingCode(false);
     }
@@ -130,11 +123,7 @@ export default function PortalLogin() {
     e.preventDefault();
     
     if (!code || code.length !== 6) {
-      toast({
-        title: 'Code required',
-        description: 'Please enter the 6-digit code from your email',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error: 'Please enter the 6-digit code from your email' });
       return;
     }
 
@@ -157,11 +146,7 @@ export default function PortalLogin() {
         window.location.href = '/portal';
       }
     } catch (error: any) {
-      toast({
-        title: 'Invalid code',
-        description: error.message || 'The code you entered is incorrect or expired. Please try again.',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error: error.message || 'The code you entered is incorrect or expired. Please try again.' });
       setCode('');
     } finally {
       setIsVerifying(false);

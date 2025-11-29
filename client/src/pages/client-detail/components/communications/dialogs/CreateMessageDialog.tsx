@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import type { CreateMessageDialogProps } from "../types";
 
 export function CreateMessageDialog({ 
@@ -39,11 +40,7 @@ export function CreateMessageDialog({
       }
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to create message thread. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

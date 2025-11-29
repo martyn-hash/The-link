@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { insertCommunicationSchema } from "@shared/schema";
 import { formatPersonName } from "../../../utils/formatters";
 import type { AddCommunicationDialogProps } from "../types";
@@ -74,11 +75,7 @@ export function AddCommunicationDialog({
       onSuccess?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to add communication. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

@@ -4,6 +4,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import TopNavigation from "@/components/top-navigation";
 import UploadModal from "@/components/upload-modal";
 import SettingsModal from "@/components/settings-modal";
@@ -79,11 +80,7 @@ export default function Admin() {
       setDeleteConfirmText("");
     },
     onError: (error: any) => {
-      toast({
-        title: "Delete Failed",
-        description: error.message || "Failed to delete test data. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -100,11 +97,7 @@ export default function Admin() {
       });
     },
     onError: (error: any) => {
-      toast({
-        title: "Test Email Failed",
-        description: error.message || "Failed to send test email. Check console for details.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -124,11 +117,7 @@ export default function Admin() {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
     },
     onError: (error: any) => {
-      toast({
-        title: "Scheduling Failed",
-        description: error.message || "Failed to run project scheduling. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -144,11 +133,7 @@ export default function Admin() {
       });
     },
     onError: (error: any) => {
-      toast({
-        title: "Dry Run Failed",
-        description: error.message || "Failed to run scheduling test. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -170,11 +155,7 @@ export default function Admin() {
       });
     },
     onError: (error: any) => {
-      toast({
-        title: "Preview Failed",
-        description: error.message || "Failed to generate scheduling preview. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -203,11 +184,7 @@ export default function Admin() {
       setShowFrequencyFix(true);
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to fetch frequency issues.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -225,11 +202,7 @@ export default function Admin() {
       setFrequencyIssues(null);
     },
     onError: (error: any) => {
-      toast({
-        title: "Fix Failed",
-        description: error.message || "Failed to fix frequency issues.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -246,11 +219,7 @@ export default function Admin() {
       setShowSchedulingExceptions(true);
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to fetch scheduling exceptions.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -267,11 +236,7 @@ export default function Admin() {
       fetchSchedulingExceptionsMutation.mutate();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to resolve exception.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -284,32 +249,24 @@ export default function Admin() {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [isAuthenticated, isLoading, toast]);
+  }, [isAuthenticated, isLoading]);
 
   // Check admin access
   useEffect(() => {
     if (user && !user.isAdmin) {
-      toast({
-        title: "Access Denied",
-        description: "You don't have permission to access this page.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You don't have permission to access this page." });
       setTimeout(() => {
         window.location.href = "/";
       }, 500);
       return;
     }
-  }, [user, toast]);
+  }, [user]);
 
   if (isLoading || !user) {
     return (

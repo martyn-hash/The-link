@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { formatPersonName } from "../../../utils/formatters";
 import type { SMSDialogProps } from "../types";
 
@@ -51,11 +52,7 @@ export function SMSDialog({
       onSuccess?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error sending SMS",
-        description: error?.message || "Failed to send SMS. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -70,18 +67,18 @@ export function SMSDialog({
     const message = formData.get('message') as string;
 
     if (!smsPersonId) {
-      toast({ title: 'Contact person required', description: 'Please select a person to send the SMS to.', variant: 'destructive' });
+      showFriendlyError({ error: 'Please select a person to send the SMS to.' });
       return;
     }
     const selected = (clientPeople || []).find((cp: any) => cp.person.id === smsPersonId);
     const to = selected?.person?.primaryPhone || selected?.person?.telephone;
 
     if (!to) {
-      toast({ title: 'No mobile number', description: 'The selected person has no Primary Mobile saved.', variant: 'destructive' });
+      showFriendlyError({ error: 'The selected person has no Primary Mobile saved.' });
       return;
     }
     if (!message?.trim()) {
-      toast({ title: 'Message required', description: 'Please enter a message.', variant: 'destructive' });
+      showFriendlyError({ error: 'Please enter a message.' });
       return;
     }
 

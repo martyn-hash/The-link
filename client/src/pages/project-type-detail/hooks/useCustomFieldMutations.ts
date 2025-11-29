@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 
 interface CustomFieldMutationCallbacks {
   onFieldCreated?: () => void;
@@ -31,11 +32,7 @@ export function useCustomFieldMutations(
       callbacks.onFieldCreated?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create custom field",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -48,11 +45,7 @@ export function useCustomFieldMutations(
       callbacks.onFieldUpdated?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update custom field",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -69,11 +62,7 @@ export function useCustomFieldMutations(
       callbacks.onFieldDeleted?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete custom field",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

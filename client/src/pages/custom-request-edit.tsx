@@ -25,6 +25,7 @@ import TopNavigation from "@/components/top-navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 
 const requestSchema = z.object({
   name: z.string().min(1, "Name is required").max(200, "Name too long"),
@@ -452,11 +453,7 @@ export default function CustomRequestEdit() {
       setEditRequestDialogOpen(false);
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update custom request",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -472,11 +469,7 @@ export default function CustomRequestEdit() {
       queryClient.invalidateQueries({ queryKey: ["/api/custom-requests", id, "full"] });
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to add section",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -496,11 +489,7 @@ export default function CustomRequestEdit() {
       setEditSectionId(null);
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update section",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -516,11 +505,7 @@ export default function CustomRequestEdit() {
       queryClient.invalidateQueries({ queryKey: ["/api/custom-requests", id, "full"] });
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete section",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -529,11 +514,7 @@ export default function CustomRequestEdit() {
       return apiRequest("PATCH", "/api/custom-request-sections/reorder", { updates });
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to reorder sections",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
       queryClient.invalidateQueries({ queryKey: ["/api/custom-requests", id, "full"] });
     },
   });
@@ -565,11 +546,7 @@ export default function CustomRequestEdit() {
       setCreateQuestionOptions([]);
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to add question",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -587,11 +564,7 @@ export default function CustomRequestEdit() {
       setEditQuestionId(null);
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update question",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -607,11 +580,7 @@ export default function CustomRequestEdit() {
       queryClient.invalidateQueries({ queryKey: ["/api/custom-requests", id, "full"] });
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete question",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -623,11 +592,7 @@ export default function CustomRequestEdit() {
       queryClient.invalidateQueries({ queryKey: ["/api/custom-requests", id, "full"] });
     },
     onError: (error, variables) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to reorder questions",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
       if (variables.onError) {
         variables.onError();
       }
@@ -654,11 +619,7 @@ export default function CustomRequestEdit() {
       setLocation(`/clients/${request?.clientId}`);
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create task instance",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -1232,22 +1193,14 @@ export default function CustomRequestEdit() {
                   const isRequired = (document.getElementById("question-required") as HTMLInputElement)?.checked;
                   
                   if (!label) {
-                    toast({
-                      title: "Error",
-                      description: "Question label is required",
-                      variant: "destructive",
-                    });
+                    showFriendlyError({ error: "Question label is required" });
                     return;
                   }
 
                   // Validate options for choice questions
                   if (["single_choice", "multi_choice", "dropdown"].includes(creatingQuestion.questionType)) {
                     if (!createQuestionOptions || createQuestionOptions.length === 0 || createQuestionOptions.every(o => !o.trim())) {
-                      toast({
-                        title: "Error",
-                        description: "At least one option is required for choice questions",
-                        variant: "destructive",
-                      });
+                      showFriendlyError({ error: "At least one option is required for choice questions" });
                       return;
                     }
                   }
@@ -1386,22 +1339,14 @@ export default function CustomRequestEdit() {
                     const isRequired = (document.getElementById("edit-question-required") as HTMLInputElement)?.checked;
                     
                     if (!label) {
-                      toast({
-                        title: "Error",
-                        description: "Question label is required",
-                        variant: "destructive",
-                      });
+                      showFriendlyError({ error: "Question label is required" });
                       return;
                     }
 
                     // Validate options for choice questions
                     if (["single_choice", "multi_choice", "dropdown"].includes(editQuestion.questionType)) {
                       if (!editQuestionOptions || editQuestionOptions.length === 0 || editQuestionOptions.every(o => !o.trim())) {
-                        toast({
-                          title: "Error",
-                          description: "At least one option is required for choice questions",
-                          variant: "destructive",
-                        });
+                        showFriendlyError({ error: "At least one option is required for choice questions" });
                         return;
                       }
                     }

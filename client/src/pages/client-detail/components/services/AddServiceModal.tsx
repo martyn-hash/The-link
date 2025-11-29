@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 import {
   Dialog,
@@ -252,11 +253,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
       onSuccess?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to add personal service. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error?.message || "Failed to add personal service. Please try again." });
     },
   });
 
@@ -322,11 +319,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
       onSuccess?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to add service. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error?.message || "Failed to add service. Please try again." });
     },
   });
 
@@ -370,11 +363,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
           status: 'invalid',
           error: data.error || 'VAT number not found in HMRC records',
         });
-        toast({
-          title: "Invalid VAT Number",
-          description: data.error || "This VAT number was not found in HMRC records. Please check and try again.",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: data.error || "This VAT number was not found in HMRC records. Please check and try again." });
       }
     },
     onError: (error: any) => {
@@ -382,11 +371,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
         status: 'invalid',
         error: error?.message || 'Failed to validate VAT number',
       });
-      toast({
-        title: "VAT Validation Failed",
-        description: error?.message || "Could not connect to HMRC API. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error?.message || "Could not connect to HMRC API. Please try again." });
     },
   });
 
@@ -397,11 +382,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
   const handleValidateVat = () => {
     const vatNumber = udfValues[VAT_UDF_FIELD_ID];
     if (!vatNumber) {
-      toast({
-        title: "No VAT Number",
-        description: "Please enter a VAT number first",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please enter a VAT number first" });
       return;
     }
     setVatValidation({ status: 'validating' });
@@ -460,11 +441,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
 
     if (hasErrors) {
       const firstError = Object.values(errors)[0];
-      toast({
-        title: "Invalid Service Details",
-        description: firstError,
-        variant: "destructive",
-      });
+      showFriendlyError({ error: firstError });
     }
 
     return !hasErrors;
@@ -480,19 +457,11 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
     // Allow 'valid' or 'bypassed' status to proceed
     if (isVatService && udfValues[VAT_UDF_FIELD_ID]) {
       if (vatValidation.status === 'idle' || vatValidation.status === 'validating') {
-        toast({
-          title: "VAT Validation Required",
-          description: "Please validate the VAT number before adding this service.",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: "Please validate the VAT number before adding this service." });
         return;
       }
       if (vatValidation.status === 'invalid') {
-        toast({
-          title: "Invalid VAT Number",
-          description: "The VAT number is invalid. Please correct it or remove it before continuing.",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: "The VAT number is invalid. Please correct it or remove it before continuing." });
         return;
       }
       // 'valid' and 'bypassed' statuses allow submission
@@ -502,11 +471,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
     if (isPersonalService) {
       // Validate person selection for personal services
       if (!selectedPersonId) {
-        toast({
-          title: "Person Required",
-          description: "Please select a person to assign this personal service to.",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: "Please select a person to assign this personal service to." });
         return;
       }
       createPeopleServiceMutation.mutate(data);
@@ -515,44 +480,24 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
       if (!isStaticService) {
         // Validate required fields for non-static client services
         if (!data.frequency) {
-          toast({
-            title: "Frequency Required",
-            description: "Please select a frequency for this client service.",
-            variant: "destructive",
-          });
+          showFriendlyError({ error: "Please select a frequency for this client service." });
           return;
         }
         if (!data.nextStartDate) {
-          toast({
-            title: "Start Date Required", 
-            description: "Please select a next start date for this client service.",
-            variant: "destructive",
-          });
+          showFriendlyError({ error: "Please select a next start date for this client service." });
           return;
         }
         if (!data.nextDueDate) {
-          toast({
-            title: "Due Date Required",
-            description: "Please select a next due date for this client service.",
-            variant: "destructive",
-          });
+          showFriendlyError({ error: "Please select a next due date for this client service." });
           return;
         }
         if (!data.serviceOwnerId) {
-          toast({
-            title: "Service Owner Required",
-            description: "Please select a service owner for this client service.",
-            variant: "destructive",
-          });
+          showFriendlyError({ error: "Please select a service owner for this client service." });
           return;
         }
         // Validate role assignments for client services
         if (!areAllRolesAssigned()) {
-          toast({
-            title: "Incomplete Role Assignments",
-            description: "Please assign users to all required roles before saving.",
-            variant: "destructive",
-          });
+          showFriendlyError({ error: "Please assign users to all required roles before saving." });
           return;
         }
       }

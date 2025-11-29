@@ -7,6 +7,7 @@ import { FolderPlus } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 
 interface CreateFolderDialogProps {
   clientId: string;
@@ -34,11 +35,7 @@ export function CreateFolderDialog({ clientId }: CreateFolderDialogProps) {
       setFolderName("");
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create folder",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

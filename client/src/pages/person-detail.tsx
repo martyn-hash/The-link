@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import TopNavigation from "@/components/top-navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -213,11 +214,7 @@ export default function PersonDetail() {
       queryClient.invalidateQueries({ queryKey: [`/api/people/${id}`] });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to update person",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error?.message || error || "Failed to update person" });
     },
   });
 
@@ -226,11 +223,7 @@ export default function PersonDetail() {
       const validConnections = person?.relatedCompanies?.filter(conn => conn.client) || [];
       
       if (validConnections.length === 0) {
-        toast({
-          title: "Error",
-          description: "No client connections found for this person",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: "No client connections found for this person" });
         return;
       }
       
@@ -238,11 +231,7 @@ export default function PersonDetail() {
       const email = person?.primaryEmail || person?.email;
       
       if (!email || !person) {
-        toast({
-          title: "Error",
-          description: "No email address found for this person",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: "No email address found for this person" });
         return;
       }
       
@@ -256,11 +245,7 @@ export default function PersonDetail() {
       setQrCodeDataUrl(response.qrCodeDataUrl);
       setShowQRCode(true);
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to generate QR code",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error?.message || error || "Failed to generate QR code" });
     }
   };
 
@@ -290,11 +275,7 @@ export default function PersonDetail() {
       queryClient.invalidateQueries({ queryKey: [`/api/people/${id}`] });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to send invitation",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error?.message || error || "Failed to send invitation" });
     },
   });
 

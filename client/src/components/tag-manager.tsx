@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import type { ClientTag, PeopleTag } from "@shared/schema";
 
 interface TagManagerProps {
@@ -51,11 +52,7 @@ export default function TagManager({ entityId, entityType, className }: TagManag
       setSelectedTagId("");
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to assign tag",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -77,11 +74,7 @@ export default function TagManager({ entityId, entityType, className }: TagManag
       });
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to remove tag",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

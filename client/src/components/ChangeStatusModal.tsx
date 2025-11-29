@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -370,11 +371,7 @@ export default function ChangeStatusModal({
       });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to submit stage approval",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -446,11 +443,7 @@ export default function ChangeStatusModal({
       if (context?.previousProjects) {
         queryClient.setQueryData(["/api/projects"], context.previousProjects);
       }
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update project status",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -489,11 +482,7 @@ export default function ChangeStatusModal({
       onClose();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send notification",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -615,11 +604,7 @@ export default function ChangeStatusModal({
 
   const handleSubmit = async () => {
     if (!newStatus || !changeReason) {
-      toast({
-        title: "Validation Error",
-        description: "Please select both a new stage and change reason",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please select both a new stage and change reason" });
       return;
     }
 
@@ -627,11 +612,7 @@ export default function ChangeStatusModal({
     if (customFields.length > 0) {
       const fieldValidation = validateCustomFields();
       if (!fieldValidation.isValid) {
-        toast({
-          title: "Validation Error",
-          description: fieldValidation.errors.join(", "),
-          variant: "destructive",
-        });
+        showFriendlyError({ error: fieldValidation.errors.join(", ") });
         return;
       }
     }
@@ -641,11 +622,7 @@ export default function ChangeStatusModal({
       // Validate approval form
       const isValid = await approvalForm.trigger();
       if (!isValid) {
-        toast({
-          title: "Validation Error",
-          description: "Please complete all required approval fields correctly",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: "Please complete all required approval fields correctly" });
         return;
       }
 
@@ -767,11 +744,7 @@ export default function ChangeStatusModal({
       setSelectedFiles((prev) =>
         prev.filter((f) => !files.some((newFile) => newFile.name === f.name))
       );
-      toast({
-        title: "Upload Failed",
-        description: error.message || "Failed to upload one or more files",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     } finally {
       setIsUploadingFiles(false);
     }

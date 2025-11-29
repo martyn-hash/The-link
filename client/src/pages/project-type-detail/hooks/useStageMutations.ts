@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import type { EditingStage } from "../utils/types";
 
 interface StageMutationCallbacks {
@@ -31,11 +32,7 @@ export function useStageMutations(
       callbacks.onStageCreated?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create stage",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -49,11 +46,7 @@ export function useStageMutations(
       callbacks.onStageUpdated?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update stage",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -67,11 +60,7 @@ export function useStageMutations(
       callbacks.onStageDeleted?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete stage",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

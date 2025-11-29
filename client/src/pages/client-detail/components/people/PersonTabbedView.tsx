@@ -229,10 +229,8 @@ export function PersonTabbedView({
             setActiveTab('contact-info');
           }
           
-          toast({
-            title: "Validation Error",
-            description: "Please check the form fields for errors.",
-            variant: "destructive",
+          showFriendlyError({
+            error: "Please check the form fields for errors."
           });
         }
       }

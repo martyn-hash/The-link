@@ -47,6 +47,7 @@ import EntitySearch from "@/components/entity-search";
 import { formatDistanceToNow, format } from "date-fns";
 import { useEffect, useState, useRef } from "react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import type { InternalTask, TaskType, User, Client, Project, Person, Service, Message } from "@shared/schema";
 
 interface TaskDocument {
@@ -139,32 +140,24 @@ export default function InternalTaskDetail() {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [isAuthenticated, authLoading, toast]);
+  }, [isAuthenticated, authLoading]);
 
   // Handle query errors
   useEffect(() => {
     if (taskError && isUnauthorizedError(taskError)) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [taskError, toast]);
+  }, [taskError]);
 
   // Add progress note mutation
   const addProgressNoteMutation = useMutation({
@@ -216,11 +209,7 @@ export default function InternalTaskDetail() {
     },
     onError: () => {
       setUploadingFile(false);
-      toast({
-        title: "Upload failed",
-        description: "Failed to upload document. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Failed to upload document. Please try again." });
     },
   });
 
@@ -242,11 +231,7 @@ export default function InternalTaskDetail() {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 10 * 1024 * 1024) {
-        toast({
-          title: "File too large",
-          description: "Maximum file size is 10MB.",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: "Maximum file size is 10MB." });
         return;
       }
       setUploadingFile(true);
@@ -271,11 +256,7 @@ export default function InternalTaskDetail() {
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
     } catch (error) {
-      toast({
-        title: "Download failed",
-        description: "Failed to download document.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Failed to download document." });
     }
   };
 
@@ -372,11 +353,7 @@ export default function InternalTaskDetail() {
       });
     },
     onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to close task. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Failed to close task. Please try again." });
     },
   });
 
@@ -402,11 +379,7 @@ export default function InternalTaskDetail() {
       });
     },
     onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to create connection. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Failed to create connection. Please try again." });
     },
   });
 
@@ -424,11 +397,7 @@ export default function InternalTaskDetail() {
       });
     },
     onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to delete connection. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Failed to delete connection. Please try again." });
     },
   });
 
@@ -490,19 +459,11 @@ export default function InternalTaskDetail() {
   const handleCloseTask = () => {
     const minutes = parseInt(totalTimeSpent);
     if (!closureNote.trim()) {
-      toast({
-        title: "Closure note required",
-        description: "Please provide a note explaining task completion.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please provide a note explaining task completion." });
       return;
     }
     if (isNaN(minutes) || minutes < 0) {
-      toast({
-        title: "Invalid time",
-        description: "Please enter a valid time in minutes.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please enter a valid time in minutes." });
       return;
     }
     closeTaskMutation.mutate({ closureNote, totalTimeSpentMinutes: minutes });

@@ -3,6 +3,7 @@ import { Mic, Square, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 
 interface AudioRecorderProps {
   onResult: (result: { content: string; subject?: string; transcription?: string }) => void;
@@ -41,11 +42,7 @@ export function AudioRecorder({ onResult, mode, disabled, className }: AudioReco
         stream.getTracks().forEach((track) => track.stop());
         
         if (chunksRef.current.length === 0) {
-          toast({
-            title: "No audio recorded",
-            description: "Please try recording again.",
-            variant: "destructive",
-          });
+          showFriendlyError({ error: "No audio was recorded. Please try recording again." });
           return;
         }
 
@@ -63,11 +60,7 @@ export function AudioRecorder({ onResult, mode, disabled, className }: AudioReco
 
     } catch (error: any) {
       console.error("Failed to start recording:", error);
-      toast({
-        title: "Microphone access denied",
-        description: "Please allow microphone access to use voice recording.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Microphone access denied. Please allow microphone access to use voice recording." });
     }
   }, [toast]);
 
@@ -118,11 +111,7 @@ export function AudioRecorder({ onResult, mode, disabled, className }: AudioReco
 
     } catch (error: any) {
       console.error("Failed to process audio:", error);
-      toast({
-        title: "Processing failed",
-        description: error.message || "Failed to process your recording. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error.message || "Failed to process your recording. Please try again." });
     } finally {
       setIsProcessing(false);
       setRecordingTime(0);

@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { apiRequest } from "@/lib/queryClient";
 import { type Client, type Service, type WorkRole, type User, type ClientService, type ClientServiceRoleAssignment } from "@shared/schema";
 import {
@@ -330,11 +331,7 @@ export function CompaniesHouseClientModal({
       setLocation(`/clients/${result.client.id}`);
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create individual client",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -349,11 +346,7 @@ export function CompaniesHouseClientModal({
       setCompanySearchResults(data.items || []);
     } catch (error) {
       console.error("Error searching companies:", error);
-      toast({
-        title: "Search Error",
-        description: "Failed to search companies. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Failed to search companies. Please try again." });
       setCompanySearchResults([]);
     } finally {
       setIsSearching(false);
@@ -382,11 +375,7 @@ export function CompaniesHouseClientModal({
       setStep('ch-confirm');
     } catch (error) {
       console.error("Error loading company details:", error);
-      toast({
-        title: "Load Error",
-        description: "Failed to load company details. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Failed to load company details. Please try again." });
     } finally {
       setIsLoadingCompany(false);
     }
@@ -423,11 +412,7 @@ export function CompaniesHouseClientModal({
     },
     onError: (error: any) => {
       console.error("Error creating client:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create client from Companies House data",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -470,11 +455,7 @@ export function CompaniesHouseClientModal({
     onError: (error: any) => {
       console.error("❌ Error finding officer matches:", error);
       console.error("❌ Error details:", JSON.stringify(error, null, 2));
-      toast({
-        title: "Error",
-        description: "Failed to find officer matches. Proceeding with creating new people.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Failed to find officer matches. Proceeding with creating new people." });
       // Skip to direct client creation if matching fails
       createClientFromCHMutation.mutate({ primaryContactIdx: primaryContactIndex });
     },

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -93,24 +94,16 @@ export default function ClientsImport() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
     }
-  }, [isAuthenticated, authLoading, toast]);
+  }, [isAuthenticated, authLoading]);
 
   const handleFileUpload = async () => {
     if (!selectedFile) {
-      toast({
-        title: "No File Selected",
-        description: "Please select a file to upload.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please select a file to upload." });
       return;
     }
 
@@ -140,11 +133,7 @@ export default function ClientsImport() {
         description: `Found ${result.totalRows} rows with ${result.headers.length} columns.`,
       });
     } catch (error: any) {
-      toast({
-        title: "Parse Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     }
   };
 
@@ -154,11 +143,7 @@ export default function ClientsImport() {
 
   const handleValidate = async () => {
     if (!parseResult || mappings.length === 0) {
-      toast({
-        title: "Missing Data",
-        description: "Please complete field mapping before validating.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please complete field mapping before validating." });
       return;
     }
 
@@ -183,11 +168,7 @@ export default function ClientsImport() {
       setCurrentStep('preview');
 
       if (result.errors.length > 0) {
-        toast({
-          title: "Validation Issues Found",
-          description: `${result.errors.length} errors need to be addressed before import.`,
-          variant: "destructive",
-        });
+        showFriendlyError({ error: `${result.errors.length} errors need to be addressed before import.` });
       } else if (result.warnings.length > 0) {
         toast({
           title: "Validation Complete with Warnings",
@@ -200,11 +181,7 @@ export default function ClientsImport() {
         });
       }
     } catch (error: any) {
-      toast({
-        title: "Validation Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     }
   };
 
@@ -240,17 +217,16 @@ export default function ClientsImport() {
       setImportProgress(100);
       setCurrentStep('complete');
 
-      toast({
-        title: result.success ? "Import Complete" : "Import Completed with Errors",
-        description: `Created ${result.summary.created} clients, updated ${result.summary.updated}.`,
-        variant: result.success ? "default" : "destructive",
-      });
+      if (result.success) {
+        toast({
+          title: "Import Complete",
+          description: `Created ${result.summary.created} clients, updated ${result.summary.updated}.`,
+        });
+      } else {
+        showFriendlyError({ error: `Import completed with errors. Created ${result.summary.created} clients, updated ${result.summary.updated}.` });
+      }
     } catch (error: any) {
-      toast({
-        title: "Import Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
       setCurrentStep('preview');
     }
   };

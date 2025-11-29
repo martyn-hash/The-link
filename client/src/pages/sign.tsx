@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { getQueryFn, apiRequest } from "@/lib/queryClient";
 import { FileText, Check, AlertCircle, Type, Send, Shield } from "lucide-react";
 import { PdfSignatureViewer } from "@/components/PdfSignatureViewer";
@@ -127,11 +128,7 @@ export default function SignPage() {
         } catch {}
         setShowTakeoverDialog(true);
       } else {
-        toast({
-          title: "Session Error",
-          description: error.message || "Failed to claim signing session",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: error.message || "Failed to claim signing session" });
       }
     },
   });
@@ -160,11 +157,7 @@ export default function SignPage() {
       }, 2000);
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to take over session",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -252,11 +245,7 @@ export default function SignPage() {
       }, 2000);
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to submit signature",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
       setPostSubmitState(null);
     },
   });
@@ -322,11 +311,7 @@ export default function SignPage() {
     if (!currentFieldId) return;
 
     if (!typedName.trim()) {
-      toast({
-        title: "Name required",
-        description: "Please type your name",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please type your name" });
       return;
     }
 
@@ -359,11 +344,7 @@ export default function SignPage() {
     );
 
     if (!allFieldsSigned) {
-      toast({
-        title: "Missing signatures",
-        description: "Please complete all signature fields",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please complete all signature fields" });
       return;
     }
 

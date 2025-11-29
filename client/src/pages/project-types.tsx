@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
 import { type ProjectType, type KanbanStage, type Service } from "@shared/schema";
@@ -112,30 +113,22 @@ export default function ProjectTypes() {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [isAuthenticated, authLoading, toast]);
+  }, [isAuthenticated, authLoading]);
 
   // Redirect non-admin users
   useEffect(() => {
     if (user && !user.isAdmin) {
-      toast({
-        title: "Access Denied",
-        description: "You don't have permission to access this page.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You don't have permission to access this page." });
       setLocation('/');
       return;
     }
-  }, [user, toast, setLocation]);
+  }, [user, setLocation]);
   
   const queryClient = useQueryClient();
   const [searchTerm, setSearchTerm] = useState("");
@@ -229,28 +222,20 @@ export default function ProjectTypes() {
       form.reset();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create project type",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
   // Handle query errors
   useEffect(() => {
     if (error && isUnauthorizedError(error)) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [error, toast]);
+  }, [error]);
 
   // Filter project types based on search term
   const filteredProjectTypes = projectTypes?.filter(projectType =>

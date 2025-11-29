@@ -17,6 +17,7 @@ import { z } from "zod";
 import TopNavigation from "@/components/top-navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 import type { ClientRequestTemplate, ClientRequestTemplateCategory } from "@shared/schema";
 
@@ -52,11 +53,7 @@ function TemplateRow({ template }: { template: TemplateWithDetails }) {
       setDeleteDialogOpen(false);
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete template",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -73,11 +70,7 @@ function TemplateRow({ template }: { template: TemplateWithDetails }) {
       queryClient.invalidateQueries({ queryKey: ["/api/client-request-templates"] });
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to update template",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -98,11 +91,7 @@ function TemplateRow({ template }: { template: TemplateWithDetails }) {
       queryClient.invalidateQueries({ queryKey: ["/api/client-request-templates"] });
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to duplicate template",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -289,11 +278,7 @@ export default function TaskTemplatesPage() {
       navigate(`/request-templates/${data.id}/edit`);
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create template",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

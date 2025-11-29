@@ -7,6 +7,7 @@ import { LogIn, ArrowLeft } from "lucide-react";
 import MagicLinkLoginForm from "@/components/magic-link-login-form";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import logoPath from "@assets/full_logo_transparent_600_1761924125378.png";
 import maintenanceImagePath from "@assets/image_1764278395182.png";
 
@@ -51,18 +52,10 @@ export default function Landing() {
         setMaintenanceMessage(data.maintenanceMessage || "The system is currently undergoing maintenance. Please try again later.");
         setShowMaintenance(true);
       } else {
-        toast({
-          title: "Error",
-          description: data.message || "Invalid email or password",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: data.message || "Invalid email or password" });
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to log in. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     } finally {
       setIsLoggingIn(false);
     }

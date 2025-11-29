@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { Mail, Loader2, KeyRound, ArrowLeft, CheckCircle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useLocation } from "wouter";
@@ -65,11 +66,7 @@ export default function MagicLinkLoginForm({ onSuccess }: MagicLinkLoginFormProp
     },
     onError: (error: any) => {
       // The API always returns 200, but handle network errors
-      toast({
-        title: "Request Failed",
-        description: "Failed to send magic link. Please check your internet connection and try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error || "Failed to send magic link. Please check your internet connection and try again." });
     },
   });
 
@@ -100,12 +97,7 @@ export default function MagicLinkLoginForm({ onSuccess }: MagicLinkLoginFormProp
     },
     onError: (error: any) => {
       console.error("Code verification error:", error);
-      const errorMessage = error.message || "Invalid verification code. Please check your code and try again.";
-      toast({
-        title: "Verification Failed",
-        description: errorMessage,
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error || "Invalid verification code. Please check your code and try again." });
     },
   });
 

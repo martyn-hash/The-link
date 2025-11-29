@@ -2,6 +2,7 @@ import { useState, useEffect, type ChangeEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -179,11 +180,7 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
       }
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to submit stage approval",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -249,11 +246,7 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
       setTargetStageApprovalFields([]);
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update project status",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
       // Reset pending state on error
       setPendingStatusChange(null);
     },
@@ -415,11 +408,7 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
 
   const handleUpdateStatus = async () => {
     if (!newStatus || !changeReason) {
-      toast({
-        title: "Validation Error",
-        description: "Please select both a new stage and change reason",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please select both a new stage and change reason" });
       return;
     }
 
@@ -427,11 +416,7 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
     if (customFields.length > 0) {
       const fieldValidation = validateCustomFields();
       if (!fieldValidation.isValid) {
-        toast({
-          title: "Validation Error",
-          description: fieldValidation.errors.join(', '),
-          variant: "destructive",
-        });
+        showFriendlyError({ error: fieldValidation.errors.join(', ') });
         return;
       }
     }
@@ -450,11 +435,7 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
         setSelectedFiles([]);
       } catch (error: any) {
         console.error('Failed to upload files:', error);
-        toast({
-          title: "Upload Failed",
-          description: error.message || "Failed to upload one or more files. Please try again.",
-          variant: "destructive",
-        });
+        showFriendlyError({ error });
         setIsUploadingFiles(false);
         return;
       }
@@ -485,11 +466,7 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
       // SECURITY FIX: Ensure we can find the approval before proceeding
       const targetApproval = stageApprovals?.find(a => a.id === targetStage.stageApprovalId);
       if (!targetApproval) {
-        toast({
-          title: "Error",
-          description: "Stage approval configuration not found",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: "Stage approval configuration not found" });
         return;
       }
 
@@ -509,11 +486,7 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
         
         // Validate that approval fields are actually loaded before opening modal
         if (!approvalFields || approvalFields.length === 0) {
-          toast({
-            title: "Configuration Error",
-            description: "Stage approval fields are not configured for this stage. Please contact an administrator.",
-            variant: "destructive",
-          });
+          showFriendlyError({ error: "Stage approval fields are not configured for this stage. Please contact an administrator." });
           return;
         }
         

@@ -24,6 +24,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { TiptapEditor } from "@/components/TiptapEditor";
 import { FileUploadZone, AttachmentList } from "@/components/attachments";
@@ -91,11 +92,7 @@ export function EmailDialog({
         newPendingFiles.push(file);
       } catch (error) {
         console.error('Error converting file to base64:', error);
-        toast({
-          title: 'Error processing file',
-          description: `Could not process ${file.name}`,
-          variant: 'destructive',
-        });
+        showFriendlyError({ error: `Could not process ${file.name}` });
       }
     }
     
@@ -123,11 +120,7 @@ export function EmailDialog({
       onSuccess?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error sending email",
-        description: error?.message || "Failed to send email. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -146,14 +139,14 @@ export function EmailDialog({
     const subject = formData.get('subject') as string;
     
     if (!emailPersonId) {
-      toast({ title: 'Contact person required', description: 'Please select a person to send the email to.', variant: 'destructive' });
+      showFriendlyError({ error: 'Please select a person to send the email to.' });
       return;
     }
     const selected = (clientPeople || []).find((cp: any) => cp.person.id === emailPersonId);
     const to = selected?.person?.primaryEmail || selected?.person?.email;
 
     if (!to) {
-      toast({ title: 'No email address', description: 'The selected person has no Primary Email saved.', variant: 'destructive' });
+      showFriendlyError({ error: 'The selected person has no Primary Email saved.' });
       return;
     }
     
@@ -163,7 +156,7 @@ export function EmailDialog({
       .replace(/&[a-zA-Z]+;/g, '')
       .trim();
     if (!textContent || textContent.length === 0) {
-      toast({ title: 'Message required', description: 'Please enter a message.', variant: 'destructive' });
+      showFriendlyError({ error: 'Please enter a message.' });
       return;
     }
     

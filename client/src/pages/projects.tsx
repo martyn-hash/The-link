@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { type ProjectWithRelations, type User, type ProjectView } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import BottomNav from "@/components/bottom-nav";
@@ -304,11 +305,7 @@ export default function Projects() {
         description: `Applied filters from "${view.name}"`,
       });
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to load saved view",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     }
   };
 
@@ -366,11 +363,7 @@ export default function Projects() {
         description: `Loaded dashboard "${dashboard.name}"`,
       });
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to load dashboard",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     }
   };
 
@@ -414,33 +407,21 @@ export default function Projects() {
         description: `"${savedView.name}" has been saved`,
       });
     },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to save view",
-        variant: "destructive",
-      });
+    onError: (error) => {
+      showFriendlyError({ error });
     },
   });
 
   // Handler to save current view
   const handleSaveCurrentView = () => {
     if (!newViewName.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a view name",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please enter a view name" });
       return;
     }
 
     // Only save list/kanban views, dashboards use separate mutation
     if (viewMode !== "list" && viewMode !== "kanban") {
-      toast({
-        title: "Error",
-        description: "Dashboard views must be saved using the dashboard creation dialog",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Dashboard views must be saved using the dashboard creation dialog" });
       return;
     }
 
@@ -510,12 +491,8 @@ export default function Projects() {
       setNewDashboardVisibility("private");
       setNewDashboardWidgets([]);
     },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to save dashboard",
-        variant: "destructive",
-      });
+    onError: (error) => {
+      showFriendlyError({ error });
     },
   });
 
@@ -533,12 +510,8 @@ export default function Projects() {
       setDeleteViewDialogOpen(false);
       setViewToDelete(null);
     },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to delete view",
-        variant: "destructive",
-      });
+    onError: (error) => {
+      showFriendlyError({ error });
     },
   });
 
@@ -563,23 +536,15 @@ export default function Projects() {
       setDeleteDashboardDialogOpen(false);
       setDashboardToDelete(null);
     },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to delete dashboard",
-        variant: "destructive",
-      });
+    onError: (error) => {
+      showFriendlyError({ error });
     },
   });
 
   // Handler to add widget to new dashboard
   const handleAddWidgetToNewDashboard = () => {
     if (!newWidgetTitle.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a widget title",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please enter a widget title" });
       return;
     }
 
@@ -610,20 +575,12 @@ export default function Projects() {
   // Handler to save new dashboard
   const handleSaveNewDashboard = () => {
     if (!newDashboardName.trim()) {
-      toast({
-        title: "Error",
-        description: "Please enter a dashboard name",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please enter a dashboard name" });
       return;
     }
 
     if (newDashboardWidgets.length === 0) {
-      toast({
-        title: "Error",
-        description: "Please add at least one widget",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please add at least one widget" });
       return;
     }
 
@@ -686,32 +643,24 @@ export default function Projects() {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [isAuthenticated, isLoading, toast]);
+  }, [isAuthenticated, isLoading]);
 
   // Handle query errors
   useEffect(() => {
     if (error && isUnauthorizedError(error)) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [error, toast]);
+  }, [error]);
 
   if (isLoading || !user) {
     return (

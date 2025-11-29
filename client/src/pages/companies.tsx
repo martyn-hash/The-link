@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation as useRouterLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { type Client, type CompanyView, type Person, type ClientPortalUser } from "@shared/schema";
@@ -444,31 +445,23 @@ export default function Companies() {
   // Auth checks
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [isAuthenticated, authLoading, toast]);
+  }, [isAuthenticated, authLoading]);
 
   useEffect(() => {
     if (peopleError && isUnauthorizedError(peopleError)) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [peopleError, toast]);
+  }, [peopleError]);
 
   // Filter clients with Companies House connections (must have company number)
   const companiesHouseClients = allClients?.filter(client => 
@@ -514,11 +507,7 @@ export default function Companies() {
       });
     },
     onError: (error: Error) => {
-      toast({
-        title: "Sync Failed",
-        description: error.message || "Failed to sync Companies House data",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -549,11 +538,7 @@ export default function Companies() {
       });
     },
     onError: (error: Error) => {
-      toast({
-        title: "Enrichment Failed",
-        description: error.message || "Failed to enrich clients with Companies House data",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -574,11 +559,7 @@ export default function Companies() {
 
   const handleSyncSelected = () => {
     if (selectedClients.size === 0) {
-      toast({
-        title: "No Clients Selected",
-        description: "Please select at least one client to sync.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please select at least one client to sync." });
       return;
     }
     syncMutation.mutate(Array.from(selectedClients));
@@ -586,11 +567,7 @@ export default function Companies() {
 
   const handleEnrichSelected = () => {
     if (selectedClients.size === 0) {
-      toast({
-        title: "No Clients Selected",
-        description: "Please select at least one client to enrich.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please select at least one client to enrich." });
       return;
     }
     enrichMutation.mutate(Array.from(selectedClients));

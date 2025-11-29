@@ -5,6 +5,7 @@ import { Download, Eye, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { VoiceNotePlayer } from "@/components/attachments/VoiceNotePlayer";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 
 interface DocumentPreviewDialogProps {
   document: {
@@ -83,11 +84,7 @@ export function DocumentPreviewDialog({ document, trigger }: DocumentPreviewDial
       } catch (err) {
         console.error('Error loading preview:', err);
         setError('Failed to load document preview');
-        toast({
-          title: 'Error',
-          description: 'Failed to load document preview',
-          variant: 'destructive',
-        });
+        showFriendlyError({ error: err });
         setIsLoading(false);
       }
     } else {
@@ -122,11 +119,7 @@ export function DocumentPreviewDialog({ document, trigger }: DocumentPreviewDial
         description: 'Document downloaded successfully',
       });
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to download document',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error });
     }
   };
 

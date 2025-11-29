@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { Check, Download, Shield, FileSignature, X, Users } from "lucide-react";
 import { format } from "date-fns";
 import { AuditTrailDialog } from "@/components/AuditTrailDialog";
@@ -86,11 +87,7 @@ export function SignatureRequestsPanel({ clientId }: SignatureRequestsPanelProps
       setCancellationReason("");
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to cancel signature request",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -102,11 +99,7 @@ export function SignatureRequestsPanel({ clientId }: SignatureRequestsPanelProps
 
   const handleCancelConfirm = () => {
     if (!requestToCancel || !cancellationReason.trim()) {
-      toast({
-        title: "Error",
-        description: "Please provide a cancellation reason",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please provide a cancellation reason" });
       return;
     }
     cancelMutation.mutate({ requestId: requestToCancel, reason: cancellationReason.trim() });
@@ -128,11 +121,7 @@ export function SignatureRequestsPanel({ clientId }: SignatureRequestsPanelProps
       
       window.open(`/api/signed-documents/${signedDoc.id}/download`, '_blank');
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Could not download signed document",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     }
   };
 
@@ -143,11 +132,7 @@ export function SignatureRequestsPanel({ clientId }: SignatureRequestsPanelProps
       setCurrentDocumentName(documentName);
       setAuditDialogOpen(true);
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Could not load audit trail",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Could not load audit trail" });
     }
   };
 

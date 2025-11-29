@@ -10,6 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { format } from "date-fns";
 import { ArrowLeft, CheckCircle, AlertCircle, FileText } from "lucide-react";
 
@@ -80,11 +81,7 @@ export default function TaskSubmissionDetail() {
       setLocation('/task-submissions');
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to mark as reviewed",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

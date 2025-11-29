@@ -4,6 +4,7 @@ import { usePushNotifications } from '@/hooks/usePushNotifications';
 import { Button } from '@/components/ui/button';
 import { Bell } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { showFriendlyError } from '@/lib/friendlyErrors';
 import logoPath from '@assets/full_logo_transparent_600_1759655632382.png';
 
 export function PortalPushNotificationPrompt() {
@@ -33,11 +34,7 @@ export function PortalPushNotificationPrompt() {
       });
       handleDismiss();
     } else {
-      toast({
-        title: 'Unable to enable push messages',
-        description: 'Please check your browser permissions and try again.',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error: 'Please check your browser permissions and try again.' });
     }
   };
 

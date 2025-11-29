@@ -10,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { showFriendlyError } from '@/lib/friendlyErrors';
 import {
   MessageCircle,
   Send,
@@ -147,11 +148,7 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
       setNotifyImmediately(true);
     },
     onError: (error: any) => {
-      toast({
-        title: "Failed to send message",
-        description: error.message || "An error occurred",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -169,11 +166,7 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
       });
     },
     onError: (error: any) => {
-      toast({
-        title: "Failed to update thread",
-        description: error.message || "An error occurred",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -216,11 +209,7 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
 
   const handleSendMessage = async () => {
     if (!selectedThreadId) {
-      toast({
-        title: "No thread selected",
-        description: "Please select a thread first",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "No thread selected. Please select a thread first." });
       return;
     }
 
@@ -257,11 +246,7 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
         notifyImmediately,
       });
     } catch (error: any) {
-      toast({
-        title: "Upload failed",
-        description: error.message || "Failed to upload files",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error.message || "Failed to upload files" });
     } finally {
       setUploadingFiles(false);
     }
@@ -274,22 +259,14 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (selectedFiles.length + files.length > 5) {
-      toast({
-        title: "Too many files",
-        description: "You can only attach up to 5 files per message",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You can only attach up to 5 files per message" });
       return;
     }
 
     const validFiles = files.filter(file => {
       const isValid = file.size <= 25 * 1024 * 1024; // 25MB limit
       if (!isValid) {
-        toast({
-          title: "File too large",
-          description: `${file.name} exceeds 25MB limit`,
-          variant: "destructive",
-        });
+        showFriendlyError({ error: `${file.name} exceeds the 25MB file size limit` });
       }
       return isValid;
     });

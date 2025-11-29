@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 
 interface ProjectTypeSettingsCallbacks {
   onServiceLinkageUpdated?: () => void;
@@ -39,11 +40,7 @@ export function useProjectTypeSettingsMutations(
       callbacks.onServiceLinkageUpdated?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update service linkage",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -63,11 +60,7 @@ export function useProjectTypeSettingsMutations(
       callbacks.onNotificationsActiveUpdated?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update notifications setting",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -87,25 +80,7 @@ export function useProjectTypeSettingsMutations(
       callbacks.onActiveStatusUpdated?.();
     },
     onError: (error: any) => {
-      if (error.status === 409 && error.code === "PROJECTS_USING_TYPE") {
-        toast({
-          title: "Cannot Deactivate Project Type",
-          description: error.message,
-          variant: "destructive",
-        });
-      } else if (error.status === 400 && error.code === "NO_FINAL_STAGE") {
-        toast({
-          title: "Cannot Activate Project Type",
-          description: error.message,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to update project type status",
-          variant: "destructive",
-        });
-      }
+      showFriendlyError({ error });
     },
   });
 
@@ -125,11 +100,7 @@ export function useProjectTypeSettingsMutations(
       callbacks.onSingleProjectUpdated?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update project type setting",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

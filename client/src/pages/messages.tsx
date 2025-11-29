@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { isUnauthorizedError } from '@/lib/authUtils';
+import { showFriendlyError } from '@/lib/friendlyErrors';
 import TopNavigation from '@/components/top-navigation';
 import BottomNav from '@/components/bottom-nav';
 import SuperSearch from '@/components/super-search';
@@ -454,11 +455,7 @@ export default function Messages() {
       });
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send message",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -475,11 +472,7 @@ export default function Messages() {
       });
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to archive thread",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -495,11 +488,7 @@ export default function Messages() {
       });
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to unarchive thread",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -674,11 +663,7 @@ export default function Messages() {
       // Clear reply-to after sending
       clearReplyTo();
     } catch (error: any) {
-      toast({
-        title: "Upload failed",
-        description: error.message || "Failed to upload files",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     } finally {
       setUploadingFiles(false);
     }
@@ -719,11 +704,7 @@ export default function Messages() {
       setRecordingInterval(interval);
     } catch (error) {
       console.error('Failed to start recording:', error);
-      toast({
-        title: 'Recording failed',
-        description: 'Unable to access microphone. Please check permissions.',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error: 'Unable to access microphone. Please check permissions.' });
     }
   };
 
@@ -810,11 +791,7 @@ export default function Messages() {
         });
       })
       .catch((error: Error) => {
-        toast({
-          title: "Error",
-          description: error.message || `Failed to ${thread.isArchived ? 'restore' : 'archive'} thread`,
-          variant: "destructive",
-        });
+        showFriendlyError({ error });
       });
 
     setSwipedThreadId(null);
@@ -895,16 +872,12 @@ export default function Messages() {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
     }
-  }, [isAuthenticated, authLoading, toast]);
+  }, [isAuthenticated, authLoading]);
 
   if (authLoading) {
     return (

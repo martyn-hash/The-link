@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -115,11 +116,7 @@ export default function PushNotificationTemplates() {
       setCreatingTemplateType(null);
     },
     onError: (error: any) => {
-      toast({
-        title: "Creation Failed",
-        description: error.message || "Failed to create template.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -136,11 +133,7 @@ export default function PushNotificationTemplates() {
       setEditingTemplate(null);
     },
     onError: (error: any) => {
-      toast({
-        title: "Update Failed",
-        description: error.message || "Failed to update template.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -157,11 +150,7 @@ export default function PushNotificationTemplates() {
       setDeletingTemplateId(null);
     },
     onError: (error: any) => {
-      toast({
-        title: "Deletion Failed",
-        description: error.message || "Failed to delete template.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
       setDeletingTemplateId(null);
     },
   });
@@ -178,11 +167,7 @@ export default function PushNotificationTemplates() {
       setTestingTemplateId(null);
     },
     onError: (error: any) => {
-      toast({
-        title: "Test Failed",
-        description: error.message || "Failed to send test notification.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
       setTestingTemplateId(null);
     },
   });

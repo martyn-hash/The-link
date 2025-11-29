@@ -17,6 +17,7 @@ import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { DocumentPreviewDialog } from "./DocumentPreviewDialog";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 
 interface DocumentFolderViewProps {
   clientId: string;
@@ -85,11 +86,7 @@ export default function DocumentFolderView({
       });
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete folder",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -107,11 +104,7 @@ export default function DocumentFolderView({
       });
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete document",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -135,11 +128,7 @@ export default function DocumentFolderView({
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to download document",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Failed to download document" });
     }
   };
 

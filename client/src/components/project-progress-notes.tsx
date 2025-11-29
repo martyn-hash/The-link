@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -111,11 +112,7 @@ export function ProjectProgressNotes({ projectId, clientId, clientPeople = [] }:
       form.reset();
     },
     onError: (error: any) => {
-      toast({
-        title: "Failed to add note",
-        description: error.message || "An error occurred",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -140,11 +137,7 @@ export function ProjectProgressNotes({ projectId, clientId, clientPeople = [] }:
       setEmailContent("");
     },
     onError: (error: any) => {
-      toast({
-        title: "Failed to send email",
-        description: error.message || "An error occurred",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -168,11 +161,7 @@ export function ProjectProgressNotes({ projectId, clientId, clientPeople = [] }:
       smsForm.reset();
     },
     onError: (error: any) => {
-      toast({
-        title: "Failed to send SMS",
-        description: error.message || "An error occurred",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -190,11 +179,7 @@ export function ProjectProgressNotes({ projectId, clientId, clientPeople = [] }:
   const handleSendEmail = (values: any) => {
     const selectedPerson = clientPeople?.find((cp: any) => cp.person.id === values.personId);
     if (!selectedPerson?.person.primaryEmail) {
-      toast({
-        title: "No email address",
-        description: "The selected person does not have a primary email address.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "The selected person does not have a primary email address." });
       return;
     }
 
@@ -209,11 +194,7 @@ export function ProjectProgressNotes({ projectId, clientId, clientPeople = [] }:
   const handleSendSMS = (values: any) => {
     const selectedPerson = clientPeople?.find((cp: any) => cp.person.id === values.personId);
     if (!selectedPerson?.person.primaryPhone) {
-      toast({
-        title: "No mobile number",
-        description: "The selected person does not have a primary mobile number.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "The selected person does not have a primary mobile number." });
       return;
     }
 

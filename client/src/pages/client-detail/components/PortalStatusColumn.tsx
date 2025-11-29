@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { apiRequest } from "@/lib/queryClient";
 import type { ClientPortalUser } from "@shared/schema";
 import { formatPersonName } from "../utils/formatters";
@@ -53,11 +54,7 @@ export function PortalStatusColumn({
       refetch();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to send invitation",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
   
@@ -79,11 +76,7 @@ export function PortalStatusColumn({
       });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to generate QR code",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
   

@@ -14,6 +14,7 @@ import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import type { UserSession, User, LoginAttempt } from "@shared/schema";
 
 export default function ActivityLogsPage() {
@@ -72,11 +73,7 @@ export default function ActivityLogsPage() {
       await queryClient.invalidateQueries({ queryKey: ["/api/super-admin/activity-logs"] });
       refetchSessions();
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to logout session",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     }
   };
 

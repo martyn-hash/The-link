@@ -27,6 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 
 interface SignatureRequestRowProps {
   item: any;
@@ -264,11 +265,7 @@ export default function SignatureRequestsPage() {
       setCancellationReason("");
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to cancel signature request",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -280,11 +277,7 @@ export default function SignatureRequestsPage() {
 
   const handleCancelConfirm = () => {
     if (!requestToCancel || !cancellationReason.trim()) {
-      toast({
-        title: "Error",
-        description: "Please provide a cancellation reason",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please provide a cancellation reason" });
       return;
     }
     cancelMutation.mutate({ requestId: requestToCancel, reason: cancellationReason.trim() });

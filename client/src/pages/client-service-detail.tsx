@@ -17,6 +17,7 @@ import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 import TopNavigation from "@/components/top-navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -163,11 +164,7 @@ export default function ClientServiceDetail() {
       queryClient.invalidateQueries({ queryKey: [`/api/client-services/${id}`] });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to update service",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -189,11 +186,7 @@ export default function ClientServiceDetail() {
       queryClient.invalidateQueries({ queryKey: [`/api/client-services/${id}`] });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to mark service as inactive",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

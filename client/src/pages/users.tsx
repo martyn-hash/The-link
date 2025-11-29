@@ -53,6 +53,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Users, Plus, Edit, Trash2, Mail, Calendar, Shield, Settings, RefreshCw, Send, Bell, Circle } from "lucide-react";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { formatDistanceToNow } from "date-fns";
 import type { User } from "@shared/schema";
 
@@ -99,30 +100,22 @@ export default function UserManagement() {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [isAuthenticated, isLoading, toast]);
+  }, [isAuthenticated, isLoading]);
 
   // Redirect non-admin users
   useEffect(() => {
     if (user && !user.isAdmin) {
-      toast({
-        title: "Access Denied",
-        description: "You don't have permission to access this page.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You don't have permission to access this page." });
       setLocation('/');
       return;
     }
-  }, [user, toast, setLocation]);
+  }, [user, setLocation]);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [showUserForm, setShowUserForm] = useState(false);
   
@@ -199,11 +192,7 @@ export default function UserManagement() {
       form.reset();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create user",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -231,11 +220,7 @@ export default function UserManagement() {
       form.reset();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update user",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -252,11 +237,7 @@ export default function UserManagement() {
       setSelectedUser(null);
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete user",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -274,11 +255,7 @@ export default function UserManagement() {
       setSelectedFallbackUserId("");
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to set fallback user",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -296,11 +273,7 @@ export default function UserManagement() {
       setPushBody("");
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send push notification",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -337,21 +310,13 @@ export default function UserManagement() {
 
   const handleSetFallbackUser = () => {
     if (!selectedFallbackUserId) {
-      toast({
-        title: "Error",
-        description: "Please select a user to set as fallback",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please select a user to set as fallback" });
       return;
     }
 
     const selectedUser = users?.find(u => u.id === selectedFallbackUserId);
     if (!selectedUser) {
-      toast({
-        title: "Error",
-        description: "Selected user not found",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Selected user not found" });
       return;
     }
 
@@ -370,18 +335,10 @@ export default function UserManagement() {
           description: "Checked for latest version. If an update is available, you'll see a notification.",
         });
       } else {
-        toast({
-          title: "Not Supported",
-          description: "Service workers are not supported in this browser.",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: "Service workers are not supported in this browser." });
       }
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to check for updates",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     } finally {
       setIsCheckingUpdates(false);
     }
@@ -389,20 +346,12 @@ export default function UserManagement() {
 
   const handleSendPushNotification = () => {
     if (!selectedPushUserId) {
-      toast({
-        title: "Error",
-        description: "Please select a user to send notification to",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please select a user to send notification to" });
       return;
     }
 
     if (!pushTitle || !pushBody) {
-      toast({
-        title: "Error",
-        description: "Please enter both title and message",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please enter both title and message" });
       return;
     }
 

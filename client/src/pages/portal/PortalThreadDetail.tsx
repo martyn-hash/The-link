@@ -10,6 +10,7 @@ import { ArrowLeft, Send, User, Building, Paperclip, X, File, Image as ImageIcon
 import { portalApi } from '@/lib/portalApi';
 import { usePortalAuth } from '@/contexts/PortalAuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { showFriendlyError } from '@/lib/friendlyErrors';
 import { formatDistanceToNow } from 'date-fns';
 import PortalBottomNav from '@/components/portal-bottom-nav';
 
@@ -126,12 +127,8 @@ export default function PortalThreadDetail() {
       setNewMessage('');
       clearAllFiles();
     },
-    onError: () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to send message',
-        variant: 'destructive',
-      });
+    onError: (error) => {
+      showFriendlyError({ error });
     },
   });
 
@@ -271,11 +268,7 @@ export default function PortalThreadDetail() {
       }, 1000);
     } catch (error) {
       console.error('[Voice Note] Failed to start recording:', error);
-      toast({
-        title: 'Recording failed',
-        description: 'Unable to access microphone. Please check permissions.',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error: 'Unable to access microphone. Please check permissions.' });
     }
   };
 
@@ -391,11 +384,7 @@ export default function PortalThreadDetail() {
     } catch (error: any) {
       console.error('[Voice Note] Upload error:', error);
       console.error('[Voice Note] Error stack:', error.stack);
-      toast({
-        title: 'Failed to send voice note',
-        description: error.message || 'Unable to upload audio. Please try again.',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error });
     } finally {
       console.log('[Voice Note] Upload process finished, setUploading(false)');
       setUploading(false);
@@ -511,11 +500,7 @@ export default function PortalThreadDetail() {
         attachments: attachments.length > 0 ? attachments : undefined 
       });
     } catch (error) {
-      toast({
-        title: 'Upload failed',
-        description: 'Failed to upload attachments',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error: 'Failed to upload attachments' });
     } finally {
       setUploading(false);
     }

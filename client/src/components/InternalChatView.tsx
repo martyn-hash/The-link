@@ -39,6 +39,7 @@ import {
   Maximize2,
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
+import { showFriendlyError } from '@/lib/friendlyErrors';
 import { formatDistanceToNow } from 'date-fns';
 import { AttachmentList, FileUploadZone, VoiceNotePlayer } from '@/components/attachments';
 import PullToRefresh from 'react-simple-pull-to-refresh';
@@ -354,11 +355,7 @@ export function InternalChatView({
       queryClient.invalidateQueries({ queryKey: ['/api/staff-messages/my-threads'] });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to send message",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -378,11 +375,7 @@ export function InternalChatView({
       });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create thread",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -519,11 +512,7 @@ export function InternalChatView({
         attachments: attachments.length > 0 ? attachments : undefined,
       });
     } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to upload files",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     } finally {
       setUploadingFiles(false);
     }
@@ -556,11 +545,7 @@ export function InternalChatView({
       }, 1000);
       setRecordingInterval(interval);
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to access microphone",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Failed to access microphone" });
     }
   };
 
@@ -1464,29 +1449,17 @@ export function InternalChatView({
             <Button
               onClick={() => {
                 if (!newThreadTopic.trim()) {
-                  toast({
-                    title: "Topic required",
-                    description: "Please enter a topic for the thread",
-                    variant: "destructive",
-                  });
+                  showFriendlyError({ error: "Please enter a topic for the thread" });
                   return;
                 }
                 
                 if (selectedParticipants.length === 0) {
-                  toast({
-                    title: "Participants required",
-                    description: "Please select at least one participant",
-                    variant: "destructive",
-                  });
+                  showFriendlyError({ error: "Please select at least one participant" });
                   return;
                 }
                 
                 if (!initialMessage.trim()) {
-                  toast({
-                    title: "Message required",
-                    description: "Please enter an initial message for the thread",
-                    variant: "destructive",
-                  });
+                  showFriendlyError({ error: "Please enter an initial message for the thread" });
                   return;
                 }
                 

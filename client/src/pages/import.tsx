@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
-import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import TopNavigation from "@/components/top-navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Building2, User, Briefcase, FileSpreadsheet, ArrowRight } from "lucide-react";
@@ -10,31 +10,22 @@ import { Button } from "@/components/ui/button";
 export default function Import() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
   const [, navigate] = useLocation();
-  const { toast } = useToast();
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
     }
-  }, [isAuthenticated, authLoading, toast]);
+  }, [isAuthenticated, authLoading]);
 
   useEffect(() => {
     if (!authLoading && user && !user.superAdmin) {
-      toast({
-        title: "Access Denied",
-        description: "You need super admin access for data imports.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You need super admin access for data imports." });
       navigate("/");
     }
-  }, [user, authLoading, navigate, toast]);
+  }, [user, authLoading, navigate]);
 
   if (authLoading) {
     return (

@@ -13,6 +13,7 @@ import { z } from "zod";
 import TopNavigation from "@/components/top-navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 import type { ClientRequestTemplateCategory, InsertClientRequestTemplateCategory } from "@shared/schema";
 
@@ -60,11 +61,7 @@ function CategoryModal({
       form.reset();
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to save category",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -172,11 +169,7 @@ function DeleteCategoryDialog({
       setOpen(false);
     },
     onError: (error) => {
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to delete category",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

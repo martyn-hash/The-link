@@ -3,6 +3,7 @@ import { useParams, Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -67,17 +68,13 @@ export default function ProjectTypeDetail() {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [isAuthenticated, authLoading, toast]);
+  }, [isAuthenticated, authLoading]);
 
   // Fetch all project type data using consolidated hook
   const {
@@ -144,17 +141,13 @@ export default function ProjectTypeDetail() {
   // Handle unauthorized errors only - project not found is handled inline
   useEffect(() => {
     if (projectTypeError && isUnauthorizedError(projectTypeError)) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [projectTypeError, toast]);
+  }, [projectTypeError]);
 
   // Mutation hooks with callbacks for state management
   const { createStageMutation, updateStageMutation, deleteStageMutation } = useStageMutations(
@@ -220,11 +213,7 @@ export default function ProjectTypeDetail() {
     if (checked && stages) {
       const hasFinalStage = stages.some((stage: any) => stage.canBeFinalStage === true);
       if (!hasFinalStage) {
-        toast({
-          title: "Cannot Activate Project Type",
-          description: "At least one stage must be marked as 'Can be final Stage' before activating this project type.",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: "At least one stage must be marked as 'Can be final Stage' before activating this project type." });
         return;
       }
     }
@@ -310,11 +299,7 @@ export default function ProjectTypeDetail() {
         
         // Client-side validation: require service role selection
         if (!stageData.assignedWorkRoleId) {
-          toast({
-            title: "Validation Error",
-            description: "Please select a service role",
-            variant: "destructive",
-          });
+          showFriendlyError({ error: "Please select a service role" });
           return;
         }
       } else {
@@ -324,11 +309,7 @@ export default function ProjectTypeDetail() {
         
         // Client-side validation: require user selection
         if (!stageData.assignedUserId) {
-          toast({
-            title: "Validation Error",
-            description: "Please select a user",
-            variant: "destructive",
-          });
+          showFriendlyError({ error: "Please select a user" });
           return;
         }
       }

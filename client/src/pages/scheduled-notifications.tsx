@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import TopNavigation from "@/components/top-navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -122,12 +123,8 @@ export default function ScheduledNotificationsPage() {
       setCancelDialogOpen(false);
       setCancellingNotificationId(null);
     },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to cancel notification. Please try again.",
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      showFriendlyError({ error });
     },
   });
 
@@ -144,12 +141,8 @@ export default function ScheduledNotificationsPage() {
         description: `Successfully cancelled ${selectedIds.size} notification(s).`,
       });
     },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to cancel notifications. Please try again.",
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      showFriendlyError({ error });
     },
   });
 

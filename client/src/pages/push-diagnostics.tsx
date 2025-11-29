@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import TopNavigation from "@/components/top-navigation";
 import { RefreshCw, CheckCircle2, XCircle, AlertCircle, Copy, Send } from "lucide-react";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 
 interface DiagnosticInfo {
   serviceWorker: {
@@ -98,12 +99,8 @@ export default function PushDiagnostics() {
       }
 
       setDiagnostics(info);
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to run diagnostics",
-        variant: "destructive",
-      });
+    } catch (error: any) {
+      showFriendlyError({ error });
     } finally {
       setIsLoading(false);
     }
@@ -137,18 +134,10 @@ export default function PushDiagnostics() {
           description: data.message || "Check your device for the notification",
         });
       } else {
-        toast({
-          title: "Test Failed",
-          description: data.message || "Failed to send test notification",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: data.message || "Failed to send test notification" });
       }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to send test notification",
-        variant: "destructive",
-      });
+    } catch (error: any) {
+      showFriendlyError({ error });
     } finally {
       setIsTesting(false);
     }

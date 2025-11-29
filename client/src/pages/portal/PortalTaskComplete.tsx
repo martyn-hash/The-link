@@ -14,6 +14,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { queryClient } from "@/lib/queryClient";
 import { portalRequest } from "@/lib/portalApi";
 import { format } from "date-fns";
@@ -97,11 +98,7 @@ export default function PortalTaskComplete() {
       queryClient.invalidateQueries({ queryKey: ['/api/portal/task-instances', taskId] });
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to save progress",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -121,11 +118,7 @@ export default function PortalTaskComplete() {
       setLocation('/portal/tasks');
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to submit request",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -188,11 +181,7 @@ export default function PortalTaskComplete() {
       });
     } catch (error: any) {
       console.error('Error uploading file:', error);
-      toast({
-        title: "Upload Failed",
-        description: error?.message || "Failed to upload file",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     } finally {
       setUploadingFiles(prev => ({ ...prev, [questionId]: false }));
     }
@@ -222,11 +211,7 @@ export default function PortalTaskComplete() {
   // Handle submit
   const handleSubmit = () => {
     if (!validateForm()) {
-      toast({
-        title: "Validation Error",
-        description: "Please fill in all required fields",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: 'Please fill in all required fields' });
       return;
     }
     submitTaskMutation.mutate(formData);

@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -69,15 +70,11 @@ export default function ChChanges() {
   // Redirect non-admin users
   useEffect(() => {
     if (user && !user.isAdmin) {
-      toast({
-        title: "Access Denied",
-        description: "You don't have permission to access this page.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You don't have permission to access this page." });
       setLocation('/');
       return;
     }
-  }, [user, toast, setLocation]);
+  }, [user, setLocation]);
 
   // Fetch grouped CH change requests
   const { data: groupedRequests, isLoading: requestsLoading } = useQuery<GroupedChangeRequest[]>({
@@ -103,11 +100,7 @@ export default function ChChanges() {
       setSelectedGroup(null);
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to approve change requests",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -136,11 +129,7 @@ export default function ChChanges() {
       setSelectedClientIds(new Set());
     },
     onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to bulk approve change requests",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

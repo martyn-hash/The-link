@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bell, BellOff, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { showFriendlyError } from '@/lib/friendlyErrors';
 import { useIsMobile } from '@/hooks/use-mobile';
 import logoPath from '@assets/full_logo_transparent_600_1759469504917.png';
 
@@ -34,11 +35,7 @@ export function PushNotificationPrompt() {
       });
       handleDismiss();
     } else {
-      toast({
-        title: 'Failed to enable notifications',
-        description: 'Please check your browser permissions and try again.',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error: 'Please check your browser permissions and try again.' });
     }
   };
 
@@ -52,11 +49,7 @@ export function PushNotificationPrompt() {
         description: 'You will no longer receive push notifications.',
       });
     } else {
-      toast({
-        title: 'Failed to disable notifications',
-        description: 'Please try again later.',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error: 'Please try again later.' });
     }
   };
 

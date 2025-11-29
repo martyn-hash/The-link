@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -78,12 +79,8 @@ export default function AdminTaskTypes() {
         description: "The task type has been created successfully.",
       });
     },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to create task type. Please try again.",
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      showFriendlyError({ error });
     },
   });
 
@@ -105,12 +102,8 @@ export default function AdminTaskTypes() {
         description: "The task type has been updated successfully.",
       });
     },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to update task type. Please try again.",
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      showFriendlyError({ error });
     },
   });
 
@@ -132,12 +125,8 @@ export default function AdminTaskTypes() {
         description: "The task type has been deleted successfully.",
       });
     },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to delete task type. It may be in use.",
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      showFriendlyError({ error });
     },
   });
 

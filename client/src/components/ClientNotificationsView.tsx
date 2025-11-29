@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -167,12 +168,8 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
         description: `Successfully cancelled ${selectedIds.size} notification(s).`,
       });
     },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to cancel notifications. Please try again.",
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      showFriendlyError({ error });
     },
   });
 
@@ -197,12 +194,8 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
         description: `Successfully reactivated ${selectedIds.size} notification(s).`,
       });
     },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Failed to reactivate notifications. Please try again.",
-        variant: "destructive",
-      });
+    onError: (error: any) => {
+      showFriendlyError({ error });
     },
   });
 
@@ -224,11 +217,7 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
       const data = await response.json();
       setPreviewData(data);
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to load preview. Please try again.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
       setPreviewOpen(false);
     } finally {
       setIsLoadingPreview(false);

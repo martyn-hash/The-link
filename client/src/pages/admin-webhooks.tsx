@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -95,7 +96,7 @@ export default function AdminWebhooks() {
       resetForm();
     },
     onError: (error: any) => {
-      toast({ title: "Failed to create webhook", description: error.message, variant: "destructive" });
+      showFriendlyError({ error });
     },
   });
 
@@ -110,7 +111,7 @@ export default function AdminWebhooks() {
       resetForm();
     },
     onError: (error: any) => {
-      toast({ title: "Failed to update webhook", description: error.message, variant: "destructive" });
+      showFriendlyError({ error });
     },
   });
 
@@ -125,7 +126,7 @@ export default function AdminWebhooks() {
       setSelectedWebhook(null);
     },
     onError: (error: any) => {
-      toast({ title: "Failed to delete webhook", description: error.message, variant: "destructive" });
+      showFriendlyError({ error });
     },
   });
 

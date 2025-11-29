@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import {
   Dialog,
   DialogContent,
@@ -74,22 +75,14 @@ export function ShareDataModal({ open, onOpenChange, client, people }: ShareData
           variant: "default"
         });
       } else {
-        toast({ 
-          title: "Failed to send data", 
-          description: "All webhook sends failed. Check the history for details.",
-          variant: "destructive"
-        });
+        showFriendlyError({ error: "All webhook sends failed. Check the history for details." });
       }
       queryClient.invalidateQueries({ queryKey: [`/api/clients/${client.id}/webhook-logs`] });
       setSelectedWebhooks([]);
       refetchLogs();
     },
     onError: (error: any) => {
-      toast({ 
-        title: "Failed to send data", 
-        description: error.message || "Error sending to webhooks",
-        variant: "destructive"
-      });
+      showFriendlyError({ error });
       queryClient.invalidateQueries({ queryKey: [`/api/clients/${client.id}/webhook-logs`] });
       refetchLogs();
     },

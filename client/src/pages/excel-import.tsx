@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -175,24 +176,16 @@ export default function ExcelImport() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
     }
-  }, [isAuthenticated, authLoading, toast]);
+  }, [isAuthenticated, authLoading]);
 
   const handleFileUpload = async () => {
     if (!excelFile) {
-      toast({
-        title: "No File Selected",
-        description: "Please select an Excel file to upload.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please select an Excel file to upload." });
       return;
     }
 
@@ -218,11 +211,7 @@ export default function ExcelImport() {
       setCurrentStep('preview');
 
       if (result.summary.hasErrors) {
-        toast({
-          title: "Parsing Complete with Errors",
-          description: `Found ${result.summary.errorCount} errors that need attention.`,
-          variant: "destructive",
-        });
+        showFriendlyError({ error: `Parsing complete with ${result.summary.errorCount} errors that need attention.` });
       } else if (result.summary.hasWarnings) {
         toast({
           title: "Parsing Complete with Warnings",
@@ -238,11 +227,7 @@ export default function ExcelImport() {
         });
       }
     } catch (error: any) {
-      toast({
-        title: "Parse Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
       setCurrentStep('upload');
     }
   };
@@ -285,11 +270,7 @@ export default function ExcelImport() {
         description: `Created ${result.clientsCreated} clients, updated ${result.clientsUpdated}, and processed ${result.peopleCreated + result.peopleUpdated} people${serviceDataMsg}.`,
       });
     } catch (error: any) {
-      toast({
-        title: "Import Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
       setCurrentStep('preview');
     }
   };

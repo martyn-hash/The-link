@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { apiRequest } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,26 +74,18 @@ export default function DataImport() {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      toast({
-        title: "Unauthorized",
-        description: "You are logged out. Logging in again...",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "You are logged out. Logging in again..." });
       setTimeout(() => {
         window.location.href = "/api/login";
       }, 500);
       return;
     }
-  }, [isAuthenticated, authLoading, toast]);
+  }, [isAuthenticated, authLoading]);
 
   // Parse CSV files
   const parseFiles = () => {
     if (!clientsFile || !servicesFile || !rolesFile) {
-      toast({
-        title: "Missing Files",
-        description: "Please upload all three CSV files before proceeding.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please upload all three CSV files before proceeding." });
       return;
     }
 
@@ -141,11 +134,7 @@ export default function DataImport() {
         validateData(data);
       })
       .catch((error) => {
-        toast({
-          title: "Parse Error",
-          description: `Failed to parse CSV files: ${error.message}`,
-          variant: "destructive",
-        });
+        showFriendlyError({ error: `Failed to parse CSV files: ${error.message}` });
       });
   };
 
@@ -166,11 +155,7 @@ export default function DataImport() {
       }
     } catch (error: any) {
       console.error("Validation error:", error);
-      toast({
-        title: "Validation Error",
-        description: error.message || "Failed to validate data",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
       setCurrentStep('upload');
     }
   };
@@ -193,11 +178,7 @@ export default function DataImport() {
         description: "Data has been successfully imported into the system.",
       });
     } catch (error: any) {
-      toast({
-        title: "Import Error",
-        description: error.message || "Failed to import data",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
       setCurrentStep('preview');
     }
   };

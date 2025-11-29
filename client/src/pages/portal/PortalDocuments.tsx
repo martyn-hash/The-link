@@ -11,6 +11,7 @@ import { usePortalAuth } from '@/contexts/PortalAuthContext';
 import { formatDistanceToNow } from 'date-fns';
 import { queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import { showFriendlyError } from '@/lib/friendlyErrors';
 import PortalBottomNav from '@/components/portal-bottom-nav';
 import { VoiceNotePlayer } from '@/components/attachments/VoiceNotePlayer';
 
@@ -108,11 +109,7 @@ export default function PortalDocuments() {
       });
     },
     onError: (error: Error) => {
-      toast({
-        title: 'Error',
-        description: error.message || 'Failed to delete document',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -121,20 +118,12 @@ export default function PortalDocuments() {
     if (!file) return;
 
     if (file.size > MAX_FILE_SIZE) {
-      toast({
-        title: 'Error',
-        description: 'File size must be less than 25MB',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error: 'File size must be less than 25MB' });
       return;
     }
 
     if (!allowedTypes.includes(file.type)) {
-      toast({
-        title: 'Error',
-        description: 'File type not allowed. Allowed types: PNG, JPEG, PDF, CSV, XLSX, DOCX, MP4, MP3, WebM, WAV, OGG',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error: 'File type not allowed. Allowed types: PNG, JPEG, PDF, CSV, XLSX, DOCX, MP4, MP3, WebM, WAV, OGG' });
       return;
     }
 
@@ -181,11 +170,7 @@ export default function PortalDocuments() {
       setSelectedFile(null);
     } catch (error) {
       console.error('Upload error:', error);
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to upload document',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error: error instanceof Error ? error : 'Failed to upload document' });
     } finally {
       setIsUploading(false);
     }

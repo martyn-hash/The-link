@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
+import { showFriendlyError } from '@/lib/friendlyErrors';
 // @ts-ignore - RingCentral Web Phone types
 import RingCentralWebPhone from 'ringcentral-web-phone';
 
@@ -215,11 +216,7 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
       setIsInitializing(false);
       setIsInitialized(false);
       
-      toast({
-        title: 'Initialization Error',
-        description: error.message || 'Failed to initialize phone',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error });
     }
   };
 
@@ -249,11 +246,7 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
     
     if (!webPhoneRef.current || !isInitialized) {
       console.error('[RingCentral] Phone not ready');
-      toast({
-        title: 'Phone Not Ready',
-        description: 'Please initialize the phone first',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error: 'Please initialize the phone first' });
       return;
     }
 
@@ -267,11 +260,7 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
         stream.getTracks().forEach(track => track.stop());
       } catch (permError: any) {
         console.error('[RingCentral] Microphone permission denied:', permError);
-        toast({
-          title: 'Microphone Access Required',
-          description: 'Please allow microphone access to make calls',
-          variant: 'destructive',
-        });
+        showFriendlyError({ error: 'Please allow microphone access to make calls' });
         return;
       }
 
@@ -383,11 +372,7 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
         });
         stopCallTimer();
         setCallState(prev => ({ ...prev, status: 'disconnected' }));
-        toast({
-          title: 'Call Failed',
-          description: error?.message || error?.reasonPhrase || 'Failed to connect call',
-          variant: 'destructive',
-        });
+        showFriendlyError({ error: error?.message || error?.reasonPhrase || 'Failed to connect call' });
       });
 
       console.log('[RingCentral] Event listeners attached, waiting for call to connect...');
@@ -397,11 +382,7 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
       console.error('[RingCentral] Error stack:', error.stack);
       console.error('[RingCentral] Error details:', JSON.stringify(error, null, 2));
       setCallState(initialCallState);
-      toast({
-        title: 'Call Error',
-        description: error.message || 'Failed to make call',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error });
     }
   };
 
@@ -461,13 +442,9 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
         }
 
         await sessionRef.current.answer();
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error answering call:', error);
-        toast({
-          title: 'Error',
-          description: 'Failed to answer call',
-          variant: 'destructive',
-        });
+        showFriendlyError({ error });
       }
     }
   };

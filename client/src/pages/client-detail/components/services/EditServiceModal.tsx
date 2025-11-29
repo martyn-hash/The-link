@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 import {
   Dialog,
@@ -111,11 +112,7 @@ export function EditServiceModal({
     },
     onError: (error: any) => {
       console.error('Failed to update service:', error);
-      toast({
-        title: "Error",
-        description: error?.message || "Failed to update service",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

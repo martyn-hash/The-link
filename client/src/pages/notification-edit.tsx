@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import type { ProjectTypeNotification, KanbanStage, ClientRequestTemplate, ProjectType } from "@shared/schema";
 import { NotificationVariableGuide } from "@/components/NotificationVariableGuide";
 import { TiptapEditor } from "@/components/TiptapEditor";
@@ -101,11 +102,7 @@ export default function NotificationEditPage() {
       navigate(`/settings/project-types/${projectTypeId}`);
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update notification",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
   

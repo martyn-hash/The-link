@@ -11,6 +11,7 @@ import { AlertCircle, Save, Pencil, X, Check, CheckCircle2, HelpCircle, Loader2 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { UDFDefinition, Service, ClientService } from "@shared/schema";
 import type { EnhancedClientService } from "../../../utils/types";
@@ -240,11 +241,7 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
           status: 'invalid',
           error: data.error,
         });
-        toast({
-          title: "VAT Invalid",
-          description: data.error || "VAT number not found in HMRC records",
-          variant: "destructive",
-        });
+        showFriendlyError({ error: data.error || "VAT number not found in HMRC records" });
       }
       onRefetch();
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientService.clientId, "services"] });
@@ -254,11 +251,7 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
         status: 'unvalidated',
         error: error instanceof Error ? error.message : 'Validation failed',
       });
-      toast({
-        title: "Validation Error",
-        description: error instanceof Error ? error.message : "Could not connect to HMRC API",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: error instanceof Error ? error : "Could not connect to HMRC API" });
     },
   });
 
@@ -369,11 +362,7 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
   const handleValidateVat = () => {
     const vatNumber = isEditing ? editedValues[VAT_UDF_FIELD_ID] : currentValues[VAT_UDF_FIELD_ID];
     if (!vatNumber) {
-      toast({
-        title: "No VAT Number",
-        description: "Please enter a VAT number first",
-        variant: "destructive",
-      });
+      showFriendlyError({ error: "Please enter a VAT number first" });
       return;
     }
     setVatStatus({ status: 'validating' });
@@ -653,11 +642,7 @@ export function ServicesDataSubTab({
       onRefetch();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to save service data",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

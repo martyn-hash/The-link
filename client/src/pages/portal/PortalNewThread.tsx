@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ArrowLeft, Send } from 'lucide-react';
 import { portalApi } from '@/lib/portalApi';
 import { useToast } from '@/hooks/use-toast';
+import { showFriendlyError } from '@/lib/friendlyErrors';
 import { usePortalAuth } from '@/contexts/PortalAuthContext';
 import PortalBottomNav from '@/components/portal-bottom-nav';
 
@@ -44,23 +45,15 @@ export default function PortalNewThread() {
       });
       setLocation(`/portal/threads/${thread.id}`);
     },
-    onError: () => {
-      toast({
-        title: 'Error',
-        description: 'Failed to create thread',
-        variant: 'destructive',
-      });
+    onError: (error) => {
+      showFriendlyError({ error });
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!subject.trim()) {
-      toast({
-        title: 'Subject required',
-        description: 'Please enter a subject for your message',
-        variant: 'destructive',
-      });
+      showFriendlyError({ error: 'Please enter a subject for your message' });
       return;
     }
     createThreadMutation.mutate(subject.trim());

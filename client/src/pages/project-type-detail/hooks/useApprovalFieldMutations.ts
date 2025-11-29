@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 
 interface ApprovalFieldMutationCallbacks {
   onFieldCreated?: () => void;
@@ -27,11 +28,7 @@ export function useApprovalFieldMutations(
       callbacks.onFieldCreated?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to create approval field",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -48,11 +45,7 @@ export function useApprovalFieldMutations(
       callbacks.onFieldUpdated?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update approval field",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -69,11 +62,7 @@ export function useApprovalFieldMutations(
       callbacks.onFieldDeleted?.();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete approval field",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

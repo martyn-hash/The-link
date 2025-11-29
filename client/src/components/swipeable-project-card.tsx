@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import type { ProjectWithRelations, KanbanStage } from "@shared/schema";
 import { format } from "date-fns";
 import { calculateCurrentInstanceTime } from "@shared/businessTime";
@@ -143,11 +144,7 @@ export default function SwipeableProjectCard({ project, canComplete = false, onS
       setIsSwiped(false);
     },
     onError: (error: any) => {
-      toast({
-        title: "Failed to complete project",
-        description: error.message || "An error occurred while completing the project.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 
@@ -168,11 +165,7 @@ export default function SwipeableProjectCard({ project, canComplete = false, onS
       setIsSwiped(false);
     },
     onError: (error: any) => {
-      toast({
-        title: "Failed to archive project",
-        description: error.message || "An error occurred while archiving the project.",
-        variant: "destructive",
-      });
+      showFriendlyError({ error });
     },
   });
 

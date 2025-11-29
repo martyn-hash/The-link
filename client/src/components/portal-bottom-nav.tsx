@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query';
 import { portalRequest } from '@/lib/portalApi';
 import { usePortalAuth } from '@/contexts/PortalAuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { showFriendlyError } from '@/lib/friendlyErrors';
 import logoPath from '@assets/full_logo_transparent_600_1759469504917.png';
 
 export default function PortalBottomNav() {
@@ -153,11 +154,7 @@ export default function PortalBottomNav() {
                             });
                             setMenuOpen(false);
                           } catch (error) {
-                            toast({
-                              title: 'Failed to switch company',
-                              description: 'Please try again',
-                              variant: 'destructive',
-                            });
+                            showFriendlyError({ error });
                           } finally {
                             setIsSwitching(false);
                           }
