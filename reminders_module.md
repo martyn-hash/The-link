@@ -332,7 +332,7 @@ All Stage 1 items have been completed and verified with e2e testing.
 #### 2.3 Add Client-Facing Stage Change Notifications ✅ DONE
 **Status:** Complete
 **What was done:**
-- Full "Client Value Notification" system implemented
+- Full "Client Value ,a nd Notification" system implemented
 - Notifications target client contacts (directors, shareholders), not staff
 - Respects receiveNotifications opt-out preference
 - Templates loaded from project_type_notifications table

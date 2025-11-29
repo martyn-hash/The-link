@@ -438,6 +438,25 @@ export function registerNotificationRoutes(
     }
   });
   
+  // Get all project types for filtering (read-only, accessible to all authenticated users)
+  // This is a simpler endpoint than /api/config/project-types which is admin-only
+  app.get("/api/project-types", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const projectTypes = await storage.getAllProjectTypes();
+      // Only return active project types with minimal data needed for filtering
+      const activeTypes = projectTypes
+        .filter(pt => pt.active)
+        .map(pt => ({
+          id: pt.id,
+          name: pt.name,
+        }));
+      res.json(activeTypes);
+    } catch (error) {
+      console.error("Error fetching project types:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch project types" });
+    }
+  });
+
   // Get all notifications for a project type
   app.get("/api/project-types/:projectTypeId/notifications", isAuthenticated, async (req: any, res: any) => {
     try {
@@ -1315,7 +1334,7 @@ export function registerNotificationRoutes(
   // Get all scheduled notifications (with filtering)
   app.get("/api/scheduled-notifications", isAuthenticated, async (req: any, res: any) => {
     try {
-      const { status, clientId, projectId, dateReference, startDate, endDate } = req.query;
+      const { status, clientId, projectId, dateReference, notificationType, startDate, endDate } = req.query;
       
       let notifications = await storage.getAllScheduledNotifications();
 
@@ -1331,6 +1350,9 @@ export function registerNotificationRoutes(
       }
       if (dateReference) {
         notifications = notifications.filter((n: ScheduledNotification) => n.dateReference === dateReference);
+      }
+      if (notificationType) {
+        notifications = notifications.filter((n: ScheduledNotification) => n.notificationType === notificationType);
       }
       if (startDate) {
         const start = new Date(startDate as string);
