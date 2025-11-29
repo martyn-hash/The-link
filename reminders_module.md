@@ -118,7 +118,7 @@ Key flow:
 - ✅ Editable subject line with merge field support
 - ✅ **Comprehensive merge fields** - 25+ variables ({client_company_name}, {project_name}, etc.)
 - ✅ **Stage approval variables** - `{stage_approval:ApprovalName}` syntax for referencing approval data (added Nov 29, 2025)
-- ✅ Per-channel controls (Email enabled, SMS marked "Coming Soon")
+- ✅ Per-channel controls (Email enabled, SMS enabled via VoodooSMS)
 - ✅ Template lookup from project_type_notifications table
 - ✅ Stage lookup scoped by projectTypeId (avoids cross-type conflicts)
 - ✅ Recipients show role badges, primary contact indicators, opt-out status
@@ -142,7 +142,7 @@ Example usage in template:
 ```
 This renders all fields from the "Quality Control Review" approval as formatted text.
 
-**SMS Status:** UI shows "Coming Soon" - VoodooSMS integration not yet implemented
+**SMS Status:** ✅ Fully implemented via VoodooSMS (Nov 29, 2025)
 
 ---
 
@@ -311,22 +311,23 @@ All Stage 1 items have been completed and verified with e2e testing.
 - Multi-select via emailRecipientIds and smsRecipientIds arrays
 - Backend handles sending to multiple recipients
 
-#### 2.2 Implement VoodooSMS Integration ⏳ OUTSTANDING
-**Complexity:** Medium | **Impact:** Medium | **Effort:** 3-4 hours
+#### 2.2 Implement VoodooSMS Integration ✅ DONE
+**Status:** Complete (Nov 29, 2025)
+**What was done:**
+- Updated `sendSMSNotification` in `notification-sender.ts` to use VoodooSMS API
+- Added phone number formatting for UK numbers (+44 format)
+- Enabled SMS channel in `ClientValueNotificationContent.tsx` (removed "Coming Soon" badge)
+- Added SMS sending logic to stage change notification endpoint in `server/routes/projects.ts`
+- Supports merge field processing for personalized SMS content
+- Proper error handling and success/failure tracking
 
-**Current Issue:** SMS sending is placeholder only - UI shows "Coming Soon"
-**Solution:**
-- Complete VoodooSMS API integration
-- Add proper error handling and status tracking
-- Test with real SMS delivery
-
-**Files to Modify:**
+**Files Modified:**
 - `server/notification-sender.ts`
-- Possibly add `server/sms-service.ts`
+- `client/src/components/ClientValueNotificationContent.tsx`
+- `server/routes/projects.ts`
 
 **Requirements:**
-- VoodooSMS API credentials (environment variable)
-- API documentation review
+- VOODOO_SMS_API_KEY environment variable must be configured
 
 #### 2.3 Add Client-Facing Stage Change Notifications ✅ DONE
 **Status:** Complete
@@ -421,8 +422,9 @@ These are nice-to-have improvements.
 5. ~~**Stage 2.3** - Client-facing stage notifications~~ ✅ Done Nov 29, 2025
 6. ~~**Stage 3.1** - AI voice recording~~ ✅ Done Nov 29, 2025
 
+7. ~~**Stage 2.2** - Implement VoodooSMS integration~~ ✅ Done Nov 29, 2025
+
 ### Outstanding
-7. **Stage 2.2** - Implement VoodooSMS integration (completes SMS channel)
 8. **Stage 3.2** - Project type filter for calendar view
 9. **Stage 4.x** - Polish items (week view, export, color-coding, analytics)
 
@@ -432,5 +434,5 @@ These are nice-to-have improvements.
 
 - All scheduled notifications run between 07:00-19:00 UK time (Europe/London timezone)
 - SendGrid is the email provider; credentials should be in environment variables
-- VoodooSMS credentials will need to be added when implementing SMS
+- VoodooSMS is the SMS provider; VOODOO_SMS_API_KEY must be configured as environment variable
 - Push notifications require VAPID keys (already configured)
