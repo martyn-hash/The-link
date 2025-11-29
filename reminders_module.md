@@ -80,7 +80,7 @@ A fully functional calendar view has been built with:
 
 ---
 
-### 5. Stage Change Notifications ⚠️ PARTIALLY COMPLETE
+### 5. Stage Change Notifications ✅ CORE COMPLETE (Stage 1 Done)
 
 **Key Files:**
 - `client/src/components/stage-change-notification-modal.tsx`
@@ -88,28 +88,21 @@ A fully functional calendar view has been built with:
 - `client/src/components/ChangeStatusModal.tsx`
 - `server/storage/notifications/stageChangeNotificationStorage.ts`
 
-**Current Behavior (Problem):**
-When a stage change occurs, notifications are **automatically sent without staff review**. The `StageChangeNotificationModal` component exists but is bypassed:
+**Current Behavior (Fixed Nov 29, 2025):**
+When a stage change occurs, staff are now shown the `StageChangeNotificationModal` for review before sending. Notifications are no longer auto-sent.
 
-```typescript
-// status-change-form.tsx line 214
-// If there's a notification preview, automatically send it without user approval
-if (preview) {
-  await apiRequest("POST", `/api/projects/${project.id}/send-stage-change-notification`, ...);
-}
-```
+**What Works:**
+- ✅ Modal shown to staff for approval before sending
+- ✅ TiptapEditor for rich text editing of email body
+- ✅ Editable subject line and push notification fields
+- ✅ "Send Notification" and "Don't Send" (suppress) options
+- ✅ Recipients list display
+- ✅ LSP errors fixed in stageChangeNotificationStorage.ts
 
-**What Exists:**
-- Modal component with recipients list display
-- Editable subject and body fields (plain textarea)
-- Editable push notification title/body
-- "Send" and "Don't Send" buttons
-
-**What's Missing:**
-- Modal not being shown to users for approval before sending
-- Uses plain `<Textarea>` instead of TiptapEditor for rich text
+**What's Still Missing (Stage 2+):**
 - Multi-recipient selection not implemented
 - AI voice recording feature not implemented
+- Client-facing stage notifications (currently staff only)
 
 ---
 
@@ -135,16 +128,14 @@ if (preview) {
 
 ---
 
-### 7. TiptapEditor Integration ⚠️ PARTIALLY COMPLETE
+### 7. TiptapEditor Integration ✅ COMPLETE
 
 **Where TiptapEditor IS Used:**
 - `StageNotificationForm.tsx` - creating stage notification templates
 - `ProjectNotificationForm.tsx` - creating project notification templates
 - `ReminderForm.tsx` - creating reminder templates
+- `stage-change-notification-modal.tsx` - editing email body before sending (added Nov 29, 2025)
 - Communications, project notes, various other forms
-
-**Where TiptapEditor is MISSING:**
-- `stage-change-notification-modal.tsx` - uses plain Textarea for email body editing
 
 ---
 
@@ -210,17 +201,15 @@ The client detail page includes a comprehensive notifications view accessible vi
 This section provides a comprehensive breakdown of what's needed to fully complete the stage change notification feature.
 
 ### Currently Working ✅
-- [ ] Template creation in project type settings (via StageNotificationForm with TiptapEditor)
-- [ ] Template variable replacement ({{client.name}}, {{project.name}}, etc.)
-- [ ] Stage trigger configuration (on_entry, on_exit)
-- [ ] Notification preview generation on stage change
-- [ ] Backend endpoint to send stage change notifications
-- [ ] Database schema for tracking sent notifications
-
-### Needs Fixing ⚠️
-- [ ] **Show modal to staff before sending** - Currently auto-sends without review
-- [ ] **TiptapEditor in edit modal** - Currently plain textarea
-- [ ] **LSP errors in storage file** - 16 TypeScript errors to fix
+- [x] Template creation in project type settings (via StageNotificationForm with TiptapEditor)
+- [x] Template variable replacement ({{client.name}}, {{project.name}}, etc.)
+- [x] Stage trigger configuration (on_entry, on_exit)
+- [x] Notification preview generation on stage change
+- [x] Backend endpoint to send stage change notifications
+- [x] Database schema for tracking sent notifications
+- [x] **Show modal to staff before sending** ✅ FIXED Nov 29, 2025
+- [x] **TiptapEditor in edit modal** ✅ FIXED Nov 29, 2025
+- [x] **LSP errors in storage file** ✅ FIXED Nov 29, 2025
 
 ### Not Implemented ❌
 - [ ] **Multi-recipient selection** - Can only send to single assigned user
@@ -231,7 +220,7 @@ This section provides a comprehensive breakdown of what's needed to fully comple
 ### Backend Components
 | Component | Status | File |
 |-----------|--------|------|
-| Stage notification storage | ⚠️ Has LSP errors | `stageChangeNotificationStorage.ts` |
+| Stage notification storage | ✅ Working | `stageChangeNotificationStorage.ts` |
 | Notification preview generation | ✅ Working | `notification-sender.ts` |
 | Send notification endpoint | ✅ Working | `server/routes.ts` |
 | Variable replacement | ✅ Working | `notification-variables.ts` |
@@ -239,54 +228,35 @@ This section provides a comprehensive breakdown of what's needed to fully comple
 ### Frontend Components
 | Component | Status | File |
 |-----------|--------|------|
-| StageChangeNotificationModal | ⚠️ Not shown to users | `stage-change-notification-modal.tsx` |
-| ChangeStatusModal | ⚠️ Auto-sends | `ChangeStatusModal.tsx` |
-| StatusChangeForm | ⚠️ Auto-sends | `status-change-form.tsx` |
+| StageChangeNotificationModal | ✅ Shows with TiptapEditor | `stage-change-notification-modal.tsx` |
+| ChangeStatusModal | ✅ Shows modal before sending | `ChangeStatusModal.tsx` |
+| StatusChangeForm | ✅ Shows modal before sending | `status-change-form.tsx` |
 | StageNotificationForm (template) | ✅ Working | `StageNotificationForm.tsx` |
 
 ---
 
 ## Implementation Roadmap
 
-### Stage 1: Critical Fixes (High Impact, Medium Complexity)
+### Stage 1: Critical Fixes ✅ COMPLETED (Nov 29, 2025)
 
-These items fix broken or incomplete core functionality.
+All Stage 1 items have been completed and verified with e2e testing.
 
-#### 1.1 Fix Stage Change Notification Flow
-**Complexity:** Medium | **Impact:** High | **Effort:** 2-4 hours
+#### 1.1 Fix Stage Change Notification Flow ✅ DONE
+**Status:** Complete
+**What was done:** 
+- Modified `status-change-form.tsx` to show `StageChangeNotificationModal` before sending
+- ChangeStatusModal already had correct implementation
+- Staff can now review, edit, or suppress notifications before they go out
 
-**Current Issue:** Notifications auto-send without staff review
-**Solution:** 
-- Modify `status-change-form.tsx` and `ChangeStatusModal.tsx` to show `StageChangeNotificationModal` before sending
-- Allow staff to review, edit, or suppress notifications before they go out
-- Add "Don't notify" checkbox option to bypass modal for quick changes
+#### 1.2 Integrate TiptapEditor in Stage Change Modal ✅ DONE
+**Status:** Complete
+**What was done:** Replaced `<Textarea>` with `<TiptapEditor>` in stage-change-notification-modal.tsx
+- Full rich text toolbar (bold, italic, underline, lists, tables, headings, etc.)
+- Consistent editing experience with template creation forms
 
-**Files to Modify:**
-- `client/src/components/status-change-form.tsx`
-- `client/src/components/ChangeStatusModal.tsx`
-- `client/src/components/stage-change-notification-modal.tsx`
-
----
-
-#### 1.2 Integrate TiptapEditor in Stage Change Modal
-**Complexity:** Low | **Impact:** Medium | **Effort:** 1-2 hours
-
-**Current Issue:** Plain textarea for editing rich email content
-**Solution:** Replace `<Textarea>` with `<TiptapEditor>` in stage-change-notification-modal.tsx
-
-**Files to Modify:**
-- `client/src/components/stage-change-notification-modal.tsx`
-
----
-
-#### 1.3 Fix LSP Errors in stageChangeNotificationStorage
-**Complexity:** Low | **Impact:** Low | **Effort:** 30 minutes
-
-**Current Issue:** 16 TypeScript/LSP errors in this file
-**Solution:** Review and fix type errors
-
-**Files to Modify:**
-- `server/storage/notifications/stageChangeNotificationStorage.ts`
+#### 1.3 Fix LSP Errors in stageChangeNotificationStorage ✅ DONE
+**Status:** Complete
+**What was done:** Added type annotations for Drizzle query results in stageChangeNotificationStorage.ts
 
 ---
 
@@ -428,9 +398,12 @@ These are nice-to-have improvements.
 
 ## Recommended Implementation Order
 
-1. **Stage 1.3** - Fix LSP errors (quick win, clears errors)
-2. **Stage 1.1** - Fix stage change notification flow (highest impact)
-3. **Stage 1.2** - Add TiptapEditor to modal (quick enhancement)
+### Completed ✅
+1. ~~**Stage 1.3** - Fix LSP errors~~ ✅ Done Nov 29, 2025
+2. ~~**Stage 1.1** - Fix stage change notification flow~~ ✅ Done Nov 29, 2025
+3. ~~**Stage 1.2** - Add TiptapEditor to modal~~ ✅ Done Nov 29, 2025
+
+### Next Up
 4. **Stage 2.2** - Implement SMS sending (completes core channels)
 5. **Stage 2.1** - Multi-recipient selection (enhances usability)
 6. **Stage 2.3** - Client-facing stage notifications (expands functionality)
