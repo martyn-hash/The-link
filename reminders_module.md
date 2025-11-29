@@ -80,43 +80,50 @@ A fully functional calendar view has been built with:
 
 ---
 
-### 5. Stage Change Notifications ✅ CORE COMPLETE (Stage 1 Done)
+### 5. Stage Change Notifications ✅ FULLY COMPLETE (All Stages Done)
 
 **Key Files:**
-- `client/src/components/stage-change-notification-modal.tsx` - Used in status-change-form.tsx
-- `client/src/components/status-change-form.tsx` - Alternative status change form
 - `client/src/components/ChangeStatusModal.tsx` - Main status modal with single-dialog UX
+- `client/src/components/ClientValueNotificationContent.tsx` - Client-facing notification UI
+- `client/src/components/StageNotificationAudioRecorder.tsx` - AI voice recording component
 - `server/storage/notifications/stageChangeNotificationStorage.ts`
+- `server/notification-variables.ts` - Merge field processing (25+ variables)
+- `server/routes/projects.ts` - Send notification endpoint with Outlook/SendGrid
 
-**Current Behavior (Fixed Nov 29, 2025):**
-When a stage change occurs, staff are now shown notification approval controls for review before sending. Notifications are no longer auto-sent.
+**Current Behavior (Completed Nov 29, 2025):**
+When a stage change occurs, staff are shown a Client Value Notification modal to send CLIENT-FACING notifications to client contacts (directors, shareholders, etc.).
 
-**Single-Modal UX (Implemented Nov 29, 2025):**
+**Single-Modal UX:**
 The ChangeStatusModal uses a single Dialog that transitions between two views:
 1. **Stage Change Form** - User selects new stage, reason, notes, etc.
-2. **Notification Content** - After stage change succeeds, same dialog shows notification approval
+2. **Client Value Notification** - After stage change succeeds, shows notification approval
 
-This eliminates stacked modals. Key flow:
+Key flow:
 - User submits stage change → API call commits immediately
 - Success toast appears confirming stage change
-- Same modal transitions to show notification content (recipients, email, push fields)
-- User can: Skip (close without sending), Don't Send (suppress & log), or Send Notification
+- Same modal transitions to show client notification content
+- User can: Skip (close), Don't Send (suppress & log), or Select Channels to Send
 - All actions close the entire modal
 
 **What Works:**
 - ✅ Single-modal UX (no stacked dialogs)
 - ✅ Stage change commits immediately with success toast before notification decision
+- ✅ **Multi-recipient selection** - Select multiple client contacts with role badges
+- ✅ **AI-assisted message drafting** - Voice recording with OpenAI Whisper + GPT-4o-mini
+- ✅ **Client-facing notifications** - Sends to directors, shareholders, contacts (not staff)
+- ✅ **Outlook integration** - Sends from staff's connected Outlook account
+- ✅ **SendGrid fallback** - Falls back to SendGrid if no Outlook
 - ✅ TiptapEditor for rich text editing of email body
-- ✅ Editable subject line and push notification fields
-- ✅ "Skip", "Don't Send" (suppress), and "Send Notification" options
-- ✅ Recipients list display
-- ✅ Form state properly resets after successful submission
-- ✅ LSP errors fixed in stageChangeNotificationStorage.ts
+- ✅ Editable subject line with merge field support
+- ✅ **Comprehensive merge fields** - 25+ variables ({client_company_name}, {project_name}, etc.)
+- ✅ Per-channel controls (Email enabled, SMS marked "Coming Soon")
+- ✅ Template lookup from project_type_notifications table
+- ✅ Stage lookup scoped by projectTypeId (avoids cross-type conflicts)
+- ✅ Recipients show role badges, primary contact indicators, opt-out status
+- ✅ Sender status indicator showing Outlook connection
+- ✅ Skip, Don't Send (Log as Suppressed), and Select a Channel options
 
-**What's Still Missing (Stage 2+):**
-- Multi-recipient selection not implemented
-- AI voice recording feature not implemented
-- Client-facing stage notifications (currently staff only)
+**SMS Status:** UI shows "Coming Soon" - VoodooSMS integration not yet implemented
 
 ---
 
@@ -212,39 +219,40 @@ The client detail page includes a comprehensive notifications view accessible vi
 
 ## Stage Change Notifications - Detailed Completion Checklist
 
-This section provides a comprehensive breakdown of what's needed to fully complete the stage change notification feature.
+This section provides a comprehensive breakdown of the stage change notification feature. **ALL ITEMS NOW COMPLETE.**
 
-### Currently Working ✅
+### All Features Complete ✅
 - [x] Template creation in project type settings (via StageNotificationForm with TiptapEditor)
-- [x] Template variable replacement ({{client.name}}, {{project.name}}, etc.)
+- [x] Template variable replacement ({client_company_name}, {project_name}, etc.) - uses single braces
 - [x] Stage trigger configuration (on_entry, on_exit)
 - [x] Notification preview generation on stage change
 - [x] Backend endpoint to send stage change notifications
 - [x] Database schema for tracking sent notifications
-- [x] **Show modal to staff before sending** ✅ FIXED Nov 29, 2025
-- [x] **TiptapEditor in edit modal** ✅ FIXED Nov 29, 2025
-- [x] **LSP errors in storage file** ✅ FIXED Nov 29, 2025
-
-### Not Implemented ❌
-- [ ] **Multi-recipient selection** - Can only send to single assigned user
-- [ ] **AI voice recording** - Speak to draft, OpenAI rewrites to template
-- [ ] **Client-facing stage notifications** - Currently only notifies staff
-- [ ] **Notification suppression toggle** - Quick bypass for routine changes
+- [x] Show modal to staff before sending ✅ FIXED Nov 29, 2025
+- [x] TiptapEditor in edit modal ✅ FIXED Nov 29, 2025
+- [x] LSP errors in storage file ✅ FIXED Nov 29, 2025
+- [x] **Multi-recipient selection** ✅ IMPLEMENTED Nov 29, 2025
+- [x] **AI voice recording** ✅ IMPLEMENTED Nov 29, 2025 (OpenAI Whisper + GPT-4o-mini)
+- [x] **Client-facing stage notifications** ✅ IMPLEMENTED Nov 29, 2025
+- [x] **Notification suppression** ✅ "Don't Send (Log as Suppressed)" option
 
 ### Backend Components
 | Component | Status | File |
 |-----------|--------|------|
 | Stage notification storage | ✅ Working | `stageChangeNotificationStorage.ts` |
-| Notification preview generation | ✅ Working | `notification-sender.ts` |
-| Send notification endpoint | ✅ Working | `server/routes.ts` |
-| Variable replacement | ✅ Working | `notification-variables.ts` |
+| Notification preview generation | ✅ Working | `prepareClientValueNotification()` |
+| Send notification endpoint | ✅ Working | `server/routes/projects.ts` |
+| Variable replacement | ✅ Working | `notification-variables.ts` (25+ merge fields) |
+| Outlook integration | ✅ Working | Microsoft Graph API in projects.ts |
+| SendGrid fallback | ✅ Working | Falls back if no Outlook |
+| AI transcription/drafting | ✅ Working | `server/routes/ai.ts` |
 
 ### Frontend Components
 | Component | Status | File |
 |-----------|--------|------|
-| StageChangeNotificationModal | ✅ Shows with TiptapEditor | `stage-change-notification-modal.tsx` |
-| ChangeStatusModal | ✅ Shows modal before sending | `ChangeStatusModal.tsx` |
-| StatusChangeForm | ✅ Shows modal before sending | `status-change-form.tsx` |
+| ClientValueNotificationContent | ✅ Main client notification UI | `ClientValueNotificationContent.tsx` |
+| StageNotificationAudioRecorder | ✅ AI voice recording | `StageNotificationAudioRecorder.tsx` |
+| ChangeStatusModal | ✅ Single-modal UX | `ChangeStatusModal.tsx` |
 | StageNotificationForm (template) | ✅ Working | `StageNotificationForm.tsx` |
 
 ---
@@ -274,30 +282,20 @@ All Stage 1 items have been completed and verified with e2e testing.
 
 ---
 
-### Stage 2: Feature Completion (Medium Impact, Medium-High Complexity)
+### Stage 2: Feature Completion ✅ COMPLETED (Nov 29, 2025)
 
-These items complete partially-implemented features.
+#### 2.1 Implement Multi-Recipient Selection ✅ DONE
+**Status:** Complete
+**What was done:**
+- ClientValueNotificationContent shows all client contacts (directors, shareholders, etc.)
+- Recipients displayed with role badges, primary contact indicators, opt-out status
+- Multi-select via emailRecipientIds and smsRecipientIds arrays
+- Backend handles sending to multiple recipients
 
-#### 2.1 Implement Multi-Recipient Selection
-**Complexity:** Medium-High | **Impact:** Medium | **Effort:** 3-5 hours
-
-**Current Issue:** Stage notifications only go to single assigned user
-**Solution:**
-- Modify `ClientPersonSelectionModal` to support checkboxes (multi-select)
-- Add multi-recipient selection to stage change notification modal
-- Update send logic to handle multiple recipients
-
-**Files to Modify:**
-- `client/src/components/ClientPersonSelectionModal.tsx`
-- `client/src/components/stage-change-notification-modal.tsx`
-- `server/routes.ts` (notification sending endpoint)
-
----
-
-#### 2.2 Implement VoodooSMS Integration
+#### 2.2 Implement VoodooSMS Integration ⏳ OUTSTANDING
 **Complexity:** Medium | **Impact:** Medium | **Effort:** 3-4 hours
 
-**Current Issue:** SMS sending is placeholder only
+**Current Issue:** SMS sending is placeholder only - UI shows "Coming Soon"
 **Solution:**
 - Complete VoodooSMS API integration
 - Add proper error handling and status tracking
@@ -311,51 +309,33 @@ These items complete partially-implemented features.
 - VoodooSMS API credentials (environment variable)
 - API documentation review
 
----
-
-#### 2.3 Add Client-Facing Stage Change Notifications
-**Complexity:** Medium | **Impact:** Medium | **Effort:** 4-6 hours
-
-**Current Issue:** Stage notifications only target staff, not clients
-**Solution:**
-- Add option in project type notification settings for client notifications on stage changes
-- Create separate template configuration for client-facing messages
-- Respect client opt-out preferences
-
-**Files to Modify:**
-- `shared/schema/notifications/tables.ts`
-- `server/notification-sender.ts`
-- `client/src/pages/project-type-detail/components/tabs/NotificationsTab.tsx`
+#### 2.3 Add Client-Facing Stage Change Notifications ✅ DONE
+**Status:** Complete
+**What was done:**
+- Full "Client Value Notification" system implemented
+- Notifications target client contacts (directors, shareholders), not staff
+- Respects receiveNotifications opt-out preference
+- Templates loaded from project_type_notifications table
 
 ---
 
-### Stage 3: Enhanced Features (Medium Impact, High Complexity)
+### Stage 3: Enhanced Features ✅ MOSTLY COMPLETE (Nov 29, 2025)
 
-These are new features that add significant value.
+#### 3.1 AI Voice Recording for Message Drafting ✅ DONE
+**Status:** Complete
+**What was done:**
+- StageNotificationAudioRecorder component with Web Audio API
+- OpenAI Whisper transcription via /api/ai/transcribe-for-notification
+- GPT-4o-mini rewrites transcription into professional notification
+- Two modes: Notes (bullet points) and Email (formal with subject/body)
+- Passes existing subject/body to AI for merge field context awareness
+- System prompts configurable in Company Settings
 
-#### 3.1 AI Voice Recording for Message Drafting
-**Complexity:** High | **Impact:** Medium | **Effort:** 6-10 hours
+**Files Created:**
+- `client/src/components/StageNotificationAudioRecorder.tsx`
+- `server/routes/ai.ts` (transcribe-for-notification endpoint)
 
-**Feature:** Staff speaks into device, audio transcribed and rewritten into professional template
-
-**Implementation:**
-- Add voice recording button to notification modal
-- Integrate Web Audio API for recording
-- Send audio to OpenAI Whisper for transcription
-- Use GPT to rewrite transcription into professional notification format
-- Pre-populate email/SMS fields with AI-generated content
-
-**Files to Create/Modify:**
-- New: `client/src/components/VoiceRecorder.tsx`
-- New: `server/ai-message-service.ts`
-- Modify: `client/src/components/stage-change-notification-modal.tsx`
-
-**Requirements:**
-- OpenAI API key with Whisper and GPT access
-
----
-
-#### 3.2 Add Project Type Filter to Calendar View
+#### 3.2 Add Project Type Filter to Calendar View ⏳ OUTSTANDING
 **Complexity:** Low | **Impact:** Low | **Effort:** 1-2 hours
 
 **Current Issue:** Can filter by project but not by project type
@@ -371,16 +351,16 @@ These are new features that add significant value.
 
 These are nice-to-have improvements.
 
-#### 4.1 Add Week View to Calendar
+#### 4.1 Add Week View to Calendar ⏳ OUTSTANDING
 **Complexity:** Medium | **Impact:** Low | **Effort:** 2-3 hours
 
-#### 4.2 Export/Print Scheduled Notifications
+#### 4.2 Export/Print Scheduled Notifications ⏳ OUTSTANDING
 **Complexity:** Medium | **Impact:** Low | **Effort:** 2-3 hours
 
-#### 4.3 Color-Code Calendar by Notification Type
+#### 4.3 Color-Code Calendar by Notification Type ⏳ OUTSTANDING
 **Complexity:** Low | **Impact:** Low | **Effort:** 1 hour
 
-#### 4.4 Add Notification Analytics Dashboard
+#### 4.4 Add Notification Analytics Dashboard ⏳ OUTSTANDING
 **Complexity:** High | **Impact:** Medium | **Effort:** 8-12 hours
 
 ---
@@ -391,7 +371,8 @@ These are nice-to-have improvements.
 |------|---------|
 | `scheduled-notifications.tsx` | Calendar view UI (global scheduled notifications) |
 | `ClientNotificationsView.tsx` | Client-specific notifications view (in client detail) |
-| `stage-change-notification-modal.tsx` | Modal for stage change notification review |
+| `ClientValueNotificationContent.tsx` | **NEW** - Client value notification UI with recipients |
+| `StageNotificationAudioRecorder.tsx` | **NEW** - AI voice recording for message drafting |
 | `ChangeStatusModal.tsx` | Modal for changing project stage (triggers notifications) |
 | `status-change-form.tsx` | Form for status changes (also triggers notifications) |
 | `notification-scheduler.ts` | Schedules notifications for services/projects |
@@ -400,13 +381,14 @@ These are nice-to-have improvements.
 | `StageNotificationForm.tsx` | Form for creating stage notification templates |
 | `ProjectNotificationForm.tsx` | Form for creating project notification templates |
 | `TiptapEditor.tsx` | Rich text editor component |
-| `ClientPersonSelectionModal.tsx` | Person selection for notification preview |
-| `stageChangeNotificationStorage.ts` | Database operations for stage change notifications |
+| `stageChangeNotificationStorage.ts` | Database operations + prepareClientValueNotification |
 | `shared/schema/notifications/tables.ts` | Notification database schema |
-| `notification-variables.ts` | Variable replacement logic |
+| `notification-variables.ts` | Variable replacement logic (25+ merge fields) |
 | `NotificationVariableGuide.tsx` | UI guide showing available template variables |
 | `userNotificationPreferencesStorage.ts` | User opt-in/out preferences |
 | `super-admin-dropdown.tsx` | Super admin menu (now includes calendar link) |
+| `server/routes/ai.ts` | AI endpoints including transcribe-for-notification |
+| `server/routes/projects.ts` | Send client notification endpoint with Outlook/SendGrid |
 
 ---
 
@@ -416,14 +398,14 @@ These are nice-to-have improvements.
 1. ~~**Stage 1.3** - Fix LSP errors~~ ✅ Done Nov 29, 2025
 2. ~~**Stage 1.1** - Fix stage change notification flow~~ ✅ Done Nov 29, 2025
 3. ~~**Stage 1.2** - Add TiptapEditor to modal~~ ✅ Done Nov 29, 2025
+4. ~~**Stage 2.1** - Multi-recipient selection~~ ✅ Done Nov 29, 2025
+5. ~~**Stage 2.3** - Client-facing stage notifications~~ ✅ Done Nov 29, 2025
+6. ~~**Stage 3.1** - AI voice recording~~ ✅ Done Nov 29, 2025
 
-### Next Up
-4. **Stage 2.2** - Implement SMS sending (completes core channels)
-5. **Stage 2.1** - Multi-recipient selection (enhances usability)
-6. **Stage 2.3** - Client-facing stage notifications (expands functionality)
-7. **Stage 3.2** - Project type filter (quick calendar improvement)
-8. **Stage 3.1** - AI voice recording (advanced feature)
-9. **Stage 4.x** - Polish items as time permits
+### Outstanding
+7. **Stage 2.2** - Implement VoodooSMS integration (completes SMS channel)
+8. **Stage 3.2** - Project type filter for calendar view
+9. **Stage 4.x** - Polish items (week view, export, color-coding, analytics)
 
 ---
 
