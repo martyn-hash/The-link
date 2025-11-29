@@ -340,9 +340,21 @@ export function processNotificationVariables(
     }
   }
   
+  // Frontend-only variables that should be preserved for client-side processing
+  // These variables depend on user interaction (e.g., recipient selection) and cannot be resolved server-side
+  const frontendOnlyVariables = [
+    'recipient_first_names',
+  ];
+  
   // Remove any remaining unreplaced variables (graceful degradation)
   // This prevents showing {variable_name} to end users if data is missing
-  processed = processed.replace(/\{[^}]+\}/g, "");
+  // But preserve frontend-only variables that will be processed client-side
+  processed = processed.replace(/\{([^}]+)\}/g, (match, varName) => {
+    if (frontendOnlyVariables.includes(varName)) {
+      return match; // Preserve the variable for frontend processing
+    }
+    return ""; // Remove unknown variables
+  });
   
   return processed;
 }
