@@ -211,7 +211,7 @@ Do not include any text outside the JSON object.`;
           return res.status(400).json({ error: "No audio file provided" });
         }
 
-        const { projectId } = req.body;
+        const { projectId, existingSubject, existingBody } = req.body;
         if (!projectId) {
           return res.status(400).json({ error: "Project ID is required" });
         }
@@ -243,6 +243,22 @@ Do not include any text outside the JSON object.`;
         let fullSystemPrompt = basePrompt;
         if (stageApprovalContext) {
           fullSystemPrompt += `\n\n--- COMPLETED WORK ITEMS ---\n${stageApprovalContext}\n--- END OF COMPLETED WORK ITEMS ---`;
+        }
+        
+        // Include existing email template with merge fields for context
+        if (existingSubject || existingBody) {
+          fullSystemPrompt += `\n\n--- EXISTING EMAIL TEMPLATE ---`;
+          if (existingSubject) {
+            fullSystemPrompt += `\nSubject: ${existingSubject}`;
+          }
+          if (existingBody) {
+            fullSystemPrompt += `\nBody: ${existingBody}`;
+          }
+          fullSystemPrompt += `\n\nThe template above shows merge fields like {client_company_name}, {client_first_name}, {project_name}, {due_date}. 
+You can use these merge fields in your response as they will be replaced with actual values. 
+Incorporate elements from this template into your response if appropriate.`;
+          fullSystemPrompt += `\n--- END OF EMAIL TEMPLATE ---`;
+          console.log("[AI] Including existing email template for context");
         }
 
         // Transcribe audio

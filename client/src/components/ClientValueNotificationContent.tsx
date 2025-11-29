@@ -177,6 +177,8 @@ export function ClientValueNotificationContent({
                 projectId={projectId}
                 onResult={handleVoiceResult}
                 disabled={isSending}
+                existingSubject={emailSubject}
+                existingBody={emailBody}
               />
             </div>
           </div>

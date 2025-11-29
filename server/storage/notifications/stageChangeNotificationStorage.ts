@@ -347,9 +347,11 @@ export class StageChangeNotificationStorage {
         .where(eq(clientPeople.clientId, clientId));
 
       if (clientContactsData.length === 0) {
-        console.log(`No client contacts found for client ${clientId}, skipping notification preview`);
+        console.log(`[ClientValueNotification] No client contacts found for client ${clientId}, skipping notification preview`);
         return null;
       }
+      
+      console.log(`[ClientValueNotification] Found ${clientContactsData.length} contacts for client ${clientId}`);
 
       // Map to client value notification recipients
       const recipients: ClientValueNotificationRecipient[] = clientContactsData.map(contact => ({

@@ -587,6 +587,8 @@ export function registerProjectRoutes(
         project.currentStatus
       );
 
+      console.log(`[Stage Change] Project ${updatedProject.id}: clientNotificationPreview ${clientNotificationPreview ? 'created with ' + clientNotificationPreview.recipients.length + ' recipients' : 'is null'}`);
+
       res.json({ 
         project: updatedProject, 
         clientNotificationPreview,

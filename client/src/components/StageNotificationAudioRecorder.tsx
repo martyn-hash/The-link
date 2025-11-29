@@ -17,6 +17,8 @@ interface StageNotificationAudioRecorderProps {
   }) => void;
   disabled?: boolean;
   className?: string;
+  existingSubject?: string;
+  existingBody?: string;
 }
 
 export function StageNotificationAudioRecorder({
@@ -24,6 +26,8 @@ export function StageNotificationAudioRecorder({
   onResult,
   disabled,
   className,
+  existingSubject,
+  existingBody,
 }: StageNotificationAudioRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -104,6 +108,12 @@ export function StageNotificationAudioRecorder({
       const formData = new FormData();
       formData.append("audio", audioBlob, "recording.webm");
       formData.append("projectId", projectId);
+      if (existingSubject) {
+        formData.append("existingSubject", existingSubject);
+      }
+      if (existingBody) {
+        formData.append("existingBody", existingBody);
+      }
 
       const response = await fetch("/api/ai/audio/stage-notification", {
         method: "POST",
