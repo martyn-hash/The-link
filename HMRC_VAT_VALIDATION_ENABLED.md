@@ -86,3 +86,192 @@ Restart the application for changes to take effect.
 
 ### Step 4: Verify
 Test with a real UK VAT number to confirm production access is working.
+
+---
+
+## HMRC VAT Sandbox API Test Results
+
+**Test Date:** 2025-11-30T19:51:49.001Z
+
+**Environment:** `https://test-api.service.hmrc.gov.uk`
+
+**Total Requests Made:** 20
+
+---
+
+### Request 1
+
+- **VAT Number Queried:** `553557881`
+- **Timestamp:** 2025-11-30T19:51:49.003Z
+- **Status:** ✅ Valid
+- **Company Name:** Credite Sberger Donal Inc.
+- **Address:** 131B Barton Hamlet
+- **Postcode:** SW97 5CK
+- **Validated At:** 2025-11-30T19:51:50+00:00
+
+### Request 2
+
+- **VAT Number Queried:** `123456789`
+- **Timestamp:** 2025-11-30T19:51:50.444Z
+- **Status:** ❌ Not Found
+- **Error Code:** NOT_FOUND
+- **Message:** VAT number not found in HMRC records.
+
+### Request 3
+
+- **VAT Number Queried:** `987654321`
+- **Timestamp:** 2025-11-30T19:51:51.023Z
+- **Status:** ❌ Not Found
+- **Error Code:** NOT_FOUND
+- **Message:** VAT number not found in HMRC records.
+
+### Request 4
+
+- **VAT Number Queried:** `111111111`
+- **Timestamp:** 2025-11-30T19:51:51.693Z
+- **Status:** ❌ Not Found
+- **Error Code:** NOT_FOUND
+- **Message:** VAT number not found in HMRC records.
+
+### Request 5
+
+- **VAT Number Queried:** `222222222`
+- **Timestamp:** 2025-11-30T19:51:52.355Z
+- **Status:** ❌ Not Found
+- **Error Code:** NOT_FOUND
+- **Message:** VAT number not found in HMRC records.
+
+### Request 6
+
+- **VAT Number Queried:** `333333333`
+- **Timestamp:** 2025-11-30T19:51:52.999Z
+- **Status:** ❌ Not Found
+- **Error Code:** NOT_FOUND
+- **Message:** VAT number not found in HMRC records.
+
+### Request 7
+
+- **VAT Number Queried:** `444444444`
+- **Timestamp:** 2025-11-30T19:51:53.369Z
+- **Status:** ❌ Not Found
+- **Error Code:** NOT_FOUND
+- **Message:** VAT number not found in HMRC records.
+
+### Request 8
+
+- **VAT Number Queried:** `555555555`
+- **Timestamp:** 2025-11-30T19:51:54.057Z
+- **Status:** ❌ Not Found
+- **Error Code:** NOT_FOUND
+- **Message:** VAT number not found in HMRC records.
+
+### Request 9
+
+- **VAT Number Queried:** `666666666`
+- **Timestamp:** 2025-11-30T19:51:54.481Z
+- **Status:** ❌ Not Found
+- **Error Code:** NOT_FOUND
+- **Message:** VAT number not found in HMRC records.
+
+### Request 10
+
+- **VAT Number Queried:** `777777777`
+- **Timestamp:** 2025-11-30T19:51:55.133Z
+- **Status:** ❌ Not Found
+- **Error Code:** NOT_FOUND
+- **Message:** VAT number not found in HMRC records.
+
+### Request 11
+
+- **VAT Number Queried:** `888888888`
+- **Timestamp:** 2025-11-30T19:51:55.780Z
+- **Status:** ❌ Not Found
+- **Error Code:** NOT_FOUND
+- **Message:** VAT number not found in HMRC records.
+
+### Request 12
+
+- **VAT Number Queried:** `999999999`
+- **Timestamp:** 2025-11-30T19:51:56.168Z
+- **Status:** ❌ Not Found
+- **Error Code:** NOT_FOUND
+- **Message:** VAT number not found in HMRC records.
+
+### Request 13
+
+- **VAT Number Queried:** `100000001`
+- **Timestamp:** 2025-11-30T19:51:56.819Z
+- **Status:** ❌ Not Found
+- **Error Code:** NOT_FOUND
+- **Message:** VAT number not found in HMRC records.
+
+### Request 14
+
+- **VAT Number Queried:** `200000002`
+- **Timestamp:** 2025-11-30T19:51:57.468Z
+- **Status:** ❌ Not Found
+- **Error Code:** NOT_FOUND
+- **Message:** VAT number not found in HMRC records.
+
+### Request 15
+
+- **VAT Number Queried:** `300000003`
+- **Timestamp:** 2025-11-30T19:51:57.837Z
+- **Status:** ❌ Not Found
+- **Error Code:** NOT_FOUND
+- **Message:** VAT number not found in HMRC records.
+
+### Request 16
+
+- **VAT Number Queried:** `400000004`
+- **Timestamp:** 2025-11-30T19:51:58.221Z
+- **Status:** ❌ Not Found
+- **Error Code:** NOT_FOUND
+- **Message:** VAT number not found in HMRC records.
+
+### Request 17
+
+- **VAT Number Queried:** `500000005`
+- **Timestamp:** 2025-11-30T19:51:58.604Z
+- **Status:** ❌ Not Found
+- **Error Code:** NOT_FOUND
+- **Message:** VAT number not found in HMRC records.
+
+### Request 18
+
+- **VAT Number Queried:** `600000006`
+- **Timestamp:** 2025-11-30T19:51:59.250Z
+- **Status:** ❌ Not Found
+- **Error Code:** NOT_FOUND
+- **Message:** VAT number not found in HMRC records.
+
+### Request 19
+
+- **VAT Number Queried:** `700000007`
+- **Timestamp:** 2025-11-30T19:51:59.617Z
+- **Status:** ❌ Not Found
+- **Error Code:** NOT_FOUND
+- **Message:** VAT number not found in HMRC records.
+
+### Request 20
+
+- **VAT Number Queried:** `800000008`
+- **Timestamp:** 2025-11-30T19:52:00.298Z
+- **Status:** ❌ Not Found
+- **Error Code:** NOT_FOUND
+- **Message:** VAT number not found in HMRC records.
+
+---
+
+## Test Summary
+
+| Metric | Count |
+|--------|-------|
+| Total Requests | 20 |
+| Valid VAT Numbers | 1 |
+| Not Found | 19 |
+| Errors | 0 |
+
+---
+
+*All 20 requests successfully made to HMRC VAT Check API sandbox environment on 30 November 2025. OAuth authentication working correctly. API responding as expected for both valid and invalid VAT numbers.*
