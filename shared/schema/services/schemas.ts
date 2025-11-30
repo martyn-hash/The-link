@@ -24,6 +24,9 @@ export const udfDefinitionSchema = z.object({
 
 export type UdfDefinition = z.infer<typeof udfDefinitionSchema>;
 
+export const serviceClientTypeValues = ["company", "individual", "both"] as const;
+export type ServiceClientType = typeof serviceClientTypeValues[number];
+
 export const baseInsertServiceSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional().nullable(),
@@ -33,6 +36,7 @@ export const baseInsertServiceSchema = z.object({
   chStartDateField: z.string().optional().nullable(),
   chDueDateField: z.string().optional().nullable(),
   isPersonalService: z.boolean().optional().default(false),
+  applicableClientTypes: z.enum(serviceClientTypeValues).optional().default("company"),
   isStaticService: z.boolean().optional().default(false),
   isVatService: z.boolean().optional().default(false),
   isActive: z.boolean().optional().default(true),

@@ -309,7 +309,19 @@ export function registerServiceImportRoutes(
           let action: "create" | "update" | "skip" = "create";
           let skipReason: string | undefined;
 
-          if (importType === "people_services" || matchedService.isPersonalService) {
+          // Determine if this should be treated as a personal service import
+          // A service is treated as personal if:
+          // - Import type is explicitly 'people_services'
+          // - applicableClientTypes is 'individual' (always personal)
+          // - applicableClientTypes is 'both' and import type is 'people_services'
+          const applicableType = matchedService.applicableClientTypes || 'company';
+          const isPeopleServicesImport = importType === "people_services";
+          const isPersonalServiceImport = 
+            isPeopleServicesImport || 
+            applicableType === "individual" ||
+            (applicableType === "both" && isPeopleServicesImport);
+
+          if (isPersonalServiceImport) {
             const personEmail = mappedRow.personEmail;
             const personName = mappedRow.personFullName;
 
@@ -562,7 +574,13 @@ export function registerServiceImportRoutes(
               }
             }
 
-            const isPersonalService = importType === "people_services" || matchedService.isPersonalService;
+            // Determine if this should be treated as a personal service import
+            const applicableType = matchedService.applicableClientTypes || 'company';
+            const isPeopleServicesImport = importType === "people_services";
+            const isPersonalService = 
+              isPeopleServicesImport || 
+              applicableType === "individual" ||
+              (applicableType === "both" && isPeopleServicesImport);
 
             if (isPersonalService) {
               const personEmail = mappedRow.personEmail;
@@ -919,7 +937,7 @@ export function registerServiceImportRoutes(
         const clientServiceExample = [
           "12345678",
           "Example Ltd",
-          allServices.find((s: any) => !s.isPersonalService)?.name || "Monthly Bookkeeping",
+          allServices.find((s: any) => (s.applicableClientTypes || 'company') !== 'individual')?.name || "Monthly Bookkeeping",
           "monthly",
           "01/01/2025",
           "15/01/2025",
@@ -964,7 +982,7 @@ export function registerServiceImportRoutes(
         const personalServiceExample = [
           "john@example.com",
           "John Smith",
-          allServices.find((s: any) => s.isPersonalService)?.name || "Personal Tax Return",
+          allServices.find((s: any) => (s.applicableClientTypes || 'company') !== 'company')?.name || "Personal Tax Return",
           "annual",
           "06/04/2025",
           "31/01/2026",
@@ -980,12 +998,14 @@ export function registerServiceImportRoutes(
         personalServiceSheet["!cols"] = personalServiceHeaders.map((h: string) => ({ wch: Math.max(h.length + 2, 15) }));
         XLSX.utils.book_append_sheet(workbook, personalServiceSheet, "Personal Services");
 
-        const serviceListData = [["Service Name", "Type", "Is Personal Service"]];
+        const serviceListData = [["Service Name", "Applicable Client Types", "Type"]];
         for (const service of allServices) {
+          const applicableType = (service as any).applicableClientTypes || 'company';
+          const typeLabel = applicableType === 'both' ? 'Both' : (applicableType === 'individual' ? 'Individual' : 'Company');
           serviceListData.push([
             service.name,
-            service.isPersonalService ? "Personal" : "Client",
-            service.isPersonalService ? "Yes" : "No",
+            typeLabel,
+            applicableType === 'individual' ? 'Personal' : (applicableType === 'both' ? 'Both' : 'Client'),
           ]);
         }
         const serviceListSheet = XLSX.utils.aoa_to_sheet(serviceListData);

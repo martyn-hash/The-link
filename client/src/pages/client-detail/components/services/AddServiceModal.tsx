@@ -106,28 +106,36 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
     enabled: isOpen,
   });
 
-  // Fetch available services based on client type
+  // Fetch all services - we'll filter them based on applicableClientTypes
   const clientTypeLower = clientType?.toLowerCase();
-  const servicesQueryKey = clientTypeLower === 'individual' 
-    ? ['/api/services'] // All services (will filter to personal services only)
-    : ['/api/services/client-assignable']; // Client assignable services only
     
   const { data: allServices, isLoading: servicesLoading } = useQuery<ServiceWithDetails[]>({
-    queryKey: servicesQueryKey,
+    queryKey: ['/api/services'],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: isOpen,
   });
   
-  // Filter services based on client type
-  const services = clientTypeLower === 'individual' 
-    ? allServices?.filter(service => service.isPersonalService) 
-    : allServices;
+  // Filter services based on client type using applicableClientTypes field
+  // 'both' services should show for either client type
+  const services = allServices?.filter(service => {
+    const applicableType = (service as any).applicableClientTypes || 'company';
+    if (applicableType === 'both') return true;
+    if (clientTypeLower === 'individual') {
+      return applicableType === 'individual';
+    }
+    return applicableType === 'company';
+  });
 
   // Fetch related people for this client (needed for personal service assignment)
+  // Should fetch when service is 'individual' or 'both' for individual clients
+  const selectedServiceApplicableType = selectedService ? (selectedService as any).applicableClientTypes || 'company' : null;
+  const shouldShowPersonSelection = selectedServiceApplicableType === 'individual' || 
+    (selectedServiceApplicableType === 'both' && clientTypeLower === 'individual');
+  
   const { data: clientPeople, isLoading: peopleLoading } = useQuery<ClientPersonWithPerson[]>({
     queryKey: [`/api/clients/${clientId}/people`],
     queryFn: getQueryFn({ on401: "throw" }),
-    enabled: Boolean(isOpen && selectedService?.isPersonalService),
+    enabled: Boolean(isOpen && shouldShowPersonSelection),
   });
 
   // Fetch users for role assignments and service owner selection
@@ -207,8 +215,17 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
     return selectedService?.roles && selectedService.roles.length > 0;
   };
 
-  // Check if selected service is personal service
-  const isPersonalService = selectedService?.isPersonalService || false;
+  // Check if selected service should be treated as personal service for this client type
+  // A service is treated as personal if:
+  // - applicableClientTypes === 'individual' (always personal)
+  // - applicableClientTypes === 'both' AND the client is an individual
+  const isPersonalService = (() => {
+    if (!selectedService) return false;
+    const applicableType = (selectedService as any).applicableClientTypes || 'company';
+    if (applicableType === 'individual') return true;
+    if (applicableType === 'both' && clientTypeLower === 'individual') return true;
+    return false;
+  })();
 
   // Handle person selection change
   const handlePersonChange = (personId: string) => {
@@ -578,8 +595,8 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
                             services.map((service) => (
                               <SelectItem key={service.id} value={service.id}>
                                 {service.name}
-                                {service.isPersonalService && (
-                                  <Badge variant="secondary" className="ml-2 text-xs">Personal Service</Badge>
+                                {(service as any).applicableClientTypes === 'both' && (
+                                  <Badge variant="secondary" className="ml-2 text-xs bg-indigo-500 text-white">Both</Badge>
                                 )}
                                 {service.isStaticService && (
                                   <Badge variant="outline" className="ml-2 text-xs text-gray-500 border-gray-300">Static</Badge>

@@ -19,7 +19,12 @@ import {
   insertClientServiceRoleAssignmentSchema,
   insertChChangeRequestSchema,
   updateChChangeRequestSchema,
+  serviceClientTypeValues,
+  type ServiceClientType,
 } from "./schemas";
+
+export { serviceClientTypeValues };
+export type { ServiceClientType };
 
 export type Service = typeof services.$inferSelect;
 export type InsertService = z.infer<typeof insertServiceSchema>;

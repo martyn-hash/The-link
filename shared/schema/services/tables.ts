@@ -1,6 +1,6 @@
 import { pgTable, varchar, text, boolean, integer, timestamp, index, unique, jsonb } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
-import { inactiveReasonEnum } from "../enums";
+import { inactiveReasonEnum, serviceClientTypeEnum } from "../enums";
 
 import { users } from "../users/tables";
 import { clients, people } from "../clients/tables";
@@ -16,6 +16,7 @@ export const services = pgTable("services", {
   chStartDateField: varchar("ch_start_date_field"),
   chDueDateField: varchar("ch_due_date_field"),
   isPersonalService: boolean("is_personal_service").default(false),
+  applicableClientTypes: serviceClientTypeEnum("applicable_client_types").default("company"),
   isStaticService: boolean("is_static_service").default(false),
   isVatService: boolean("is_vat_service").default(false),
   isActive: boolean("is_active").default(true),

@@ -82,3 +82,9 @@ export const nlacReasonEnum = pgEnum("nlac_reason", [
   "other",
   "reactivated"
 ]);
+
+export const serviceClientTypeEnum = pgEnum("service_client_type", [
+  "company",
+  "individual", 
+  "both"
+]);

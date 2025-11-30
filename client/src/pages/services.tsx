@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { showFriendlyError } from "@/lib/friendlyErrors";
 import { apiRequest } from "@/lib/queryClient";
-import { type Service, type WorkRole, type UDFDefinition, baseInsertServiceSchema, insertWorkRoleSchema } from "@shared/schema";
+import { type Service, type WorkRole, type UDFDefinition, baseInsertServiceSchema, insertWorkRoleSchema, serviceClientTypeValues, type ServiceClientType } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -438,6 +438,7 @@ export default function Services() {
       chStartDateField: "",
       chDueDateField: "",
       isVatService: false,
+      applicableClientTypes: "company",
     },
   });
 
@@ -656,6 +657,7 @@ export default function Services() {
       isPersonalService: service.isPersonalService ?? false,
       isStaticService: service.isStaticService ?? false,
       isVatService: (service as any).isVatService ?? false,
+      applicableClientTypes: (service as any).applicableClientTypes ?? "company",
     });
     setViewMode('edit-service');
   };
@@ -852,13 +854,22 @@ export default function Services() {
                                       CH
                                     </Badge>
                                   )}
-                                  {service.isPersonalService && (
+                                  {(service as any).applicableClientTypes === "individual" && (
                                     <Badge 
                                       variant="secondary" 
                                       className="bg-purple-500 text-white"
-                                      data-testid={`personal-status-${service.id}`}
+                                      data-testid={`client-type-${service.id}`}
                                     >
-                                      Personal
+                                      Individual Only
+                                    </Badge>
+                                  )}
+                                  {(service as any).applicableClientTypes === "both" && (
+                                    <Badge 
+                                      variant="secondary" 
+                                      className="bg-indigo-500 text-white"
+                                      data-testid={`client-type-${service.id}`}
+                                    >
+                                      Company & Individual
                                     </Badge>
                                   )}
                                   {service.isStaticService && (
@@ -991,27 +1002,33 @@ export default function Services() {
                             )}
                           />
 
-                          {/* Personal Service Section */}
+                          {/* Applicable Client Types Section */}
                           <FormField
                             control={serviceForm.control}
-                            name="isPersonalService"
+                            name="applicableClientTypes"
                             render={({ field }) => (
-                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm">
-                                <div className="space-y-1">
-                                  <FormLabel htmlFor="personal-service-switch">Personal Service</FormLabel>
-                                  <div className="text-sm text-muted-foreground">
-                                    Mark this service as being for individuals rather than companies (e.g., Self-Assessments)
+                              <FormItem className="rounded-lg border p-4 shadow-sm">
+                                <div className="space-y-3">
+                                  <div>
+                                    <FormLabel>Applicable Client Types</FormLabel>
+                                    <div className="text-sm text-muted-foreground">
+                                      Choose which client types this service applies to
+                                    </div>
                                   </div>
+                                  <FormControl>
+                                    <Select onValueChange={field.onChange} value={field.value || "company"} data-testid="select-client-types">
+                                      <SelectTrigger className="w-full md:w-[300px]">
+                                        <SelectValue placeholder="Select client types" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="company">Company Only</SelectItem>
+                                        <SelectItem value="individual">Individual Only</SelectItem>
+                                        <SelectItem value="both">Both Company & Individual</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </FormControl>
+                                  <FormMessage />
                                 </div>
-                                <FormControl>
-                                  <Switch
-                                    id="personal-service-switch"
-                                    checked={field.value || false}
-                                    onCheckedChange={field.onChange}
-                                    data-testid="switch-personal-service"
-                                    aria-describedby="personal-service-description"
-                                  />
-                                </FormControl>
                               </FormItem>
                             )}
                           />
@@ -1023,14 +1040,14 @@ export default function Services() {
                             render={({ field }) => (
                               <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm">
                                 <div className="space-y-1">
-                                  <FormLabel htmlFor="static-service-switch">Static Service</FormLabel>
+                                  <FormLabel htmlFor="static-service-switch-create">Static Service</FormLabel>
                                   <div className="text-sm text-muted-foreground">
                                     Mark this service as static (display only, cannot be mapped to project types)
                                   </div>
                                 </div>
                                 <FormControl>
                                   <Switch
-                                    id="static-service-switch"
+                                    id="static-service-switch-create"
                                     checked={field.value || false}
                                     onCheckedChange={field.onChange}
                                     data-testid="switch-static-service"
@@ -1284,27 +1301,33 @@ export default function Services() {
                             )}
                           />
 
-                          {/* Personal Service Section */}
+                          {/* Applicable Client Types Section */}
                           <FormField
                             control={serviceForm.control}
-                            name="isPersonalService"
+                            name="applicableClientTypes"
                             render={({ field }) => (
-                              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm">
-                                <div className="space-y-1">
-                                  <FormLabel htmlFor="personal-service-switch">Personal Service</FormLabel>
-                                  <div className="text-sm text-muted-foreground">
-                                    Mark this service as being for individuals rather than companies (e.g., Self-Assessments)
+                              <FormItem className="rounded-lg border p-4 shadow-sm">
+                                <div className="space-y-3">
+                                  <div>
+                                    <FormLabel>Applicable Client Types</FormLabel>
+                                    <div className="text-sm text-muted-foreground">
+                                      Choose which client types this service applies to
+                                    </div>
                                   </div>
+                                  <FormControl>
+                                    <Select onValueChange={field.onChange} value={field.value || "company"} data-testid="select-client-types-edit">
+                                      <SelectTrigger className="w-full md:w-[300px]">
+                                        <SelectValue placeholder="Select client types" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="company">Company Only</SelectItem>
+                                        <SelectItem value="individual">Individual Only</SelectItem>
+                                        <SelectItem value="both">Both Company & Individual</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </FormControl>
+                                  <FormMessage />
                                 </div>
-                                <FormControl>
-                                  <Switch
-                                    id="personal-service-switch"
-                                    checked={field.value || false}
-                                    onCheckedChange={field.onChange}
-                                    data-testid="switch-personal-service"
-                                    aria-describedby="personal-service-description"
-                                  />
-                                </FormControl>
                               </FormItem>
                             )}
                           />
@@ -1316,17 +1339,17 @@ export default function Services() {
                             render={({ field }) => (
                               <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm">
                                 <div className="space-y-1">
-                                  <FormLabel htmlFor="static-service-switch">Static Service</FormLabel>
+                                  <FormLabel htmlFor="static-service-switch-edit">Static Service</FormLabel>
                                   <div className="text-sm text-muted-foreground">
                                     Mark this service as static (display only, cannot be mapped to project types)
                                   </div>
                                 </div>
                                 <FormControl>
                                   <Switch
-                                    id="static-service-switch"
+                                    id="static-service-switch-edit"
                                     checked={field.value || false}
                                     onCheckedChange={field.onChange}
-                                    data-testid="switch-static-service"
+                                    data-testid="switch-static-service-edit"
                                     aria-describedby="static-service-description"
                                   />
                                 </FormControl>
@@ -1346,17 +1369,17 @@ export default function Services() {
                               render={({ field }) => (
                                 <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4 shadow-sm bg-background">
                                   <div className="space-y-1">
-                                    <FormLabel htmlFor="ch-connection-switch">Enable Companies House Connection</FormLabel>
+                                    <FormLabel htmlFor="ch-connection-switch-edit">Enable Companies House Connection</FormLabel>
                                     <div className="text-sm text-muted-foreground">
                                       Auto-populate dates from client Companies House data (accounts and confirmation statement deadlines)
                                     </div>
                                   </div>
                                   <FormControl>
                                     <Switch
-                                      id="ch-connection-switch"
+                                      id="ch-connection-switch-edit"
                                       checked={field.value || false}
                                       onCheckedChange={field.onChange}
-                                      data-testid="switch-ch-connection"
+                                      data-testid="switch-ch-connection-edit"
                                       aria-describedby="ch-connection-description"
                                     />
                                   </FormControl>
@@ -1372,7 +1395,7 @@ export default function Services() {
                                   render={({ field }) => (
                                     <FormItem>
                                       <FormLabel>Start Date Field</FormLabel>
-                                      <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-ch-start-field">
+                                      <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-ch-start-field-edit">
                                         <FormControl>
                                           <SelectTrigger>
                                             <SelectValue placeholder="Select CH field" />
@@ -1394,7 +1417,7 @@ export default function Services() {
                                   render={({ field }) => (
                                     <FormItem>
                                       <FormLabel>Due Date Field</FormLabel>
-                                      <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-ch-due-field">
+                                      <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-ch-due-field-edit">
                                         <FormControl>
                                           <SelectTrigger>
                                             <SelectValue placeholder="Select CH field" />
