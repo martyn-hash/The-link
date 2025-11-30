@@ -7,7 +7,26 @@ import type { ChChangeRequest } from "../shared/schema";
 /**
  * Types of CH update scenarios
  */
-type UpdateScenario = 'accounts_filed' | 'extension_granted' | 'confirmation_statement' | 'single_field';
+type UpdateScenario = 'accounts_filed' | 'extension_granted' | 'confirmation_statement' | 'address_change' | 'single_field';
+
+/**
+ * Address field name constant (must match ch-sync-service.ts)
+ */
+const ADDRESS_FIELD_NAME = 'registeredOfficeAddress';
+
+/**
+ * Address data structure (must match ch-sync-service.ts)
+ */
+interface AddressData {
+  formatted: string;
+  components: {
+    registeredAddress1: string | null;
+    registeredAddress2: string | null;
+    registeredAddress3: string | null;
+    registeredPostcode: string | null;
+    registeredCountry: string | null;
+  };
+}
 
 /**
  * Detect which scenario this approval represents based on ALL pending changes for the same client
@@ -39,6 +58,12 @@ async function detectUpdateScenario(clientId: string, requestIdsBeingApproved: s
   
   if (hasConfStatementChange) {
     return 'confirmation_statement';
+  }
+
+  // Scenario 4: Address change
+  const hasAddressChange = allPendingFieldNames.includes(ADDRESS_FIELD_NAME);
+  if (hasAddressChange) {
+    return 'address_change';
   }
 
   // Default: single field update
@@ -121,8 +146,25 @@ export async function applyChChanges(
     const clientUpdates: any = {};
     for (const request of requestsToApprove) {
       const fieldName = request.fieldName as string;
-      const newValue = request.newValue ? new Date(request.newValue) : null;
-      clientUpdates[fieldName] = newValue;
+      
+      // Handle address changes specially - parse JSON and update individual fields
+      if (fieldName === ADDRESS_FIELD_NAME && request.newValue) {
+        try {
+          const addressData: AddressData = JSON.parse(request.newValue);
+          clientUpdates.registeredAddress1 = addressData.components.registeredAddress1;
+          clientUpdates.registeredAddress2 = addressData.components.registeredAddress2;
+          clientUpdates.registeredAddress3 = addressData.components.registeredAddress3;
+          clientUpdates.registeredPostcode = addressData.components.registeredPostcode;
+          clientUpdates.registeredCountry = addressData.components.registeredCountry;
+          console.log(`[CH Update] Parsed address change for client ${clientId}: ${addressData.formatted}`);
+        } catch (parseError) {
+          console.error(`[CH Update] Failed to parse address JSON for client ${clientId}:`, parseError);
+        }
+      } else {
+        // Date fields
+        const newValue = request.newValue ? new Date(request.newValue) : null;
+        clientUpdates[fieldName] = newValue;
+      }
     }
 
     if (Object.keys(clientUpdates).length > 0) {
@@ -135,9 +177,15 @@ export async function applyChChanges(
       console.log(`[CH Update] Updated client ${clientId} with ${Object.keys(clientUpdates).length} fields`);
     }
 
-    // Step 2: Update all affected client services
+    // Step 2: Update all affected client services (skip address changes - they don't affect services)
     for (const request of requestsToApprove) {
       const fieldName = request.fieldName as string;
+      
+      // Skip address changes - they only update the client record, not services
+      if (fieldName === ADDRESS_FIELD_NAME) {
+        continue;
+      }
+      
       const newValue = request.newValue ? new Date(request.newValue) : null;
       
       const affectedServices = await getAffectedClientServices(clientId, fieldName);

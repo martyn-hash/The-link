@@ -10,9 +10,14 @@ interface ChApiData {
   confirmationStatementNextDue: Date | null;
   confirmationStatementNextMadeUpTo: Date | null;
   companyStatusDetail: string | null;
+  registeredAddress1: string | null;
+  registeredAddress2: string | null;
+  registeredAddress3: string | null;
+  registeredPostcode: string | null;
+  registeredCountry: string | null;
 }
 
-// CH fields that we monitor for changes
+// CH fields that we monitor for changes (date fields)
 const CH_MONITORED_FIELDS = [
   'nextAccountsPeriodEnd',
   'nextAccountsDue', 
@@ -21,6 +26,27 @@ const CH_MONITORED_FIELDS = [
 ] as const;
 
 type ChMonitoredField = typeof CH_MONITORED_FIELDS[number];
+
+// Special field name for combined address tracking
+const ADDRESS_FIELD_NAME = 'registeredOfficeAddress';
+
+/**
+ * Format address components into a single displayable string
+ */
+function formatAddress(
+  address1: string | null | undefined,
+  address2: string | null | undefined,
+  address3: string | null | undefined,
+  postcode: string | null | undefined,
+  country: string | null | undefined
+): string | null {
+  const parts = [address1, address2, address3, postcode, country]
+    .filter(Boolean)
+    .map(s => s?.trim())
+    .filter(s => s && s.length > 0);
+  
+  return parts.length > 0 ? parts.join(', ') : null;
+}
 
 /**
  * Fetch data from Companies House API
@@ -36,8 +62,15 @@ async function fetchChData(companyNumber: string): Promise<ChApiData | null> {
       accounts: profile.accounts,
       confirmation_statement: profile.confirmation_statement,
       company_status: profile.company_status,
-      company_status_detail: profile.company_status_detail
+      company_status_detail: profile.company_status_detail,
+      registered_office_address: profile.registered_office_address
     }, null, 2));
+    
+    // Parse the registered office address
+    const address = profile.registered_office_address || {};
+    const registeredAddress1 = address.premises 
+      ? `${address.premises} ${address.address_line_1 || ''}`.trim() 
+      : (address.address_line_1 || null);
     
     return {
       companyNumber,
@@ -46,6 +79,11 @@ async function fetchChData(companyNumber: string): Promise<ChApiData | null> {
       confirmationStatementNextDue: profile.confirmation_statement?.next_due ? new Date(profile.confirmation_statement.next_due) : null,
       confirmationStatementNextMadeUpTo: profile.confirmation_statement?.next_made_up_to ? new Date(profile.confirmation_statement.next_made_up_to) : null,
       companyStatusDetail: profile.company_status_detail || null,
+      registeredAddress1: registeredAddress1,
+      registeredAddress2: address.address_line_2 || null,
+      registeredAddress3: address.care_of || address.locality || null,
+      registeredPostcode: address.postal_code || null,
+      registeredCountry: address.country || null,
     };
   } catch (error) {
     console.error(`[CH Sync] Error fetching data for company ${companyNumber}:`, error);
@@ -54,7 +92,7 @@ async function fetchChData(companyNumber: string): Promise<ChApiData | null> {
 }
 
 /**
- * Compare client CH data with fetched CH data and return differences
+ * Compare client CH data with fetched CH data and return differences for date fields
  */
 function detectChanges(client: Client, chData: ChApiData): Array<{
   fieldName: ChMonitoredField;
@@ -103,6 +141,86 @@ function detectChanges(client: Client, chData: ChApiData): Array<{
 }
 
 /**
+ * Address data structure for storage (JSON stringified in newValue)
+ */
+interface AddressData {
+  formatted: string;
+  components: {
+    registeredAddress1: string | null;
+    registeredAddress2: string | null;
+    registeredAddress3: string | null;
+    registeredPostcode: string | null;
+    registeredCountry: string | null;
+  };
+}
+
+/**
+ * Compare client address with CH address and detect changes
+ * For address changes, we store the components as JSON for proper reconstruction on approval
+ */
+function detectAddressChange(client: Client, chData: ChApiData): {
+  fieldName: string;
+  oldValue: string | null;
+  newValue: string | null;
+} | null {
+  // Format current client address
+  const clientAddress = formatAddress(
+    client.registeredAddress1,
+    client.registeredAddress2,
+    client.registeredAddress3,
+    client.registeredPostcode,
+    client.registeredCountry
+  );
+  
+  // Format CH address
+  const chAddress = formatAddress(
+    chData.registeredAddress1,
+    chData.registeredAddress2,
+    chData.registeredAddress3,
+    chData.registeredPostcode,
+    chData.registeredCountry
+  );
+  
+  // Skip if CH returns no address
+  if (!chAddress && clientAddress) {
+    console.log(`[CH Sync] Skipping address: CH returned null but we have an address`);
+    return null;
+  }
+  
+  // Skip if both are null
+  if (!chAddress && !clientAddress) {
+    return null;
+  }
+  
+  // Normalize for comparison (lowercase, remove extra whitespace)
+  const normalizedClientAddress = clientAddress?.toLowerCase().replace(/\s+/g, ' ').trim() || null;
+  const normalizedChAddress = chAddress?.toLowerCase().replace(/\s+/g, ' ').trim() || null;
+  
+  // Detect actual changes
+  if (normalizedClientAddress !== normalizedChAddress) {
+    // Store both the formatted display value and the components for reconstruction
+    const newAddressData: AddressData = {
+      formatted: chAddress!,
+      components: {
+        registeredAddress1: chData.registeredAddress1,
+        registeredAddress2: chData.registeredAddress2,
+        registeredAddress3: chData.registeredAddress3,
+        registeredPostcode: chData.registeredPostcode,
+        registeredCountry: chData.registeredCountry,
+      }
+    };
+    
+    return {
+      fieldName: ADDRESS_FIELD_NAME,
+      oldValue: clientAddress,
+      newValue: JSON.stringify(newAddressData),
+    };
+  }
+  
+  return null;
+}
+
+/**
  * Process a single client for CH data sync
  */
 async function syncClientData(client: Client): Promise<number> {
@@ -128,6 +246,7 @@ async function syncClientData(client: Client): Promise<number> {
       confirmationStatementNextDue: chData.confirmationStatementNextDue,
       confirmationStatementNextMadeUpTo: chData.confirmationStatementNextMadeUpTo,
       companyStatusDetail: chData.companyStatusDetail,
+      registeredAddress: formatAddress(chData.registeredAddress1, chData.registeredAddress2, chData.registeredAddress3, chData.registeredPostcode, chData.registeredCountry),
     });
     
     // Update company status detail immediately (doesn't require approval)
@@ -142,7 +261,17 @@ async function syncClientData(client: Client): Promise<number> {
     }
     
     // Detect changes in monitored date fields
-    const changes = detectChanges(client, chData);
+    const dateChanges = detectChanges(client, chData);
+    
+    // Detect address changes
+    const addressChange = detectAddressChange(client, chData);
+    
+    // Combine all changes
+    const changes: Array<{ fieldName: string; oldValue: string | null; newValue: string | null }> = [
+      ...dateChanges,
+      ...(addressChange ? [addressChange] : []),
+    ];
+    
     if (changes.length === 0) {
       console.log(`[CH Sync] No changes detected for ${client.name}`);
       return 0;
@@ -157,11 +286,23 @@ async function syncClientData(client: Client): Promise<number> {
     // For first-time imports (oldValue is null), apply directly without creating change requests
     // This handles cases where clients are imported and we're just setting initial data
     if (firstTimeImports.length > 0) {
-      const directUpdates: Record<string, Date> = {};
+      const directUpdates: Record<string, any> = {};
       for (const change of firstTimeImports) {
         if (change.newValue) {
-          directUpdates[change.fieldName] = new Date(change.newValue);
-          console.log(`[CH Sync] First import - applying ${change.fieldName} directly for ${client.name}: null → ${change.newValue}`);
+          // Handle address fields differently (they're strings, not dates)
+          if (change.fieldName === ADDRESS_FIELD_NAME) {
+            // For address, we need to update individual address components
+            directUpdates.registeredAddress1 = chData.registeredAddress1;
+            directUpdates.registeredAddress2 = chData.registeredAddress2;
+            directUpdates.registeredAddress3 = chData.registeredAddress3;
+            directUpdates.registeredPostcode = chData.registeredPostcode;
+            directUpdates.registeredCountry = chData.registeredCountry;
+            console.log(`[CH Sync] First import - applying address directly for ${client.name}: null → ${change.newValue}`);
+          } else {
+            // Date fields
+            directUpdates[change.fieldName] = new Date(change.newValue);
+            console.log(`[CH Sync] First import - applying ${change.fieldName} directly for ${client.name}: null → ${change.newValue}`);
+          }
         }
       }
       

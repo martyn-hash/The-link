@@ -49,6 +49,7 @@ type GroupedChangeRequest = {
   };
   accountsChanges: any[];
   confirmationStatementChanges: any[];
+  addressChanges: any[];
   affectedServices: string[];
   affectedProjects: number;
 };
@@ -212,7 +213,21 @@ export default function ChChanges() {
       parts.push(`Conf. Statement (${fields.join(', ')})`);
     }
     
+    if (group.addressChanges?.length > 0) {
+      parts.push('Registered Office');
+    }
+    
     return parts.join(' • ');
+  };
+
+  const formatAddressValue = (value: any) => {
+    if (!value) return "—";
+    try {
+      const parsed = JSON.parse(value);
+      return parsed.formatted || value;
+    } catch {
+      return value;
+    }
   };
 
   if (authLoading) {
@@ -336,13 +351,15 @@ export default function ChChanges() {
                         // Flatten all changes into individual rows
                         const allChanges = [
                           ...group.accountsChanges.map(c => ({ ...c, changeType: 'Accounts', group })),
-                          ...group.confirmationStatementChanges.map(c => ({ ...c, changeType: 'Confirmation Statement', group }))
+                          ...group.confirmationStatementChanges.map(c => ({ ...c, changeType: 'Confirmation Statement', group })),
+                          ...(group.addressChanges || []).map(c => ({ ...c, changeType: 'Address', group }))
                         ];
                         
                         return allChanges.map((change, idx) => {
                           // Show client info and actions only on first row for this client
                           const isFirstRow = idx === 0;
                           const rowSpan = allChanges.length;
+                          const isAddressChange = change.fieldName === 'registeredOfficeAddress';
                           
                           return (
                             <TableRow key={change.id} data-testid={`row-change-${change.id}`}>
@@ -381,15 +398,16 @@ export default function ChChanges() {
                                 {change.fieldName === 'nextAccountsDue' && 'Accounts Due Date'}
                                 {change.fieldName === 'confirmationStatementNextDue' && 'CS Due Date'}
                                 {change.fieldName === 'confirmationStatementNextMadeUpTo' && 'CS Made Up To'}
+                                {change.fieldName === 'registeredOfficeAddress' && 'Registered Office'}
                               </TableCell>
                               <TableCell>
-                                <div className="px-2 py-1 bg-red-50 border border-red-200 rounded text-red-700 text-sm font-mono">
-                                  {formatValue(change.oldValue)}
+                                <div className={`px-2 py-1 bg-red-50 border border-red-200 rounded text-red-700 text-sm ${isAddressChange ? '' : 'font-mono'}`}>
+                                  {isAddressChange ? (change.oldValue || "—") : formatValue(change.oldValue)}
                                 </div>
                               </TableCell>
                               <TableCell>
-                                <div className="px-2 py-1 bg-green-50 border border-green-200 rounded text-green-700 text-sm font-mono">
-                                  {formatValue(change.newValue)}
+                                <div className={`px-2 py-1 bg-green-50 border border-green-200 rounded text-green-700 text-sm ${isAddressChange ? '' : 'font-mono'}`}>
+                                  {isAddressChange ? formatAddressValue(change.newValue) : formatValue(change.newValue)}
                                 </div>
                               </TableCell>
                               {isFirstRow && (
@@ -566,6 +584,36 @@ export default function ChChanges() {
                 </div>
               )}
 
+              {/* Address Changes */}
+              {selectedGroup.addressChanges?.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-3 flex items-center space-x-2">
+                    <Badge variant="outline">Registered Office Address</Badge>
+                  </h3>
+                  <div className="space-y-3">
+                    {selectedGroup.addressChanges.map((change) => (
+                      <div key={change.id} className="border rounded-lg p-4">
+                        <div className="font-medium text-sm mb-2">Registered Office Address</div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label className="text-xs text-muted-foreground">Current</Label>
+                            <div className="mt-1 p-2 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+                              {change.oldValue || "—"}
+                            </div>
+                          </div>
+                          <div>
+                            <Label className="text-xs text-muted-foreground">New</Label>
+                            <div className="mt-1 p-2 bg-green-50 border border-green-200 rounded text-green-700 text-sm">
+                              {formatAddressValue(change.newValue)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Impact Analysis */}
               <div className="border-t pt-4">
                 <h3 className="font-semibold mb-3">Impact Analysis</h3>
@@ -607,7 +655,7 @@ export default function ChChanges() {
           <AlertDialogHeader>
             <AlertDialogTitle>Approve All Changes for {selectedGroup?.client.name}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will approve {selectedGroup ? selectedGroup.accountsChanges.length + selectedGroup.confirmationStatementChanges.length : 0} change{selectedGroup && (selectedGroup.accountsChanges.length + selectedGroup.confirmationStatementChanges.length) !== 1 ? 's' : ''} and automatically update:
+              This will approve {selectedGroup ? selectedGroup.accountsChanges.length + selectedGroup.confirmationStatementChanges.length + (selectedGroup.addressChanges?.length || 0) : 0} change{selectedGroup && (selectedGroup.accountsChanges.length + selectedGroup.confirmationStatementChanges.length + (selectedGroup.addressChanges?.length || 0)) !== 1 ? 's' : ''} and automatically update:
               <ul className="list-disc list-inside mt-2 space-y-1">
                 <li>Client Companies House data</li>
                 {selectedGroup && selectedGroup.affectedServices.length > 0 && (
@@ -615,6 +663,9 @@ export default function ChChanges() {
                 )}
                 {selectedGroup && selectedGroup.affectedProjects > 0 && (
                   <li>{selectedGroup.affectedProjects} active project{selectedGroup.affectedProjects !== 1 ? 's' : ''}</li>
+                )}
+                {selectedGroup && (selectedGroup.addressChanges?.length || 0) > 0 && (
+                  <li>Registered office address</li>
                 )}
               </ul>
             </AlertDialogDescription>

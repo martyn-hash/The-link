@@ -526,6 +526,7 @@ export function registerCompaniesHouseRoutes(
         client: any;
         accountsChanges: any[];
         confirmationStatementChanges: any[];
+        addressChanges: any[];
         affectedServices: string[];
         affectedProjects: number;
       }>();
@@ -538,6 +539,7 @@ export function registerCompaniesHouseRoutes(
             client: request.client,
             accountsChanges: [],
             confirmationStatementChanges: [],
+            addressChanges: [],
             affectedServices: [],
             affectedProjects: 0,
           });
@@ -550,6 +552,20 @@ export function registerCompaniesHouseRoutes(
           group.accountsChanges.push(request);
         } else if (fieldName === 'confirmationStatementNextDue' || fieldName === 'confirmationStatementNextMadeUpTo') {
           group.confirmationStatementChanges.push(request);
+        } else if (fieldName === 'registeredOfficeAddress') {
+          // Parse the JSON address data for display
+          try {
+            const addressData = JSON.parse(request.newValue || '{}');
+            group.addressChanges.push({
+              ...request,
+              newValueFormatted: addressData.formatted || request.newValue,
+            });
+          } catch {
+            group.addressChanges.push({
+              ...request,
+              newValueFormatted: request.newValue,
+            });
+          }
         }
       }
 
