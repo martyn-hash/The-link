@@ -9,8 +9,10 @@ import TopNavigation from "@/components/top-navigation";
 import UploadModal from "@/components/upload-modal";
 import SettingsModal from "@/components/settings-modal";
 import UserManagementModal from "@/components/user-management-modal";
+import ScheduledServicesTab from "@/components/scheduled-services-tab";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import {
   AlertDialog,
@@ -359,8 +361,15 @@ export default function Admin() {
         
         {/* Main Content */}
         <main className="flex-1 overflow-auto p-6">
-          {/* Statistics Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList className="mb-6">
+              <TabsTrigger value="overview" data-testid="tab-admin-overview">Overview</TabsTrigger>
+              <TabsTrigger value="scheduled-services" data-testid="tab-scheduled-services">Scheduled Services</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="overview" className="space-y-6">
+              {/* Statistics Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center">
@@ -1087,6 +1096,12 @@ export default function Admin() {
               </Card>
             </div>
           )}
+            </TabsContent>
+            
+            <TabsContent value="scheduled-services">
+              <ScheduledServicesTab />
+            </TabsContent>
+          </Tabs>
         </main>
       </div>
 
