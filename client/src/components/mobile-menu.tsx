@@ -14,7 +14,8 @@ import {
   X,
   MessageCircle,
   Building,
-  Users
+  Users,
+  List
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import type { User } from "@shared/schema";
@@ -57,6 +58,7 @@ export default function MobileMenu({ user }: MobileMenuProps) {
   const navItems = [
     { href: "/", label: "Dashboard", icon: Home, show: true },
     { href: "/projects", label: "Projects", icon: FolderOpen, show: true },
+    { href: "/services", label: "Services", icon: List, show: true },
     { href: "/messages", label: "Messages", icon: MessageCircle, show: true },
     { href: "/companies", label: "Clients", icon: Building, show: true },
   ];

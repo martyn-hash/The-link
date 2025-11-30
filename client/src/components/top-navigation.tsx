@@ -167,20 +167,18 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                           </div>
                         </Link>
                       </DropdownMenuItem>
-                      {(user?.isAdmin || user?.canSeeAdminMenu) && (
-                        <DropdownMenuItem asChild>
-                          <Link href="/scheduled-services" className="w-full">
-                            <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-services-menu">
-                              <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900 flex items-center justify-center shrink-0">
-                                <Calendar className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium text-foreground text-sm">Services</div>
-                              </div>
+                      <DropdownMenuItem asChild>
+                        <Link href="/services" className="w-full">
+                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-services-menu">
+                            <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900 flex items-center justify-center shrink-0">
+                              <List className="w-4 h-4 text-amber-600 dark:text-amber-400" />
                             </div>
-                          </Link>
-                        </DropdownMenuItem>
-                      )}
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-foreground text-sm">Services</div>
+                            </div>
+                          </div>
+                        </Link>
+                      </DropdownMenuItem>
                     </div>
 
                     {/* Column 2: Messages, Clients */}
