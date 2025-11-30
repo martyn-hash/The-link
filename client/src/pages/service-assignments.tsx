@@ -84,7 +84,7 @@ import {
   EyeOff
 } from "lucide-react";
 import { format } from "date-fns";
-import type { User as UserType, Service, WorkRole, Client } from "@shared/schema";
+import type { User as UserType, Service, WorkRole, Client, Project, ProjectType as ProjectTypeSchema } from "@shared/schema";
 
 interface ServiceAssignmentView {
   id: string;
@@ -163,6 +163,93 @@ interface PeopleServiceWithDetails {
 }
 
 type ServiceAssignment = (ClientServiceWithDetails | PeopleServiceWithDetails) & { type: 'client' | 'personal' };
+
+interface ProjectWithDetails {
+  id: string;
+  name: string;
+  status: string;
+  currentStageId: string | null;
+  startDate: string | null;
+  dueDate: string | null;
+  completedAt: string | null;
+  projectType?: {
+    id: string;
+    name: string;
+    service?: {
+      id: string;
+      name: string;
+    };
+  };
+  client?: {
+    id: string;
+    name: string;
+  };
+}
+
+function ActiveProjectsSection({ clientServiceId }: { clientServiceId: string }) {
+  const { data: projects, isLoading } = useQuery<ProjectWithDetails[]>({
+    queryKey: ['/api/client-services', clientServiceId, 'projects'],
+    enabled: !!clientServiceId,
+  });
+
+  const activeProjects = useMemo(() => {
+    if (!projects) return [];
+    return projects.filter(p => {
+      const status = (p.status || '').toLowerCase();
+      return status !== 'completed' && status !== 'cancelled';
+    });
+  }, [projects]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-48" />
+        <Skeleton className="h-8 w-full" />
+      </div>
+    );
+  }
+
+  if (!activeProjects || activeProjects.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground italic">
+        No active projects for this service
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-4 gap-4 text-xs font-medium text-muted-foreground border-b pb-1">
+        <span>Project</span>
+        <span>Status</span>
+        <span>Start Date</span>
+        <span>Due Date</span>
+      </div>
+      {activeProjects.map((project) => (
+        <div key={project.id} className="grid grid-cols-4 gap-4 text-sm py-1 hover:bg-muted/50 rounded">
+          <a 
+            href={`/projects/${project.id}`}
+            className="text-primary hover:underline truncate"
+            data-testid={`link-project-${project.id}`}
+          >
+            {project.name}
+          </a>
+          <span>
+            <Badge variant="outline" className="text-xs capitalize">
+              {project.status?.replace(/_/g, ' ') || 'Unknown'}
+            </Badge>
+          </span>
+          <span className="text-muted-foreground">
+            {project.startDate ? format(new Date(project.startDate), 'dd MMM yyyy') : '—'}
+          </span>
+          <span className="text-muted-foreground">
+            {project.dueDate ? format(new Date(project.dueDate), 'dd MMM yyyy') : '—'}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function ServiceAssignments() {
   const { user, isLoading: authLoading, isAuthenticated } = useAuth();
@@ -948,18 +1035,16 @@ export default function ServiceAssignments() {
                           </TableCell>
                         </TableRow>
 
-                        {/* Expanded - Active Projects (placeholder for now) */}
+                        {/* Expanded - Active Projects */}
                         {isExpanded && isClientService && (
                           <TableRow className="bg-muted/30" key={`expanded-${assignment.id}`}>
                             <TableCell colSpan={isAdmin ? (showRoleColumns ? 11 : 10) : (showRoleColumns ? 10 : 9)} className="py-3">
                               <div className="pl-12">
-                                <p className="text-sm font-medium mb-2 flex items-center gap-2">
+                                <p className="text-sm font-medium mb-3 flex items-center gap-2">
                                   <FolderKanban className="w-4 h-4" />
                                   Active Projects
                                 </p>
-                                <p className="text-sm text-muted-foreground">
-                                  Loading active projects... (coming soon)
-                                </p>
+                                <ActiveProjectsSection clientServiceId={cs!.id} />
                               </div>
                             </TableCell>
                           </TableRow>
