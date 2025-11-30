@@ -18,6 +18,7 @@ import {
   projectChronology,
 } from '@shared/schema';
 import { eq, and, or, desc, ilike, ne, inArray, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import type { 
   ClientService,
   InsertClientService,
@@ -1734,25 +1735,28 @@ export class ServiceAssignmentStorage extends BaseStorage {
     showInactive?: boolean;
     limit?: number;
     offset?: number;
-  }): Promise<Array<ClientService & { 
+  } = {}): Promise<Array<ClientService & { 
     client: Client; 
     service: Service; 
     serviceOwner: User | null;
     roleAssignments: Array<ClientServiceRoleAssignment & { workRole: WorkRole; user: User }>;
   }>> {
     try {
+      // Ensure filters is not null/undefined
+      const safeFilters = filters || {};
+      
       // Build the where conditions
       const conditions = [];
       
-      if (filters.serviceId) {
-        conditions.push(eq(clientServices.serviceId, filters.serviceId));
+      if (safeFilters.serviceId) {
+        conditions.push(eq(clientServices.serviceId, safeFilters.serviceId));
       }
       
-      if (filters.serviceOwnerId) {
-        conditions.push(eq(clientServices.serviceOwnerId, filters.serviceOwnerId));
+      if (safeFilters.serviceOwnerId) {
+        conditions.push(eq(clientServices.serviceOwnerId, safeFilters.serviceOwnerId));
       }
       
-      if (!filters.showInactive) {
+      if (!safeFilters.showInactive) {
         conditions.push(eq(clientServices.isActive, true));
       }
 
@@ -1776,7 +1780,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
           createdAt: clientServices.createdAt,
           clientName: clients.name,
           clientEmail: clients.email,
-          clientType: clients.type,
+          clientType: clients.clientType,
           serviceName: services.name,
           serviceIsPersonalService: services.isPersonalService,
           serviceDescription: services.description,
@@ -1790,8 +1794,8 @@ export class ServiceAssignmentStorage extends BaseStorage {
         .innerJoin(services, eq(clientServices.serviceId, services.id))
         .leftJoin(users, eq(clientServices.serviceOwnerId, users.id))
         .where(conditions.length > 0 ? and(...conditions) : undefined)
-        .limit(filters.limit || 500)
-        .offset(filters.offset || 0);
+        .limit(safeFilters.limit || 500)
+        .offset(safeFilters.offset || 0);
 
       // Get all client service IDs for role assignments batch lookup
       const clientServiceIds = results.map(r => r.id);
@@ -1799,6 +1803,8 @@ export class ServiceAssignmentStorage extends BaseStorage {
       // Batch fetch all role assignments using regular joins
       let allRoleAssignments: Array<ClientServiceRoleAssignment & { workRole: WorkRole; user: User }> = [];
       if (clientServiceIds.length > 0) {
+        // Use an alias to avoid conflicts with the users table used in the main query
+        const roleUserAlias = alias(users, 'role_user');
         const assignmentRows = await db
           .select({
             id: clientServiceRoleAssignments.id,
@@ -1809,13 +1815,13 @@ export class ServiceAssignmentStorage extends BaseStorage {
             createdAt: clientServiceRoleAssignments.createdAt,
             workRoleName: workRoles.name,
             workRoleDescription: workRoles.description,
-            userFirstName: users.firstName,
-            userLastName: users.lastName,
-            userEmail: users.email,
+            userFirstName: roleUserAlias.firstName,
+            userLastName: roleUserAlias.lastName,
+            userEmail: roleUserAlias.email,
           })
           .from(clientServiceRoleAssignments)
           .innerJoin(workRoles, eq(clientServiceRoleAssignments.workRoleId, workRoles.id))
-          .innerJoin(users, eq(clientServiceRoleAssignments.userId, users.id))
+          .innerJoin(roleUserAlias, eq(clientServiceRoleAssignments.userId, roleUserAlias.id))
           .where(and(
             inArray(clientServiceRoleAssignments.clientServiceId, clientServiceIds),
             eq(clientServiceRoleAssignments.isActive, true)
@@ -1855,14 +1861,14 @@ export class ServiceAssignmentStorage extends BaseStorage {
         const roleAssignments = roleAssignmentsByClientServiceId.get(row.id) || [];
         
         // Filter by role if specified
-        if (filters.roleId && !roleAssignments.some(ra => ra.workRoleId === filters.roleId)) {
+        if (safeFilters.roleId && !roleAssignments.some(ra => ra.workRoleId === safeFilters.roleId)) {
           return null;
         }
 
         // Filter by user if specified
-        if (filters.userId && 
-            row.serviceOwnerId !== filters.userId && 
-            !roleAssignments.some(ra => ra.userId === filters.userId)) {
+        if (safeFilters.userId && 
+            row.serviceOwnerId !== safeFilters.userId && 
+            !roleAssignments.some(ra => ra.userId === safeFilters.userId)) {
           return null;
         }
 
@@ -1917,28 +1923,31 @@ export class ServiceAssignmentStorage extends BaseStorage {
     showInactive?: boolean;
     limit?: number;
     offset?: number;
-  }): Promise<Array<PeopleService & { 
+  } = {}): Promise<Array<PeopleService & { 
     person: Person; 
     service: Service; 
     serviceOwner: User | null;
   }>> {
     try {
+      // Ensure filters is not null/undefined
+      const safeFilters = filters || {};
+      
       // Build the where conditions
       const conditions = [];
       
-      if (filters.serviceId) {
-        conditions.push(eq(peopleServices.serviceId, filters.serviceId));
+      if (safeFilters.serviceId) {
+        conditions.push(eq(peopleServices.serviceId, safeFilters.serviceId));
       }
       
-      if (filters.serviceOwnerId) {
-        conditions.push(eq(peopleServices.serviceOwnerId, filters.serviceOwnerId));
+      if (safeFilters.serviceOwnerId) {
+        conditions.push(eq(peopleServices.serviceOwnerId, safeFilters.serviceOwnerId));
       }
       
-      if (!filters.showInactive) {
+      if (!safeFilters.showInactive) {
         conditions.push(eq(peopleServices.isActive, true));
       }
 
-      // Use a single optimized query with joins
+      // Use a single optimized query with joins, including client linkage through clientPeople
       const results = await db
         .select({
           id: peopleServices.id,
@@ -1953,9 +1962,11 @@ export class ServiceAssignmentStorage extends BaseStorage {
           notes: peopleServices.notes,
           isActive: peopleServices.isActive,
           createdAt: peopleServices.createdAt,
+          personFullName: people.fullName,
           personFirstName: people.firstName,
           personLastName: people.lastName,
-          personClientId: people.clientId,
+          clientId: clientPeople.clientId,
+          clientName: clients.name,
           serviceName: services.name,
           serviceIsPersonalService: services.isPersonalService,
           serviceDescription: services.description,
@@ -1965,11 +1976,13 @@ export class ServiceAssignmentStorage extends BaseStorage {
         })
         .from(peopleServices)
         .innerJoin(people, eq(peopleServices.personId, people.id))
+        .leftJoin(clientPeople, eq(people.id, clientPeople.personId))
+        .leftJoin(clients, eq(clientPeople.clientId, clients.id))
         .innerJoin(services, eq(peopleServices.serviceId, services.id))
         .leftJoin(users, eq(peopleServices.serviceOwnerId, users.id))
         .where(conditions.length > 0 ? and(...conditions) : undefined)
-        .limit(filters.limit || 500)
-        .offset(filters.offset || 0);
+        .limit(safeFilters.limit || 500)
+        .offset(safeFilters.offset || 0);
 
       // Transform results
       const fullResults = results.map(row => ({
@@ -1987,10 +2000,12 @@ export class ServiceAssignmentStorage extends BaseStorage {
         createdAt: row.createdAt,
         person: {
           id: row.personId,
+          fullName: row.personFullName,
           firstName: row.personFirstName,
           lastName: row.personLastName,
-          clientId: row.personClientId,
         } as Person,
+        clientId: row.clientId,
+        clientName: row.clientName,
         service: {
           id: row.serviceId,
           name: row.serviceName,
