@@ -12,10 +12,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Mail, MessageSquare, BellRing, X, Eye } from "lucide-react";
+import { Mail, MessageSquare, BellRing, X, Eye, RotateCcw, Ban } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format, formatDistanceToNow } from "date-fns";
 import { NotificationPreviewDialog } from "@/components/NotificationPreviewDialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type NotificationWithRelations = {
   id: string;
@@ -26,6 +27,7 @@ type NotificationWithRelations = {
   sentAt?: string | null;
   status: string;
   failureReason?: string | null;
+  eligibleStageIdsSnapshot?: string[] | null;
   recipient: {
     id: string;
     fullName: string;
@@ -49,7 +51,7 @@ interface ClientNotificationsViewProps {
 
 export function ClientNotificationsView({ clientId }: ClientNotificationsViewProps) {
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<"active" | "cancelled" | "sent" | "failed">("active");
+  const [activeTab, setActiveTab] = useState<"active" | "suppressed" | "cancelled" | "sent" | "failed">("active");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   
   // Preview dialog state
@@ -78,6 +80,8 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
     // Filter by status based on active tab
     if (activeTab === "active") {
       if (!params.status) params.status = "scheduled";
+    } else if (activeTab === "suppressed") {
+      params.status = "suppressed";
     } else if (activeTab === "cancelled") {
       params.status = "cancelled";
     } else if (activeTab === "sent") {
@@ -203,6 +207,57 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
     bulkReactivateMutation.mutate(Array.from(selectedIds));
   };
 
+  // Single cancel mutation
+  const singleCancelMutation = useMutation({
+    mutationFn: async (notificationId: string) => {
+      return await apiRequest("POST", "/api/scheduled-notifications/bulk-cancel", { notificationIds: [notificationId] });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/scheduled-notifications/client", clientId] });
+      toast({
+        title: "Notification cancelled",
+        description: "The notification will not be sent.",
+      });
+    },
+    onError: (error: any) => {
+      showFriendlyError({ error });
+    },
+  });
+
+  // Single retry mutation
+  const singleRetryMutation = useMutation({
+    mutationFn: async (notificationId: string) => {
+      return await apiRequest("POST", `/api/scheduled-notifications/${notificationId}/retry`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/scheduled-notifications/client", clientId] });
+      toast({
+        title: "Notification queued for retry",
+        description: "The notification will be attempted again.",
+      });
+    },
+    onError: (error: any) => {
+      showFriendlyError({ error });
+    },
+  });
+
+  // Single reactivate mutation
+  const singleReactivateMutation = useMutation({
+    mutationFn: async (notificationId: string) => {
+      return await apiRequest("PATCH", `/api/scheduled-notifications/${notificationId}/reactivate`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/scheduled-notifications/client", clientId] });
+      toast({
+        title: "Notification reactivated",
+        description: "The notification has been reactivated.",
+      });
+    },
+    onError: (error: any) => {
+      showFriendlyError({ error });
+    },
+  });
+
   // Preview notification handler
   const handlePreview = async (notificationId: string) => {
     setIsLoadingPreview(true);
@@ -225,7 +280,9 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
   };
 
   // Get status badge
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (notification: NotificationWithRelations) => {
+    const { status, eligibleStageIdsSnapshot } = notification;
+    
     switch (status) {
       case "scheduled":
         return <Badge variant="default" className="bg-blue-600" data-testid={`badge-status-${status}`}>Scheduled</Badge>;
@@ -235,6 +292,33 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
         return <Badge variant="destructive" data-testid={`badge-status-${status}`}>Failed</Badge>;
       case "cancelled":
         return <Badge variant="secondary" data-testid={`badge-status-${status}`}>Cancelled</Badge>;
+      case "suppressed":
+        const hasStageRestriction = eligibleStageIdsSnapshot && eligibleStageIdsSnapshot.length > 0;
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge 
+                  variant="secondary" 
+                  className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 cursor-help" 
+                  data-testid={`badge-status-${status}`}
+                >
+                  Suppressed
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-sm">
+                  {hasStageRestriction 
+                    ? "This notification was suppressed because the project moved to a stage where this reminder isn't active."
+                    : "This notification was suppressed."}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  May be reactivated if the project moves back to an eligible stage.
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
       default:
         return <Badge variant="outline" data-testid={`badge-status-${status}`}>{status}</Badge>;
     }
@@ -289,13 +373,14 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
       </CardHeader>
       <CardContent>
         <Tabs value={activeTab} onValueChange={(val) => {
-          setActiveTab(val as "active" | "cancelled" | "sent" | "failed");
+          setActiveTab(val as "active" | "suppressed" | "cancelled" | "sent" | "failed");
           setSelectedIds(new Set());
         }}>
-          <TabsList className="mb-4">
+          <TabsList className="mb-4 flex-wrap h-auto gap-1">
             <TabsTrigger value="active" data-testid="tab-active-notifications">Active</TabsTrigger>
+            <TabsTrigger value="suppressed" data-testid="tab-suppressed-notifications" className="bg-amber-50 dark:bg-amber-950">Suppressed</TabsTrigger>
             <TabsTrigger value="cancelled" data-testid="tab-cancelled-notifications">Do Not Send</TabsTrigger>
-            <TabsTrigger value="sent" data-testid="tab-sent-notifications">Sent Notifications</TabsTrigger>
+            <TabsTrigger value="sent" data-testid="tab-sent-notifications">Sent</TabsTrigger>
             <TabsTrigger value="failed" data-testid="tab-failed-notifications">Failed</TabsTrigger>
           </TabsList>
 
@@ -357,8 +442,7 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
                   <SelectContent>
                     <SelectItem value="all">All</SelectItem>
                     <SelectItem value="scheduled">Scheduled</SelectItem>
-                    <SelectItem value="sent">Sent</SelectItem>
-                    <SelectItem value="failed">Failed</SelectItem>
+                    <SelectItem value="suppressed">Suppressed</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -400,20 +484,37 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
           </div>
 
           {/* Bulk Action Bar */}
-          {selectedIds.size > 0 && (
+          {selectedIds.size > 0 && (activeTab === "active" || activeTab === "suppressed" || activeTab === "cancelled") && (
             <div className="bg-muted p-3 rounded-lg mb-4 flex items-center justify-between">
               <span className="text-sm font-medium">
                 {selectedIds.size} notification{selectedIds.size > 1 ? 's' : ''} selected
               </span>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={activeTab === "active" ? handleBulkCancel : handleBulkReactivate}
-                disabled={activeTab === "active" ? bulkCancelMutation.isPending : bulkReactivateMutation.isPending}
-                data-testid="button-bulk-cancel"
-              >
-                {activeTab === "active" ? "Do Not Send" : "Reactivate"}
-              </Button>
+              <div className="flex gap-2">
+                {activeTab === "active" && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleBulkCancel}
+                    disabled={bulkCancelMutation.isPending}
+                    data-testid="button-bulk-cancel"
+                  >
+                    <Ban className="h-4 w-4 mr-2" />
+                    Do Not Send
+                  </Button>
+                )}
+                {(activeTab === "suppressed" || activeTab === "cancelled") && (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleBulkReactivate}
+                    disabled={bulkReactivateMutation.isPending}
+                    data-testid="button-bulk-reactivate"
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Reactivate
+                  </Button>
+                )}
+              </div>
             </div>
           )}
 
@@ -475,7 +576,7 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
                         </TableCell>
                         <TableCell className="text-sm">{formatRelativeDate(notification.scheduledFor)}</TableCell>
                         <TableCell className="text-sm">{notification.projectType?.name || "-"}</TableCell>
-                        <TableCell>{getStatusBadge(notification.status)}</TableCell>
+                        <TableCell>{getStatusBadge(notification)}</TableCell>
                         <TableCell className="text-right">
                           <Button
                             variant="ghost"
@@ -486,6 +587,98 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
                             <Eye className="h-4 w-4 mr-2" />
                             Preview
                           </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="suppressed">
+            {isLoading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-12 w-full" />
+              </div>
+            ) : notifications.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No suppressed notifications found.
+                <p className="text-sm mt-2">Notifications are suppressed when a project moves to a stage where the reminder is not active.</p>
+              </div>
+            ) : (
+              <div className="border rounded-lg">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12">
+                        <Checkbox
+                          checked={selectedIds.size === notifications.length && notifications.length > 0}
+                          onCheckedChange={handleSelectAll}
+                          data-testid="checkbox-select-all-suppressed"
+                        />
+                      </TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Recipient</TableHead>
+                      <TableHead>Scheduled Date</TableHead>
+                      <TableHead>Project Type</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {notifications.map((notification) => (
+                      <TableRow key={notification.id} data-testid={`row-notification-suppressed-${notification.id}`}>
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedIds.has(notification.id)}
+                            onCheckedChange={() => handleToggleSelect(notification.id)}
+                            data-testid={`checkbox-select-suppressed-${notification.id}`}
+                          />
+                        </TableCell>
+                        <TableCell>{getCategoryBadge(notification.category)}</TableCell>
+                        <TableCell className="text-sm">{capitalizeChannel(notification.notificationType)}</TableCell>
+                        <TableCell>
+                          {notification.recipient ? (
+                            <div>
+                              <div className="font-medium">{notification.recipient.fullName}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {notification.recipient.primaryEmail || notification.recipient.primaryPhone || "-"}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm">{formatRelativeDate(notification.scheduledFor)}</TableCell>
+                        <TableCell className="text-sm">{notification.projectType?.name || "-"}</TableCell>
+                        <TableCell>{getStatusBadge(notification)}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handlePreview(notification.id)}
+                              data-testid={`button-preview-suppressed-${notification.id}`}
+                            >
+                              <Eye className="h-4 w-4 mr-1" />
+                              Preview
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => singleReactivateMutation.mutate(notification.id)}
+                              disabled={singleReactivateMutation.isPending}
+                              className="text-green-600 hover:text-green-700"
+                              data-testid={`button-reactivate-suppressed-${notification.id}`}
+                            >
+                              <RotateCcw className="h-4 w-4 mr-1" />
+                              Reactivate
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -552,15 +745,28 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
                         <TableCell className="text-sm">{formatRelativeDate(notification.scheduledFor)}</TableCell>
                         <TableCell className="text-sm">{notification.projectType?.name || "-"}</TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handlePreview(notification.id)}
-                            data-testid={`button-preview-cancelled-${notification.id}`}
-                          >
-                            <Eye className="h-4 w-4 mr-2" />
-                            Preview
-                          </Button>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handlePreview(notification.id)}
+                              data-testid={`button-preview-cancelled-${notification.id}`}
+                            >
+                              <Eye className="h-4 w-4 mr-1" />
+                              Preview
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => singleReactivateMutation.mutate(notification.id)}
+                              disabled={singleReactivateMutation.isPending}
+                              className="text-green-600 hover:text-green-700"
+                              data-testid={`button-reactivate-cancelled-${notification.id}`}
+                            >
+                              <RotateCcw className="h-4 w-4 mr-1" />
+                              Reactivate
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -614,7 +820,7 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
                         </TableCell>
                         <TableCell className="text-sm">{notification.sentAt ? formatRelativeDate(notification.sentAt) : "-"}</TableCell>
                         <TableCell className="text-sm">{notification.projectType?.name || "-"}</TableCell>
-                        <TableCell>{getStatusBadge(notification.status)}</TableCell>
+                        <TableCell>{getStatusBadge(notification)}</TableCell>
                         <TableCell className="text-right">
                           <Button
                             variant="ghost"
@@ -684,15 +890,28 @@ export function ClientNotificationsView({ clientId }: ClientNotificationsViewPro
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handlePreview(notification.id)}
-                            data-testid={`button-preview-failed-${notification.id}`}
-                          >
-                            <Eye className="h-4 w-4 mr-2" />
-                            Preview
-                          </Button>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handlePreview(notification.id)}
+                              data-testid={`button-preview-failed-${notification.id}`}
+                            >
+                              <Eye className="h-4 w-4 mr-1" />
+                              Preview
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => singleRetryMutation.mutate(notification.id)}
+                              disabled={singleRetryMutation.isPending}
+                              className="text-blue-600 hover:text-blue-700"
+                              data-testid={`button-retry-failed-${notification.id}`}
+                            >
+                              <RotateCcw className="h-4 w-4 mr-1" />
+                              Retry
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
