@@ -70,7 +70,7 @@ export function registerQuickBooksRoutes(
         await storage.createQboOAuthState({
           state,
           clientId,
-          userId: req.effectiveUserId,
+          userId: req.user?.effectiveUserId,
           expiresAt: new Date(Date.now() + 10 * 60 * 1000),
         });
 

@@ -1,0 +1,96 @@
+-30 22:19:25.13
+70cb37bd
+User
+at async file:///home/runner/workspace/dist/index.js:48892:9 {
+2025-11-30 22:19:25.13
+70cb37bd
+User
+code: '23502',
+2025-11-30 22:19:25.13
+70cb37bd
+User
+at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345:74
+2025-11-30 22:19:25.13
+70cb37bd
+User
+hint: undefined,
+2025-11-30 22:19:25.13
+70cb37bd
+User
+}
+2025-11-30 22:19:25.13
+70cb37bd
+User
+internalQuery: undefined,
+2025-11-30 22:19:25.13
+70cb37bd
+User
+schema: 'public',
+2025-11-30 22:19:25.13
+70cb37bd
+User
+severity: 'ERROR',
+2025-11-30 22:19:25.13
+70cb37bd
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-11-30 22:19:25.13
+70cb37bd
+User
+table: 'qbo_oauth_states',
+2025-11-30 22:19:25.13
+70cb37bd
+User
+where: undefined,
+2025-11-30 22:19:25.13
+70cb37bd
+User
+dataType: undefined,
+2025-11-30 22:19:25.13
+70cb37bd
+User
+at async QboStorage.createQboOAuthState (file:///home/runner/workspace/dist/index.js:18191:25)
+2025-11-30 22:19:25.13
+70cb37bd
+User
+constraint: undefined,
+2025-11-30 22:19:25.13
+70cb37bd
+User
+position: undefined,
+2025-11-30 22:19:25.13
+70cb37bd
+User
+length: 416,
+2025-11-30 22:19:25.13
+70cb37bd
+User
+detail: 'Failing row contains (3a9ae892-dec5-4a5f-852d-f0d5967c3fa1, 4e03fd1a3be26166ced7dd3de42ef7dc1f5077d729a044cbdb7c0a8390ef51cd, 0c53ce34-4a88-43aa-8d59-7e9ee4142b58, null, 2025-11-30 22:29:25.093, f, 2025-11-30 22:19:25.111531).',
+2025-11-30 22:19:25.13
+70cb37bd
+User
+file: 'execMain.c',
+2025-11-30 22:19:25.13
+70cb37bd
+User
+Error initiating QuickBooks connection: error: null value in column "user_id" of relation "qbo_oauth_states" violates not-null constraint
+2025-11-30 22:19:25.13
+70cb37bd
+User
+line: '2015',
+2025-11-30 22:19:25.13
+70cb37bd
+User
+internalPosition: undefined,
+2025-11-30 22:19:25.13
+70cb37bd
+User
+at async NeonPreparedQuery.execute (file:///home/runner/workspace/node_modules/drizzle-orm/neon-serverless/session.js:76:20)
+2025-11-30 22:19:25.13
+70cb37bd
+User
+column: 'user_id',
+2025-11-30 22:19:25.13
+70cb37bd
+User
+routine: 'ExecConstraints'
