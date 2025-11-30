@@ -32,7 +32,8 @@ export const notificationStatusEnum = pgEnum("notification_status", [
   "scheduled", 
   "sent", 
   "failed", 
-  "cancelled"
+  "cancelled",
+  "suppressed"
 ]);
 
 export const pushSubscriptions = pgTable("push_subscriptions", {
@@ -95,6 +96,7 @@ export const projectTypeNotifications = pgTable("project_type_notifications", {
   pushTitle: varchar("push_title", { length: 50 }),
   pushBody: varchar("push_body", { length: 120 }),
   clientRequestTemplateId: varchar("client_request_template_id").references(() => clientRequestTemplates.id, { onDelete: "set null" }),
+  eligibleStageIds: text("eligible_stage_ids").array(),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -170,6 +172,9 @@ export const scheduledNotifications = pgTable("scheduled_notifications", {
   cancelledAt: timestamp("cancelled_at"),
   cancelReason: text("cancel_reason"),
   stopReminders: boolean("stop_reminders").default(false),
+  eligibleStageIdsSnapshot: text("eligible_stage_ids_snapshot").array(),
+  suppressedAt: timestamp("suppressed_at"),
+  reactivatedAt: timestamp("reactivated_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
