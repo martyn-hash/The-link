@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -74,6 +75,9 @@ import {
 type NotificationWithRelations = ScheduledNotification & {
   client?: { id: string; name: string };
   project?: { id: string; description: string; projectTypeId?: string };
+  eligibleStageIdsSnapshot?: string[] | null;
+  suppressedAt?: Date | null;
+  reactivatedAt?: Date | null;
 };
 
 export default function ScheduledNotificationsPage() {
@@ -260,7 +264,9 @@ export default function ScheduledNotificationsPage() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (notification: NotificationWithRelations) => {
+    const { status, eligibleStageIdsSnapshot } = notification;
+    
     switch (status) {
       case "scheduled":
         return <Badge variant="default" className="bg-blue-600" data-testid={`badge-status-${status}`}>Scheduled</Badge>;
@@ -270,6 +276,33 @@ export default function ScheduledNotificationsPage() {
         return <Badge variant="destructive" data-testid={`badge-status-${status}`}>Failed</Badge>;
       case "cancelled":
         return <Badge variant="secondary" data-testid={`badge-status-${status}`}>Cancelled</Badge>;
+      case "suppressed":
+        const hasStageRestriction = eligibleStageIdsSnapshot && eligibleStageIdsSnapshot.length > 0;
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge 
+                  variant="secondary" 
+                  className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200 cursor-help" 
+                  data-testid={`badge-status-${status}`}
+                >
+                  Suppressed
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="text-sm">
+                  {hasStageRestriction 
+                    ? "This notification was suppressed because the project moved to a stage where this reminder isn't active."
+                    : "This notification was suppressed."}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  May be reactivated if the project moves back to an eligible stage.
+                </p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
       default:
         return <Badge variant="outline" data-testid={`badge-status-${status}`}>{status}</Badge>;
     }
@@ -788,7 +821,7 @@ export default function ScheduledNotificationsPage() {
                               {getSourceBadge(notification)}
                             </TableCell>
                             <TableCell>
-                              {getStatusBadge(notification.status)}
+                              {getStatusBadge(notification)}
                             </TableCell>
                             <TableCell className="max-w-xs" data-testid={`text-content-preview-${notification.id}`}>
                               <span className="text-sm text-muted-foreground">
@@ -943,6 +976,7 @@ export default function ScheduledNotificationsPage() {
                   <SelectItem value="sent">Sent</SelectItem>
                   <SelectItem value="failed">Failed</SelectItem>
                   <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value="suppressed">Suppressed</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1112,7 +1146,7 @@ export default function ScheduledNotificationsPage() {
                                 {getTypeIcon(notification.notificationType)}
                                 {notification.notificationType}
                               </Badge>
-                              {getStatusBadge(notification.status)}
+                              {getStatusBadge(notification)}
                               <span className="text-sm text-muted-foreground font-medium">
                                 {notification.scheduledFor && format(new Date(notification.scheduledFor), "HH:mm")}
                               </span>
