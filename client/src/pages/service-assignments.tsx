@@ -1179,6 +1179,7 @@ export default function ServiceAssignments() {
               </Label>
               <Select value={serviceFilter} onValueChange={(value) => {
                 setServiceFilter(value);
+                setSelectedIds(new Set()); // Clear selections when filter changes
                 if (value !== serviceFilter) {
                   setRoleFilter("all"); // Reset role filter when service changes
                 }
@@ -1207,7 +1208,10 @@ export default function ServiceAssignments() {
               </Label>
               <Select 
                 value={roleFilter} 
-                onValueChange={setRoleFilter}
+                onValueChange={(value) => {
+                  setRoleFilter(value);
+                  setSelectedIds(new Set()); // Clear selections when filter changes
+                }}
                 disabled={availableRoles.length === 0}
               >
                 <SelectTrigger data-testid="select-role-filter">
@@ -1237,7 +1241,10 @@ export default function ServiceAssignments() {
                 <Users className="w-4 h-4" />
                 Assigned User
               </Label>
-              <Select value={userFilter} onValueChange={setUserFilter}>
+              <Select value={userFilter} onValueChange={(value) => {
+                setUserFilter(value);
+                setSelectedIds(new Set()); // Clear selections when filter changes
+              }}>
                 <SelectTrigger data-testid="select-user-filter">
                   <SelectValue placeholder="All Users" />
                 </SelectTrigger>

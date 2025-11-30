@@ -2125,12 +2125,14 @@ export class ServiceAssignmentStorage extends BaseStorage {
         let projectTypeId = service.projectTypeId;
         if (!projectTypeId) {
           // Try to match by name if no projectTypeId is set - use exact match first, then partial match
+          // Escape special ilike characters (% and _) in service name to prevent unintended pattern matching
+          const baseName = service.name.replace(' Service', '').replace(/%/g, '\\%').replace(/_/g, '\\_');
           const matchingProjectTypes = await db
             .select()
             .from(projectTypes)
             .where(or(
               eq(projectTypes.name, service.name),
-              ilike(projectTypes.name, `%${service.name.replace(' Service', '')}%`)
+              ilike(projectTypes.name, `%${baseName}%`)
             ));
           if (matchingProjectTypes.length > 0) {
             projectTypeId = matchingProjectTypes[0].id;
