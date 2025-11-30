@@ -89,11 +89,13 @@ Test with a real UK VAT number to confirm production access is working.
 
 ---
 
-## HMRC VAT Sandbox API Test Results
+## HMRC VAT Sandbox API Test Results (Official Test Numbers)
 
-**Test Date:** 2025-11-30T19:51:49.001Z
+**Test Date:** 2025-11-30T20:06:45.736Z
 
 **Environment:** `https://test-api.service.hmrc.gov.uk`
+
+**Test Data Source:** [HMRC Official GitHub Repository](https://github.com/hmrc/vat-registered-companies-api/blob/main/public/api/conf/2.0/test-data/vrn.csv)
 
 **Total Requests Made:** 20
 
@@ -102,164 +104,202 @@ Test with a real UK VAT number to confirm production access is working.
 ### Request 1
 
 - **VAT Number Queried:** `553557881`
-- **Timestamp:** 2025-11-30T19:51:49.003Z
+- **Timestamp:** 2025-11-30T20:06:45.739Z
 - **Status:** ✅ Valid
 - **Company Name:** Credite Sberger Donal Inc.
 - **Address:** 131B Barton Hamlet
 - **Postcode:** SW97 5CK
-- **Validated At:** 2025-11-30T19:51:50+00:00
+- **Validated At:** 2025-11-30T20:06:46+00:00
 
 ### Request 2
 
-- **VAT Number Queried:** `123456789`
-- **Timestamp:** 2025-11-30T19:51:50.444Z
-- **Status:** ❌ Not Found
-- **Error Code:** NOT_FOUND
-- **Message:** VAT number not found in HMRC records.
+- **VAT Number Queried:** `436189915`
+- **Timestamp:** 2025-11-30T20:06:47.084Z
+- **Status:** ✅ Valid
+- **Company Name:** Phillia Communics Cor
+- **Address:** 129A Drumfearn Road
+- **Postcode:** HA60 4RO
+- **Validated At:** 2025-11-30T20:06:47+00:00
 
 ### Request 3
 
-- **VAT Number Queried:** `987654321`
-- **Timestamp:** 2025-11-30T19:51:51.023Z
-- **Status:** ❌ Not Found
-- **Error Code:** NOT_FOUND
-- **Message:** VAT number not found in HMRC records.
+- **VAT Number Queried:** `011591667`
+- **Timestamp:** 2025-11-30T20:06:47.507Z
+- **Status:** ✅ Valid
+- **Company Name:** Lufthay
+- **Address:** 104 Butler's Road
+- **Postcode:** NG01 0ZM
+- **Validated At:** 2025-11-30T20:06:47+00:00
 
 ### Request 4
 
-- **VAT Number Queried:** `111111111`
-- **Timestamp:** 2025-11-30T19:51:51.693Z
-- **Status:** ❌ Not Found
-- **Error Code:** NOT_FOUND
-- **Message:** VAT number not found in HMRC records.
+- **VAT Number Queried:** `961925638`
+- **Timestamp:** 2025-11-30T20:06:48.174Z
+- **Status:** ✅ Valid
+- **Company Name:** SABIC Fuel
+- **Address:** 12 Torrisholme Road
+- **Postcode:** CT84 7VH
+- **Validated At:** 2025-11-30T20:06:48+00:00
 
 ### Request 5
 
-- **VAT Number Queried:** `222222222`
-- **Timestamp:** 2025-11-30T19:51:52.355Z
-- **Status:** ❌ Not Found
-- **Error Code:** NOT_FOUND
-- **Message:** VAT number not found in HMRC records.
+- **VAT Number Queried:** `710882182`
+- **Timestamp:** 2025-11-30T20:06:48.846Z
+- **Status:** ✅ Valid
+- **Company Name:** Louiss Shipponko
+- **Address:** 121 Redcar Road East
+- **Postcode:** MK29 5GQ
+- **Validated At:** 2025-11-30T20:06:48+00:00
 
 ### Request 6
 
-- **VAT Number Queried:** `333333333`
-- **Timestamp:** 2025-11-30T19:51:52.999Z
-- **Status:** ❌ Not Found
-- **Error Code:** NOT_FOUND
-- **Message:** VAT number not found in HMRC records.
+- **VAT Number Queried:** `792920366`
+- **Timestamp:** 2025-11-30T20:06:49.240Z
+- **Status:** ✅ Valid
+- **Company Name:** Nippon Bankin
+- **Address:** 42 Westmorland Place
+- **Postcode:** TA98 3JT
+- **Validated At:** 2025-11-30T20:06:49+00:00
 
 ### Request 7
 
-- **VAT Number Queried:** `444444444`
-- **Timestamp:** 2025-11-30T19:51:53.369Z
-- **Status:** ❌ Not Found
-- **Error Code:** NOT_FOUND
-- **Message:** VAT number not found in HMRC records.
+- **VAT Number Queried:** `567152344`
+- **Timestamp:** 2025-11-30T20:06:49.813Z
+- **Status:** ✅ Valid
+- **Company Name:** China Ltd.
+- **Address:** 98 Swinston Hill Gardens
+- **Postcode:** L22 8NY
+- **Validated At:** 2025-11-30T20:06:50+00:00
 
 ### Request 8
 
-- **VAT Number Queried:** `555555555`
-- **Timestamp:** 2025-11-30T19:51:54.057Z
-- **Status:** ❌ Not Found
-- **Error Code:** NOT_FOUND
-- **Message:** VAT number not found in HMRC records.
+- **VAT Number Queried:** `293129633`
+- **Timestamp:** 2025-11-30T20:06:50.377Z
+- **Status:** ✅ Valid
+- **Company Name:** MS&AD Insurance
+- **Address:** 82 Clemie Close
+- **Postcode:** RM37 4KI
+- **Validated At:** 2025-11-30T20:06:50+00:00
 
 ### Request 9
 
-- **VAT Number Queried:** `666666666`
-- **Timestamp:** 2025-11-30T19:51:54.481Z
-- **Status:** ❌ Not Found
-- **Error Code:** NOT_FOUND
-- **Message:** VAT number not found in HMRC records.
+- **VAT Number Queried:** `036139833`
+- **Timestamp:** 2025-11-30T20:06:51.043Z
+- **Status:** ✅ Valid
+- **Company Name:** Exxon Bradesco
+- **Address:** 59 Wheelwrights Lane
+- **Postcode:** LS40 7CO
+- **Validated At:** 2025-11-30T20:06:51+00:00
 
 ### Request 10
 
-- **VAT Number Queried:** `777777777`
-- **Timestamp:** 2025-11-30T19:51:55.133Z
-- **Status:** ❌ Not Found
-- **Error Code:** NOT_FOUND
-- **Message:** VAT number not found in HMRC records.
+- **VAT Number Queried:** `133431885`
+- **Timestamp:** 2025-11-30T20:06:51.707Z
+- **Status:** ✅ Valid
+- **Company Name:** Bergy Health
+- **Address:** 86 Tokio Gardens
+- **Postcode:** WR15 2EW
+- **Validated At:** 2025-11-30T20:06:51+00:00
 
 ### Request 11
 
-- **VAT Number Queried:** `888888888`
-- **Timestamp:** 2025-11-30T19:51:55.780Z
-- **Status:** ❌ Not Found
-- **Error Code:** NOT_FOUND
-- **Message:** VAT number not found in HMRC records.
+- **VAT Number Queried:** `462794985`
+- **Timestamp:** 2025-11-30T20:06:52.099Z
+- **Status:** ✅ Valid
+- **Company Name:** Communitex
+- **Address:** 71B Sea Forth Drive
+- **Postcode:** HS01 3QY
+- **Validated At:** 2025-11-30T20:06:52+00:00
 
 ### Request 12
 
-- **VAT Number Queried:** `999999999`
-- **Timestamp:** 2025-11-30T19:51:56.168Z
-- **Status:** ❌ Not Found
-- **Error Code:** NOT_FOUND
-- **Message:** VAT number not found in HMRC records.
+- **VAT Number Queried:** `051798906`
+- **Timestamp:** 2025-11-30T20:06:52.756Z
+- **Status:** ✅ Valid
+- **Company Name:** Yance Shantari Holdings
+- **Address:** 23 Elm Road West
+- **Postcode:** HA96 5DF
+- **Validated At:** 2025-11-30T20:06:53+00:00
 
 ### Request 13
 
-- **VAT Number Queried:** `100000001`
-- **Timestamp:** 2025-11-30T19:51:56.819Z
-- **Status:** ❌ Not Found
-- **Error Code:** NOT_FOUND
-- **Message:** VAT number not found in HMRC records.
+- **VAT Number Queried:** `698814748`
+- **Timestamp:** 2025-11-30T20:06:53.315Z
+- **Status:** ✅ Valid
+- **Company Name:** Arconic Inc.
+- **Address:** 135 Blatchington Close
+- **Postcode:** HX82 4EJ
+- **Validated At:** 2025-11-30T20:06:53+00:00
 
 ### Request 14
 
-- **VAT Number Queried:** `200000002`
-- **Timestamp:** 2025-11-30T19:51:57.468Z
-- **Status:** ❌ Not Found
-- **Error Code:** NOT_FOUND
-- **Message:** VAT number not found in HMRC records.
+- **VAT Number Queried:** `256676991`
+- **Timestamp:** 2025-11-30T20:06:53.873Z
+- **Status:** ✅ Valid
+- **Company Name:** Améric Power
+- **Address:** 100 Ashtree Mews
+- **Postcode:** CB05 7UT
+- **Validated At:** 2025-11-30T20:06:54+00:00
 
 ### Request 15
 
-- **VAT Number Queried:** `300000003`
-- **Timestamp:** 2025-11-30T19:51:57.837Z
-- **Status:** ❌ Not Found
-- **Error Code:** NOT_FOUND
-- **Message:** VAT number not found in HMRC records.
+- **VAT Number Queried:** `494521394`
+- **Timestamp:** 2025-11-30T20:06:54.327Z
+- **Status:** ✅ Valid
+- **Company Name:** Statoil Hess
+- **Address:** 68 Croft Baker Way
+- **Postcode:** DN56 0QJ
+- **Validated At:** 2025-11-30T20:06:54+00:00
 
 ### Request 16
 
-- **VAT Number Queried:** `400000004`
-- **Timestamp:** 2025-11-30T19:51:58.221Z
-- **Status:** ❌ Not Found
-- **Error Code:** NOT_FOUND
-- **Message:** VAT number not found in HMRC records.
+- **VAT Number Queried:** `486691505`
+- **Timestamp:** 2025-11-30T20:06:54.991Z
+- **Status:** ✅ Valid
+- **Company Name:** Enel Engie
+- **Address:** 16 Barnt Green Road
+- **Postcode:** WD83 8EZ
+- **Validated At:** 2025-11-30T20:06:55+00:00
 
 ### Request 17
 
-- **VAT Number Queried:** `500000005`
-- **Timestamp:** 2025-11-30T19:51:58.604Z
-- **Status:** ❌ Not Found
-- **Error Code:** NOT_FOUND
-- **Message:** VAT number not found in HMRC records.
+- **VAT Number Queried:** `282415407`
+- **Timestamp:** 2025-11-30T20:06:55.383Z
+- **Status:** ✅ Valid
+- **Company Name:** Banking Cathay
+- **Address:** 140 Horton Street
+- **Postcode:** ML69 7XA
+- **Validated At:** 2025-11-30T20:06:55+00:00
 
 ### Request 18
 
-- **VAT Number Queried:** `600000006`
-- **Timestamp:** 2025-11-30T19:51:59.250Z
-- **Status:** ❌ Not Found
-- **Error Code:** NOT_FOUND
-- **Message:** VAT number not found in HMRC records.
+- **VAT Number Queried:** `309335202`
+- **Timestamp:** 2025-11-30T20:06:55.876Z
+- **Status:** ✅ Valid
+- **Company Name:** Old Fujitsub
+- **Address:** 103 Mill Brooks
+- **Postcode:** TN16 7VB
+- **Validated At:** 2025-11-30T20:06:55+00:00
 
 ### Request 19
 
-- **VAT Number Queried:** `700000007`
-- **Timestamp:** 2025-11-30T19:51:59.617Z
-- **Status:** ❌ Not Found
-- **Error Code:** NOT_FOUND
-- **Message:** VAT number not found in HMRC records.
+- **VAT Number Queried:** `775917660`
+- **Timestamp:** 2025-11-30T20:06:56.238Z
+- **Status:** ✅ Valid
+- **Company Name:** Markets Mini Inc.
+- **Address:** 100 Wren Hollow
+- **Postcode:** TN65 7OJ
+- **Validated At:** 2025-11-30T20:06:56+00:00
 
 ### Request 20
 
-- **VAT Number Queried:** `800000008`
-- **Timestamp:** 2025-11-30T19:52:00.298Z
-- **Status:** ❌ Not Found
-- **Error Code:** NOT_FOUND
-- **Message:** VAT number not found in HMRC records.
+- **VAT Number Queried:** `726129090`
+- **Timestamp:** 2025-11-30T20:06:56.912Z
+- **Status:** ✅ Valid
+- **Company Name:** Amers Sumi
+- **Address:** 90 Fen Bight Circle
+- **Postcode:** NN64 1LE
+- **Validated At:** 2025-11-30T20:06:57+00:00
 
 ---
 
@@ -268,10 +308,10 @@ Test with a real UK VAT number to confirm production access is working.
 | Metric | Count |
 |--------|-------|
 | Total Requests | 20 |
-| Valid VAT Numbers | 1 |
-| Not Found | 19 |
+| Valid VAT Numbers | 20 |
+| Not Found | 0 |
 | Errors | 0 |
 
 ---
 
-*All 20 requests successfully made to HMRC VAT Check API sandbox environment on 30 November 2025. OAuth authentication working correctly. API responding as expected for both valid and invalid VAT numbers.*
+*All 20 requests successfully made to HMRC VAT Check API sandbox environment on 30 November 2025 using official HMRC test data. OAuth authentication working correctly. All VAT number lookups returned valid company data as expected.*
