@@ -2121,14 +2121,17 @@ export class ServiceAssignmentStorage extends BaseStorage {
           continue;
         }
 
-        // Get project type - try by ID first, then by name matching
+        // Get project type - try by ID first, then by name matching (same pattern as elsewhere in this module)
         let projectTypeId = service.projectTypeId;
         if (!projectTypeId) {
-          // Try to match by name if no projectTypeId is set
+          // Try to match by name if no projectTypeId is set - use exact match first, then partial match
           const matchingProjectTypes = await db
             .select()
             .from(projectTypes)
-            .where(eq(projectTypes.name, service.name));
+            .where(or(
+              eq(projectTypes.name, service.name),
+              ilike(projectTypes.name, `%${service.name.replace(' Service', '')}%`)
+            ));
           if (matchingProjectTypes.length > 0) {
             projectTypeId = matchingProjectTypes[0].id;
             console.log(`[BulkReassign] Project type found by name matching: ${matchingProjectTypes[0].name} for service: ${service.name}`);
