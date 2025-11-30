@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
@@ -87,7 +87,12 @@ import {
   CalendarClock,
   FolderKanban,
   Eye,
-  EyeOff
+  EyeOff,
+  Check,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  FileText
 } from "lucide-react";
 import { format } from "date-fns";
 import type { User as UserType, Service, WorkRole, Client, Project, ProjectType as ProjectTypeSchema } from "@shared/schema";
@@ -297,14 +302,17 @@ export default function ServiceAssignments() {
   const [reassignRoleId, setReassignRoleId] = useState("");
   const [reassignToUserId, setReassignToUserId] = useState("");
   const [reassignProgress, setReassignProgress] = useState<{
-    isRunning: boolean;
+    step: 'processing' | 'complete' | 'error';
+    currentStepIndex: number;
     total: number;
-    completed: number;
     roleChanges: number;
     projectUpdates: number;
     chronologyEntries: number;
+    errorMessage?: string;
   } | null>(null);
   const [reassignConfirmOpen, setReassignConfirmOpen] = useState(false);
+  const [progressDialogOpen, setProgressDialogOpen] = useState(false);
+  const stepTimersRef = useRef<NodeJS.Timeout[]>([]);
   
   // Bulk date editing state
   const [dateEditDialogOpen, setDateEditDialogOpen] = useState(false);
@@ -548,6 +556,12 @@ export default function ServiceAssignments() {
     },
   });
 
+  // Helper to clear step animation timers
+  const clearStepTimers = () => {
+    stepTimersRef.current.forEach(timer => clearTimeout(timer));
+    stepTimersRef.current = [];
+  };
+
   // Bulk reassignment mutation
   const bulkReassignMutation = useMutation({
     mutationFn: async (data: { 
@@ -558,18 +572,31 @@ export default function ServiceAssignments() {
       return apiRequest("POST", "/api/service-assignments/bulk-reassign", data);
     },
     onSuccess: (result: any) => {
+      // Clear any pending step timers to prevent race conditions
+      clearStepTimers();
       queryClient.invalidateQueries({ queryKey: ["/api/service-assignments"] });
-      setReassignDialogOpen(false);
-      setReassignProgress(null);
-      setSelectedIds(new Set());
-      toast({
-        title: "Reassignment complete",
-        description: `Updated ${result.roleChanges} role assignments and ${result.projectUpdates} projects.`,
+      // Update progress to show completion
+      setReassignProgress({
+        step: 'complete',
+        currentStepIndex: 3,
+        total: result.roleChanges || 0,
+        roleChanges: result.roleChanges || 0,
+        projectUpdates: result.projectUpdates || 0,
+        chronologyEntries: result.chronologyEntries || 0,
       });
     },
-    onError: (error) => {
-      showFriendlyError({ error });
-      setReassignProgress(null);
+    onError: (error: any) => {
+      // Clear any pending step timers to prevent race conditions
+      clearStepTimers();
+      setReassignProgress({
+        step: 'error',
+        currentStepIndex: 0,
+        total: 0,
+        roleChanges: 0,
+        projectUpdates: 0,
+        chronologyEntries: 0,
+        errorMessage: error?.message || 'An error occurred during reassignment',
+      });
     },
   });
   
@@ -658,20 +685,45 @@ export default function ServiceAssignments() {
 
   const handleConfirmReassignment = () => {
     setReassignConfirmOpen(false);
+    // Clear any existing timers
+    clearStepTimers();
+    // Open progress dialog and set initial state
+    setProgressDialogOpen(true);
     setReassignProgress({
-      isRunning: true,
+      step: 'processing',
+      currentStepIndex: 0,
       total: selectedIds.size,
-      completed: 0,
       roleChanges: 0,
       projectUpdates: 0,
       chronologyEntries: 0,
     });
+
+    // Simulate step progression for visual feedback (only updates if still processing)
+    const timer1 = setTimeout(() => {
+      setReassignProgress(prev => 
+        prev?.step === 'processing' ? { ...prev, currentStepIndex: 1 } : prev
+      );
+    }, 500);
+    const timer2 = setTimeout(() => {
+      setReassignProgress(prev => 
+        prev?.step === 'processing' ? { ...prev, currentStepIndex: 2 } : prev
+      );
+    }, 1000);
+    stepTimersRef.current = [timer1, timer2];
 
     bulkReassignMutation.mutate({
       clientServiceIds: Array.from(selectedIds),
       fromRoleId: reassignRoleId,
       toUserId: reassignToUserId,
     });
+  };
+  
+  const handleCloseProgressDialog = () => {
+    setProgressDialogOpen(false);
+    setReassignProgress(null);
+    setReassignRoleId("");
+    setReassignToUserId("");
+    setSelectedIds(new Set());
   };
   
   const handleBulkDateEdit = () => {
@@ -1431,36 +1483,7 @@ export default function ServiceAssignments() {
             </DialogDescription>
           </DialogHeader>
 
-          {reassignProgress ? (
-            <div className="space-y-4 py-4">
-              <div className="text-center">
-                <RefreshCw className="w-8 h-8 mx-auto animate-spin text-primary mb-4" />
-                <h3 className="font-medium mb-2">Processing Reassignments</h3>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span>Role assignments updated</span>
-                  <span className="font-medium">{reassignProgress.roleChanges}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span>Projects updated</span>
-                  <span className="font-medium">{reassignProgress.projectUpdates}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span>Chronology entries created</span>
-                  <span className="font-medium">{reassignProgress.chronologyEntries}</span>
-                </div>
-                <Progress 
-                  value={(reassignProgress.completed / reassignProgress.total) * 100} 
-                  className="h-2"
-                />
-                <p className="text-xs text-center text-muted-foreground">
-                  {reassignProgress.completed} of {reassignProgress.total} processed
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4 py-4">
+          <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label>Role to Reassign</Label>
                 <Select value={reassignRoleId} onValueChange={setReassignRoleId}>
@@ -1497,8 +1520,7 @@ export default function ServiceAssignments() {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-          )}
+          </div>
 
           <DialogFooter>
             <Button 
@@ -1546,6 +1568,148 @@ export default function ServiceAssignments() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reassignment Progress Dialog */}
+      <Dialog open={progressDialogOpen} onOpenChange={(open) => {
+        // Only allow closing if complete or error
+        if (!open && reassignProgress?.step !== 'processing') {
+          handleCloseProgressDialog();
+        }
+      }}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {reassignProgress?.step === 'complete' ? (
+                <CheckCircle2 className="w-5 h-5 text-green-600" />
+              ) : reassignProgress?.step === 'error' ? (
+                <AlertCircle className="w-5 h-5 text-red-600" />
+              ) : (
+                <Loader2 className="w-5 h-5 animate-spin text-primary" />
+              )}
+              {reassignProgress?.step === 'complete' ? 'Reassignment Complete' : 
+               reassignProgress?.step === 'error' ? 'Reassignment Failed' : 
+               'Processing Reassignment'}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            {/* Step indicators */}
+            <div className="space-y-3">
+              {/* Step 1: Updating Service Assignments */}
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  (reassignProgress?.currentStepIndex ?? 0) > 0 || reassignProgress?.step === 'complete'
+                    ? 'bg-green-100 text-green-600'
+                    : (reassignProgress?.currentStepIndex ?? 0) === 0 && reassignProgress?.step === 'processing'
+                      ? 'bg-primary/10 text-primary animate-pulse'
+                      : 'bg-muted text-muted-foreground'
+                }`}>
+                  {(reassignProgress?.currentStepIndex ?? 0) > 0 || reassignProgress?.step === 'complete' ? (
+                    <Check className="w-4 h-4" />
+                  ) : (reassignProgress?.currentStepIndex ?? 0) === 0 && reassignProgress?.step === 'processing' ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <span className="text-sm font-medium">1</span>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Updating service assignments</p>
+                  <p className="text-xs text-muted-foreground">
+                    Changing role assignments on selected services
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 2: Updating Projects */}
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  (reassignProgress?.currentStepIndex ?? 0) > 1 || reassignProgress?.step === 'complete'
+                    ? 'bg-green-100 text-green-600'
+                    : (reassignProgress?.currentStepIndex ?? 0) === 1 && reassignProgress?.step === 'processing'
+                      ? 'bg-primary/10 text-primary animate-pulse'
+                      : 'bg-muted text-muted-foreground'
+                }`}>
+                  {(reassignProgress?.currentStepIndex ?? 0) > 1 || reassignProgress?.step === 'complete' ? (
+                    <Check className="w-4 h-4" />
+                  ) : (reassignProgress?.currentStepIndex ?? 0) === 1 && reassignProgress?.step === 'processing' ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <span className="text-sm font-medium">2</span>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Updating active projects</p>
+                  <p className="text-xs text-muted-foreground">
+                    Updating role on any linked active projects
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 3: Logging to Chronology */}
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                  (reassignProgress?.currentStepIndex ?? 0) > 2 || reassignProgress?.step === 'complete'
+                    ? 'bg-green-100 text-green-600'
+                    : (reassignProgress?.currentStepIndex ?? 0) === 2 && reassignProgress?.step === 'processing'
+                      ? 'bg-primary/10 text-primary animate-pulse'
+                      : 'bg-muted text-muted-foreground'
+                }`}>
+                  {(reassignProgress?.currentStepIndex ?? 0) > 2 || reassignProgress?.step === 'complete' ? (
+                    <Check className="w-4 h-4" />
+                  ) : (reassignProgress?.currentStepIndex ?? 0) === 2 && reassignProgress?.step === 'processing' ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <span className="text-sm font-medium">3</span>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Recording changes</p>
+                  <p className="text-xs text-muted-foreground">
+                    Logging changes to project chronologies
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Results summary - shown when complete */}
+            {reassignProgress?.step === 'complete' && (
+              <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                <h4 className="font-medium text-sm flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  Summary
+                </h4>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <span className="text-muted-foreground">Services updated:</span>
+                  <span className="font-medium">{reassignProgress.roleChanges}</span>
+                  <span className="text-muted-foreground">Projects updated:</span>
+                  <span className="font-medium">{reassignProgress.projectUpdates}</span>
+                  <span className="text-muted-foreground">Chronology entries:</span>
+                  <span className="font-medium">{reassignProgress.chronologyEntries}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Error message - shown when error */}
+            {reassignProgress?.step === 'error' && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p className="text-sm text-red-700">
+                  {reassignProgress.errorMessage || 'An unexpected error occurred during reassignment.'}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button 
+              onClick={handleCloseProgressDialog}
+              disabled={reassignProgress?.step === 'processing'}
+              data-testid="button-close-progress"
+            >
+              {reassignProgress?.step === 'processing' ? 'Processing...' : 'Done'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Bulk Date Edit Dialog */}
       <Dialog open={dateEditDialogOpen} onOpenChange={setDateEditDialogOpen}>
