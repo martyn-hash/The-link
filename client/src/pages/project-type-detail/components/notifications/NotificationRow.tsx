@@ -66,6 +66,14 @@ export function NotificationRow({
     setPreviewOpen(true);
   };
   
+  const getEligibleStages = () => {
+    const eligibleIds = notification.eligibleStageIds as string[] | null;
+    if (!eligibleIds || eligibleIds.length === 0) return null;
+    return eligibleIds
+      .map(id => stages.find(s => s.id === id))
+      .filter(Boolean);
+  };
+  
   const getTriggerSummary = () => {
     if (notification.category === 'project') {
       const offsetLabel = notification.offsetType === 'on' ? 'On' : 
@@ -78,6 +86,8 @@ export function NotificationRow({
       return `When ${trigger} "${stage?.name || 'Unknown'}"`;
     }
   };
+  
+  const eligibleStages = getEligibleStages();
 
   const getContentPreview = () => {
     if (notification.notificationType === 'email') {
@@ -116,9 +126,45 @@ export function NotificationRow({
       </TableCell>
       
       <TableCell>
-        <span className="text-sm" data-testid={`text-trigger-${notification.id}`}>
-          {getTriggerSummary()}
-        </span>
+        <div className="space-y-1">
+          <span className="text-sm" data-testid={`text-trigger-${notification.id}`}>
+            {getTriggerSummary()}
+          </span>
+          {eligibleStages && eligibleStages.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge 
+                      variant="secondary" 
+                      className="text-xs cursor-help"
+                      data-testid={`badge-stage-restriction-${notification.id}`}
+                    >
+                      {eligibleStages.length} stage{eligibleStages.length !== 1 ? 's' : ''} only
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p className="text-xs font-medium mb-1">Active only when project is in:</p>
+                    <div className="flex flex-wrap gap-1">
+                      {eligibleStages.map(stage => stage && (
+                        <span 
+                          key={stage.id} 
+                          className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-muted"
+                        >
+                          <span 
+                            className="w-2 h-2 rounded-full" 
+                            style={{ backgroundColor: stage.color || '#6b7280' }}
+                          />
+                          {stage.name}
+                        </span>
+                      ))}
+                    </div>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          )}
+        </div>
       </TableCell>
       
       <TableCell>

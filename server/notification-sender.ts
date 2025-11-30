@@ -11,6 +11,7 @@ import {
   clientServices,
   services,
   users,
+  kanbanStages,
   type ScheduledNotification,
   type InsertNotificationHistory,
 } from "@shared/schema";
@@ -586,6 +587,62 @@ async function buildNotificationVariableContext(
 /**
  * Process a single scheduled notification
  */
+/**
+ * Verify stage eligibility for a due-date notification at send time
+ * This is a safety check - stage changes should already suppress ineligible notifications
+ */
+async function verifyStageEligibility(
+  notification: ScheduledNotification
+): Promise<{ isEligible: boolean; reason?: string }> {
+  // Only check due-date notifications with stage restrictions
+  const eligibleStages = notification.eligibleStageIdsSnapshot as string[] | null;
+  if (!eligibleStages || eligibleStages.length === 0 || !notification.projectId) {
+    return { isEligible: true };
+  }
+
+  // Get the project's current stage
+  const [project] = await db
+    .select({
+      currentStatus: projects.currentStatus,
+      projectTypeId: projects.projectTypeId,
+    })
+    .from(projects)
+    .where(eq(projects.id, notification.projectId))
+    .limit(1);
+
+  if (!project) {
+    // Project no longer exists, notification should be skipped
+    return { isEligible: false, reason: "Project no longer exists" };
+  }
+
+  // Look up the current stage ID
+  const [stage] = await db
+    .select({ id: kanbanStages.id })
+    .from(kanbanStages)
+    .where(
+      and(
+        eq(kanbanStages.projectTypeId, project.projectTypeId),
+        eq(kanbanStages.name, project.currentStatus)
+      )
+    )
+    .limit(1);
+
+  if (!stage) {
+    // Stage not found, allow send to avoid false negatives
+    return { isEligible: true };
+  }
+
+  // Check if current stage is in the eligible list
+  if (!eligibleStages.includes(stage.id)) {
+    return {
+      isEligible: false,
+      reason: `Project stage "${project.currentStatus}" is not in eligible stages for this notification`,
+    };
+  }
+
+  return { isEligible: true };
+}
+
 async function processSingleNotification(
   notification: ScheduledNotification,
   firmSettings: typeof companySettings.$inferSelect | null
@@ -609,6 +666,31 @@ async function processSingleNotification(
     console.log(
       `[NotificationSender] Notification ${notification.id} status changed to ${currentNotification.status}, skipping`
     );
+    return;
+  }
+
+  // Stage eligibility check for due-date notifications (safety check at send time)
+  const stageCheck = await verifyStageEligibility(currentNotification);
+  if (!stageCheck.isEligible) {
+    console.log(
+      `[NotificationSender] Notification ${notification.id} suppressed at send time: ${stageCheck.reason}`
+    );
+    
+    // Mark as suppressed rather than failed since this is expected behavior
+    await db
+      .update(scheduledNotifications)
+      .set({
+        status: "suppressed",
+        suppressedAt: new Date(),
+        cancelReason: stageCheck.reason,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(scheduledNotifications.id, notification.id),
+          eq(scheduledNotifications.status, "scheduled")
+        )
+      );
     return;
   }
 

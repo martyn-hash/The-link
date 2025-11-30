@@ -122,6 +122,7 @@ export function NotificationsTab({
             onCancel={() => setIsAddingProjectNotification(false)}
             createMutation={createNotificationMutation}
             clientRequestTemplates={clientRequestTemplates || []}
+            stages={stages}
           />
         )}
 

@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ArrowLeft, Loader2, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
@@ -41,9 +42,14 @@ export default function NotificationEditPage() {
     queryKey: [`/api/project-types/${projectTypeId}/notifications/${notificationId}`],
   });
   
-  // Fetch project type data for stages
+  // Fetch project type data
   const { data: projectType, isLoading: projectTypeLoading } = useQuery<ProjectType>({
     queryKey: [`/api/project-types/${projectTypeId}`],
+  });
+  
+  // Fetch kanban stages for this project type
+  const { data: stages = [], isLoading: stagesLoading } = useQuery<KanbanStage[]>({
+    queryKey: ['/api/config/project-types', projectTypeId, 'stages'],
   });
   
   // Fetch client request templates
@@ -64,6 +70,7 @@ export default function NotificationEditPage() {
   const [pushTitle, setPushTitle] = useState("");
   const [pushBody, setPushBody] = useState("");
   const [clientRequestTemplateId, setClientRequestTemplateId] = useState<string>("");
+  const [eligibleStageIds, setEligibleStageIds] = useState<string[]>([]);
   
   // Initialize form when notification loads
   useEffect(() => {
@@ -80,6 +87,8 @@ export default function NotificationEditPage() {
         setDateReference(notification.dateReference || "due_date");
         setOffsetType(notification.offsetType || "before");
         setOffsetDays(notification.offsetDays || 7);
+        const stages = notification.eligibleStageIds as string[] | null;
+        setEligibleStageIds(stages || []);
       } else {
         setStageId(notification.stageId || "");
         setStageTrigger(notification.stageTrigger || "entry");
@@ -118,6 +127,9 @@ export default function NotificationEditPage() {
       data.dateReference = dateReference;
       data.offsetType = offsetType;
       data.offsetDays = offsetDays;
+      data.eligibleStageIds = dateReference === 'due_date' && eligibleStageIds.length > 0 
+        ? eligibleStageIds 
+        : null;
     } else {
       data.stageId = stageId;
       data.stageTrigger = stageTrigger;
@@ -136,6 +148,22 @@ export default function NotificationEditPage() {
     updateMutation.mutate(data);
   };
   
+  const toggleStage = (stageId: string) => {
+    setEligibleStageIds(prev => 
+      prev.includes(stageId) 
+        ? prev.filter(id => id !== stageId)
+        : [...prev, stageId]
+    );
+  };
+  
+  const selectAllStages = () => {
+    setEligibleStageIds(stages.map(s => s.id));
+  };
+  
+  const clearAllStages = () => {
+    setEligibleStageIds([]);
+  };
+  
   const canSubmit = () => {
     if (!notification) return false;
     if (notification.category === 'stage' && !stageId) return false;
@@ -149,7 +177,7 @@ export default function NotificationEditPage() {
     navigate(`/settings/project-types/${projectTypeId}`);
   };
   
-  const isLoading = notificationLoading || projectTypeLoading || templatesLoading;
+  const isLoading = notificationLoading || projectTypeLoading || stagesLoading || templatesLoading;
   
   if (isLoading) {
     return (
@@ -176,8 +204,6 @@ export default function NotificationEditPage() {
       </div>
     );
   }
-  
-  const stages = projectType?.stages || [];
   
   return (
     <>
@@ -296,6 +322,66 @@ export default function NotificationEditPage() {
             </div>
           )}
           
+          {notification.category === 'project' && dateReference === 'due_date' && stages.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Label>Active in Stages (Optional)</Label>
+                  <div className="group relative">
+                    <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                    <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-72 p-3 bg-popover border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                      <p className="text-xs text-muted-foreground">
+                        If you select stages here, this notification will only be sent when the project is in one of these stages. If the project moves to a different stage, the notification will be suppressed. This is useful for "chase" reminders that should stop once the client has provided what you need.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" onClick={selectAllStages} type="button" data-testid="button-select-all-stages">
+                    Select All
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={clearAllStages} type="button" data-testid="button-clear-all-stages">
+                    Clear
+                  </Button>
+                </div>
+              </div>
+              {eligibleStageIds.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No stages selected - notification will be sent regardless of project stage
+                </p>
+              )}
+              {eligibleStageIds.length > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  Notification will only be sent when project is in: {eligibleStageIds.length} stage{eligibleStageIds.length !== 1 ? 's' : ''}
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2 p-3 border rounded-lg bg-muted/30 max-h-48 overflow-y-auto">
+                {[...stages].sort((a, b) => a.order - b.order).map((stage) => (
+                  <label
+                    key={stage.id}
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border cursor-pointer transition-all ${
+                      eligibleStageIds.includes(stage.id)
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background hover:bg-muted border-border'
+                    }`}
+                    data-testid={`stage-checkbox-${stage.id}`}
+                  >
+                    <Checkbox
+                      checked={eligibleStageIds.includes(stage.id)}
+                      onCheckedChange={() => toggleStage(stage.id)}
+                      className="sr-only"
+                    />
+                    <span
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: stage.color || '#6b7280' }}
+                    />
+                    <span className="text-sm font-medium">{stage.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
           {(notificationType === 'email' || notificationType === 'push') && (
             <div className="space-y-2">
               <Label>Link to Client Request Template (Optional)</Label>

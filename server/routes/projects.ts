@@ -589,6 +589,24 @@ export function registerProjectRoutes(
 
       console.log(`[Stage Change] Project ${updatedProject.id}: clientNotificationPreview ${clientNotificationPreview ? 'created with ' + clientNotificationPreview.recipients.length + ' recipients' : 'is null'}`);
 
+      // Handle stage-aware due-date notification suppression/reactivation
+      try {
+        const { handleProjectStageChangeForNotifications, getStageIdByName } = await import("../notification-scheduler");
+        const newStageId = await getStageIdByName(project.projectTypeId, updateData.newStatus);
+        if (newStageId) {
+          const { suppressed, reactivated } = await handleProjectStageChangeForNotifications(
+            updatedProject.id,
+            newStageId
+          );
+          if (suppressed > 0 || reactivated > 0) {
+            console.log(`[Stage Change Notifications] Project ${updatedProject.id}: ${suppressed} suppressed, ${reactivated} reactivated`);
+          }
+        }
+      } catch (notificationError) {
+        // Log but don't fail the stage change
+        console.error("[Stage Change Notifications] Error handling notification suppression/reactivation:", notificationError);
+      }
+
       res.json({ 
         project: updatedProject, 
         clientNotificationPreview,

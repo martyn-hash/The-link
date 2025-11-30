@@ -10,11 +10,13 @@ import {
   people,
   taskInstances,
   companySettings,
+  projects,
+  kanbanStages,
   type InsertScheduledNotification,
   type ProjectTypeNotification,
   type ClientRequestReminder,
 } from "@shared/schema";
-import { eq, and, sql, isNotNull } from "drizzle-orm";
+import { eq, and, sql, isNotNull, or, inArray, gte, ne } from "drizzle-orm";
 
 /**
  * Notification Scheduler Service
@@ -131,6 +133,63 @@ interface ScheduleProjectDueDateNotificationsParams {
   projectTypeId: string;
   dueDate: Date;
   relatedPeople?: string[];
+  currentStageId?: string; // If known, avoids extra DB lookup
+}
+
+/**
+ * Get the current stage ID for a project based on its currentStatus (stage name)
+ * Returns null if project or stage not found
+ */
+async function getProjectCurrentStageId(projectId: string): Promise<string | null> {
+  const result = await db
+    .select({
+      currentStatus: projects.currentStatus,
+      projectTypeId: projects.projectTypeId,
+    })
+    .from(projects)
+    .where(eq(projects.id, projectId))
+    .limit(1);
+  
+  if (result.length === 0) {
+    console.warn(`[NotificationScheduler] Project ${projectId} not found`);
+    return null;
+  }
+  
+  const { currentStatus, projectTypeId } = result[0];
+  
+  // Look up the stage ID by name and project type
+  const stage = await db
+    .select({ id: kanbanStages.id })
+    .from(kanbanStages)
+    .where(
+      and(
+        eq(kanbanStages.projectTypeId, projectTypeId),
+        eq(kanbanStages.name, currentStatus)
+      )
+    )
+    .limit(1);
+  
+  return stage.length > 0 ? stage[0].id : null;
+}
+
+/**
+ * Check if a stage is in the list of eligible stages for a notification
+ * Returns true if:
+ * - eligibleStageIds is null/empty (no restriction)
+ * - stageId is in the eligibleStageIds array
+ */
+function isStageEligible(stageId: string | null, eligibleStageIds: string[] | null): boolean {
+  // If no eligible stages defined, all stages are eligible
+  if (!eligibleStageIds || eligibleStageIds.length === 0) {
+    return true;
+  }
+  
+  // If no current stage ID, we can't determine eligibility
+  if (!stageId) {
+    return true; // Default to allowing if we can't determine stage
+  }
+  
+  return eligibleStageIds.includes(stageId);
 }
 
 /**
@@ -317,6 +376,12 @@ export async function scheduleServiceStartDateNotifications(
  * This creates scheduled notification records based on the project type's
  * due_date notification configuration. These notifications are project-based
  * and are scheduled when a project is created from a service.
+ * 
+ * STAGE-AWARE SCHEDULING:
+ * - If a notification template has eligibleStageIds defined, the notification
+ *   will only be created if the project is currently in an eligible stage.
+ * - The eligibleStageIds snapshot is stored with each scheduled notification
+ *   so stage changes can later suppress/reactivate notifications.
  */
 export async function scheduleProjectDueDateNotifications(
   params: ScheduleProjectDueDateNotificationsParams
@@ -328,6 +393,7 @@ export async function scheduleProjectDueDateNotifications(
     projectTypeId,
     dueDate,
     relatedPeople = [],
+    currentStageId: providedStageId,
   } = params;
 
   console.log(`[NotificationScheduler] Scheduling due_date notifications for project ${projectId}`);
@@ -336,6 +402,12 @@ export async function scheduleProjectDueDateNotifications(
   if (!(await areNotificationsActive(projectTypeId))) {
     console.log(`[NotificationScheduler] Skipping scheduling - notifications disabled for project type ${projectTypeId}`);
     return;
+  }
+
+  // Get current stage ID for stage eligibility checking
+  const currentStageId = providedStageId ?? await getProjectCurrentStageId(projectId);
+  if (currentStageId) {
+    console.log(`[NotificationScheduler] Project ${projectId} is currently in stage ${currentStageId}`);
   }
 
   // Check if push notifications are enabled globally (cache for this scheduling run)
@@ -399,6 +471,17 @@ export async function scheduleProjectDueDateNotifications(
       continue;
     }
 
+    // Check stage eligibility for due-date notifications with eligible stage restrictions
+    const eligibleStages = notification.eligibleStageIds as string[] | null;
+    const stageEligible = isStageEligible(currentStageId, eligibleStages);
+    
+    if (!stageEligible) {
+      console.log(
+        `[NotificationScheduler] Skipping notification ${notification.id} - project stage ${currentStageId} is not in eligible stages [${eligibleStages?.join(', ')}]`
+      );
+      continue;
+    }
+
     // Create one notification per recipient
     for (const personId of filteredPeople) {
       scheduledNotificationsToInsert.push({
@@ -421,11 +504,12 @@ export async function scheduleProjectDueDateNotifications(
         cancelledBy: null,
         cancelReason: null,
         stopReminders: false,
+        eligibleStageIdsSnapshot: eligibleStages || null, // Store snapshot for stage-change re-evaluation
       });
     }
 
     console.log(
-      `[NotificationScheduler] Scheduled due_date notification ${notification.id} for ${scheduledFor.toISOString()} (${filteredPeople.length} recipient(s))`
+      `[NotificationScheduler] Scheduled due_date notification ${notification.id} for ${scheduledFor.toISOString()} (${filteredPeople.length} recipient(s))${eligibleStages ? ` [stage-restricted to ${eligibleStages.length} stage(s)]` : ''}`
     );
   }
 
@@ -434,6 +518,7 @@ export async function scheduleProjectDueDateNotifications(
     await db.transaction(async (tx) => {
       // Delete existing due_date notifications for this project
       // Only delete notifications that match the due_date notification IDs to avoid deleting stage-based notifications
+      // Also delete suppressed notifications as they will be re-evaluated
       const dueDateNotificationIds = notifications.map(n => n.id);
       
       if (dueDateNotificationIds.length > 0) {
@@ -442,7 +527,10 @@ export async function scheduleProjectDueDateNotifications(
           .where(
             and(
               eq(scheduledNotifications.projectId, projectId),
-              eq(scheduledNotifications.status, "scheduled"),
+              or(
+                eq(scheduledNotifications.status, "scheduled"),
+                eq(scheduledNotifications.status, "suppressed")
+              ),
               sql`${scheduledNotifications.projectTypeNotificationId} IN (${sql.join(dueDateNotificationIds.map(id => sql`${id}`), sql`, `)})`
             )
           );
@@ -461,6 +549,120 @@ export async function scheduleProjectDueDateNotifications(
     );
     throw error;
   }
+}
+
+/**
+ * Re-evaluate due-date notifications when a project's stage changes
+ * 
+ * This function handles stage-aware suppression and reactivation:
+ * - When project moves to a stage NOT in eligibleStageIds: suppress pending notifications
+ * - When project moves BACK to an eligible stage: reactivate suppressed notifications
+ * 
+ * @param projectId - The project whose stage changed
+ * @param newStageId - The new stage ID the project is now in
+ * @returns Object with counts of suppressed and reactivated notifications
+ */
+export async function handleProjectStageChangeForNotifications(
+  projectId: string,
+  newStageId: string
+): Promise<{ suppressed: number; reactivated: number }> {
+  console.log(`[NotificationScheduler] Handling stage change for project ${projectId} to stage ${newStageId}`);
+  
+  let suppressed = 0;
+  let reactivated = 0;
+  
+  try {
+    // Get all pending (scheduled or suppressed) due-date notifications for this project
+    // that have stage restrictions (eligibleStageIdsSnapshot is not null)
+    const pendingNotifications = await db
+      .select()
+      .from(scheduledNotifications)
+      .where(
+        and(
+          eq(scheduledNotifications.projectId, projectId),
+          or(
+            eq(scheduledNotifications.status, "scheduled"),
+            eq(scheduledNotifications.status, "suppressed")
+          ),
+          // Only process notifications with stage restrictions
+          isNotNull(scheduledNotifications.eligibleStageIdsSnapshot),
+          // Only future notifications
+          gte(scheduledNotifications.scheduledFor, new Date())
+        )
+      );
+    
+    if (pendingNotifications.length === 0) {
+      console.log(`[NotificationScheduler] No stage-restricted pending notifications found for project ${projectId}`);
+      return { suppressed: 0, reactivated: 0 };
+    }
+    
+    console.log(`[NotificationScheduler] Found ${pendingNotifications.length} stage-restricted notification(s) to evaluate`);
+    
+    const now = new Date();
+    
+    // Process each notification
+    for (const notification of pendingNotifications) {
+      const eligibleStages = notification.eligibleStageIdsSnapshot as string[] | null;
+      const isEligible = isStageEligible(newStageId, eligibleStages);
+      
+      if (notification.status === "scheduled" && !isEligible) {
+        // Suppress: was scheduled but now in ineligible stage
+        await db
+          .update(scheduledNotifications)
+          .set({
+            status: "suppressed",
+            suppressedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(scheduledNotifications.id, notification.id));
+        
+        suppressed++;
+        console.log(`[NotificationScheduler] Suppressed notification ${notification.id} - stage ${newStageId} not in eligible stages`);
+        
+      } else if (notification.status === "suppressed" && isEligible) {
+        // Reactivate: was suppressed but now back in eligible stage
+        await db
+          .update(scheduledNotifications)
+          .set({
+            status: "scheduled",
+            reactivatedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(scheduledNotifications.id, notification.id));
+        
+        reactivated++;
+        console.log(`[NotificationScheduler] Reactivated notification ${notification.id} - stage ${newStageId} is now eligible`);
+      }
+    }
+    
+    console.log(`[NotificationScheduler] Stage change complete: ${suppressed} suppressed, ${reactivated} reactivated`);
+    return { suppressed, reactivated };
+    
+  } catch (error) {
+    console.error(
+      `[NotificationScheduler] Error handling stage change for project ${projectId}:`,
+      error instanceof Error ? error.message : error
+    );
+    throw error;
+  }
+}
+
+/**
+ * Get the stage ID from a stage name for a specific project type
+ */
+export async function getStageIdByName(projectTypeId: string, stageName: string): Promise<string | null> {
+  const result = await db
+    .select({ id: kanbanStages.id })
+    .from(kanbanStages)
+    .where(
+      and(
+        eq(kanbanStages.projectTypeId, projectTypeId),
+        eq(kanbanStages.name, stageName)
+      )
+    )
+    .limit(1);
+  
+  return result.length > 0 ? result[0].id : null;
 }
 
 /**
