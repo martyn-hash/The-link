@@ -368,6 +368,24 @@ export default function ServiceAssignments() {
     const roleIds = new Set(serviceRoleAssignments.map(ra => ra.workRoleId));
     return workRoles.filter(r => roleIds.has(r.id));
   }, [serviceFilter, services, clientServices, workRoles]);
+  
+  // Get all unique roles that appear in any client service (for column headers)
+  // Uses the full unfiltered clientServices data to ensure columns remain stable
+  const allRolesInData = useMemo(() => {
+    const roleIds = new Set<string>();
+    // Scan ALL client services (unfiltered) to collect all roles in use
+    clientServices.forEach(cs => {
+      cs.roleAssignments?.forEach(ra => {
+        if (ra.isActive) {
+          roleIds.add(ra.workRoleId);
+        }
+      });
+    });
+    // Return roles that have at least one active assignment, sorted alphabetically
+    return workRoles
+      .filter(r => roleIds.has(r.id))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [clientServices, workRoles]);
 
   // Combine and filter results
   const allAssignments: ServiceAssignment[] = useMemo(() => {
@@ -911,7 +929,11 @@ export default function ServiceAssignments() {
                     <TableHead>Type</TableHead>
                     <TableHead>Client / Person</TableHead>
                     <TableHead>Service</TableHead>
-                    {showRoleColumns && <TableHead>Roles</TableHead>}
+                    {showRoleColumns && allRolesInData.map(role => (
+                      <TableHead key={role.id} className="text-xs">
+                        {role.name}
+                      </TableHead>
+                    ))}
                     <TableHead>Service Owner</TableHead>
                     <TableHead>Next Start</TableHead>
                     <TableHead>Next Due</TableHead>
@@ -973,26 +995,27 @@ export default function ServiceAssignments() {
                             {isClientService ? cs?.client.name : `${ps?.person.firstName} ${ps?.person.lastName}`}
                           </TableCell>
                           <TableCell>{isClientService ? cs?.service.name : ps?.service.name}</TableCell>
-                          {showRoleColumns && (
-                            <TableCell>
-                              {isClientService && cs?.roleAssignments && cs.roleAssignments.filter(ra => ra.isActive).length > 0 ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {cs.roleAssignments.filter(ra => ra.isActive).map((ra) => (
-                                    <Badge 
-                                      key={ra.id} 
-                                      variant="outline" 
-                                      className="text-xs whitespace-nowrap"
-                                      title={`${ra.user.firstName} ${ra.user.lastName}`}
-                                    >
-                                      {ra.workRole.name}: {ra.user.firstName} {ra.user.lastName?.charAt(0)}.
-                                    </Badge>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span className="text-muted-foreground text-sm">—</span>
-                              )}
-                            </TableCell>
-                          )}
+                          {showRoleColumns && allRolesInData.map(role => {
+                            if (isClientService && cs?.roleAssignments) {
+                              const assignment = cs.roleAssignments.find(
+                                ra => ra.workRoleId === role.id && ra.isActive
+                              );
+                              if (assignment) {
+                                return (
+                                  <TableCell key={role.id} className="text-sm">
+                                    <span title={`${assignment.user.firstName} ${assignment.user.lastName}`}>
+                                      {assignment.user.firstName} {assignment.user.lastName?.charAt(0)}.
+                                    </span>
+                                  </TableCell>
+                                );
+                              }
+                            }
+                            return (
+                              <TableCell key={role.id} className="text-center">
+                                <span className="text-muted-foreground">✕</span>
+                              </TableCell>
+                            );
+                          })}
                           <TableCell>
                             {(isClientService ? cs?.serviceOwner : ps?.serviceOwner) ? (
                               <span className="flex items-center gap-1">
@@ -1038,7 +1061,13 @@ export default function ServiceAssignments() {
                         {/* Expanded - Active Projects */}
                         {isExpanded && isClientService && (
                           <TableRow className="bg-muted/30" key={`expanded-${assignment.id}`}>
-                            <TableCell colSpan={isAdmin ? (showRoleColumns ? 11 : 10) : (showRoleColumns ? 10 : 9)} className="py-3">
+                            <TableCell colSpan={
+                              (isAdmin ? 1 : 0) + // Admin checkbox column
+                              1 + // Expand button column
+                              3 + // Type, Client/Person, Service columns
+                              (showRoleColumns ? allRolesInData.length : 0) + // Role columns
+                              5 // Service Owner, Next Start, Next Due, Frequency, Status
+                            } className="py-3">
                               <div className="pl-12">
                                 <p className="text-sm font-medium mb-3 flex items-center gap-2">
                                   <FolderKanban className="w-4 h-4" />

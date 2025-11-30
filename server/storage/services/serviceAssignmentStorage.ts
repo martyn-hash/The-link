@@ -2063,8 +2063,12 @@ export class ServiceAssignmentStorage extends BaseStorage {
         throw new Error('User not found');
       }
 
+      console.log(`[BulkReassign] Starting bulk reassign for ${params.clientServiceIds.length} client services, fromRoleId: ${params.fromRoleId}, toUserId: ${params.toUserId}`);
+      
       // Process each client service
       for (const clientServiceId of params.clientServiceIds) {
+        console.log(`[BulkReassign] Processing client service ${clientServiceId}`);
+        
         // Find the existing role assignment
         const [existingAssignment] = await db
           .select()
@@ -2076,8 +2080,11 @@ export class ServiceAssignmentStorage extends BaseStorage {
           ));
 
         if (!existingAssignment) {
+          console.log(`[BulkReassign] No existing assignment found for role ${params.fromRoleId}, skipping`);
           continue; // No assignment to update
         }
+        
+        console.log(`[BulkReassign] Found existing assignment ${existingAssignment.id}, updating user from ${existingAssignment.userId} to ${params.toUserId}`);
 
         const oldUserId = existingAssignment.userId;
 
@@ -2109,7 +2116,12 @@ export class ServiceAssignmentStorage extends BaseStorage {
           .from(services)
           .where(eq(services.id, clientService.serviceId));
 
-        if (!service || !service.projectTypeId) continue;
+        if (!service || !service.projectTypeId) {
+          console.log(`[BulkReassign] Service not found or has no projectTypeId, skipping project updates`);
+          continue;
+        }
+        
+        console.log(`[BulkReassign] Looking for active projects for clientId: ${clientService.clientId}, projectTypeId: ${service.projectTypeId}`);
 
         // Find and update any active projects with this role assignment
         const activeProjects = await db
@@ -2120,8 +2132,12 @@ export class ServiceAssignmentStorage extends BaseStorage {
             eq(projects.projectTypeId, service.projectTypeId),
             ne(projects.currentStatus, 'Completed')
           ));
+          
+        console.log(`[BulkReassign] Found ${activeProjects.length} active projects`);
 
         for (const project of activeProjects) {
+          console.log(`[BulkReassign] Checking project ${project.id}, currentStatus: "${project.currentStatus}", projectTypeId: ${project.projectTypeId}`);
+          
           // Check if this project's current stage is assigned to this work role
           const [stage] = await db
             .select()
@@ -2132,8 +2148,11 @@ export class ServiceAssignmentStorage extends BaseStorage {
               eq(kanbanStages.assignedWorkRoleId, params.fromRoleId)
             ));
 
+          console.log(`[BulkReassign] Stage lookup result: ${stage ? `found stage ${stage.id} with roleId ${stage.assignedWorkRoleId}` : 'no matching stage found'}`);
+
           if (stage) {
             const previousAssigneeId = project.currentAssigneeId;
+            console.log(`[BulkReassign] Stage matched! Updating project ${project.id} assignee from ${previousAssigneeId} to ${params.toUserId}`);
             
             // Update the project's current assignee
             await db
@@ -2157,21 +2176,28 @@ export class ServiceAssignmentStorage extends BaseStorage {
             const newAssigneeName = `${newUser.firstName} ${newUser.lastName}`.trim();
 
             // Add chronology entry for the project
-            await db.insert(projectChronology).values({
-              projectId: project.id,
-              fromStatus: project.currentStatus,
-              toStatus: project.currentStatus,
-              assigneeId: params.toUserId,
-              changeReason: `Bulk role reassignment: ${workRole.name} role changed from ${oldAssigneeName} to ${newAssigneeName}`,
-              timeInPreviousStage: null,
-              businessHoursInPreviousStage: null,
-            });
-            
-            chronologyEntries++;
+            try {
+              await db.insert(projectChronology).values({
+                projectId: project.id,
+                fromStatus: project.currentStatus,
+                toStatus: project.currentStatus,
+                assigneeId: params.toUserId,
+                changedById: params.performedByUserId,
+                changeReason: `Bulk role reassignment: ${workRole.name} role changed from ${oldAssigneeName} to ${newAssigneeName}`,
+                timeInPreviousStage: null,
+                businessHoursInPreviousStage: null,
+              });
+              console.log(`[BulkReassign] Created chronology entry for project ${project.id}`);
+              chronologyEntries++;
+            } catch (chronologyError) {
+              console.error(`[BulkReassign] Failed to create chronology entry for project ${project.id}:`, chronologyError);
+            }
           }
         }
       }
 
+      console.log(`[BulkReassign] Completed. Results: roleChanges=${roleChanges}, projectUpdates=${projectUpdates}, chronologyEntries=${chronologyEntries}`);
+      
       return {
         roleChanges,
         projectUpdates,
