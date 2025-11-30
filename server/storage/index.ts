@@ -3030,6 +3030,10 @@ export class DatabaseStorage implements IStorage {
     return this.serviceAssignmentStorage.bulkReassignRole(params);
   }
 
+  async bulkUpdateServiceDates(params: any) {
+    return this.serviceAssignmentStorage.bulkUpdateServiceDates(params);
+  }
+
   // Column Preferences operations (3 methods) - ColumnPreferencesStorage
   async getUserColumnPreferences(userId: string, viewType?: string) {
     return this.columnPreferencesStorage.getUserColumnPreferences(userId, viewType);

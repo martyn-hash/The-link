@@ -2182,4 +2182,103 @@ export class ServiceAssignmentStorage extends BaseStorage {
       throw error;
     }
   }
+
+  async bulkUpdateServiceDates(params: {
+    serviceIds: string[];
+    serviceType: 'client' | 'personal';
+    mode: 'shift' | 'set';
+    shiftDays?: number;
+    startDate?: string;
+    dueDate?: string;
+    target: 'start' | 'due' | 'both';
+  }): Promise<{ updated: number }> {
+    try {
+      let updated = 0;
+
+      if (params.serviceType === 'client') {
+        for (const serviceId of params.serviceIds) {
+          const [service] = await db
+            .select()
+            .from(clientServices)
+            .where(eq(clientServices.id, serviceId));
+
+          if (!service) continue;
+
+          const updates: { nextStartDate?: Date; nextDueDate?: Date } = {};
+
+          if (params.mode === 'shift' && params.shiftDays) {
+            if ((params.target === 'start' || params.target === 'both') && service.nextStartDate) {
+              const newStartDate = new Date(service.nextStartDate);
+              newStartDate.setDate(newStartDate.getDate() + params.shiftDays);
+              updates.nextStartDate = newStartDate;
+            }
+            if ((params.target === 'due' || params.target === 'both') && service.nextDueDate) {
+              const newDueDate = new Date(service.nextDueDate);
+              newDueDate.setDate(newDueDate.getDate() + params.shiftDays);
+              updates.nextDueDate = newDueDate;
+            }
+          } else if (params.mode === 'set') {
+            if ((params.target === 'start' || params.target === 'both') && params.startDate) {
+              updates.nextStartDate = new Date(params.startDate);
+            }
+            if ((params.target === 'due' || params.target === 'both') && params.dueDate) {
+              updates.nextDueDate = new Date(params.dueDate);
+            }
+          }
+
+          if (Object.keys(updates).length > 0) {
+            await db
+              .update(clientServices)
+              .set(updates)
+              .where(eq(clientServices.id, serviceId));
+            updated++;
+          }
+        }
+      } else if (params.serviceType === 'personal') {
+        for (const serviceId of params.serviceIds) {
+          const [service] = await db
+            .select()
+            .from(peopleServices)
+            .where(eq(peopleServices.id, serviceId));
+
+          if (!service) continue;
+
+          const updates: { nextStartDate?: Date; nextDueDate?: Date } = {};
+
+          if (params.mode === 'shift' && params.shiftDays) {
+            if ((params.target === 'start' || params.target === 'both') && service.nextStartDate) {
+              const newStartDate = new Date(service.nextStartDate);
+              newStartDate.setDate(newStartDate.getDate() + params.shiftDays);
+              updates.nextStartDate = newStartDate;
+            }
+            if ((params.target === 'due' || params.target === 'both') && service.nextDueDate) {
+              const newDueDate = new Date(service.nextDueDate);
+              newDueDate.setDate(newDueDate.getDate() + params.shiftDays);
+              updates.nextDueDate = newDueDate;
+            }
+          } else if (params.mode === 'set') {
+            if ((params.target === 'start' || params.target === 'both') && params.startDate) {
+              updates.nextStartDate = new Date(params.startDate);
+            }
+            if ((params.target === 'due' || params.target === 'both') && params.dueDate) {
+              updates.nextDueDate = new Date(params.dueDate);
+            }
+          }
+
+          if (Object.keys(updates).length > 0) {
+            await db
+              .update(peopleServices)
+              .set(updates)
+              .where(eq(peopleServices.id, serviceId));
+            updated++;
+          }
+        }
+      }
+
+      return { updated };
+    } catch (error) {
+      console.error('[Storage] Error in bulkUpdateServiceDates:', error);
+      throw error;
+    }
+  }
 }

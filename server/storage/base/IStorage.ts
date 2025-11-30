@@ -438,6 +438,16 @@ export interface IStorage {
     chronologyEntries: number;
   }>;
   
+  bulkUpdateServiceDates(params: {
+    serviceIds: string[];
+    serviceType: 'client' | 'personal';
+    mode: 'shift' | 'set';
+    shiftDays?: number;
+    startDate?: string;
+    dueDate?: string;
+    target: 'start' | 'due' | 'both';
+  }): Promise<{ updated: number }>;
+  
   getUserColumnPreferences(userId: string, viewType?: string): Promise<UserColumnPreferences | undefined>;
   upsertUserColumnPreferences(preferences: InsertUserColumnPreferences): Promise<UserColumnPreferences>;
   updateUserColumnPreferences(userId: string, viewType: string, preferences: UpdateUserColumnPreferences): Promise<UserColumnPreferences>;

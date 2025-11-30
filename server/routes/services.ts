@@ -812,4 +812,62 @@ export function registerServiceRoutes(
       res.status(500).json({ message: "Failed to complete bulk role reassignment" });
     }
   });
+
+  // ==================================================
+  // BULK DATE UPDATE API ROUTES
+  // ==================================================
+
+  // POST /api/service-assignments/bulk-update-dates - Bulk update service dates (admin only)
+  app.post("/api/service-assignments/bulk-update-dates", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { serviceIds, serviceType, mode, shiftDays, startDate, dueDate, target } = req.body;
+
+      if (!serviceIds || !Array.isArray(serviceIds) || serviceIds.length === 0) {
+        return res.status(400).json({ message: "Service IDs are required" });
+      }
+
+      if (!serviceType || !['client', 'personal'].includes(serviceType)) {
+        return res.status(400).json({ message: "Valid service type is required (client or personal)" });
+      }
+
+      if (!mode || !['shift', 'set'].includes(mode)) {
+        return res.status(400).json({ message: "Valid mode is required (shift or set)" });
+      }
+
+      if (!target || !['start', 'due', 'both'].includes(target)) {
+        return res.status(400).json({ message: "Valid target is required (start, due, or both)" });
+      }
+
+      if (mode === 'shift' && (typeof shiftDays !== 'number' || shiftDays === 0)) {
+        return res.status(400).json({ message: "Shift days must be a non-zero number" });
+      }
+
+      if (mode === 'set') {
+        if (target === 'start' && !startDate) {
+          return res.status(400).json({ message: "Start date is required" });
+        }
+        if (target === 'due' && !dueDate) {
+          return res.status(400).json({ message: "Due date is required" });
+        }
+        if (target === 'both' && (!startDate || !dueDate)) {
+          return res.status(400).json({ message: "Both start and due dates are required" });
+        }
+      }
+
+      const result = await storage.bulkUpdateServiceDates({
+        serviceIds,
+        serviceType,
+        mode,
+        shiftDays,
+        startDate,
+        dueDate,
+        target,
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error in bulk date update:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to complete bulk date update" });
+    }
+  });
 }

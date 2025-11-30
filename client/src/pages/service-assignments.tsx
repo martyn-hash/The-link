@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
@@ -76,8 +76,14 @@ import {
   Trash2,
   RefreshCw,
   UserCog,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Calendar,
+  CalendarClock,
+  FolderKanban,
+  Eye,
+  EyeOff
 } from "lucide-react";
+import { format } from "date-fns";
 import type { User as UserType, Service, WorkRole, Client } from "@shared/schema";
 
 interface ServiceAssignmentView {
@@ -177,6 +183,9 @@ export default function ServiceAssignments() {
   // Selection state for bulk operations
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  
+  // Column visibility toggle
+  const [showRoleColumns, setShowRoleColumns] = useState(true);
 
   // Saved views state
   const [saveViewDialogOpen, setSaveViewDialogOpen] = useState(false);
@@ -197,6 +206,14 @@ export default function ServiceAssignments() {
     chronologyEntries: number;
   } | null>(null);
   const [reassignConfirmOpen, setReassignConfirmOpen] = useState(false);
+  
+  // Bulk date editing state
+  const [dateEditDialogOpen, setDateEditDialogOpen] = useState(false);
+  const [dateEditMode, setDateEditMode] = useState<'shift' | 'set'>('shift');
+  const [dateEditTarget, setDateEditTarget] = useState<'start' | 'due' | 'both'>('both');
+  const [shiftDays, setShiftDays] = useState<number>(0);
+  const [setStartDate, setSetStartDate] = useState<string>('');
+  const [setDueDate, setSetDueDate] = useState<string>('');
 
   // Default to "my assignments" for non-admins on first load
   useEffect(() => {
@@ -438,6 +455,37 @@ export default function ServiceAssignments() {
       setReassignProgress(null);
     },
   });
+  
+  // Bulk date edit mutation
+  const bulkDateEditMutation = useMutation({
+    mutationFn: async (data: { 
+      serviceIds: string[];
+      serviceType: 'client' | 'personal';
+      mode: 'shift' | 'set';
+      shiftDays?: number;
+      startDate?: string;
+      dueDate?: string;
+      target: 'start' | 'due' | 'both';
+    }) => {
+      return apiRequest("POST", "/api/service-assignments/bulk-update-dates", data);
+    },
+    onSuccess: (result: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/service-assignments/client"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/service-assignments/personal"] });
+      setDateEditDialogOpen(false);
+      setSelectedIds(new Set());
+      setShiftDays(0);
+      setSetStartDate('');
+      setSetDueDate('');
+      toast({
+        title: "Dates updated",
+        description: `Updated ${result.updated} service${result.updated !== 1 ? 's' : ''}.`,
+      });
+    },
+    onError: (error) => {
+      showFriendlyError({ error });
+    },
+  });
 
   const handleSaveView = () => {
     if (!newViewName.trim()) {
@@ -500,6 +548,52 @@ export default function ServiceAssignments() {
       fromRoleId: reassignRoleId,
       toUserId: reassignToUserId,
     });
+  };
+  
+  const handleBulkDateEdit = () => {
+    const clientServiceIds = Array.from(selectedIds).filter(id => 
+      allAssignments.find(a => a.id === id && a.type === 'client')
+    );
+    
+    if (clientServiceIds.length === 0) {
+      showFriendlyError({ error: "Please select at least one client service to update" });
+      return;
+    }
+    
+    if (dateEditMode === 'shift') {
+      if (shiftDays === 0) {
+        showFriendlyError({ error: "Please enter a number of days to shift (positive or negative)" });
+        return;
+      }
+      bulkDateEditMutation.mutate({
+        serviceIds: clientServiceIds,
+        serviceType: 'client',
+        mode: 'shift',
+        shiftDays,
+        target: dateEditTarget,
+      });
+    } else {
+      if (dateEditTarget === 'start' && !setStartDate) {
+        showFriendlyError({ error: "Please select a start date" });
+        return;
+      }
+      if (dateEditTarget === 'due' && !setDueDate) {
+        showFriendlyError({ error: "Please select a due date" });
+        return;
+      }
+      if (dateEditTarget === 'both' && (!setStartDate || !setDueDate)) {
+        showFriendlyError({ error: "Please select both start and due dates" });
+        return;
+      }
+      bulkDateEditMutation.mutate({
+        serviceIds: clientServiceIds,
+        serviceType: 'client',
+        mode: 'set',
+        startDate: setStartDate || undefined,
+        dueDate: setDueDate || undefined,
+        target: dateEditTarget,
+      });
+    }
   };
 
   // Get available roles for the selected service assignments
@@ -617,6 +711,21 @@ export default function ServiceAssignments() {
                 data-testid="input-search"
               />
             </div>
+            
+            {/* Column Toggle */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowRoleColumns(!showRoleColumns)}
+              className="text-muted-foreground"
+              data-testid="button-toggle-roles"
+            >
+              {showRoleColumns ? (
+                <><EyeOff className="w-4 h-4 mr-2" /> Hide Roles</>
+              ) : (
+                <><Eye className="w-4 h-4 mr-2" /> Show Roles</>
+              )}
+            </Button>
 
             {/* Bulk Actions (Admin only) */}
             {isAdmin && selectedIds.size > 0 && (
@@ -631,6 +740,14 @@ export default function ServiceAssignments() {
                 >
                   <ArrowRightLeft className="w-4 h-4 mr-2" />
                   Reassign Roles
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setDateEditDialogOpen(true)}
+                  data-testid="button-bulk-dates"
+                >
+                  <CalendarClock className="w-4 h-4 mr-2" />
+                  Edit Dates
                 </Button>
                 <Button
                   variant="ghost"
@@ -707,7 +824,10 @@ export default function ServiceAssignments() {
                     <TableHead>Type</TableHead>
                     <TableHead>Client / Person</TableHead>
                     <TableHead>Service</TableHead>
+                    {showRoleColumns && <TableHead>Roles</TableHead>}
                     <TableHead>Service Owner</TableHead>
+                    <TableHead>Next Start</TableHead>
+                    <TableHead>Next Due</TableHead>
                     <TableHead>Frequency</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
@@ -718,12 +838,10 @@ export default function ServiceAssignments() {
                     const cs = isClientService ? assignment as ClientServiceWithDetails & { type: 'client' } : null;
                     const ps = !isClientService ? assignment as PeopleServiceWithDetails & { type: 'personal' } : null;
                     const isExpanded = expandedRows.has(assignment.id);
-                    const hasRoles = cs?.roleAssignments && cs.roleAssignments.length > 0;
 
                     return (
-                      <>
-                        <TableRow 
-                          key={assignment.id}
+                      <React.Fragment key={assignment.id}>
+                        <TableRow
                           className={selectedIds.has(assignment.id) ? "bg-muted/50" : ""}
                           data-testid={`row-assignment-${assignment.id}`}
                         >
@@ -739,7 +857,7 @@ export default function ServiceAssignments() {
                             </TableCell>
                           )}
                           <TableCell>
-                            {isClientService && hasRoles && (
+                            {isClientService && (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -768,6 +886,26 @@ export default function ServiceAssignments() {
                             {isClientService ? cs?.client.name : `${ps?.person.firstName} ${ps?.person.lastName}`}
                           </TableCell>
                           <TableCell>{isClientService ? cs?.service.name : ps?.service.name}</TableCell>
+                          {showRoleColumns && (
+                            <TableCell>
+                              {isClientService && cs?.roleAssignments && cs.roleAssignments.filter(ra => ra.isActive).length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {cs.roleAssignments.filter(ra => ra.isActive).map((ra) => (
+                                    <Badge 
+                                      key={ra.id} 
+                                      variant="outline" 
+                                      className="text-xs whitespace-nowrap"
+                                      title={`${ra.user.firstName} ${ra.user.lastName}`}
+                                    >
+                                      {ra.workRole.name}: {ra.user.firstName} {ra.user.lastName?.charAt(0)}.
+                                    </Badge>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="text-muted-foreground text-sm">—</span>
+                              )}
+                            </TableCell>
+                          )}
                           <TableCell>
                             {(isClientService ? cs?.serviceOwner : ps?.serviceOwner) ? (
                               <span className="flex items-center gap-1">
@@ -778,6 +916,24 @@ export default function ServiceAssignments() {
                               </span>
                             ) : (
                               <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {assignment.nextStartDate ? (
+                              <span className="text-sm">
+                                {format(new Date(assignment.nextStartDate), 'dd MMM yyyy')}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {assignment.nextDueDate ? (
+                              <span className="text-sm">
+                                {format(new Date(assignment.nextDueDate), 'dd MMM yyyy')}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">—</span>
                             )}
                           </TableCell>
                           <TableCell>
@@ -792,36 +948,23 @@ export default function ServiceAssignments() {
                           </TableCell>
                         </TableRow>
 
-                        {/* Expanded Role Assignments */}
-                        {isExpanded && isClientService && hasRoles && (
-                          <TableRow className="bg-muted/30">
-                            <TableCell colSpan={isAdmin ? 8 : 7} className="py-3">
+                        {/* Expanded - Active Projects (placeholder for now) */}
+                        {isExpanded && isClientService && (
+                          <TableRow className="bg-muted/30" key={`expanded-${assignment.id}`}>
+                            <TableCell colSpan={isAdmin ? (showRoleColumns ? 11 : 10) : (showRoleColumns ? 10 : 9)} className="py-3">
                               <div className="pl-12">
                                 <p className="text-sm font-medium mb-2 flex items-center gap-2">
-                                  <Users className="w-4 h-4" />
-                                  Role Assignments
+                                  <FolderKanban className="w-4 h-4" />
+                                  Active Projects
                                 </p>
-                                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                                  {cs?.roleAssignments?.filter(ra => ra.isActive).map((ra) => (
-                                    <div
-                                      key={ra.id}
-                                      className="flex items-center gap-2 p-2 bg-background rounded border"
-                                      data-testid={`role-assignment-${ra.id}`}
-                                    >
-                                      <div className="flex-1">
-                                        <p className="text-sm font-medium">{ra.workRole.name}</p>
-                                        <p className="text-xs text-muted-foreground">
-                                          {ra.user.firstName} {ra.user.lastName}
-                                        </p>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                  Loading active projects... (coming soon)
+                                </p>
                               </div>
                             </TableCell>
                           </TableRow>
                         )}
-                      </>
+                      </React.Fragment>
                     );
                   })}
                 </TableBody>
@@ -1151,6 +1294,124 @@ export default function ServiceAssignments() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bulk Date Edit Dialog */}
+      <Dialog open={dateEditDialogOpen} onOpenChange={setDateEditDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarClock className="w-5 h-5" />
+              Bulk Date Edit
+            </DialogTitle>
+            <DialogDescription>
+              Update dates for {selectedIds.size} selected service{selectedIds.size !== 1 ? 's' : ''}.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {/* Mode Selection */}
+            <div className="space-y-2">
+              <Label>Edit Mode</Label>
+              <Select 
+                value={dateEditMode} 
+                onValueChange={(value: 'shift' | 'set') => setDateEditMode(value)}
+              >
+                <SelectTrigger data-testid="select-date-mode">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="shift">Shift dates by days</SelectItem>
+                  <SelectItem value="set">Set specific dates</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Target Selection */}
+            <div className="space-y-2">
+              <Label>Which dates to update</Label>
+              <Select 
+                value={dateEditTarget} 
+                onValueChange={(value: 'start' | 'due' | 'both') => setDateEditTarget(value)}
+              >
+                <SelectTrigger data-testid="select-date-target">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="both">Both start and due dates</SelectItem>
+                  <SelectItem value="start">Start date only</SelectItem>
+                  <SelectItem value="due">Due date only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            
+            {/* Shift Mode Options */}
+            {dateEditMode === 'shift' && (
+              <div className="space-y-2">
+                <Label htmlFor="shift-days">Number of days to shift</Label>
+                <Input
+                  id="shift-days"
+                  type="number"
+                  value={shiftDays}
+                  onChange={(e) => setShiftDays(parseInt(e.target.value) || 0)}
+                  placeholder="Enter days (positive or negative)"
+                  data-testid="input-shift-days"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Use positive numbers to move dates forward, negative to move back. 
+                  For example, -1 moves all dates back by one day.
+                </p>
+              </div>
+            )}
+            
+            {/* Set Mode Options */}
+            {dateEditMode === 'set' && (
+              <>
+                {(dateEditTarget === 'start' || dateEditTarget === 'both') && (
+                  <div className="space-y-2">
+                    <Label htmlFor="set-start-date">New Start Date</Label>
+                    <Input
+                      id="set-start-date"
+                      type="date"
+                      value={setStartDate}
+                      onChange={(e) => setSetStartDate(e.target.value)}
+                      data-testid="input-set-start-date"
+                    />
+                  </div>
+                )}
+                {(dateEditTarget === 'due' || dateEditTarget === 'both') && (
+                  <div className="space-y-2">
+                    <Label htmlFor="set-due-date">New Due Date</Label>
+                    <Input
+                      id="set-due-date"
+                      type="date"
+                      value={setDueDate}
+                      onChange={(e) => setSetDueDate(e.target.value)}
+                      data-testid="input-set-due-date"
+                    />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setDateEditDialogOpen(false)}
+              disabled={bulkDateEditMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleBulkDateEdit}
+              disabled={bulkDateEditMutation.isPending}
+              data-testid="button-apply-dates"
+            >
+              {bulkDateEditMutation.isPending ? "Updating..." : "Apply Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete View Confirmation */}
       <AlertDialog open={deleteViewDialogOpen} onOpenChange={setDeleteViewDialogOpen}>
