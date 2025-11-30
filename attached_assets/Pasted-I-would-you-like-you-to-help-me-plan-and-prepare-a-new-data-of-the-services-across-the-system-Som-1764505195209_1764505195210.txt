@@ -1,0 +1,35 @@
+I would you like you to help me plan and prepare a new data of the services across the system. 
+
+Some context, now we have live users on our main system, they have started to ask me questions, such as where can I see all services I am responsible for, or where can I see the services that I have a role in, or what if a staff member leaves and we need to update a number of roles in services at once. 
+
+This made me realise we have a slight gap covering real world use cases. 
+
+The objectives for what we're about to do, will be: 
+
+- To provide a data view in the system, similar to /projects that lists services. To maintain UI consistency, there should be a filter section that is shown on the right of the screen (same as projects and scheduled notifications) 
+
+- Services are a funny one because different services have different roles, and as such as the results if shown as one service per role may end up with lots of empty columns (roles present in service X that are not present in service Y etc), so I think we start the page without data, but instead prompt the user to build their first set of results using the filters. Each previous filter, filters the next one - what I mean, is if I select 'weekly payroll' from the filters, then in the 'roles' filter, I would only see the roles that relate to this service. 
+
+- The aim is that a service owner could easily build a list of their overall services, or someone who has a different roles across different services, could still build a view of all the services they are mapped to as a user. 
+
+- Let users save and load views (a bit like how we do for /projects now). 
+
+
+Then for users with admin privileges in their user profile, we should support re-allocating roles to other users, either individually, or in bulk. Getting the logic right on this is going to be key - we have something similar now where by the user can navigate to client detail - services - view - edit - change roles. Performing this, updates the future service, but also locates any existing projects that need to be updated from old to new user, and this includes finding any current stages that need their assigned user changing. 
+
+To achieve this, I imagine the admin user will need to create a set of filters that are relevant - so by service, or by specific user, or both (as this most likely reflects the real world - a staff member leaves, so we have to re-assign their work to someone else, or we assign different clients to a staff member, so need to change their service allocations). 
+
+Then the admin user should be able select one or many rows, define the role that needs changing (if there are multliple -for example, they pick weekly payroll, and the service has 3 roles, we need to re-assign role x where role assignee is user y) and then afer confiriming this is the step they wish to take, the system should carefully perform the logic that we have for individual role changes as defined above, but in bulk. 
+
+I think some sort of visual representation would assuring - a dialogue box that shows the count, and what needs to be done, and it reducing as the work is being done. 
+
+Bonus points if: 
+- You can get a chronology entry on project chronologies to state a role change has taken place. 
+- You can email the new assignee (maybe run this job just once a day or something and aggregate the figures, otherwise, they might get 50 emails in an hour at some point!). 
+
+
+This is intended to provide enterprise grade administration that addresses the real world use cases of accounting teams. 
+
+I think we already have a 'services' menu in the logo menu, but it's use case is more for my use when I was testing - it's all about scheduling projects, but it's not really an end user feature, so I think you could stick that existing page as a new tab on the /admin page and replace the current /services page with the scope above. 
+
+Help me to brainstorm this as an idea, sense check it, help me find the gaps in my thinking, and as ever let's make this the best thing out there. 
