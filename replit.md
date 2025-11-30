@@ -43,7 +43,7 @@ PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, sof
 ## External Dependencies
 
 ### Third-Party Services
--   **Companies House API**: For UK company data integration.
+-   **Companies House API**: For UK company data integration, including nightly sync of date fields (accounts, confirmation statement) and registered office address changes with approval workflow.
 -   **Microsoft Graph API**: For staff email integration.
 -   **RingCentral**: For VoIP phone system integration.
 -   **SendGrid**: For transactional email delivery.
