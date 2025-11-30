@@ -23,6 +23,11 @@ export default function SuperAdminDropdown({ user }: SuperAdminDropdownProps) {
 
   const superAdminItems = [
     {
+      label: "Project Scheduling",
+      href: "/admin",
+      icon: Calendar,
+    },
+    {
       label: "Company Settings",
       href: "/company-settings",
       icon: Settings,
