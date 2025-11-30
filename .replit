@@ -108,4 +108,6 @@ defaultBucketID = "replit-objstore-fb4ebf31-d972-4a71-8d64-00fd32c62d4e"
 [userenv]
 
 [userenv.development]
-HMRC_VAT_VALIDATION_ENABLED = "false"
+HMRC_VAT_VALIDATION_ENABLED = "true"
+HMRC_API_BASE_URL = "https://test-api.service.hmrc.gov.uk"
+HMRC_AUTH_URL = "https://test-api.service.hmrc.gov.uk/oauth/token"
