@@ -2116,12 +2116,31 @@ export class ServiceAssignmentStorage extends BaseStorage {
           .from(services)
           .where(eq(services.id, clientService.serviceId));
 
-        if (!service || !service.projectTypeId) {
-          console.log(`[BulkReassign] Service not found or has no projectTypeId, skipping project updates`);
+        if (!service) {
+          console.log(`[BulkReassign] Service not found, skipping project updates`);
+          continue;
+        }
+
+        // Get project type - try by ID first, then by name matching
+        let projectTypeId = service.projectTypeId;
+        if (!projectTypeId) {
+          // Try to match by name if no projectTypeId is set
+          const matchingProjectTypes = await db
+            .select()
+            .from(projectTypes)
+            .where(eq(projectTypes.name, service.name));
+          if (matchingProjectTypes.length > 0) {
+            projectTypeId = matchingProjectTypes[0].id;
+            console.log(`[BulkReassign] Project type found by name matching: ${matchingProjectTypes[0].name} for service: ${service.name}`);
+          }
+        }
+
+        if (!projectTypeId) {
+          console.log(`[BulkReassign] No projectTypeId found for service ${service.name}, skipping project updates`);
           continue;
         }
         
-        console.log(`[BulkReassign] Looking for active projects for clientId: ${clientService.clientId}, projectTypeId: ${service.projectTypeId}`);
+        console.log(`[BulkReassign] Looking for active projects for clientId: ${clientService.clientId}, projectTypeId: ${projectTypeId}`);
 
         // Find and update any active projects with this role assignment
         const activeProjects = await db
@@ -2129,7 +2148,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
           .from(projects)
           .where(and(
             eq(projects.clientId, clientService.clientId),
-            eq(projects.projectTypeId, service.projectTypeId),
+            eq(projects.projectTypeId, projectTypeId),
             ne(projects.currentStatus, 'Completed')
           ));
           

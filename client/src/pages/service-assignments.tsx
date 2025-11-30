@@ -60,6 +60,12 @@ import {
 } from "@/components/ui/collapsible";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { 
   Filter, 
   Search, 
@@ -167,9 +173,10 @@ type ServiceAssignment = (ClientServiceWithDetails | PeopleServiceWithDetails) &
 interface ProjectWithDetails {
   id: string;
   name: string;
-  status: string;
+  description: string;
+  currentStatus: string;
   currentStageId: string | null;
-  startDate: string | null;
+  createdAt: string | null;
   dueDate: string | null;
   completedAt: string | null;
   projectType?: {
@@ -195,7 +202,7 @@ function ActiveProjectsSection({ clientServiceId }: { clientServiceId: string })
   const activeProjects = useMemo(() => {
     if (!projects) return [];
     return projects.filter(p => {
-      const status = (p.status || '').toLowerCase();
+      const status = (p.currentStatus || '').toLowerCase();
       return status !== 'completed' && status !== 'cancelled';
     });
   }, [projects]);
@@ -222,7 +229,7 @@ function ActiveProjectsSection({ clientServiceId }: { clientServiceId: string })
       <div className="grid grid-cols-4 gap-4 text-xs font-medium text-muted-foreground border-b pb-1">
         <span>Project</span>
         <span>Status</span>
-        <span>Start Date</span>
+        <span>Created</span>
         <span>Due Date</span>
       </div>
       {activeProjects.map((project) => (
@@ -232,15 +239,15 @@ function ActiveProjectsSection({ clientServiceId }: { clientServiceId: string })
             className="text-primary hover:underline truncate"
             data-testid={`link-project-${project.id}`}
           >
-            {project.name}
+            {project.description || project.name}
           </a>
           <span>
             <Badge variant="outline" className="text-xs capitalize">
-              {project.status?.replace(/_/g, ' ') || 'Unknown'}
+              {project.currentStatus?.replace(/_/g, ' ') || 'Unknown'}
             </Badge>
           </span>
           <span className="text-muted-foreground">
-            {project.startDate ? format(new Date(project.startDate), 'dd MMM yyyy') : '—'}
+            {project.createdAt ? format(new Date(project.createdAt), 'dd MMM yyyy') : '—'}
           </span>
           <span className="text-muted-foreground">
             {project.dueDate ? format(new Date(project.dueDate), 'dd MMM yyyy') : '—'}
@@ -598,27 +605,29 @@ export default function ServiceAssignments() {
       return;
     }
 
+    // Use field names that match the schema: serviceId, roleId, userId, serviceOwnerId
     const filters = {
-      serviceFilter,
-      roleFilter,
-      userFilter,
-      serviceOwnerFilter,
-      showInactive,
+      serviceId: serviceFilter !== "all" ? serviceFilter : undefined,
+      roleId: roleFilter !== "all" ? roleFilter : undefined,
+      userId: userFilter !== "all" ? userFilter : undefined,
+      serviceOwnerId: serviceOwnerFilter !== "all" ? serviceOwnerFilter : undefined,
+      showInactive: showInactive || undefined,
     };
 
     saveViewMutation.mutate({
       name: newViewName.trim(),
-      filters: JSON.stringify(filters),
+      filters, // Pass as object, not JSON string
     });
   };
 
   const handleLoadView = (view: ServiceAssignmentView) => {
     try {
       const filters = typeof view.filters === 'string' ? JSON.parse(view.filters) : view.filters;
-      setServiceFilter(filters.serviceFilter || "all");
-      setRoleFilter(filters.roleFilter || "all");
-      setUserFilter(filters.userFilter || "all");
-      setServiceOwnerFilter(filters.serviceOwnerFilter || "all");
+      // Support both old field names (serviceFilter) and new ones (serviceId)
+      setServiceFilter(filters.serviceId || filters.serviceFilter || "all");
+      setRoleFilter(filters.roleId || filters.roleFilter || "all");
+      setUserFilter(filters.userId || filters.userFilter || "all");
+      setServiceOwnerFilter(filters.serviceOwnerId || filters.serviceOwnerFilter || "all");
       setShowInactive(filters.showInactive || false);
       toast({
         title: "View loaded",
@@ -721,6 +730,19 @@ export default function ServiceAssignments() {
   const isLoading = authLoading || clientServicesLoading || peopleServicesLoading;
   const isAdmin = user?.isAdmin || false;
   const clientAssignmentCount = allAssignments.filter(a => a.type === 'client').length;
+  
+  // UX safeguards for bulk operations
+  // Date editing requires a single service type to be selected in filters
+  const canBulkEditDates = serviceFilter !== "all";
+  const dateEditDisabledReason = !canBulkEditDates 
+    ? "Select a specific service type in filters to enable bulk date editing" 
+    : null;
+  
+  // Role reassignment requires both a service type AND a user to be selected
+  const canBulkReassignRoles = serviceFilter !== "all" && userFilter !== "all";
+  const reassignDisabledReason = !canBulkReassignRoles 
+    ? "Select a specific service type and user in filters to enable bulk role reassignment" 
+    : null;
 
   if (authLoading) {
     return (
@@ -838,22 +860,50 @@ export default function ServiceAssignments() {
                 <Badge variant="outline" data-testid="text-selected-count">
                   {selectedIds.size} selected
                 </Badge>
-                <Button
-                  variant="default"
-                  onClick={() => setReassignDialogOpen(true)}
-                  data-testid="button-bulk-reassign"
-                >
-                  <ArrowRightLeft className="w-4 h-4 mr-2" />
-                  Reassign Roles
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setDateEditDialogOpen(true)}
-                  data-testid="button-bulk-dates"
-                >
-                  <CalendarClock className="w-4 h-4 mr-2" />
-                  Edit Dates
-                </Button>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Button
+                          variant="default"
+                          onClick={() => setReassignDialogOpen(true)}
+                          disabled={!canBulkReassignRoles}
+                          data-testid="button-bulk-reassign"
+                        >
+                          <ArrowRightLeft className="w-4 h-4 mr-2" />
+                          Reassign Roles
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    {reassignDisabledReason && (
+                      <TooltipContent>
+                        <p>{reassignDisabledReason}</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Button
+                          variant="outline"
+                          onClick={() => setDateEditDialogOpen(true)}
+                          disabled={!canBulkEditDates}
+                          data-testid="button-bulk-dates"
+                        >
+                          <CalendarClock className="w-4 h-4 mr-2" />
+                          Edit Dates
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    {dateEditDisabledReason && (
+                      <TooltipContent>
+                        <p>{dateEditDisabledReason}</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                </TooltipProvider>
                 <Button
                   variant="ghost"
                   size="sm"
