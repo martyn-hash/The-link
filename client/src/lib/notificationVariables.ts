@@ -217,6 +217,15 @@ export const NOTIFICATION_VARIABLES: NotificationVariable[] = [
     description: "The email signature of the assigned staff member",
     example: "Best regards,\\nSarah Johnson\\nSenior Accountant"
   },
+  {
+    id: "staff_calendly_link",
+    token: "{staff_calendly_link}",
+    label: "Staff Calendly Link",
+    category: "Firm",
+    description: "The Calendly scheduling link of the staff member sending the notification (set in profile)",
+    example: "https://calendly.com/sarah-johnson",
+    channels: ["email"]
+  },
   
   // Action Link Variables
   {

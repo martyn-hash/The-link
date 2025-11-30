@@ -28,6 +28,7 @@ export const users = pgTable("users", {
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
   emailSignature: text("email_signature"),
+  calendlyLink: varchar("calendly_link"),
   isAdmin: boolean("is_admin").default(false),
   canSeeAdminMenu: boolean("can_see_admin_menu").default(false),
   superAdmin: boolean("super_admin").default(false),

@@ -56,6 +56,7 @@ export interface NotificationVariableContext {
   // Staff data
   projectOwner?: User;
   assignedStaff?: User;
+  sendingStaff?: User; // The staff member sending the notification (for stage change client value notifications)
   
   // Firm settings
   firmSettings?: {
@@ -310,6 +311,13 @@ export function processNotificationVariables(
   if (staffForSignature) {
     const signature = staffForSignature.emailSignature || formatUserName(staffForSignature);
     processed = processed.replace(/\{staff_signature\}/g, signature);
+  }
+  
+  // Staff Calendly link (use sending staff, or assigned staff, or project owner)
+  const staffForCalendly = context.sendingStaff || context.assignedStaff || context.projectOwner;
+  if (staffForCalendly) {
+    const calendlyLink = (staffForCalendly as any).calendlyLink || "";
+    processed = processed.replace(/\{staff_calendly_link\}/g, calendlyLink);
   }
   
   // Action links

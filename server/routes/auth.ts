@@ -545,6 +545,7 @@ export async function registerAuthAndMiscRoutes(
         lastName: true,
         profileImageUrl: true,
         emailSignature: true,
+        calendlyLink: true,
       }).partial();
 
       const validProfileData = safeProfileSchema.parse(profileData);

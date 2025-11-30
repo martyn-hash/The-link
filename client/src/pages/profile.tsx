@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/form";
 
 // Icons
-import { User, Bell, Save, Eye, EyeOff, Settings, Mail, CheckCircle, AlertCircle, ExternalLink, LogOut, Edit3, Phone } from "lucide-react";
+import { User, Bell, Save, Eye, EyeOff, Settings, Mail, CheckCircle, AlertCircle, ExternalLink, LogOut, Edit3, Phone, Calendar } from "lucide-react";
 import { TiptapEditor } from '@/components/TiptapEditor';
 
 // Zod schemas
@@ -49,6 +49,10 @@ const emailSignatureUpdateSchema = z.object({
   emailSignature: z.string().optional(),
 });
 
+const calendlyLinkUpdateSchema = z.object({
+  calendlyLink: z.string().url("Please enter a valid URL").optional().or(z.literal("")),
+});
+
 const passwordChangeSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
   newPassword: z.string().min(6, "New password must be at least 6 characters"),
@@ -61,6 +65,7 @@ const passwordChangeSchema = z.object({
 type ProfileUpdateData = z.infer<typeof profileUpdateSchema>;
 type PasswordChangeData = z.infer<typeof passwordChangeSchema>;
 type EmailSignatureUpdateData = z.infer<typeof emailSignatureUpdateSchema>;
+type CalendlyLinkUpdateData = z.infer<typeof calendlyLinkUpdateSchema>;
 type NotificationPreferences = z.infer<typeof updateUserNotificationPreferencesSchema>;
 
 // Push Notifications Management Card
@@ -187,6 +192,7 @@ export default function Profile() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [emailSignature, setEmailSignature] = useState('');
+  const [calendlyLink, setCalendlyLink] = useState('');
   
   // Get initial tab from URL params
   const urlParams = new URLSearchParams(window.location.search);
@@ -296,6 +302,20 @@ export default function Profile() {
     },
   });
 
+  // Calendly link update mutation
+  const updateCalendlyLinkMutation = useMutation({
+    mutationFn: async (data: CalendlyLinkUpdateData) => {
+      return await apiRequest("PUT", "/api/users/profile", data);
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Calendly link updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
+    },
+    onError: (error: any) => {
+      showFriendlyError({ error });
+    },
+  });
+
   // Outlook disconnect mutation
   const disconnectOutlookMutation = useMutation({
     mutationFn: async () => {
@@ -342,6 +362,11 @@ export default function Profile() {
   // Handle email signature save
   const handleEmailSignatureSave = () => {
     updateEmailSignatureMutation.mutate({ emailSignature });
+  };
+
+  // Handle calendly link save
+  const handleCalendlyLinkSave = () => {
+    updateCalendlyLinkMutation.mutate({ calendlyLink: calendlyLink || "" });
   };
 
   // Handle Outlook connection
@@ -414,10 +439,11 @@ export default function Profile() {
         keepDirty: false
       });
       
-      // Initialize email signature from user data
+      // Initialize email signature and calendly link from user data
       setEmailSignature(user.emailSignature || "");
+      setCalendlyLink((user as any).calendlyLink || "");
     }
-  }, [user?.firstName, user?.lastName, user?.id, user?.emailSignature]);
+  }, [user?.firstName, user?.lastName, user?.id, user?.emailSignature, (user as any)?.calendlyLink]);
 
   if (isAuthLoading) {
     return (
@@ -997,6 +1023,72 @@ export default function Profile() {
                     >
                       Clear
                     </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Calendly Link */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5" />
+                  Calendly Link
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Add your Calendly scheduling link. This will be available as a merge field in client notifications, 
+                  allowing clients to easily book meetings with you.
+                </p>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="calendly-link" className="text-sm font-medium">Calendly URL</Label>
+                  <Input
+                    id="calendly-link"
+                    type="url"
+                    value={calendlyLink}
+                    onChange={(e) => setCalendlyLink(e.target.value)}
+                    placeholder="https://calendly.com/your-name"
+                    data-testid="input-calendly-link"
+                  />
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={handleCalendlyLinkSave}
+                    disabled={updateCalendlyLinkMutation.isPending}
+                    className="flex items-center gap-2"
+                    data-testid="button-save-calendly-link"
+                  >
+                    {updateCalendlyLinkMutation.isPending ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    Save Link
+                  </Button>
+                  
+                  {calendlyLink && (
+                    <>
+                      <Button
+                        variant="outline"
+                        onClick={() => setCalendlyLink("")}
+                        data-testid="button-clear-calendly-link"
+                      >
+                        Clear
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => window.open(calendlyLink, '_blank')}
+                        data-testid="button-open-calendly-link"
+                        className="flex items-center gap-1"
+                      >
+                        <ExternalLink className="w-3 h-3" />
+                        Test Link
+                      </Button>
+                    </>
                   )}
                 </div>
               </CardContent>

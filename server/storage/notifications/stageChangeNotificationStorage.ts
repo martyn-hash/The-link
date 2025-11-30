@@ -554,6 +554,7 @@ export class StageChangeNotificationStorage {
           dueDate: projectWithClient.dueDate || null,
         },
         assignedStaff: sendingUser,
+        sendingStaff: sendingUser, // The user sending this notification (for {staff_calendly_link})
         stageApprovals: stageApprovalsMap.size > 0 ? stageApprovalsMap : undefined,
       };
 
