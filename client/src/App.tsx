@@ -60,6 +60,7 @@ const UserActivityTracking = lazy(() => import("@/pages/user-activity-tracking")
 const CompanySettingsPage = lazy(() => import("@/pages/company-settings"));
 const AdminWebhooks = lazy(() => import("@/pages/admin-webhooks"));
 const DataCleanup = lazy(() => import("@/pages/data-cleanup"));
+const QboConnections = lazy(() => import("@/pages/qbo-connections"));
 const PortalLogin = lazy(() => import("@/pages/portal/PortalLogin"));
 const PortalVerify = lazy(() => import("@/pages/portal/PortalVerify"));
 const PortalInstall = lazy(() => import("@/pages/portal/PortalInstall"));
@@ -222,6 +223,7 @@ function Router() {
         <Route path="/super-admin/user-activity-tracking" component={UserActivityTracking} />
         <Route path="/super-admin/webhooks" component={AdminWebhooks} />
         <Route path="/super-admin/data-cleanup" component={DataCleanup} />
+        <Route path="/super-admin/qbo-connections" component={QboConnections} />
         <Route path="/company-settings" component={CompanySettingsPage} />
         
         {/* Catch-all NotFound route */}

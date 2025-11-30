@@ -39,3 +39,4 @@ export * from './requests';
 export * from './notifications';
 export * from './webhooks';
 export * from './errors';
+export * from './qbo';

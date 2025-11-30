@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Users, ChevronDown, Bell, Activity, Eye, Settings, FileSpreadsheet, Share2, Calendar, Trash2 } from "lucide-react";
+import { Users, ChevronDown, Bell, Activity, Eye, Settings, FileSpreadsheet, Share2, Calendar, Trash2, Link2 } from "lucide-react";
 import type { User } from "@shared/schema";
 
 interface SuperAdminDropdownProps {
@@ -56,6 +56,11 @@ export default function SuperAdminDropdown({ user }: SuperAdminDropdownProps) {
       label: "Webhooks",
       href: "/super-admin/webhooks",
       icon: Share2,
+    },
+    {
+      label: "QuickBooks Connections",
+      href: "/super-admin/qbo-connections",
+      icon: Link2,
     },
     {
       label: "User Management",

@@ -89,6 +89,7 @@ import {
   CompanySettingsStorage
 } from './settings/index.js';
 import { WebhookStorage } from './webhooks/index.js';
+import { QboStorage } from './qbo/index.js';
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -156,6 +157,7 @@ export class DatabaseStorage implements IStorage {
   private userPreferencesStorage: UserPreferencesStorage;
   private companySettingsStorage: CompanySettingsStorage;
   private webhookStorage: WebhookStorage;
+  private qboStorage: QboStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -252,6 +254,9 @@ export class DatabaseStorage implements IStorage {
     
     // Initialize webhooks domain storage
     this.webhookStorage = new WebhookStorage();
+    
+    // Initialize QBO domain storage
+    this.qboStorage = new QboStorage();
     
     // Register cross-domain helpers
     this.registerClientHelpers();
@@ -3220,6 +3225,84 @@ export class DatabaseStorage implements IStorage {
 
   async hasSuccessfulWebhookForClient(clientId: string, webhookConfigId: string) {
     return this.webhookStorage.hasSuccessfulWebhookForClient(clientId, webhookConfigId);
+  }
+
+  // ============================================================================
+  // QBO (QUICKBOOKS ONLINE) DOMAIN - Delegated to QboStorage
+  // ============================================================================
+
+  async createQboConnection(data: Parameters<typeof this.qboStorage.createQboConnection>[0]) {
+    return this.qboStorage.createQboConnection(data);
+  }
+
+  async getQboConnectionById(id: string) {
+    return this.qboStorage.getQboConnectionById(id);
+  }
+
+  async getQboConnectionByClientId(clientId: string) {
+    return this.qboStorage.getQboConnectionByClientId(clientId);
+  }
+
+  async getQboConnectionByRealmId(realmId: string) {
+    return this.qboStorage.getQboConnectionByRealmId(realmId);
+  }
+
+  async getAllQboConnections() {
+    return this.qboStorage.getAllQboConnections();
+  }
+
+  async getActiveQboConnections() {
+    return this.qboStorage.getActiveQboConnections();
+  }
+
+  async updateQboConnection(id: string, data: Parameters<typeof this.qboStorage.updateQboConnection>[1]) {
+    return this.qboStorage.updateQboConnection(id, data);
+  }
+
+  async deactivateQboConnection(id: string) {
+    return this.qboStorage.deactivateQboConnection(id);
+  }
+
+  async deleteQboConnection(id: string) {
+    return this.qboStorage.deleteQboConnection(id);
+  }
+
+  async updateQboConnectionTokens(
+    id: string,
+    accessTokenEncrypted: string,
+    refreshTokenEncrypted: string,
+    accessTokenExpiresAt: Date,
+    refreshTokenExpiresAt: Date
+  ) {
+    return this.qboStorage.updateQboConnectionTokens(id, accessTokenEncrypted, refreshTokenEncrypted, accessTokenExpiresAt, refreshTokenExpiresAt);
+  }
+
+  async updateQboConnectionError(id: string, errorMessage: string) {
+    return this.qboStorage.updateQboConnectionError(id, errorMessage);
+  }
+
+  async updateQboConnectionLastSync(id: string) {
+    return this.qboStorage.updateQboConnectionLastSync(id);
+  }
+
+  async createQboOAuthState(data: Parameters<typeof this.qboStorage.createQboOAuthState>[0]) {
+    return this.qboStorage.createQboOAuthState(data);
+  }
+
+  async getQboOAuthStateByState(state: string) {
+    return this.qboStorage.getQboOAuthStateByState(state);
+  }
+
+  async markQboOAuthStateAsUsed(id: string) {
+    return this.qboStorage.markQboOAuthStateAsUsed(id);
+  }
+
+  async cleanupExpiredQboOAuthStates() {
+    return this.qboStorage.cleanupExpiredQboOAuthStates();
+  }
+
+  async getQboConnectionsWithClients() {
+    return this.qboStorage.getQboConnectionsWithClients();
   }
 
 }

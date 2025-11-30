@@ -162,3 +162,9 @@ export {
   funnyErrorPhrases,
   userSeenPhrases,
 } from './errors/tables';
+
+// QBO (QuickBooks Online) domain tables
+export {
+  qboConnections,
+  qboOAuthStates,
+} from './qbo/tables';
