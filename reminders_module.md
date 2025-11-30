@@ -1,12 +1,51 @@
 # Reminders & Notifications Module - Technical Audit & Implementation Roadmap
 
-**Last Updated:** November 29, 2025
+**Last Updated:** November 30, 2025
 
 ---
 
 ## Executive Summary
 
 This document provides a comprehensive audit of the reminders and notifications module for the client management system. It covers the current implementation status, identifies gaps, and outlines a staged approach to complete the remaining work.
+
+---
+
+## Email Sending Configuration
+
+| Notification Type | Email Sender | Sender Name Source |
+|-------------------|-------------|-------------------|
+| **Scheduled Reminders** (due-date, start-date) | SendGrid | `companySettings.emailSenderName` (fallback: "The Link Team") |
+| **Stage Change Client Value Notifications** | Outlook (with SendGrid fallback) | Staff's connected Outlook account |
+| **Signature Requests** | SendGrid | `companySettings.emailSenderName` |
+
+**Key Implementation Details:**
+- Reminders: `notification-sender.ts` line 718 uses `firmSettings?.emailSenderName`
+- Stage Notifications: `server/routes/projects.ts` lines 1079-1117 check `preview.senderHasOutlook` and fall back to SendGrid
+
+---
+
+## Stage-Aware Reminder Suppression ✅ COMPLETE (Nov 30, 2025)
+
+Due-date reminders can be configured to only send when a project is in specific stages. This prevents irrelevant reminders from being sent (e.g., "Your accounts are due soon" when the work is already complete).
+
+**How It Works:**
+1. **Template Configuration**: Admins select eligible stages when creating notification templates
+2. **Initial Scheduling**: Notifications only created if project is currently in an eligible stage
+3. **Stage Change Handling**: When project stage changes:
+   - If new stage is NOT eligible → Notification is suppressed (status = "suppressed")
+   - If new stage IS eligible → Suppressed notification is reactivated (status = "scheduled")
+4. **Send-Time Verification**: Double-check at send time to catch edge cases
+
+**Database Fields:**
+- `eligibleStageIds` on template (`projectTypeNotifications`) - which stages this notification applies to
+- `eligibleStageIdsSnapshot` on scheduled notification - snapshot at creation time
+- `suppressedAt` - when notification was suppressed
+- `reactivatedAt` - when notification was reactivated
+
+**Key Files:**
+- `server/notification-scheduler.ts` - `handleProjectStageChangeForNotifications()`
+- `server/notification-sender.ts` - `verifyStageEligibility()`
+- `server/routes/projects.ts` - Stage change triggers notification suppression/reactivation
 
 ---
 
@@ -63,20 +102,21 @@ A fully functional calendar view has been built with:
 
 ---
 
-### 4. SMS Notification System ⚠️ PLACEHOLDER ONLY
+### 4. SMS Notification System ✅ COMPLETE
 
-**Location:** `server/notification-sender.ts` (line ~252)
+**Location:** `server/notification-sender.ts` (lines 245-332)
 
-**Current Status:**
-- SMS content field exists in database schema (160 char limit enforced)
+**Features:**
+- SMS content field in database schema (160 char limit enforced)
 - SMS template creation works in UI
-- **SMS is NOT actually being sent** - only logged to console
-- VoodooSMS integration code is placeholder/stub
+- **VoodooSMS integration fully implemented** (Nov 29, 2025)
+- UK phone number formatting (+44 format)
+- Proper error handling and success/failure tracking
+- Supports merge field processing for personalized SMS content
+- SMS sending in both scheduled reminders and stage change client value notifications
 
-```typescript
-// TODO: Implement VoodooSMS integration
-// For now, this is a placeholder that logs the SMS
-```
+**Requirements:**
+- `VOODOO_SMS_API_KEY` environment variable must be configured
 
 ---
 
@@ -201,20 +241,26 @@ The client detail page includes a comprehensive notifications view accessible vi
 **Component:** `ClientNotificationsView` (`client/src/components/ClientNotificationsView.tsx`)
 
 **Features:**
-- **Tab-based view** with Active, Cancelled, Sent, and Failed sections
+- **Tab-based view** with Active, Suppressed, Cancelled, Sent, and Failed sections (Nov 30, 2025)
 - **Filtering capabilities:**
   - Category filter (project, stage, service)
   - Type filter (email, SMS, push)
   - Recipient filter (specific contact)
   - Status filter
   - Date range (from/to)
-- **Bulk selection** for batch cancel operations
+- **Bulk selection** for batch cancel and reactivate operations
+- **Per-row action buttons** (Nov 30, 2025):
+  - Active tab: Preview, Cancel
+  - Suppressed tab: Preview, Reactivate (with stage-aware tooltip explanation)
+  - Cancelled tab: Preview, Reactivate (only for future-dated notifications)
+  - Failed tab: Preview, Retry
+- **Stage-aware tooltips** - Suppressed status badges include tooltips explaining why the notification was suppressed (e.g., "This notification was suppressed because the project moved to a stage where this reminder isn't active.")
 - **Preview dialog** to view notification content before sending
 - **Table view** showing:
   - Notification type and category
   - Recipient name and contact info
   - Scheduled date/time
-  - Status with color-coded badges
+  - Status with color-coded badges (including amber for suppressed)
   - Project type association
 - **Client-specific API endpoint:** `/api/scheduled-notifications/client/{clientId}`
 

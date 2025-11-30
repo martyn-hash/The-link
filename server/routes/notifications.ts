@@ -762,7 +762,7 @@ export function registerNotificationRoutes(
         const projectData = await storage.getProject(scheduledNotification.projectId);
         if (projectData) {
           project = projectData as Project;
-          projectType = await storage.getProjectTypeById(projectData.projectTypeId);
+          projectType = await storage.getProjectTypeById(projectData.projectTypeId) || null;
         }
       } else if (scheduledNotification.clientServiceId) {
         // If no project but has clientServiceId, get projectType from service
@@ -770,7 +770,7 @@ export function registerNotificationRoutes(
         if (clientService) {
           const service = await storage.getServiceById(clientService.serviceId);
           if (service && service.projectTypeId) {
-            projectType = await storage.getProjectTypeById(service.projectTypeId);
+            projectType = await storage.getProjectTypeById(service.projectTypeId) || null;
             // Find any active project for this client and project type as fallback
             const allProjects = await storage.getAllProjects();
             project = allProjects.find(p => 
@@ -806,9 +806,11 @@ export function registerNotificationRoutes(
           name: 'Sample Service',
           description: '',
           createdAt: new Date(),
-          updatedAt: new Date(),
-          isActive: true,
-          notificationsActive: true
+          serviceId: null,
+          active: true,
+          notificationsActive: true,
+          singleProjectPerClient: false,
+          order: 0
         } as ProjectType;
       }
       
