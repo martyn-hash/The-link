@@ -33,8 +33,13 @@ export default function AdminDropdown({ user }: AdminDropdownProps) {
       icon: Settings,
     },
     {
-      label: "Services",
+      label: "Service Assignments",
       href: "/services",
+      icon: Settings2,
+    },
+    {
+      label: "Service Config",
+      href: "/admin/service-config",
       icon: Settings2,
     },
     {

@@ -221,8 +221,19 @@ export function registerServiceRoutes(
   // WORK ROLES API ROUTES
   // ==================================================
 
-  // GET /api/work-roles - Get all work roles
+  // GET /api/work-roles - Get all work roles (admin only for management)
   app.get("/api/work-roles", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const workRoles = await storage.getAllWorkRoles();
+      res.json(workRoles);
+    } catch (error) {
+      console.error("Error fetching work roles:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch work roles" });
+    }
+  });
+
+  // GET /api/work-roles/active - Get work roles (read-only for all authenticated users)
+  app.get("/api/work-roles/active", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const workRoles = await storage.getAllWorkRoles();
       res.json(workRoles);
@@ -633,6 +644,172 @@ export function registerServiceRoutes(
         error: "Failed to validate VAT number",
         errorCode: "SERVER_ERROR"
       });
+    }
+  });
+
+  // ==================================================
+  // SERVICE ASSIGNMENTS API ROUTES
+  // ==================================================
+
+  // GET /api/service-assignments/client - Get client service assignments with filters
+  app.get("/api/service-assignments/client", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { serviceId, roleId, userId, serviceOwnerId, showInactive } = req.query;
+      
+      const filters = {
+        serviceId: serviceId && serviceId !== 'all' ? serviceId : undefined,
+        roleId: roleId && roleId !== 'all' ? roleId : undefined,
+        userId: userId && userId !== 'all' ? userId : undefined,
+        serviceOwnerId: serviceOwnerId && serviceOwnerId !== 'all' ? serviceOwnerId : undefined,
+        showInactive: showInactive === 'true',
+      };
+
+      const assignments = await storage.getServiceAssignmentsWithFilters(filters);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error fetching client service assignments:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch client service assignments" });
+    }
+  });
+
+  // GET /api/service-assignments/personal - Get personal service assignments with filters
+  app.get("/api/service-assignments/personal", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { serviceId, serviceOwnerId, showInactive } = req.query;
+      
+      const filters = {
+        serviceId: serviceId && serviceId !== 'all' ? serviceId : undefined,
+        serviceOwnerId: serviceOwnerId && serviceOwnerId !== 'all' ? serviceOwnerId : undefined,
+        showInactive: showInactive === 'true',
+      };
+
+      const assignments = await storage.getPersonalServiceAssignmentsWithFilters(filters);
+      res.json(assignments);
+    } catch (error) {
+      console.error("Error fetching personal service assignments:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch personal service assignments" });
+    }
+  });
+
+  // ==================================================
+  // SERVICE ASSIGNMENT VIEWS API ROUTES
+  // ==================================================
+
+  // GET /api/service-assignment-views - Get user's saved views
+  app.get("/api/service-assignment-views", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user?.effectiveUserId || req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const views = await storage.getServiceAssignmentViewsByUserId(userId);
+      res.json(views);
+    } catch (error) {
+      console.error("Error fetching service assignment views:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch service assignment views" });
+    }
+  });
+
+  // POST /api/service-assignment-views - Create a new saved view
+  app.post("/api/service-assignment-views", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user?.effectiveUserId || req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const { name, filters } = req.body;
+      
+      if (!name) {
+        return res.status(400).json({ message: "Name is required" });
+      }
+
+      // Validate filters using Zod schema
+      const { serviceAssignmentViewFiltersSchema } = await import('@shared/schema');
+      const validatedFilters = serviceAssignmentViewFiltersSchema.safeParse(filters || {});
+      
+      if (!validatedFilters.success) {
+        return res.status(400).json({ 
+          message: "Invalid filter format",
+          errors: validatedFilters.error.errors
+        });
+      }
+
+      const view = await storage.createServiceAssignmentView({
+        userId,
+        name,
+        filters: validatedFilters.data,
+      });
+
+      res.status(201).json(view);
+    } catch (error) {
+      console.error("Error creating service assignment view:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to create service assignment view" });
+    }
+  });
+
+  // DELETE /api/service-assignment-views/:id - Delete a saved view
+  app.delete("/api/service-assignment-views/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user?.effectiveUserId || req.user?.id;
+      const { id } = req.params;
+
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      // Verify ownership
+      const view = await storage.getServiceAssignmentViewById(id);
+      if (!view) {
+        return res.status(404).json({ message: "View not found" });
+      }
+      
+      if (view.userId !== userId) {
+        return res.status(403).json({ message: "Not authorized to delete this view" });
+      }
+
+      await storage.deleteServiceAssignmentView(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting service assignment view:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to delete service assignment view" });
+    }
+  });
+
+  // ==================================================
+  // BULK ROLE REASSIGNMENT API ROUTES
+  // ==================================================
+
+  // POST /api/service-assignments/bulk-reassign - Bulk reassign roles (admin only)
+  app.post("/api/service-assignments/bulk-reassign", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const userId = req.user?.effectiveUserId || req.user?.id;
+      const { clientServiceIds, fromRoleId, toUserId } = req.body;
+
+      if (!clientServiceIds || !Array.isArray(clientServiceIds) || clientServiceIds.length === 0) {
+        return res.status(400).json({ message: "Client service IDs are required" });
+      }
+
+      if (!fromRoleId) {
+        return res.status(400).json({ message: "Role ID is required" });
+      }
+
+      if (!toUserId) {
+        return res.status(400).json({ message: "Target user ID is required" });
+      }
+
+      const result = await storage.bulkReassignRole({
+        clientServiceIds,
+        fromRoleId,
+        toUserId,
+        performedByUserId: userId,
+      });
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error in bulk role reassignment:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to complete bulk role reassignment" });
     }
   });
 }

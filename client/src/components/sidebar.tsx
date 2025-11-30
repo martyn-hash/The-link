@@ -68,10 +68,10 @@ export default function Sidebar({ user }: SidebarProps) {
       roles: ["admin"],
     },
     {
-      label: "Services",
+      label: "Service Assignments",
       href: "/services",
       icon: Settings2,
-      roles: ["admin"],
+      roles: ["admin", "manager"],
     },
     {
       label: "Upload Projects",

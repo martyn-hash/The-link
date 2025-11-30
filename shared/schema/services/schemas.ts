@@ -8,6 +8,7 @@ import {
   serviceRoles,
   clientServiceRoleAssignments,
   chChangeRequests,
+  serviceAssignmentViews,
 } from "./tables";
 
 export const udfDefinitionSchema = z.object({
@@ -100,3 +101,26 @@ export const insertClientServiceRoleAssignmentSchema = createInsertSchema(client
   id: true,
   createdAt: true,
 });
+
+// Schema for saved view filters validation
+export const serviceAssignmentViewFiltersSchema = z.object({
+  serviceId: z.string().optional(),
+  roleId: z.string().optional(),
+  userId: z.string().optional(),
+  serviceOwnerId: z.string().optional(),
+  showInactive: z.boolean().optional(),
+  viewType: z.enum(["client", "personal", "all"]).optional(),
+  search: z.string().optional(),
+});
+
+export type ServiceAssignmentViewFilters = z.infer<typeof serviceAssignmentViewFiltersSchema>;
+
+export const insertServiceAssignmentViewSchema = createInsertSchema(serviceAssignmentViews).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  filters: serviceAssignmentViewFiltersSchema,
+});
+
+export type ServiceAssignmentView = typeof serviceAssignmentViews.$inferSelect;
+export type InsertServiceAssignmentView = z.infer<typeof insertServiceAssignmentViewSchema>;

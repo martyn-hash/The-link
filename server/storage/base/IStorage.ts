@@ -46,6 +46,8 @@ import {
   type InsertProjectView,
   type CompanyView,
   type InsertCompanyView,
+  type ServiceAssignmentView,
+  type InsertServiceAssignmentView,
   type UserColumnPreferences,
   type InsertUserColumnPreferences,
   type UpdateUserColumnPreferences,
@@ -396,6 +398,45 @@ export interface IStorage {
   createCompanyView(view: InsertCompanyView): Promise<CompanyView>;
   getCompanyViewsByUserId(userId: string): Promise<CompanyView[]>;
   deleteCompanyView(id: string): Promise<void>;
+  
+  createServiceAssignmentView(view: InsertServiceAssignmentView): Promise<ServiceAssignmentView>;
+  getServiceAssignmentViewsByUserId(userId: string): Promise<ServiceAssignmentView[]>;
+  getServiceAssignmentViewById(id: string): Promise<ServiceAssignmentView | undefined>;
+  deleteServiceAssignmentView(id: string): Promise<void>;
+  
+  getServiceAssignmentsWithFilters(filters: {
+    serviceId?: string;
+    roleId?: string;
+    userId?: string;
+    serviceOwnerId?: string;
+    showInactive?: boolean;
+  }): Promise<Array<ClientService & { 
+    client: Client; 
+    service: Service; 
+    serviceOwner: User | null;
+    roleAssignments: Array<ClientServiceRoleAssignment & { workRole: WorkRole; user: User }>;
+  }>>;
+  
+  getPersonalServiceAssignmentsWithFilters(filters: {
+    serviceId?: string;
+    serviceOwnerId?: string;
+    showInactive?: boolean;
+  }): Promise<Array<PeopleService & { 
+    person: Person; 
+    service: Service; 
+    serviceOwner: User | null;
+  }>>;
+  
+  bulkReassignRole(params: {
+    clientServiceIds: string[];
+    fromRoleId: string;
+    toUserId: string;
+    performedByUserId: string;
+  }): Promise<{
+    roleChanges: number;
+    projectUpdates: number;
+    chronologyEntries: number;
+  }>;
   
   getUserColumnPreferences(userId: string, viewType?: string): Promise<UserColumnPreferences | undefined>;
   upsertUserColumnPreferences(preferences: InsertUserColumnPreferences): Promise<UserColumnPreferences>;

@@ -14,6 +14,8 @@ import {
   clientPeople,
   projects,
   kanbanStages,
+  serviceAssignmentViews,
+  projectChronology,
 } from '@shared/schema';
 import { eq, and, or, desc, ilike, ne, inArray, sql } from 'drizzle-orm';
 import type { 
@@ -29,6 +31,8 @@ import type {
   ProjectType,
   User,
   WorkRole,
+  ServiceAssignmentView,
+  InsertServiceAssignmentView,
 } from '@shared/schema';
 
 export class ServiceAssignmentStorage extends BaseStorage {
@@ -1685,6 +1689,482 @@ export class ServiceAssignmentStorage extends BaseStorage {
     } catch (error) {
       console.error('[Storage] Error in batch resolve stage role assignees:', error);
       return result;
+    }
+  }
+
+  // ==================== Service Assignment Views CRUD operations ====================
+
+  async getServiceAssignmentViewsByUserId(userId: string): Promise<ServiceAssignmentView[]> {
+    return await db
+      .select()
+      .from(serviceAssignmentViews)
+      .where(eq(serviceAssignmentViews.userId, userId))
+      .orderBy(desc(serviceAssignmentViews.createdAt));
+  }
+
+  async getServiceAssignmentViewById(id: string): Promise<ServiceAssignmentView | undefined> {
+    const [view] = await db
+      .select()
+      .from(serviceAssignmentViews)
+      .where(eq(serviceAssignmentViews.id, id));
+    return view;
+  }
+
+  async createServiceAssignmentView(data: InsertServiceAssignmentView): Promise<ServiceAssignmentView> {
+    const [view] = await db
+      .insert(serviceAssignmentViews)
+      .values(data)
+      .returning();
+    return view;
+  }
+
+  async deleteServiceAssignmentView(id: string): Promise<void> {
+    await db
+      .delete(serviceAssignmentViews)
+      .where(eq(serviceAssignmentViews.id, id));
+  }
+
+  // ==================== Service Assignments Query operations ====================
+
+  async getServiceAssignmentsWithFilters(filters: {
+    serviceId?: string;
+    roleId?: string;
+    userId?: string;
+    serviceOwnerId?: string;
+    showInactive?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<Array<ClientService & { 
+    client: Client; 
+    service: Service; 
+    serviceOwner: User | null;
+    roleAssignments: Array<ClientServiceRoleAssignment & { workRole: WorkRole; user: User }>;
+  }>> {
+    try {
+      // Build the where conditions
+      const conditions = [];
+      
+      if (filters.serviceId) {
+        conditions.push(eq(clientServices.serviceId, filters.serviceId));
+      }
+      
+      if (filters.serviceOwnerId) {
+        conditions.push(eq(clientServices.serviceOwnerId, filters.serviceOwnerId));
+      }
+      
+      if (!filters.showInactive) {
+        conditions.push(eq(clientServices.isActive, true));
+      }
+
+      // Use a single optimized query with joins
+      const results = await db
+        .select({
+          id: clientServices.id,
+          clientId: clientServices.clientId,
+          serviceId: clientServices.serviceId,
+          serviceOwnerId: clientServices.serviceOwnerId,
+          frequency: clientServices.frequency,
+          nextStartDate: clientServices.nextStartDate,
+          nextDueDate: clientServices.nextDueDate,
+          intendedStartDay: clientServices.intendedStartDay,
+          intendedDueDay: clientServices.intendedDueDay,
+          isActive: clientServices.isActive,
+          inactiveReason: clientServices.inactiveReason,
+          inactiveAt: clientServices.inactiveAt,
+          inactiveByUserId: clientServices.inactiveByUserId,
+          udfValues: clientServices.udfValues,
+          createdAt: clientServices.createdAt,
+          clientName: clients.name,
+          clientEmail: clients.email,
+          clientType: clients.type,
+          serviceName: services.name,
+          serviceIsPersonalService: services.isPersonalService,
+          serviceDescription: services.description,
+          serviceProjectTypeId: services.projectTypeId,
+          ownerFirstName: users.firstName,
+          ownerLastName: users.lastName,
+          ownerId: users.id,
+        })
+        .from(clientServices)
+        .innerJoin(clients, eq(clientServices.clientId, clients.id))
+        .innerJoin(services, eq(clientServices.serviceId, services.id))
+        .leftJoin(users, eq(clientServices.serviceOwnerId, users.id))
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .limit(filters.limit || 500)
+        .offset(filters.offset || 0);
+
+      // Get all client service IDs for role assignments batch lookup
+      const clientServiceIds = results.map(r => r.id);
+      
+      // Batch fetch all role assignments using regular joins
+      let allRoleAssignments: Array<ClientServiceRoleAssignment & { workRole: WorkRole; user: User }> = [];
+      if (clientServiceIds.length > 0) {
+        const assignmentRows = await db
+          .select({
+            id: clientServiceRoleAssignments.id,
+            clientServiceId: clientServiceRoleAssignments.clientServiceId,
+            workRoleId: clientServiceRoleAssignments.workRoleId,
+            userId: clientServiceRoleAssignments.userId,
+            isActive: clientServiceRoleAssignments.isActive,
+            createdAt: clientServiceRoleAssignments.createdAt,
+            workRoleName: workRoles.name,
+            workRoleDescription: workRoles.description,
+            userFirstName: users.firstName,
+            userLastName: users.lastName,
+            userEmail: users.email,
+          })
+          .from(clientServiceRoleAssignments)
+          .innerJoin(workRoles, eq(clientServiceRoleAssignments.workRoleId, workRoles.id))
+          .innerJoin(users, eq(clientServiceRoleAssignments.userId, users.id))
+          .where(and(
+            inArray(clientServiceRoleAssignments.clientServiceId, clientServiceIds),
+            eq(clientServiceRoleAssignments.isActive, true)
+          ));
+        
+        allRoleAssignments = assignmentRows.map(a => ({
+          id: a.id,
+          clientServiceId: a.clientServiceId,
+          workRoleId: a.workRoleId,
+          userId: a.userId,
+          isActive: a.isActive,
+          createdAt: a.createdAt,
+          workRole: {
+            id: a.workRoleId,
+            name: a.workRoleName,
+            description: a.workRoleDescription,
+          } as WorkRole,
+          user: {
+            id: a.userId,
+            firstName: a.userFirstName,
+            lastName: a.userLastName,
+            email: a.userEmail,
+          } as User,
+        }));
+      }
+
+      // Group role assignments by client service ID
+      const roleAssignmentsByClientServiceId = new Map<string, Array<ClientServiceRoleAssignment & { workRole: WorkRole; user: User }>>();
+      for (const ra of allRoleAssignments) {
+        const existing = roleAssignmentsByClientServiceId.get(ra.clientServiceId) || [];
+        existing.push(ra);
+        roleAssignmentsByClientServiceId.set(ra.clientServiceId, existing);
+      }
+
+      // Transform results
+      const fullResults = results.map(row => {
+        const roleAssignments = roleAssignmentsByClientServiceId.get(row.id) || [];
+        
+        // Filter by role if specified
+        if (filters.roleId && !roleAssignments.some(ra => ra.workRoleId === filters.roleId)) {
+          return null;
+        }
+
+        // Filter by user if specified
+        if (filters.userId && 
+            row.serviceOwnerId !== filters.userId && 
+            !roleAssignments.some(ra => ra.userId === filters.userId)) {
+          return null;
+        }
+
+        return {
+          id: row.id,
+          clientId: row.clientId,
+          serviceId: row.serviceId,
+          serviceOwnerId: row.serviceOwnerId,
+          frequency: row.frequency,
+          nextStartDate: row.nextStartDate,
+          nextDueDate: row.nextDueDate,
+          intendedStartDay: row.intendedStartDay,
+          intendedDueDay: row.intendedDueDay,
+          isActive: row.isActive,
+          inactiveReason: row.inactiveReason,
+          inactiveAt: row.inactiveAt,
+          inactiveByUserId: row.inactiveByUserId,
+          udfValues: row.udfValues,
+          createdAt: row.createdAt,
+          client: {
+            id: row.clientId,
+            name: row.clientName,
+            email: row.clientEmail,
+            type: row.clientType,
+          } as Client,
+          service: {
+            id: row.serviceId,
+            name: row.serviceName,
+            description: row.serviceDescription,
+            isPersonalService: row.serviceIsPersonalService,
+            projectTypeId: row.serviceProjectTypeId,
+          } as Service,
+          serviceOwner: row.ownerId ? {
+            id: row.ownerId,
+            firstName: row.ownerFirstName,
+            lastName: row.ownerLastName,
+          } as User : null,
+          roleAssignments,
+        };
+      });
+
+      return fullResults.filter(r => r !== null) as any;
+    } catch (error) {
+      console.error('[Storage] Error in getServiceAssignmentsWithFilters:', error);
+      throw error;
+    }
+  }
+
+  async getPersonalServiceAssignmentsWithFilters(filters: {
+    serviceId?: string;
+    serviceOwnerId?: string;
+    showInactive?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<Array<PeopleService & { 
+    person: Person; 
+    service: Service; 
+    serviceOwner: User | null;
+  }>> {
+    try {
+      // Build the where conditions
+      const conditions = [];
+      
+      if (filters.serviceId) {
+        conditions.push(eq(peopleServices.serviceId, filters.serviceId));
+      }
+      
+      if (filters.serviceOwnerId) {
+        conditions.push(eq(peopleServices.serviceOwnerId, filters.serviceOwnerId));
+      }
+      
+      if (!filters.showInactive) {
+        conditions.push(eq(peopleServices.isActive, true));
+      }
+
+      // Use a single optimized query with joins
+      const results = await db
+        .select({
+          id: peopleServices.id,
+          personId: peopleServices.personId,
+          serviceId: peopleServices.serviceId,
+          serviceOwnerId: peopleServices.serviceOwnerId,
+          frequency: peopleServices.frequency,
+          nextStartDate: peopleServices.nextStartDate,
+          nextDueDate: peopleServices.nextDueDate,
+          intendedStartDay: peopleServices.intendedStartDay,
+          intendedDueDay: peopleServices.intendedDueDay,
+          notes: peopleServices.notes,
+          isActive: peopleServices.isActive,
+          createdAt: peopleServices.createdAt,
+          personFirstName: people.firstName,
+          personLastName: people.lastName,
+          personClientId: people.clientId,
+          serviceName: services.name,
+          serviceIsPersonalService: services.isPersonalService,
+          serviceDescription: services.description,
+          ownerFirstName: users.firstName,
+          ownerLastName: users.lastName,
+          ownerId: users.id,
+        })
+        .from(peopleServices)
+        .innerJoin(people, eq(peopleServices.personId, people.id))
+        .innerJoin(services, eq(peopleServices.serviceId, services.id))
+        .leftJoin(users, eq(peopleServices.serviceOwnerId, users.id))
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .limit(filters.limit || 500)
+        .offset(filters.offset || 0);
+
+      // Transform results
+      const fullResults = results.map(row => ({
+        id: row.id,
+        personId: row.personId,
+        serviceId: row.serviceId,
+        serviceOwnerId: row.serviceOwnerId,
+        frequency: row.frequency,
+        nextStartDate: row.nextStartDate,
+        nextDueDate: row.nextDueDate,
+        intendedStartDay: row.intendedStartDay,
+        intendedDueDay: row.intendedDueDay,
+        notes: row.notes,
+        isActive: row.isActive,
+        createdAt: row.createdAt,
+        person: {
+          id: row.personId,
+          firstName: row.personFirstName,
+          lastName: row.personLastName,
+          clientId: row.personClientId,
+        } as Person,
+        service: {
+          id: row.serviceId,
+          name: row.serviceName,
+          description: row.serviceDescription,
+          isPersonalService: row.serviceIsPersonalService,
+        } as Service,
+        serviceOwner: row.ownerId ? {
+          id: row.ownerId,
+          firstName: row.ownerFirstName,
+          lastName: row.ownerLastName,
+        } as User : null,
+      }));
+
+      return fullResults;
+    } catch (error) {
+      console.error('[Storage] Error in getPersonalServiceAssignmentsWithFilters:', error);
+      throw error;
+    }
+  }
+
+  // ==================== Bulk Role Reassignment ====================
+
+  async bulkReassignRole(params: {
+    clientServiceIds: string[];
+    fromRoleId: string;
+    toUserId: string;
+    performedByUserId: string;
+  }): Promise<{
+    roleChanges: number;
+    projectUpdates: number;
+    chronologyEntries: number;
+  }> {
+    let roleChanges = 0;
+    let projectUpdates = 0;
+    let chronologyEntries = 0;
+
+    try {
+      // Get the work role being reassigned
+      const [workRole] = await db
+        .select()
+        .from(workRoles)
+        .where(eq(workRoles.id, params.fromRoleId));
+
+      if (!workRole) {
+        throw new Error('Work role not found');
+      }
+
+      // Get the new user
+      const [newUser] = await db
+        .select()
+        .from(users)
+        .where(eq(users.id, params.toUserId));
+
+      if (!newUser) {
+        throw new Error('User not found');
+      }
+
+      // Process each client service
+      for (const clientServiceId of params.clientServiceIds) {
+        // Find the existing role assignment
+        const [existingAssignment] = await db
+          .select()
+          .from(clientServiceRoleAssignments)
+          .where(and(
+            eq(clientServiceRoleAssignments.clientServiceId, clientServiceId),
+            eq(clientServiceRoleAssignments.workRoleId, params.fromRoleId),
+            eq(clientServiceRoleAssignments.isActive, true)
+          ));
+
+        if (!existingAssignment) {
+          continue; // No assignment to update
+        }
+
+        const oldUserId = existingAssignment.userId;
+
+        // Get old user info for logging
+        const [oldUser] = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, oldUserId));
+
+        // Update the role assignment
+        await db
+          .update(clientServiceRoleAssignments)
+          .set({ userId: params.toUserId })
+          .where(eq(clientServiceRoleAssignments.id, existingAssignment.id));
+        
+        roleChanges++;
+
+        // Get the client service to find the client and service info
+        const [clientService] = await db
+          .select()
+          .from(clientServices)
+          .where(eq(clientServices.id, clientServiceId));
+
+        if (!clientService) continue;
+
+        // Get the service to find the project type
+        const [service] = await db
+          .select()
+          .from(services)
+          .where(eq(services.id, clientService.serviceId));
+
+        if (!service || !service.projectTypeId) continue;
+
+        // Find and update any active projects with this role assignment
+        const activeProjects = await db
+          .select()
+          .from(projects)
+          .where(and(
+            eq(projects.clientId, clientService.clientId),
+            eq(projects.projectTypeId, service.projectTypeId),
+            ne(projects.currentStatus, 'Completed')
+          ));
+
+        for (const project of activeProjects) {
+          // Check if this project's current stage is assigned to this work role
+          const [stage] = await db
+            .select()
+            .from(kanbanStages)
+            .where(and(
+              eq(kanbanStages.projectTypeId, project.projectTypeId),
+              eq(kanbanStages.name, project.currentStatus || ''),
+              eq(kanbanStages.assignedWorkRoleId, params.fromRoleId)
+            ));
+
+          if (stage) {
+            const previousAssigneeId = project.currentAssigneeId;
+            
+            // Update the project's current assignee
+            await db
+              .update(projects)
+              .set({ currentAssigneeId: params.toUserId })
+              .where(eq(projects.id, project.id));
+            
+            projectUpdates++;
+
+            // Get the old assignee name for chronology
+            let oldAssigneeName = 'Unassigned';
+            if (previousAssigneeId) {
+              const [prevUser] = await db
+                .select()
+                .from(users)
+                .where(eq(users.id, previousAssigneeId));
+              if (prevUser) {
+                oldAssigneeName = `${prevUser.firstName} ${prevUser.lastName}`.trim();
+              }
+            }
+            const newAssigneeName = `${newUser.firstName} ${newUser.lastName}`.trim();
+
+            // Add chronology entry for the project
+            await db.insert(projectChronology).values({
+              projectId: project.id,
+              fromStatus: project.currentStatus,
+              toStatus: project.currentStatus,
+              assigneeId: params.toUserId,
+              changeReason: `Bulk role reassignment: ${workRole.name} role changed from ${oldAssigneeName} to ${newAssigneeName}`,
+              timeInPreviousStage: null,
+              businessHoursInPreviousStage: null,
+            });
+            
+            chronologyEntries++;
+          }
+        }
+      }
+
+      return {
+        roleChanges,
+        projectUpdates,
+        chronologyEntries,
+      };
+    } catch (error) {
+      console.error('[Storage] Error in bulkReassignRole:', error);
+      throw error;
     }
   }
 }

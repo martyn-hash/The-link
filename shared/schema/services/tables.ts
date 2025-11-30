@@ -100,6 +100,16 @@ export const clientServiceRoleAssignments = pgTable("client_service_role_assignm
   index("idx_client_service_role_assignments_active").on(table.clientServiceId, table.workRoleId, table.isActive),
 ]);
 
+export const serviceAssignmentViews = pgTable("service_assignment_views", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: varchar("name").notNull(),
+  filters: jsonb("filters").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_service_assignment_views_user_id").on(table.userId),
+]);
+
 export const chChangeRequests = pgTable("ch_change_requests", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),

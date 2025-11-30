@@ -3001,6 +3001,35 @@ export class DatabaseStorage implements IStorage {
     return this.viewsStorage.deleteCompanyView(id);
   }
 
+  // Service Assignment Views operations - ServiceAssignmentStorage
+  async createServiceAssignmentView(view: any) {
+    return this.serviceAssignmentStorage.createServiceAssignmentView(view);
+  }
+
+  async getServiceAssignmentViewsByUserId(userId: string) {
+    return this.serviceAssignmentStorage.getServiceAssignmentViewsByUserId(userId);
+  }
+
+  async getServiceAssignmentViewById(id: string) {
+    return this.serviceAssignmentStorage.getServiceAssignmentViewById(id);
+  }
+
+  async deleteServiceAssignmentView(id: string) {
+    return this.serviceAssignmentStorage.deleteServiceAssignmentView(id);
+  }
+
+  async getServiceAssignmentsWithFilters(filters: any) {
+    return this.serviceAssignmentStorage.getServiceAssignmentsWithFilters(filters);
+  }
+
+  async getPersonalServiceAssignmentsWithFilters(filters: any) {
+    return this.serviceAssignmentStorage.getPersonalServiceAssignmentsWithFilters(filters);
+  }
+
+  async bulkReassignRole(params: any) {
+    return this.serviceAssignmentStorage.bulkReassignRole(params);
+  }
+
   // Column Preferences operations (3 methods) - ColumnPreferencesStorage
   async getUserColumnPreferences(userId: string, viewType?: string) {
     return this.columnPreferencesStorage.getUserColumnPreferences(userId, viewType);

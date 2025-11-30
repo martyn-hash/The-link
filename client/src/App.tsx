@@ -31,6 +31,7 @@ const ClientServiceDetail = lazy(() => import("@/pages/client-service-detail"));
 const People = lazy(() => import("@/pages/people"));
 const PersonDetail = lazy(() => import("@/pages/person-detail"));
 const Services = lazy(() => import("@/pages/services"));
+const ServiceAssignments = lazy(() => import("@/pages/service-assignments"));
 const ScheduledServices = lazy(() => import("@/pages/scheduled-services"));
 const ChChanges = lazy(() => import("@/pages/ch-changes"));
 const Companies = lazy(() => import("@/pages/companies"));
@@ -186,7 +187,8 @@ function Router() {
         <Route path="/settings/project-types/:projectTypeId/notifications/:notificationId/edit" component={NotificationEditPage} />
         <Route path="/settings/project-types/:id" component={ProjectTypeDetail} />
         <Route path="/users" component={Users} />
-        <Route path="/services" component={Services} />
+        <Route path="/services" component={ServiceAssignments} />
+        <Route path="/admin/service-config" component={Services} />
         <Route path="/scheduled-services" component={ScheduledServices} />
         <Route path="/ch-changes" component={ChChanges} />
         <Route path="/companies" component={Companies} />
