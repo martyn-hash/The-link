@@ -279,7 +279,12 @@ export default function ServiceAssignments() {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   
   // Column visibility toggle
-  const [showRoleColumns, setShowRoleColumns] = useState(true);
+  const [showRoleColumns, setShowRoleColumns] = useState(false);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const pageSizeOptions = [25, 50, 100, 200];
 
   // Saved views state
   const [saveViewDialogOpen, setSaveViewDialogOpen] = useState(false);
@@ -643,7 +648,12 @@ export default function ServiceAssignments() {
       showFriendlyError({ error: "Please select a role and user for reassignment" });
       return;
     }
-    setReassignConfirmOpen(true);
+    // Close the main dialog before opening the confirmation to avoid double-overlay
+    setReassignDialogOpen(false);
+    // Use a small delay to allow the first dialog to close before opening the confirmation
+    setTimeout(() => {
+      setReassignConfirmOpen(true);
+    }, 100);
   };
 
   const handleConfirmReassignment = () => {
@@ -809,6 +819,19 @@ export default function ServiceAssignments() {
                 Save View
               </Button>
 
+              {/* Show/Hide Roles Toggle */}
+              <Button
+                variant="outline"
+                onClick={() => setShowRoleColumns(!showRoleColumns)}
+                data-testid="button-toggle-roles"
+              >
+                {showRoleColumns ? (
+                  <><EyeOff className="w-4 h-4 mr-2" /> Hide Roles</>
+                ) : (
+                  <><Eye className="w-4 h-4 mr-2" /> Show Roles</>
+                )}
+              </Button>
+
               {/* Filter Button */}
               <Button
                 variant={activeFilterCount() > 0 ? "default" : "outline"}
@@ -838,21 +861,6 @@ export default function ServiceAssignments() {
                 data-testid="input-search"
               />
             </div>
-            
-            {/* Column Toggle */}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowRoleColumns(!showRoleColumns)}
-              className="text-muted-foreground"
-              data-testid="button-toggle-roles"
-            >
-              {showRoleColumns ? (
-                <><EyeOff className="w-4 h-4 mr-2" /> Hide Roles</>
-              ) : (
-                <><Eye className="w-4 h-4 mr-2" /> Show Roles</>
-              )}
-            </Button>
 
             {/* Bulk Actions (Admin only) */}
             {isAdmin && selectedIds.size > 0 && (
@@ -916,10 +924,10 @@ export default function ServiceAssignments() {
             )}
           </div>
 
-          {/* Results Summary */}
-          <div className="flex items-center gap-4 mb-4">
+          {/* Results Summary with Pagination Info */}
+          <div className="flex items-center justify-between mb-4">
             <p className="text-sm text-muted-foreground" data-testid="text-results-count">
-              Showing {allAssignments.length} service assignment{allAssignments.length !== 1 ? 's' : ''}
+              Showing {Math.min((currentPage - 1) * pageSize + 1, allAssignments.length)}-{Math.min(currentPage * pageSize, allAssignments.length)} of {allAssignments.length} service assignment{allAssignments.length !== 1 ? 's' : ''}
               {activeFilterCount() > 0 && (
                 <Button
                   variant="link"
@@ -931,6 +939,27 @@ export default function ServiceAssignments() {
                 </Button>
               )}
             </p>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Rows per page:</span>
+              <Select 
+                value={pageSize.toString()} 
+                onValueChange={(value) => {
+                  setPageSize(parseInt(value));
+                  setCurrentPage(1); // Reset to first page when changing page size
+                }}
+              >
+                <SelectTrigger className="w-[80px]" data-testid="select-page-size">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {pageSizeOptions.map((size) => (
+                    <SelectItem key={size} value={size.toString()}>
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Results Table */}
@@ -992,7 +1021,9 @@ export default function ServiceAssignments() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {allAssignments.map((assignment) => {
+                  {allAssignments
+                    .slice((currentPage - 1) * pageSize, currentPage * pageSize)
+                    .map((assignment) => {
                     const isClientService = assignment.type === 'client';
                     const cs = isClientService ? assignment as ClientServiceWithDetails & { type: 'client' } : null;
                     const ps = !isClientService ? assignment as PeopleServiceWithDetails & { type: 'personal' } : null;
@@ -1133,6 +1164,53 @@ export default function ServiceAssignments() {
                   })}
                 </TableBody>
               </Table>
+              
+              {/* Pagination Controls */}
+              {allAssignments.length > pageSize && (
+                <div className="flex items-center justify-between p-4 border-t">
+                  <p className="text-sm text-muted-foreground">
+                    Page {currentPage} of {Math.ceil(allAssignments.length / pageSize)}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                      data-testid="button-first-page"
+                    >
+                      First
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      data-testid="button-prev-page"
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.min(Math.ceil(allAssignments.length / pageSize), p + 1))}
+                      disabled={currentPage >= Math.ceil(allAssignments.length / pageSize)}
+                      data-testid="button-next-page"
+                    >
+                      Next
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(Math.ceil(allAssignments.length / pageSize))}
+                      disabled={currentPage >= Math.ceil(allAssignments.length / pageSize)}
+                      data-testid="button-last-page"
+                    >
+                      Last
+                    </Button>
+                  </div>
+                </div>
+              )}
             </Card>
           )}
         </div>
@@ -1180,6 +1258,7 @@ export default function ServiceAssignments() {
               <Select value={serviceFilter} onValueChange={(value) => {
                 setServiceFilter(value);
                 setSelectedIds(new Set()); // Clear selections when filter changes
+                setCurrentPage(1); // Reset to first page when filter changes
                 if (value !== serviceFilter) {
                   setRoleFilter("all"); // Reset role filter when service changes
                 }
@@ -1211,6 +1290,7 @@ export default function ServiceAssignments() {
                 onValueChange={(value) => {
                   setRoleFilter(value);
                   setSelectedIds(new Set()); // Clear selections when filter changes
+                  setCurrentPage(1); // Reset to first page when filter changes
                 }}
                 disabled={availableRoles.length === 0}
               >
@@ -1244,6 +1324,7 @@ export default function ServiceAssignments() {
               <Select value={userFilter} onValueChange={(value) => {
                 setUserFilter(value);
                 setSelectedIds(new Set()); // Clear selections when filter changes
+                setCurrentPage(1); // Reset to first page when filter changes
               }}>
                 <SelectTrigger data-testid="select-user-filter">
                   <SelectValue placeholder="All Users" />

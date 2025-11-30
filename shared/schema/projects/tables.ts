@@ -44,6 +44,7 @@ export const projects = pgTable("projects", {
 export const projectChronology = pgTable("project_chronology", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   projectId: varchar("project_id").notNull().references(() => projects.id),
+  entryType: varchar("entry_type").default("stage_change"),
   fromStatus: varchar("from_status"),
   toStatus: varchar("to_status").notNull(),
   assigneeId: varchar("assignee_id").references(() => users.id),

@@ -2203,11 +2203,13 @@ export class ServiceAssignmentStorage extends BaseStorage {
             try {
               await db.insert(projectChronology).values({
                 projectId: project.id,
+                entryType: 'role_change',
                 fromStatus: project.currentStatus,
                 toStatus: project.currentStatus,
                 assigneeId: params.toUserId,
                 changedById: params.performedByUserId,
-                changeReason: `Bulk role reassignment: ${workRole.name} role changed from ${oldAssigneeName} to ${newAssigneeName}`,
+                changeReason: `${workRole.name}`,
+                notes: `Changed from ${oldAssigneeName} to ${newAssigneeName}`,
                 timeInPreviousStage: null,
                 businessHoursInPreviousStage: null,
               });
