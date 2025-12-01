@@ -2104,6 +2104,12 @@ export function registerProjectRoutes(
         return res.status(400).json({ message: "Project type ID is required" });
       }
 
+      // Validate that project type exists
+      const projectType = await storage.getProjectTypeById(projectTypeId);
+      if (!projectType) {
+        return res.status(404).json({ message: "Project type not found" });
+      }
+
       // Get all active projects of this type with a due date
       const allProjects = await storage.getAllProjects();
       const projectsOfType = allProjects.filter(p => 
@@ -2148,6 +2154,12 @@ export function registerProjectRoutes(
         return res.status(400).json({ 
           message: "projectTypeId, currentDueDate, and newDueDate are required" 
         });
+      }
+
+      // Validate that project type exists
+      const projectType = await storage.getProjectTypeById(projectTypeId);
+      if (!projectType) {
+        return res.status(404).json({ message: "Project type not found" });
       }
 
       // Validate dates

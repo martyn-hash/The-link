@@ -25,7 +25,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
-import { Upload, Settings, Users, FileText, BarChart, Trash2, Clock, PlayCircle, TestTube, Activity, CheckCircle, AlertCircle, TrendingUp, Eye, Calendar, Mail, Send, Wrench, AlertTriangle } from "lucide-react";
+import { Upload, Settings, Users, FileText, BarChart, Trash2, Clock, PlayCircle, TestTube, Activity, CheckCircle, AlertCircle, TrendingUp, Eye, Calendar, Mail, Send, Wrench, AlertTriangle, RefreshCw } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function Admin() {
   const { user, isLoading, isAuthenticated } = useAuth();
@@ -43,6 +46,11 @@ export default function Admin() {
   const [frequencyIssues, setFrequencyIssues] = useState<any>(null);
   const [showSchedulingExceptions, setShowSchedulingExceptions] = useState(false);
   const [schedulingExceptions, setSchedulingExceptions] = useState<any>(null);
+  const [showBatchUpdateDialog, setShowBatchUpdateDialog] = useState(false);
+  const [selectedProjectTypeId, setSelectedProjectTypeId] = useState<string>("");
+  const [selectedCurrentDueDate, setSelectedCurrentDueDate] = useState<string>("");
+  const [newDueDate, setNewDueDate] = useState<string>("");
+  const [distinctDueDates, setDistinctDueDates] = useState<Array<{ date: string; count: number }>>([]);
 
   const { data: projects, isLoading: projectsLoading } = useQuery({
     queryKey: ["/api/projects"],
@@ -171,6 +179,58 @@ export default function Admin() {
     queryKey: ["/api/project-scheduling/monitoring"],
     enabled: false, // Only fetch when manually triggered
     retry: false,
+  });
+
+  // Query for project types - used in batch update dialog
+  const { data: projectTypes } = useQuery({
+    queryKey: ["/api/project-types"],
+    enabled: isAuthenticated && !!user?.isAdmin,
+    retry: false,
+  }) as { data: any[] | undefined };
+
+  // Mutation to fetch distinct due dates for a project type
+  const fetchDistinctDueDatesMutation = useMutation({
+    mutationFn: async (projectTypeId: string) => {
+      const response = await fetch(`/api/projects/batch-update/due-dates/${projectTypeId}`, {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch distinct due dates");
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      setDistinctDueDates(data.distinctDueDates || []);
+      setSelectedCurrentDueDate("");
+    },
+    onError: (error: any) => {
+      showFriendlyError({ error });
+    },
+  });
+
+  // Mutation to batch update project due dates
+  const batchUpdateDueDatesMutation = useMutation({
+    mutationFn: async (data: { projectTypeId: string; currentDueDate: string; newDueDate: string }) => {
+      return await apiRequest("POST", "/api/projects/batch-update/due-dates", data);
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Due Dates Updated",
+        description: `Successfully updated ${data.updatedCount} projects from ${new Date(data.currentDueDate).toLocaleDateString()} to ${new Date(data.newDueDate).toLocaleDateString()}.`,
+        variant: "default",
+      });
+      
+      // Refresh project data
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      
+      // Reset form and close dialog
+      setShowBatchUpdateDialog(false);
+      setSelectedProjectTypeId("");
+      setSelectedCurrentDueDate("");
+      setNewDueDate("");
+      setDistinctDueDates([]);
+    },
+    onError: (error: any) => {
+      showFriendlyError({ error });
+    },
   });
 
   const fetchFrequencyIssuesMutation = useMutation({
@@ -569,6 +629,16 @@ export default function Admin() {
                     >
                       <AlertCircle className="w-3 h-3 mr-2" />
                       {fetchSchedulingExceptionsMutation.isPending ? "Loading..." : "View Scheduling Errors"}
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="w-full justify-start"
+                      onClick={() => setShowBatchUpdateDialog(true)}
+                      data-testid="button-batch-update-due-dates"
+                    >
+                      <RefreshCw className="w-3 h-3 mr-2" />
+                      Batch Update Due Dates
                     </Button>
                     <Button 
                       variant="destructive" 
@@ -1374,6 +1444,165 @@ export default function Admin() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Batch Update Due Dates Dialog */}
+      <Dialog open={showBatchUpdateDialog} onOpenChange={(open) => {
+        if (!open) {
+          setShowBatchUpdateDialog(false);
+          setSelectedProjectTypeId("");
+          setSelectedCurrentDueDate("");
+          setNewDueDate("");
+          setDistinctDueDates([]);
+        }
+      }}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5" />
+              Batch Update Due Dates
+            </DialogTitle>
+            <DialogDescription>
+              Update the due dates for multiple projects at once by selecting a project type, 
+              choosing the current due date to match, and setting a new due date.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {/* Project Type Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="projectType">Project Type</Label>
+              <Select
+                value={selectedProjectTypeId}
+                onValueChange={(value) => {
+                  setSelectedProjectTypeId(value);
+                  setSelectedCurrentDueDate("");
+                  setNewDueDate("");
+                  if (value) {
+                    fetchDistinctDueDatesMutation.mutate(value);
+                  } else {
+                    setDistinctDueDates([]);
+                  }
+                }}
+              >
+                <SelectTrigger id="projectType" data-testid="select-project-type">
+                  <SelectValue placeholder="Select a project type" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(projectTypes || []).map((pt: any) => (
+                    <SelectItem key={pt.id} value={pt.id}>
+                      {pt.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Current Due Date Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="currentDueDate">Current Due Date</Label>
+              {fetchDistinctDueDatesMutation.isPending ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground p-2">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  Loading due dates...
+                </div>
+              ) : distinctDueDates.length > 0 ? (
+                <Select
+                  value={selectedCurrentDueDate}
+                  onValueChange={setSelectedCurrentDueDate}
+                  disabled={!selectedProjectTypeId}
+                >
+                  <SelectTrigger id="currentDueDate" data-testid="select-current-due-date">
+                    <SelectValue placeholder="Select current due date" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {distinctDueDates.map((item) => (
+                      <SelectItem key={item.date} value={item.date}>
+                        {new Date(item.date).toLocaleDateString()} ({item.count} project{item.count !== 1 ? 's' : ''})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : selectedProjectTypeId ? (
+                <div className="text-sm text-muted-foreground p-2 bg-muted rounded">
+                  No projects with due dates found for this project type.
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground p-2 bg-muted rounded">
+                  Select a project type first to see available due dates.
+                </div>
+              )}
+            </div>
+
+            {/* New Due Date Selection */}
+            <div className="space-y-2">
+              <Label htmlFor="newDueDate">New Due Date</Label>
+              <Input
+                id="newDueDate"
+                type="date"
+                value={newDueDate}
+                onChange={(e) => setNewDueDate(e.target.value)}
+                disabled={!selectedCurrentDueDate}
+                data-testid="input-new-due-date"
+              />
+            </div>
+
+            {/* Preview of changes */}
+            {selectedCurrentDueDate && newDueDate && (
+              <div className="p-3 bg-muted rounded-lg">
+                <div className="text-sm font-medium mb-1">Preview</div>
+                <div className="text-sm text-muted-foreground">
+                  {distinctDueDates.find(d => d.date === selectedCurrentDueDate)?.count || 0} project(s) will be updated from{' '}
+                  <span className="font-medium">{new Date(selectedCurrentDueDate).toLocaleDateString()}</span> to{' '}
+                  <span className="font-medium">{new Date(newDueDate).toLocaleDateString()}</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowBatchUpdateDialog(false);
+                setSelectedProjectTypeId("");
+                setSelectedCurrentDueDate("");
+                setNewDueDate("");
+                setDistinctDueDates([]);
+              }}
+              data-testid="button-cancel-batch-update"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (selectedProjectTypeId && selectedCurrentDueDate && newDueDate) {
+                  batchUpdateDueDatesMutation.mutate({
+                    projectTypeId: selectedProjectTypeId,
+                    currentDueDate: selectedCurrentDueDate,
+                    newDueDate: newDueDate,
+                  });
+                }
+              }}
+              disabled={
+                !selectedProjectTypeId || 
+                !selectedCurrentDueDate || 
+                !newDueDate || 
+                batchUpdateDueDatesMutation.isPending
+              }
+              data-testid="button-confirm-batch-update"
+            >
+              {batchUpdateDueDatesMutation.isPending ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent mr-2" />
+                  Updating...
+                </>
+              ) : (
+                "Update Due Dates"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
