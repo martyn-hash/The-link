@@ -37,11 +37,15 @@ export function generateAuthUrl(state: string): string {
     throw new Error('QuickBooks Client ID not configured');
   }
 
+  // Get redirect URI at runtime to ensure env var changes are picked up
+  const redirectUri = process.env.QUICKBOOKS_REDIRECT_URI || 'https://flow.growth.accountants/api/oauth/callback';
+  console.log('[QuickBooks] Using redirect URI:', redirectUri);
+
   const params = new URLSearchParams({
     client_id: QUICKBOOKS_CLIENT_ID,
     response_type: 'code',
     scope: QBO_SCOPES,
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: redirectUri,
     state: state,
   });
 
@@ -53,6 +57,9 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenResponse
     throw new Error('QuickBooks credentials not configured');
   }
 
+  // Get redirect URI at runtime
+  const redirectUri = process.env.QUICKBOOKS_REDIRECT_URI || 'https://flow.growth.accountants/api/oauth/callback';
+  
   const credentials = Buffer.from(`${QUICKBOOKS_CLIENT_ID}:${QUICKBOOKS_CLIENT_SECRET}`).toString('base64');
 
   const response = await fetch(QBO_TOKEN_URL, {
@@ -65,7 +72,7 @@ export async function exchangeCodeForTokens(code: string): Promise<TokenResponse
     body: new URLSearchParams({
       grant_type: 'authorization_code',
       code: code,
-      redirect_uri: REDIRECT_URI,
+      redirect_uri: redirectUri,
     }),
   });
 
