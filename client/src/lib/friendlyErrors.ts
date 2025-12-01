@@ -289,6 +289,7 @@ export async function showFriendlyError(options: FriendlyErrorOptions): Promise<
     description,
     variant: "friendly" as const,
     duration: 8000,
+    technicalDetails: errorMessage,
   });
 }
 
@@ -337,6 +338,7 @@ export function showFriendlyErrorSync(options: FriendlyErrorOptions): void {
     description,
     variant: "friendly" as const,
     duration: 8000,
+    technicalDetails: errorMessage,
   });
   
   showFriendlyError(options);
