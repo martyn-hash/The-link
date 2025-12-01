@@ -4,6 +4,7 @@
   "description": "Growth Accountants workflow management platform",
   "theme_color": "#0A7BBF",
   "background_color": "#ffffff",
+  "display_override": ["tabbed", "standalone"],
   "display": "standalone",
   "orientation": "portrait",
   "scope": "/",
