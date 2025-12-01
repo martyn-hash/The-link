@@ -200,6 +200,14 @@ export async function applyChChanges(
         }
         if (service.chDueDateField === fieldName) {
           serviceUpdates.nextDueDate = newValue;
+          
+          // Calculate target delivery date from due date minus offset
+          if (newValue && service.chTargetDeliveryDaysOffset && service.chTargetDeliveryDaysOffset > 0) {
+            const targetDate = new Date(newValue);
+            targetDate.setDate(targetDate.getDate() - service.chTargetDeliveryDaysOffset);
+            serviceUpdates.targetDeliveryDate = targetDate;
+            console.log(`[CH Update] Calculated target delivery date for service ${clientService.id}: ${targetDate.toISOString()}`);
+          }
         }
         
         if (Object.keys(serviceUpdates).length > 0) {
@@ -225,12 +233,23 @@ export async function applyChChanges(
         const affectedServices = await getAffectedClientServices(clientId, 'nextAccountsDue');
         
         for (const clientService of affectedServices) {
+          const service = clientService.service;
           const activeProjects = await getActiveProjectsByClientService(clientService.id);
           
           for (const project of activeProjects) {
+            const projectUpdates: any = { dueDate: newDueDate };
+            
+            // Calculate target delivery date from due date minus offset
+            if (newDueDate && service.chTargetDeliveryDaysOffset && service.chTargetDeliveryDaysOffset > 0) {
+              const targetDate = new Date(newDueDate);
+              targetDate.setDate(targetDate.getDate() - service.chTargetDeliveryDaysOffset);
+              projectUpdates.targetDeliveryDate = targetDate;
+              console.log(`[CH Update] Calculated project target delivery date: ${targetDate.toISOString()}`);
+            }
+            
             await tx
               .update(projects)
-              .set({ dueDate: newDueDate })
+              .set(projectUpdates)
               .where(eq(projects.id, project.id));
             
             result.updatedProjects++;

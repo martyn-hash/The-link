@@ -437,6 +437,7 @@ export default function Services() {
       isCompaniesHouseConnected: false,
       chStartDateField: "",
       chDueDateField: "",
+      chTargetDeliveryDaysOffset: null,
       isVatService: false,
       applicableClientTypes: "company",
     },
@@ -654,6 +655,7 @@ export default function Services() {
       isCompaniesHouseConnected: service.isCompaniesHouseConnected ?? false,
       chStartDateField: service.chStartDateField ?? "",
       chDueDateField: service.chDueDateField ?? "",
+      chTargetDeliveryDaysOffset: (service as any).chTargetDeliveryDaysOffset ?? null,
       isPersonalService: service.isPersonalService ?? false,
       isStaticService: service.isStaticService ?? false,
       isVatService: (service as any).isVatService ?? false,
@@ -1089,46 +1091,72 @@ export default function Services() {
                             />
                             
                             {serviceForm.watch("isCompaniesHouseConnected") && (
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                <FormField
-                                  control={serviceForm.control}
-                                  name="chStartDateField"
-                                  render={({ field }) => (
-                                    <FormItem>
-                                      <FormLabel>Start Date Field</FormLabel>
-                                      <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-ch-start-field">
-                                        <FormControl>
-                                          <SelectTrigger>
-                                            <SelectValue placeholder="Select CH field" />
-                                          </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                          <SelectItem value="nextAccountsPeriodEnd">Next Accounts Period End</SelectItem>
-                                          <SelectItem value="confirmationStatementNextMadeUpTo">Confirmation Statement Next Made Up To</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
+                              <div className="space-y-5">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                  <FormField
+                                    control={serviceForm.control}
+                                    name="chStartDateField"
+                                    render={({ field }) => (
+                                      <FormItem>
+                                        <FormLabel>Start Date Field</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-ch-start-field">
+                                          <FormControl>
+                                            <SelectTrigger>
+                                              <SelectValue placeholder="Select CH field" />
+                                            </SelectTrigger>
+                                          </FormControl>
+                                          <SelectContent>
+                                            <SelectItem value="nextAccountsPeriodEnd">Next Accounts Period End</SelectItem>
+                                            <SelectItem value="confirmationStatementNextMadeUpTo">Confirmation Statement Next Made Up To</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+                                  
+                                  <FormField
+                                    control={serviceForm.control}
+                                    name="chDueDateField"
+                                    render={({ field }) => (
+                                      <FormItem>
+                                        <FormLabel>Due Date Field</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-ch-due-field">
+                                          <FormControl>
+                                            <SelectTrigger>
+                                              <SelectValue placeholder="Select CH field" />
+                                            </SelectTrigger>
+                                          </FormControl>
+                                          <SelectContent>
+                                            <SelectItem value="nextAccountsDue">Next Accounts Due</SelectItem>
+                                            <SelectItem value="confirmationStatementNextDue">Confirmation Statement Next Due</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+                                </div>
                                 
                                 <FormField
                                   control={serviceForm.control}
-                                  name="chDueDateField"
+                                  name="chTargetDeliveryDaysOffset"
                                   render={({ field }) => (
                                     <FormItem>
-                                      <FormLabel>Due Date Field</FormLabel>
-                                      <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-ch-due-field">
-                                        <FormControl>
-                                          <SelectTrigger>
-                                            <SelectValue placeholder="Select CH field" />
-                                          </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                          <SelectItem value="nextAccountsDue">Next Accounts Due</SelectItem>
-                                          <SelectItem value="confirmationStatementNextDue">Confirmation Statement Next Due</SelectItem>
-                                        </SelectContent>
-                                      </Select>
+                                      <FormLabel>Target Delivery Days Before Deadline</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          placeholder="e.g. 14"
+                                          value={field.value ?? ""}
+                                          onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                                          data-testid="input-ch-target-delivery-offset"
+                                        />
+                                      </FormControl>
+                                      <div className="text-sm text-muted-foreground">
+                                        Number of days before the CH deadline to set as internal target delivery date. Leave empty for no target.
+                                      </div>
                                       <FormMessage />
                                     </FormItem>
                                   )}
@@ -1388,46 +1416,72 @@ export default function Services() {
                             />
                             
                             {serviceForm.watch("isCompaniesHouseConnected") && (
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                <FormField
-                                  control={serviceForm.control}
-                                  name="chStartDateField"
-                                  render={({ field }) => (
-                                    <FormItem>
-                                      <FormLabel>Start Date Field</FormLabel>
-                                      <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-ch-start-field-edit">
-                                        <FormControl>
-                                          <SelectTrigger>
-                                            <SelectValue placeholder="Select CH field" />
-                                          </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                          <SelectItem value="nextAccountsPeriodEnd">Next Accounts Period End</SelectItem>
-                                          <SelectItem value="confirmationStatementNextMadeUpTo">Confirmation Statement Next Made Up To</SelectItem>
-                                        </SelectContent>
-                                      </Select>
-                                      <FormMessage />
-                                    </FormItem>
-                                  )}
-                                />
+                              <div className="space-y-5">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                  <FormField
+                                    control={serviceForm.control}
+                                    name="chStartDateField"
+                                    render={({ field }) => (
+                                      <FormItem>
+                                        <FormLabel>Start Date Field</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-ch-start-field-edit">
+                                          <FormControl>
+                                            <SelectTrigger>
+                                              <SelectValue placeholder="Select CH field" />
+                                            </SelectTrigger>
+                                          </FormControl>
+                                          <SelectContent>
+                                            <SelectItem value="nextAccountsPeriodEnd">Next Accounts Period End</SelectItem>
+                                            <SelectItem value="confirmationStatementNextMadeUpTo">Confirmation Statement Next Made Up To</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+                                  
+                                  <FormField
+                                    control={serviceForm.control}
+                                    name="chDueDateField"
+                                    render={({ field }) => (
+                                      <FormItem>
+                                        <FormLabel>Due Date Field</FormLabel>
+                                        <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-ch-due-field-edit">
+                                          <FormControl>
+                                            <SelectTrigger>
+                                              <SelectValue placeholder="Select CH field" />
+                                            </SelectTrigger>
+                                          </FormControl>
+                                          <SelectContent>
+                                            <SelectItem value="nextAccountsDue">Next Accounts Due</SelectItem>
+                                            <SelectItem value="confirmationStatementNextDue">Confirmation Statement Next Due</SelectItem>
+                                          </SelectContent>
+                                        </Select>
+                                        <FormMessage />
+                                      </FormItem>
+                                    )}
+                                  />
+                                </div>
                                 
                                 <FormField
                                   control={serviceForm.control}
-                                  name="chDueDateField"
+                                  name="chTargetDeliveryDaysOffset"
                                   render={({ field }) => (
                                     <FormItem>
-                                      <FormLabel>Due Date Field</FormLabel>
-                                      <Select onValueChange={field.onChange} value={field.value || ""} data-testid="select-ch-due-field-edit">
-                                        <FormControl>
-                                          <SelectTrigger>
-                                            <SelectValue placeholder="Select CH field" />
-                                          </SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                          <SelectItem value="nextAccountsDue">Next Accounts Due</SelectItem>
-                                          <SelectItem value="confirmationStatementNextDue">Confirmation Statement Next Due</SelectItem>
-                                        </SelectContent>
-                                      </Select>
+                                      <FormLabel>Target Delivery Days Before Deadline</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          placeholder="e.g. 14"
+                                          value={field.value ?? ""}
+                                          onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                                          data-testid="input-ch-target-delivery-offset-edit"
+                                        />
+                                      </FormControl>
+                                      <div className="text-sm text-muted-foreground">
+                                        Number of days before the CH deadline to set as internal target delivery date. Leave empty for no target.
+                                      </div>
                                       <FormMessage />
                                     </FormItem>
                                   )}
