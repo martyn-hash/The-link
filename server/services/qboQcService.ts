@@ -4,6 +4,7 @@ import { QboConnection, QboQcRun, QboQcResult, QboQcResultItem, InsertQboQcRun, 
 
 export type QcStatus = 'pass' | 'warning' | 'fail' | 'blocked';
 export type QcSection = 'period_control' | 'bank_cash' | 'sales_ar' | 'purchases_ap' | 'vat' | 'journals' | 'attachments' | 'master_data' | 'analytics';
+export type QcErrorCategory = 'rate_limit' | 'auth' | 'permission' | 'query_syntax' | 'feature_unavailable' | 'network' | 'unknown';
 
 export interface QcCheckContext {
   accessToken: string;
@@ -24,6 +25,8 @@ export interface QcCheckResult {
   summary: string;
   items?: QcResultItemData[];
   metadata?: Record<string, unknown>;
+  errorCategory?: QcErrorCategory;
+  errorDetails?: string;
 }
 
 export interface QcResultItemData {
@@ -44,30 +47,134 @@ export interface QcCheck {
   execute(context: QcCheckContext): Promise<QcCheckResult>;
 }
 
+interface QcApiError extends Error {
+  statusCode?: number;
+  category: QcErrorCategory;
+  isRetryable: boolean;
+  userMessage: string;
+}
+
+function parseStatusCode(value: any): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 100 && value < 600) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = parseInt(value, 10);
+    if (Number.isFinite(parsed) && parsed >= 100 && parsed < 600) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
+function classifyApiError(error: any): QcApiError {
+  const statusCode = 
+    parseStatusCode(error.statusCode) || 
+    parseStatusCode(error.status) || 
+    parseStatusCode(error.response?.status) ||
+    parseStatusCode(error.response?.statusCode) ||
+    parseStatusCode(error.fault?.error?.[0]?.code) ||
+    (error.message?.match(/\b([45]\d{2})\b/) ? parseInt(error.message.match(/\b([45]\d{2})\b/)[1]) : undefined);
+  
+  const stringCode = typeof error.code === 'string' ? error.code.toLowerCase() : '';
+  
+  const rawMessage = 
+    error.message || 
+    error.fault?.error?.[0]?.message ||
+    error.response?.data?.message ||
+    'Unknown error';
+  
+  const message = rawMessage.toLowerCase();
+  
+  let category: QcErrorCategory = 'unknown';
+  let isRetryable = false;
+  let userMessage = 'An unexpected error occurred';
+  
+  if (statusCode === 429) {
+    category = 'rate_limit';
+    isRetryable = true;
+    userMessage = 'QuickBooks API rate limit reached. Please try again in a few minutes.';
+  } else if (statusCode === 401) {
+    category = 'auth';
+    isRetryable = false;
+    userMessage = 'QuickBooks authentication expired. Please reconnect your QuickBooks account.';
+  } else if (statusCode === 403) {
+    category = 'permission';
+    isRetryable = false;
+    userMessage = 'QuickBooks permission denied. The app may not have access to this data type.';
+  } else if (statusCode === 400) {
+    if (message.includes('invalid query') || message.includes('queryparserexception')) {
+      category = 'query_syntax';
+      userMessage = 'Query format not supported by this QuickBooks company.';
+    } else if (message.includes('feature') || message.includes('not enabled') || message.includes('not supported')) {
+      category = 'feature_unavailable';
+      userMessage = 'This feature is not enabled in the QuickBooks company settings.';
+    } else {
+      category = 'query_syntax';
+      userMessage = 'Unable to query this data from QuickBooks. The company may not use this feature.';
+    }
+    isRetryable = false;
+  } else if (statusCode === 500 || statusCode === 502 || statusCode === 503 || statusCode === 504) {
+    category = 'network';
+    isRetryable = true;
+    userMessage = 'QuickBooks service temporarily unavailable. Please try again.';
+  } else if (message.includes('econnrefused') || message.includes('etimedout') || message.includes('network')) {
+    category = 'network';
+    isRetryable = true;
+    userMessage = 'Network error connecting to QuickBooks. Please try again.';
+  } else if (stringCode === 'econnrefused' || stringCode === 'etimedout' || stringCode === 'enotfound' || stringCode === 'econnreset') {
+    category = 'network';
+    isRetryable = true;
+    userMessage = 'Network error connecting to QuickBooks. Please try again.';
+  } else if (stringCode.includes('auth') || stringCode.includes('token') || stringCode.includes('unauthorized')) {
+    category = 'auth';
+    isRetryable = false;
+    userMessage = 'QuickBooks authentication expired. Please reconnect your QuickBooks account.';
+  } else if (stringCode.includes('permission') || stringCode.includes('forbidden') || stringCode.includes('access')) {
+    category = 'permission';
+    isRetryable = false;
+    userMessage = 'QuickBooks permission denied. The app may not have access to this data type.';
+  }
+  
+  const qcError = new Error(rawMessage) as QcApiError;
+  qcError.statusCode = statusCode;
+  qcError.category = category;
+  qcError.isRetryable = isRetryable;
+  qcError.userMessage = userMessage;
+  
+  return qcError;
+}
+
 class ApiCallTracker {
   private callCount = 0;
   private callTimestamps: number[] = [];
   private readonly maxCallsPerMinute = 500;
-  private readonly minDelayBetweenCalls = 50;
+  private readonly minDelayBetweenCalls = 100;
+  private requestQueue: Promise<void> = Promise.resolve();
   
   async trackCall(): Promise<void> {
-    this.callCount++;
-    const now = Date.now();
-    this.callTimestamps.push(now);
-    
-    const oneMinuteAgo = now - 60000;
-    this.callTimestamps = this.callTimestamps.filter(ts => ts > oneMinuteAgo);
-    
-    if (this.callTimestamps.length >= this.maxCallsPerMinute) {
-      const oldestInWindow = this.callTimestamps[0];
-      const waitTime = 60000 - (now - oldestInWindow) + 1000;
-      if (waitTime > 0) {
-        console.log(`[QC] Rate limit approaching, waiting ${waitTime}ms`);
-        await this.delay(waitTime);
-      }
-    }
-    
-    await this.delay(this.minDelayBetweenCalls);
+    return new Promise((resolve) => {
+      this.requestQueue = this.requestQueue.then(async () => {
+        this.callCount++;
+        const now = Date.now();
+        this.callTimestamps.push(now);
+        
+        const oneMinuteAgo = now - 60000;
+        this.callTimestamps = this.callTimestamps.filter(ts => ts > oneMinuteAgo);
+        
+        if (this.callTimestamps.length >= this.maxCallsPerMinute) {
+          const oldestInWindow = this.callTimestamps[0];
+          const waitTime = 60000 - (now - oldestInWindow) + 1000;
+          if (waitTime > 0) {
+            console.log(`[QC] Rate limit approaching, waiting ${waitTime}ms`);
+            await this.delay(waitTime);
+          }
+        }
+        
+        await this.delay(this.minDelayBetweenCalls);
+        resolve();
+      });
+    });
   }
   
   private delay(ms: number): Promise<void> {
@@ -77,6 +184,34 @@ class ApiCallTracker {
   getCallCount(): number {
     return this.callCount;
   }
+}
+
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelayMs: number = 250
+): Promise<T> {
+  let lastError: any;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error: any) {
+      lastError = error;
+      const classifiedError = classifyApiError(error);
+      
+      if (!classifiedError.isRetryable || attempt === maxRetries) {
+        throw classifiedError;
+      }
+      
+      const jitter = Math.random() * 100;
+      const delay = baseDelayMs * Math.pow(2, attempt) + jitter;
+      console.log(`[QC] Retry attempt ${attempt + 1}/${maxRetries} after ${delay.toFixed(0)}ms (${classifiedError.category})`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+  
+  throw lastError;
 }
 
 async function ensureValidToken(connection: QboConnection): Promise<{ accessToken: string; connection: QboConnection }> {
@@ -109,16 +244,18 @@ async function qboQuery<T>(
   query: string,
   entityName: string
 ): Promise<T[]> {
-  await context.apiCallTracker.trackCall();
-  
-  const encodedQuery = encodeURIComponent(query);
-  const result = await makeQboApiRequest<{ QueryResponse: Record<string, T[]> }>(
-    context.accessToken,
-    context.realmId,
-    `/query?query=${encodedQuery}`
-  );
-  
-  return result.QueryResponse[entityName] || [];
+  return withRetry(async () => {
+    await context.apiCallTracker.trackCall();
+    
+    const encodedQuery = encodeURIComponent(query);
+    const result = await makeQboApiRequest<{ QueryResponse: Record<string, T[]> }>(
+      context.accessToken,
+      context.realmId,
+      `/query?query=${encodedQuery}`
+    );
+    
+    return result.QueryResponse[entityName] || [];
+  });
 }
 
 async function qboGetEntity<T>(
@@ -126,13 +263,34 @@ async function qboGetEntity<T>(
   entityType: string,
   entityId: string
 ): Promise<T> {
-  await context.apiCallTracker.trackCall();
+  return withRetry(async () => {
+    await context.apiCallTracker.trackCall();
+    
+    return makeQboApiRequest<T>(
+      context.accessToken,
+      context.realmId,
+      `/${entityType}/${entityId}`
+    );
+  });
+}
+
+function createBlockedResult(
+  code: string,
+  name: string,
+  section: QcSection,
+  error: any
+): QcCheckResult {
+  const classifiedError = error.category ? error : classifyApiError(error);
   
-  return makeQboApiRequest<T>(
-    context.accessToken,
-    context.realmId,
-    `/${entityType}/${entityId}`
-  );
+  return {
+    checkCode: code,
+    checkName: name,
+    section,
+    status: 'blocked',
+    summary: classifiedError.userMessage,
+    errorCategory: classifiedError.category,
+    errorDetails: classifiedError.message,
+  };
 }
 
 export const qcChecks: QcCheck[] = [];
@@ -190,13 +348,7 @@ const A1_PeriodLock: QcCheck = {
         summary: `Book close date (${bookCloseDate}) is before selected period end. Period remains open for editing.`,
       };
     } catch (error) {
-      return {
-        checkCode: 'A1',
-        checkName: 'Period Lock Status',
-        section: 'period_control',
-        status: 'blocked',
-        summary: `Failed to check period lock: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      };
+      return createBlockedResult('A1', 'Period Lock Status', 'period_control', error);
     }
   },
 };
@@ -301,13 +453,7 @@ const A2_BackdatedEntries: QcCheck = {
         items,
       };
     } catch (error) {
-      return {
-        checkCode: 'A2',
-        checkName: 'Backdated Entries',
-        section: 'period_control',
-        status: 'blocked',
-        summary: `Failed to check backdated entries: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      };
+      return createBlockedResult('A2', 'Backdated Entries', 'period_control', error);
     }
   },
 };
@@ -392,13 +538,7 @@ const A3_FutureDatedEntries: QcCheck = {
         items,
       };
     } catch (error) {
-      return {
-        checkCode: 'A3',
-        checkName: 'Future-Dated Entries',
-        section: 'period_control',
-        status: 'blocked',
-        summary: `Failed to check future-dated entries: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      };
+      return createBlockedResult('A3', 'Future-Dated Entries', 'period_control', error);
     }
   },
 };
@@ -469,13 +609,7 @@ const B3_UnreconciledCash: QcCheck = {
         metadata: { totalBankBalance: totalUnreconciled },
       };
     } catch (error) {
-      return {
-        checkCode: 'B3',
-        checkName: 'Unreconciled Cash Transactions',
-        section: 'bank_cash',
-        status: 'blocked',
-        summary: `Failed to check unreconciled transactions: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      };
+      return createBlockedResult('B3', 'Unreconciled Cash Transactions', 'bank_cash', error);
     }
   },
 };
@@ -564,13 +698,7 @@ const B4_UndepositedFunds: QcCheck = {
         metadata: { accountId: undepositedFunds.Id },
       };
     } catch (error) {
-      return {
-        checkCode: 'B4',
-        checkName: 'Undeposited Funds Balance',
-        section: 'bank_cash',
-        status: 'blocked',
-        summary: `Failed to check undeposited funds: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      };
+      return createBlockedResult('B4', 'Undeposited Funds Balance', 'bank_cash', error);
     }
   },
 };
@@ -668,13 +796,7 @@ const C1_InvoiceSequencing: QcCheck = {
         metadata: { totalInvoices: invoices.length, numericInvoices: numericInvoices.length },
       };
     } catch (error) {
-      return {
-        checkCode: 'C1',
-        checkName: 'Invoice Number Sequencing',
-        section: 'sales_ar',
-        status: 'blocked',
-        summary: `Failed to check invoice sequencing: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      };
+      return createBlockedResult('C1', 'Invoice Number Sequencing', 'sales_ar', error);
     }
   },
 };
@@ -761,13 +883,7 @@ const C2_ARAgeing: QcCheck = {
         metadata: { ageBuckets, invoiceCount: invoices.length },
       };
     } catch (error) {
-      return {
-        checkCode: 'C2',
-        checkName: 'Accounts Receivable Ageing',
-        section: 'sales_ar',
-        status: 'blocked',
-        summary: `Failed to check AR ageing: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      };
+      return createBlockedResult('C2', 'Accounts Receivable Ageing', 'sales_ar', error);
     }
   },
 };
@@ -854,13 +970,7 @@ const D2_APAgeing: QcCheck = {
         metadata: { ageBuckets, billCount: bills.length },
       };
     } catch (error) {
-      return {
-        checkCode: 'D2',
-        checkName: 'Accounts Payable Ageing',
-        section: 'purchases_ap',
-        status: 'blocked',
-        summary: `Failed to check AP ageing: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      };
+      return createBlockedResult('D2', 'Accounts Payable Ageing', 'purchases_ap', error);
     }
   },
 };
@@ -952,13 +1062,7 @@ const E1_VATCompliance: QcCheck = {
         metadata: { totalInvoices: invoices.length, totalBills: bills.length },
       };
     } catch (error) {
-      return {
-        checkCode: 'E1',
-        checkName: 'VAT/GST Compliance',
-        section: 'vat',
-        status: 'blocked',
-        summary: `Failed to check VAT compliance: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      };
+      return createBlockedResult('E1', 'VAT/GST Compliance', 'vat', error);
     }
   },
 };
@@ -1039,13 +1143,7 @@ const F1_UnbalancedJournals: QcCheck = {
         metadata: { totalJournals: journals.length },
       };
     } catch (error) {
-      return {
-        checkCode: 'F1',
-        checkName: 'Journal Entry Balance',
-        section: 'journals',
-        status: 'blocked',
-        summary: `Failed to check journal balance: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      };
+      return createBlockedResult('F1', 'Journal Entry Balance', 'journals', error);
     }
   },
 };
@@ -1108,31 +1206,58 @@ export async function runQcChecks(
     
     const checkResults = await Promise.all(
       qcChecks.map(check => 
-        check.execute(context).catch(error => ({
-          checkCode: check.code,
-          checkName: check.name,
-          section: check.section,
-          status: 'blocked' as QcStatus,
-          summary: `Check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        }))
+        check.execute(context).catch(error => {
+          const classified = classifyApiError(error);
+          return {
+            checkCode: check.code,
+            checkName: check.name,
+            section: check.section,
+            status: 'blocked' as QcStatus,
+            summary: classified.userMessage || `Check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+            errorCategory: classified.category,
+            errorDetails: classified.message,
+            metadata: {
+              errorCategory: classified.category,
+              errorDetails: classified.message,
+              statusCode: classified.statusCode,
+            },
+          } as QcCheckResult;
+        })
       )
     );
     
     let passed = 0, warnings = 0, failed = 0, blocked = 0;
     
     for (const result of checkResults) {
-      const hasOptionalProps = 'value' in result;
+      const fullResult = result as QcCheckResult;
+      const metadata: Record<string, unknown> = {
+        ...(fullResult.metadata || {}),
+      };
+      
+      if (fullResult.errorCategory) {
+        metadata.errorCategory = fullResult.errorCategory;
+      }
+      if (fullResult.errorDetails) {
+        metadata.errorDetails = fullResult.errorDetails;
+      }
+      
+      const finalMetadata = Object.keys(metadata).length > 0 ? metadata : undefined;
+      
+      if (result.status === 'blocked') {
+        console.log(`[QC Debug] Blocked check ${result.checkCode}: metadata =`, JSON.stringify(finalMetadata));
+      }
+      
       const resultData: InsertQboQcResult = {
         runId: run.id,
         checkCode: result.checkCode,
         checkName: result.checkName,
         section: result.section,
         status: result.status,
-        value: hasOptionalProps ? (result as QcCheckResult).value : undefined,
-        expected: hasOptionalProps ? (result as QcCheckResult).expected : undefined,
+        value: fullResult.value,
+        expected: fullResult.expected,
         summary: result.summary,
-        metadata: hasOptionalProps ? ((result as QcCheckResult).metadata as Record<string, unknown> | undefined) : undefined,
-        itemCount: hasOptionalProps && (result as QcCheckResult).items ? (result as QcCheckResult).items!.length : 0,
+        metadata: finalMetadata,
+        itemCount: fullResult.items ? fullResult.items.length : 0,
       };
       
       const savedResult = await storage.createQcResult(resultData);

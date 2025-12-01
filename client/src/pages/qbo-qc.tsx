@@ -51,6 +51,8 @@ interface QcCheckResult {
   summary: string;
   itemCount: number;
   items: QcResultItem[];
+  errorCategory?: string;
+  errorDetails?: string;
 }
 
 interface QcResultItem {

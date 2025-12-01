@@ -558,12 +558,17 @@ export function registerQuickBooksRoutes(
           return res.status(404).json({ message: "QC run not found" });
         }
         
-        const resultsWithLabels = runWithDetails.results.map(result => ({
-          ...result,
-          sectionLabel: getSectionLabel(result.section as any),
-          statusLabel: getStatusLabel(result.status as any),
-          statusColor: getStatusColor(result.status as any),
-        }));
+        const resultsWithLabels = runWithDetails.results.map(result => {
+          const metadata = result.metadata as Record<string, unknown> | null;
+          return {
+            ...result,
+            sectionLabel: getSectionLabel(result.section as any),
+            statusLabel: getStatusLabel(result.status as any),
+            statusColor: getStatusColor(result.status as any),
+            errorCategory: metadata?.errorCategory as string | undefined,
+            errorDetails: metadata?.errorDetails as string | undefined,
+          };
+        });
         
         res.json({
           ...runWithDetails,
