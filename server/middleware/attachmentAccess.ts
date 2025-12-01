@@ -5,13 +5,14 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db';
-import { messages, messageThreads, documents } from '@shared/schema';
+import { messages, messageThreads, documents, projectMessageThreads, projects } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 import { verifyJWT } from '../portalAuth';
 import { storage } from '../storage/index';
 
 /**
  * Verifies if a user has access to a specific message thread
+ * Supports both standard message threads (messageThreads) and project message threads (projectMessageThreads)
  * @param userId - Staff user ID (if authenticated as staff)
  * @param portalUserId - Portal user ID (if authenticated as portal user)
  * @param threadId - The thread ID to check access for
@@ -23,7 +24,7 @@ export async function verifyThreadAccess(
   threadId: string
 ): Promise<{ hasAccess: boolean; clientId?: string }> {
   try {
-    // Get the thread
+    // First, try to find the thread in standard messageThreads
     const thread = await db.query.messageThreads.findFirst({
       where: eq(messageThreads.id, threadId),
       columns: {
@@ -32,17 +33,49 @@ export async function verifyThreadAccess(
       },
     });
 
-    if (!thread) {
+    let clientId: string | undefined;
+
+    if (thread) {
+      // Found in standard message threads
+      clientId = thread.clientId;
+    } else {
+      // Try to find in project message threads
+      const projectThread = await db.query.projectMessageThreads.findFirst({
+        where: eq(projectMessageThreads.id, threadId),
+        columns: {
+          id: true,
+          projectId: true,
+        },
+      });
+
+      if (projectThread) {
+        // Get the project to find the client
+        const project = await db.query.projects.findFirst({
+          where: eq(projects.id, projectThread.projectId),
+          columns: {
+            id: true,
+            clientId: true,
+          },
+        });
+
+        if (project) {
+          clientId = project.clientId;
+        }
+      }
+    }
+
+    if (!clientId && !thread) {
+      // Thread not found in either table
       return { hasAccess: false };
     }
 
     // Staff users can access all threads
     if (userId) {
-      return { hasAccess: true, clientId: thread.clientId };
+      return { hasAccess: true, clientId };
     }
 
     // Portal users can only access threads for their own client
-    if (portalUserId) {
+    if (portalUserId && clientId) {
       // Get the portal user's client ID
       const portalUser = await db.query.clientPortalUsers.findFirst({
         where: (clientPortalUsers, { eq }) => eq(clientPortalUsers.id, portalUserId),
@@ -51,8 +84,8 @@ export async function verifyThreadAccess(
         },
       });
 
-      if (portalUser && portalUser.clientId === thread.clientId) {
-        return { hasAccess: true, clientId: thread.clientId };
+      if (portalUser && portalUser.clientId === clientId) {
+        return { hasAccess: true, clientId };
       }
     }
 
@@ -180,6 +213,59 @@ export async function verifyMessageAttachmentAccess(
     next();
   } catch (error) {
     console.error('Error in verifyMessageAttachmentAccess middleware:', error);
+    return res.status(500).json({ message: 'Error verifying access' });
+  }
+}
+
+/**
+ * Express middleware to verify message attachment access for POST requests
+ * Accepts threadId from either query params OR request body
+ * Supports both standard message threads and project message threads
+ */
+export async function verifyMessageAttachmentAccessPost(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
+  try {
+    const user = (req as any).user;
+    const portalUser = (req as any).portalUser;
+    // Accept threadId from query or body for POST requests
+    const threadId = (req.query.threadId as string) || (req.body?.threadId as string);
+
+    // For staff users without threadId, allow access (they can view any document)
+    if (!threadId) {
+      if (user?.id || user?.effectiveUserId) {
+        // Staff user - grant access without thread verification
+        (req as any).verified = {
+          hasAccess: true,
+          threadId: null,
+        };
+        return next();
+      }
+      return res.status(400).json({ message: 'threadId is required for portal user access' });
+    }
+
+    const userId = user?.effectiveUserId || user?.id;
+    const { hasAccess } = await verifyThreadAccess(
+      userId,
+      portalUser?.id,
+      threadId
+    );
+
+    if (!hasAccess) {
+      return res.status(403).json({ message: 'Access denied to this attachment' });
+    }
+
+    // Attach to request for downstream use
+    (req as any).verified = {
+      hasAccess: true,
+      threadId,
+    };
+
+    next();
+  } catch (error) {
+    console.error('Error in verifyMessageAttachmentAccessPost middleware:', error);
     return res.status(500).json({ message: 'Error verifying access' });
   }
 }

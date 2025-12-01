@@ -1019,8 +1019,9 @@ export class ProjectStorage extends BaseStorage {
       throw new Error("Project not found");
     }
 
-    // CRITICAL FIX: Capture the old status before any transaction to ensure reliable scope
+    // CRITICAL FIX: Capture the old status and previous assignee before any transaction to ensure reliable scope
     const oldStatus = project.currentStatus;
+    const previousAssigneeId = project.currentAssigneeId;
 
     // Validate the new status using the centralized validation method
     if (!this.projectHelpers.validateProjectStatus) {
@@ -1267,9 +1268,9 @@ export class ProjectStorage extends BaseStorage {
       await this.projectHelpers.sendStageChangeNotifications(update.projectId, update.newStatus, oldStatus);
     }
 
-    // Auto-create message thread if person changing stage differs from person responsible for new stage
-    // Only create if both users are defined (new stage has an assignee)
-    if (userId && newAssigneeId && userId !== newAssigneeId && chronologyEntryId) {
+    // Auto-create message thread when the assignee changes (handoff between different users)
+    // Compare previous assignee with new assignee to detect actual handoffs
+    if (previousAssigneeId && newAssigneeId && previousAssigneeId !== newAssigneeId && chronologyEntryId) {
       try {
         if (!this.projectHelpers.createProjectMessageThread || !this.projectHelpers.createProjectMessageParticipant || !this.projectHelpers.createProjectMessage) {
           console.warn('Message thread helpers not registered, skipping thread creation');
@@ -1292,10 +1293,10 @@ export class ProjectStorage extends BaseStorage {
             createdByUserId: userId,
           });
           
-          // Add both users as participants
+          // Add both the previous and new assignees as participants
           await this.projectHelpers.createProjectMessageParticipant({
             threadId: newThread.id,
-            userId: userId,
+            userId: previousAssigneeId,
           });
           
           await this.projectHelpers.createProjectMessageParticipant({
@@ -1303,24 +1304,43 @@ export class ProjectStorage extends BaseStorage {
             userId: newAssigneeId,
           });
           
-          // Create initial message with stage change notes and/or attachments if provided
-          if ((update.notesHtml && update.notesHtml.trim()) || (update.attachments && update.attachments.length > 0)) {
-            // Transform attachments to include URL for stage-change-attachments endpoint
-            // so AttachmentList can fetch them correctly (not from project-messages endpoint)
-            const messageAttachments = update.attachments?.map(att => ({
-              ...att,
-              url: `/api/projects/${update.projectId}/stage-change-attachments${att.objectPath}`,
-            }));
-            
-            await this.projectHelpers.createProjectMessage({
+          // Also add the person who made the change as a participant if different from both assignees
+          if (userId !== previousAssigneeId && userId !== newAssigneeId) {
+            await this.projectHelpers.createProjectMessageParticipant({
               threadId: newThread.id,
-              content: update.notesHtml?.trim() || 'Stage change attachments',
               userId: userId,
-              attachments: messageAttachments,
             });
           }
           
-          console.log(`[Storage] Created message thread "${threadTopic}" for project ${update.projectId}`);
+          // Always create a message for the handoff - with notes/attachments if provided, or a default summary
+          const hasCustomContent = (update.notesHtml && update.notesHtml.trim()) || (update.attachments && update.attachments.length > 0);
+          
+          // Transform attachments to include URL for stage-change-attachments endpoint
+          // so AttachmentList can fetch them correctly (not from project-messages endpoint)
+          const messageAttachments = update.attachments?.map(att => ({
+            ...att,
+            url: `/api/projects/${update.projectId}/stage-change-attachments${att.objectPath}`,
+          }));
+          
+          // Build the message content - use provided notes or create a default handoff summary
+          let messageContent: string;
+          if (update.notesHtml && update.notesHtml.trim()) {
+            messageContent = update.notesHtml.trim();
+          } else if (update.attachments && update.attachments.length > 0) {
+            messageContent = `<p>Stage changed from <strong>${oldStatus}</strong> to <strong>${update.newStatus}</strong></p><p>Reason: ${update.changeReason}</p><p><em>Attachments included below.</em></p>`;
+          } else {
+            // Default handoff message when no notes or attachments provided
+            messageContent = `<p>Stage changed from <strong>${oldStatus}</strong> to <strong>${update.newStatus}</strong></p><p>Reason: ${update.changeReason}</p>`;
+          }
+          
+          await this.projectHelpers.createProjectMessage({
+            threadId: newThread.id,
+            content: messageContent,
+            userId: userId,
+            attachments: hasCustomContent ? messageAttachments : undefined,
+          });
+          
+          console.log(`[Storage] Created message thread "${threadTopic}" for project ${update.projectId} (handoff from ${previousAssigneeId} to ${newAssigneeId})`);
         }
       } catch (error) {
         console.error(`[Storage] Failed to create message thread for project ${update.projectId}:`, error);

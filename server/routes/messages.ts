@@ -15,6 +15,8 @@ import {
   validateParams,
 } from "./routeHelpers";
 import { convertOfficeToPDF, getCacheKey, isConvertibleOfficeDoc } from "../utils/documentConverter";
+import XLSX from "xlsx";
+import { verifyMessageAttachmentAccessPost } from "../middleware/attachmentAccess";
 
 // Communications parameter validation schemas
 const paramCommunicationIdSchema = z.object({
@@ -1397,6 +1399,86 @@ export function registerMessageRoutes(
       console.error("Error converting document to PDF:", error);
       res.status(500).json({ 
         message: "Failed to convert document", 
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Parse Excel files and return sheet data for in-app preview
+  // Uses shared verifyMessageAttachmentAccessPost middleware for consistent authorization
+  // Supports both standard message threads and project message threads
+  app.post("/api/internal/attachments/excel-preview", isAuthenticated, resolveEffectiveUser, verifyMessageAttachmentAccessPost, async (req: any, res: any) => {
+    try {
+      const { objectPath, fileName } = req.body;
+
+      if (!objectPath || !fileName) {
+        return res.status(400).json({ message: "objectPath and fileName are required" });
+      }
+
+      // Check if file is an Excel file
+      const extension = fileName.substring(fileName.lastIndexOf('.')).toLowerCase();
+      if (!['.xlsx', '.xls', '.xlsm', '.xlsb'].includes(extension)) {
+        return res.status(400).json({ message: "File is not an Excel spreadsheet" });
+      }
+
+      // Authorization already verified by verifyMessageAttachmentAccessPost middleware
+
+      const objectStorageService = new ObjectStorageService();
+
+      // Download the Excel file
+      // objectPath may come as /project-messages/... so we need to prepend /objects
+      const fullObjectPath = objectPath.startsWith('/objects/') ? objectPath : `/objects${objectPath}`;
+      const buffer = await objectStorageService.downloadObjectToBuffer(fullObjectPath);
+
+      // Parse the Excel file using SheetJS
+      const workbook = XLSX.read(buffer, { type: 'buffer' });
+
+      // Extract data from all sheets
+      const sheets: Array<{
+        name: string;
+        data: any[][];
+        rowCount: number;
+        colCount: number;
+      }> = [];
+
+      const MAX_ROWS_PER_SHEET = 500; // Limit rows for performance
+
+      for (const sheetName of workbook.SheetNames) {
+        const worksheet = workbook.Sheets[sheetName];
+        
+        // Get range to determine dimensions
+        const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+        const totalRows = range.e.r - range.s.r + 1;
+        const totalCols = range.e.c - range.s.c + 1;
+
+        // Convert to JSON array of arrays, limiting rows
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
+          header: 1, 
+          defval: '',
+          range: { s: { r: 0, c: 0 }, e: { r: Math.min(range.e.r, MAX_ROWS_PER_SHEET - 1), c: range.e.c } }
+        }) as any[][];
+
+        sheets.push({
+          name: sheetName,
+          data: jsonData,
+          rowCount: totalRows,
+          colCount: totalCols,
+        });
+      }
+
+      console.log(`[ExcelPreview] Parsed ${fileName}: ${sheets.length} sheets`);
+
+      res.json({
+        fileName,
+        sheetCount: sheets.length,
+        sheets,
+        maxRowsPerSheet: MAX_ROWS_PER_SHEET,
+      });
+
+    } catch (error) {
+      console.error("Error parsing Excel file:", error);
+      res.status(500).json({ 
+        message: "Failed to parse Excel file", 
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
