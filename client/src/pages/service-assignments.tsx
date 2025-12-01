@@ -278,6 +278,12 @@ export default function ServiceAssignments() {
   const [serviceOwnerFilter, setServiceOwnerFilter] = useState("all");
   const [showInactive, setShowInactive] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  
+  // Date range filter states
+  const [nextStartDateFrom, setNextStartDateFrom] = useState<string>("");
+  const [nextStartDateTo, setNextStartDateTo] = useState<string>("");
+  const [nextDueDateFrom, setNextDueDateFrom] = useState<string>("");
+  const [nextDueDateTo, setNextDueDateTo] = useState<string>("");
 
   // Selection state for bulk operations
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -461,8 +467,44 @@ export default function ServiceAssignments() {
       });
     }
 
+    // Apply next start date range filter
+    if (nextStartDateFrom || nextStartDateTo) {
+      combined = combined.filter(assignment => {
+        if (!assignment.nextStartDate) return false;
+        const startDate = new Date(assignment.nextStartDate);
+        if (nextStartDateFrom) {
+          const fromDate = new Date(nextStartDateFrom);
+          if (startDate < fromDate) return false;
+        }
+        if (nextStartDateTo) {
+          const toDate = new Date(nextStartDateTo);
+          toDate.setHours(23, 59, 59, 999); // Include the entire end day
+          if (startDate > toDate) return false;
+        }
+        return true;
+      });
+    }
+
+    // Apply next due date range filter
+    if (nextDueDateFrom || nextDueDateTo) {
+      combined = combined.filter(assignment => {
+        if (!assignment.nextDueDate) return false;
+        const dueDate = new Date(assignment.nextDueDate);
+        if (nextDueDateFrom) {
+          const fromDate = new Date(nextDueDateFrom);
+          if (dueDate < fromDate) return false;
+        }
+        if (nextDueDateTo) {
+          const toDate = new Date(nextDueDateTo);
+          toDate.setHours(23, 59, 59, 999); // Include the entire end day
+          if (dueDate > toDate) return false;
+        }
+        return true;
+      });
+    }
+
     return combined;
-  }, [clientServices, peopleServices, searchTerm, roleFilter, userFilter]);
+  }, [clientServices, peopleServices, searchTerm, roleFilter, userFilter, nextStartDateFrom, nextStartDateTo, nextDueDateFrom, nextDueDateTo]);
 
   // Active filter count
   const activeFilterCount = () => {
