@@ -1,8 +1,10 @@
-# Target Delivery Date Implementation Plan
+# Target Delivery Date Implementation
+
+**Status: IMPLEMENTED** (December 2025)
 
 ## Overview
 
-This document outlines the plan to add a **Target Delivery Date** field to services and projects. This creates a three-date model:
+This document describes the **Target Delivery Date** field that has been added to services and projects. This creates a three-date model:
 
 | Date Field | Purpose | Example (VAT Service) |
 |------------|---------|----------------------|
@@ -196,40 +198,41 @@ This field defines how many days before the CH deadline to set the target delive
 
 ---
 
-## Implementation Phases
+## Implementation Status
 
-### Phase 1: Database & Schema (Low Risk)
-1. Add database columns via migration
-2. Update Drizzle schema files
-3. Update Zod validation schemas
-4. Update TypeScript interfaces
+### Phase 1: Database & Schema ✅ COMPLETED
+1. ✅ Added database columns via migration
+2. ✅ Updated Drizzle schema files
+3. ✅ Updated Zod validation schemas
+4. ✅ Updated TypeScript interfaces
 
-### Phase 2: Backend API (Medium Risk)
-1. Update storage layer to handle new field
-2. Update API routes to accept/return new field
-3. Add to import/export functionality
+### Phase 2: Backend API ✅ COMPLETED
+1. ✅ Updated storage layer to handle new field
+2. ✅ Updated API routes to accept/return new field
+3. (Import/export to be done in future phase)
 
-### Phase 3: Service Assignments Page (Your Requested Feature)
-1. Add Target Delivery Date column to table
-2. Enable inline editing or detail panel editing
-3. Add bulk edit capability for existing services
+### Phase 3: Service Assignments Page ✅ COMPLETED
+1. ✅ Added Target Delivery Date column to table
+2. ✅ Enabled inline editing in detail panel
+3. (Bulk edit capability to be done in future phase)
 
-### Phase 4: Other Frontend Pages (Medium Risk)
-1. Add Service Modal - include target delivery date field
-2. Edit Service Modal - include target delivery date field
-3. Client service detail views
-4. Scheduled services views
+### Phase 4: Other Frontend Pages ✅ COMPLETED
+1. ✅ Add Service Modal - includes target delivery date field
+2. ✅ Edit Service Modal - includes target delivery date field
+3. ✅ Scheduled services views display target delivery date
+4. ✅ Services admin page includes CH target delivery offset field
 
-### Phase 5: Scheduling Integration (HIGH RISK - Requires Thorough Testing)
-1. Update frequency calculator to include target delivery date
-2. Update project creator to set target delivery date on new projects
-3. Update rescheduling logic to calculate next target delivery date
-4. Update notification system for target delivery date awareness
+### Phase 5: Scheduling Integration ✅ COMPLETED
+1. ✅ Project scheduler includes targetDeliveryDate in DueService interface
+2. ✅ Project creation passes targetDeliveryDate to new projects
+3. ✅ Rescheduling maintains target delivery offset relative to due date
+4. ✅ CH update logic recalculates targetDeliveryDate when deadlines change
+5. (Notification system integration to be done in future phase)
 
-### Phase 6: Project Display
-1. Update project detail to show target delivery date
-2. Update project info component to display target delivery date
-3. **DO NOT** change "On Track" / "Behind Schedule" calculation (keep using deadline date)
+### Phase 6: Project Display ✅ COMPLETED
+1. ✅ Project info component displays target delivery date
+2. ✅ Performance metrics remain unchanged (using deadline date)
+3. ✅ Scheduled services view shows current project target delivery date
 
 ### Future Phase: Performance Metrics Update
 *To be implemented in a future release*
@@ -301,16 +304,33 @@ This field defines how many days before the CH deadline to set the target delive
 
 ## Summary
 
-This is a **medium-high complexity** change affecting:
+This **medium-high complexity** change has been implemented, affecting:
 - **6** database tables (including `services` for CH offset)
 - **~35** code files
-- **3** core scheduling modules (requires careful testing)
+- **3** core scheduling modules
 
-**Estimated effort**: 2-3 days for full implementation
+**Implementation date**: December 2025
 
-**Recommended approach**: 
-1. Start with Phase 1-3 (database, backend, service assignments page)
-2. Validate with stakeholders before proceeding to scheduling changes
-3. Phase 5 (scheduling) should be done separately with extensive testing
+### Key Files Modified
 
-**Timeline note**: Implementation is planned for a few weeks out, allowing time for thorough planning and documentation of the core scheduling modules before any changes are made.
+**Backend:**
+- `shared/schema/services/tables.ts` - Added `targetDeliveryDate` and `chTargetDeliveryDaysOffset` columns
+- `shared/schema/projects/tables.ts` - Added `targetDeliveryDate` column
+- `server/storage/services/serviceAssignmentStorage.ts` - Added date handling
+- `server/core/service-mapper.ts` - CH target delivery calculation
+- `server/project-scheduler.ts` - DueService interface and project creation
+- `server/ch-update-logic.ts` - CH date update handling
+
+**Frontend:**
+- `client/src/pages/service-assignments.tsx` - Target Delivery column and editing
+- `client/src/pages/services.tsx` - CH target delivery offset field
+- `client/src/pages/client-detail/components/services/AddServiceModal.tsx` - Target delivery date field
+- `client/src/pages/client-detail/components/services/EditServiceModal.tsx` - Target delivery date field
+- `client/src/components/project-info.tsx` - Display target delivery date
+- `client/src/pages/scheduled-services.tsx` - Target delivery date columns
+
+### Remaining Future Work
+1. Add notification templates for approaching target delivery date
+2. Update import/export functionality for target delivery date
+3. Add bulk update capability for existing services
+4. Update performance metrics to use target delivery date instead of deadline date
