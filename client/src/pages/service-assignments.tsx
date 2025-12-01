@@ -113,6 +113,7 @@ interface ClientServiceWithDetails {
   frequency: string | null;
   nextStartDate: string | null;
   nextDueDate: string | null;
+  targetDeliveryDate: string | null;
   isActive: boolean;
   client: {
     id: string;
@@ -154,6 +155,7 @@ interface PeopleServiceWithDetails {
   frequency: string | null;
   nextStartDate: string | null;
   nextDueDate: string | null;
+  targetDeliveryDate: string | null;
   isActive: boolean;
   person: {
     id: string;
@@ -1126,6 +1128,7 @@ export default function ServiceAssignments() {
                     <TableHead>Service Owner</TableHead>
                     <TableHead>Next Start</TableHead>
                     <TableHead>Next Due</TableHead>
+                    <TableHead>Target Delivery</TableHead>
                     <TableHead>Frequency</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
@@ -1238,6 +1241,15 @@ export default function ServiceAssignments() {
                             )}
                           </TableCell>
                           <TableCell>
+                            {assignment.targetDeliveryDate ? (
+                              <span className="text-sm">
+                                {format(new Date(assignment.targetDeliveryDate), 'dd MMM yyyy')}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground text-sm">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
                             {(isClientService ? cs?.frequency : ps?.frequency) || (
                               <span className="text-muted-foreground">—</span>
                             )}
@@ -1257,7 +1269,7 @@ export default function ServiceAssignments() {
                               1 + // Expand button column
                               3 + // Type, Client/Person, Service columns
                               (showRoleColumns ? allRolesInData.length : 0) + // Role columns
-                              5 // Service Owner, Next Start, Next Due, Frequency, Status
+                              6 // Service Owner, Next Start, Next Due, Target Delivery, Frequency, Status
                             } className="py-3">
                               <div className="pl-12">
                                 <p className="text-sm font-medium mb-3 flex items-center gap-2">

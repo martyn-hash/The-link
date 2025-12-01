@@ -50,6 +50,7 @@ export function EditServiceModal({
     defaultValues: {
       nextStartDate: service.nextStartDate ? new Date(service.nextStartDate).toISOString().split('T')[0] : '',
       nextDueDate: service.nextDueDate ? new Date(service.nextDueDate).toISOString().split('T')[0] : '',
+      targetDeliveryDate: service.targetDeliveryDate ? new Date(service.targetDeliveryDate).toISOString().split('T')[0] : '',
       serviceOwnerId: service.serviceOwnerId || 'none',
       frequency: (service.frequency as "daily" | "weekly" | "monthly" | "quarterly" | "annually") || 'monthly',
       isActive: service.isActive ?? true,
@@ -79,6 +80,9 @@ export function EditServiceModal({
         nextDueDate: data.nextDueDate && data.nextDueDate.trim() !== '' ? 
           (data.nextDueDate.includes('T') ? data.nextDueDate : data.nextDueDate + 'T00:00:00.000Z') : 
           undefined,
+        targetDeliveryDate: data.targetDeliveryDate && data.targetDeliveryDate.trim() !== '' ? 
+          (data.targetDeliveryDate.includes('T') ? data.targetDeliveryDate : data.targetDeliveryDate + 'T00:00:00.000Z') : 
+          null,
         serviceOwnerId: data.serviceOwnerId === "none" ? null : data.serviceOwnerId,
         frequency: isCompaniesHouseService ? "annually" : data.frequency,
         isActive: data.isActive,
@@ -256,6 +260,23 @@ export function EditServiceModal({
                       <FormControl>
                         <Input type="date" {...field} data-testid="input-next-due-date" />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="targetDeliveryDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Target Delivery Date</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} data-testid="input-target-delivery-date" />
+                      </FormControl>
+                      <FormDescription>
+                        Internal target date for delivery before the due date.
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

@@ -95,6 +95,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
       frequency: "monthly",
       nextStartDate: "",
       nextDueDate: "",
+      targetDeliveryDate: "",
       serviceOwnerId: "",
     },
   });
@@ -249,6 +250,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
         frequency: data.frequency,
         nextStartDate: formatDateToDateTime(data.nextStartDate),
         nextDueDate: formatDateToDateTime(data.nextDueDate),
+        targetDeliveryDate: formatDateToDateTime(data.targetDeliveryDate),
         notes: null,
       });
     },
@@ -297,6 +299,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
         frequency: data.frequency,
         nextStartDate: data.nextStartDate && data.nextStartDate.trim() ? new Date(data.nextStartDate).toISOString() : null,
         nextDueDate: data.nextDueDate && data.nextDueDate.trim() ? new Date(data.nextDueDate).toISOString() : null,
+        targetDeliveryDate: data.targetDeliveryDate && data.targetDeliveryDate.trim() ? new Date(data.targetDeliveryDate).toISOString() : null,
         serviceOwnerId: data.serviceOwnerId && data.serviceOwnerId.trim() ? data.serviceOwnerId : null,
         udfValues: Object.keys(processedUdfValues).length > 0 ? processedUdfValues : undefined,
       });
@@ -723,6 +726,31 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
                           Date automatically populated from Companies House data
                         </p>
                       )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="targetDeliveryDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel fieldState="optional">
+                        Target Delivery Date
+                      </FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="date" 
+                          {...field} 
+                          data-testid="input-target-delivery-date"
+                          disabled={isStaticService}
+                          className={isStaticService ? 'bg-muted text-muted-foreground pointer-events-none' : ''}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Internal target date for delivery before the due date
+                      </p>
                       <FormMessage />
                     </FormItem>
                   )}
