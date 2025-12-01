@@ -323,8 +323,8 @@ Incorporate elements from this template into your response if appropriate.`;
     }
   );
 
-  // Text-based email refinement for stage notifications
-  // This allows users to refine existing email content with a simple text prompt
+  // Text-based email generation/refinement for stage notifications
+  // This allows users to generate new emails or refine existing content with a simple text prompt
   router.post(
     "/refine-email",
     isAuthenticated,
@@ -334,14 +334,13 @@ Incorporate elements from this template into your response if appropriate.`;
         const { projectId, prompt, currentSubject, currentBody } = req.body;
         
         if (!prompt || !prompt.trim()) {
-          return res.status(400).json({ error: "Refinement prompt is required" });
-        }
-        
-        if (!currentBody) {
-          return res.status(400).json({ error: "Current email body is required" });
+          return res.status(400).json({ error: "Prompt is required" });
         }
 
-        console.log("[AI] Refining email with text prompt for project:", projectId);
+        // Determine if we're generating from scratch or refining existing content
+        const isGenerating = !currentBody || !currentBody.trim();
+        
+        console.log("[AI] " + (isGenerating ? "Generating" : "Refining") + " email with text prompt for project:", projectId);
         console.log("[AI] Prompt:", prompt);
 
         // Fetch stage approval context if project ID provided
@@ -353,10 +352,40 @@ Incorporate elements from this template into your response if appropriate.`;
         // Get system prompt from company settings
         const settings = await storage.getCompanySettings();
         const basePrompt = settings?.aiSystemPromptStageNotifications ||
-          `You are a professional assistant helping to refine client notification emails for an accounting/bookkeeping firm.`;
+          `You are a professional assistant helping to compose client notification emails for an accounting/bookkeeping firm.`;
 
-        // Build the full system prompt
-        let fullSystemPrompt = `${basePrompt}
+        // Build different prompts based on whether we're generating or refining
+        let fullSystemPrompt: string;
+        let userMessage: string;
+
+        if (isGenerating) {
+          // Generation mode: create new email from prompt
+          fullSystemPrompt = `${basePrompt}
+
+You are helping a staff member compose a new email to a client. They will provide instructions on what the email should say.
+
+Create a professional, friendly email based on their instructions.
+You may include merge fields like {client_company_name}, {client_first_name}, {project_name}, {due_date} where appropriate.
+
+You must respond with valid JSON in this exact format:
+{
+  "subject": "A clear, appropriate email subject line",
+  "body": "The email body with proper HTML formatting (paragraphs, etc.)"
+}
+Do not include any text outside the JSON object.`;
+
+          if (stageApprovalContext) {
+            fullSystemPrompt += `\n\n--- COMPLETED WORK ITEMS (Available for context) ---\n${stageApprovalContext}\n--- END OF COMPLETED WORK ITEMS ---`;
+          }
+
+          userMessage = `--- EMAIL REQUEST ---
+${prompt}
+--- END OF REQUEST ---
+
+Please compose an email based on the instructions above.`;
+        } else {
+          // Refinement mode: modify existing email
+          fullSystemPrompt = `${basePrompt}
 
 You are helping a staff member refine an existing email. They will provide:
 1. The current email subject and body
@@ -372,12 +401,11 @@ You must respond with valid JSON in this exact format:
 }
 Do not include any text outside the JSON object.`;
 
-        if (stageApprovalContext) {
-          fullSystemPrompt += `\n\n--- COMPLETED WORK ITEMS (Available for context) ---\n${stageApprovalContext}\n--- END OF COMPLETED WORK ITEMS ---`;
-        }
+          if (stageApprovalContext) {
+            fullSystemPrompt += `\n\n--- COMPLETED WORK ITEMS (Available for context) ---\n${stageApprovalContext}\n--- END OF COMPLETED WORK ITEMS ---`;
+          }
 
-        // Build the user message with current content and refinement instructions
-        let userMessage = `--- CURRENT EMAIL ---
+          userMessage = `--- CURRENT EMAIL ---
 Subject: ${currentSubject || "(No subject)"}
 Body: ${currentBody}
 --- END OF CURRENT EMAIL ---
@@ -387,6 +415,7 @@ ${prompt}
 --- END OF REQUEST ---
 
 Please refine the email according to the request above.`;
+        }
 
         // Call GPT
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -420,21 +449,21 @@ Please refine the email according to the request above.`;
         try {
           parsed = JSON.parse(content);
         } catch (e) {
-          console.error("[AI] Failed to parse refinement JSON:", e);
-          parsed = { subject: currentSubject, body: content };
+          console.error("[AI] Failed to parse email JSON:", e);
+          parsed = { subject: currentSubject || "", body: content };
         }
 
-        console.log("[AI] Email refinement complete");
+        console.log("[AI] Email " + (isGenerating ? "generation" : "refinement") + " complete");
 
         res.json({
           success: true,
-          subject: parsed.subject || currentSubject,
-          body: parsed.body || currentBody,
+          subject: parsed.subject || currentSubject || "",
+          body: parsed.body || currentBody || "",
         });
       } catch (error: any) {
-        console.error("[AI] Error refining email:", error);
+        console.error("[AI] Error processing email:", error);
         res.status(500).json({
-          error: error.message || "Failed to refine email",
+          error: error.message || "Failed to process email",
         });
       }
     }
