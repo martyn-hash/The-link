@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const TAB_LIST = ["overview", "services", "projects", "communications", "chronology", "documents", "tasks", "risk", "qc"] as const;
+const TAB_LIST = ["overview", "services", "projects", "communications", "chronology", "documents", "tasks", "risk"] as const;
 
 type TabValue = typeof TAB_LIST[number];
 
@@ -115,13 +115,6 @@ export function ClientTabNavigation({
               >
                 Notifications
               </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onTabChange("qc")}
-                className="bg-blue-600 text-white hover:bg-blue-700 focus:bg-blue-700"
-                data-testid="menu-item-qc"
-              >
-                QC Checks
-              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </TabsList>
@@ -147,7 +140,7 @@ export function ClientTabNavigation({
           size="icon"
           className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-12 w-12 rounded-full bg-background/80 backdrop-blur-sm shadow-md"
           onClick={handleNextTab}
-          disabled={activeTab === "qc"}
+          disabled={activeTab === "risk"}
           data-testid="tab-nav-right"
         >
           <ChevronRight className="h-6 w-6" />
@@ -195,13 +188,6 @@ export function ClientTabNavigation({
                 >
                   Notifications
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => onTabChange("qc")}
-                  className="bg-blue-600 text-white hover:bg-blue-700 focus:bg-blue-700"
-                  data-testid="menu-item-qc-mobile"
-                >
-                  QC Checks
-                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </TabsList>
@@ -220,7 +206,6 @@ export function ClientTabNavigation({
             {activeTab === "documents" && "Documents"}
             {activeTab === "tasks" && "Tasks"}
             {activeTab === "risk" && (riskView === "risk" ? "Risk Assessment" : "Notifications")}
-            {activeTab === "qc" && "Quality Control"}
           </h2>
         </div>
       )}

@@ -5,4 +5,3 @@ export { ProjectsTab } from './ProjectsTab';
 export { OverviewTab } from './OverviewTab';
 export { TasksTab } from './TasksTab';
 export { ServicesTab } from './ServicesTab';
-export { QcTab } from './QcTab';
