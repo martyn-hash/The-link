@@ -1429,6 +1429,16 @@ export class ProjectStorage extends BaseStorage {
       }
     }
     
+    // Apply client filter
+    if (filters.clientFilter && filters.clientFilter !== 'all') {
+      conditions.push(eq(projects.clientId, filters.clientFilter));
+    }
+    
+    // Apply project type filter
+    if (filters.projectTypeFilter && filters.projectTypeFilter !== 'all') {
+      conditions.push(eq(projects.projectTypeId, filters.projectTypeFilter));
+    }
+    
     // Group by logic
     let results: { label: string; value: number }[] = [];
     
@@ -1467,10 +1477,26 @@ export class ProjectStorage extends BaseStorage {
         .where(conditions.length > 0 ? and(...conditions) : undefined)
         .groupBy(projects.currentStatus);
       
+      // Fetch all kanban stages to get order and color information
+      const allStages = await db
+        .select({
+          name: kanbanStages.name,
+          order: kanbanStages.order,
+          color: kanbanStages.color,
+        })
+        .from(kanbanStages)
+        .orderBy(kanbanStages.order);
+      
+      // Create a map of stage name to order and color
+      const stageOrderMap = new Map(allStages.map(s => [s.name, { order: s.order, color: s.color }]));
+      
+      // Map results with stage info and sort by stage order
       results = grouped.map(g => ({
         label: g.status || 'Unknown',
         value: g.count,
-      }));
+        order: stageOrderMap.get(g.status || '')?.order ?? 999,
+        color: stageOrderMap.get(g.status || '')?.color || null,
+      })).sort((a, b) => a.order - b.order);
     } else if (groupBy === 'assignee') {
       const grouped = await db
         .select({

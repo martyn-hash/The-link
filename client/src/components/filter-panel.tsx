@@ -66,12 +66,22 @@ interface FilterPanelProps {
   viewMode: "kanban" | "list" | "dashboard";
   setViewMode: (value: "kanban" | "list" | "dashboard") => void;
   
+  // Optional new filters for dashboards
+  clientFilter?: string;
+  setClientFilter?: (value: string) => void;
+  projectTypeFilter?: string;
+  setProjectTypeFilter?: (value: string) => void;
+  
   // Data for dropdowns
   services: { id: string; name: string }[];
   users: User[];
   taskAssignees: User[];
   serviceOwners: User[];
   isManagerOrAdmin: boolean;
+  
+  // Optional data for new filters
+  clients?: { id: string; name: string }[];
+  projectTypes?: { id: string; name: string }[];
 }
 
 export default function FilterPanel({
@@ -99,11 +109,17 @@ export default function FilterPanel({
   setServiceDueDateFilter,
   viewMode,
   setViewMode,
+  clientFilter,
+  setClientFilter,
+  projectTypeFilter,
+  setProjectTypeFilter,
   services,
   users,
   taskAssignees,
   serviceOwners,
   isManagerOrAdmin,
+  clients,
+  projectTypes,
 }: FilterPanelProps) {
   // Fetch unique due dates for selected service
   const { data: serviceDueDates = [] } = useQuery<string[]>({
@@ -364,6 +380,64 @@ export default function FilterPanel({
                   data-testid="switch-kanban-view"
                 />
               </div>
+            )}
+
+            {/* Client Filter - Only show in dashboard mode with clients available */}
+            {viewMode === "dashboard" && clients && clients.length > 0 && setClientFilter && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <Label className="flex items-center gap-2">
+                    <Briefcase className="w-4 h-4" />
+                    Client
+                  </Label>
+                  <Select 
+                    value={clientFilter || "all"} 
+                    onValueChange={setClientFilter}
+                  >
+                    <SelectTrigger data-testid="select-client-filter">
+                      <SelectValue placeholder="All Clients" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Clients</SelectItem>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
+            {/* Project Type Filter - Only show in dashboard mode with project types available */}
+            {viewMode === "dashboard" && projectTypes && projectTypes.length > 0 && setProjectTypeFilter && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <Label className="flex items-center gap-2">
+                    <Folder className="w-4 h-4" />
+                    Project Type
+                  </Label>
+                  <Select 
+                    value={projectTypeFilter || "all"} 
+                    onValueChange={setProjectTypeFilter}
+                  >
+                    <SelectTrigger data-testid="select-project-type-filter">
+                      <SelectValue placeholder="All Project Types" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Project Types</SelectItem>
+                      {projectTypes.map((projectType) => (
+                        <SelectItem key={projectType.id} value={projectType.id}>
+                          {projectType.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
             )}
 
             <Separator />

@@ -48,6 +48,8 @@ const analyticsQuerySchema = z.object({
       from: z.string().optional(),
       to: z.string().optional(),
     }).optional(),
+    clientFilter: z.string().optional(),
+    projectTypeFilter: z.string().optional(),
   }).optional(),
   groupBy: z.enum(['projectType', 'status', 'assignee', 'serviceOwner', 'daysOverdue'], {
     required_error: "groupBy must be one of: projectType, status, assignee, serviceOwner, daysOverdue",

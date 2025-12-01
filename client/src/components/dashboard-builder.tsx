@@ -15,7 +15,8 @@ import {
   List,
   Trash2,
   Settings,
-  Table as TableIcon
+  Table as TableIcon,
+  Download
 } from "lucide-react";
 import {
   Table,
@@ -53,6 +54,8 @@ interface DashboardBuilderProps {
     showArchived: boolean;
     dynamicDateFilter: "all" | "overdue" | "today" | "next7days" | "next14days" | "next30days" | "custom";
     customDateRange: { from: Date | undefined; to: Date | undefined };
+    clientFilter?: string;
+    projectTypeFilter?: string;
   };
   widgets: Widget[];
   editMode?: boolean;
@@ -83,9 +86,19 @@ interface Dashboard {
 interface AnalyticsDataPoint {
   label: string;
   value: number;
+  order?: number;
+  color?: string | null;
 }
 
-const CHART_COLORS = ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4', '#ec4899'];
+const CHART_COLORS = [
+  'hsl(195, 81%, 32%)',  // Primary teal
+  'hsl(94, 55%, 51%)',   // Green
+  'hsl(312, 44%, 34%)',  // Purple/magenta
+  'hsl(50, 99%, 50%)',   // Yellow
+  'hsl(197, 67%, 15%)',  // Dark teal
+  'hsl(0, 72%, 51%)',    // Red
+  'hsl(220, 70%, 60%)',  // Blue
+];
 
 interface TableFilter {
   groupBy: "projectType" | "status" | "assignee" | "serviceOwner" | "daysOverdue";
@@ -212,7 +225,7 @@ function WidgetCard({ widget, filters, editMode, onRemove, onChartClick, isActiv
       return apiRequest("POST", "/api/analytics", {
         filters: {
           serviceFilter: filters.serviceFilter !== "all" ? filters.serviceFilter : undefined,
-          showArchived: filters.showArchived, // Send the actual boolean value
+          showArchived: filters.showArchived,
           taskAssigneeFilter: filters.taskAssigneeFilter !== "all" ? filters.taskAssigneeFilter : undefined,
           serviceOwnerFilter: filters.serviceOwnerFilter !== "all" ? filters.serviceOwnerFilter : undefined,
           userFilter: filters.userFilter !== "all" ? filters.userFilter : undefined,
@@ -221,6 +234,8 @@ function WidgetCard({ widget, filters, editMode, onRemove, onChartClick, isActiv
             from: filters.customDateRange.from ? filters.customDateRange.from.toISOString() : undefined,
             to: filters.customDateRange.to ? filters.customDateRange.to.toISOString() : undefined,
           } : undefined,
+          clientFilter: filters.clientFilter && filters.clientFilter !== "all" ? filters.clientFilter : undefined,
+          projectTypeFilter: filters.projectTypeFilter && filters.projectTypeFilter !== "all" ? filters.projectTypeFilter : undefined,
         },
         groupBy: widget.groupBy,
       });
@@ -274,16 +289,28 @@ function WidgetCard({ widget, filters, editMode, onRemove, onChartClick, isActiv
         ) : widget.type === "bar" ? (
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="label" />
-              <YAxis />
-              <Tooltip />
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="label" className="text-xs" />
+              <YAxis className="text-xs" />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: 'hsl(var(--card))', 
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '8px'
+                }} 
+              />
               <Bar 
                 dataKey="value" 
-                fill="#3b82f6" 
                 onClick={({ payload }) => onChartClick(widget.groupBy, payload.label)}
                 cursor="pointer"
-              />
+              >
+                {chartData.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`}
+                    fill={widget.groupBy === "status" && entry.color ? entry.color : CHART_COLORS[index % CHART_COLORS.length]}
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         ) : widget.type === "line" ? (
@@ -293,16 +320,24 @@ function WidgetCard({ widget, filters, editMode, onRemove, onChartClick, isActiv
                 onChartClick(widget.groupBy, e.activeLabel);
               }
             }}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="label" />
-              <YAxis />
-              <Tooltip />
+              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+              <XAxis dataKey="label" className="text-xs" />
+              <YAxis className="text-xs" />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: 'hsl(var(--card))', 
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '8px'
+                }} 
+              />
               <Line 
                 type="monotone" 
                 dataKey="value" 
-                stroke="#8b5cf6" 
+                stroke="hsl(195, 81%, 32%)"
                 strokeWidth={2}
                 cursor="pointer"
+                dot={{ fill: 'hsl(195, 81%, 32%)', strokeWidth: 2 }}
+                activeDot={{ r: 6, fill: 'hsl(312, 44%, 34%)' }}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -325,11 +360,17 @@ function WidgetCard({ widget, filters, editMode, onRemove, onChartClick, isActiv
                 {chartData.map((entry, index) => (
                   <Cell 
                     key={`cell-${index}`} 
-                    fill={CHART_COLORS[index % CHART_COLORS.length]}
+                    fill={widget.groupBy === "status" && entry.color ? entry.color : CHART_COLORS[index % CHART_COLORS.length]}
                   />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip 
+                contentStyle={{ 
+                  backgroundColor: 'hsl(var(--card))', 
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '8px'
+                }} 
+              />
             </RechartsPieChart>
           </ResponsiveContainer>
         )}
@@ -465,7 +506,9 @@ function MiniKanbanBoard({ serviceId, filters }: MiniKanbanBoardProps) {
                     {stageProjects.slice(0, 5).map((project: any) => (
                       <Card
                         key={project.id}
-                        className="p-2 hover:shadow-md transition-shadow cursor-pointer"
+                        className="p-2 hover:shadow-md hover:bg-accent/50 transition-all cursor-pointer border-l-4"
+                        style={{ borderLeftColor: stage.color || "#6b7280" }}
+                        onClick={() => window.location.href = `/projects/${project.id}`}
                         data-testid={`mini-project-card-${project.id}`}
                       >
                         <div className="space-y-1">
@@ -510,7 +553,6 @@ function FilteredDataTable({ filters, tableFilter, onClearFilter }: FilteredData
   const queryParams = useMemo(() => {
     const params: Record<string, any> = {};
     if (filters.serviceFilter !== "all") params.serviceId = filters.serviceFilter;
-    // Always send showArchived as string for query params
     params.showArchived = filters.showArchived;
     if (filters.taskAssigneeFilter !== "all") params.assigneeId = filters.taskAssigneeFilter;
     if (filters.serviceOwnerFilter !== "all") params.serviceOwnerId = filters.serviceOwnerFilter;
@@ -520,8 +562,38 @@ function FilteredDataTable({ filters, tableFilter, onClearFilter }: FilteredData
       if (filters.customDateRange.from) params.dateFrom = filters.customDateRange.from.toISOString();
       if (filters.customDateRange.to) params.dateTo = filters.customDateRange.to.toISOString();
     }
+    if (filters.clientFilter && filters.clientFilter !== "all") params.clientId = filters.clientFilter;
+    if (filters.projectTypeFilter && filters.projectTypeFilter !== "all") params.projectTypeId = filters.projectTypeFilter;
     return params;
   }, [filters]);
+  
+  // CSV Export function
+  const exportToCSV = (projectsToExport: ProjectWithRelations[]) => {
+    const headers = ['Client', 'Project Type', 'Status', 'Assignee', 'Service Owner', 'Due Date'];
+    const rows = projectsToExport.map(project => [
+      project.client?.name || 'N/A',
+      project.projectType?.name || 'N/A',
+      project.currentStatus || 'N/A',
+      project.currentAssignee ? `${project.currentAssignee.firstName || ''} ${project.currentAssignee.lastName || ''}`.trim() : 'Unassigned',
+      project.projectOwner ? `${project.projectOwner.firstName || ''} ${project.projectOwner.lastName || ''}`.trim() : 'N/A',
+      project.dueDate ? new Date(project.dueDate).toLocaleDateString() : 'N/A'
+    ]);
+    
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `dashboard-export-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // Fetch projects with applied filters using default fetcher
   const { data: allProjects = [], isLoading } = useQuery<ProjectWithRelations[]>({
@@ -581,16 +653,29 @@ function FilteredDataTable({ filters, tableFilter, onClearFilter }: FilteredData
               )}
             </CardDescription>
           </div>
-          {tableFilter && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onClearFilter}
-              data-testid="button-clear-table-filter"
-            >
-              Clear Filter
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {projects.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => exportToCSV(projects)}
+                data-testid="button-export-csv"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export CSV
+              </Button>
+            )}
+            {tableFilter && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onClearFilter}
+                data-testid="button-clear-table-filter"
+              >
+                Clear Filter
+              </Button>
+            )}
+          </div>
         </div>
       </CardHeader>
       <CardContent>
@@ -617,7 +702,12 @@ function FilteredDataTable({ filters, tableFilter, onClearFilter }: FilteredData
               </TableHeader>
               <TableBody>
                 {projects.map((project) => (
-                  <TableRow key={project.id} data-testid={`table-row-${project.id}`}>
+                  <TableRow 
+                    key={project.id} 
+                    className="cursor-pointer hover:bg-accent/50 transition-colors"
+                    onClick={() => window.location.href = `/projects/${project.id}`}
+                    data-testid={`table-row-${project.id}`}
+                  >
                     <TableCell className="font-medium" data-testid={`cell-client-${project.id}`}>
                       {project.client?.name || 'N/A'}
                     </TableCell>

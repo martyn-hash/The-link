@@ -155,6 +155,8 @@ export default function Projects() {
     to: undefined,
   });
   const [dashboardServiceDueDateFilter, setDashboardServiceDueDateFilter] = useState("all");
+  const [dashboardClientFilter, setDashboardClientFilter] = useState("all");
+  const [dashboardProjectTypeFilter, setDashboardProjectTypeFilter] = useState("all");
 
   // Save view modal state
   const [saveViewDialogOpen, setSaveViewDialogOpen] = useState(false);
@@ -244,6 +246,22 @@ export default function Projects() {
     queryKey: ["/api/dashboards"],
     enabled: isAuthenticated && !!user,
     retry: false,
+  });
+
+  // Fetch all clients (for dashboard filter)
+  const { data: allClients = [] } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/clients"],
+    enabled: isAuthenticated && !!user && viewMode === "dashboard",
+    retry: false,
+    select: (data: any[]) => data.map((c: any) => ({ id: c.id, name: c.name })).sort((a, b) => a.name.localeCompare(b.name))
+  });
+
+  // Fetch all project types (for dashboard filter)
+  const { data: allProjectTypes = [] } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/project-types"],
+    enabled: isAuthenticated && !!user && viewMode === "dashboard",
+    retry: false,
+    select: (data: any[]) => data.map((pt: any) => ({ id: pt.id, name: pt.name })).sort((a, b) => a.name.localeCompare(b.name))
   });
 
   // Pull-to-refresh handler - invalidates all project-related queries
@@ -356,6 +374,8 @@ export default function Projects() {
           to: parsedFilters.customDateRange?.to ? new Date(parsedFilters.customDateRange.to) : undefined,
         });
         setDashboardServiceDueDateFilter(parsedFilters.serviceDueDateFilter || "all");
+        setDashboardClientFilter(parsedFilters.clientFilter || "all");
+        setDashboardProjectTypeFilter(parsedFilters.projectTypeFilter || "all");
       }
       
       toast({
@@ -597,6 +617,8 @@ export default function Projects() {
         to: dashboardCustomDateRange.to ? dashboardCustomDateRange.to.toISOString() : undefined,
       },
       serviceDueDateFilter: dashboardServiceDueDateFilter,
+      clientFilter: dashboardClientFilter,
+      projectTypeFilter: dashboardProjectTypeFilter,
     };
 
     saveDashboardMutation.mutate({
@@ -627,6 +649,8 @@ export default function Projects() {
         to: dashboardCustomDateRange.to ? dashboardCustomDateRange.to.toISOString() : undefined,
       },
       serviceDueDateFilter: dashboardServiceDueDateFilter,
+      clientFilter: dashboardClientFilter,
+      projectTypeFilter: dashboardProjectTypeFilter,
     };
 
     saveDashboardMutation.mutate({
@@ -1150,6 +1174,8 @@ export default function Projects() {
                       showArchived: dashboardShowArchived,
                       dynamicDateFilter: dashboardDynamicDateFilter,
                       customDateRange: dashboardCustomDateRange,
+                      clientFilter: dashboardClientFilter,
+                      projectTypeFilter: dashboardProjectTypeFilter,
                     }}
                     widgets={dashboardWidgets}
                     editMode={dashboardEditMode}
@@ -1254,6 +1280,8 @@ export default function Projects() {
                     showArchived: dashboardShowArchived,
                     dynamicDateFilter: dashboardDynamicDateFilter,
                     customDateRange: dashboardCustomDateRange,
+                    clientFilter: dashboardClientFilter,
+                    projectTypeFilter: dashboardProjectTypeFilter,
                   }}
                   widgets={dashboardWidgets}
                   editMode={dashboardEditMode}
@@ -1531,6 +1559,42 @@ export default function Projects() {
                       <SelectItem value="next7days">Next 7 Days</SelectItem>
                       <SelectItem value="next14days">Next 14 Days</SelectItem>
                       <SelectItem value="next30days">Next 30 Days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Client Filter */}
+                <div className="space-y-2">
+                  <Label htmlFor="dashboard-client-filter">Client</Label>
+                  <Select value={dashboardClientFilter} onValueChange={setDashboardClientFilter}>
+                    <SelectTrigger id="dashboard-client-filter" data-testid="select-dashboard-client">
+                      <SelectValue placeholder="All Clients" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Clients</SelectItem>
+                      {allClients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Project Type Filter */}
+                <div className="space-y-2">
+                  <Label htmlFor="dashboard-project-type-filter">Project Type</Label>
+                  <Select value={dashboardProjectTypeFilter} onValueChange={setDashboardProjectTypeFilter}>
+                    <SelectTrigger id="dashboard-project-type-filter" data-testid="select-dashboard-project-type">
+                      <SelectValue placeholder="All Project Types" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Project Types</SelectItem>
+                      {allProjectTypes.map((pt) => (
+                        <SelectItem key={pt.id} value={pt.id}>
+                          {pt.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
