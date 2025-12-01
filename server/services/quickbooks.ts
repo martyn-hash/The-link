@@ -39,7 +39,11 @@ export function generateAuthUrl(state: string): string {
 
   // Get redirect URI at runtime to ensure env var changes are picked up
   const redirectUri = process.env.QUICKBOOKS_REDIRECT_URI || 'https://flow.growth.accountants/api/oauth/callback';
+  console.log('[QuickBooks] ========== AUTH URL DEBUG ==========');
+  console.log('[QuickBooks] QUICKBOOKS_REDIRECT_URI env var:', process.env.QUICKBOOKS_REDIRECT_URI);
   console.log('[QuickBooks] Using redirect URI:', redirectUri);
+  console.log('[QuickBooks] Redirect URI length:', redirectUri.length);
+  console.log('[QuickBooks] Redirect URI bytes:', Buffer.from(redirectUri).toString('hex'));
 
   const params = new URLSearchParams({
     client_id: QUICKBOOKS_CLIENT_ID,
@@ -49,7 +53,11 @@ export function generateAuthUrl(state: string): string {
     state: state,
   });
 
-  return `${QBO_AUTH_URL}?${params.toString()}`;
+  const fullUrl = `${QBO_AUTH_URL}?${params.toString()}`;
+  console.log('[QuickBooks] Full auth URL:', fullUrl);
+  console.log('[QuickBooks] =====================================');
+
+  return fullUrl;
 }
 
 export async function exchangeCodeForTokens(code: string): Promise<TokenResponse> {
