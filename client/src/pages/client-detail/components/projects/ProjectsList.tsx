@@ -43,6 +43,7 @@ export function ProjectsList({ projects, isLoading, clientId, isCompleted = fals
             <TableRow>
               <TableHead>Project Name</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead className="text-purple-700 dark:text-purple-400">Target Date</TableHead>
               <TableHead>Due Date</TableHead>
               <TableHead>Assignee</TableHead>
               {isCompleted && <TableHead>Completion</TableHead>}
@@ -54,6 +55,7 @@ export function ProjectsList({ projects, isLoading, clientId, isCompleted = fals
               <TableRow key={i}>
                 <TableCell><Skeleton className="h-4 w-32" /></TableCell>
                 <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                 <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                 <TableCell><Skeleton className="h-4 w-28" /></TableCell>
                 {isCompleted && <TableCell><Skeleton className="h-4 w-20" /></TableCell>}
@@ -141,6 +143,12 @@ export function ProjectsList({ projects, isLoading, clientId, isCompleted = fals
                       </p>
                     </div>
                     <div>
+                      <span className="text-purple-600 dark:text-purple-400 text-xs">Target Date</span>
+                      <p className="font-medium text-purple-700 dark:text-purple-400" data-testid={`text-targetdate-${project.id}`}>
+                        {project.targetDeliveryDate ? formatDate(project.targetDeliveryDate) : '-'}
+                      </p>
+                    </div>
+                    <div>
                       <span className="text-muted-foreground text-xs">Due Date</span>
                       <p className="font-medium" data-testid={`text-duedate-${project.id}`}>
                         {project.dueDate ? formatDate(project.dueDate) : '-'}
@@ -174,6 +182,7 @@ export function ProjectsList({ projects, isLoading, clientId, isCompleted = fals
           <TableRow>
             <TableHead>Project Name</TableHead>
             <TableHead>Status</TableHead>
+            <TableHead className="text-purple-700 dark:text-purple-400">Target Date</TableHead>
             <TableHead>Due Date</TableHead>
             <TableHead>Assignee</TableHead>
             {isCompleted && <TableHead>Completion</TableHead>}

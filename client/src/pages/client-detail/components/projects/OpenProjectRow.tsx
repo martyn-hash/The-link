@@ -49,6 +49,12 @@ export function OpenProjectRow({ project, clientId }: OpenProjectRowProps) {
       </TableCell>
       
       <TableCell>
+        <span className="text-sm text-purple-700 dark:text-purple-400" data-testid={`text-targetdate-${project.id}`}>
+          {project.targetDeliveryDate ? formatDate(project.targetDeliveryDate) : '-'}
+        </span>
+      </TableCell>
+      
+      <TableCell>
         <span className="text-sm" data-testid={`text-duedate-${project.id}`}>
           {project.dueDate ? formatDate(project.dueDate) : '-'}
         </span>
