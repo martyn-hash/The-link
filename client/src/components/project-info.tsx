@@ -193,19 +193,33 @@ export default function ProjectInfo({ project, user, currentStage, currentAssign
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Left Column: Due Date and Role Assignments */}
         <div>
-          {/* Due Date Section */}
-          {project.dueDate && (
-            <div className="mb-6">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground font-medium">Due Date:</span>
-                <span className="font-semibold text-foreground" data-testid="text-project-due-date">
-                  {new Date(project.dueDate).toLocaleDateString('en-GB', { 
-                    day: '2-digit', 
-                    month: 'short', 
-                    year: 'numeric'
-                  })}
-                </span>
-              </div>
+          {/* Dates Section */}
+          {(project.dueDate || project.targetDeliveryDate) && (
+            <div className="mb-6 space-y-2">
+              {project.targetDeliveryDate && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground font-medium">Target Delivery:</span>
+                  <span className="font-semibold text-foreground" data-testid="text-project-target-delivery">
+                    {new Date(project.targetDeliveryDate).toLocaleDateString('en-GB', { 
+                      day: '2-digit', 
+                      month: 'short', 
+                      year: 'numeric'
+                    })}
+                  </span>
+                </div>
+              )}
+              {project.dueDate && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground font-medium">Due Date:</span>
+                  <span className="font-semibold text-foreground" data-testid="text-project-due-date">
+                    {new Date(project.dueDate).toLocaleDateString('en-GB', { 
+                      day: '2-digit', 
+                      month: 'short', 
+                      year: 'numeric'
+                    })}
+                  </span>
+                </div>
+              )}
             </div>
           )}
           

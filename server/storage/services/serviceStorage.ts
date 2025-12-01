@@ -266,6 +266,7 @@ export class ServiceStorage extends BaseStorage {
         clientOrPersonName: clients.name,
         nextStartDate: clientServices.nextStartDate,
         nextDueDate: clientServices.nextDueDate,
+        targetDeliveryDate: clientServices.targetDeliveryDate,
         frequency: clientServices.frequency,
         isActive: clientServices.isActive,
         serviceOwnerId: clientServices.serviceOwnerId,
@@ -290,6 +291,7 @@ export class ServiceStorage extends BaseStorage {
         clientOrPersonName: people.fullName,
         nextStartDate: peopleServices.nextStartDate,
         nextDueDate: peopleServices.nextDueDate,
+        targetDeliveryDate: peopleServices.targetDeliveryDate,
         frequency: peopleServices.frequency,
         isActive: peopleServices.isActive,
         serviceOwnerId: peopleServices.serviceOwnerId,
@@ -313,6 +315,7 @@ export class ServiceStorage extends BaseStorage {
         clientId: projects.clientId,
         projectMonth: projects.projectMonth,
         dueDate: projects.dueDate,
+        targetDeliveryDate: projects.targetDeliveryDate,
       })
       .from(projects)
       .where(and(
@@ -327,12 +330,13 @@ export class ServiceStorage extends BaseStorage {
     );
 
     // Create a map of client-projectType combinations to their project dates
-    const activeProjectDates = new Map<string, { startDate: Date | null; dueDate: Date | null }>();
+    const activeProjectDates = new Map<string, { startDate: Date | null; dueDate: Date | null; targetDeliveryDate: Date | null }>();
     activeProjects.forEach(p => {
       const key = `${p.clientId}-${p.projectTypeId}`;
       activeProjectDates.set(key, {
         startDate: p.projectMonth as any,
-        dueDate: p.dueDate
+        dueDate: p.dueDate,
+        targetDeliveryDate: p.targetDeliveryDate
       });
     });
 
@@ -365,6 +369,7 @@ export class ServiceStorage extends BaseStorage {
           clientOrPersonType: 'client' as const,
           nextStartDate: cs.nextStartDate ? cs.nextStartDate.toISOString() : null,
           nextDueDate: cs.nextDueDate ? cs.nextDueDate.toISOString() : null,
+          targetDeliveryDate: cs.targetDeliveryDate ? cs.targetDeliveryDate.toISOString() : null,
           currentProjectStartDate: currentProjectDates?.startDate ? 
             (currentProjectDates.startDate instanceof Date ? currentProjectDates.startDate.toISOString() : 
              typeof currentProjectDates.startDate === 'string' ? currentProjectDates.startDate : 
@@ -373,6 +378,10 @@ export class ServiceStorage extends BaseStorage {
             (currentProjectDates.dueDate instanceof Date ? currentProjectDates.dueDate.toISOString() : 
              typeof currentProjectDates.dueDate === 'string' ? currentProjectDates.dueDate : 
              new Date(currentProjectDates.dueDate).toISOString()) : null,
+          currentProjectTargetDeliveryDate: currentProjectDates?.targetDeliveryDate ? 
+            (currentProjectDates.targetDeliveryDate instanceof Date ? currentProjectDates.targetDeliveryDate.toISOString() : 
+             typeof currentProjectDates.targetDeliveryDate === 'string' ? currentProjectDates.targetDeliveryDate : 
+             new Date(currentProjectDates.targetDeliveryDate).toISOString()) : null,
           projectTypeName: cs.projectTypeName || null,
           hasActiveProject,
           frequency: cs.frequency || 'monthly',
@@ -408,6 +417,7 @@ export class ServiceStorage extends BaseStorage {
           clientOrPersonType: 'person' as const,
           nextStartDate: ps.nextStartDate ? ps.nextStartDate.toISOString() : null,
           nextDueDate: ps.nextDueDate ? ps.nextDueDate.toISOString() : null,
+          targetDeliveryDate: ps.targetDeliveryDate ? ps.targetDeliveryDate.toISOString() : null,
           currentProjectStartDate: currentProjectDates?.startDate ? 
             (currentProjectDates.startDate instanceof Date ? currentProjectDates.startDate.toISOString() : 
              typeof currentProjectDates.startDate === 'string' ? currentProjectDates.startDate : 
@@ -416,6 +426,10 @@ export class ServiceStorage extends BaseStorage {
             (currentProjectDates.dueDate instanceof Date ? currentProjectDates.dueDate.toISOString() : 
              typeof currentProjectDates.dueDate === 'string' ? currentProjectDates.dueDate : 
              new Date(currentProjectDates.dueDate).toISOString()) : null,
+          currentProjectTargetDeliveryDate: currentProjectDates?.targetDeliveryDate ? 
+            (currentProjectDates.targetDeliveryDate instanceof Date ? currentProjectDates.targetDeliveryDate.toISOString() : 
+             typeof currentProjectDates.targetDeliveryDate === 'string' ? currentProjectDates.targetDeliveryDate : 
+             new Date(currentProjectDates.targetDeliveryDate).toISOString()) : null,
           projectTypeName: ps.projectTypeName || null,
           hasActiveProject,
           frequency: ps.frequency || 'monthly',

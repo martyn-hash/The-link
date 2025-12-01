@@ -39,8 +39,10 @@ interface ScheduledServiceView {
   clientOrPersonType: 'client' | 'person';
   nextStartDate: string | null;
   nextDueDate: string | null;
+  targetDeliveryDate: string | null;
   currentProjectStartDate: string | null; // Current project start date (when hasActiveProject is true)
   currentProjectDueDate: string | null;   // Current project due date (when hasActiveProject is true)
+  currentProjectTargetDeliveryDate: string | null; // Current project target delivery date
   projectTypeName: string;
   hasActiveProject: boolean;
   frequency: string;
@@ -336,25 +338,39 @@ export default function ScheduledServices() {
                                   )}
                                 </div>
                               )}
+                              {service.targetDeliveryDate && safeFormatDate(service.targetDeliveryDate) && (
+                                <div className="flex items-center space-x-2">
+                                  <span className="text-xs text-muted-foreground">Target:</span>
+                                  <span className="text-sm">{safeFormatDate(service.targetDeliveryDate)}</span>
+                                </div>
+                              )}
                               {service.nextDueDate && safeFormatDate(service.nextDueDate) && (
                                 <div className="flex items-center space-x-2">
                                   <span className="text-xs text-muted-foreground">Due:</span>
                                   <span className="text-sm">{safeFormatDate(service.nextDueDate)}</span>
                                 </div>
                               )}
-                              {!service.nextStartDate && !service.nextDueDate && (
+                              {!service.nextStartDate && !service.nextDueDate && !service.targetDeliveryDate && (
                                 <span className="text-muted-foreground text-sm">-</span>
                               )}
                             </div>
                           </TableCell>
                           <TableCell>
-                            {service.hasActiveProject && (service.currentProjectStartDate || service.currentProjectDueDate) ? (
+                            {service.hasActiveProject && (service.currentProjectStartDate || service.currentProjectDueDate || service.currentProjectTargetDeliveryDate) ? (
                               <div className="space-y-1">
                                 {service.currentProjectStartDate && safeFormatDate(service.currentProjectStartDate) && (
                                   <div className="flex items-center space-x-2">
                                     <span className="text-xs text-muted-foreground">Started:</span>
                                     <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
                                       {safeFormatDate(service.currentProjectStartDate)}
+                                    </span>
+                                  </div>
+                                )}
+                                {service.currentProjectTargetDeliveryDate && safeFormatDate(service.currentProjectTargetDeliveryDate) && (
+                                  <div className="flex items-center space-x-2">
+                                    <span className="text-xs text-muted-foreground">Target:</span>
+                                    <span className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                                      {safeFormatDate(service.currentProjectTargetDeliveryDate)}
                                     </span>
                                   </div>
                                 )}
