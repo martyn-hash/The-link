@@ -14,7 +14,9 @@ This document outlines the plan to add a **Target Delivery Date** field to servi
 
 1. **Keep existing `nextDueDate` field name** - This remains the deadline date for backwards compatibility with Companies House linked services
 2. **Add new `targetDeliveryDate` field** - New column alongside existing date fields
-3. **Companies House services** - CH field mapping continues to populate `nextDueDate` (deadline), target delivery would be manually set or calculated as an offset
+3. **No service-level default offset** - Target delivery date will be defined during client/person service mapping, not at the service template level
+4. **Companies House services** - Add a `chTargetDeliveryDaysOffset` field to the Service definition. When CH updates the deadline date (`nextDueDate`), automatically calculate target delivery date by subtracting this offset (e.g., if offset is 7, target = deadline - 7 days)
+5. **Performance metrics unchanged (for now)** - Keep using deadline date (`nextDueDate`) for "On Track" / "Behind Schedule" calculations. Update metrics to use target delivery date in a future release
 
 ---
 
@@ -50,11 +52,17 @@ ALTER TABLE project_scheduling_history ADD COLUMN new_target_delivery_date TIMES
 ALTER TABLE scheduling_exceptions ADD COLUMN target_delivery_date TIMESTAMP;
 ```
 
+#### 6. `services` table (for CH offset)
+```sql
+ALTER TABLE services ADD COLUMN ch_target_delivery_days_offset INTEGER;
+```
+This field defines how many days before the CH deadline to set the target delivery date for Companies House-linked services.
+
 ### Files to Update
 
 | File | Changes Required |
 |------|-----------------|
-| `shared/schema/services/tables.ts` | Add `targetDeliveryDate` and `intendedTargetDeliveryDay` columns to `clientServices` and `peopleServices` |
+| `shared/schema/services/tables.ts` | Add `targetDeliveryDate` and `intendedTargetDeliveryDay` columns to `clientServices` and `peopleServices`. Add `chTargetDeliveryDaysOffset` to `services` table |
 | `shared/schema/projects/tables.ts` | Add `targetDeliveryDate` column to `projects` and update history tables |
 
 ---
@@ -118,13 +126,25 @@ ALTER TABLE scheduling_exceptions ADD COLUMN target_delivery_date TIMESTAMP;
 
 | File | Changes Required |
 |------|-----------------|
-| `server/ch-update-logic.ts` | Review - CH updates should NOT touch target delivery date (it's internal) |
+| `server/ch-update-logic.ts` | When CH updates the deadline date (`nextDueDate`), calculate and set `targetDeliveryDate` using the service's `chTargetDeliveryDaysOffset` (deadline - offset days) |
+
+**CH Target Delivery Date Logic:**
+1. Service definition includes `chTargetDeliveryDaysOffset` (e.g., 7 days)
+2. When CH data updates the client service's `nextDueDate` (deadline)
+3. Automatically calculate `targetDeliveryDate = nextDueDate - chTargetDeliveryDaysOffset`
+4. Update the client service's `targetDeliveryDate` field
 
 ---
 
 ## Frontend Changes
 
-### Service Assignments Page (Primary Edit Interface)
+### Services Configuration Page (For CH Offset)
+
+| File | Changes Required |
+|------|-----------------|
+| `client/src/pages/services.tsx` | Add `chTargetDeliveryDaysOffset` field to service create/edit form (only shown when `isCompaniesHouseConnected` is true) |
+
+### Service Assignments Page (Primary Edit Interface for Existing Mappings)
 
 | File | Changes Required |
 |------|-----------------|
@@ -159,7 +179,7 @@ ALTER TABLE scheduling_exceptions ADD COLUMN target_delivery_date TIMESTAMP;
 | File | Changes Required |
 |------|-----------------|
 | `client/src/pages/project-detail.tsx` | Display target delivery date |
-| `client/src/components/project-info.tsx` | Display target delivery date, use for "Behind Schedule" calculation |
+| `client/src/components/project-info.tsx` | Display target delivery date (do NOT change "Behind Schedule" calculation - that stays on deadline date for now) |
 | `client/src/components/project-card.tsx` | Optionally display target delivery date |
 
 ### Excel Import
@@ -208,8 +228,13 @@ ALTER TABLE scheduling_exceptions ADD COLUMN target_delivery_date TIMESTAMP;
 
 ### Phase 6: Project Display
 1. Update project detail to show target delivery date
-2. Update project info component for tracking metrics
-3. Consider using target delivery date for "On Track" / "Behind Schedule" calculation
+2. Update project info component to display target delivery date
+3. **DO NOT** change "On Track" / "Behind Schedule" calculation (keep using deadline date)
+
+### Future Phase: Performance Metrics Update
+*To be implemented in a future release*
+1. Update "On Track" / "Behind Schedule" to use target delivery date instead of deadline
+2. Add new reporting/dashboard views for target delivery performance
 
 ---
 
@@ -247,13 +272,19 @@ ALTER TABLE scheduling_exceptions ADD COLUMN target_delivery_date TIMESTAMP;
 
 ---
 
+## Resolved Design Questions
+
+| Question | Decision |
+|----------|----------|
+| **Default offset** | No service-level default. Target delivery is defined during client/person mapping |
+| **CH services** | Service config includes `chTargetDeliveryDaysOffset`. Target = CH deadline - offset days |
+| **Metrics** | Keep using deadline date for now. Update to target delivery date in future release |
+
 ## Open Questions
 
-1. **Default offset**: Should there be a service-level default offset (e.g., "target is always 7 days before deadline")?
-2. **Required field**: Should target delivery date be optional or required for non-static services?
-3. **CH services**: How should target delivery work for CH-linked services where deadline comes from CH?
-4. **Metrics**: Which date should drive the "On Track" / "Behind Schedule" calculation?
-5. **Notifications**: Should there be notification templates for approaching target delivery date?
+1. **Required field**: Should target delivery date be optional or required for non-static services?
+2. **Notifications**: Should there be notification templates for approaching target delivery date?
+3. **Bulk update**: What should be the default behaviour when bulk-updating existing services with missing target delivery dates?
 
 ---
 
@@ -271,7 +302,7 @@ ALTER TABLE scheduling_exceptions ADD COLUMN target_delivery_date TIMESTAMP;
 ## Summary
 
 This is a **medium-high complexity** change affecting:
-- **5** database tables
+- **6** database tables (including `services` for CH offset)
 - **~35** code files
 - **3** core scheduling modules (requires careful testing)
 
@@ -281,3 +312,5 @@ This is a **medium-high complexity** change affecting:
 1. Start with Phase 1-3 (database, backend, service assignments page)
 2. Validate with stakeholders before proceeding to scheduling changes
 3. Phase 5 (scheduling) should be done separately with extensive testing
+
+**Timeline note**: Implementation is planned for a few weeks out, allowing time for thorough planning and documentation of the core scheduling modules before any changes are made.
