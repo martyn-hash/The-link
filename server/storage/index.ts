@@ -89,7 +89,7 @@ import {
   CompanySettingsStorage
 } from './settings/index.js';
 import { WebhookStorage } from './webhooks/index.js';
-import { QboStorage } from './qbo/index.js';
+import { QboStorage, QcStorage } from './qbo/index.js';
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -158,6 +158,7 @@ export class DatabaseStorage implements IStorage {
   private companySettingsStorage: CompanySettingsStorage;
   private webhookStorage: WebhookStorage;
   private qboStorage: QboStorage;
+  private qcStorage: QcStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -257,6 +258,7 @@ export class DatabaseStorage implements IStorage {
     
     // Initialize QBO domain storage
     this.qboStorage = new QboStorage();
+    this.qcStorage = new QcStorage();
     
     // Register cross-domain helpers
     this.registerClientHelpers();
@@ -3303,6 +3305,95 @@ export class DatabaseStorage implements IStorage {
 
   async getQboConnectionsWithClients() {
     return this.qboStorage.getQboConnectionsWithClients();
+  }
+
+  // QC Storage Methods
+  async createQcRun(data: Parameters<typeof this.qcStorage.createQcRun>[0]) {
+    return this.qcStorage.createQcRun(data);
+  }
+
+  async getQcRunById(id: string) {
+    return this.qcStorage.getQcRunById(id);
+  }
+
+  async updateQcRun(id: string, data: Parameters<typeof this.qcStorage.updateQcRun>[1]) {
+    return this.qcStorage.updateQcRun(id, data);
+  }
+
+  async getQcRunsByClientId(clientId: string, limit?: number) {
+    return this.qcStorage.getQcRunsByClientId(clientId, limit);
+  }
+
+  async getLatestQcRunByClientId(clientId: string) {
+    return this.qcStorage.getLatestQcRunByClientId(clientId);
+  }
+
+  async getQcRunWithDetails(runId: string) {
+    return this.qcStorage.getQcRunWithDetails(runId);
+  }
+
+  async createQcResult(data: Parameters<typeof this.qcStorage.createQcResult>[0]) {
+    return this.qcStorage.createQcResult(data);
+  }
+
+  async createQcResults(data: Parameters<typeof this.qcStorage.createQcResults>[0]) {
+    return this.qcStorage.createQcResults(data);
+  }
+
+  async getQcResultsByRunId(runId: string) {
+    return this.qcStorage.getQcResultsByRunId(runId);
+  }
+
+  async createQcResultItem(data: Parameters<typeof this.qcStorage.createQcResultItem>[0]) {
+    return this.qcStorage.createQcResultItem(data);
+  }
+
+  async createQcResultItems(data: Parameters<typeof this.qcStorage.createQcResultItems>[0]) {
+    return this.qcStorage.createQcResultItems(data);
+  }
+
+  async getQcResultItemsByResultId(resultId: string) {
+    return this.qcStorage.getQcResultItemsByResultId(resultId);
+  }
+
+  async updateQcResultItem(id: string, data: Parameters<typeof this.qcStorage.updateQcResultItem>[1]) {
+    return this.qcStorage.updateQcResultItem(id, data);
+  }
+
+  async getQcResultItemById(id: string) {
+    return this.qcStorage.getQcResultItemById(id);
+  }
+
+  async approveQcResultItem(itemId: string, userId: string, note: string | null) {
+    return this.qcStorage.approveQcResultItem(itemId, userId, note);
+  }
+
+  async escalateQcResultItem(itemId: string, userId: string, note: string | null) {
+    return this.qcStorage.escalateQcResultItem(itemId, userId, note);
+  }
+
+  async resolveQcResultItem(itemId: string, userId: string, note: string | null) {
+    return this.qcStorage.resolveQcResultItem(itemId, userId, note);
+  }
+
+  async createApprovalHistory(data: Parameters<typeof this.qcStorage.createApprovalHistory>[0]) {
+    return this.qcStorage.createApprovalHistory(data);
+  }
+
+  async getApprovalHistoryByItemId(itemId: string) {
+    return this.qcStorage.getApprovalHistoryByItemId(itemId);
+  }
+
+  async getPendingApprovalsByClientId(clientId: string) {
+    return this.qcStorage.getPendingApprovalsByClientId(clientId);
+  }
+
+  async getQcRunSummary(runId: string) {
+    return this.qcStorage.getQcRunSummary(runId);
+  }
+
+  async getLatestQcRunSummary(clientId: string) {
+    return this.qcStorage.getLatestQcRunSummary(clientId);
   }
 
 }
