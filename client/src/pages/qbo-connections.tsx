@@ -116,8 +116,7 @@ export default function QboConnections() {
 
   const connectMutation = useMutation({
     mutationFn: async (clientId: string) => {
-      const response = await apiRequest("GET", `/api/quickbooks/connect/${clientId}`);
-      return response.json();
+      return await apiRequest("GET", `/api/quickbooks/connect/${clientId}`);
     },
     onSuccess: (data: { authUrl: string }) => {
       setShowConnectDialog(false);
