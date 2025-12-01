@@ -67,6 +67,8 @@ const ALL_COLUMNS: ColumnConfig[] = [
   { id: "client", label: "Client", sortable: true, defaultVisible: true, minWidth: 150 },
   { id: "projectType", label: "Project Type", sortable: true, defaultVisible: true, minWidth: 150 },
   { id: "serviceOwner", label: "Service Owner", sortable: true, defaultVisible: true, minWidth: 150 },
+  { id: "targetDeliveryDate", label: "Target Date", sortable: true, defaultVisible: false, minWidth: 120 },
+  { id: "daysToTarget", label: "Days to Target", sortable: true, defaultVisible: false, minWidth: 130 },
   { id: "dueDate", label: "Due Date", sortable: true, defaultVisible: true, minWidth: 120 },
   { id: "status", label: "Status", sortable: true, defaultVisible: true, minWidth: 180 },
   { id: "assignedTo", label: "Assigned To", sortable: false, defaultVisible: true, minWidth: 150 },
@@ -512,6 +514,23 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
     return days !== null && days < 0;
   };
 
+  const getDaysToTarget = (targetDeliveryDate: Date | string | null) => {
+    if (!targetDeliveryDate) return null;
+    const now = new Date();
+    const target = new Date(targetDeliveryDate);
+    const diffTime = target.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  const formatDaysToTarget = (targetDeliveryDate: Date | string | null) => {
+    const days = getDaysToTarget(targetDeliveryDate);
+    if (days === null) return "-";
+    if (days < 0) return `${Math.abs(days)} days overdue`;
+    if (days === 0) return "Due today";
+    return `${days} days`;
+  };
+
   const sortedProjects = [...projects].sort((a, b) => {
     let comparison = 0;
 
@@ -526,6 +545,16 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
         const aOwner = a.projectOwner ? `${a.projectOwner.firstName} ${a.projectOwner.lastName}` : "";
         const bOwner = b.projectOwner ? `${b.projectOwner.firstName} ${b.projectOwner.lastName}` : "";
         comparison = aOwner.localeCompare(bOwner);
+        break;
+      case "targetDeliveryDate":
+        const aTargetDate = a.targetDeliveryDate ? new Date(a.targetDeliveryDate).getTime() : 0;
+        const bTargetDate = b.targetDeliveryDate ? new Date(b.targetDeliveryDate).getTime() : 0;
+        comparison = aTargetDate - bTargetDate;
+        break;
+      case "daysToTarget":
+        const aTargetDays = getDaysToTarget(a.targetDeliveryDate) ?? Infinity;
+        const bTargetDays = getDaysToTarget(b.targetDeliveryDate) ?? Infinity;
+        comparison = aTargetDays - bTargetDays;
         break;
       case "dueDate":
         const aDate = a.dueDate ? new Date(a.dueDate).getTime() : 0;
@@ -639,6 +668,25 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
                 : "Unassigned"}
             </span>
           </div>
+        );
+      case "targetDeliveryDate":
+        return (
+          <div className="flex items-center space-x-2">
+            <Calendar className="w-4 h-4 text-purple-600" />
+            <span className="text-sm text-purple-700 dark:text-purple-400" data-testid={`text-target-date-${project.id}`}>
+              {project.targetDeliveryDate ? formatDate(project.targetDeliveryDate) : "-"}
+            </span>
+          </div>
+        );
+      case "daysToTarget":
+        const targetDays = getDaysToTarget(project.targetDeliveryDate);
+        return (
+          <span
+            className={`text-sm ${targetDays !== null && targetDays < 0 ? "text-red-600 font-semibold" : targetDays !== null && targetDays <= 3 ? "text-orange-600" : "text-purple-700 dark:text-purple-400"}`}
+            data-testid={`text-days-to-target-${project.id}`}
+          >
+            {formatDaysToTarget(project.targetDeliveryDate)}
+          </span>
         );
       case "dueDate":
         return (
