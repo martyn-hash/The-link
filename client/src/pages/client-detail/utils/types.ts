@@ -72,6 +72,7 @@ export const addServiceSchema = z.object({
   frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "annually"]).optional(),
   nextStartDate: z.string().optional(),
   nextDueDate: z.string().optional(),
+  targetDeliveryDate: z.string().optional(),
   serviceOwnerId: z.string().optional(),
 });
 
@@ -110,6 +111,7 @@ export type UpdatePersonData = z.infer<typeof updatePersonSchema>;
 export const editServiceSchema = z.object({
   nextStartDate: z.string().optional(),
   nextDueDate: z.string().optional(),
+  targetDeliveryDate: z.string().optional(),
   serviceOwnerId: z.string().optional(),
   frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "annually"]).optional(),
   isActive: z.boolean().optional(),

@@ -35,6 +35,7 @@ export const baseInsertServiceSchema = z.object({
   isCompaniesHouseConnected: z.boolean().optional().default(false),
   chStartDateField: z.string().optional().nullable(),
   chDueDateField: z.string().optional().nullable(),
+  chTargetDeliveryDaysOffset: z.number().int().min(0).optional().nullable(),
   isPersonalService: z.boolean().optional().default(false),
   applicableClientTypes: z.enum(serviceClientTypeValues).optional().default("company"),
   isStaticService: z.boolean().optional().default(false),
@@ -85,6 +86,7 @@ export const insertClientServiceSchema = createInsertSchema(clientServices).omit
   frequency: z.enum(["monthly", "quarterly", "annually", "weekly", "daily"]).optional(),
   nextStartDate: z.union([z.date(), z.string().datetime(), z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()]).optional(),
   nextDueDate: z.union([z.date(), z.string().datetime(), z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()]).optional(),
+  targetDeliveryDate: z.union([z.date(), z.string().datetime(), z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()]).optional(),
   udfValues: z.record(z.any()).optional(),
 });
 
@@ -97,6 +99,7 @@ export const insertPeopleServiceSchema = createInsertSchema(peopleServices).omit
   frequency: z.enum(["monthly", "quarterly", "annually", "weekly", "daily"]).default("monthly"),
   nextStartDate: z.string().datetime().optional(),
   nextDueDate: z.string().datetime().optional(),
+  targetDeliveryDate: z.union([z.date(), z.string().datetime(), z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.literal(""), z.null()]).optional(),
 });
 
 export const updatePeopleServiceSchema = insertPeopleServiceSchema.partial();
