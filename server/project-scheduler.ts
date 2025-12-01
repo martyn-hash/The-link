@@ -23,6 +23,20 @@ import type {
   InsertSchedulingException
 } from "@shared/schema";
 
+/**
+ * Configuration warning with enriched context for email notifications
+ */
+export interface ConfigurationWarning {
+  issueType: 'no_project_type' | 'no_kanban_stages' | 'missing_service_owner' | 'invalid_frequency' | 'other';
+  clientId: string | null;
+  clientName: string;
+  serviceId: string;
+  serviceName: string;
+  issueDescription: string;
+  suggestedFix: string;
+  timestamp: Date;
+}
+
 export interface SchedulingRunResult {
   status: 'success' | 'partial_failure' | 'failure';
   totalServicesChecked: number;
@@ -41,6 +55,7 @@ export interface SchedulingRunResult {
     error: string;
     timestamp: Date;
   }>;
+  configurationWarnings: ConfigurationWarning[]; // Rich warnings for email notifications
   summary: string;
 }
 
@@ -714,6 +729,7 @@ export async function runProjectSchedulingEnhanced(
     executionTimeMs: 0,
     dryRun,
     errors: [],
+    configurationWarnings: [],
     summary: ''
   };
 
@@ -747,6 +763,7 @@ export async function runProjectSchedulingEnhanced(
     result.peopleServicesSkipped = analysisResult.peopleServicesSkipped;
     result.configurationErrorsEncountered = analysisResult.configurationErrorsEncountered;
     result.errors.push(...analysisResult.configurationErrors);
+    result.configurationWarnings.push(...analysisResult.configurationWarnings);
 
     console.log(`[Project Scheduler] Found ${analysisResult.dueServices.length} services due today${filterText}`);
 
@@ -756,12 +773,17 @@ export async function runProjectSchedulingEnhanced(
         await processService(dueService, result, targetDate, dryRun);
       } catch (error) {
         result.errorsEncountered++;
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         result.errors.push({
           serviceId: dueService.id,
           serviceType: dueService.type,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: errorMessage,
           timestamp: new Date()
         });
+        
+        // Add enriched warning based on error type
+        await addWarningFromProcessingError(dueService, errorMessage, result.configurationWarnings);
+        
         console.error(`[Project Scheduler] Error processing service ${dueService.id}:`, error);
       }
     }
@@ -850,6 +872,7 @@ export async function runProjectScheduling(
     executionTimeMs: 0,
     dryRun,
     errors: [],
+    configurationWarnings: [],
     summary: ''
   };
 
@@ -870,6 +893,7 @@ export async function runProjectScheduling(
     result.peopleServicesSkipped = analysisResult.peopleServicesSkipped;
     result.configurationErrorsEncountered = analysisResult.configurationErrorsEncountered;
     result.errors.push(...analysisResult.configurationErrors);
+    result.configurationWarnings.push(...analysisResult.configurationWarnings);
 
     console.log(`[Project Scheduler] Found ${analysisResult.dueServices.length} services due today`);
 
@@ -879,12 +903,17 @@ export async function runProjectScheduling(
         await processService(dueService, result, targetDate, dryRun);
       } catch (error) {
         result.errorsEncountered++;
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         result.errors.push({
           serviceId: dueService.id,
           serviceType: dueService.type,
-          error: error instanceof Error ? error.message : 'Unknown error',
+          error: errorMessage,
           timestamp: new Date()
         });
+        
+        // Add enriched warning based on error type
+        await addWarningFromProcessingError(dueService, errorMessage, result.configurationWarnings);
+        
         console.error(`[Project Scheduler] Error processing service ${dueService.id}:`, error);
       }
     }
@@ -931,6 +960,7 @@ interface ServiceAnalysisResult {
     error: string;
     timestamp: Date;
   }>;
+  configurationWarnings: ConfigurationWarning[];
 }
 
 /**
@@ -949,6 +979,7 @@ async function findServicesDueToday(
     error: string;
     timestamp: Date;
   }> = [];
+  const configurationWarnings: ConfigurationWarning[] = [];
 
   // Process client services - use already hydrated data to avoid refetch mismatches
   for (const clientServiceWithDetails of clientServicesWithDetails) {
@@ -968,6 +999,33 @@ async function findServicesDueToday(
           error: `Service '${clientServiceWithDetails.service.name}' has no project type configured`,
           timestamp: new Date()
         });
+        
+        // Add enriched warning with client name
+        try {
+          const client = await storage.getClientById(clientServiceWithDetails.clientId);
+          configurationWarnings.push({
+            issueType: 'no_project_type',
+            clientId: clientServiceWithDetails.clientId,
+            clientName: client?.name || 'Unknown Client',
+            serviceId: clientServiceWithDetails.id,
+            serviceName: clientServiceWithDetails.service.name,
+            issueDescription: `Service "${clientServiceWithDetails.service.name}" has no project type configured`,
+            suggestedFix: 'Go to Admin > Services and assign a Project Type to this service',
+            timestamp: new Date()
+          });
+        } catch (e) {
+          // Fallback if we can't fetch client
+          configurationWarnings.push({
+            issueType: 'no_project_type',
+            clientId: clientServiceWithDetails.clientId,
+            clientName: 'Unknown Client',
+            serviceId: clientServiceWithDetails.id,
+            serviceName: clientServiceWithDetails.service.name,
+            issueDescription: `Service "${clientServiceWithDetails.service.name}" has no project type configured`,
+            suggestedFix: 'Go to Admin > Services and assign a Project Type to this service',
+            timestamp: new Date()
+          });
+        }
         continue; // Skip this service but continue processing others
       }
 
@@ -1007,8 +1065,62 @@ async function findServicesDueToday(
     dueServices,
     peopleServicesSkipped,
     configurationErrorsEncountered,
-    configurationErrors
+    configurationErrors,
+    configurationWarnings
   };
+}
+
+/**
+ * Helper function to add enriched warning from processing error
+ */
+async function addWarningFromProcessingError(
+  dueService: DueService,
+  errorMessage: string,
+  warnings: ConfigurationWarning[]
+): Promise<void> {
+  let clientName = 'Unknown Client';
+  
+  // Try to get client name
+  if (dueService.clientId) {
+    try {
+      const client = await storage.getClientById(dueService.clientId);
+      clientName = client?.name || 'Unknown Client';
+    } catch (e) {
+      // Keep default
+    }
+  }
+  
+  // Determine issue type and suggested fix based on error message
+  let issueType: ConfigurationWarning['issueType'] = 'other';
+  let suggestedFix = 'Review the service configuration in Admin > Services';
+  
+  if (errorMessage.includes('No kanban stages configured')) {
+    issueType = 'no_kanban_stages';
+    suggestedFix = 'Go to Admin > Project Types and add kanban stages to the project type for this service';
+  } else if (errorMessage.includes('No valid assignee') || errorMessage.includes('Service owner is required')) {
+    issueType = 'missing_service_owner';
+    suggestedFix = 'Go to the client\'s Services tab and assign a Service Owner to this service';
+  } else if (errorMessage.includes('Unsupported frequency')) {
+    issueType = 'invalid_frequency';
+    // Extract the frequency value from error if present
+    const freqMatch = errorMessage.match(/Unsupported frequency: (\w+)/);
+    const badFreq = freqMatch ? freqMatch[1] : 'unknown';
+    suggestedFix = `The frequency "${badFreq}" is invalid. Go to the client\'s Services tab and set a valid frequency (daily, weekly, fortnightly, monthly, quarterly, annually)`;
+  } else if (errorMessage.includes('no project type configured')) {
+    issueType = 'no_project_type';
+    suggestedFix = 'Go to Admin > Services and assign a Project Type to this service';
+  }
+  
+  warnings.push({
+    issueType,
+    clientId: dueService.clientId || null,
+    clientName,
+    serviceId: dueService.id,
+    serviceName: dueService.service.name,
+    issueDescription: errorMessage,
+    suggestedFix,
+    timestamp: new Date()
+  });
 }
 
 /**
