@@ -327,10 +327,11 @@ export default function ServiceAssignments() {
   // Bulk date editing state
   const [dateEditDialogOpen, setDateEditDialogOpen] = useState(false);
   const [dateEditMode, setDateEditMode] = useState<'shift' | 'set'>('shift');
-  const [dateEditTarget, setDateEditTarget] = useState<'start' | 'due' | 'both'>('both');
+  const [dateEditTarget, setDateEditTarget] = useState<'start' | 'due' | 'target' | 'both' | 'all'>('both');
   const [shiftDays, setShiftDays] = useState<number>(0);
   const [setStartDate, setSetStartDate] = useState<string>('');
   const [setDueDate, setSetDueDate] = useState<string>('');
+  const [setTargetDate, setSetTargetDate] = useState<string>('');
 
   // Default to "my assignments" for non-admins on first load
   useEffect(() => {
@@ -685,7 +686,8 @@ export default function ServiceAssignments() {
       shiftDays?: number;
       startDate?: string;
       dueDate?: string;
-      target: 'start' | 'due' | 'both';
+      targetDate?: string;
+      target: 'start' | 'due' | 'target' | 'both' | 'all';
     }) => {
       return apiRequest("POST", "/api/service-assignments/bulk-update-dates", data);
     },
@@ -841,8 +843,16 @@ export default function ServiceAssignments() {
         showFriendlyError({ error: "Please select a due date" });
         return;
       }
+      if (dateEditTarget === 'target' && !setTargetDate) {
+        showFriendlyError({ error: "Please select a target delivery date" });
+        return;
+      }
       if (dateEditTarget === 'both' && (!setStartDate || !setDueDate)) {
         showFriendlyError({ error: "Please select both start and due dates" });
+        return;
+      }
+      if (dateEditTarget === 'all' && (!setStartDate || !setDueDate || !setTargetDate)) {
+        showFriendlyError({ error: "Please select all three dates (start, due, and target delivery)" });
         return;
       }
       bulkDateEditMutation.mutate({
@@ -851,6 +861,7 @@ export default function ServiceAssignments() {
         mode: 'set',
         startDate: setStartDate || undefined,
         dueDate: setDueDate || undefined,
+        targetDate: setTargetDate || undefined,
         target: dateEditTarget,
       });
     }
@@ -1266,7 +1277,7 @@ export default function ServiceAssignments() {
                           </TableCell>
                           <TableCell>
                             {assignment.targetDeliveryDate ? (
-                              <span className="text-sm">
+                              <span className="text-sm text-purple-600 dark:text-purple-400" data-testid={`text-target-delivery-${assignment.id}`}>
                                 {format(new Date(assignment.targetDeliveryDate), 'dd MMM yyyy')}
                               </span>
                             ) : (
@@ -2033,15 +2044,17 @@ export default function ServiceAssignments() {
               <Label>Which dates to update</Label>
               <Select 
                 value={dateEditTarget} 
-                onValueChange={(value: 'start' | 'due' | 'both') => setDateEditTarget(value)}
+                onValueChange={(value: 'start' | 'due' | 'target' | 'both' | 'all') => setDateEditTarget(value)}
               >
                 <SelectTrigger data-testid="select-date-target">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="both">Both start and due dates</SelectItem>
+                  <SelectItem value="all">All dates (start, due, and target)</SelectItem>
+                  <SelectItem value="both">Start and due dates</SelectItem>
                   <SelectItem value="start">Start date only</SelectItem>
                   <SelectItem value="due">Due date only</SelectItem>
+                  <SelectItem value="target">Target delivery date only</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -2068,7 +2081,7 @@ export default function ServiceAssignments() {
             {/* Set Mode Options */}
             {dateEditMode === 'set' && (
               <>
-                {(dateEditTarget === 'start' || dateEditTarget === 'both') && (
+                {(dateEditTarget === 'start' || dateEditTarget === 'both' || dateEditTarget === 'all') && (
                   <div className="space-y-2">
                     <Label htmlFor="set-start-date">New Start Date</Label>
                     <Input
@@ -2080,7 +2093,7 @@ export default function ServiceAssignments() {
                     />
                   </div>
                 )}
-                {(dateEditTarget === 'due' || dateEditTarget === 'both') && (
+                {(dateEditTarget === 'due' || dateEditTarget === 'both' || dateEditTarget === 'all') && (
                   <div className="space-y-2">
                     <Label htmlFor="set-due-date">New Due Date</Label>
                     <Input
@@ -2089,6 +2102,18 @@ export default function ServiceAssignments() {
                       value={setDueDate}
                       onChange={(e) => setSetDueDate(e.target.value)}
                       data-testid="input-set-due-date"
+                    />
+                  </div>
+                )}
+                {(dateEditTarget === 'target' || dateEditTarget === 'all') && (
+                  <div className="space-y-2">
+                    <Label htmlFor="set-target-date" className="text-purple-600 dark:text-purple-400">New Target Delivery Date</Label>
+                    <Input
+                      id="set-target-date"
+                      type="date"
+                      value={setTargetDate}
+                      onChange={(e) => setSetTargetDate(e.target.value)}
+                      data-testid="input-set-target-date"
                     />
                   </div>
                 )}

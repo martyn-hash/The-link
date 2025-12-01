@@ -445,7 +445,8 @@ export interface IStorage {
     shiftDays?: number;
     startDate?: string;
     dueDate?: string;
-    target: 'start' | 'due' | 'both';
+    targetDate?: string;
+    target: 'start' | 'due' | 'target' | 'both' | 'all';
   }): Promise<{ updated: number }>;
   
   getUserColumnPreferences(userId: string, viewType?: string): Promise<UserColumnPreferences | undefined>;

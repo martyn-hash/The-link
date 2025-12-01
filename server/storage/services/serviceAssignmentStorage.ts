@@ -2290,7 +2290,8 @@ export class ServiceAssignmentStorage extends BaseStorage {
     shiftDays?: number;
     startDate?: string;
     dueDate?: string;
-    target: 'start' | 'due' | 'both';
+    targetDate?: string;
+    target: 'start' | 'due' | 'target' | 'both' | 'all';
   }): Promise<{ updated: number }> {
     try {
       let updated = 0;
@@ -2304,25 +2305,33 @@ export class ServiceAssignmentStorage extends BaseStorage {
 
           if (!service) continue;
 
-          const updates: { nextStartDate?: Date; nextDueDate?: Date } = {};
+          const updates: { nextStartDate?: Date; nextDueDate?: Date; targetDeliveryDate?: Date | null } = {};
 
           if (params.mode === 'shift' && params.shiftDays) {
-            if ((params.target === 'start' || params.target === 'both') && service.nextStartDate) {
+            if ((params.target === 'start' || params.target === 'both' || params.target === 'all') && service.nextStartDate) {
               const newStartDate = new Date(service.nextStartDate);
               newStartDate.setDate(newStartDate.getDate() + params.shiftDays);
               updates.nextStartDate = newStartDate;
             }
-            if ((params.target === 'due' || params.target === 'both') && service.nextDueDate) {
+            if ((params.target === 'due' || params.target === 'both' || params.target === 'all') && service.nextDueDate) {
               const newDueDate = new Date(service.nextDueDate);
               newDueDate.setDate(newDueDate.getDate() + params.shiftDays);
               updates.nextDueDate = newDueDate;
             }
+            if ((params.target === 'target' || params.target === 'all') && service.targetDeliveryDate) {
+              const newTargetDate = new Date(service.targetDeliveryDate);
+              newTargetDate.setDate(newTargetDate.getDate() + params.shiftDays);
+              updates.targetDeliveryDate = newTargetDate;
+            }
           } else if (params.mode === 'set') {
-            if ((params.target === 'start' || params.target === 'both') && params.startDate) {
+            if ((params.target === 'start' || params.target === 'both' || params.target === 'all') && params.startDate) {
               updates.nextStartDate = new Date(params.startDate);
             }
-            if ((params.target === 'due' || params.target === 'both') && params.dueDate) {
+            if ((params.target === 'due' || params.target === 'both' || params.target === 'all') && params.dueDate) {
               updates.nextDueDate = new Date(params.dueDate);
+            }
+            if ((params.target === 'target' || params.target === 'all') && params.targetDate) {
+              updates.targetDeliveryDate = new Date(params.targetDate);
             }
           }
 
@@ -2343,25 +2352,33 @@ export class ServiceAssignmentStorage extends BaseStorage {
 
           if (!service) continue;
 
-          const updates: { nextStartDate?: Date; nextDueDate?: Date } = {};
+          const updates: { nextStartDate?: Date; nextDueDate?: Date; targetDeliveryDate?: Date | null } = {};
 
           if (params.mode === 'shift' && params.shiftDays) {
-            if ((params.target === 'start' || params.target === 'both') && service.nextStartDate) {
+            if ((params.target === 'start' || params.target === 'both' || params.target === 'all') && service.nextStartDate) {
               const newStartDate = new Date(service.nextStartDate);
               newStartDate.setDate(newStartDate.getDate() + params.shiftDays);
               updates.nextStartDate = newStartDate;
             }
-            if ((params.target === 'due' || params.target === 'both') && service.nextDueDate) {
+            if ((params.target === 'due' || params.target === 'both' || params.target === 'all') && service.nextDueDate) {
               const newDueDate = new Date(service.nextDueDate);
               newDueDate.setDate(newDueDate.getDate() + params.shiftDays);
               updates.nextDueDate = newDueDate;
             }
+            if ((params.target === 'target' || params.target === 'all') && service.targetDeliveryDate) {
+              const newTargetDate = new Date(service.targetDeliveryDate);
+              newTargetDate.setDate(newTargetDate.getDate() + params.shiftDays);
+              updates.targetDeliveryDate = newTargetDate;
+            }
           } else if (params.mode === 'set') {
-            if ((params.target === 'start' || params.target === 'both') && params.startDate) {
+            if ((params.target === 'start' || params.target === 'both' || params.target === 'all') && params.startDate) {
               updates.nextStartDate = new Date(params.startDate);
             }
-            if ((params.target === 'due' || params.target === 'both') && params.dueDate) {
+            if ((params.target === 'due' || params.target === 'both' || params.target === 'all') && params.dueDate) {
               updates.nextDueDate = new Date(params.dueDate);
+            }
+            if ((params.target === 'target' || params.target === 'all') && params.targetDate) {
+              updates.targetDeliveryDate = new Date(params.targetDate);
             }
           }
 

@@ -58,6 +58,7 @@ function formatDate(date: string | Date | null): string {
 const updateServiceSchema = z.object({
   nextStartDate: z.string().optional(),
   nextDueDate: z.string().optional(),
+  targetDeliveryDate: z.string().optional(),
   frequency: z.enum(['weekly', 'fortnightly', 'monthly', 'quarterly', 'annually', 'one-off']).optional(),
   serviceOwnerId: z.string().optional(),
   isActive: z.boolean().optional(),
@@ -115,6 +116,7 @@ export default function ClientServiceDetail() {
     defaultValues: {
       nextStartDate: "",
       nextDueDate: "",
+      targetDeliveryDate: "",
       frequency: "monthly",
       serviceOwnerId: "",
       isActive: true,
@@ -136,6 +138,7 @@ export default function ClientServiceDetail() {
       editForm.reset({
         nextStartDate: clientService.nextStartDate ? new Date(clientService.nextStartDate).toISOString().split('T')[0] : "",
         nextDueDate: clientService.nextDueDate ? new Date(clientService.nextDueDate).toISOString().split('T')[0] : "",
+        targetDeliveryDate: (clientService as any).targetDeliveryDate ? new Date((clientService as any).targetDeliveryDate).toISOString().split('T')[0] : "",
         frequency: clientService.frequency as any,
         serviceOwnerId: clientService.serviceOwnerId || "",
         isActive: clientService.isActive !== false,
@@ -554,6 +557,20 @@ export default function ClientServiceDetail() {
                     <FormLabel>Next Due Date</FormLabel>
                     <FormControl>
                       <Input type="date" {...field} data-testid="input-next-due" />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={editForm.control}
+                name="targetDeliveryDate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-purple-600 dark:text-purple-400">Target Delivery Date</FormLabel>
+                    <FormControl>
+                      <Input type="date" {...field} data-testid="input-target-delivery" />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

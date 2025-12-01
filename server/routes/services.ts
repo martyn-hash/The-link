@@ -820,7 +820,7 @@ export function registerServiceRoutes(
   // POST /api/service-assignments/bulk-update-dates - Bulk update service dates (admin only)
   app.post("/api/service-assignments/bulk-update-dates", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
-      const { serviceIds, serviceType, mode, shiftDays, startDate, dueDate, target } = req.body;
+      const { serviceIds, serviceType, mode, shiftDays, startDate, dueDate, targetDate, target } = req.body;
 
       if (!serviceIds || !Array.isArray(serviceIds) || serviceIds.length === 0) {
         return res.status(400).json({ message: "Service IDs are required" });
@@ -834,8 +834,8 @@ export function registerServiceRoutes(
         return res.status(400).json({ message: "Valid mode is required (shift or set)" });
       }
 
-      if (!target || !['start', 'due', 'both'].includes(target)) {
-        return res.status(400).json({ message: "Valid target is required (start, due, or both)" });
+      if (!target || !['start', 'due', 'target', 'both', 'all'].includes(target)) {
+        return res.status(400).json({ message: "Valid target is required (start, due, target, both, or all)" });
       }
 
       if (mode === 'shift' && (typeof shiftDays !== 'number' || shiftDays === 0)) {
@@ -849,8 +849,14 @@ export function registerServiceRoutes(
         if (target === 'due' && !dueDate) {
           return res.status(400).json({ message: "Due date is required" });
         }
+        if (target === 'target' && !targetDate) {
+          return res.status(400).json({ message: "Target delivery date is required" });
+        }
         if (target === 'both' && (!startDate || !dueDate)) {
           return res.status(400).json({ message: "Both start and due dates are required" });
+        }
+        if (target === 'all' && (!startDate || !dueDate || !targetDate)) {
+          return res.status(400).json({ message: "All dates (start, due, and target) are required" });
         }
       }
 
@@ -861,6 +867,7 @@ export function registerServiceRoutes(
         shiftDays,
         startDate,
         dueDate,
+        targetDate,
         target,
       });
 
