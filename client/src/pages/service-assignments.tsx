@@ -515,6 +515,10 @@ export default function ServiceAssignments() {
     if (serviceOwnerFilter !== "all") count++;
     if (showInactive) count++;
     if (searchTerm) count++;
+    if (nextStartDateFrom) count++;
+    if (nextStartDateTo) count++;
+    if (nextDueDateFrom) count++;
+    if (nextDueDateTo) count++;
     return count;
   };
 
@@ -525,6 +529,10 @@ export default function ServiceAssignments() {
     setServiceOwnerFilter("all");
     setShowInactive(false);
     setSearchTerm("");
+    setNextStartDateFrom("");
+    setNextStartDateTo("");
+    setNextDueDateFrom("");
+    setNextDueDateTo("");
     setSelectedIds(new Set());
   };
 
@@ -686,6 +694,10 @@ export default function ServiceAssignments() {
       userId: userFilter !== "all" ? userFilter : undefined,
       serviceOwnerId: serviceOwnerFilter !== "all" ? serviceOwnerFilter : undefined,
       showInactive: showInactive || undefined,
+      nextStartDateFrom: nextStartDateFrom || undefined,
+      nextStartDateTo: nextStartDateTo || undefined,
+      nextDueDateFrom: nextDueDateFrom || undefined,
+      nextDueDateTo: nextDueDateTo || undefined,
     };
 
     saveViewMutation.mutate({
@@ -703,6 +715,10 @@ export default function ServiceAssignments() {
       setUserFilter(filters.userId || filters.userFilter || "all");
       setServiceOwnerFilter(filters.serviceOwnerId || filters.serviceOwnerFilter || "all");
       setShowInactive(filters.showInactive || false);
+      setNextStartDateFrom(filters.nextStartDateFrom || "");
+      setNextStartDateTo(filters.nextStartDateTo || "");
+      setNextDueDateFrom(filters.nextDueDateFrom || "");
+      setNextDueDateTo(filters.nextDueDateTo || "");
       toast({
         title: "View loaded",
         description: `Applied filters from "${view.name}"`,
@@ -1457,6 +1473,134 @@ export default function ServiceAssignments() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <Separator />
+
+            {/* Next Start Date Range Filter */}
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2">
+                <Calendar className="w-4 h-4" />
+                Next Start Date Range
+              </Label>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">From</Label>
+                  <div className="flex gap-1">
+                    <Input
+                      type="date"
+                      value={nextStartDateFrom}
+                      onChange={(e) => {
+                        setNextStartDateFrom(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      data-testid="input-start-date-from"
+                      className="text-sm"
+                    />
+                    {nextStartDateFrom && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 w-9 p-0 shrink-0"
+                        onClick={() => setNextStartDateFrom("")}
+                        data-testid="button-clear-start-date-from"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">To</Label>
+                  <div className="flex gap-1">
+                    <Input
+                      type="date"
+                      value={nextStartDateTo}
+                      onChange={(e) => {
+                        setNextStartDateTo(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      data-testid="input-start-date-to"
+                      className="text-sm"
+                    />
+                    {nextStartDateTo && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 w-9 p-0 shrink-0"
+                        onClick={() => setNextStartDateTo("")}
+                        data-testid="button-clear-start-date-to"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Next Due Date Range Filter */}
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2">
+                <CalendarClock className="w-4 h-4" />
+                Next Due Date Range
+              </Label>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">From</Label>
+                  <div className="flex gap-1">
+                    <Input
+                      type="date"
+                      value={nextDueDateFrom}
+                      onChange={(e) => {
+                        setNextDueDateFrom(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      data-testid="input-due-date-from"
+                      className="text-sm"
+                    />
+                    {nextDueDateFrom && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 w-9 p-0 shrink-0"
+                        onClick={() => setNextDueDateFrom("")}
+                        data-testid="button-clear-due-date-from"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">To</Label>
+                  <div className="flex gap-1">
+                    <Input
+                      type="date"
+                      value={nextDueDateTo}
+                      onChange={(e) => {
+                        setNextDueDateTo(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      data-testid="input-due-date-to"
+                      className="text-sm"
+                    />
+                    {nextDueDateTo && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 w-9 p-0 shrink-0"
+                        onClick={() => setNextDueDateTo("")}
+                        data-testid="button-clear-due-date-to"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <Separator />
