@@ -1,4 +1,4 @@
-or # FutureBooks: Quality Control & Advisory System
+# FutureBooks: Quality Control & Advisory System
 
 ## Vision
 
@@ -14,14 +14,75 @@ FutureBooks transforms the delivery of bookkeeping and accountancy services from
 
 | Phase | Focus | Status |
 |-------|-------|--------|
-| **Phase 1** | Quality Control Checks | 📋 Planning |
+| **Phase 1** | Quality Control Checks | ✅ Core Complete |
 | **Phase 2** | Financial Insights & KPIs | ⏳ Future |
 | **Phase 3** | AI-Generated Advisory Comments | ⏳ Future |
 | **Phase 4** | Beautiful Client Reports | ⏳ Future |
 
 ---
 
-## Current QuickBooks Integration
+## Current Status (December 2025)
+
+### What's Been Built
+
+**Phase 1 - Quality Control Engine** is operational with the following capabilities:
+
+#### 10 QC Checks Implemented
+
+| Check Code | Section | Description | Status |
+|------------|---------|-------------|--------|
+| `undeposited_funds` | Bank & Cash | Verifies Undeposited Funds account is cleared | ✅ Live |
+| `bank_account_count` | Bank & Cash | Confirms at least one bank account exists | ✅ Live |
+| `open_invoices_ageing` | Sales/AR | Flags invoices over 90 days old | ✅ Live |
+| `negative_ar_balances` | Sales/AR | Detects customers with credit balances | ✅ Live |
+| `unpaid_bills_ageing` | Purchases/AP | Flags bills over 90 days old | ✅ Live |
+| `negative_ap_balances` | Purchases/AP | Detects vendors with debit balances | ✅ Live |
+| `suspense_balance` | Journals | Checks "Ask My Accountant" account is zero | ✅ Live |
+| `journal_count` | Journals | Verifies journal entries exist in period | ✅ Live |
+| `large_journals` | Journals | Flags unusual journal entries over £5,000 | ✅ Live |
+| `new_accounts` | Master Data | Identifies newly created Chart of Accounts | ✅ Live |
+
+#### System Features
+
+- **Period Selection**: Monthly QC runs with configurable date ranges
+- **Scoring System**: Weighted formula - ((Passed × 1.0) + (Warnings × 0.5)) / Total × 100
+- **Error Classification**: 7 categories (rate_limit, auth, permission, query_syntax, feature_unavailable, network, unknown)
+- **Retry Logic**: Exponential backoff for transient API failures (429, 5xx)
+- **Rate Limiting**: Request queue with 100ms delays to stay within QuickBooks limits
+- **Token Management**: Automatic refresh of expired OAuth tokens
+
+#### Where to Access
+
+QC functionality is currently in the **Super Admin** section for testing:
+- Navigate to: **Super Admin → QuickBooks Connections**
+- Click on any connected client row to access QC
+- URL pattern: `/super-admin/qbo-connections/:connectionId/qc`
+
+#### Database Schema
+
+```
+qbo_qc_runs          - QC run metadata (period, status, scores)
+qbo_qc_results       - Individual check results with metadata
+qbo_qc_result_items  - Flagged transactions for review
+qbo_qc_approval_history - Audit trail for approvals
+```
+
+### What's Next
+
+**Remaining Phase 1 Work:**
+- [ ] Configurable thresholds (let firms customize limits)
+- [ ] Reports API checks (Trial Balance, P&L for analytics)
+- [ ] Attachable check (verify journal documentation)
+- [ ] Duplicate vendor/customer detection
+
+**Phase 2 Preview:**
+- Financial KPIs (liquidity ratios, working capital)
+- Trend analysis across periods
+- Benchmark comparisons
+
+---
+
+## QuickBooks Integration Architecture
 
 ### Connection Architecture
 
@@ -48,7 +109,9 @@ const data = await makeQboApiRequest<ResponseType>(
 
 ---
 
-## Phase 1: Quality Control Requirements
+## Phase 1: Quality Control Implementation
+
+> **Note:** For detailed pass/warning/fail criteria and thresholds for each check, see `future_docs.md` in the project root.
 
 ### Date Filtering Approach
 
