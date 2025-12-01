@@ -49,8 +49,10 @@ export class ServiceAssignmentStorage extends BaseStorage {
         frequency: clientServices.frequency,
         nextStartDate: clientServices.nextStartDate,
         nextDueDate: clientServices.nextDueDate,
+        targetDeliveryDate: clientServices.targetDeliveryDate,
         intendedStartDay: clientServices.intendedStartDay,
         intendedDueDay: clientServices.intendedDueDay,
+        intendedTargetDeliveryDay: clientServices.intendedTargetDeliveryDay,
         isActive: clientServices.isActive,
         inactiveReason: clientServices.inactiveReason,
         inactiveAt: clientServices.inactiveAt,
@@ -86,8 +88,10 @@ export class ServiceAssignmentStorage extends BaseStorage {
       frequency: result.frequency,
       nextStartDate: result.nextStartDate,
       nextDueDate: result.nextDueDate,
+      targetDeliveryDate: result.targetDeliveryDate,
       intendedStartDay: result.intendedStartDay,
       intendedDueDay: result.intendedDueDay,
+      intendedTargetDeliveryDay: result.intendedTargetDeliveryDay,
       isActive: result.isActive,
       inactiveReason: result.inactiveReason,
       inactiveAt: result.inactiveAt,
@@ -215,8 +219,10 @@ export class ServiceAssignmentStorage extends BaseStorage {
         frequency: cs.frequency,
         nextStartDate: cs.nextStartDate,
         nextDueDate: cs.nextDueDate,
+        targetDeliveryDate: cs.targetDeliveryDate,
         intendedStartDay: cs.intendedStartDay,
         intendedDueDay: cs.intendedDueDay,
+        intendedTargetDeliveryDay: cs.intendedTargetDeliveryDay,
         isActive: cs.isActive,
         inactiveReason: cs.inactiveReason,
         inactiveAt: cs.inactiveAt,
@@ -241,6 +247,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
           isCompaniesHouseConnected: service.isCompaniesHouseConnected,
           chStartDateField: service.chStartDateField,
           chDueDateField: service.chDueDateField,
+          chTargetDeliveryDaysOffset: service.chTargetDeliveryDaysOffset,
           createdAt: service.createdAt,
           projectType: projectType || null,
         },
@@ -401,8 +408,10 @@ export class ServiceAssignmentStorage extends BaseStorage {
             frequency: cs.frequency,
             nextStartDate: cs.nextStartDate,
             nextDueDate: cs.nextDueDate,
+            targetDeliveryDate: cs.targetDeliveryDate,
             intendedStartDay: cs.intendedStartDay,
             intendedDueDay: cs.intendedDueDay,
+            intendedTargetDeliveryDay: cs.intendedTargetDeliveryDay,
             isActive: cs.isActive,
             inactiveReason: cs.inactiveReason,
             inactiveAt: cs.inactiveAt,
@@ -421,6 +430,7 @@ export class ServiceAssignmentStorage extends BaseStorage {
               isCompaniesHouseConnected: service.isCompaniesHouseConnected,
               chStartDateField: service.chStartDateField,
               chDueDateField: service.chDueDateField,
+              chTargetDeliveryDaysOffset: service.chTargetDeliveryDaysOffset,
               createdAt: service.createdAt,
               projectType: projectType || null,
             },
@@ -455,8 +465,10 @@ export class ServiceAssignmentStorage extends BaseStorage {
         frequency: clientServices.frequency,
         nextStartDate: clientServices.nextStartDate,
         nextDueDate: clientServices.nextDueDate,
+        targetDeliveryDate: clientServices.targetDeliveryDate,
         intendedStartDay: clientServices.intendedStartDay,
         intendedDueDay: clientServices.intendedDueDay,
+        intendedTargetDeliveryDay: clientServices.intendedTargetDeliveryDay,
         isActive: clientServices.isActive,
         inactiveReason: clientServices.inactiveReason,
         inactiveAt: clientServices.inactiveAt,
@@ -489,6 +501,9 @@ export class ServiceAssignmentStorage extends BaseStorage {
     if (processedData.nextDueDate && typeof processedData.nextDueDate === 'string') {
       processedData.nextDueDate = new Date(processedData.nextDueDate);
     }
+    if ((processedData as any).targetDeliveryDate && typeof (processedData as any).targetDeliveryDate === 'string') {
+      (processedData as any).targetDeliveryDate = new Date((processedData as any).targetDeliveryDate);
+    }
 
     const [clientService] = await db
       .insert(clientServices)
@@ -506,6 +521,9 @@ export class ServiceAssignmentStorage extends BaseStorage {
     }
     if (processedData.nextDueDate && typeof processedData.nextDueDate === 'string') {
       processedData.nextDueDate = new Date(processedData.nextDueDate);
+    }
+    if ((processedData as any).targetDeliveryDate && typeof (processedData as any).targetDeliveryDate === 'string') {
+      (processedData as any).targetDeliveryDate = new Date((processedData as any).targetDeliveryDate);
     }
 
     const [updatedClientService] = await db
@@ -1057,8 +1075,10 @@ export class ServiceAssignmentStorage extends BaseStorage {
         frequency: peopleServices.frequency,
         nextStartDate: peopleServices.nextStartDate,
         nextDueDate: peopleServices.nextDueDate,
+        targetDeliveryDate: peopleServices.targetDeliveryDate,
         intendedStartDay: peopleServices.intendedStartDay,
         intendedDueDay: peopleServices.intendedDueDay,
+        intendedTargetDeliveryDay: peopleServices.intendedTargetDeliveryDay,
         notes: peopleServices.notes,
         isActive: peopleServices.isActive,
         createdAt: peopleServices.createdAt,
@@ -1082,8 +1102,10 @@ export class ServiceAssignmentStorage extends BaseStorage {
       frequency: result.frequency,
       nextStartDate: result.nextStartDate,
       nextDueDate: result.nextDueDate,
+      targetDeliveryDate: result.targetDeliveryDate,
       intendedStartDay: result.intendedStartDay,
       intendedDueDay: result.intendedDueDay,
+      intendedTargetDeliveryDay: result.intendedTargetDeliveryDay,
       notes: result.notes,
       isActive: result.isActive,
       createdAt: result.createdAt,
@@ -1105,8 +1127,10 @@ export class ServiceAssignmentStorage extends BaseStorage {
         frequency: peopleServices.frequency,
         nextStartDate: peopleServices.nextStartDate,
         nextDueDate: peopleServices.nextDueDate,
+        targetDeliveryDate: peopleServices.targetDeliveryDate,
         intendedStartDay: peopleServices.intendedStartDay,
         intendedDueDay: peopleServices.intendedDueDay,
+        intendedTargetDeliveryDay: peopleServices.intendedTargetDeliveryDay,
         notes: peopleServices.notes,
         isActive: peopleServices.isActive,
         createdAt: peopleServices.createdAt,
@@ -1136,8 +1160,10 @@ export class ServiceAssignmentStorage extends BaseStorage {
       frequency: result.frequency,
       nextStartDate: result.nextStartDate,
       nextDueDate: result.nextDueDate,
+      targetDeliveryDate: result.targetDeliveryDate,
       intendedStartDay: result.intendedStartDay,
       intendedDueDay: result.intendedDueDay,
+      intendedTargetDeliveryDay: result.intendedTargetDeliveryDay,
       notes: result.notes,
       isActive: result.isActive,
       createdAt: result.createdAt,
@@ -1160,8 +1186,10 @@ export class ServiceAssignmentStorage extends BaseStorage {
         frequency: peopleServices.frequency,
         nextStartDate: peopleServices.nextStartDate,
         nextDueDate: peopleServices.nextDueDate,
+        targetDeliveryDate: peopleServices.targetDeliveryDate,
         intendedStartDay: peopleServices.intendedStartDay,
         intendedDueDay: peopleServices.intendedDueDay,
+        intendedTargetDeliveryDay: peopleServices.intendedTargetDeliveryDay,
         notes: peopleServices.notes,
         isActive: peopleServices.isActive,
         createdAt: peopleServices.createdAt,
@@ -1186,8 +1214,10 @@ export class ServiceAssignmentStorage extends BaseStorage {
       frequency: result.frequency,
       nextStartDate: result.nextStartDate,
       nextDueDate: result.nextDueDate,
+      targetDeliveryDate: result.targetDeliveryDate,
       intendedStartDay: result.intendedStartDay,
       intendedDueDay: result.intendedDueDay,
+      intendedTargetDeliveryDay: result.intendedTargetDeliveryDay,
       notes: result.notes,
       isActive: result.isActive,
       createdAt: result.createdAt,
@@ -1209,8 +1239,10 @@ export class ServiceAssignmentStorage extends BaseStorage {
         frequency: peopleServices.frequency,
         nextStartDate: peopleServices.nextStartDate,
         nextDueDate: peopleServices.nextDueDate,
+        targetDeliveryDate: peopleServices.targetDeliveryDate,
         intendedStartDay: peopleServices.intendedStartDay,
         intendedDueDay: peopleServices.intendedDueDay,
+        intendedTargetDeliveryDay: peopleServices.intendedTargetDeliveryDay,
         notes: peopleServices.notes,
         isActive: peopleServices.isActive,
         createdAt: peopleServices.createdAt,
@@ -1229,8 +1261,10 @@ export class ServiceAssignmentStorage extends BaseStorage {
       frequency: result.frequency,
       nextStartDate: result.nextStartDate,
       nextDueDate: result.nextDueDate,
+      targetDeliveryDate: result.targetDeliveryDate,
       intendedStartDay: result.intendedStartDay,
       intendedDueDay: result.intendedDueDay,
+      intendedTargetDeliveryDay: result.intendedTargetDeliveryDay,
       notes: result.notes,
       isActive: result.isActive,
       createdAt: result.createdAt,
@@ -1248,8 +1282,10 @@ export class ServiceAssignmentStorage extends BaseStorage {
         frequency: peopleServices.frequency,
         nextStartDate: peopleServices.nextStartDate,
         nextDueDate: peopleServices.nextDueDate,
+        targetDeliveryDate: peopleServices.targetDeliveryDate,
         intendedStartDay: peopleServices.intendedStartDay,
         intendedDueDay: peopleServices.intendedDueDay,
+        intendedTargetDeliveryDay: peopleServices.intendedTargetDeliveryDay,
         notes: peopleServices.notes,
         isActive: peopleServices.isActive,
         createdAt: peopleServices.createdAt,
@@ -1275,8 +1311,10 @@ export class ServiceAssignmentStorage extends BaseStorage {
       frequency: result.frequency,
       nextStartDate: result.nextStartDate,
       nextDueDate: result.nextDueDate,
+      targetDeliveryDate: result.targetDeliveryDate,
       intendedStartDay: result.intendedStartDay,
       intendedDueDay: result.intendedDueDay,
+      intendedTargetDeliveryDay: result.intendedTargetDeliveryDay,
       notes: result.notes,
       isActive: result.isActive,
       createdAt: result.createdAt,
@@ -1295,6 +1333,9 @@ export class ServiceAssignmentStorage extends BaseStorage {
     if (processedData.nextDueDate && typeof processedData.nextDueDate === 'string') {
       processedData.nextDueDate = new Date(processedData.nextDueDate);
     }
+    if (processedData.targetDeliveryDate && typeof processedData.targetDeliveryDate === 'string') {
+      processedData.targetDeliveryDate = new Date(processedData.targetDeliveryDate);
+    }
 
     const [newPeopleService] = await db.insert(peopleServices).values(processedData).returning();
     return newPeopleService;
@@ -1308,6 +1349,9 @@ export class ServiceAssignmentStorage extends BaseStorage {
     }
     if (processedData.nextDueDate && typeof processedData.nextDueDate === 'string') {
       processedData.nextDueDate = new Date(processedData.nextDueDate);
+    }
+    if (processedData.targetDeliveryDate && typeof processedData.targetDeliveryDate === 'string') {
+      processedData.targetDeliveryDate = new Date(processedData.targetDeliveryDate);
     }
 
     const [updatedPeopleService] = await db
@@ -1880,8 +1924,10 @@ export class ServiceAssignmentStorage extends BaseStorage {
           frequency: row.frequency,
           nextStartDate: row.nextStartDate,
           nextDueDate: row.nextDueDate,
+          targetDeliveryDate: (row as any).targetDeliveryDate || null,
           intendedStartDay: row.intendedStartDay,
           intendedDueDay: row.intendedDueDay,
+          intendedTargetDeliveryDay: (row as any).intendedTargetDeliveryDay || null,
           isActive: row.isActive,
           inactiveReason: row.inactiveReason,
           inactiveAt: row.inactiveAt,
@@ -1892,8 +1938,8 @@ export class ServiceAssignmentStorage extends BaseStorage {
             id: row.clientId,
             name: row.clientName,
             email: row.clientEmail,
-            type: row.clientType,
-          } as Client,
+            clientType: row.clientType,
+          } as unknown as Client,
           service: {
             id: row.serviceId,
             name: row.serviceName,
@@ -1993,8 +2039,10 @@ export class ServiceAssignmentStorage extends BaseStorage {
         frequency: row.frequency,
         nextStartDate: row.nextStartDate,
         nextDueDate: row.nextDueDate,
+        targetDeliveryDate: (row as any).targetDeliveryDate || null,
         intendedStartDay: row.intendedStartDay,
         intendedDueDay: row.intendedDueDay,
+        intendedTargetDeliveryDay: (row as any).intendedTargetDeliveryDay || null,
         notes: row.notes,
         isActive: row.isActive,
         createdAt: row.createdAt,
