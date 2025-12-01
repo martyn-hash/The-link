@@ -21,7 +21,8 @@ import {
   ProjectsTab, 
   OverviewTab, 
   TasksTab,
-  ServicesTab 
+  ServicesTab,
+  QcTab
 } from "./components/tabs";
 import { useClientData, useClientMutations, useCompanyConnections } from "./hooks";
 import { ClientHeader } from "./components/ClientHeader";
@@ -182,7 +183,7 @@ export default function ClientDetail() {
           />
 
           <SwipeableTabsWrapper
-            tabs={["overview", "services", "projects", "communications", "chronology", "documents", "tasks", "risk"]}
+            tabs={["overview", "services", "projects", "communications", "chronology", "documents", "tasks", "risk", "qc"]}
             currentTab={activeTab}
             onTabChange={setActiveTab}
             enabled={isMobile}
@@ -266,6 +267,10 @@ export default function ClientDetail() {
 
           <TabsContent value="risk" className="space-y-6 mt-6">
             <RiskTab clientId={id!} riskView={riskView} />
+          </TabsContent>
+
+          <TabsContent value="qc" className="space-y-6 mt-6">
+            <QcTab clientId={id!} />
           </TabsContent>
           </SwipeableTabsWrapper>
         </Tabs>

@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { z } from "zod";
 import { storage } from "../storage/index";
 import {
   generateAuthUrl,
@@ -14,6 +15,36 @@ import {
   generateOAuthState,
   isQuickBooksConfigured,
 } from "../services/quickbooks";
+import {
+  runQcChecks,
+  qcChecks,
+  getSectionLabel,
+  getStatusLabel,
+  getStatusColor,
+} from "../services/qboQcService";
+
+const dateStringSchema = z.string().refine((val) => {
+  const date = new Date(val);
+  return !isNaN(date.getTime());
+}, { message: "Invalid date format" });
+
+const qcRunSchema = z.object({
+  periodStart: dateStringSchema,
+  periodEnd: dateStringSchema,
+}).refine((data) => {
+  const start = new Date(data.periodStart);
+  const end = new Date(data.periodEnd);
+  return start <= end;
+}, { message: "Period start must be before or equal to period end" }).refine((data) => {
+  const start = new Date(data.periodStart);
+  const end = new Date(data.periodEnd);
+  const daysDiff = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+  return daysDiff <= 366;
+}, { message: "Period cannot exceed 366 days" });
+
+const itemActionSchema = z.object({
+  note: z.string().max(1000).optional().nullable(),
+});
 
 export function registerQuickBooksRoutes(
   app: Express,
@@ -367,6 +398,281 @@ export function registerQuickBooksRoutes(
         console.error("Error testing QuickBooks connection:", error);
         await storage.updateQboConnectionError(req.params.connectionId, error.message);
         res.status(500).json({ message: "Failed to test QuickBooks connection", error: error.message });
+      }
+    }
+  );
+
+  app.get(
+    "/api/qc/checks",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res: any) => {
+      try {
+        const checks = qcChecks.map(check => ({
+          code: check.code,
+          name: check.name,
+          section: check.section,
+          sectionLabel: getSectionLabel(check.section),
+          description: check.description,
+        }));
+        
+        res.json(checks);
+      } catch (error) {
+        console.error("Error fetching QC checks:", error);
+        res.status(500).json({ message: "Failed to fetch QC checks" });
+      }
+    }
+  );
+
+  app.post(
+    "/api/qc/run/:clientId",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res: any) => {
+      try {
+        const { clientId } = req.params;
+        
+        const validationResult = qcRunSchema.safeParse(req.body);
+        if (!validationResult.success) {
+          return res.status(400).json({ 
+            message: "Invalid request", 
+            errors: validationResult.error.errors.map(e => e.message) 
+          });
+        }
+        
+        const { periodStart, periodEnd } = validationResult.data;
+        
+        const connection = await storage.getQboConnectionByClientId(clientId);
+        if (!connection) {
+          return res.status(400).json({ 
+            message: "No QuickBooks connection found for this client. Please connect QuickBooks first." 
+          });
+        }
+        
+        if (!connection.isActive) {
+          return res.status(400).json({ message: "QuickBooks connection is inactive" });
+        }
+        
+        const run = await runQcChecks(
+          clientId,
+          connection.id,
+          new Date(periodStart),
+          new Date(periodEnd),
+          req.user?.effectiveUserId
+        );
+        
+        res.json(run);
+      } catch (error: any) {
+        console.error("Error running QC checks:", error);
+        res.status(500).json({ message: "Failed to run QC checks", error: error.message });
+      }
+    }
+  );
+
+  app.get(
+    "/api/qc/summary/:clientId",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res: any) => {
+      try {
+        const { clientId } = req.params;
+        
+        const summary = await storage.getLatestQcRunSummary(clientId);
+        
+        if (!summary) {
+          return res.json({ hasRun: false });
+        }
+        
+        res.json({
+          hasRun: true,
+          ...summary,
+        });
+      } catch (error) {
+        console.error("Error fetching QC summary:", error);
+        res.status(500).json({ message: "Failed to fetch QC summary" });
+      }
+    }
+  );
+
+  app.get(
+    "/api/qc/runs/:clientId",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res: any) => {
+      try {
+        const { clientId } = req.params;
+        const limit = parseInt(req.query.limit as string) || 10;
+        
+        const runs = await storage.getQcRunsByClientId(clientId, limit);
+        
+        res.json(runs);
+      } catch (error) {
+        console.error("Error fetching QC runs:", error);
+        res.status(500).json({ message: "Failed to fetch QC runs" });
+      }
+    }
+  );
+
+  app.get(
+    "/api/qc/run/:runId",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res: any) => {
+      try {
+        const { runId } = req.params;
+        
+        const runWithDetails = await storage.getQcRunWithDetails(runId);
+        
+        if (!runWithDetails) {
+          return res.status(404).json({ message: "QC run not found" });
+        }
+        
+        const resultsWithLabels = runWithDetails.results.map(result => ({
+          ...result,
+          sectionLabel: getSectionLabel(result.section as any),
+          statusLabel: getStatusLabel(result.status as any),
+          statusColor: getStatusColor(result.status as any),
+        }));
+        
+        res.json({
+          ...runWithDetails,
+          results: resultsWithLabels,
+        });
+      } catch (error) {
+        console.error("Error fetching QC run details:", error);
+        res.status(500).json({ message: "Failed to fetch QC run details" });
+      }
+    }
+  );
+
+  app.get(
+    "/api/qc/pending/:clientId",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res: any) => {
+      try {
+        const { clientId } = req.params;
+        
+        const pendingItems = await storage.getPendingApprovalsByClientId(clientId);
+        
+        res.json(pendingItems);
+      } catch (error) {
+        console.error("Error fetching pending approvals:", error);
+        res.status(500).json({ message: "Failed to fetch pending approvals" });
+      }
+    }
+  );
+
+  app.post(
+    "/api/qc/item/:itemId/approve",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res: any) => {
+      try {
+        const { itemId } = req.params;
+        const userId = req.user?.effectiveUserId;
+        
+        if (!userId) {
+          return res.status(401).json({ message: "User not authenticated" });
+        }
+        
+        const validationResult = itemActionSchema.safeParse(req.body);
+        if (!validationResult.success) {
+          return res.status(400).json({ 
+            message: "Invalid request", 
+            errors: validationResult.error.errors.map(e => e.message) 
+          });
+        }
+        
+        const { note } = validationResult.data;
+        const item = await storage.approveQcResultItem(itemId, userId, note || null);
+        
+        res.json(item);
+      } catch (error: any) {
+        console.error("Error approving QC item:", error);
+        res.status(500).json({ message: "Failed to approve item", error: error.message });
+      }
+    }
+  );
+
+  app.post(
+    "/api/qc/item/:itemId/escalate",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res: any) => {
+      try {
+        const { itemId } = req.params;
+        const userId = req.user?.effectiveUserId;
+        
+        if (!userId) {
+          return res.status(401).json({ message: "User not authenticated" });
+        }
+        
+        const validationResult = itemActionSchema.safeParse(req.body);
+        if (!validationResult.success) {
+          return res.status(400).json({ 
+            message: "Invalid request", 
+            errors: validationResult.error.errors.map(e => e.message) 
+          });
+        }
+        
+        const { note } = validationResult.data;
+        const item = await storage.escalateQcResultItem(itemId, userId, note || null);
+        
+        res.json(item);
+      } catch (error: any) {
+        console.error("Error escalating QC item:", error);
+        res.status(500).json({ message: "Failed to escalate item", error: error.message });
+      }
+    }
+  );
+
+  app.post(
+    "/api/qc/item/:itemId/resolve",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res: any) => {
+      try {
+        const { itemId } = req.params;
+        const userId = req.user?.effectiveUserId;
+        
+        if (!userId) {
+          return res.status(401).json({ message: "User not authenticated" });
+        }
+        
+        const validationResult = itemActionSchema.safeParse(req.body);
+        if (!validationResult.success) {
+          return res.status(400).json({ 
+            message: "Invalid request", 
+            errors: validationResult.error.errors.map(e => e.message) 
+          });
+        }
+        
+        const { note } = validationResult.data;
+        const item = await storage.resolveQcResultItem(itemId, userId, note || null);
+        
+        res.json(item);
+      } catch (error: any) {
+        console.error("Error resolving QC item:", error);
+        res.status(500).json({ message: "Failed to resolve item", error: error.message });
+      }
+    }
+  );
+
+  app.get(
+    "/api/qc/item/:itemId/history",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res: any) => {
+      try {
+        const { itemId } = req.params;
+        
+        const history = await storage.getApprovalHistoryByItemId(itemId);
+        
+        res.json(history);
+      } catch (error) {
+        console.error("Error fetching approval history:", error);
+        res.status(500).json({ message: "Failed to fetch approval history" });
       }
     }
   );

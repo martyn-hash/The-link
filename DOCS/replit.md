@@ -3,6 +3,16 @@
 ## Overview
 This full-stack project management application provides a comprehensive solution for managing projects, clients, and services. It aims for a seamless, app-like experience across devices, prioritizing mobile responsiveness and intuitive user interfaces. The application integrates with third-party services to streamline communication, document management, and compliance tracking, offering a robust platform for efficient business operations. Key capabilities include core project management, client and contact management, service and communication tracking, and a client portal with secure messaging.
 
+## Recent Changes (December 2025)
+- **QuickBooks Quality Control System (Dec 1)**: Implemented comprehensive QC checks for QuickBooks Online connected clients. Features include:
+  - 10 automated quality checks across 6 categories: Period Control (lock status, backdated/future entries), Bank & Cash (unreconciled transactions, undeposited funds), Sales & AR (invoice sequencing, ageing), Purchases & AP (bill ageing), VAT compliance, and Journal entries.
+  - API rate limiting with 500 req/min throttling and concurrent request capping.
+  - Traffic light status system (pass/warning/fail/blocked) with overall QC score calculation.
+  - Approval workflow for flagged items (approve/escalate/resolve with notes).
+  - Date-range filtering for period-specific analysis.
+  - Frontend QC dashboard tab on client detail pages with collapsible sections and item-level actions.
+  - Database tables: qbo_qc_runs, qbo_qc_results, qbo_qc_result_items, qbo_qc_approval_history.
+
 ## Recent Changes (October 2025)
 - **Project Messaging System (Oct 21)**: Implemented staff-to-staff instant messaging for project discussions. Features include dedicated Messages tab on project pages, split-view UI (thread list + conversation), participant tagging with role-based suggestions, file attachments (25MB, max 5 files), real-time push notifications via service worker, URL-based deep-linking from notifications, and automated email reminders for unread messages older than 10 minutes (batched per user, sent every 10 minutes via SendGrid).
 - **Change Status Modal (Oct 21)**: Streamlined project detail page UI by consolidating status change functionality into a modal dialog. Removed the dedicated status change panel and replaced it with a discreet "Change Status" button in the header. The modal features a dynamic two-column layout that appears when stage approval is required, freeing up valuable screen real estate on the right side for messaging features.
