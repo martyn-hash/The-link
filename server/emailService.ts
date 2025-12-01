@@ -1,5 +1,6 @@
 import { MailService } from '@sendgrid/mail';
 import DOMPurify from 'isomorphic-dompurify';
+import type { ConfigurationWarning } from './project-scheduler';
 
 if (!process.env.SENDGRID_API_KEY) {
   console.warn("SENDGRID_API_KEY environment variable not set. Email notifications will be disabled.");
@@ -519,12 +520,14 @@ export async function sendSchedulingSummaryEmail(
     executionTimeMs: number;
     summary: string;
     errors?: any[];
+    configurationWarnings?: ConfigurationWarning[];
   }
 ): Promise<boolean> {
   const baseUrl = 'https://flow.growth.accountants';
   const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
   const isFailure = summaryData.status === 'failure';
   const hasErrors = summaryData.errorsEncountered > 0;
+  const hasWarnings = (summaryData.configurationWarnings?.length || 0) > 0;
   
   const subject = `${isFailure ? '❌ ' : hasErrors ? '⚠️ ' : '✅ '}Nightly Project Scheduling Summary - ${new Date().toLocaleDateString()} - The Link`;
   
@@ -591,6 +594,33 @@ export async function sendSchedulingSummaryEmail(
           </div>
           ` : ''}
           
+          ${hasWarnings ? `
+          <div style="background-color: #fffbeb; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #f59e0b;">
+            <h3 style="margin-top: 0; color: #d97706; font-size: 16px;">🔧 Configuration Warnings</h3>
+            <p style="color: #374151; margin-bottom: 15px;">The following configuration issues prevented some services from being scheduled. These should be addressed to ensure all services run correctly:</p>
+            <div style="background-color: white; padding: 15px; border-radius: 6px; font-size: 14px; color: #374151; max-height: 300px; overflow-y: auto; border: 1px solid #fde68a;">
+              ${summaryData.configurationWarnings?.map(warning => 
+                `<div style="margin-bottom: 15px; padding: 12px; background-color: #fffbeb; border-radius: 6px; border: 1px solid #fde68a;">
+                  <div style="margin-bottom: 8px;">
+                    <strong style="color: #92400e;">Client:</strong> <span style="color: #374151;">${warning.clientName}</span>
+                    <span style="color: #9ca3af; margin-left: 10px;">•</span>
+                    <strong style="color: #92400e; margin-left: 10px;">Service:</strong> <span style="color: #374151;">${warning.serviceName}</span>
+                  </div>
+                  <div style="margin-bottom: 8px;">
+                    <span style="display: inline-block; padding: 2px 8px; background-color: #fef3c7; color: #92400e; border-radius: 4px; font-size: 12px; font-weight: 600; text-transform: uppercase;">
+                      ${warning.issueType.replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                  <div style="color: #6b7280; font-size: 13px; margin-bottom: 6px;">${warning.issueDescription}</div>
+                  <div style="color: #059669; font-size: 13px; font-weight: 500;">
+                    💡 <strong>Fix:</strong> ${warning.suggestedFix}
+                  </div>
+                </div>`
+              ).join('') || 'No warnings available'}
+            </div>
+          </div>
+          ` : ''}
+          
           <div style="background-color: #f8fafc; padding: 20px; border-radius: 8px; margin: 25px 0; border: 1px solid #e2e8f0;">
             <h3 style="margin-top: 0; color: #475569; font-size: 16px;">📋 Summary</h3>
             <p style="margin-bottom: 0; color: #374151; line-height: 1.6; font-style: italic;">
@@ -645,7 +675,18 @@ ${hasErrors ? `
 ERRORS:
 ${summaryData.errors?.map(error => `- Service ${error.serviceId || 'Unknown'}: ${error.error || 'Unknown error'}`).join('\n') || 'Error details not available'}
 ` : ''}
+${hasWarnings ? `
+CONFIGURATION WARNINGS:
+The following configuration issues prevented some services from being scheduled:
 
+${summaryData.configurationWarnings?.map(warning => 
+`- Client: ${warning.clientName}
+  Service: ${warning.serviceName}
+  Issue: ${warning.issueType.replace(/_/g, ' ').toUpperCase()}
+  Description: ${warning.issueDescription}
+  Fix: ${warning.suggestedFix}
+`).join('\n') || 'No warnings available'}
+` : ''}
 This is an automated summary of your nightly project scheduling run. The next scheduling run will occur at 1:00 AM UTC tomorrow.
 
 Best regards,

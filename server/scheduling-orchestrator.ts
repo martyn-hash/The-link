@@ -315,7 +315,8 @@ async function sendSchedulingEmails(schedulingResult: SchedulingRunResult, trigg
         errorsEncountered: schedulingResult.errorsEncountered,
         executionTimeMs: schedulingResult.executionTimeMs,
         summary: enhancedSummary,
-        errors: schedulingResult.errors
+        errors: schedulingResult.errors,
+        configurationWarnings: schedulingResult.configurationWarnings
       });
     });
     
