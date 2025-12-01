@@ -284,6 +284,8 @@ export default function ServiceAssignments() {
   // Date range filter states
   const [nextStartDateFrom, setNextStartDateFrom] = useState<string>("");
   const [nextStartDateTo, setNextStartDateTo] = useState<string>("");
+  const [targetDeliveryDateFrom, setTargetDeliveryDateFrom] = useState<string>("");
+  const [targetDeliveryDateTo, setTargetDeliveryDateTo] = useState<string>("");
   const [nextDueDateFrom, setNextDueDateFrom] = useState<string>("");
   const [nextDueDateTo, setNextDueDateTo] = useState<string>("");
 
@@ -487,6 +489,24 @@ export default function ServiceAssignments() {
       });
     }
 
+    // Apply target delivery date range filter
+    if (targetDeliveryDateFrom || targetDeliveryDateTo) {
+      combined = combined.filter(assignment => {
+        if (!assignment.targetDeliveryDate) return false;
+        const targetDate = new Date(assignment.targetDeliveryDate);
+        if (targetDeliveryDateFrom) {
+          const fromDate = new Date(targetDeliveryDateFrom);
+          if (targetDate < fromDate) return false;
+        }
+        if (targetDeliveryDateTo) {
+          const toDate = new Date(targetDeliveryDateTo);
+          toDate.setHours(23, 59, 59, 999); // Include the entire end day
+          if (targetDate > toDate) return false;
+        }
+        return true;
+      });
+    }
+
     // Apply next due date range filter
     if (nextDueDateFrom || nextDueDateTo) {
       combined = combined.filter(assignment => {
@@ -506,7 +526,7 @@ export default function ServiceAssignments() {
     }
 
     return combined;
-  }, [clientServices, peopleServices, searchTerm, roleFilter, userFilter, nextStartDateFrom, nextStartDateTo, nextDueDateFrom, nextDueDateTo]);
+  }, [clientServices, peopleServices, searchTerm, roleFilter, userFilter, nextStartDateFrom, nextStartDateTo, targetDeliveryDateFrom, targetDeliveryDateTo, nextDueDateFrom, nextDueDateTo]);
 
   // Active filter count
   const activeFilterCount = () => {
@@ -519,6 +539,8 @@ export default function ServiceAssignments() {
     if (searchTerm) count++;
     if (nextStartDateFrom) count++;
     if (nextStartDateTo) count++;
+    if (targetDeliveryDateFrom) count++;
+    if (targetDeliveryDateTo) count++;
     if (nextDueDateFrom) count++;
     if (nextDueDateTo) count++;
     return count;
@@ -533,6 +555,8 @@ export default function ServiceAssignments() {
     setSearchTerm("");
     setNextStartDateFrom("");
     setNextStartDateTo("");
+    setTargetDeliveryDateFrom("");
+    setTargetDeliveryDateTo("");
     setNextDueDateFrom("");
     setNextDueDateTo("");
     setSelectedIds(new Set());
@@ -1542,6 +1566,70 @@ export default function ServiceAssignments() {
                         className="h-9 w-9 p-0 shrink-0"
                         onClick={() => setNextStartDateTo("")}
                         data-testid="button-clear-start-date-to"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Target Delivery Date Range Filter */}
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2">
+                <CalendarClock className="w-4 h-4 text-purple-600" />
+                Target Delivery Date Range
+              </Label>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">From</Label>
+                  <div className="flex gap-1">
+                    <Input
+                      type="date"
+                      value={targetDeliveryDateFrom}
+                      onChange={(e) => {
+                        setTargetDeliveryDateFrom(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      data-testid="input-target-delivery-date-from"
+                      className="text-sm"
+                    />
+                    {targetDeliveryDateFrom && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 w-9 p-0 shrink-0"
+                        onClick={() => setTargetDeliveryDateFrom("")}
+                        data-testid="button-clear-target-delivery-date-from"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">To</Label>
+                  <div className="flex gap-1">
+                    <Input
+                      type="date"
+                      value={targetDeliveryDateTo}
+                      onChange={(e) => {
+                        setTargetDeliveryDateTo(e.target.value);
+                        setCurrentPage(1);
+                      }}
+                      data-testid="input-target-delivery-date-to"
+                      className="text-sm"
+                    />
+                    {targetDeliveryDateTo && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-9 w-9 p-0 shrink-0"
+                        onClick={() => setTargetDeliveryDateTo("")}
+                        data-testid="button-clear-target-delivery-date-to"
                       >
                         <X className="w-4 h-4" />
                       </Button>

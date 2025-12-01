@@ -62,6 +62,17 @@ export function ClientServiceRow({ clientService }: ClientServiceRowProps) {
       </TableCell>
       <TableCell>
         <div className="text-sm">
+          {clientService.targetDeliveryDate ? (
+            <div className="text-purple-600" data-testid={`text-target-delivery-${clientService.id}`}>
+              {formatDate(clientService.targetDeliveryDate)}
+            </div>
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          )}
+        </div>
+      </TableCell>
+      <TableCell>
+        <div className="text-sm">
           {clientService.nextDueDate ? (
             <div data-testid={`text-next-due-${clientService.id}`}>
               {formatDate(clientService.nextDueDate)}

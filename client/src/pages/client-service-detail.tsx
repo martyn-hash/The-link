@@ -352,6 +352,12 @@ export default function ClientServiceDetail() {
                 </p>
               </div>
               <div>
+                <label className="text-sm text-muted-foreground">Target Delivery Date</label>
+                <p className="font-medium text-purple-600" data-testid="text-target-delivery">
+                  {formatDate(clientService.targetDeliveryDate)}
+                </p>
+              </div>
+              <div>
                 <label className="text-sm text-muted-foreground">Next Due Date</label>
                 <p className="font-medium" data-testid="text-next-due">
                   {formatDate(clientService.nextDueDate)}

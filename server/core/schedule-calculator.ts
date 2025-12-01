@@ -37,6 +37,7 @@ export interface DueService {
   frequency: ServiceFrequency;
   nextStartDate: Date;
   nextDueDate: Date;
+  targetDeliveryDate: Date | null;
   isCompaniesHouseService: boolean;
 }
 
@@ -217,6 +218,7 @@ export async function findServicesDue(
         frequency: (clientService.frequency || 'monthly') as ServiceFrequency,
         nextStartDate: clientService.nextStartDate,
         nextDueDate: clientService.nextDueDate || clientService.nextStartDate,
+        targetDeliveryDate: clientService.targetDeliveryDate || null,
         isCompaniesHouseService: isChService
       });
     }
@@ -255,6 +257,7 @@ export async function findServicesDue(
         frequency: (peopleService.frequency || 'monthly') as ServiceFrequency,
         nextStartDate: peopleService.nextStartDate,
         nextDueDate: peopleService.nextDueDate || peopleService.nextStartDate,
+        targetDeliveryDate: peopleService.targetDeliveryDate || null,
         isCompaniesHouseService: false // People services are never CH services
       });
     }
@@ -285,17 +288,33 @@ export async function rescheduleService(
     frequency
   );
   
+  // Calculate next target delivery date by maintaining the same offset from due date
+  let nextTargetDeliveryDate: Date | null = null;
+  if (dueService.targetDeliveryDate && dueService.nextDueDate) {
+    // Calculate the offset in days between the due date and target delivery date
+    const originalDueDateMs = new Date(dueService.nextDueDate).getTime();
+    const targetDeliveryMs = new Date(dueService.targetDeliveryDate).getTime();
+    const offsetDays = Math.round((originalDueDateMs - targetDeliveryMs) / (24 * 60 * 60 * 1000));
+    
+    // Apply the same offset to the new due date
+    nextTargetDeliveryDate = new Date(nextDueDate);
+    nextTargetDeliveryDate.setUTCDate(nextTargetDeliveryDate.getUTCDate() - offsetDays);
+    console.log(`[Schedule Calculator] Maintaining target delivery offset: ${offsetDays} days before due date`);
+  }
+  
   // Update the service
   if (dueService.type === 'client') {
     await storage.updateClientService(dueService.id, {
       nextStartDate: nextStartDate.toISOString(),
-      nextDueDate: nextDueDate.toISOString()
+      nextDueDate: nextDueDate.toISOString(),
+      targetDeliveryDate: nextTargetDeliveryDate ? nextTargetDeliveryDate.toISOString() : null
     });
     console.log(`[Schedule Calculator] Rescheduled client service ${dueService.id} to ${nextStartDate.toISOString()}`);
   } else if (dueService.type === 'people') {
     await storage.updatePeopleService(dueService.id, {
       nextStartDate: nextStartDate.toISOString(),
-      nextDueDate: nextDueDate.toISOString()
+      nextDueDate: nextDueDate.toISOString(),
+      targetDeliveryDate: nextTargetDeliveryDate ? nextTargetDeliveryDate.toISOString() : null
     });
     console.log(`[Schedule Calculator] Rescheduled people service ${dueService.id} to ${nextStartDate.toISOString()}`);
   }
@@ -334,6 +353,7 @@ export async function getOverdueServices(
         frequency: (service.frequency || 'monthly') as ServiceFrequency,
         nextStartDate: service.nextStartDate,
         nextDueDate: service.nextDueDate || service.nextStartDate,
+        targetDeliveryDate: service.targetDeliveryDate || null,
         isCompaniesHouseService: !!service.service.isCompaniesHouseConnected
       });
     }
@@ -357,6 +377,7 @@ export async function getOverdueServices(
         frequency: (service.frequency || 'monthly') as ServiceFrequency,
         nextStartDate: service.nextStartDate,
         nextDueDate: service.nextDueDate || service.nextStartDate,
+        targetDeliveryDate: service.targetDeliveryDate || null,
         isCompaniesHouseService: false
       });
     }

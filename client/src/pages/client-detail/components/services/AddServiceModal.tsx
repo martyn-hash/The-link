@@ -185,6 +185,16 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
         if (dueDateValue) {
           const dueDate = new Date(dueDateValue);
           form.setValue('nextDueDate', dueDate.toISOString().split('T')[0]);
+          
+          // Auto-calculate target delivery date from due date and CH offset
+          const chOffset = (service as any).chTargetDeliveryDaysOffset;
+          if (chOffset && chOffset > 0) {
+            const targetDeliveryDate = new Date(dueDate);
+            targetDeliveryDate.setDate(targetDeliveryDate.getDate() - chOffset);
+            form.setValue('targetDeliveryDate', targetDeliveryDate.toISOString().split('T')[0]);
+          } else {
+            form.setValue('targetDeliveryDate', '');
+          }
         }
       }
     }
@@ -734,26 +744,45 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
                 <FormField
                   control={form.control}
                   name="targetDeliveryDate"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel fieldState="optional">
-                        Target Delivery Date
-                      </FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="date" 
-                          {...field} 
-                          data-testid="input-target-delivery-date"
-                          disabled={isStaticService}
-                          className={isStaticService ? 'bg-muted text-muted-foreground pointer-events-none' : ''}
-                        />
-                      </FormControl>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Internal target date for delivery before the due date
-                      </p>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  render={({ field }) => {
+                    const hasCHOffset = isCompaniesHouseService && (selectedService as any)?.chTargetDeliveryDaysOffset > 0;
+                    const isAutoCalculated = hasCHOffset && !!field.value;
+                    return (
+                      <FormItem>
+                        <FormLabel fieldState="optional" className={isAutoCalculated ? "text-purple-600 dark:text-purple-400" : ""}>
+                          Target Delivery Date
+                          {isAutoCalculated && (
+                            <span className="ml-2 text-xs font-normal">(Auto-calculated)</span>
+                          )}
+                        </FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="date" 
+                            {...field} 
+                            data-testid="input-target-delivery-date"
+                            disabled={isStaticService || isAutoCalculated}
+                            className={
+                              isAutoCalculated 
+                                ? 'bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 pointer-events-none' 
+                                : isStaticService 
+                                  ? 'bg-muted text-muted-foreground pointer-events-none' 
+                                  : ''
+                            }
+                          />
+                        </FormControl>
+                        {isAutoCalculated ? (
+                          <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                            Calculated as {(selectedService as any).chTargetDeliveryDaysOffset} days before the Companies House deadline
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Internal target date for delivery before the due date
+                          </p>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
                 />
                 </div>
               </div>

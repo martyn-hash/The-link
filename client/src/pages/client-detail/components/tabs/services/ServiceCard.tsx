@@ -76,6 +76,12 @@ export function ServiceCard({ clientService }: ServiceCardProps) {
               </p>
             </div>
             <div>
+              <span className="text-muted-foreground text-xs">Target Delivery</span>
+              <p className="font-medium text-purple-600" data-testid={`text-target-delivery-${clientService.id}`}>
+                {formatDate(clientService.targetDeliveryDate)}
+              </p>
+            </div>
+            <div>
               <span className="text-muted-foreground text-xs">Next Due</span>
               <p className="font-medium" data-testid={`text-next-due-${clientService.id}`}>
                 {formatDate(clientService.nextDueDate)}

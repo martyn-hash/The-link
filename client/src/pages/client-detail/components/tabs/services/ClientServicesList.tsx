@@ -110,6 +110,7 @@ export function ClientServicesList({
                         <TableHead>Service</TableHead>
                         <TableHead>Frequency</TableHead>
                         <TableHead>Next Start</TableHead>
+                        <TableHead>Target Delivery</TableHead>
                         <TableHead>Next Due</TableHead>
                         <TableHead>Service Owner</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
@@ -143,6 +144,7 @@ export function ClientServicesList({
                         <TableHead>Service</TableHead>
                         <TableHead>Frequency</TableHead>
                         <TableHead>Next Start</TableHead>
+                        <TableHead>Target Delivery</TableHead>
                         <TableHead>Next Due</TableHead>
                         <TableHead>Service Owner</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
