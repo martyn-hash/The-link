@@ -924,26 +924,26 @@ export function InternalChatView({
                   </div>
                 </CardHeader>
 
-                {/* All Attachments Gallery */}
+                {/* All Attachments Gallery - Compact collapsible section */}
                 {allAttachments.length > 0 && (
                   <div className="border-b">
                     <button
                       onClick={() => setShowAttachmentsGallery(!showAttachmentsGallery)}
-                      className="w-full px-4 py-2 flex items-center justify-between hover:bg-muted/50 transition-colors"
+                      className="w-full px-3 py-1.5 flex items-center justify-between hover:bg-muted/50 transition-colors"
                       data-testid="button-toggle-attachments-gallery"
                     >
-                      <div className="flex items-center gap-2">
-                        <Paperclip className="w-4 h-4" />
-                        <span className="text-sm font-medium">All Attachments ({allAttachments.length})</span>
+                      <div className="flex items-center gap-1.5">
+                        <Paperclip className="w-3.5 h-3.5 text-muted-foreground" />
+                        <span className="text-xs font-medium text-muted-foreground">Attachments ({allAttachments.length})</span>
                       </div>
                       {showAttachmentsGallery ? (
-                        <ChevronUp className="w-4 h-4" />
+                        <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />
                       ) : (
-                        <ChevronDown className="w-4 h-4" />
+                        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
                       )}
                     </button>
                     {showAttachmentsGallery && (
-                      <div className="p-4 bg-muted/30">
+                      <div className="px-3 py-2 bg-muted/20">
                         <AttachmentList
                           attachments={allAttachments}
                           readonly={true}
@@ -1055,10 +1055,11 @@ export function InternalChatView({
                                         }}
                                       />
                                       {message.attachments && message.attachments.length > 0 && (
-                                        <div className="mt-2">
+                                        <div className="mt-2 pt-2 border-t border-border/50">
                                           <AttachmentList
                                             attachments={message.attachments}
                                             readonly={true}
+                                            compact={true}
                                           />
                                         </div>
                                       )}
@@ -1168,10 +1169,11 @@ export function InternalChatView({
                                       }}
                                     />
                                     {message.attachments && message.attachments.length > 0 && (
-                                      <div className="mt-2">
+                                      <div className="mt-2 pt-2 border-t border-border/50">
                                         <AttachmentList
                                           attachments={message.attachments}
                                           readonly={true}
+                                          compact={true}
                                         />
                                       </div>
                                     )}
@@ -1567,11 +1569,12 @@ export function InternalChatView({
                             }}
                           />
                           {message.attachments && message.attachments.length > 0 && (
-                            <div className="mt-2">
+                            <div className="mt-2 pt-2 border-t border-border/50">
                               <AttachmentList
                                 attachments={message.attachments}
                                 readonly={true}
                                 threadId={selectedThreadId || undefined}
+                                compact={true}
                               />
                             </div>
                           )}

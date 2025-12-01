@@ -1409,7 +1409,7 @@ export function registerMessageRoutes(
   // Supports both standard message threads and project message threads
   app.post("/api/internal/attachments/excel-preview", isAuthenticated, resolveEffectiveUser, verifyMessageAttachmentAccessPost, async (req: any, res: any) => {
     try {
-      const { objectPath, fileName } = req.body;
+      const { objectPath, fileName, url } = req.body;
 
       if (!objectPath || !fileName) {
         return res.status(400).json({ message: "objectPath and fileName are required" });
@@ -1425,9 +1425,22 @@ export function registerMessageRoutes(
 
       const objectStorageService = new ObjectStorageService();
 
-      // Download the Excel file
-      // objectPath may come as /project-messages/... so we need to prepend /objects
-      const fullObjectPath = objectPath.startsWith('/objects/') ? objectPath : `/objects${objectPath}`;
+      // Determine the full object path based on the attachment type
+      let fullObjectPath: string;
+      
+      // Check if this is a stage-change-attachment by looking at the URL pattern
+      const stageChangeMatch = url?.match(/\/api\/projects\/([^/]+)\/stage-change-attachments/);
+      if (stageChangeMatch) {
+        // Stage change attachment - construct the correct path
+        const projectId = stageChangeMatch[1];
+        // objectPath is like /{timestamp}_{filename}, need to construct full storage path
+        fullObjectPath = `/objects/stage-change-attachments/${projectId}${objectPath}`;
+        console.log(`[ExcelPreview] Stage change attachment detected, full path: ${fullObjectPath}`);
+      } else {
+        // Regular project message attachment
+        fullObjectPath = objectPath.startsWith('/objects/') ? objectPath : `/objects${objectPath}`;
+      }
+
       const buffer = await objectStorageService.downloadObjectToBuffer(fullObjectPath);
 
       // Parse the Excel file using SheetJS

@@ -96,6 +96,7 @@ export function AttachmentPreview({ attachment, onClose, open }: AttachmentPrevi
         objectPath: attachment.objectPath,
         fileName: attachment.fileName,
         threadId: attachment.threadId,
+        url: attachment.url,
       });
 
       setExcelData(response);

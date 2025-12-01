@@ -29,6 +29,7 @@ interface AttachmentListProps {
   readonly?: boolean;
   className?: string;
   threadId?: string; // For project message attachments
+  compact?: boolean; // Compact mode for inline display in messages
 }
 
 export function AttachmentList({
@@ -38,6 +39,7 @@ export function AttachmentList({
   readonly = false,
   className = '',
   threadId,
+  compact = false,
 }: AttachmentListProps) {
   const [previewFile, setPreviewFile] = useState<{ attachment: Attachment; url: string } | null>(null);
 
@@ -122,7 +124,7 @@ export function AttachmentList({
   }
 
   return (
-    <div className={`space-y-2 ${className}`}>
+    <div className={`${compact ? 'space-y-1' : 'space-y-2'} ${className}`}>
       {attachments.map((item, index) => {
         const attachment = getAttachmentData(item, index);
         const isImage = attachment.fileType.startsWith('image/');
@@ -130,23 +132,25 @@ export function AttachmentList({
         return (
           <div
             key={index}
-            className="flex items-center gap-3 p-3 bg-muted rounded-lg hover:bg-muted/80 transition-colors"
+            className={`flex items-center ${compact ? 'gap-2 p-1.5 px-2' : 'gap-3 p-3'} bg-muted rounded-lg hover:bg-muted/80 transition-colors`}
           >
             {/* File Icon */}
-            <div className="flex-shrink-0 text-muted-foreground">
+            <div className={`flex-shrink-0 text-muted-foreground ${compact ? 'scale-90' : ''}`}>
               {getFileIcon(attachment.fileType)}
             </div>
 
             {/* File Info */}
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{attachment.fileName}</p>
-              <p className="text-xs text-muted-foreground">
-                {attachment.fileType} • {formatFileSize(attachment.fileSize)}
-              </p>
+              <p className={`${compact ? 'text-xs' : 'text-sm'} font-medium truncate`}>{attachment.fileName}</p>
+              {!compact && (
+                <p className="text-xs text-muted-foreground">
+                  {attachment.fileType} • {formatFileSize(attachment.fileSize)}
+                </p>
+              )}
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-1 flex-shrink-0">
+            <div className="flex items-center gap-0.5 flex-shrink-0">
               {/* Preview button (for images and PDFs in readonly mode) */}
               {readonly && canPreview(attachment.fileType) && getAttachmentUrl(attachment) && (
                 <Button
@@ -154,9 +158,10 @@ export function AttachmentList({
                   variant="ghost"
                   onClick={() => handlePreview(attachment)}
                   title="Preview"
+                  className={compact ? 'h-6 w-6 p-0' : ''}
                   data-testid={`button-preview-${index}`}
                 >
-                  <Eye className="h-4 w-4" />
+                  <Eye className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
                 </Button>
               )}
 
@@ -167,9 +172,10 @@ export function AttachmentList({
                   variant="ghost"
                   onClick={() => handleDownload(attachment)}
                   title="Download"
+                  className={compact ? 'h-6 w-6 p-0' : ''}
                   data-testid={`button-download-${index}`}
                 >
-                  <Download className="h-4 w-4" />
+                  <Download className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
                 </Button>
               )}
 
@@ -180,9 +186,9 @@ export function AttachmentList({
                   variant="ghost"
                   onClick={() => onRemove(index)}
                   title="Remove"
-                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  className={`text-destructive hover:text-destructive hover:bg-destructive/10 ${compact ? 'h-6 w-6 p-0' : ''}`}
                 >
-                  <X className="h-4 w-4" />
+                  <X className={compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} />
                 </Button>
               )}
             </div>
