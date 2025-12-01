@@ -1,0 +1,212 @@
+✅ WORLD-CLASS, FULLY MEASURABLE QC CHECKLIST
+A. Period control
+
+Books locked to prior periods
+
+close_date >= end_of_previous_period.
+
+No back-dated transactions
+
+No transactions with TxnDate < close_date.
+
+No excessively future-dated transactions
+
+No transactions with TxnDate > period_end + 30 days.
+
+B. Bank & cash
+
+All bank accounts reconciled to period end
+
+Reconciliation report exists for period_end.
+
+Ending difference = £0.
+
+GL balance matches online bank balance
+
+|gl_balance – online_feed_balance| <= £1.
+
+Unreconciled bank items below threshold
+
+< 3 unreconciled items OR
+
+< £50 total unreconciled.
+
+Undeposited funds cleared
+
+Undeposited Funds account balance = £0 ± £5.
+
+C. Sales & accounts receivable
+
+No missing invoice numbers or gaps
+
+Invoice numbers sequential, or gaps flagged for approval.
+
+Debtors ageing within tolerance
+
+No invoices > 120 days old unless manually approved.
+
+60-day invoices represent < X% of total (e.g., 20%).
+
+No negative debtor balances
+
+No customer has a negative AR balance beyond -£5.
+
+Matched receipts
+
+Bank feed deposits allocated to invoices unless “Other Income” is appropriate.
+
+Unmatched receipts < X% of monthly sales (e.g., <5%).
+
+D. Purchases, AP & expenses
+
+No old unpaid bills without approval
+
+Bills >120 days old flagged unless noted.
+
+60-day bills represent < X% of total liabilities.
+
+No negative supplier balances
+
+No supplier shows < -£5 balance.
+
+Large expenses coded correctly
+
+Any transaction >£500 matches expected COA/VAT rules.
+
+Outliers flagged.
+
+Misc/other/suspense postings minimal
+
+No single uncategorised/misc/suspense entry > £50.
+
+Total misc/suspense < £100.
+
+E. VAT & indirect taxes
+
+Correct VAT code assignment by category
+
+Insurance = exempt
+
+Wages = no VAT
+
+Bank charges = exempt
+
+Fuel = 20% or partial (configurable)
+
+Others follow expected rules
+
+Zero VAT exceptions
+
+No transactions in VAT Exception report (or all justified & approved).
+
+VAT return reconciles to general ledger
+
+VAT control balance matches return total ±£1.
+
+Variance vs. prior quarter within range
+
+Output VAT variance < ±25% (unless seasonal).
+
+Input VAT variance < ±25%.
+
+Any variance > threshold requires approval note.
+
+F. Journals & general ledger
+
+Payroll journals present
+
+At least 1 payroll journal in period.
+
+Contains lines for wages, employer NI, etc.
+
+Depreciation journals done (if FA exists)
+
+If fixed assets > £1,000: depreciation journal present monthly/quarterly.
+
+No manual journals to restricted accounts
+
+No JE posted to:
+
+VAT control
+
+Sales/revenue accounts
+
+Directors Loan control
+
+Bank accounts
+without an approval flag.
+
+Suspense and AMA (Ask My Accountant) = £0
+
+Both accounts balance = £0 ±£5.
+
+G. Attachments & audit trail
+
+Attachments present where required
+
+All expenses >£50 must have attachment or bill.
+
+All supplier bills must have attachment.
+
+Exceptions flagged.
+
+All bank feed transactions processed
+
+No bank transactions older than X days left unprocessed (e.g., 7).
+
+H. Master data
+
+New suppliers/customers approved
+
+All created this period flagged unless reviewed.
+
+No duplicate suppliers/customers
+
+Similar names/emails/phone flagged.
+
+New COA accounts reviewed/approved
+
+Any account created this period must be explicitly approved.
+
+I. Analytical, quantifiable “sanity tests”
+
+Turnover trend within expected band
+
+Revenue within ±25% of average of last 3 comparable months.
+
+Or seasonal pattern rule applied.
+
+Gross margin within expected band
+
+GM% within ±10% of prior 3 months average.
+
+If outside → approval note required.
+
+Operating expense spikes detected
+
+Categories with >200% spike flagged for review.
+
+Or absolute variance > £X (e.g., £1,000).
+
+Directors Loan Account movement reconciled
+
+Net DLA movement must be fully explained by:
+
+dividends
+
+payroll
+
+drawings
+
+transfers
+
+expense claims
+
+Unexplained movement < £50.
+(Fully codifiable: sum of expected categories must reconcile to movement.)
+
+Profit variance check
+
+Net profit variance vs prior 3-month average within ±30%.
+
+Or flagged for explanation.
