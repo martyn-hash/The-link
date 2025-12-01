@@ -54,8 +54,10 @@ interface DueService {
   frequency: ServiceFrequency;
   nextStartDate: Date;
   nextDueDate: Date;
+  targetDeliveryDate: Date | null; // Target delivery date for internal metrics
   intendedStartDay: number | null; // Intended day-of-month for start date (29-31)
   intendedDueDay: number | null; // Intended day-of-month for due date (29-31)
+  intendedTargetDeliveryDay: number | null; // Intended day-of-month for target delivery date (29-31)
   isCompaniesHouseService: boolean; // Flag to indicate CH services
 }
 
@@ -984,8 +986,10 @@ async function findServicesDueToday(
         frequency: clientServiceWithDetails.frequency as ServiceFrequency,
         nextStartDate: clientServiceWithDetails.nextStartDate,
         nextDueDate: clientServiceWithDetails.nextDueDate || clientServiceWithDetails.nextStartDate,
+        targetDeliveryDate: clientServiceWithDetails.targetDeliveryDate || null,
         intendedStartDay: clientServiceWithDetails.intendedStartDay,
         intendedDueDay: clientServiceWithDetails.intendedDueDay,
+        intendedTargetDeliveryDay: clientServiceWithDetails.intendedTargetDeliveryDay || null,
         isCompaniesHouseService: isChService
       });
     }
@@ -1292,6 +1296,7 @@ async function createProjectFromService(dueService: DueService): Promise<any> {
     currentAssigneeId: finalAssigneeId,
     priority: 'medium',
     dueDate: dueService.nextDueDate,
+    targetDeliveryDate: dueService.targetDeliveryDate,
     projectMonth: formatProjectMonth(dueService.nextStartDate)
   };
 
@@ -1315,6 +1320,7 @@ async function rescheduleService(dueService: DueService, targetDate: Date): Prom
   // For dates on 29, 30, or 31, remember the intended day for future scheduling
   let intendedStartDay = dueService.intendedStartDay;
   let intendedDueDay = dueService.intendedDueDay;
+  let intendedTargetDeliveryDay = dueService.intendedTargetDeliveryDay;
   
   // Auto-detect intended days if not already set and current day is 29-31
   if (intendedStartDay === null && dueService.nextStartDate.getUTCDate() >= 29) {
@@ -1322,6 +1328,9 @@ async function rescheduleService(dueService: DueService, targetDate: Date): Prom
   }
   if (intendedDueDay === null && dueService.nextDueDate.getUTCDate() >= 29) {
     intendedDueDay = dueService.nextDueDate.getUTCDate();
+  }
+  if (intendedTargetDeliveryDay === null && dueService.targetDeliveryDate && dueService.targetDeliveryDate.getUTCDate() >= 29) {
+    intendedTargetDeliveryDay = dueService.targetDeliveryDate.getUTCDate();
   }
   
   const { nextStartDate, nextDueDate } = calculateNextServiceDates(
@@ -1332,13 +1341,24 @@ async function rescheduleService(dueService: DueService, targetDate: Date): Prom
     intendedDueDay
   );
 
+  // Calculate next target delivery date if one exists
+  // Maintain the same offset between due date and target delivery date
+  let nextTargetDeliveryDate: Date | null = null;
+  if (dueService.targetDeliveryDate) {
+    const offsetDays = Math.round((dueService.nextDueDate.getTime() - dueService.targetDeliveryDate.getTime()) / (1000 * 60 * 60 * 24));
+    nextTargetDeliveryDate = new Date(nextDueDate);
+    nextTargetDeliveryDate.setDate(nextTargetDeliveryDate.getDate() - offsetDays);
+  }
+
   // Update the service
   if (dueService.type === 'client') {
     await storage.updateClientService(dueService.id, {
       nextStartDate: nextStartDate.toISOString(),
       nextDueDate: nextDueDate.toISOString(),
+      targetDeliveryDate: nextTargetDeliveryDate?.toISOString() || null,
       intendedStartDay,
-      intendedDueDay
+      intendedDueDay,
+      intendedTargetDeliveryDay
     });
   } else if (dueService.type === 'people') {
     // Update people service when support is added

@@ -36,12 +36,17 @@ export function convertServiceDates(data: any): any {
     processedData.nextDueDate = new Date(processedData.nextDueDate);
   }
   
+  if (processedData.targetDeliveryDate && typeof processedData.targetDeliveryDate === 'string') {
+    processedData.targetDeliveryDate = new Date(processedData.targetDeliveryDate);
+  }
+  
   return processedData;
 }
 
 /**
  * Validate and prepare Companies House service data
  * CH services have special date field mappings from client data
+ * Target delivery date is calculated by subtracting chTargetDeliveryDaysOffset from the due date
  */
 export async function prepareCompaniesHouseServiceData(
   service: Service,
@@ -77,11 +82,20 @@ export async function prepareCompaniesHouseServiceData(
     throw new Error('Companies House service requires client to have valid CH date fields');
   }
 
+  // Calculate target delivery date from CH due date minus offset
+  let targetDeliveryDate: string | undefined = undefined;
+  if (service.chTargetDeliveryDaysOffset && service.chTargetDeliveryDaysOffset > 0) {
+    const targetDate = new Date(dueDate);
+    targetDate.setDate(targetDate.getDate() - service.chTargetDeliveryDaysOffset);
+    targetDeliveryDate = targetDate.toISOString();
+  }
+
   return {
     ...baseData,
     frequency: 'annually' as const, // CH services always annual
     nextStartDate: startDate.toISOString(),
-    nextDueDate: dueDate.toISOString()
+    nextDueDate: dueDate.toISOString(),
+    ...(targetDeliveryDate ? { targetDeliveryDate } : {})
   };
 }
 
