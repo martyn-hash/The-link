@@ -271,9 +271,16 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
   // Apply saved preferences on load
   useEffect(() => {
     if (savedPreferences) {
-      // Apply column order - just use saved order directly
+      // Apply column order - merge saved order with any new columns that were added since
       if (savedPreferences.columnOrder) {
-        setColumnOrder(savedPreferences.columnOrder);
+        const allColumnIds = ALL_COLUMNS.map(col => col.id);
+        // Keep the saved order for known columns, then append any new columns at the end
+        const newColumnsNotInSaved = allColumnIds.filter(id => !savedPreferences.columnOrder.includes(id));
+        const mergedOrder = [
+          ...savedPreferences.columnOrder.filter(id => allColumnIds.includes(id)), // Remove any deleted columns
+          ...newColumnsNotInSaved, // Add new columns at the end
+        ];
+        setColumnOrder(mergedOrder);
       }
       
       // Apply visible columns - use saved preferences directly without merging defaults
