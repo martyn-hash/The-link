@@ -283,6 +283,37 @@ export function registerQuickBooksRoutes(
     }
   );
 
+  app.get(
+    "/api/super-admin/qbo-connection/:connectionId",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const { connectionId } = req.params;
+        
+        const connection = await storage.getQboConnectionById(connectionId);
+        if (!connection) {
+          return res.status(404).json({ message: "Connection not found" });
+        }
+        
+        const client = await storage.getClientById(connection.clientId);
+
+        res.json({
+          id: connection.id,
+          clientId: connection.clientId,
+          realmId: connection.realmId,
+          companyName: connection.companyName,
+          isActive: connection.isActive,
+          client: client ? { id: client.id, name: client.name } : null,
+        });
+      } catch (error) {
+        console.error("Error fetching QBO connection:", error);
+        res.status(500).json({ message: "Failed to fetch QBO connection" });
+      }
+    }
+  );
+
   app.post(
     "/api/quickbooks/refresh/:connectionId",
     isAuthenticated,

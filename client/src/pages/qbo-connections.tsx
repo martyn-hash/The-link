@@ -52,9 +52,11 @@ import {
   Building2,
   Search,
   Loader2,
-  TestTube
+  TestTube,
+  FileCheck
 } from "lucide-react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useRoute } from "wouter";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Client, QboConnectionWithClient } from "@shared/schema";
 import { format, formatDistanceToNow } from "date-fns";
 
@@ -70,7 +72,7 @@ interface QboStatus {
 export default function QboConnections() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const [showConnectDialog, setShowConnectDialog] = useState(false);
   const [showDisconnectDialog, setShowDisconnectDialog] = useState(false);
@@ -310,7 +312,12 @@ export default function QboConnections() {
                     const status = getConnectionStatus(conn);
                     const StatusIcon = status.icon;
                     return (
-                      <TableRow key={conn.id} data-testid={`row-connection-${conn.id}`}>
+                      <TableRow 
+                        key={conn.id} 
+                        data-testid={`row-connection-${conn.id}`}
+                        className="cursor-pointer hover:bg-muted/50 transition-colors"
+                        onClick={() => navigate(`/super-admin/qbo-connections/${conn.id}/qc`)}
+                      >
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Building2 className="w-4 h-4 text-muted-foreground" />
@@ -348,8 +355,21 @@ export default function QboConnections() {
                             {conn.createdAt ? format(new Date(conn.createdAt), 'MMM d, yyyy') : '-'}
                           </span>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-2">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => navigate(`/super-admin/qbo-connections/${conn.id}/qc`)}
+                                  data-testid={`button-qc-${conn.id}`}
+                                >
+                                  <FileCheck className="w-4 h-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Quality Control Checks</TooltipContent>
+                            </Tooltip>
                             <Button
                               variant="outline"
                               size="sm"
