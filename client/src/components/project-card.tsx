@@ -260,6 +260,18 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
   const projectStatus = useMemo(() => {
     // For completed projects, determine status at completion time (not current time)
     if (project.completionStatus) {
+      // For completed_unsuccessfully projects, ALWAYS show as red (Late/Overdue)
+      // This is because unsuccessful completion typically indicates the project missed
+      // deadlines or had issues that prevented successful completion
+      if (project.completionStatus === 'completed_unsuccessfully') {
+        return { 
+          status: 'Late / Overdue' as const, 
+          color: 'bg-red-600 text-white' as const,
+          bgColor: 'bg-red-50 dark:bg-red-950/30' as const
+        };
+      }
+      
+      // For completed_successfully projects, check if they were on time
       // Find the completion timestamp from chronology
       // Look for the LAST status change entry (entry with toStatus field), which indicates
       // when the project was moved to its final completed stage
@@ -296,7 +308,7 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
         }
       }
       
-      // Completed on time or before due date = On Track (green)
+      // Completed successfully on time or before due date = On Track (green)
       return { 
         status: 'On Track' as const, 
         color: 'bg-green-600 text-white' as const,
