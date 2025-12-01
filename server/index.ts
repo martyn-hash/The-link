@@ -3,8 +3,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import cron from "node-cron";
 import { runChSync } from "./ch-sync-service";
-import { runProjectScheduling } from "./project-scheduler";
-import { sendSchedulingSummaryEmail } from "./emailService";
+import { executeScheduledRun, runStartupCatchup } from "./scheduling-orchestrator";
 import { sendProjectMessageReminders } from "./projectMessageReminderService";
 import { updateDashboardCache } from "./dashboard-cache-service";
 import { storage, initializeDefaultNotificationTemplates } from "./storage/index";
@@ -133,59 +132,36 @@ app.use((req, res, next) => {
     // Initialize default notification templates
     await initializeDefaultNotificationTemplates();
     
-    // Setup nightly project scheduling
+    // Run startup catch-up to detect and execute any missed scheduling runs
+    // This ensures server restarts don't cause missed overnight scheduling
+    try {
+      log('[Scheduling Orchestrator] Running startup catch-up check...');
+      const catchupResult = await runStartupCatchup();
+      log(`[Scheduling Orchestrator] ${catchupResult.message}`);
+    } catch (catchupError) {
+      console.error('[Scheduling Orchestrator] Error in startup catch-up:', catchupError);
+    }
+    
+    // Setup nightly project scheduling via orchestrator
     // Runs every day at 1:00 AM UTC (before CH sync to ensure projects are created first)
+    // The orchestrator handles duplicate prevention and email notifications
     cron.schedule('0 1 * * *', async () => {
       try {
-        log('[Project Scheduler] Starting scheduled nightly run...');
-        const result = await runProjectScheduling('scheduled');
-        log(`[Project Scheduler] Nightly run completed: ${result.status} - ${result.projectsCreated} projects created, ${result.servicesRescheduled} services rescheduled`);
-        if (result.errorsEncountered > 0) {
-          console.error(`[Project Scheduler] Nightly run had ${result.errorsEncountered} errors:`, result.errors);
-        }
+        log('[Scheduling Orchestrator] Starting scheduled nightly run...');
+        const result = await executeScheduledRun();
+        log(`[Scheduling Orchestrator] Nightly run ${result.status}: ${result.message}`);
         
-        // Send email notifications to users who have enabled scheduling summaries
-        try {
-          log('[Project Scheduler] Sending notification emails...');
-          const usersWithNotifications = await storage.getUsersWithSchedulingNotifications();
-          
-          if (usersWithNotifications.length > 0) {
-            const emailPromises = usersWithNotifications.map(async (user) => {
-              const userDisplayName = user.firstName && user.lastName 
-                ? `${user.firstName} ${user.lastName}` 
-                : user.firstName || user.email || 'User';
-              
-              return sendSchedulingSummaryEmail(user.email!, userDisplayName, {
-                status: result.status,
-                servicesFoundDue: result.servicesFoundDue,
-                projectsCreated: result.projectsCreated,
-                servicesRescheduled: result.servicesRescheduled,
-                errorsEncountered: result.errorsEncountered,
-                executionTimeMs: result.executionTimeMs,
-                summary: result.summary,
-                errors: result.errors
-              });
-            });
-            
-            const emailResults = await Promise.allSettled(emailPromises);
-            const successfulEmails = emailResults.filter(result => result.status === 'fulfilled' && result.value).length;
-            const failedEmails = emailResults.filter(result => result.status === 'rejected' || !result.value).length;
-            
-            log(`[Project Scheduler] Email notifications sent: ${successfulEmails} successful, ${failedEmails} failed`);
-          } else {
-            log('[Project Scheduler] No users have enabled scheduling summary notifications');
-          }
-        } catch (emailError) {
-          console.error('[Project Scheduler] Error sending notification emails:', emailError);
+        if (result.schedulingResult?.errorsEncountered && result.schedulingResult.errorsEncountered > 0) {
+          console.error(`[Scheduling Orchestrator] Nightly run had ${result.schedulingResult.errorsEncountered} errors:`, result.schedulingResult.errors);
         }
       } catch (error) {
-        console.error('[Project Scheduler] Fatal error in nightly run:', error);
+        console.error('[Scheduling Orchestrator] Fatal error in nightly run:', error);
       }
     }, {
       timezone: "UTC"
     });
     
-    log('[Project Scheduler] Nightly scheduler initialized (runs daily at 1:00 AM UTC)');
+    log('[Scheduling Orchestrator] Nightly scheduler initialized (runs daily at 1:00 AM UTC with catch-up on restart)');
     
     // Setup nightly Companies House data synchronization
     // Runs every day at 2:00 AM UTC (after project scheduling)
