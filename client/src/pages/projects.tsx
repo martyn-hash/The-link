@@ -102,6 +102,7 @@ export default function Projects() {
   // Reset to list view when no service is selected for kanban
   useEffect(() => {
     if (serviceFilter === "all" && viewMode === "kanban") {
+      setCurrentSavedViewId(null); // Clear saved view when falling back
       setViewMode("list");
     }
   }, [serviceFilter, viewMode]);
@@ -543,6 +544,13 @@ export default function Projects() {
       title: "Filters Reset",
       description: "Showing all projects (including archived)",
     });
+  };
+
+  // Handler for manual view mode switching (toolbar buttons)
+  // Clears saved view ID since user is manually changing view, not loading a saved view
+  const handleManualViewModeChange = (mode: "list" | "kanban" | "calendar" | "dashboard") => {
+    setCurrentSavedViewId(null);
+    setViewMode(mode);
   };
 
   // Save view mutation
@@ -1174,7 +1182,7 @@ export default function Projects() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setViewMode("list")}
+                  onClick={() => handleManualViewModeChange("list")}
                   data-testid="button-switch-to-list-view"
                   className="gap-2"
                 >
@@ -1253,7 +1261,7 @@ export default function Projects() {
                   <Button
                     variant={viewMode === "list" ? "secondary" : "ghost"}
                     size="sm"
-                    onClick={() => setViewMode("list")}
+                    onClick={() => handleManualViewModeChange("list")}
                     data-testid="button-view-list"
                     className="h-11 md:h-8 px-2 md:px-3"
                   >
@@ -1263,7 +1271,7 @@ export default function Projects() {
                   <Button
                     variant={viewMode === "dashboard" ? "secondary" : "ghost"}
                     size="sm"
-                    onClick={() => setViewMode("dashboard")}
+                    onClick={() => handleManualViewModeChange("dashboard")}
                     data-testid="button-view-dashboard"
                     className="h-11 md:h-8 px-2 md:px-3"
                   >
@@ -1273,7 +1281,7 @@ export default function Projects() {
                   <Button
                     variant={viewMode === "calendar" ? "secondary" : "ghost"}
                     size="sm"
-                    onClick={() => setViewMode("calendar")}
+                    onClick={() => handleManualViewModeChange("calendar")}
                     data-testid="button-view-calendar"
                     className="h-11 md:h-8 px-2 md:px-3"
                   >
@@ -1334,7 +1342,7 @@ export default function Projects() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setViewMode("list")}
+                  onClick={() => handleManualViewModeChange("list")}
                   data-testid="button-switch-to-list-view-mobile"
                   className="h-11 px-3 gap-2"
                 >
@@ -1349,7 +1357,7 @@ export default function Projects() {
                   <Button
                     variant={viewMode === "list" ? "secondary" : "ghost"}
                     size="sm"
-                    onClick={() => setViewMode("list")}
+                    onClick={() => handleManualViewModeChange("list")}
                     data-testid="button-view-list"
                     className="h-11 px-2"
                   >
@@ -1358,7 +1366,7 @@ export default function Projects() {
                   <Button
                     variant={viewMode === "dashboard" ? "secondary" : "ghost"}
                     size="sm"
-                    onClick={() => setViewMode("dashboard")}
+                    onClick={() => handleManualViewModeChange("dashboard")}
                     data-testid="button-view-dashboard"
                     className="h-11 px-2"
                   >
@@ -1367,7 +1375,7 @@ export default function Projects() {
                   <Button
                     variant={viewMode === "calendar" ? "secondary" : "ghost"}
                     size="sm"
-                    onClick={() => setViewMode("calendar")}
+                    onClick={() => handleManualViewModeChange("calendar")}
                     data-testid="button-view-calendar-mobile"
                     className="h-11 px-2"
                   >
@@ -1469,7 +1477,7 @@ export default function Projects() {
                       projects={paginatedProjects} 
                       user={user} 
                       serviceFilter={serviceFilter}
-                      onSwitchToKanban={() => setViewMode("kanban")}
+                      onSwitchToKanban={() => handleManualViewModeChange("kanban")}
                     />
                     {/* Pagination Controls */}
                     {totalPages > 1 && (
@@ -1586,7 +1594,7 @@ export default function Projects() {
                     projects={paginatedProjects} 
                     user={user} 
                     serviceFilter={serviceFilter}
-                    onSwitchToKanban={() => setViewMode("kanban")}
+                    onSwitchToKanban={() => handleManualViewModeChange("kanban")}
                   />
                   {/* Pagination Controls */}
                   {totalPages > 1 && (
