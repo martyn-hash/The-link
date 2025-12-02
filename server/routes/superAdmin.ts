@@ -4,6 +4,12 @@ import { updateCompanySettingsSchema, insertWebhookConfigSchema, updateWebhookCo
 import multer from "multer";
 import { ObjectStorageService, objectStorageClient, parseObjectPath } from "../objectStorage";
 import bcrypt from "bcrypt";
+import { z } from "zod";
+
+const updateUserAccessFlagsSchema = z.object({
+  accessEmail: z.boolean().optional(),
+  accessCalendar: z.boolean().optional(),
+});
 
 /**
  * Super Admin routes for activity logs and login attempts
@@ -1063,6 +1069,90 @@ export function registerSuperAdminRoutes(
           error: error.message,
           hint: "Some records may have foreign key constraints. Check the error details."
         });
+      }
+    }
+  );
+
+  // ============================================================================
+  // USER ACCESS FLAGS MANAGEMENT (Super Admin)
+  // Controls which users have their Microsoft email/calendar data synced
+  // ============================================================================
+
+  // Get all users with their access flags
+  app.get(
+    "/api/super-admin/users",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const allUsers = await storage.getAllUsers();
+        // Return only necessary fields for the admin view
+        const usersWithFlags = allUsers.map(user => ({
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          isAdmin: user.isAdmin,
+          superAdmin: user.superAdmin,
+          accessEmail: user.accessEmail ?? false,
+          accessCalendar: user.accessCalendar ?? false,
+          createdAt: user.createdAt,
+        }));
+        res.json(usersWithFlags);
+      } catch (error) {
+        console.error("Error fetching users:", error);
+        res.status(500).json({ message: "Failed to fetch users" });
+      }
+    }
+  );
+
+  // Update a user's access flags (accessEmail, accessCalendar)
+  app.patch(
+    "/api/super-admin/users/:userId/access-flags",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const { userId } = req.params;
+        
+        // Validate request body
+        const validationResult = updateUserAccessFlagsSchema.safeParse(req.body);
+        if (!validationResult.success) {
+          return res.status(400).json({ 
+            message: "Invalid access flags data", 
+            errors: validationResult.error.errors 
+          });
+        }
+
+        const { accessEmail, accessCalendar } = validationResult.data;
+        
+        // Build update object with only defined values
+        const updates: { accessEmail?: boolean; accessCalendar?: boolean } = {};
+        if (accessEmail !== undefined) updates.accessEmail = accessEmail;
+        if (accessCalendar !== undefined) updates.accessCalendar = accessCalendar;
+
+        if (Object.keys(updates).length === 0) {
+          return res.status(400).json({ message: "No valid fields to update" });
+        }
+
+        const updatedUser = await storage.updateUser(userId, updates);
+        
+        res.json({
+          id: updatedUser.id,
+          email: updatedUser.email,
+          firstName: updatedUser.firstName,
+          lastName: updatedUser.lastName,
+          accessEmail: updatedUser.accessEmail ?? false,
+          accessCalendar: updatedUser.accessCalendar ?? false,
+        });
+      } catch (error: any) {
+        console.error("Error updating user access flags:", error);
+        if (error.message === "User not found") {
+          return res.status(404).json({ message: "User not found" });
+        }
+        res.status(500).json({ message: "Failed to update user access flags" });
       }
     }
   );

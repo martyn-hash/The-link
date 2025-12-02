@@ -4,12 +4,14 @@
  * Uses client credentials flow (daemon/service authentication) to access
  * Microsoft Graph API with application-level permissions.
  * 
- * This allows tenant-wide access to read emails for any user without
- * requiring individual user OAuth consent.
+ * This allows tenant-wide access to read emails and calendars for any user
+ * without requiring individual user OAuth consent.
  * 
  * Required permissions (Application type, admin consent required):
- * - Mail.Read or Mail.ReadWrite: Read mail in all mailboxes
+ * - Mail.Read or Mail.ReadWrite: Read/write mail in all mailboxes
+ * - Mail.Send: Send mail as any user
  * - User.Read.All: Read all users' full profiles
+ * - Calendars.Read or Calendars.ReadWrite: Read/write calendars in all mailboxes
  */
 
 import { Client } from '@microsoft/microsoft-graph-client';
@@ -352,6 +354,436 @@ export async function getUserMailFolders(userIdOrEmail: string): Promise<Array<{
     .api(`/users/${encodeURIComponent(userIdOrEmail)}/mailFolders`)
     .select('id,displayName,totalItemCount,unreadItemCount')
     .get();
+
+  return response.value || [];
+}
+
+// ============================================================================
+// CALENDAR FUNCTIONS
+// ============================================================================
+
+/**
+ * Calendar event type definition
+ */
+export interface CalendarEvent {
+  id?: string;
+  subject: string;
+  body?: {
+    contentType: 'text' | 'html';
+    content: string;
+  };
+  start: {
+    dateTime: string; // ISO 8601 format
+    timeZone: string;
+  };
+  end: {
+    dateTime: string;
+    timeZone: string;
+  };
+  location?: {
+    displayName: string;
+  };
+  attendees?: Array<{
+    emailAddress: {
+      address: string;
+      name?: string;
+    };
+    type: 'required' | 'optional' | 'resource';
+  }>;
+  isOnlineMeeting?: boolean;
+  onlineMeetingProvider?: 'teamsForBusiness' | 'skypeForBusiness' | 'skypeForConsumer';
+  onlineMeeting?: {
+    joinUrl: string;
+  };
+  isAllDay?: boolean;
+  showAs?: 'free' | 'tentative' | 'busy' | 'oof' | 'workingElsewhere' | 'unknown';
+  importance?: 'low' | 'normal' | 'high';
+  sensitivity?: 'normal' | 'personal' | 'private' | 'confidential';
+  categories?: string[];
+  recurrence?: any; // Recurrence pattern
+  reminderMinutesBeforeStart?: number;
+  responseRequested?: boolean;
+  organizer?: {
+    emailAddress: {
+      address: string;
+      name?: string;
+    };
+  };
+  webLink?: string;
+  createdDateTime?: string;
+  lastModifiedDateTime?: string;
+}
+
+/**
+ * Get user's calendars
+ */
+export async function getUserCalendars(userIdOrEmail: string): Promise<Array<{
+  id: string;
+  name: string;
+  color: string;
+  isDefaultCalendar: boolean;
+  canEdit: boolean;
+  canShare: boolean;
+}>> {
+  const client = await getApplicationGraphClient();
+
+  const response = await client
+    .api(`/users/${encodeURIComponent(userIdOrEmail)}/calendars`)
+    .select('id,name,color,isDefaultCalendar,canEdit,canShare')
+    .get();
+
+  return response.value || [];
+}
+
+/**
+ * Get calendar events for a user
+ * 
+ * @param userIdOrEmail - Azure AD user GUID or email address
+ * @param options - Query options for filtering events
+ */
+export async function getUserCalendarEvents(
+  userIdOrEmail: string,
+  options: {
+    calendarId?: string; // Specific calendar ID, or omit for default calendar
+    startDateTime?: string; // ISO 8601 start date/time
+    endDateTime?: string; // ISO 8601 end date/time
+    top?: number;
+    skip?: number;
+    filter?: string;
+    orderBy?: string;
+    select?: string[];
+  } = {}
+): Promise<{
+  events: CalendarEvent[];
+  nextLink?: string;
+  count?: number;
+}> {
+  const {
+    calendarId,
+    startDateTime,
+    endDateTime,
+    top = 50,
+    skip,
+    filter,
+    orderBy = 'start/dateTime',
+    select = [
+      'id',
+      'subject',
+      'body',
+      'start',
+      'end',
+      'location',
+      'attendees',
+      'isOnlineMeeting',
+      'onlineMeeting',
+      'isAllDay',
+      'showAs',
+      'importance',
+      'sensitivity',
+      'organizer',
+      'webLink',
+      'createdDateTime',
+      'lastModifiedDateTime',
+    ],
+  } = options;
+
+  const client = await getApplicationGraphClient();
+
+  // Build the API path
+  let apiPath: string;
+  if (calendarId) {
+    apiPath = `/users/${encodeURIComponent(userIdOrEmail)}/calendars/${calendarId}/events`;
+  } else {
+    apiPath = `/users/${encodeURIComponent(userIdOrEmail)}/calendar/events`;
+  }
+
+  // Use calendarView endpoint if date range is specified for better results
+  if (startDateTime && endDateTime) {
+    apiPath = calendarId
+      ? `/users/${encodeURIComponent(userIdOrEmail)}/calendars/${calendarId}/calendarView`
+      : `/users/${encodeURIComponent(userIdOrEmail)}/calendar/calendarView`;
+  }
+
+  let request = client
+    .api(apiPath)
+    .select(select.join(','))
+    .top(top)
+    .orderby(orderBy);
+
+  // Add date range for calendarView
+  if (startDateTime && endDateTime) {
+    request = request.query({
+      startDateTime,
+      endDateTime,
+    });
+  }
+
+  if (skip) {
+    request = request.skip(skip);
+  }
+
+  if (filter) {
+    request = request.filter(filter);
+  }
+
+  const response = await request.get();
+
+  return {
+    events: response.value || [],
+    nextLink: response['@odata.nextLink'],
+    count: response['@odata.count'],
+  };
+}
+
+/**
+ * Get a specific calendar event by ID
+ */
+export async function getUserCalendarEventById(
+  userIdOrEmail: string,
+  eventId: string
+): Promise<CalendarEvent | null> {
+  try {
+    const client = await getApplicationGraphClient();
+
+    const event = await client
+      .api(`/users/${encodeURIComponent(userIdOrEmail)}/calendar/events/${eventId}`)
+      .select('id,subject,body,start,end,location,attendees,isOnlineMeeting,onlineMeeting,isAllDay,showAs,importance,sensitivity,organizer,webLink,recurrence,reminderMinutesBeforeStart,createdDateTime,lastModifiedDateTime')
+      .get();
+
+    return event;
+  } catch (error: any) {
+    if (error.statusCode === 404) {
+      return null;
+    }
+    console.error('[Application Graph] Error getting calendar event:', error);
+    throw error;
+  }
+}
+
+/**
+ * Create a calendar event for a user
+ * 
+ * If isOnlineMeeting is true and onlineMeetingProvider is 'teamsForBusiness',
+ * a Teams meeting will be automatically created with a join link.
+ * 
+ * @param userIdOrEmail - Azure AD user GUID or email address (the organizer)
+ * @param event - The event details to create
+ * @returns The created event including the Teams join URL if applicable
+ */
+export async function createUserCalendarEvent(
+  userIdOrEmail: string,
+  event: {
+    subject: string;
+    body?: {
+      contentType: 'text' | 'html';
+      content: string;
+    };
+    start: {
+      dateTime: string;
+      timeZone: string;
+    };
+    end: {
+      dateTime: string;
+      timeZone: string;
+    };
+    location?: {
+      displayName: string;
+    };
+    attendees?: Array<{
+      emailAddress: {
+        address: string;
+        name?: string;
+      };
+      type: 'required' | 'optional';
+    }>;
+    isOnlineMeeting?: boolean;
+    onlineMeetingProvider?: 'teamsForBusiness' | 'skypeForBusiness' | 'skypeForConsumer';
+    isAllDay?: boolean;
+    showAs?: 'free' | 'tentative' | 'busy' | 'oof' | 'workingElsewhere';
+    importance?: 'low' | 'normal' | 'high';
+    sensitivity?: 'normal' | 'personal' | 'private' | 'confidential';
+    categories?: string[];
+    reminderMinutesBeforeStart?: number;
+    responseRequested?: boolean;
+    recurrence?: {
+      pattern: {
+        type: 'daily' | 'weekly' | 'absoluteMonthly' | 'relativeMonthly' | 'absoluteYearly' | 'relativeYearly';
+        interval: number;
+        daysOfWeek?: string[];
+        dayOfMonth?: number;
+        month?: number;
+        firstDayOfWeek?: string;
+      };
+      range: {
+        type: 'endDate' | 'noEnd' | 'numbered';
+        startDate: string;
+        endDate?: string;
+        numberOfOccurrences?: number;
+      };
+    };
+  },
+  calendarId?: string
+): Promise<CalendarEvent> {
+  const client = await getApplicationGraphClient();
+
+  // Build the API path
+  const apiPath = calendarId
+    ? `/users/${encodeURIComponent(userIdOrEmail)}/calendars/${calendarId}/events`
+    : `/users/${encodeURIComponent(userIdOrEmail)}/calendar/events`;
+
+  const createdEvent = await client
+    .api(apiPath)
+    .post(event);
+
+  console.log(`[Application Graph] Created calendar event for ${userIdOrEmail}: ${createdEvent.subject}`);
+  
+  if (createdEvent.onlineMeeting?.joinUrl) {
+    console.log(`[Application Graph] Teams meeting link: ${createdEvent.onlineMeeting.joinUrl}`);
+  }
+
+  return createdEvent;
+}
+
+/**
+ * Update a calendar event for a user
+ * 
+ * @param userIdOrEmail - Azure AD user GUID or email address
+ * @param eventId - The ID of the event to update
+ * @param updates - The fields to update
+ */
+export async function updateUserCalendarEvent(
+  userIdOrEmail: string,
+  eventId: string,
+  updates: Partial<{
+    subject: string;
+    body: {
+      contentType: 'text' | 'html';
+      content: string;
+    };
+    start: {
+      dateTime: string;
+      timeZone: string;
+    };
+    end: {
+      dateTime: string;
+      timeZone: string;
+    };
+    location: {
+      displayName: string;
+    };
+    attendees: Array<{
+      emailAddress: {
+        address: string;
+        name?: string;
+      };
+      type: 'required' | 'optional';
+    }>;
+    isOnlineMeeting: boolean;
+    onlineMeetingProvider: 'teamsForBusiness' | 'skypeForBusiness' | 'skypeForConsumer';
+    isAllDay: boolean;
+    showAs: 'free' | 'tentative' | 'busy' | 'oof' | 'workingElsewhere';
+    importance: 'low' | 'normal' | 'high';
+    sensitivity: 'normal' | 'personal' | 'private' | 'confidential';
+    categories: string[];
+    reminderMinutesBeforeStart: number;
+    responseRequested: boolean;
+  }>
+): Promise<CalendarEvent> {
+  const client = await getApplicationGraphClient();
+
+  const updatedEvent = await client
+    .api(`/users/${encodeURIComponent(userIdOrEmail)}/calendar/events/${eventId}`)
+    .patch(updates);
+
+  console.log(`[Application Graph] Updated calendar event ${eventId} for ${userIdOrEmail}`);
+
+  return updatedEvent;
+}
+
+/**
+ * Delete a calendar event for a user
+ * 
+ * @param userIdOrEmail - Azure AD user GUID or email address
+ * @param eventId - The ID of the event to delete
+ */
+export async function deleteUserCalendarEvent(
+  userIdOrEmail: string,
+  eventId: string
+): Promise<void> {
+  const client = await getApplicationGraphClient();
+
+  await client
+    .api(`/users/${encodeURIComponent(userIdOrEmail)}/calendar/events/${eventId}`)
+    .delete();
+
+  console.log(`[Application Graph] Deleted calendar event ${eventId} for ${userIdOrEmail}`);
+}
+
+/**
+ * Accept, decline, or tentatively accept a calendar event
+ * 
+ * @param userIdOrEmail - Azure AD user GUID or email address
+ * @param eventId - The ID of the event
+ * @param response - The response type: accept, decline, or tentativelyAccept
+ * @param comment - Optional comment to include in the response
+ * @param sendResponse - Whether to send a response to the organizer (default true)
+ */
+export async function respondToUserCalendarEvent(
+  userIdOrEmail: string,
+  eventId: string,
+  response: 'accept' | 'decline' | 'tentativelyAccept',
+  comment?: string,
+  sendResponse: boolean = true
+): Promise<void> {
+  const client = await getApplicationGraphClient();
+
+  await client
+    .api(`/users/${encodeURIComponent(userIdOrEmail)}/calendar/events/${eventId}/${response}`)
+    .post({
+      comment,
+      sendResponse,
+    });
+
+  console.log(`[Application Graph] Responded ${response} to event ${eventId} for ${userIdOrEmail}`);
+}
+
+/**
+ * Get free/busy schedule for one or more users
+ * 
+ * @param organizerIdOrEmail - The user making the request
+ * @param schedules - Array of email addresses to get schedules for
+ * @param startTime - Start of the time window
+ * @param endTime - End of the time window
+ * @param availabilityViewInterval - Interval in minutes (15, 30, or 60)
+ */
+export async function getScheduleAvailability(
+  organizerIdOrEmail: string,
+  schedules: string[],
+  startTime: { dateTime: string; timeZone: string },
+  endTime: { dateTime: string; timeZone: string },
+  availabilityViewInterval: number = 30
+): Promise<Array<{
+  scheduleId: string;
+  availabilityView: string;
+  scheduleItems: Array<{
+    status: 'free' | 'tentative' | 'busy' | 'oof' | 'workingElsewhere';
+    start: { dateTime: string; timeZone: string };
+    end: { dateTime: string; timeZone: string };
+    subject?: string;
+    location?: string;
+  }>;
+  workingHours: any;
+}>> {
+  const client = await getApplicationGraphClient();
+
+  const response = await client
+    .api(`/users/${encodeURIComponent(organizerIdOrEmail)}/calendar/getSchedule`)
+    .post({
+      schedules,
+      startTime,
+      endTime,
+      availabilityViewInterval,
+    });
 
   return response.value || [];
 }
