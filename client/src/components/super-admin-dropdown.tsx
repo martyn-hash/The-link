@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Users, ChevronDown, Bell, Activity, Eye, Settings, FileSpreadsheet, Share2, Calendar, Trash2, Link2 } from "lucide-react";
+import { Users, ChevronDown, Bell, Activity, Eye, Settings, FileSpreadsheet, Share2, Calendar, Trash2, Link2, Mail } from "lucide-react";
 import type { User } from "@shared/schema";
 
 interface SuperAdminDropdownProps {
@@ -76,6 +76,11 @@ export default function SuperAdminDropdown({ user }: SuperAdminDropdownProps) {
       label: "Data Cleanup",
       href: "/super-admin/data-cleanup",
       icon: Trash2,
+    },
+    {
+      label: "Email / Calendar Test",
+      href: "/super-admin/graph-test",
+      icon: Mail,
     },
   ];
 
