@@ -2,8 +2,9 @@ import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, formatDistanceToNow } from "date-fns";
 import { 
-  X, ChevronRight, CheckSquare, Calendar, Target, Clock, Building2,
-  MessageSquare, User, Briefcase, FileText, AlertCircle, ArrowUpRight
+  X, ChevronRight, ChevronLeft, CheckSquare, Calendar, Target, Clock, Building2,
+  MessageSquare, User, Briefcase, FileText, AlertCircle, Flag, Tag,
+  Activity, ClipboardList, Users, MapPin
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { CalendarEvent as CalendarEventType } from "@shared/schema";
 
 interface CalendarDayModalProps {
@@ -175,10 +182,9 @@ export default function CalendarDayModal({
   onOpenChange,
   date,
   events,
-  onEventClick,
 }: CalendarDayModalProps) {
   const [selectedEvent, setSelectedEvent] = useState<CalendarEventType | null>(null);
-  const [showFullDetails, setShowFullDetails] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const categories = useMemo(() => groupEventsByType(events), [events]);
 
@@ -193,7 +199,7 @@ export default function CalendarDayModal({
   useEffect(() => {
     if (!open) {
       setSelectedEvent(null);
-      setShowFullDetails(false);
+      setIsExpanded(false);
     }
   }, [open]);
 
@@ -203,7 +209,7 @@ export default function CalendarDayModal({
     enabled: !!selectedEvent && selectedEvent.entityType === 'project' && open,
   });
 
-  // Fetch client chronology when a project event is selected (for stage changes etc)
+  // Fetch client chronology when a project event is selected
   const { data: clientChronology, isLoading: loadingChronology } = useQuery<ChronologyEntry[]>({
     queryKey: ['/api/clients', selectedEvent?.clientId, 'chronology'],
     enabled: !!selectedEvent && !!selectedEvent.clientId && selectedEvent.entityType === 'project' && open,
@@ -220,23 +226,19 @@ export default function CalendarDayModal({
     if (!clientChronology || !selectedEvent) return [];
     return clientChronology
       .filter(entry => entry.entityId === selectedEvent.entityId && entry.entityType === 'project')
-      .slice(0, 5);
+      .slice(0, 10);
   }, [clientChronology, selectedEvent]);
 
   const handleEventSelect = (event: CalendarEventType) => {
     setSelectedEvent(event);
-    setShowFullDetails(false);
   };
 
-  const handleShowMore = () => {
-    setShowFullDetails(true);
+  const handleExpand = () => {
+    setIsExpanded(true);
   };
 
-  const handleViewFullPage = () => {
-    if (selectedEvent) {
-      onEventClick(selectedEvent);
-      onOpenChange(false);
-    }
+  const handleCollapse = () => {
+    setIsExpanded(false);
   };
 
   if (!date) return null;
@@ -249,21 +251,35 @@ export default function CalendarDayModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent 
         className={cn(
-          "max-w-[95vw] h-[85vh] p-0 gap-0 transition-all duration-300",
-          showFullDetails ? "md:max-w-6xl" : "md:max-w-4xl"
+          "p-0 gap-0 transition-all duration-300 ease-in-out",
+          isExpanded 
+            ? "max-w-[96vw] w-[96vw] h-[94vh] max-h-[94vh]" 
+            : "max-w-[95vw] md:max-w-4xl h-[85vh]"
         )}
       >
-        <DialogHeader className="px-6 py-4 border-b bg-muted/30">
+        <DialogHeader className="px-6 py-4 border-b bg-muted/30 shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Calendar className="w-6 h-6 text-primary" />
+              {isExpanded && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCollapse}
+                  className="mr-2"
+                  data-testid="button-collapse-modal"
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" />
+                  Back
+                </Button>
+              )}
+              <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                <Calendar className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <DialogTitle className="text-xl font-bold">
+                <DialogTitle className="text-lg font-bold">
                   {format(date, "EEEE, MMMM d, yyyy")}
                 </DialogTitle>
-                <p className="text-sm text-muted-foreground mt-0.5">
+                <p className="text-sm text-muted-foreground">
                   {events.length} {events.length === 1 ? "item" : "items"} scheduled
                 </p>
               </div>
@@ -271,73 +287,108 @@ export default function CalendarDayModal({
           </div>
         </DialogHeader>
 
-        <div className="flex flex-1 overflow-hidden">
-          {/* Column 1: Categories */}
-          <div 
-            className={cn(
-              "border-r transition-all duration-300 flex flex-col min-w-0",
-              showFullDetails ? "w-44" : "w-56"
-            )}
-          >
-            <div className="px-3 py-2 border-b bg-muted/20">
-              <h3 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">
-                Categories
-              </h3>
-            </div>
-            <ScrollArea className="flex-1">
-              <Accordion type="multiple" defaultValue={categories.map(c => c.id)} className="px-2 py-2">
-                {categories.map((category) => (
-                  <AccordionItem 
-                    key={category.id} 
-                    value={category.id}
-                    className="border rounded-lg mb-2 overflow-hidden"
-                  >
-                    <AccordionTrigger className="px-2 py-1.5 hover:no-underline hover:bg-accent/50 text-sm">
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: category.color }}
-                        />
-                        <category.icon className="w-3.5 h-3.5 text-muted-foreground" />
-                        <Badge variant="secondary" className="ml-auto text-xs h-5">
-                          {category.events.length}
-                        </Badge>
-                      </div>
-                    </AccordionTrigger>
-                    <AccordionContent className="pb-1 px-1">
-                      <div className="space-y-0.5">
-                        {category.events.map((event) => (
-                          <button
-                            key={event.id}
-                            onClick={() => handleEventSelect(event)}
-                            className={cn(
-                              "w-full text-left px-2 py-1.5 rounded-md text-xs transition-colors",
-                              "hover:bg-accent",
-                              selectedEvent?.id === event.id && "bg-accent ring-1 ring-primary"
-                            )}
-                          >
-                            <div className="flex items-center gap-1">
-                              <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                              <span className="truncate font-medium">{event.title}</span>
+        <div className="flex flex-1 overflow-hidden min-h-0">
+          {/* Column 1: Categories - becomes icon rail when expanded */}
+          <TooltipProvider>
+            <div 
+              className={cn(
+                "border-r transition-all duration-300 flex flex-col shrink-0",
+                isExpanded ? "w-16" : "w-56"
+              )}
+            >
+              {!isExpanded && (
+                <div className="px-3 py-2 border-b bg-muted/20 shrink-0">
+                  <h3 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">
+                    Categories
+                  </h3>
+                </div>
+              )}
+              <ScrollArea className="flex-1">
+                {isExpanded ? (
+                  // Icon rail mode
+                  <div className="py-2 space-y-1">
+                    {categories.map((category) => (
+                      <Tooltip key={category.id}>
+                        <TooltipTrigger asChild>
+                          <div className="px-2">
+                            <div 
+                              className={cn(
+                                "w-12 h-12 rounded-lg flex flex-col items-center justify-center cursor-pointer transition-colors",
+                                "hover:bg-accent",
+                                selectedEvent && category.events.some(e => e.id === selectedEvent.id) && "bg-accent ring-1 ring-primary"
+                              )}
+                              style={{ borderLeft: `3px solid ${category.color}` }}
+                              onClick={() => handleEventSelect(category.events[0])}
+                            >
+                              <category.icon className="w-4 h-4 text-muted-foreground" />
+                              <span className="text-xs font-bold mt-0.5">{category.events.length}</span>
                             </div>
-                          </button>
-                        ))}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </ScrollArea>
-          </div>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">
+                          <p>{category.name} ({category.events.length})</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </div>
+                ) : (
+                  // Full accordion mode
+                  <Accordion type="multiple" defaultValue={categories.map(c => c.id)} className="px-2 py-2">
+                    {categories.map((category) => (
+                      <AccordionItem 
+                        key={category.id} 
+                        value={category.id}
+                        className="border rounded-lg mb-2 overflow-hidden"
+                      >
+                        <AccordionTrigger className="px-2 py-1.5 hover:no-underline hover:bg-accent/50 text-sm">
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                              style={{ backgroundColor: category.color }}
+                            />
+                            <category.icon className="w-3.5 h-3.5 text-muted-foreground" />
+                            <span className="font-medium text-xs truncate">{category.name}</span>
+                            <Badge variant="secondary" className="ml-auto text-xs h-5">
+                              {category.events.length}
+                            </Badge>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pb-1 px-1">
+                          <div className="space-y-0.5">
+                            {category.events.map((event) => (
+                              <button
+                                key={event.id}
+                                onClick={() => handleEventSelect(event)}
+                                className={cn(
+                                  "w-full text-left px-2 py-1.5 rounded-md text-xs transition-colors",
+                                  "hover:bg-accent",
+                                  selectedEvent?.id === event.id && "bg-accent ring-1 ring-primary"
+                                )}
+                              >
+                                <div className="flex items-center gap-1">
+                                  <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                                  <span className="truncate font-medium">{event.title}</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                )}
+              </ScrollArea>
+            </div>
+          </TooltipProvider>
 
-          {/* Column 2: Summary with enriched data */}
+          {/* Column 2: Summary - becomes thin when expanded */}
           <div 
             className={cn(
-              "transition-all duration-300 flex flex-col min-w-0",
-              showFullDetails ? "w-72 border-r" : "flex-1"
+              "transition-all duration-300 flex flex-col min-w-0 shrink-0",
+              isExpanded ? "w-64 border-r" : "flex-1"
             )}
           >
-            <div className="px-4 py-2 border-b bg-muted/20 flex items-center justify-between">
+            <div className="px-4 py-2 border-b bg-muted/20 flex items-center justify-between shrink-0">
               <h3 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">
                 Summary
               </h3>
@@ -352,7 +403,9 @@ export default function CalendarDayModal({
                   />
                   
                   <div>
-                    <h4 className="font-bold text-lg leading-tight">{selectedEvent.title}</h4>
+                    <h4 className={cn("font-bold leading-tight", isExpanded ? "text-base" : "text-lg")}>
+                      {selectedEvent.title}
+                    </h4>
                     {selectedEvent.clientName && (
                       <p className="text-sm text-muted-foreground mt-1">
                         {selectedEvent.clientName}
@@ -393,195 +446,25 @@ export default function CalendarDayModal({
                     </div>
                   )}
 
-                  <Separator />
-
-                  {/* Enriched content based on entity type */}
-                  {selectedEvent.entityType === 'project' && (
-                    <div className="space-y-3">
-                      <h5 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                        <Clock className="w-3.5 h-3.5" />
-                        Recent Activity
-                      </h5>
-                      
-                      {isLoadingDetails ? (
-                        <div className="space-y-2">
-                          {[1, 2, 3].map(i => (
-                            <div key={i} className="animate-pulse bg-muted/30 rounded-lg h-16" />
-                          ))}
-                        </div>
-                      ) : projectChronology.length > 0 ? (
-                        <div className="space-y-2">
-                          {projectChronology.map((entry) => (
-                            <div key={entry.id} className="bg-muted/30 rounded-lg p-2.5 text-sm">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium text-xs capitalize">
-                                    {entry.eventType.replace(/_/g, " ")}
-                                  </p>
-                                  {entry.fromValue && entry.toValue && (
-                                    <p className="text-xs text-muted-foreground mt-0.5">
-                                      {entry.fromValue} → {entry.toValue}
-                                    </p>
-                                  )}
-                                  {entry.changeReason && (
-                                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                                      {entry.changeReason}
-                                    </p>
-                                  )}
-                                </div>
-                                <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                                  {formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true })}
-                                </span>
-                              </div>
-                              {entry.user && (
-                                <p className="text-[10px] text-muted-foreground mt-1">
-                                  by {entry.user.firstName} {entry.user.lastName}
-                                </p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      ) : projectCommunications && projectCommunications.length > 0 ? (
-                        <div className="space-y-2">
-                          {projectCommunications.slice(0, 3).map((comm) => (
-                            <div key={comm.id} className="bg-muted/30 rounded-lg p-2.5 text-sm">
-                              <div className="flex items-start gap-2">
-                                <MessageSquare className="w-3.5 h-3.5 text-muted-foreground mt-0.5" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-xs line-clamp-2">{comm.content}</p>
-                                  <p className="text-[10px] text-muted-foreground mt-1">
-                                    {formatDistanceToNow(new Date(comm.createdAt), { addSuffix: true })}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground italic">No recent activity</p>
-                      )}
-
-                      {selectedEvent.meta?.stageName && (
-                        <>
-                          <Separator />
-                          <div className="bg-muted/30 rounded-lg p-2.5">
-                            <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Current Stage</p>
-                            <p className="font-medium text-sm mt-0.5">{selectedEvent.meta.stageName}</p>
-                          </div>
-                        </>
-                      )}
+                  {selectedEvent.meta?.stageName && (
+                    <div className="bg-muted/30 rounded-lg p-2.5">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Current Stage</p>
+                      <p className="font-medium text-sm mt-0.5">{selectedEvent.meta.stageName}</p>
                     </div>
                   )}
 
-                  {selectedEvent.entityType === 'task' && (
-                    <div className="space-y-3">
-                      <h5 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                        <FileText className="w-3.5 h-3.5" />
-                        Task Details
-                      </h5>
-                      
-                      {loadingTask ? (
-                        <div className="space-y-2">
-                          {[1, 2, 3].map(i => (
-                            <div key={i} className="animate-pulse bg-muted/30 rounded-lg h-12" />
-                          ))}
-                        </div>
-                      ) : taskDetails ? (
-                        <div className="space-y-2">
-                          {taskDetails.description && (
-                            <div className="bg-muted/30 rounded-lg p-2.5">
-                              <p className="text-xs">{taskDetails.description}</p>
-                            </div>
-                          )}
-                          
-                          {taskDetails.taskType && (
-                            <div className="bg-muted/30 rounded-lg p-2.5">
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Task Type</p>
-                              <p className="font-medium text-sm mt-0.5">{taskDetails.taskType.name}</p>
-                            </div>
-                          )}
-
-                          {taskDetails.priority && (
-                            <div className="bg-muted/30 rounded-lg p-2.5">
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Priority</p>
-                              <Badge 
-                                variant={taskDetails.priority === "urgent" || taskDetails.priority === "high" ? "destructive" : "secondary"}
-                                className="mt-0.5"
-                              >
-                                {taskDetails.priority}
-                              </Badge>
-                            </div>
-                          )}
-
-                          {(taskDetails.client || taskDetails.project) && (
-                            <>
-                              <Separator />
-                              <h5 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                                <Briefcase className="w-3.5 h-3.5" />
-                                Related To
-                              </h5>
-                              {taskDetails.client && (
-                                <div className="bg-muted/30 rounded-lg p-2.5">
-                                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Client</p>
-                                  <p className="font-medium text-sm mt-0.5">{taskDetails.client.companyName}</p>
-                                </div>
-                              )}
-                              {taskDetails.project && (
-                                <div className="bg-muted/30 rounded-lg p-2.5">
-                                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Project</p>
-                                  <p className="font-medium text-sm mt-0.5">{taskDetails.project.name}</p>
-                                </div>
-                              )}
-                            </>
-                          )}
-
-                          {taskDetails.progressNotes && taskDetails.progressNotes.length > 0 && (
-                            <>
-                              <Separator />
-                              <h5 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-                                <MessageSquare className="w-3.5 h-3.5" />
-                                Recent Notes
-                              </h5>
-                              {taskDetails.progressNotes.slice(0, 2).map((note) => (
-                                <div key={note.id} className="bg-muted/30 rounded-lg p-2.5">
-                                  <p className="text-xs line-clamp-2">{note.content}</p>
-                                  <p className="text-[10px] text-muted-foreground mt-1">
-                                    {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
-                                  </p>
-                                </div>
-                              ))}
-                            </>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground italic">Loading task details...</p>
-                      )}
-                    </div>
+                  {!isExpanded && (
+                    <>
+                      <Separator />
+                      <Button
+                        onClick={handleExpand}
+                        className="w-full"
+                        data-testid="button-show-more-details"
+                      >
+                        Show Full Details
+                      </Button>
+                    </>
                   )}
-
-                  <Separator />
-
-                  {/* Action buttons */}
-                  <div className="flex gap-2 pt-1">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleShowMore}
-                      className="flex-1"
-                      data-testid="button-show-more-details"
-                    >
-                      Show More
-                    </Button>
-                    <Button
-                      size="sm"
-                      onClick={handleViewFullPage}
-                      className="flex-1"
-                      data-testid="button-view-full-page"
-                    >
-                      <ArrowUpRight className="w-3.5 h-3.5 mr-1" />
-                      Open Page
-                    </Button>
-                  </div>
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-full p-8">
@@ -591,204 +474,342 @@ export default function CalendarDayModal({
             </ScrollArea>
           </div>
 
-          {/* Column 3: Full Details (only shown when expanded) */}
-          {showFullDetails && selectedEvent && (
-            <div className="flex-1 flex flex-col min-w-0">
-              <div className="px-4 py-2 border-b bg-muted/20 flex items-center justify-between">
-                <h3 className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">
+          {/* Column 3: Full Details - only shown when expanded, takes majority of space */}
+          {isExpanded && selectedEvent && (
+            <div className="flex-1 flex flex-col min-w-0 bg-background">
+              <div className="px-6 py-3 border-b bg-muted/10 flex items-center justify-between shrink-0">
+                <h3 className="font-semibold text-sm text-foreground">
                   Full Details
                 </h3>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowFullDetails(false)}
-                  className="h-6 text-xs px-2"
-                >
-                  <X className="w-3 h-3 mr-1" />
-                  Collapse
-                </Button>
               </div>
-              <ScrollArea className="flex-1 p-4">
-                <div className="space-y-6">
-                  {/* Header card */}
+              <ScrollArea className="flex-1">
+                <div className="p-6 space-y-6">
+                  {/* Hero Header */}
                   <div 
-                    className="rounded-lg p-4"
+                    className="rounded-xl p-6"
                     style={{ 
-                      backgroundColor: `${selectedEvent.color}15`,
+                      background: `linear-gradient(135deg, ${selectedEvent.color}20 0%, ${selectedEvent.color}05 100%)`,
                       borderLeft: `4px solid ${selectedEvent.color}`
                     }}
                   >
-                    <h4 className="font-bold text-xl">{selectedEvent.title}</h4>
-                    {selectedEvent.clientName && (
-                      <p className="text-muted-foreground mt-1">{selectedEvent.clientName}</p>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <h2 className="text-2xl font-bold">{selectedEvent.title}</h2>
+                        {selectedEvent.clientName && (
+                          <p className="text-lg text-muted-foreground mt-1">{selectedEvent.clientName}</p>
+                        )}
+                      </div>
+                      <div className="flex flex-col gap-2 items-end">
+                        <Badge 
+                          variant={selectedEvent.isOverdue ? "destructive" : "secondary"}
+                          className="text-sm px-3 py-1"
+                        >
+                          {selectedEvent.status}
+                        </Badge>
+                        {selectedEvent.isOverdue && (
+                          <Badge variant="destructive" className="text-sm px-3 py-1">
+                            Overdue
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Metadata Grid */}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="bg-card border rounded-lg p-4">
+                      <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                        <Tag className="w-4 h-4" />
+                        <span className="text-xs uppercase tracking-wide">Type</span>
+                      </div>
+                      <p className="font-semibold capitalize">{selectedEvent.type.replace(/_/g, " ")}</p>
+                    </div>
+                    
+                    <div className="bg-card border rounded-lg p-4">
+                      <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                        <Calendar className="w-4 h-4" />
+                        <span className="text-xs uppercase tracking-wide">Due Date</span>
+                      </div>
+                      <p className="font-semibold">{format(new Date(selectedEvent.date), "MMM d, yyyy")}</p>
+                    </div>
+
+                    {selectedEvent.assigneeName && (
+                      <div className="bg-card border rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                          <User className="w-4 h-4" />
+                          <span className="text-xs uppercase tracking-wide">Assignee</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div 
+                            className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold"
+                            style={{ backgroundColor: selectedEvent.color }}
+                          >
+                            {selectedEvent.assigneeName.charAt(0)}
+                          </div>
+                          <p className="font-semibold">{selectedEvent.assigneeName}</p>
+                        </div>
+                      </div>
                     )}
-                    {selectedEvent.isOverdue && (
-                      <Badge variant="destructive" className="mt-2">Overdue</Badge>
+
+                    {selectedEvent.meta?.serviceName && (
+                      <div className="bg-card border rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                          <Briefcase className="w-4 h-4" />
+                          <span className="text-xs uppercase tracking-wide">Service</span>
+                        </div>
+                        <p className="font-semibold">{selectedEvent.meta.serviceName}</p>
+                      </div>
+                    )}
+
+                    {selectedEvent.meta?.stageName && (
+                      <div className="bg-card border rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                          <Flag className="w-4 h-4" />
+                          <span className="text-xs uppercase tracking-wide">Stage</span>
+                        </div>
+                        <p className="font-semibold">{selectedEvent.meta.stageName}</p>
+                      </div>
+                    )}
+
+                    {selectedEvent.meta?.projectTypeName && (
+                      <div className="bg-card border rounded-lg p-4">
+                        <div className="flex items-center gap-2 text-muted-foreground mb-2">
+                          <ClipboardList className="w-4 h-4" />
+                          <span className="text-xs uppercase tracking-wide">Project Type</span>
+                        </div>
+                        <p className="font-semibold">{selectedEvent.meta.projectTypeName}</p>
+                      </div>
                     )}
                   </div>
 
-                  {/* Full details grid */}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-4">
-                      <div>
-                        <h5 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
-                          Event Information
-                        </h5>
-                        <div className="bg-card border rounded-lg divide-y">
-                          <div className="flex justify-between p-3">
-                            <span className="text-sm text-muted-foreground">Type</span>
-                            <span className="font-medium text-sm capitalize">{selectedEvent.type.replace(/_/g, " ")}</span>
-                          </div>
-                          <div className="flex justify-between p-3">
-                            <span className="text-sm text-muted-foreground">Date</span>
-                            <span className="font-medium text-sm">{format(new Date(selectedEvent.date), "MMM d, yyyy")}</span>
-                          </div>
-                          <div className="flex justify-between p-3">
-                            <span className="text-sm text-muted-foreground">Status</span>
-                            <Badge variant="secondary">{selectedEvent.status}</Badge>
-                          </div>
+                  {/* Task-specific content */}
+                  {selectedEvent.entityType === 'task' && (
+                    <>
+                      {loadingTask ? (
+                        <div className="space-y-4">
+                          <div className="animate-pulse bg-muted/30 rounded-lg h-32" />
+                          <div className="animate-pulse bg-muted/30 rounded-lg h-48" />
                         </div>
-                      </div>
-
-                      {selectedEvent.assigneeName && (
-                        <div>
-                          <h5 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
-                            Assignment
-                          </h5>
-                          <div className="bg-card border rounded-lg p-3">
-                            <div className="flex items-center gap-3">
-                              <div 
-                                className="w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold text-sm"
-                                style={{ backgroundColor: selectedEvent.color }}
-                              >
-                                {selectedEvent.assigneeName.charAt(0).toUpperCase()}
-                              </div>
-                              <div>
-                                <p className="font-medium">{selectedEvent.assigneeName}</p>
-                                <p className="text-sm text-muted-foreground">Assigned</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="space-y-4">
-                      {(selectedEvent.meta?.serviceName || selectedEvent.meta?.projectTypeName || selectedEvent.meta?.stageName) && (
-                        <div>
-                          <h5 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
-                            Project Details
-                          </h5>
-                          <div className="bg-card border rounded-lg divide-y">
-                            {selectedEvent.meta?.serviceName && (
-                              <div className="flex justify-between p-3">
-                                <span className="text-sm text-muted-foreground">Service</span>
-                                <span className="font-medium text-sm">{selectedEvent.meta.serviceName}</span>
-                              </div>
-                            )}
-                            {selectedEvent.meta?.projectTypeName && (
-                              <div className="flex justify-between p-3">
-                                <span className="text-sm text-muted-foreground">Project Type</span>
-                                <span className="font-medium text-sm">{selectedEvent.meta.projectTypeName}</span>
-                              </div>
-                            )}
-                            {selectedEvent.meta?.stageName && (
-                              <div className="flex justify-between p-3">
-                                <span className="text-sm text-muted-foreground">Stage</span>
-                                <span className="font-medium text-sm">{selectedEvent.meta.stageName}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Full chronology for projects */}
-                      {selectedEvent.entityType === 'project' && projectChronology.length > 0 && (
-                        <div>
-                          <h5 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
-                            Activity Timeline
-                          </h5>
-                          <div className="bg-card border rounded-lg divide-y max-h-64 overflow-y-auto">
-                            {projectChronology.map((entry) => (
-                              <div key={entry.id} className="p-3">
-                                <div className="flex justify-between items-start">
-                                  <div>
-                                    <p className="font-medium text-sm capitalize">
-                                      {entry.eventType.replace(/_/g, " ")}
-                                    </p>
-                                    {entry.fromValue && entry.toValue && (
-                                      <p className="text-sm text-muted-foreground">
-                                        {entry.fromValue} → {entry.toValue}
-                                      </p>
-                                    )}
-                                    {entry.notes && (
-                                      <p className="text-sm text-muted-foreground mt-1">{entry.notes}</p>
-                                    )}
-                                  </div>
-                                  <span className="text-xs text-muted-foreground whitespace-nowrap ml-2">
-                                    {format(new Date(entry.timestamp), "MMM d, HH:mm")}
-                                  </span>
-                                </div>
-                                {entry.user && (
-                                  <p className="text-xs text-muted-foreground mt-1">
-                                    by {entry.user.firstName} {entry.user.lastName}
-                                  </p>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Full task details */}
-                      {selectedEvent.entityType === 'task' && taskDetails && (
+                      ) : taskDetails ? (
                         <>
+                          {/* Task Description */}
                           {taskDetails.description && (
-                            <div>
-                              <h5 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
-                                Description
-                              </h5>
-                              <div className="bg-card border rounded-lg p-3">
-                                <p className="text-sm">{taskDetails.description}</p>
+                            <div className="bg-card border rounded-lg p-6">
+                              <div className="flex items-center gap-2 text-muted-foreground mb-3">
+                                <FileText className="w-4 h-4" />
+                                <span className="text-sm font-semibold uppercase tracking-wide">Description</span>
+                              </div>
+                              <p className="text-foreground leading-relaxed">{taskDetails.description}</p>
+                            </div>
+                          )}
+
+                          {/* Task Details Grid */}
+                          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                            {taskDetails.taskType && (
+                              <div className="bg-card border rounded-lg p-4">
+                                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Task Type</p>
+                                <p className="font-semibold">{taskDetails.taskType.name}</p>
+                              </div>
+                            )}
+                            {taskDetails.priority && (
+                              <div className="bg-card border rounded-lg p-4">
+                                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Priority</p>
+                                <Badge 
+                                  variant={taskDetails.priority === "urgent" || taskDetails.priority === "high" ? "destructive" : "secondary"}
+                                >
+                                  {taskDetails.priority}
+                                </Badge>
+                              </div>
+                            )}
+                            {taskDetails.creator && (
+                              <div className="bg-card border rounded-lg p-4">
+                                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Created By</p>
+                                <p className="font-semibold">{taskDetails.creator.firstName} {taskDetails.creator.lastName}</p>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Related Entities */}
+                          {(taskDetails.client || taskDetails.project) && (
+                            <div className="bg-card border rounded-lg p-6">
+                              <div className="flex items-center gap-2 text-muted-foreground mb-4">
+                                <Users className="w-4 h-4" />
+                                <span className="text-sm font-semibold uppercase tracking-wide">Related To</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-4">
+                                {taskDetails.client && (
+                                  <div className="bg-muted/30 rounded-lg p-4">
+                                    <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Client</p>
+                                    <p className="font-semibold">{taskDetails.client.companyName}</p>
+                                  </div>
+                                )}
+                                {taskDetails.project && (
+                                  <div className="bg-muted/30 rounded-lg p-4">
+                                    <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Project</p>
+                                    <p className="font-semibold">{taskDetails.project.name}</p>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           )}
-                          
+
+                          {/* Progress Notes */}
                           {taskDetails.progressNotes && taskDetails.progressNotes.length > 0 && (
-                            <div>
-                              <h5 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-2">
-                                All Progress Notes
-                              </h5>
-                              <div className="bg-card border rounded-lg divide-y max-h-48 overflow-y-auto">
+                            <div className="bg-card border rounded-lg p-6">
+                              <div className="flex items-center gap-2 text-muted-foreground mb-4">
+                                <MessageSquare className="w-4 h-4" />
+                                <span className="text-sm font-semibold uppercase tracking-wide">Progress Notes</span>
+                                <Badge variant="secondary" className="ml-auto">{taskDetails.progressNotes.length}</Badge>
+                              </div>
+                              <div className="space-y-4">
                                 {taskDetails.progressNotes.map((note) => (
-                                  <div key={note.id} className="p-3">
-                                    <p className="text-sm">{note.content}</p>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                      {format(new Date(note.createdAt), "MMM d, yyyy 'at' HH:mm")}
-                                      {note.createdBy && ` by ${note.createdBy.firstName} ${note.createdBy.lastName}`}
-                                    </p>
+                                  <div key={note.id} className="bg-muted/30 rounded-lg p-4">
+                                    <p className="text-foreground">{note.content}</p>
+                                    <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+                                      <span>{format(new Date(note.createdAt), "MMM d, yyyy 'at' HH:mm")}</span>
+                                      {note.createdBy && (
+                                        <>
+                                          <span>•</span>
+                                          <span>{note.createdBy.firstName} {note.createdBy.lastName}</span>
+                                        </>
+                                      )}
+                                    </div>
                                   </div>
                                 ))}
                               </div>
                             </div>
                           )}
                         </>
-                      )}
-                    </div>
-                  </div>
+                      ) : null}
+                    </>
+                  )}
 
-                  {/* Bottom action */}
-                  <div className="flex justify-center pt-4 border-t">
-                    <Button 
-                      size="lg" 
-                      onClick={handleViewFullPage}
-                      className="px-8"
-                      data-testid="button-open-full-view-expanded"
-                    >
-                      <ArrowUpRight className="w-4 h-4 mr-2" />
-                      Open Full {selectedEvent.entityType === "project" ? "Project" : "Task"} Page
-                    </Button>
-                  </div>
+                  {/* Project-specific content */}
+                  {selectedEvent.entityType === 'project' && (
+                    <>
+                      {isLoadingDetails ? (
+                        <div className="space-y-4">
+                          <div className="animate-pulse bg-muted/30 rounded-lg h-32" />
+                          <div className="animate-pulse bg-muted/30 rounded-lg h-48" />
+                        </div>
+                      ) : (
+                        <>
+                          {/* Activity Timeline */}
+                          {projectChronology.length > 0 && (
+                            <div className="bg-card border rounded-lg p-6">
+                              <div className="flex items-center gap-2 text-muted-foreground mb-4">
+                                <Activity className="w-4 h-4" />
+                                <span className="text-sm font-semibold uppercase tracking-wide">Activity Timeline</span>
+                                <Badge variant="secondary" className="ml-auto">{projectChronology.length}</Badge>
+                              </div>
+                              <div className="relative">
+                                <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-border" />
+                                <div className="space-y-4">
+                                  {projectChronology.map((entry, index) => (
+                                    <div key={entry.id} className="relative pl-10">
+                                      <div 
+                                        className="absolute left-2.5 w-3 h-3 rounded-full border-2 border-background"
+                                        style={{ backgroundColor: selectedEvent.color }}
+                                      />
+                                      <div className="bg-muted/30 rounded-lg p-4">
+                                        <div className="flex items-start justify-between gap-4">
+                                          <div className="flex-1">
+                                            <p className="font-semibold capitalize">
+                                              {entry.eventType.replace(/_/g, " ")}
+                                            </p>
+                                            {entry.fromValue && entry.toValue && (
+                                              <p className="text-sm text-muted-foreground mt-1">
+                                                <span className="line-through">{entry.fromValue}</span>
+                                                <span className="mx-2">→</span>
+                                                <span className="font-medium text-foreground">{entry.toValue}</span>
+                                              </p>
+                                            )}
+                                            {entry.changeReason && (
+                                              <p className="text-sm text-muted-foreground mt-1">
+                                                Reason: {entry.changeReason}
+                                              </p>
+                                            )}
+                                            {entry.notes && (
+                                              <p className="text-sm mt-2">{entry.notes}</p>
+                                            )}
+                                          </div>
+                                          <div className="text-right shrink-0">
+                                            <p className="text-sm text-muted-foreground">
+                                              {formatDistanceToNow(new Date(entry.timestamp), { addSuffix: true })}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">
+                                              {format(new Date(entry.timestamp), "MMM d, HH:mm")}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        {entry.user && (
+                                          <div className="flex items-center gap-2 mt-3 pt-3 border-t">
+                                            <div 
+                                              className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs font-semibold"
+                                              style={{ backgroundColor: selectedEvent.color }}
+                                            >
+                                              {entry.user.firstName.charAt(0)}
+                                            </div>
+                                            <span className="text-sm text-muted-foreground">
+                                              {entry.user.firstName} {entry.user.lastName}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Communications */}
+                          {projectCommunications && projectCommunications.length > 0 && (
+                            <div className="bg-card border rounded-lg p-6">
+                              <div className="flex items-center gap-2 text-muted-foreground mb-4">
+                                <MessageSquare className="w-4 h-4" />
+                                <span className="text-sm font-semibold uppercase tracking-wide">Communications</span>
+                                <Badge variant="secondary" className="ml-auto">{projectCommunications.length}</Badge>
+                              </div>
+                              <div className="space-y-4">
+                                {projectCommunications.slice(0, 5).map((comm) => (
+                                  <div key={comm.id} className="bg-muted/30 rounded-lg p-4">
+                                    <p className="text-foreground">{comm.content}</p>
+                                    <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+                                      <span>{formatDistanceToNow(new Date(comm.createdAt), { addSuffix: true })}</span>
+                                      {comm.createdBy && (
+                                        <>
+                                          <span>•</span>
+                                          <span>{comm.createdBy.firstName} {comm.createdBy.lastName}</span>
+                                        </>
+                                      )}
+                                      {comm.communicationType && (
+                                        <>
+                                          <span>•</span>
+                                          <Badge variant="outline" className="text-xs">{comm.communicationType}</Badge>
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Empty state for projects with no activity */}
+                          {projectChronology.length === 0 && (!projectCommunications || projectCommunications.length === 0) && (
+                            <div className="bg-card border rounded-lg p-8 text-center">
+                              <Activity className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                              <h3 className="font-semibold text-lg mb-2">No Recent Activity</h3>
+                              <p className="text-muted-foreground">
+                                There is no recorded activity or communications for this project yet.
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </>
+                  )}
                 </div>
               </ScrollArea>
             </div>
