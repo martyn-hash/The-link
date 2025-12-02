@@ -257,13 +257,13 @@ export function ClientValueNotificationContent({
             <>
               <Check className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
               <span className="text-green-700 dark:text-green-300">
-                Sending from Outlook {preview.senderEmail && <span className="text-green-600 dark:text-green-400">({preview.senderEmail})</span>}
+                Sending from Microsoft 365 {preview.senderEmail && <span className="text-green-600 dark:text-green-400">({preview.senderEmail})</span>}
               </span>
             </>
           ) : (
             <>
               <AlertCircle className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-              <span className="text-amber-700 dark:text-amber-300">Outlook not connected - using system mailer</span>
+              <span className="text-amber-700 dark:text-amber-300">Email access not enabled - using system mailer</span>
             </>
           )}
         </div>
