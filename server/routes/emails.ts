@@ -2,6 +2,13 @@ import type { Express } from "express";
 import { storage } from "../storage/index";
 import { createReplyToMessage, createReplyAllToMessage } from "../utils/userOutlookClient";
 import { z } from "zod";
+import {
+  isApplicationGraphConfigured,
+  getUserByEmail,
+  getUserEmails,
+  getUserMailFolders,
+  listTenantUsers,
+} from "../utils/applicationGraphClient";
 
 /**
  * Email Routes
@@ -440,6 +447,166 @@ export function registerEmailRoutes(
       res.status(500).json({
         message: "Failed to send test email",
         error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // ==================================================
+  // ADMIN: Tenant-Wide Microsoft Graph API Test Routes
+  // ==================================================
+
+  /**
+   * GET /api/admin/emails/test-tenant-access
+   * Test tenant-wide email access using application permissions
+   * 
+   * Query params:
+   * - email: Email address to look up (e.g., martyn@growth.accountants)
+   */
+  app.get('/api/admin/emails/test-tenant-access', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      if (!req.user?.isAdmin) {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      // Check if application credentials are configured
+      if (!isApplicationGraphConfigured()) {
+        return res.status(400).json({
+          success: false,
+          message: "Microsoft application credentials not configured",
+          missing: "MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, and/or MICROSOFT_TENANT_ID"
+        });
+      }
+
+      const email = req.query.email as string || 'martyn@growth.accountants';
+
+      console.log(`[Tenant Access Test] Testing access for email: ${email}`);
+
+      // Step 1: Look up the user by email to get their Azure AD GUID
+      const user = await getUserByEmail(email);
+      
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: `User not found in Azure AD: ${email}`,
+          step: 'user_lookup'
+        });
+      }
+
+      console.log(`[Tenant Access Test] Found user: ${user.displayName} (${user.id})`);
+
+      // Step 2: Get the user's mail folders
+      let mailFolders;
+      try {
+        mailFolders = await getUserMailFolders(user.id);
+        console.log(`[Tenant Access Test] Retrieved ${mailFolders.length} mail folders`);
+      } catch (folderError: any) {
+        return res.status(500).json({
+          success: false,
+          message: "Failed to access mail folders - may lack Mail.Read permission",
+          error: folderError.message,
+          user: {
+            id: user.id,
+            displayName: user.displayName,
+            email: user.mail || user.userPrincipalName
+          },
+          step: 'mail_folders'
+        });
+      }
+
+      // Step 3: Get some recent emails from Inbox
+      let recentEmails;
+      try {
+        recentEmails = await getUserEmails(user.id, {
+          folder: 'Inbox',
+          top: 5,
+          orderBy: 'receivedDateTime desc'
+        });
+        console.log(`[Tenant Access Test] Retrieved ${recentEmails.messages.length} recent emails`);
+      } catch (emailError: any) {
+        return res.status(500).json({
+          success: false,
+          message: "Failed to read emails - may lack Mail.Read permission",
+          error: emailError.message,
+          user: {
+            id: user.id,
+            displayName: user.displayName,
+            email: user.mail || user.userPrincipalName
+          },
+          mailFolders,
+          step: 'read_emails'
+        });
+      }
+
+      // Success! Return all the data
+      res.json({
+        success: true,
+        message: "Tenant-wide email access is working!",
+        user: {
+          azureAdId: user.id,
+          displayName: user.displayName,
+          email: user.mail || user.userPrincipalName
+        },
+        mailFolders: mailFolders.map(f => ({
+          name: f.displayName,
+          totalItems: f.totalItemCount,
+          unread: f.unreadItemCount
+        })),
+        recentEmails: recentEmails.messages.map((msg: any) => ({
+          id: msg.id,
+          internetMessageId: msg.internetMessageId,
+          subject: msg.subject,
+          from: msg.from?.emailAddress?.address,
+          receivedDateTime: msg.receivedDateTime,
+          isRead: msg.isRead,
+          preview: msg.bodyPreview?.substring(0, 100)
+        }))
+      });
+
+    } catch (error: any) {
+      console.error('[Tenant Access Test] Error:', error);
+      res.status(500).json({
+        success: false,
+        message: "Tenant access test failed",
+        error: error.message,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      });
+    }
+  });
+
+  /**
+   * GET /api/admin/emails/list-tenant-users
+   * List all users in the tenant (for testing/debugging)
+   */
+  app.get('/api/admin/emails/list-tenant-users', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      if (!req.user?.isAdmin) {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      if (!isApplicationGraphConfigured()) {
+        return res.status(400).json({
+          success: false,
+          message: "Microsoft application credentials not configured"
+        });
+      }
+
+      const result = await listTenantUsers({ top: 50 });
+
+      res.json({
+        success: true,
+        count: result.users.length,
+        users: result.users.map(u => ({
+          id: u.id,
+          displayName: u.displayName,
+          email: u.mail || u.userPrincipalName
+        }))
+      });
+    } catch (error: any) {
+      console.error('[List Tenant Users] Error:', error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to list tenant users",
+        error: error.message
       });
     }
   });
