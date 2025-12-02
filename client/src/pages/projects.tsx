@@ -1912,7 +1912,7 @@ export default function Projects() {
               />
             </div>
             <div className="text-sm text-muted-foreground">
-              <p>Current view mode: <strong>{viewMode === "list" ? "List" : "Kanban"}</strong></p>
+              <p>Current view mode: <strong>{viewMode === "list" ? "List" : viewMode === "calendar" ? "Calendar" : "Kanban"}</strong></p>
             </div>
           </div>
           <DialogFooter>

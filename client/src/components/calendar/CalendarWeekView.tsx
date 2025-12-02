@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   startOfWeek,
   endOfWeek,
@@ -7,9 +7,9 @@ import {
   format,
 } from "date-fns";
 import { cn } from "@/lib/utils";
-import CalendarEvent from "./CalendarEvent";
-import type { CalendarEvent as CalendarEventType } from "@shared/schema";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import CalendarDayModal from "./CalendarDayModal";
+import type { CalendarEvent as CalendarEventType } from "@shared/schema";
 
 interface CalendarWeekViewProps {
   currentDate: Date;
@@ -19,11 +19,83 @@ interface CalendarWeekViewProps {
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+interface CategorySummary {
+  name: string;
+  count: number;
+  color: string;
+  type: "service" | "stage" | "target" | "task";
+}
+
+function groupEventsByCategory(events: CalendarEventType[]): CategorySummary[] {
+  const serviceMap = new Map<string, { count: number; color: string }>();
+  let stageCount = 0;
+  let targetCount = 0;
+  let taskCount = 0;
+
+  events.forEach((event) => {
+    if (event.type === "project_due") {
+      const serviceName = event.meta?.serviceName || "Other";
+      const existing = serviceMap.get(serviceName) || { count: 0, color: event.color };
+      existing.count++;
+      serviceMap.set(serviceName, existing);
+    } else if (event.type === "stage_deadline") {
+      stageCount++;
+    } else if (event.type === "project_target") {
+      targetCount++;
+    } else if (event.type === "task_due") {
+      taskCount++;
+    }
+  });
+
+  const summaries: CategorySummary[] = [];
+
+  serviceMap.forEach((value, key) => {
+    summaries.push({
+      name: key,
+      count: value.count,
+      color: value.color,
+      type: "service",
+    });
+  });
+
+  if (stageCount > 0) {
+    summaries.push({
+      name: "Stage Deadlines",
+      count: stageCount,
+      color: "#f59e0b",
+      type: "stage",
+    });
+  }
+
+  if (targetCount > 0) {
+    summaries.push({
+      name: "Target Dates",
+      count: targetCount,
+      color: "#3b82f6",
+      type: "target",
+    });
+  }
+
+  if (taskCount > 0) {
+    summaries.push({
+      name: "Tasks",
+      count: taskCount,
+      color: "#10b981",
+      type: "task",
+    });
+  }
+
+  return summaries.sort((a, b) => b.count - a.count);
+}
+
 export default function CalendarWeekView({
   currentDate,
   events,
   onEventClick,
 }: CalendarWeekViewProps) {
+  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+
   const weekDays = useMemo(() => {
     const weekStart = startOfWeek(currentDate);
     const weekEnd = endOfWeek(currentDate);
@@ -46,74 +118,145 @@ export default function CalendarWeekView({
 
   const today = new Date();
 
+  const handleDayClick = (day: Date, dayEvents: CalendarEventType[]) => {
+    if (dayEvents.length > 0) {
+      setSelectedDay(day);
+      setModalOpen(true);
+    }
+  };
+
+  const selectedDayEvents = selectedDay 
+    ? eventsByDay.get(format(selectedDay, "yyyy-MM-dd")) || []
+    : [];
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="grid grid-cols-7 border-b">
-        {weekDays.map((day, index) => {
-          const isToday = isSameDay(day, today);
-          return (
-            <div
-              key={day.toISOString()}
-              className={cn(
-                "py-3 text-center border-r last:border-r-0",
-                isToday && "bg-primary/5"
-              )}
-            >
-              <div className="text-sm text-muted-foreground">
-                {WEEKDAYS[index]}
-              </div>
+    <>
+      <div className="flex flex-col h-full bg-card rounded-lg border-2 border-border shadow-sm overflow-hidden">
+        <div className="grid grid-cols-7 bg-muted/50 border-b-2 border-border">
+          {weekDays.map((day, index) => {
+            const isToday = isSameDay(day, today);
+            const dayKey = format(day, "yyyy-MM-dd");
+            const dayEvents = eventsByDay.get(dayKey) || [];
+            const totalEvents = dayEvents.length;
+            
+            return (
               <div
+                key={day.toISOString()}
                 className={cn(
-                  "text-lg font-semibold mt-1",
-                  isToday && "text-primary"
+                  "py-4 text-center border-r-2 border-border last:border-r-0 transition-colors",
+                  isToday && "bg-primary/10"
                 )}
               >
-                {format(day, "d")}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {format(day, "MMM")}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-7 flex-1">
-        {weekDays.map((day) => {
-          const isToday = isSameDay(day, today);
-          const dayKey = format(day, "yyyy-MM-dd");
-          const dayEvents = eventsByDay.get(dayKey) || [];
-
-          return (
-            <div
-              key={day.toISOString()}
-              className={cn(
-                "border-r last:border-r-0 min-h-[300px]",
-                isToday && "bg-primary/5"
-              )}
-              data-testid={`calendar-week-day-${dayKey}`}
-            >
-              <ScrollArea className="h-full p-2">
-                <div className="space-y-1">
-                  {dayEvents.length === 0 ? (
-                    <div className="text-xs text-muted-foreground text-center py-4">
-                      No events
-                    </div>
-                  ) : (
-                    dayEvents.map((event) => (
-                      <CalendarEvent
-                        key={event.id}
-                        event={event}
-                        onClick={onEventClick}
-                      />
-                    ))
-                  )}
+                <div className="text-xs text-muted-foreground uppercase tracking-wide font-semibold">
+                  {WEEKDAYS[index]}
                 </div>
-              </ScrollArea>
-            </div>
-          );
-        })}
+                <div
+                  className={cn(
+                    "text-2xl font-bold mt-1 transition-colors",
+                    isToday && "text-primary"
+                  )}
+                >
+                  {format(day, "d")}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {format(day, "MMM")}
+                </div>
+                {totalEvents > 0 && (
+                  <button
+                    onClick={() => handleDayClick(day, dayEvents)}
+                    className={cn(
+                      "mt-2 text-xs font-medium px-2 py-1 rounded-full transition-all",
+                      "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"
+                    )}
+                    data-testid={`calendar-week-see-more-${dayKey}`}
+                  >
+                    {totalEvents} items
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="grid grid-cols-7 flex-1">
+          {weekDays.map((day) => {
+            const isToday = isSameDay(day, today);
+            const dayKey = format(day, "yyyy-MM-dd");
+            const dayEvents = eventsByDay.get(dayKey) || [];
+            const categories = groupEventsByCategory(dayEvents);
+            const totalEvents = dayEvents.length;
+
+            return (
+              <div
+                key={day.toISOString()}
+                className={cn(
+                  "border-r-2 border-border last:border-r-0 min-h-[350px] transition-colors group",
+                  isToday && "bg-primary/5",
+                  totalEvents > 0 && "cursor-pointer hover:bg-accent/30"
+                )}
+                data-testid={`calendar-week-day-${dayKey}`}
+                onClick={() => handleDayClick(day, dayEvents)}
+              >
+                <ScrollArea className="h-full p-3">
+                  <div className="space-y-2">
+                    {categories.length === 0 ? (
+                      <div className="text-xs text-muted-foreground text-center py-8">
+                        No events
+                      </div>
+                    ) : (
+                      <>
+                        {categories.map((category, i) => (
+                          <div
+                            key={`${category.name}-${i}`}
+                            className="p-2 rounded-lg border transition-colors hover:bg-accent/50"
+                            style={{ 
+                              borderLeftWidth: "3px",
+                              borderLeftColor: category.color 
+                            }}
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-lg text-foreground">
+                                {category.count}
+                              </span>
+                              <span className="text-sm text-muted-foreground truncate">
+                                {category.name}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                        
+                        {totalEvents > 0 && (
+                          <button
+                            className={cn(
+                              "w-full text-center py-2 text-xs font-medium rounded-lg transition-all",
+                              "bg-muted/50 text-muted-foreground hover:bg-primary hover:text-primary-foreground",
+                              "opacity-0 group-hover:opacity-100"
+                            )}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDayClick(day, dayEvents);
+                            }}
+                          >
+                            See all {totalEvents} items
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </div>
+
+      <CalendarDayModal
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        date={selectedDay}
+        events={selectedDayEvents}
+        onEventClick={onEventClick}
+      />
+    </>
   );
 }
