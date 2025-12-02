@@ -369,17 +369,17 @@ export class StageChangeNotificationStorage {
         receiveNotifications: contact.receiveNotifications !== false, // Default to true
       }));
 
-      // Get the sending user to check if they have Outlook configured
+      // Get the sending user to check if they have email access enabled
       const sendingUser = await this.getUser(sendingUserId);
       if (!sendingUser) {
         console.warn(`Sending user ${sendingUserId} not found`);
         return null;
       }
 
-      // Check if the user has Outlook connected via storage
-      const { storage } = await import('../index');
-      const outlookAccount = await storage.getUserOauthAccount(sendingUserId, 'outlook');
-      const senderHasOutlook = !!outlookAccount;
+      // Check if the user has email access enabled by admin (tenant-wide Microsoft 365 access)
+      // Also check if Microsoft Graph is configured at the application level
+      const { isApplicationGraphConfigured } = await import('../../utils/applicationGraphClient');
+      const senderHasOutlook = !!sendingUser.accessEmail && isApplicationGraphConfigured();
       const senderEmail = sendingUser.email || null;
 
       // Get chronology for context

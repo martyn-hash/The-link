@@ -1338,43 +1338,50 @@ export function registerProjectRoutes(
 
       // Send emails if channel is enabled
       if (notificationData.sendEmail !== false && emailRecipients.length > 0) {
-        // Try to send via Outlook if user has it configured
-        if (preview.senderHasOutlook) {
+        // Try to send via Microsoft 365 tenant-wide access if user has email access enabled
+        if (preview.senderHasOutlook && effectiveUser?.email) {
           try {
-            const { sendEmailAsUser } = await import("../utils/userOutlookClient");
+            const { sendEmailAsUser: sendEmailTenantWide, isApplicationGraphConfigured } = await import("../utils/applicationGraphClient");
             
-            const emailPromises = emailRecipients.map(async (recipient) => {
-              try {
-                // Process merge fields for this recipient
-                const context = buildMergeFieldContext(recipient);
-                const processedSubject = processNotificationVariables(notificationData.emailSubject, context);
-                const processedBody = processNotificationVariables(notificationData.emailBody, context);
-                
-                await sendEmailAsUser(
-                  effectiveUserId,
-                  recipient.email!,
-                  processedSubject,
-                  processedBody,
-                  true // isHtml
-                );
-                console.log(`[Client Value Notification] Email sent via Outlook to ${recipient.email} for project ${projectId}`);
-                return { success: true, email: recipient.email };
-              } catch (error) {
-                console.error(`[Client Value Notification] Failed to send via Outlook to ${recipient.email}:`, error);
-                return { success: false, email: recipient.email, error: error instanceof Error ? error.message : 'Unknown error' };
-              }
-            });
+            // Only use tenant-wide if Graph is configured
+            if (!isApplicationGraphConfigured()) {
+              console.log(`[Client Value Notification] Microsoft Graph not configured, using SendGrid for project ${projectId}`);
+              await sendViaSendGrid();
+            } else {
+              const emailPromises = emailRecipients.map(async (recipient) => {
+                try {
+                  // Process merge fields for this recipient
+                  const context = buildMergeFieldContext(recipient);
+                  const processedSubject = processNotificationVariables(notificationData.emailSubject, context);
+                  const processedBody = processNotificationVariables(notificationData.emailBody, context);
+                  
+                  // Use tenant-wide access with sender's email address
+                  await sendEmailTenantWide(
+                    effectiveUser.email!,  // Sender email for /users/{email}/sendMail
+                    recipient.email!,
+                    processedSubject,
+                    processedBody,
+                    true // isHtml
+                  );
+                  console.log(`[Client Value Notification] Email sent via Microsoft Graph to ${recipient.email} for project ${projectId}`);
+                  return { success: true, email: recipient.email };
+                } catch (error) {
+                  console.error(`[Client Value Notification] Failed to send via Microsoft Graph to ${recipient.email}:`, error);
+                  return { success: false, email: recipient.email, error: error instanceof Error ? error.message : 'Unknown error' };
+                }
+              });
 
-            const results = await Promise.allSettled(emailPromises);
-            stats.email.successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
-            stats.email.failed = results.length - stats.email.successful;
+              const results = await Promise.allSettled(emailPromises);
+              stats.email.successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length;
+              stats.email.failed = results.length - stats.email.successful;
+            }
           } catch (outlookError) {
-            console.error(`[Client Value Notification] Outlook send error, falling back to SendGrid:`, outlookError);
+            console.error(`[Client Value Notification] Microsoft Graph send error, falling back to SendGrid:`, outlookError);
             // Fall back to SendGrid if Outlook fails
             await sendViaSendGrid();
           }
         } else {
-          // No Outlook configured, use SendGrid
+          // No Outlook access configured, use SendGrid
           await sendViaSendGrid();
         }
       } else {
