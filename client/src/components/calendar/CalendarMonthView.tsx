@@ -186,9 +186,8 @@ export default function CalendarMonthView({
                   {totalEvents > 0 && (
                     <button
                       className={cn(
-                        "text-xs font-medium px-2 py-1 rounded-full transition-all",
-                        "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground",
-                        "opacity-0 group-hover:opacity-100"
+                        "text-[10px] font-medium px-1.5 py-0.5 rounded transition-all",
+                        "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"
                       )}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -196,7 +195,7 @@ export default function CalendarMonthView({
                       }}
                       data-testid={`calendar-day-see-more-${dayKey}`}
                     >
-                      See all
+                      See more
                     </button>
                   )}
                 </div>

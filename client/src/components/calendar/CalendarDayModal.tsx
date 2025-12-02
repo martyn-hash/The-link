@@ -198,12 +198,7 @@ export default function CalendarDayModal({
 
   const categories = useMemo(() => groupEventsByType(events), [events]);
 
-  useEffect(() => {
-    if (open && events.length > 0 && !selectedEvent) {
-      setSelectedEvent(events[0]);
-    }
-  }, [open, events]);
-
+  // Reset state when modal closes
   useEffect(() => {
     if (!open) {
       setSelectedEvent(null);
@@ -456,8 +451,14 @@ export default function CalendarDayModal({
                   )}
                 </div>
               ) : (
-                <div className="flex items-center justify-center h-32 p-4">
-                  <p className="text-xs text-muted-foreground">Select an event</p>
+                <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+                  <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mb-3">
+                    <ChevronRight className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                  <p className="text-sm font-medium text-foreground mb-1">No selection</p>
+                  <p className="text-xs text-muted-foreground max-w-[180px]">
+                    Select a project or task from the categories on the left to see more details
+                  </p>
                 </div>
               )}
             </ScrollArea>
