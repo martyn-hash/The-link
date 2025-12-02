@@ -38,6 +38,8 @@ export const users = pgTable("users", {
   notificationPreferences: jsonb("notification_preferences"),
   canMakeServicesInactive: boolean("can_make_services_inactive").default(false),
   canMakeProjectsInactive: boolean("can_make_projects_inactive").default(false),
+  accessEmail: boolean("access_email").default(false),
+  accessCalendar: boolean("access_calendar").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   lastLoginAt: timestamp("last_login_at"),
