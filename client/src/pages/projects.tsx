@@ -122,6 +122,7 @@ export default function Projects() {
 
   // Dashboard state
   const [currentDashboard, setCurrentDashboard] = useState<Dashboard | null>(null);
+  const [currentSavedViewId, setCurrentSavedViewId] = useState<string | null>(null);
   const [dashboardWidgets, setDashboardWidgets] = useState<Widget[]>([]);
   const [dashboardEditMode, setDashboardEditMode] = useState(false);
   const [createDashboardModalOpen, setCreateDashboardModalOpen] = useState(false);
@@ -396,6 +397,9 @@ export default function Projects() {
     try {
       const filters = typeof view.filters === 'string' ? JSON.parse(view.filters) : view.filters;
       
+      // Track the loaded saved view ID for "Set as Default" functionality
+      setCurrentSavedViewId(view.id);
+      
       setServiceFilter(filters.serviceFilter || "all");
       setTaskAssigneeFilter(filters.taskAssigneeFilter || "all");
       setServiceOwnerFilter(filters.serviceOwnerFilter || "all");
@@ -446,6 +450,9 @@ export default function Projects() {
       setCurrentDashboard(dashboard);
       setDashboardWidgets(dashboard.widgets || []);
       setDashboardEditMode(false);
+      
+      // Clear saved view ID since we're now viewing a dashboard
+      setCurrentSavedViewId(null);
       
       // Switch to dashboard view mode
       setViewMode("dashboard");
@@ -521,6 +528,9 @@ export default function Projects() {
     setCustomDateRange({ from: undefined, to: undefined });
     setBehindScheduleOnly(false);
     setServiceDueDateFilter("all");
+    
+    // Clear saved view tracking since we're viewing all projects now
+    setCurrentSavedViewId(null);
     
     // Switch to list view (default view mode)
     setViewMode("list");
@@ -730,19 +740,22 @@ export default function Projects() {
         defaultViewId: currentDashboard.id,
       });
     } else if (viewMode === 'calendar') {
+      // If a saved view is loaded, save its ID; otherwise save null for plain calendar view
       setDefaultViewMutation.mutate({
         defaultViewType: 'calendar',
-        defaultViewId: null,
+        defaultViewId: currentSavedViewId,
       });
     } else if (viewMode === 'list') {
+      // If a saved view is loaded, save its ID; otherwise save null for plain list view
       setDefaultViewMutation.mutate({
         defaultViewType: 'list',
-        defaultViewId: null,
+        defaultViewId: currentSavedViewId,
       });
     } else if (viewMode === 'kanban') {
+      // If a saved view is loaded, save its ID; otherwise save null for plain kanban view
       setDefaultViewMutation.mutate({
         defaultViewType: 'kanban',
-        defaultViewId: null,
+        defaultViewId: currentSavedViewId,
       });
     }
   };
@@ -756,8 +769,19 @@ export default function Projects() {
       return defaultViewType === 'dashboard' && defaultViewId === currentDashboard.id;
     }
     
-    return defaultViewType === viewMode && !defaultViewId;
-  }, [userProjectPreferences, viewMode, currentDashboard]);
+    // For non-dashboard views, check if the view mode matches AND the saved view ID matches
+    // If currentSavedViewId is null and defaultViewId is null, it's a plain view match
+    // If both have values, they must be equal
+    if (defaultViewType === viewMode) {
+      if (defaultViewId && currentSavedViewId) {
+        return defaultViewId === currentSavedViewId;
+      }
+      // Both are null/undefined - plain view mode with no saved view
+      return !defaultViewId && !currentSavedViewId;
+    }
+    
+    return false;
+  }, [userProjectPreferences, viewMode, currentDashboard, currentSavedViewId]);
 
   // Handler to add widget to new dashboard
   const handleAddWidgetToNewDashboard = () => {
