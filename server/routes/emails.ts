@@ -1,6 +1,5 @@
 import type { Express } from "express";
 import { storage } from "../storage/index";
-import { createReplyToMessage, createReplyAllToMessage } from "../utils/userOutlookClient";
 import { z } from "zod";
 import {
   isApplicationGraphConfigured,
@@ -8,6 +7,8 @@ import {
   getUserEmails,
   getUserMailFolders,
   listTenantUsers,
+  createReplyToMessage,
+  createReplyAllToMessage,
 } from "../utils/applicationGraphClient";
 
 /**
@@ -65,6 +66,33 @@ export function registerEmailRoutes(
       
       const { body, to, cc, subject, replyAll, attachments } = validation.data;
       
+      // Check if tenant-wide Graph is configured
+      if (!isApplicationGraphConfigured()) {
+        return res.status(400).json({
+          message: "Microsoft 365 email integration is not configured on this server."
+        });
+      }
+      
+      // Get the user to check their accessEmail flag and get their email
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(400).json({ message: "User not found." });
+      }
+      
+      // Check if user has email access enabled by admin
+      if (!user.accessEmail) {
+        return res.status(403).json({
+          message: "Email access is not enabled for your account. Please contact your administrator."
+        });
+      }
+      
+      // User must have an email address to send from
+      if (!user.email) {
+        return res.status(400).json({
+          message: "No email address configured for your account."
+        });
+      }
+      
       // Get the email message from database
       const message = await storage.getEmailMessageById(messageId);
       if (!message) {
@@ -83,11 +111,12 @@ export function registerEmailRoutes(
         return res.status(404).json({ message: "Message not found in your mailbox" });
       }
       
-      // Send reply via Microsoft Graph API with attachments and custom recipients/subject
+      // Send reply via Microsoft Graph API using tenant-wide permissions
+      // Pass user's email (for /users/{email}/... endpoints) instead of userId
       if (replyAll) {
-        await createReplyAllToMessage(userId, graphMessageId, body, true, subject, to, cc, attachments);
+        await createReplyAllToMessage(user.email, graphMessageId, body, true, { subject, to, cc, attachments });
       } else {
-        await createReplyToMessage(userId, graphMessageId, body, true, subject, to, cc, attachments);
+        await createReplyToMessage(user.email, graphMessageId, body, true, { subject, to, cc, attachments });
       }
       
       res.json({
@@ -96,6 +125,26 @@ export function registerEmailRoutes(
       });
     } catch (error) {
       console.error('Error sending email reply:', error);
+      
+      // Handle specific Graph API errors
+      if (error instanceof Error) {
+        if (error.message.includes('InvalidAuthenticationToken') || error.message.includes('Unauthorized')) {
+          return res.status(401).json({
+            message: "Microsoft 365 authentication error. Please contact your administrator."
+          });
+        }
+        if (error.message.includes('Forbidden') || error.message.includes('Access is denied')) {
+          return res.status(403).json({
+            message: "Permission denied. Your administrator may need to grant Mail.Send permissions."
+          });
+        }
+        if (error.message.includes('MailboxNotFound') || error.message.includes('ResourceNotFound')) {
+          return res.status(400).json({
+            message: "Mailbox not found. Please verify your email address is correctly configured."
+          });
+        }
+      }
+      
       res.status(500).json({
         message: "Failed to send reply",
         error: error instanceof Error ? error.message : "Unknown error"
