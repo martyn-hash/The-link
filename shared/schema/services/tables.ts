@@ -21,6 +21,7 @@ export const services = pgTable("services", {
   isStaticService: boolean("is_static_service").default(false),
   isVatService: boolean("is_vat_service").default(false),
   isActive: boolean("is_active").default(true),
+  showInProjectServiceId: varchar("show_in_project_service_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

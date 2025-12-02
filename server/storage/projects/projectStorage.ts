@@ -555,6 +555,10 @@ export class ProjectStorage extends BaseStorage {
       ? await this.projectHelpers.resolveStageRoleAssigneesBatch(results)
       : new Map<string, User | undefined>();
 
+    // Fetch priority service indicators for all projects
+    // This finds services that have showInProjectServiceId set, then checks if clients have those services
+    const priorityIndicatorsMap = await this.getPriorityServiceIndicatorsBatch(results);
+
     // Convert null relations to undefined and populate stage role assignee from batch result
     const projectsWithAssignees = results.map((project) => {
       return {
@@ -562,6 +566,7 @@ export class ProjectStorage extends BaseStorage {
         currentAssignee: project.currentAssignee || undefined,
         projectOwner: project.projectOwner || undefined,
         stageRoleAssignee: stageRoleAssigneesMap.get(project.id),
+        priorityServiceIndicators: priorityIndicatorsMap.get(project.id) || [],
         chronology: project.chronology.map(c => ({
           ...c,
           assignee: c.assignee || undefined,
@@ -571,6 +576,95 @@ export class ProjectStorage extends BaseStorage {
     });
     
     return projectsWithAssignees as any;
+  }
+
+  /**
+   * Batch lookup for priority service indicators
+   * Returns a map of projectId -> array of service names that should show as priority indicators
+   */
+  private async getPriorityServiceIndicatorsBatch(projects: any[]): Promise<Map<string, string[]>> {
+    const priorityMap = new Map<string, string[]>();
+    
+    if (projects.length === 0) {
+      return priorityMap;
+    }
+
+    try {
+      // Step 1: Get all services that have showInProjectServiceId set
+      const indicatorServices = await db
+        .select({
+          id: services.id,
+          name: services.name,
+          showInProjectServiceId: services.showInProjectServiceId,
+        })
+        .from(services)
+        .where(isNotNull(services.showInProjectServiceId));
+
+      if (indicatorServices.length === 0) {
+        return priorityMap;
+      }
+
+      // Step 2: Build a map of targetServiceId -> list of indicator service info
+      const targetToIndicators = new Map<string, Array<{ id: string; name: string }>>();
+      for (const service of indicatorServices) {
+        if (service.showInProjectServiceId) {
+          const existing = targetToIndicators.get(service.showInProjectServiceId) || [];
+          existing.push({ id: service.id, name: service.name });
+          targetToIndicators.set(service.showInProjectServiceId, existing);
+        }
+      }
+
+      // Step 3: Get unique client IDs and service IDs we need to check
+      const clientIds = [...new Set(projects.map(p => p.clientId))];
+      const indicatorServiceIds = indicatorServices.map(s => s.id);
+
+      // Step 4: Fetch all client-service relationships for relevant clients and indicator services
+      const clientServiceRelations = await db
+        .select({
+          clientId: clientServices.clientId,
+          serviceId: clientServices.serviceId,
+        })
+        .from(clientServices)
+        .where(
+          and(
+            inArray(clientServices.clientId, clientIds),
+            inArray(clientServices.serviceId, indicatorServiceIds),
+            eq(clientServices.isActive, true)
+          )
+        );
+
+      // Step 5: Build a set of (clientId, serviceId) pairs that exist
+      const clientHasService = new Set<string>();
+      for (const rel of clientServiceRelations) {
+        clientHasService.add(`${rel.clientId}:${rel.serviceId}`);
+      }
+
+      // Step 6: For each project, determine which priority indicators to show
+      for (const project of projects) {
+        const projectServiceId = project.projectType?.serviceId;
+        if (!projectServiceId) continue;
+
+        const indicatorsForThisService = targetToIndicators.get(projectServiceId);
+        if (!indicatorsForThisService) continue;
+
+        const indicators: string[] = [];
+        for (const indicator of indicatorsForThisService) {
+          // Check if the client has this indicator service
+          if (clientHasService.has(`${project.clientId}:${indicator.id}`)) {
+            indicators.push(indicator.name);
+          }
+        }
+
+        if (indicators.length > 0) {
+          priorityMap.set(project.id, indicators);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching priority service indicators:', error);
+      // Return empty map on error to not break the main query
+    }
+
+    return priorityMap;
   }
 
   async getProjectsByUser(userId: string, role: string, filters?: { month?: string; archived?: boolean; showArchived?: boolean; inactive?: boolean; serviceId?: string; assigneeId?: string; serviceOwnerId?: string; userId?: string; dynamicDateFilter?: string; dateFrom?: string; dateTo?: string }): Promise<ProjectWithRelations[]> {
@@ -925,6 +1019,9 @@ export class ProjectStorage extends BaseStorage {
       ? await this.projectHelpers.resolveStageRoleAssigneesBatch(results)
       : new Map<string, User | undefined>();
 
+    // Fetch priority service indicators for all projects
+    const priorityIndicatorsMap = await this.getPriorityServiceIndicatorsBatch(results);
+
     // Convert null relations to undefined and populate stage role assignee from batch result
     const projectsWithAssignees = results.map((project) => {
       return {
@@ -932,6 +1029,7 @@ export class ProjectStorage extends BaseStorage {
         currentAssignee: project.currentAssignee || undefined,
         projectOwner: project.projectOwner || undefined,
         stageRoleAssignee: stageRoleAssigneesMap.get(project.id),
+        priorityServiceIndicators: priorityIndicatorsMap.get(project.id) || [],
         chronology: project.chronology.map(c => ({
           ...c,
           assignee: c.assignee || undefined,
@@ -993,6 +1091,9 @@ export class ProjectStorage extends BaseStorage {
       ? await this.projectHelpers.resolveStageRoleAssigneesBatch(results)
       : new Map<string, User | undefined>();
 
+    // Fetch priority service indicators for all projects
+    const priorityIndicatorsMap = await this.getPriorityServiceIndicatorsBatch(results);
+
     // Convert null relations to undefined and populate stage role assignee from batch result
     const projectsWithAssignees = results.map((project) => {
       return {
@@ -1000,6 +1101,7 @@ export class ProjectStorage extends BaseStorage {
         currentAssignee: project.currentAssignee || undefined,
         projectOwner: project.projectOwner || undefined,
         stageRoleAssignee: stageRoleAssigneesMap.get(project.id),
+        priorityServiceIndicators: priorityIndicatorsMap.get(project.id) || [],
         chronology: project.chronology.map(c => ({
           ...c,
           assignee: c.assignee || undefined,

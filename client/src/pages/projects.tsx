@@ -1088,8 +1088,8 @@ export default function Projects() {
                 </div>
               )}
               
-              {/* Filters Button - Only visible in list or calendar view */}
-              {(viewMode === "list" || viewMode === "calendar") && (
+              {/* Filters Button - visible in list, kanban, or calendar view */}
+              {(viewMode === "list" || viewMode === "kanban" || viewMode === "calendar") && (
                 <Button
                   variant="outline"
                   onClick={() => setFilterPanelOpen(true)}
@@ -1181,8 +1181,8 @@ export default function Projects() {
                 </div>
               )}
               
-              {/* Filters Button - Only visible in list or calendar view */}
-              {(viewMode === "list" || viewMode === "calendar") && (
+              {/* Filters Button - visible in list, kanban, or calendar view */}
+              {(viewMode === "list" || viewMode === "kanban" || viewMode === "calendar") && (
                 <Button
                   variant="outline"
                   onClick={() => setFilterPanelOpen(true)}

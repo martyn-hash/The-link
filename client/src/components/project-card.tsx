@@ -481,6 +481,25 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
         </div>
       </CardContent>
 
+      {/* Priority service indicators - shown in top-left corner */}
+      {project.priorityServiceIndicators && project.priorityServiceIndicators.length > 0 && !isSelected && (
+        <div 
+          className="absolute top-1 left-1 z-10 flex flex-wrap gap-0.5 max-w-[70%]"
+          data-testid={`priority-indicators-${project.id}`}
+        >
+          {project.priorityServiceIndicators.map((serviceName, index) => (
+            <span
+              key={`${project.id}-indicator-${index}`}
+              className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 shadow-sm"
+              title={`Client has ${serviceName} service`}
+              data-testid={`priority-badge-${project.id}-${index}`}
+            >
+              {serviceName}
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Selection indicator in top-left corner */}
       {isSelected && (
         <div 

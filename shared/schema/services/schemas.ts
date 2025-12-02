@@ -41,6 +41,7 @@ export const baseInsertServiceSchema = z.object({
   isStaticService: z.boolean().optional().default(false),
   isVatService: z.boolean().optional().default(false),
   isActive: z.boolean().optional().default(true),
+  showInProjectServiceId: z.string().optional().nullable(),
 });
 
 export const insertServiceSchema = baseInsertServiceSchema.refine((data) => {

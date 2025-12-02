@@ -660,6 +660,7 @@ export default function Services() {
       isStaticService: service.isStaticService ?? false,
       isVatService: (service as any).isVatService ?? false,
       applicableClientTypes: (service as any).applicableClientTypes ?? "company",
+      showInProjectServiceId: (service as any).showInProjectServiceId ?? null,
     });
     setViewMode('edit-service');
   };
@@ -1206,6 +1207,44 @@ export default function Services() {
                             )}
                           </div>
 
+                          {/* Show in Project Section */}
+                          <FormField
+                            control={serviceForm.control}
+                            name="showInProjectServiceId"
+                            render={({ field }) => (
+                              <FormItem className="rounded-lg border p-4 shadow-sm">
+                                <div className="space-y-3">
+                                  <div>
+                                    <FormLabel>Show in Project</FormLabel>
+                                    <div className="text-sm text-muted-foreground">
+                                      When a client has this service plus the selected service below, show this service name as a priority indicator on the other service's project cards
+                                    </div>
+                                  </div>
+                                  <FormControl>
+                                    <Select 
+                                      onValueChange={(value) => field.onChange(value === "none" ? null : value)} 
+                                      value={field.value || "none"} 
+                                      data-testid="select-show-in-project"
+                                    >
+                                      <SelectTrigger className="w-full md:w-[300px]">
+                                        <SelectValue placeholder="Select service to show on" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="none">None</SelectItem>
+                                        {services?.filter(s => s.id !== editingService?.id).map((service) => (
+                                          <SelectItem key={service.id} value={service.id}>
+                                            {service.name}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </FormControl>
+                                  <FormMessage />
+                                </div>
+                              </FormItem>
+                            )}
+                          />
+
                           <FormField
                             control={serviceForm.control}
                             name="roleIds"
@@ -1530,6 +1569,44 @@ export default function Services() {
                               </div>
                             )}
                           </div>
+
+                          {/* Show in Project Section */}
+                          <FormField
+                            control={serviceForm.control}
+                            name="showInProjectServiceId"
+                            render={({ field }) => (
+                              <FormItem className="rounded-lg border p-4 shadow-sm">
+                                <div className="space-y-3">
+                                  <div>
+                                    <FormLabel>Show in Project</FormLabel>
+                                    <div className="text-sm text-muted-foreground">
+                                      When a client has this service plus the selected service below, show this service name as a priority indicator on the other service's project cards
+                                    </div>
+                                  </div>
+                                  <FormControl>
+                                    <Select 
+                                      onValueChange={(value) => field.onChange(value === "none" ? null : value)} 
+                                      value={field.value || "none"} 
+                                      data-testid="select-show-in-project-edit"
+                                    >
+                                      <SelectTrigger className="w-full md:w-[300px]">
+                                        <SelectValue placeholder="Select service to show on" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="none">None</SelectItem>
+                                        {services?.filter(s => s.id !== editingService?.id).map((service) => (
+                                          <SelectItem key={service.id} value={service.id}>
+                                            {service.name}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </FormControl>
+                                  <FormMessage />
+                                </div>
+                              </FormItem>
+                            )}
+                          />
 
                           <FormField
                             control={serviceForm.control}

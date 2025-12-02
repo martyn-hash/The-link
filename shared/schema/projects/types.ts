@@ -124,4 +124,5 @@ export type ProjectWithRelations = Project & {
     total: number;
   }[];
   stageRoleAssignee?: User;
+  priorityServiceIndicators?: string[];
 };
