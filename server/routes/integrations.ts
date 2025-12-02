@@ -23,7 +23,10 @@ import {
 } from "./routeHelpers";
 import { insertUserIntegrationSchema } from "@shared/schema";
 import { sendTaskAssignmentEmail } from "../emailService";
-import { generateUserOutlookAuthUrl, exchangeCodeForTokens, getUserOutlookClient } from "../utils/userOutlookClient";
+import {
+  isApplicationGraphConfigured,
+  sendEmailAsUser as sendEmailAsUserTenantWide,
+} from "../utils/applicationGraphClient";
 import {
   generateUserRingCentralAuthUrl,
   exchangeCodeForRingCentralTokens,
@@ -44,103 +47,49 @@ export function registerIntegrationRoutes(
   requireAdmin: any
 ) {
   // ==================================================
-  // OUTLOOK OAUTH ROUTES
+  // MICROSOFT 365 EMAIL ROUTES (Tenant-Wide Access)
   // ==================================================
+  // Uses application-level permissions - no individual OAuth required
+  // Access controlled via accessEmail flag in user settings
 
-  app.get('/api/oauth/outlook/auth-url', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
-    try {
-      const userId = req.user!.effectiveUserId;
-      const authUrl = await generateUserOutlookAuthUrl(userId);
-      res.json({ authUrl });
-    } catch (error) {
-      console.error("Error generating Outlook auth URL:", error instanceof Error ? error.message : error);
-
-      // Check if it's a configuration error
-      if (error instanceof Error && error.message.includes('Microsoft OAuth not configured')) {
-        return res.status(400).json({
-          message: "Microsoft Outlook integration is not configured on this server",
-          configured: false
-        });
-      }
-
-      res.status(500).json({ message: "Failed to generate auth URL" });
-    }
-  });
-
-  app.get('/api/oauth/outlook/callback', async (req: any, res: any) => {
-    try {
-      const { code, state } = req.query;
-
-      if (!code || !state) {
-        return res.status(400).json({ message: "Missing authorization code or state" });
-      }
-
-      const result = await exchangeCodeForTokens(code as string, state as string);
-
-      if (!result.success) {
-        return res.status(400).json({ message: result.error });
-      }
-
-      // Redirect to profile page with success message
-      res.redirect('/profile?tab=integrations&outlook=connected');
-    } catch (error) {
-      console.error("Error handling Outlook OAuth callback:", error instanceof Error ? error.message : error);
-      res.redirect('/profile?tab=integrations&outlook=error');
-    }
-  });
-
+  // Check Outlook status - checks tenant-wide configuration and user's accessEmail flag
   app.get('/api/oauth/outlook/status', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const userId = req.user!.effectiveUserId;
-
-      try {
-        const account = await storage.getUserOauthAccount(userId, 'outlook');
-
-        if (!account) {
-          return res.json({ connected: false });
-        }
-
-        // Check if tokens are valid by trying to get user info
-        try {
-          const client = await getUserOutlookClient(userId);
-          if (!client) {
-            return res.json({ connected: false });
-          }
-
-          const userInfo = await client.api('/me').get();
-          res.json({
-            connected: true,
-            email: userInfo.mail || userInfo.userPrincipalName,
-            displayName: userInfo.displayName
-          });
-        } catch (tokenError) {
-          // Tokens might be expired or invalid
-          res.json({ connected: false, needsReauth: true });
-        }
-      } catch (dbError) {
-        // Database or schema error - return disconnected status
-        console.error("Database error checking OAuth status:", dbError instanceof Error ? dbError.message : dbError);
-        res.json({ connected: false });
+      
+      // Check if tenant-wide Graph is configured
+      if (!isApplicationGraphConfigured()) {
+        return res.json({ connected: false, reason: 'not_configured' });
       }
+      
+      // Get the user to check their accessEmail flag
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.json({ connected: false, reason: 'user_not_found' });
+      }
+      
+      // Check if user has email access enabled by admin
+      if (!user.accessEmail) {
+        return res.json({ 
+          connected: false, 
+          reason: 'access_not_enabled',
+          message: 'Email access is managed by your administrator'
+        });
+      }
+      
+      // User has access - return connected status with their email
+      res.json({
+        connected: true,
+        email: user.email || 'Connected',
+        tenantWide: true // Indicate this is tenant-wide access, not individual OAuth
+      });
     } catch (error) {
       console.error("Error checking Outlook status:", error instanceof Error ? error.message : error);
-      // Return disconnected instead of 500 to prevent UI blocking
       res.json({ connected: false });
     }
   });
 
-  app.delete('/api/oauth/outlook/disconnect', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
-    try {
-      const userId = req.user!.effectiveUserId;
-      await storage.deleteUserOauthAccount(userId, 'outlook');
-      res.json({ message: "Outlook account disconnected successfully" });
-    } catch (error) {
-      console.error("Error disconnecting Outlook account:", error instanceof Error ? error.message : error);
-      res.status(500).json({ message: "Failed to disconnect account" });
-    }
-  });
-
-  // Send email using user's Outlook account
+  // Send email using tenant-wide application permissions
   app.post('/api/oauth/outlook/send-email', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const userId = req.user!.effectiveUserId;
@@ -156,34 +105,43 @@ export function registerIntegrationRoutes(
 
       const { to, subject, content, clientId, personId } = validationResult.data;
 
-      // Check if user has Outlook connected
-      const outlookClient = await getUserOutlookClient(userId);
-      if (!outlookClient) {
+      // Check if tenant-wide Graph is configured
+      if (!isApplicationGraphConfigured()) {
         return res.status(400).json({
-          message: "No Outlook account connected. Please connect your account first."
+          message: "Microsoft 365 email integration is not configured on this server."
+        });
+      }
+      
+      // Get the user to check their accessEmail flag and get their email
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(400).json({
+          message: "User not found."
+        });
+      }
+      
+      // Check if user has email access enabled by admin
+      if (!user.accessEmail) {
+        return res.status(403).json({
+          message: "Email access is not enabled for your account. Please contact your administrator."
+        });
+      }
+      
+      // User must have an email address to send from
+      if (!user.email) {
+        return res.status(400).json({
+          message: "No email address configured for your account."
         });
       }
 
-      // Prepare email message
-      const message = {
+      // Send email using tenant-wide application permissions
+      await sendEmailAsUserTenantWide(
+        user.email,
+        to,
         subject,
-        body: {
-          contentType: 'HTML',
-          content: content
-        },
-        toRecipients: [
-          {
-            emailAddress: {
-              address: to
-            }
-          }
-        ]
-      };
-
-      // Send email through Microsoft Graph API
-      await outlookClient.api('/me/sendMail').post({
-        message
-      });
+        content,
+        true // isHtml
+      );
 
       // Log the communication only if linked to a client
       if (clientId) {
@@ -204,24 +162,29 @@ export function registerIntegrationRoutes(
         subject
       });
     } catch (error) {
-      console.error("Error sending email via Outlook:", error instanceof Error ? error.message : error);
+      console.error("Error sending email via Microsoft Graph:", error instanceof Error ? error.message : error);
 
       // Handle specific Graph API errors
       if (error instanceof Error) {
         if (error.message.includes('InvalidAuthenticationToken') || error.message.includes('Unauthorized')) {
           return res.status(401).json({
-            message: "Your Outlook connection has expired. Please reconnect your account."
+            message: "Microsoft 365 authentication error. Please contact your administrator."
           });
         }
-        if (error.message.includes('Forbidden')) {
+        if (error.message.includes('Forbidden') || error.message.includes('Access is denied')) {
           return res.status(403).json({
-            message: "Insufficient permissions to send email. Please reconnect your account."
+            message: "Permission denied. Your administrator may need to grant Mail.Send permissions."
+          });
+        }
+        if (error.message.includes('MailboxNotFound') || error.message.includes('ResourceNotFound')) {
+          return res.status(400).json({
+            message: "Mailbox not found. Please verify your email address is correctly configured."
           });
         }
       }
 
       res.status(500).json({
-        message: "Failed to send email. Please try again or reconnect your account."
+        message: "Failed to send email. Please try again or contact your administrator."
       });
     }
   });
