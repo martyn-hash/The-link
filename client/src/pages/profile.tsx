@@ -223,17 +223,6 @@ export default function Profile() {
     enabled: !!user,
   });
 
-  // Fetch Outlook connection status
-  const { data: outlookStatus, isLoading: outlookStatusLoading, refetch: refetchOutlookStatus } = useQuery<{
-    connected: boolean;
-    email?: string;
-    displayName?: string;
-    needsReauth?: boolean;
-  }>({
-    queryKey: ["/api/oauth/outlook/status"],
-    enabled: !!user,
-  });
-
   // Fetch RingCentral connection status
   const { data: ringcentralStatus, isLoading: ringcentralStatusLoading, refetch: refetchRingCentralStatus } = useQuery<{
     connected: boolean;
@@ -316,20 +305,6 @@ export default function Profile() {
     },
   });
 
-  // Outlook disconnect mutation
-  const disconnectOutlookMutation = useMutation({
-    mutationFn: async () => {
-      return await apiRequest("DELETE", "/api/oauth/outlook/disconnect");
-    },
-    onSuccess: () => {
-      toast({ title: "Success", description: "Outlook account disconnected successfully" });
-      refetchOutlookStatus();
-    },
-    onError: (error: any) => {
-      showFriendlyError({ error });
-    },
-  });
-
   // RingCentral disconnect mutation
   const disconnectRingCentralMutation = useMutation({
     mutationFn: async () => {
@@ -367,26 +342,6 @@ export default function Profile() {
   // Handle calendly link save
   const handleCalendlyLinkSave = () => {
     updateCalendlyLinkMutation.mutate({ calendlyLink: calendlyLink || "" });
-  };
-
-  // Handle Outlook connection
-  const handleOutlookConnect = async () => {
-    try {
-      const response = await fetch('/api/oauth/outlook/auth-url');
-      const data = await response.json();
-      if (data.authUrl) {
-        window.location.href = data.authUrl;
-      } else {
-        showFriendlyError({ error: "Failed to generate authentication URL" });
-      }
-    } catch (error) {
-      showFriendlyError({ error });
-    }
-  };
-
-  // Handle Outlook disconnect
-  const handleOutlookDisconnect = () => {
-    disconnectOutlookMutation.mutate();
   };
 
   // Handle RingCentral connection
@@ -835,73 +790,76 @@ export default function Profile() {
           <TabsContent value="integrations" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Email Integrations</CardTitle>
+                <CardTitle>Microsoft 365 Access</CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">
-                {/* Outlook Integration */}
+                {/* Email Access Status - Managed by Admin */}
                 <div className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
-                      <Mail className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                    <div className={`w-12 h-12 ${(user as any).accessEmail ? 'bg-green-100 dark:bg-green-900' : 'bg-gray-100 dark:bg-gray-800'} rounded-lg flex items-center justify-center`}>
+                      <Mail className={`w-6 h-6 ${(user as any).accessEmail ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`} />
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold" data-testid="text-outlook-title">
-                        Microsoft Outlook
+                      <h3 className="text-lg font-semibold" data-testid="text-email-access-title">
+                        Email Access
                       </h3>
                       <p className="text-sm text-muted-foreground">
-                        Connect your personal Outlook account to send emails from your own mailbox
+                        {(user as any).accessEmail 
+                          ? 'Your Outlook email is synced with the CRM' 
+                          : 'Email sync is managed by your administrator'}
                       </p>
-                      {outlookStatus?.connected && outlookStatus.email && (
-                        <p className="text-sm text-green-600 dark:text-green-400 mt-1" data-testid="text-outlook-email">
-                          Connected as {outlookStatus.email}
-                        </p>
-                      )}
                     </div>
                   </div>
-                  <div className="flex items-center space-x-4">
-                    {outlookStatusLoading ? (
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
-                    ) : outlookStatus?.connected ? (
-                      <div className="flex items-center space-x-2">
-                        <div className="flex items-center space-x-1">
-                          <CheckCircle className="w-5 h-5 text-green-500" />
-                          <span className="text-sm text-green-600 dark:text-green-400" data-testid="status-outlook-connected">
-                            Connected
-                          </span>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleOutlookDisconnect}
-                          disabled={disconnectOutlookMutation.isPending}
-                          data-testid="button-disconnect-outlook"
-                        >
-                          {disconnectOutlookMutation.isPending ? (
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current" />
-                          ) : (
-                            "Disconnect"
-                          )}
-                        </Button>
+                  <div className="flex items-center">
+                    {(user as any).accessEmail ? (
+                      <div className="flex items-center space-x-1">
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                        <span className="text-sm text-green-600 dark:text-green-400" data-testid="status-email-enabled">
+                          Enabled
+                        </span>
                       </div>
                     ) : (
-                      <div className="flex items-center space-x-2">
-                        {outlookStatus?.needsReauth && (
-                          <div className="flex items-center space-x-1">
-                            <AlertCircle className="w-5 h-5 text-yellow-500" />
-                            <span className="text-sm text-yellow-600 dark:text-yellow-400">
-                              Needs reauth
-                            </span>
-                          </div>
-                        )}
-                        <Button
-                          onClick={handleOutlookConnect}
-                          size="sm"
-                          data-testid="button-connect-outlook"
-                          className="flex items-center gap-2"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                          Connect
-                        </Button>
+                      <div className="flex items-center space-x-1">
+                        <AlertCircle className="w-5 h-5 text-gray-400" />
+                        <span className="text-sm text-muted-foreground" data-testid="status-email-disabled">
+                          Not enabled
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Calendar Access Status - Managed by Admin */}
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center space-x-4">
+                    <div className={`w-12 h-12 ${(user as any).accessCalendar ? 'bg-green-100 dark:bg-green-900' : 'bg-gray-100 dark:bg-gray-800'} rounded-lg flex items-center justify-center`}>
+                      <Calendar className={`w-6 h-6 ${(user as any).accessCalendar ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`} />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold" data-testid="text-calendar-access-title">
+                        Calendar Access
+                      </h3>
+                      <p className="text-sm text-muted-foreground">
+                        {(user as any).accessCalendar 
+                          ? 'Your Outlook calendar is synced with the CRM' 
+                          : 'Calendar sync is managed by your administrator'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center">
+                    {(user as any).accessCalendar ? (
+                      <div className="flex items-center space-x-1">
+                        <CheckCircle className="w-5 h-5 text-green-500" />
+                        <span className="text-sm text-green-600 dark:text-green-400" data-testid="status-calendar-enabled">
+                          Enabled
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-1">
+                        <AlertCircle className="w-5 h-5 text-gray-400" />
+                        <span className="text-sm text-muted-foreground" data-testid="status-calendar-disabled">
+                          Not enabled
+                        </span>
                       </div>
                     )}
                   </div>

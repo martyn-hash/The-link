@@ -52,7 +52,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Users, Plus, Edit, Trash2, Mail, Calendar, Shield, Settings, RefreshCw, Send, Bell, Circle } from "lucide-react";
+import { Users, Plus, Edit, Trash2, Mail, Calendar, Shield, Settings, RefreshCw, Send, Bell, Circle, CloudCog } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { showFriendlyError } from "@/lib/friendlyErrors";
 import { formatDistanceToNow } from "date-fns";
 import type { User } from "@shared/schema";
@@ -92,6 +93,11 @@ type CreateUserFormData = z.infer<typeof createUserFormSchema>;
 type EditUserFormData = z.infer<typeof editUserFormSchema>;
 type UserFormData = CreateUserFormData | EditUserFormData;
 
+interface UserWithAccessFlags extends User {
+  accessEmail: boolean | null;
+  accessCalendar: boolean | null;
+}
+
 export default function UserManagement() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
@@ -127,6 +133,22 @@ export default function UserManagement() {
 
   const { data: users, isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
+  });
+
+  // Super admin query for users with access flags (only if current user is super admin)
+  const { data: usersWithAccessFlags } = useQuery<UserWithAccessFlags[]>({
+    queryKey: ["/api/super-admin/users"],
+    enabled: !!user?.superAdmin,
+  });
+
+  // Merge access flags into main users list for super admins
+  const usersWithFlags: UserWithAccessFlags[] = (users || []).map(u => {
+    const flagsData = usersWithAccessFlags?.find(uf => uf.id === u.id);
+    return {
+      ...u,
+      accessEmail: flagsData?.accessEmail ?? false,
+      accessCalendar: flagsData?.accessCalendar ?? false,
+    };
   });
 
   // Fallback user queries and mutations
@@ -276,6 +298,34 @@ export default function UserManagement() {
       showFriendlyError({ error });
     },
   });
+
+  // Mutation to update user access flags (super admin only)
+  const updateAccessFlagsMutation = useMutation({
+    mutationFn: async ({ userId, accessEmail, accessCalendar }: { userId: string; accessEmail?: boolean; accessCalendar?: boolean }) => {
+      return await apiRequest("PATCH", `/api/super-admin/users/${userId}/access-flags`, {
+        accessEmail,
+        accessCalendar,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/super-admin/users"] });
+      toast({
+        title: "Success",
+        description: "User access flags updated",
+      });
+    },
+    onError: (error: any) => {
+      showFriendlyError({ error });
+    },
+  });
+
+  const handleToggleAccessEmail = (userId: string, currentValue: boolean) => {
+    updateAccessFlagsMutation.mutate({ userId, accessEmail: !currentValue });
+  };
+
+  const handleToggleAccessCalendar = (userId: string, currentValue: boolean) => {
+    updateAccessFlagsMutation.mutate({ userId, accessCalendar: !currentValue });
+  };
 
   const handleSubmit = (data: UserFormData) => {
     if (selectedUser) {
@@ -661,7 +711,7 @@ export default function UserManagement() {
             {/* User List */}
             <div className="flex-1 flex flex-col min-h-0">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium">Users ({users?.length || 0})</h3>
+                <h3 className="text-lg font-medium">Users ({usersWithFlags?.length || 0})</h3>
                 <Button
                   onClick={handleNewUser}
                   data-testid="button-new-user"
@@ -683,22 +733,38 @@ export default function UserManagement() {
                         <TableHead>Name</TableHead>
                         <TableHead>Email</TableHead>
                         <TableHead>Role</TableHead>
+                        {user?.superAdmin && (
+                          <>
+                            <TableHead className="text-center">
+                              <div className="flex items-center gap-1 justify-center">
+                                <Mail className="w-3 h-3" />
+                                Access Email
+                              </div>
+                            </TableHead>
+                            <TableHead className="text-center">
+                              <div className="flex items-center gap-1 justify-center">
+                                <Calendar className="w-3 h-3" />
+                                Access Calendar
+                              </div>
+                            </TableHead>
+                          </>
+                        )}
                         <TableHead>Status</TableHead>
                         <TableHead>Last Login</TableHead>
                         <TableHead className="w-20">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {users?.map((user: User) => (
-                        <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
+                      {usersWithFlags?.map((rowUser: UserWithAccessFlags) => (
+                        <TableRow key={rowUser.id} data-testid={`row-user-${rowUser.id}`}>
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2">
-                              <span>{user.firstName} {user.lastName}</span>
-                              {fallbackUser?.id === user.id && (
+                              <span>{rowUser.firstName} {rowUser.lastName}</span>
+                              {fallbackUser?.id === rowUser.id && (
                                 <Badge 
                                   variant="secondary" 
                                   className="bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
-                                  data-testid={`badge-fallback-user-${user.id}`}
+                                  data-testid={`badge-fallback-user-${rowUser.id}`}
                                 >
                                   <Shield className="w-3 h-3 mr-1" />
                                   Fallback
@@ -709,32 +775,52 @@ export default function UserManagement() {
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <Mail className="w-3 h-3 text-muted-foreground" />
-                              {user.email}
+                              {rowUser.email}
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge className={getRoleDisplay(user).color}>
-                              {getRoleDisplay(user).label}
+                            <Badge className={getRoleDisplay(rowUser).color}>
+                              {getRoleDisplay(rowUser).label}
                             </Badge>
                           </TableCell>
+                          {user?.superAdmin && (
+                            <>
+                              <TableCell className="text-center">
+                                <Switch
+                                  checked={rowUser.accessEmail ?? false}
+                                  onCheckedChange={() => handleToggleAccessEmail(rowUser.id, rowUser.accessEmail ?? false)}
+                                  disabled={updateAccessFlagsMutation.isPending}
+                                  data-testid={`switch-access-email-${rowUser.id}`}
+                                />
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Switch
+                                  checked={rowUser.accessCalendar ?? false}
+                                  onCheckedChange={() => handleToggleAccessCalendar(rowUser.id, rowUser.accessCalendar ?? false)}
+                                  disabled={updateAccessFlagsMutation.isPending}
+                                  data-testid={`switch-access-calendar-${rowUser.id}`}
+                                />
+                              </TableCell>
+                            </>
+                          )}
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <Circle 
-                                className={`w-2 h-2 ${(user as any).isOnline ? 'fill-green-500 text-green-500' : 'fill-gray-300 text-gray-300'}`}
-                                data-testid={`status-${user.id}`}
+                                className={`w-2 h-2 ${(rowUser as any).isOnline ? 'fill-green-500 text-green-500' : 'fill-gray-300 text-gray-300'}`}
+                                data-testid={`status-${rowUser.id}`}
                               />
                               <span className="text-sm">
-                                {(user as any).isOnline ? 'Online' : 'Offline'}
+                                {(rowUser as any).isOnline ? 'Online' : 'Offline'}
                               </span>
                             </div>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                              {user.lastLoginAt ? (
+                              {rowUser.lastLoginAt ? (
                                 <>
                                   <Calendar className="w-3 h-3" />
-                                  <span title={new Date(user.lastLoginAt).toLocaleString()}>
-                                    {formatDistanceToNow(new Date(user.lastLoginAt), { addSuffix: true })}
+                                  <span title={new Date(rowUser.lastLoginAt).toLocaleString()}>
+                                    {formatDistanceToNow(new Date(rowUser.lastLoginAt), { addSuffix: true })}
                                   </span>
                                 </>
                               ) : (
@@ -747,17 +833,17 @@ export default function UserManagement() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleEditUser(user)}
-                                data-testid={`button-edit-user-${user.id}`}
+                                onClick={() => handleEditUser(rowUser)}
+                                data-testid={`button-edit-user-${rowUser.id}`}
                               >
                                 <Edit className="w-3 h-3" />
                               </Button>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handleDeleteUser(user)}
+                                onClick={() => handleDeleteUser(rowUser)}
                                 className="text-destructive hover:text-destructive"
-                                data-testid={`button-delete-user-${user.id}`}
+                                data-testid={`button-delete-user-${rowUser.id}`}
                               >
                                 <Trash2 className="w-3 h-3" />
                               </Button>
