@@ -627,6 +627,112 @@ export function registerProjectRoutes(
     }
   });
 
+  // Pre-flight validation for bulk move - checks if a stage allows bulk moves
+  // Returns eligibility status and valid reasons (those without custom fields/approvals)
+  const bulkMoveValidationSchema = z.object({
+    projectTypeId: z.string().uuid(),
+    targetStageName: z.string().min(1),
+  });
+
+  app.post("/api/projects/bulk-move-eligibility", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const { projectTypeId, targetStageName } = bulkMoveValidationSchema.parse(req.body);
+
+      // Get the target stage
+      const stages = await storage.getAllKanbanStages();
+      const targetStage = stages.find(stage => 
+        stage.name === targetStageName && 
+        stage.projectTypeId === projectTypeId
+      );
+
+      if (!targetStage) {
+        return res.status(404).json({ 
+          eligible: false,
+          blockingReason: "stage_not_found",
+          message: "Stage not found for this project type."
+        });
+      }
+
+      const restrictions: string[] = [];
+
+      // Check 1: Stage has approval requirements
+      if (targetStage.stageApprovalId) {
+        restrictions.push("stage_approval");
+      }
+
+      // Check 2: Client notification templates on this stage
+      const projectTypeNotifications = await storage.getProjectTypeNotificationsByProjectTypeId(projectTypeId);
+      const activeStageNotifications = projectTypeNotifications.filter(
+        (n: any) => n.isActive && n.category === 'stage' && n.stageId === targetStage.id
+      );
+      if (activeStageNotifications.length > 0) {
+        restrictions.push("client_notifications");
+      }
+
+      // Check 3: Get all reasons and filter to those valid for bulk move
+      const allReasons = await storage.getChangeReasonsByProjectTypeId(projectTypeId);
+      
+      // Get stage-reason mappings to filter to valid reasons for this stage
+      const stageReasonMappings = await storage.getAllStageReasonMaps();
+      const validReasonIdsForStage = new Set(
+        stageReasonMappings
+          .filter((m: any) => m.stageId === targetStage.id)
+          .map((m: any) => m.reasonId)
+      );
+
+      // Filter to reasons that are valid for this stage
+      const reasonsForStage = allReasons.filter((r: any) => validReasonIdsForStage.has(r.id));
+
+      // Further filter to reasons without approvals or custom fields
+      const validReasonsForBulk: any[] = [];
+      for (const reason of reasonsForStage) {
+        // Skip if reason has approval
+        if (reason.stageApprovalId) {
+          continue;
+        }
+
+        // Skip if reason has custom fields
+        const customFields = await storage.getReasonCustomFieldsByReasonId(reason.id);
+        if (customFields.length > 0) {
+          continue;
+        }
+
+        validReasonsForBulk.push({
+          id: reason.id,
+          reason: reason.reason,
+        });
+      }
+
+      // If no valid reasons, add to restrictions
+      if (validReasonsForBulk.length === 0 && reasonsForStage.length > 0) {
+        restrictions.push("all_reasons_have_requirements");
+      }
+
+      // Determine eligibility - only eligible if no blocking restrictions
+      const blockingRestrictions = restrictions.filter(r => 
+        r === "stage_approval" || r === "client_notifications"
+      );
+
+      const eligible = blockingRestrictions.length === 0 && validReasonsForBulk.length > 0;
+
+      res.json({
+        eligible,
+        restrictions,
+        validReasons: eligible ? validReasonsForBulk : [],
+        stageId: targetStage.id,
+        stageName: targetStage.name,
+      });
+
+    } catch (error) {
+      console.error("[POST /api/projects/bulk-move-eligibility] Error:", error instanceof Error ? error.message : error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        res.status(400).json({ message: "Validation failed", errors: (error as any).issues });
+      } else {
+        res.status(500).json({ message: "Failed to validate bulk move eligibility" });
+      }
+    }
+  });
+
   // Bulk update project status - for multi-select Kanban moves
   // Only allows "simple moves" without approvals, custom fields, or client notifications
   const bulkUpdateStatusSchema = z.object({

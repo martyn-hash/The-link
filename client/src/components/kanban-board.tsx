@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, useDroppable, DragOverEvent, PointerSensor, KeyboardSensor, useSensor, useSensors, pointerWithin, rectIntersection } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -14,7 +14,9 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, AlertCircle, RefreshCw, X } from "lucide-react";
 import { BulkChangeStatusModal } from "./BulkChangeStatusModal";
-import type { ProjectWithRelations, User, KanbanStage } from "@shared/schema";
+import { BulkMoveRestrictionDialog } from "./BulkMoveRestrictionDialog";
+import { apiRequest } from "@/lib/queryClient";
+import type { ProjectWithRelations, User, KanbanStage, ChangeReason } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 
@@ -75,6 +77,14 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
   
   // State for bulk change status modal
   const [showBulkChangeStatusModal, setShowBulkChangeStatusModal] = useState(false);
+  
+  // State for bulk move restriction dialog
+  const [showBulkMoveRestrictionDialog, setShowBulkMoveRestrictionDialog] = useState(false);
+  const [bulkMoveRestrictions, setBulkMoveRestrictions] = useState<string[]>([]);
+  
+  // State for pre-validated bulk move data
+  const [bulkMoveValidReasons, setBulkMoveValidReasons] = useState<Array<{ id: string; reason: string }>>([]);
+  const [isValidatingBulkMove, setIsValidatingBulkMove] = useState(false);
   
   // Get authentication state
   const { isAuthenticated, user: authUser } = useAuth();
@@ -260,7 +270,7 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
     }
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
 
@@ -317,8 +327,35 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
         // Check if moving to a different status
         const sourceStatus = selectedProjects[0].currentStatus;
         if (sourceStatus !== targetStatusName) {
-          setTargetStatus(targetStatusName);
-          setShowBulkChangeStatusModal(true);
+          // Pre-flight validation: check if bulk move is allowed for this stage
+          setIsValidatingBulkMove(true);
+          try {
+            const eligibility = await apiRequest("POST", "/api/projects/bulk-move-eligibility", {
+              projectTypeId: selectedProjects[0].projectTypeId,
+              targetStageName: targetStatusName,
+            });
+            
+            if (eligibility.eligible) {
+              // Stage is eligible for bulk move - show the form modal
+              setBulkMoveValidReasons(eligibility.validReasons || []);
+              setTargetStatus(targetStatusName);
+              setShowBulkChangeStatusModal(true);
+            } else {
+              // Stage has restrictions - show informative dialog
+              setBulkMoveRestrictions(eligibility.restrictions || ["unknown"]);
+              setTargetStatus(targetStatusName);
+              setShowBulkMoveRestrictionDialog(true);
+            }
+          } catch (error) {
+            console.error("[Kanban] Bulk move eligibility check failed:", error);
+            toast({
+              title: "Validation failed",
+              description: "Could not validate bulk move eligibility. Please try again.",
+              variant: "destructive",
+            });
+          } finally {
+            setIsValidatingBulkMove(false);
+          }
         }
       } else {
         // Single project move
@@ -353,6 +390,7 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
   const handleBulkModalClose = () => {
     setShowBulkChangeStatusModal(false);
     setTargetStatus(null);
+    setBulkMoveValidReasons([]);
     clearSelection();
   };
   
@@ -360,8 +398,17 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
   const handleBulkStatusUpdated = () => {
     setShowBulkChangeStatusModal(false);
     setTargetStatus(null);
+    setBulkMoveValidReasons([]);
     clearSelection();
     queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+  };
+  
+  // Callback when restriction dialog is closed
+  const handleRestrictionDialogClose = () => {
+    setShowBulkMoveRestrictionDialog(false);
+    setTargetStatus(null);
+    setBulkMoveRestrictions([]);
+    // Don't clear selection - let user try moving to a different stage
   };
 
   const activeProject = activeId ? projects.find(p => p.id === activeId) : null;
@@ -593,6 +640,16 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
         targetStatus={targetStatus || ""}
         user={user}
         onStatusUpdated={handleBulkStatusUpdated}
+        preValidatedReasons={bulkMoveValidReasons}
+      />
+
+      {/* Bulk Move Restriction Dialog - shows when bulk move is not allowed */}
+      <BulkMoveRestrictionDialog
+        isOpen={showBulkMoveRestrictionDialog}
+        onClose={handleRestrictionDialogClose}
+        targetStageName={targetStatus || ""}
+        restrictions={bulkMoveRestrictions}
+        projectCount={selectedProjectIds.size}
       />
     </div>
   );
