@@ -406,6 +406,8 @@ export default function Projects() {
       setServiceOwnerFilter(filters.serviceOwnerFilter || "all");
       setUserFilter(filters.userFilter || "all");
       setShowArchived(filters.showArchived || false);
+      setBehindScheduleOnly(filters.behindScheduleOnly || false);
+      setShowCompletedRegardless(filters.showCompletedRegardless ?? true);
       setDynamicDateFilter(filters.dynamicDateFilter || "all");
       setCustomDateRange({
         from: filters.customDateRange?.from ? new Date(filters.customDateRange.from) : undefined,
@@ -591,9 +593,10 @@ export default function Projects() {
       serviceOwnerFilter,
       userFilter,
       showArchived,
+      behindScheduleOnly,
+      showCompletedRegardless,
       dynamicDateFilter,
       customDateRange,
-      behindScheduleOnly,
       serviceDueDateFilter,
     };
 
