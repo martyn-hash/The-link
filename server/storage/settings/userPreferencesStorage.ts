@@ -30,21 +30,4 @@ export class UserPreferencesStorage {
       .returning();
     return result;
   }
-
-  async deleteUserProjectPreferences(userId: string): Promise<void> {
-    await db
-      .delete(userProjectPreferences)
-      .where(eq(userProjectPreferences.userId, userId));
-  }
-
-  async clearDefaultView(userId: string): Promise<void> {
-    await db
-      .update(userProjectPreferences)
-      .set({
-        defaultViewId: null,
-        defaultViewType: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(userProjectPreferences.userId, userId));
-  }
 }

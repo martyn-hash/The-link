@@ -106,7 +106,7 @@ export const insertUserProjectPreferencesSchema = createInsertSchema(userProject
   createdAt: true,
   updatedAt: true,
 }).extend({
-  defaultViewType: z.enum(['list', 'kanban', 'dashboard']).nullable().optional(),
+  defaultViewType: z.enum(['list', 'kanban', 'calendar', 'dashboard']).nullable().optional(),
 });
 
 export const updateUserProjectPreferencesSchema = insertUserProjectPreferencesSchema.partial().omit({ userId: true });

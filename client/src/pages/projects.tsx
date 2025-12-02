@@ -54,7 +54,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Columns3, List, Filter, BarChart3, Plus, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Star } from "lucide-react";
+import { Columns3, List, Filter, BarChart3, Plus, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 import { CalendarView } from "@/components/calendar";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -398,7 +398,7 @@ export default function Projects() {
     try {
       const filters = typeof view.filters === 'string' ? JSON.parse(view.filters) : view.filters;
       
-      // Track the loaded saved view ID for "Set as Default" functionality
+      // Track the loaded saved view ID
       setCurrentSavedViewId(view.id);
       
       setServiceFilter(filters.serviceFilter || "all");
@@ -437,6 +437,12 @@ export default function Projects() {
           setCalendarSettings(undefined);
         }
       }
+      
+      // Auto-save this as the last viewed saved view (runs silently in background)
+      saveLastViewedMutation.mutate({
+        defaultViewType: view.viewMode,
+        defaultViewId: view.id,
+      });
       
       toast({
         title: "View Loaded",
@@ -500,6 +506,12 @@ export default function Projects() {
         setDashboardClientFilter(parsedFilters.clientFilter || "all");
         setDashboardProjectTypeFilter(parsedFilters.projectTypeFilter || "all");
       }
+      
+      // Auto-save this as the last viewed dashboard (runs silently in background)
+      saveLastViewedMutation.mutate({
+        defaultViewType: 'dashboard',
+        defaultViewId: dashboard.id,
+      });
       
       toast({
         title: "Dashboard Loaded",
@@ -709,90 +721,20 @@ export default function Projects() {
     },
   });
 
-  // Set default view mutation
-  const setDefaultViewMutation = useMutation({
+  // Save last viewed mutation - silently saves the last viewed saved view/dashboard
+  // This runs in the background without showing toasts to the user
+  const saveLastViewedMutation = useMutation({
     mutationFn: async (data: { defaultViewType: string; defaultViewId?: string | null }) => {
       return apiRequest("POST", "/api/user-project-preferences", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/user-project-preferences"] });
-      toast({
-        title: "Default View Set",
-        description: "This view will load automatically when you visit Projects",
-      });
     },
     onError: (error) => {
-      showFriendlyError({ error });
+      // Silently log errors - don't show to user since this is background functionality
+      console.error("Failed to save last viewed preference:", error);
     },
   });
-
-  // Clear default view mutation
-  const clearDefaultViewMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest("DELETE", "/api/user-project-preferences");
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/user-project-preferences"] });
-      toast({
-        title: "Default View Cleared",
-        description: "Projects will now load with the list view",
-      });
-    },
-    onError: (error) => {
-      showFriendlyError({ error });
-    },
-  });
-
-  // Handler to set current view/dashboard as default
-  const handleSetAsDefaultView = () => {
-    if (viewMode === 'dashboard' && currentDashboard) {
-      setDefaultViewMutation.mutate({
-        defaultViewType: 'dashboard',
-        defaultViewId: currentDashboard.id,
-      });
-    } else if (viewMode === 'calendar') {
-      // If a saved view is loaded, save its ID; otherwise save null for plain calendar view
-      setDefaultViewMutation.mutate({
-        defaultViewType: 'calendar',
-        defaultViewId: currentSavedViewId,
-      });
-    } else if (viewMode === 'list') {
-      // If a saved view is loaded, save its ID; otherwise save null for plain list view
-      setDefaultViewMutation.mutate({
-        defaultViewType: 'list',
-        defaultViewId: currentSavedViewId,
-      });
-    } else if (viewMode === 'kanban') {
-      // If a saved view is loaded, save its ID; otherwise save null for plain kanban view
-      setDefaultViewMutation.mutate({
-        defaultViewType: 'kanban',
-        defaultViewId: currentSavedViewId,
-      });
-    }
-  };
-
-  // Check if current view is the user's default
-  const isCurrentViewDefault = useMemo(() => {
-    if (!userProjectPreferences) return false;
-    const { defaultViewType, defaultViewId } = userProjectPreferences;
-    
-    if (viewMode === 'dashboard' && currentDashboard) {
-      return defaultViewType === 'dashboard' && defaultViewId === currentDashboard.id;
-    }
-    
-    // For non-dashboard views, check if the view mode matches AND the saved view ID matches
-    // If currentSavedViewId is null and defaultViewId is null, it's a plain view match
-    // If both have values, they must be equal
-    if (defaultViewType === viewMode) {
-      if (defaultViewId && currentSavedViewId) {
-        return defaultViewId === currentSavedViewId;
-      }
-      // Both are null/undefined - plain view mode with no saved view
-      return !defaultViewId && !currentSavedViewId;
-    }
-    
-    return false;
-  }, [userProjectPreferences, viewMode, currentDashboard, currentSavedViewId]);
 
   // Handler to add widget to new dashboard
   const handleAddWidgetToNewDashboard = () => {
@@ -1041,8 +983,9 @@ export default function Projects() {
     if (behindScheduleOnly) {
       behindScheduleMatch = false; // Default to false, only match if truly behind
       
-      if (!project.completionStatus && project.projectType?.kanbanStages) {
-        const currentStageConfig = project.projectType.kanbanStages.find(
+      const projectTypeWithStages = project.projectType as (typeof project.projectType & { kanbanStages?: any[] });
+      if (!project.completionStatus && projectTypeWithStages?.kanbanStages) {
+        const currentStageConfig = projectTypeWithStages.kanbanStages.find(
           (s: any) => s.name === project.currentStatus
         );
         
@@ -1165,19 +1108,6 @@ export default function Projects() {
                 data-testid="button-view-all-projects"
               >
                 View All Projects
-              </Button>
-
-              {/* Set as Default View button */}
-              <Button
-                variant={isCurrentViewDefault ? "secondary" : "outline"}
-                size="sm"
-                onClick={isCurrentViewDefault ? () => clearDefaultViewMutation.mutate() : handleSetAsDefaultView}
-                disabled={setDefaultViewMutation.isPending || clearDefaultViewMutation.isPending || (viewMode === 'dashboard' && !currentDashboard)}
-                data-testid="button-set-default-view"
-                className="gap-2"
-              >
-                <Star className={`w-4 h-4 ${isCurrentViewDefault ? 'fill-current' : ''}`} />
-                {isCurrentViewDefault ? 'Default View' : 'Set as Default'}
               </Button>
 
               {/* Switch to List View button - only show in kanban view */}

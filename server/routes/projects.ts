@@ -185,21 +185,6 @@ export function registerProjectRoutes(
     }
   });
 
-  app.delete("/api/user-project-preferences", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
-    try {
-      const effectiveUserId = req.user?.effectiveUserId;
-      if (!effectiveUserId) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
-
-      await storage.deleteUserProjectPreferences(effectiveUserId);
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting user project preferences:", error instanceof Error ? error.message : error);
-      res.status(400).json({ message: "Failed to delete user project preferences" });
-    }
-  });
-
   // ==================================================
   // PROJECTS API ROUTES
   // ==================================================

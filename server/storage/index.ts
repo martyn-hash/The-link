@@ -3087,21 +3087,13 @@ export class DatabaseStorage implements IStorage {
     return this.dashboardStorage.clearHomescreenDashboards(userId);
   }
 
-  // User Project Preferences operations (4 methods) - UserPreferencesStorage
+  // User Project Preferences operations (2 methods) - UserPreferencesStorage
   async getUserProjectPreferences(userId: string) {
     return this.userPreferencesStorage.getUserProjectPreferences(userId);
   }
 
   async upsertUserProjectPreferences(preferences: any) {
     return this.userPreferencesStorage.upsertUserProjectPreferences(preferences);
-  }
-
-  async deleteUserProjectPreferences(userId: string) {
-    return this.userPreferencesStorage.deleteUserProjectPreferences(userId);
-  }
-
-  async clearDefaultView(userId: string) {
-    return this.userPreferencesStorage.clearDefaultView(userId);
   }
 
   // Company Settings operations (2 methods) - CompanySettingsStorage

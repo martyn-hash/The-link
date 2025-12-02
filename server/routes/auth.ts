@@ -913,21 +913,6 @@ export async function registerAuthAndMiscRoutes(
     }
   });
 
-  app.delete("/api/project-preferences/default", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
-    try {
-      const effectiveUserId = req.user?.effectiveUserId;
-      if (!effectiveUserId) {
-        return res.status(401).json({ message: "User not authenticated" });
-      }
-
-      await storage.clearDefaultView(effectiveUserId);
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error clearing default view:", error instanceof Error ? error.message : error);
-      res.status(400).json({ message: "Failed to clear default view" });
-    }
-  });
-
   // GET /api/dashboard - Get personalized dashboard data (homescreen - lightweight version for Recently Viewed only)
   app.get("/api/dashboard", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {

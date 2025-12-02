@@ -464,8 +464,6 @@ export interface IStorage {
   
   getUserProjectPreferences(userId: string): Promise<UserProjectPreferences | undefined>;
   upsertUserProjectPreferences(preferences: InsertUserProjectPreferences): Promise<UserProjectPreferences>;
-  deleteUserProjectPreferences(userId: string): Promise<void>;
-  clearDefaultView(userId: string): Promise<void>;
   
   getProjectAnalytics(filters: any, groupBy: string, metric?: string): Promise<{ label: string; value: number }[]>;
   
