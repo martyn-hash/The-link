@@ -595,7 +595,7 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
           })}
         </div>
 
-        <DragOverlay>
+        <DragOverlay dropAnimation={selectedProjectIds.size > 1 ? null : undefined}>
           {activeProject && selectedProjectIds.size > 1 ? (
             <BulkDragPreview
               projects={projects.filter(p => selectedProjectIds.has(p.id))}
