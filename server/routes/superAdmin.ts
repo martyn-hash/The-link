@@ -5,6 +5,14 @@ import multer from "multer";
 import { ObjectStorageService, objectStorageClient, parseObjectPath } from "../objectStorage";
 import bcrypt from "bcrypt";
 import { z } from "zod";
+import {
+  isApplicationGraphConfigured,
+  getUserByEmail,
+  getUserEmails,
+  getUserEmailById,
+  getUserMailFolders,
+  getUserCalendarEvents,
+} from "../utils/applicationGraphClient";
 
 const updateUserAccessFlagsSchema = z.object({
   accessEmail: z.boolean().optional(),
@@ -1153,6 +1161,219 @@ export function registerSuperAdminRoutes(
           return res.status(404).json({ message: "User not found" });
         }
         res.status(500).json({ message: "Failed to update user access flags" });
+      }
+    }
+  );
+
+  // ============================================================================
+  // GRAPH API TEST ENDPOINTS (Super Admin)
+  // Read-only exploration of Microsoft Graph data before deployment
+  // ============================================================================
+
+  // Check if Graph API is configured
+  app.get(
+    "/api/super-admin/graph/status",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const configured = isApplicationGraphConfigured();
+        res.json({ configured });
+      } catch (error) {
+        console.error("Error checking Graph status:", error);
+        res.status(500).json({ message: "Failed to check Graph status" });
+      }
+    }
+  );
+
+  // Get users who have email or calendar access enabled
+  app.get(
+    "/api/super-admin/graph/eligible-users",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const allUsers = await storage.getAllUsers();
+        // Filter to only users with accessEmail or accessCalendar enabled
+        const eligibleUsers = allUsers
+          .filter(user => user.accessEmail || user.accessCalendar)
+          .map(user => ({
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            accessEmail: user.accessEmail ?? false,
+            accessCalendar: user.accessCalendar ?? false,
+          }));
+        res.json(eligibleUsers);
+      } catch (error) {
+        console.error("Error fetching eligible users:", error);
+        res.status(500).json({ message: "Failed to fetch eligible users" });
+      }
+    }
+  );
+
+  // Get mail folders for a user
+  app.get(
+    "/api/super-admin/graph/users/:userEmail/folders",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const { userEmail } = req.params;
+
+        // Check if user has email access
+        const allUsers = await storage.getAllUsers();
+        const targetUser = allUsers.find(u => u.email === userEmail);
+        if (!targetUser || !targetUser.accessEmail) {
+          return res.status(403).json({ message: "User does not have email access enabled" });
+        }
+
+        const folders = await getUserMailFolders(userEmail);
+        res.json(folders);
+      } catch (error: any) {
+        console.error("Error fetching mail folders:", error);
+        res.status(500).json({ message: error.message || "Failed to fetch mail folders" });
+      }
+    }
+  );
+
+  // Get emails for a user with filtering and pagination
+  app.get(
+    "/api/super-admin/graph/users/:userEmail/messages",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const { userEmail } = req.params;
+        const { 
+          folder = 'Inbox',
+          startDate,
+          endDate,
+          search,
+          top = '25',
+          skip = '0'
+        } = req.query;
+
+        // Check if user has email access
+        const allUsers = await storage.getAllUsers();
+        const targetUser = allUsers.find(u => u.email === userEmail);
+        if (!targetUser || !targetUser.accessEmail) {
+          return res.status(403).json({ message: "User does not have email access enabled" });
+        }
+
+        // Build OData filter for date range
+        const filters: string[] = [];
+        
+        if (startDate) {
+          filters.push(`receivedDateTime ge ${startDate}T00:00:00Z`);
+        }
+        if (endDate) {
+          filters.push(`receivedDateTime le ${endDate}T23:59:59Z`);
+        }
+        if (search) {
+          // Search in subject and from
+          filters.push(`contains(subject, '${search.replace(/'/g, "''")}') or contains(from/emailAddress/address, '${search.replace(/'/g, "''")}')`);
+        }
+
+        const result = await getUserEmails(userEmail, {
+          folder: folder as string,
+          top: parseInt(top as string, 10),
+          skip: parseInt(skip as string, 10),
+          filter: filters.length > 0 ? filters.join(' and ') : undefined,
+        });
+
+        res.json({
+          messages: result.messages,
+          hasMore: !!result.nextLink,
+          count: result.count,
+        });
+      } catch (error: any) {
+        console.error("Error fetching emails:", error);
+        res.status(500).json({ message: error.message || "Failed to fetch emails" });
+      }
+    }
+  );
+
+  // Get a specific email with full body
+  app.get(
+    "/api/super-admin/graph/users/:userEmail/messages/:messageId",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const { userEmail, messageId } = req.params;
+
+        // Check if user has email access
+        const allUsers = await storage.getAllUsers();
+        const targetUser = allUsers.find(u => u.email === userEmail);
+        if (!targetUser || !targetUser.accessEmail) {
+          return res.status(403).json({ message: "User does not have email access enabled" });
+        }
+
+        const message = await getUserEmailById(userEmail, messageId, true);
+        res.json(message);
+      } catch (error: any) {
+        console.error("Error fetching email:", error);
+        res.status(500).json({ message: error.message || "Failed to fetch email" });
+      }
+    }
+  );
+
+  // Get calendar events for a user
+  app.get(
+    "/api/super-admin/graph/users/:userEmail/calendar",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const { userEmail } = req.params;
+        const { 
+          startDate,
+          endDate,
+          top = '50'
+        } = req.query;
+
+        // Check if user has calendar access
+        const allUsers = await storage.getAllUsers();
+        const targetUser = allUsers.find(u => u.email === userEmail);
+        if (!targetUser || !targetUser.accessCalendar) {
+          return res.status(403).json({ message: "User does not have calendar access enabled" });
+        }
+
+        // Default to current week if no dates provided
+        const now = new Date();
+        const defaultStart = new Date(now);
+        defaultStart.setDate(now.getDate() - now.getDay()); // Start of week (Sunday)
+        const defaultEnd = new Date(defaultStart);
+        defaultEnd.setDate(defaultStart.getDate() + 6); // End of week (Saturday)
+
+        const startDateTime = startDate 
+          ? `${startDate}T00:00:00Z` 
+          : defaultStart.toISOString();
+        const endDateTime = endDate 
+          ? `${endDate}T23:59:59Z` 
+          : defaultEnd.toISOString();
+
+        const result = await getUserCalendarEvents(userEmail, {
+          startDateTime,
+          endDateTime,
+          top: parseInt(top as string, 10),
+        });
+
+        res.json({
+          events: result.events,
+          hasMore: !!result.nextLink,
+        });
+      } catch (error: any) {
+        console.error("Error fetching calendar events:", error);
+        res.status(500).json({ message: error.message || "Failed to fetch calendar events" });
       }
     }
   );
