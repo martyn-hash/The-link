@@ -786,3 +786,347 @@ export async function getScheduleAvailability(
 
   return response.value || [];
 }
+
+// ============================================================================
+// EMAIL SENDING FUNCTIONS (Tenant-Wide)
+// ============================================================================
+
+/**
+ * Send an email on behalf of a user using application permissions
+ * 
+ * @param userIdOrEmail - Azure AD user GUID or email address (the sender)
+ * @param to - Recipient email address(es)
+ * @param subject - Email subject
+ * @param content - Email body content (HTML or plain text)
+ * @param isHtml - Whether the content is HTML (default: true)
+ * @param options - Additional options (cc, bcc, attachments, saveToSentItems)
+ */
+export async function sendEmailAsUser(
+  userIdOrEmail: string,
+  to: string | string[],
+  subject: string,
+  content: string,
+  isHtml: boolean = true,
+  options: {
+    cc?: string[];
+    bcc?: string[];
+    attachments?: Array<{
+      name: string;
+      contentType: string;
+      contentBytes: string; // Base64 encoded
+    }>;
+    saveToSentItems?: boolean;
+  } = {}
+): Promise<{ success: boolean }> {
+  const client = await getApplicationGraphClient();
+
+  const toRecipients = (Array.isArray(to) ? to : [to]).map(email => ({
+    emailAddress: { address: email }
+  }));
+
+  const message: any = {
+    subject,
+    body: {
+      contentType: isHtml ? 'HTML' : 'Text',
+      content
+    },
+    toRecipients
+  };
+
+  if (options.cc && options.cc.length > 0) {
+    message.ccRecipients = options.cc.map(email => ({
+      emailAddress: { address: email }
+    }));
+  }
+
+  if (options.bcc && options.bcc.length > 0) {
+    message.bccRecipients = options.bcc.map(email => ({
+      emailAddress: { address: email }
+    }));
+  }
+
+  if (options.attachments && options.attachments.length > 0) {
+    message.attachments = options.attachments.map(att => ({
+      '@odata.type': '#microsoft.graph.fileAttachment',
+      name: att.name,
+      contentType: att.contentType,
+      contentBytes: att.contentBytes
+    }));
+  }
+
+  await client
+    .api(`/users/${encodeURIComponent(userIdOrEmail)}/sendMail`)
+    .post({
+      message,
+      saveToSentItems: options.saveToSentItems !== false // default to true
+    });
+
+  console.log(`[Application Graph] Email sent from ${userIdOrEmail} to ${Array.isArray(to) ? to.join(', ') : to}`);
+  return { success: true };
+}
+
+/**
+ * Create a reply to an email message using application permissions
+ * 
+ * @param userIdOrEmail - Azure AD user GUID or email address (the sender)
+ * @param messageId - The Graph API message ID to reply to
+ * @param content - The reply content (HTML or plain text)
+ * @param isHtml - Whether the content is HTML (default: true)
+ * @param options - Additional options (subject, to, cc, attachments)
+ */
+export async function createReplyToMessage(
+  userIdOrEmail: string,
+  messageId: string,
+  content: string,
+  isHtml: boolean = true,
+  options: {
+    subject?: string;
+    to?: string[];
+    cc?: string[];
+    attachments?: Array<{
+      objectPath: string;
+      fileName: string;
+      contentType?: string;
+      fileSize?: number;
+    }>;
+  } = {}
+): Promise<{ success: boolean }> {
+  const client = await getApplicationGraphClient();
+
+  // For plain text without attachments, use simple reply action
+  if (!isHtml && (!options.attachments || options.attachments.length === 0)) {
+    await client
+      .api(`/users/${encodeURIComponent(userIdOrEmail)}/messages/${messageId}/reply`)
+      .post({ comment: content });
+    console.log(`[Application Graph] Simple reply sent from ${userIdOrEmail}`);
+    return { success: true };
+  }
+
+  // For HTML content or attachments, create draft and update it
+  // Step 1: Create draft reply
+  const draftReply = await client
+    .api(`/users/${encodeURIComponent(userIdOrEmail)}/messages/${messageId}/createReply`)
+    .post({});
+
+  if (!draftReply || !draftReply.id) {
+    throw new Error('Failed to create draft reply');
+  }
+
+  // Step 2: Update draft body with HTML content and custom recipients/subject
+  const patchData: any = {
+    body: {
+      contentType: 'HTML',
+      content
+    }
+  };
+
+  if (options.subject) {
+    patchData.subject = options.subject;
+  }
+
+  if (options.to && options.to.length > 0) {
+    patchData.toRecipients = options.to.map(email => ({
+      emailAddress: { address: email }
+    }));
+  }
+
+  if (options.cc && options.cc.length > 0) {
+    patchData.ccRecipients = options.cc.map(email => ({
+      emailAddress: { address: email }
+    }));
+  }
+
+  await client
+    .api(`/users/${encodeURIComponent(userIdOrEmail)}/messages/${draftReply.id}`)
+    .patch(patchData);
+
+  // Step 3: Add attachments if provided
+  if (options.attachments && options.attachments.length > 0) {
+    const { ObjectStorageService } = await import('../objectStorage');
+    
+    for (const attachment of options.attachments) {
+      const fileBuffer = await ObjectStorageService.downloadFile(attachment.objectPath);
+      const base64Content = fileBuffer.toString('base64');
+
+      await client
+        .api(`/users/${encodeURIComponent(userIdOrEmail)}/messages/${draftReply.id}/attachments`)
+        .post({
+          '@odata.type': '#microsoft.graph.fileAttachment',
+          name: attachment.fileName,
+          contentType: attachment.contentType || 'application/octet-stream',
+          contentBytes: base64Content
+        });
+    }
+  }
+
+  // Step 4: Send the draft
+  await client
+    .api(`/users/${encodeURIComponent(userIdOrEmail)}/messages/${draftReply.id}/send`)
+    .post({});
+
+  console.log(`[Application Graph] Reply sent from ${userIdOrEmail}`);
+  return { success: true };
+}
+
+/**
+ * Create a reply-all to an email message using application permissions
+ * 
+ * @param userIdOrEmail - Azure AD user GUID or email address (the sender)
+ * @param messageId - The Graph API message ID to reply to
+ * @param content - The reply content (HTML or plain text)
+ * @param isHtml - Whether the content is HTML (default: true)
+ * @param options - Additional options (subject, to, cc, attachments)
+ */
+export async function createReplyAllToMessage(
+  userIdOrEmail: string,
+  messageId: string,
+  content: string,
+  isHtml: boolean = true,
+  options: {
+    subject?: string;
+    to?: string[];
+    cc?: string[];
+    attachments?: Array<{
+      objectPath: string;
+      fileName: string;
+      contentType?: string;
+      fileSize?: number;
+    }>;
+  } = {}
+): Promise<{ success: boolean }> {
+  const client = await getApplicationGraphClient();
+
+  // For plain text without attachments, use simple replyAll action
+  if (!isHtml && (!options.attachments || options.attachments.length === 0)) {
+    await client
+      .api(`/users/${encodeURIComponent(userIdOrEmail)}/messages/${messageId}/replyAll`)
+      .post({ comment: content });
+    console.log(`[Application Graph] Simple reply-all sent from ${userIdOrEmail}`);
+    return { success: true };
+  }
+
+  // For HTML content or attachments, create draft and update it
+  // Step 1: Create draft reply-all
+  const draftReply = await client
+    .api(`/users/${encodeURIComponent(userIdOrEmail)}/messages/${messageId}/createReplyAll`)
+    .post({});
+
+  if (!draftReply || !draftReply.id) {
+    throw new Error('Failed to create draft reply-all');
+  }
+
+  // Step 2: Update draft body with HTML content and custom recipients/subject
+  const patchData: any = {
+    body: {
+      contentType: 'HTML',
+      content
+    }
+  };
+
+  if (options.subject) {
+    patchData.subject = options.subject;
+  }
+
+  if (options.to && options.to.length > 0) {
+    patchData.toRecipients = options.to.map(email => ({
+      emailAddress: { address: email }
+    }));
+  }
+
+  if (options.cc && options.cc.length > 0) {
+    patchData.ccRecipients = options.cc.map(email => ({
+      emailAddress: { address: email }
+    }));
+  }
+
+  await client
+    .api(`/users/${encodeURIComponent(userIdOrEmail)}/messages/${draftReply.id}`)
+    .patch(patchData);
+
+  // Step 3: Add attachments if provided
+  if (options.attachments && options.attachments.length > 0) {
+    const { ObjectStorageService } = await import('../objectStorage');
+    
+    for (const attachment of options.attachments) {
+      const fileBuffer = await ObjectStorageService.downloadFile(attachment.objectPath);
+      const base64Content = fileBuffer.toString('base64');
+
+      await client
+        .api(`/users/${encodeURIComponent(userIdOrEmail)}/messages/${draftReply.id}/attachments`)
+        .post({
+          '@odata.type': '#microsoft.graph.fileAttachment',
+          name: attachment.fileName,
+          contentType: attachment.contentType || 'application/octet-stream',
+          contentBytes: base64Content
+        });
+    }
+  }
+
+  // Step 4: Send the draft
+  await client
+    .api(`/users/${encodeURIComponent(userIdOrEmail)}/messages/${draftReply.id}/send`)
+    .post({});
+
+  console.log(`[Application Graph] Reply-all sent from ${userIdOrEmail}`);
+  return { success: true };
+}
+
+/**
+ * Download an email attachment using application permissions
+ * 
+ * @param userIdOrEmail - Azure AD user GUID or email address (mailbox owner)
+ * @param messageId - The Graph API message ID containing the attachment
+ * @param attachmentId - The Graph API attachment ID to download
+ * @returns Buffer containing the attachment content
+ */
+export async function downloadEmailAttachment(
+  userIdOrEmail: string,
+  messageId: string,
+  attachmentId: string
+): Promise<Buffer> {
+  const client = await getApplicationGraphClient();
+
+  const attachmentContent = await client
+    .api(`/users/${encodeURIComponent(userIdOrEmail)}/messages/${messageId}/attachments/${attachmentId}/$value`)
+    .getStream();
+
+  // Convert stream to buffer
+  const chunks: Uint8Array[] = [];
+  for await (const chunk of attachmentContent) {
+    chunks.push(chunk);
+  }
+
+  console.log(`[Application Graph] Downloaded attachment ${attachmentId} from ${userIdOrEmail}`);
+  return Buffer.concat(chunks);
+}
+
+/**
+ * Get user's Outlook profile using application permissions
+ */
+export async function getUserOutlookProfile(userIdOrEmail: string): Promise<{
+  id: string;
+  email: string;
+  displayName: string;
+  givenName?: string;
+  surname?: string;
+} | null> {
+  try {
+    const client = await getApplicationGraphClient();
+    
+    const profile = await client
+      .api(`/users/${encodeURIComponent(userIdOrEmail)}`)
+      .select('id,mail,userPrincipalName,displayName,givenName,surname')
+      .get();
+
+    return {
+      id: profile.id,
+      email: profile.mail || profile.userPrincipalName,
+      displayName: profile.displayName,
+      givenName: profile.givenName,
+      surname: profile.surname,
+    };
+  } catch (error) {
+    console.error('[Application Graph] Error getting user profile:', error);
+    return null;
+  }
+}
