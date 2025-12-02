@@ -1,5 +1,6 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Move } from "lucide-react";
 import type { ProjectWithRelations } from "@shared/schema";
 
 interface BulkDragPreviewProps {
@@ -7,11 +8,11 @@ interface BulkDragPreviewProps {
   primaryProject: ProjectWithRelations;
 }
 
-export function BulkDragPreview({ projects, primaryProject }: BulkDragPreviewProps) {
+export function BulkDragPreview({ projects }: BulkDragPreviewProps) {
   const count = projects.length;
   
   return (
-    <div className="relative w-[280px]" data-testid="bulk-drag-preview">
+    <div className="relative w-[200px]" data-testid="bulk-drag-preview">
       {count >= 3 && (
         <div
           className="absolute top-2 left-2 right-0 h-full bg-card border border-border rounded-lg opacity-40 pointer-events-none"
@@ -27,31 +28,23 @@ export function BulkDragPreview({ projects, primaryProject }: BulkDragPreviewPro
       )}
       
       <Card className="border-2 border-primary/50 shadow-xl bg-card relative">
-        <CardContent className="p-3">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              <h4 className="font-semibold text-sm truncate">
-                {primaryProject.client?.name || 'Unknown Client'}
-              </h4>
-              <p className="text-xs text-muted-foreground truncate">
-                {primaryProject.projectType?.name || 'Unknown Type'}
-              </p>
+        <CardContent className="p-4">
+          <div className="flex flex-col items-center gap-2">
+            <div className="flex items-center gap-2">
+              <Move className="h-5 w-5 text-primary" />
+              <Badge 
+                variant="default" 
+                className="bg-primary text-primary-foreground text-sm font-bold px-3 py-1"
+                data-testid="bulk-drag-count-badge"
+              >
+                {count}
+              </Badge>
             </div>
             
-            <Badge 
-              variant="default" 
-              className="shrink-0 bg-primary text-primary-foreground text-xs font-bold px-2 py-0.5"
-              data-testid="bulk-drag-count-badge"
-            >
-              {count}
-            </Badge>
-          </div>
-          
-          {count > 1 && (
-            <p className="text-xs text-muted-foreground mt-2 text-center">
-              Moving {count} projects
+            <p className="text-sm font-medium text-foreground text-center">
+              Moving {count} project{count !== 1 ? 's' : ''}
             </p>
-          )}
+          </div>
         </CardContent>
       </Card>
     </div>

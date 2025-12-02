@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, AlertCircle, RefreshCw, X } from "lucide-react";
 import { BulkChangeStatusModal } from "./BulkChangeStatusModal";
 import { BulkMoveRestrictionDialog } from "./BulkMoveRestrictionDialog";
+import { BulkMoveStageConflictDialog } from "./BulkMoveStageConflictDialog";
 import { BulkDragPreview } from "./BulkDragPreview";
 import { apiRequest } from "@/lib/queryClient";
 import type { ProjectWithRelations, User, KanbanStage, ChangeReason } from "@shared/schema";
@@ -81,6 +82,8 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
   
   // State for bulk move restriction dialog
   const [showBulkMoveRestrictionDialog, setShowBulkMoveRestrictionDialog] = useState(false);
+  const [showBulkMoveStageConflictDialog, setShowBulkMoveStageConflictDialog] = useState(false);
+  const [conflictingStageNames, setConflictingStageNames] = useState<string[]>([]);
   const [bulkMoveRestrictions, setBulkMoveRestrictions] = useState<string[]>([]);
   
   // State for pre-validated bulk move data
@@ -321,11 +324,9 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
         // Check that all selected projects are in the same current stage
         const currentStages = new Set(selectedProjects.map(p => p.currentStatus));
         if (currentStages.size > 1) {
-          toast({
-            title: "Cannot bulk move",
-            description: "Selected projects must be in the same stage. Please select projects from the same column.",
-            variant: "destructive",
-          });
+          // Show conflict dialog with the list of stages
+          setConflictingStageNames(Array.from(currentStages));
+          setShowBulkMoveStageConflictDialog(true);
           setOveredColumn(null);
           return;
         }
@@ -661,6 +662,15 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
         targetStageName={targetStatus || ""}
         restrictions={bulkMoveRestrictions}
         projectCount={selectedProjectIds.size}
+      />
+
+      <BulkMoveStageConflictDialog
+        isOpen={showBulkMoveStageConflictDialog}
+        onClose={() => {
+          setShowBulkMoveStageConflictDialog(false);
+          setConflictingStageNames([]);
+        }}
+        stageNames={conflictingStageNames}
       />
     </div>
   );
