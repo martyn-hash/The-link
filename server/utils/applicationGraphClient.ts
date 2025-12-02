@@ -288,7 +288,6 @@ export async function getUserEmailById(
     'hasAttachments',
     'bodyPreview',
     'isRead',
-    'inReplyTo',
   ];
 
   if (includeBody) {
