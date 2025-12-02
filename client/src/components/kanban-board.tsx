@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Plus, AlertCircle, RefreshCw, X } from "lucide-react";
 import { BulkChangeStatusModal } from "./BulkChangeStatusModal";
 import { BulkMoveRestrictionDialog } from "./BulkMoveRestrictionDialog";
+import { BulkDragPreview } from "./BulkDragPreview";
 import { apiRequest } from "@/lib/queryClient";
 import type { ProjectWithRelations, User, KanbanStage, ChangeReason } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
@@ -252,9 +253,14 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
     // Close any open hover popovers when drag starts
     setHoveredProjectId(null);
     
-    // When multi-select is active (>1 selected), keep selection for bulk move
-    // Only clear selection if dragging a non-selected project with no multi-select
-    if (selectedProjectIds.size <= 1 && !selectedProjectIds.has(draggedProjectId)) {
+    // Handle selection state for bulk moves:
+    // 1. If dragging a selected card with multi-select active (>1), keep all selections for bulk move
+    // 2. If dragging an unselected card, clear selection and start fresh (single drag)
+    if (selectedProjectIds.has(draggedProjectId) && selectedProjectIds.size > 1) {
+      // Dragging a card that's part of multi-selection - keep all selected for bulk move
+      // Selection stays as-is
+    } else {
+      // Not a multi-select bulk drag - clear any existing selection
       clearSelection();
     }
     
@@ -589,14 +595,19 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
         </div>
 
         <DragOverlay>
-          {activeProject && (
+          {activeProject && selectedProjectIds.size > 1 ? (
+            <BulkDragPreview
+              projects={projects.filter(p => selectedProjectIds.has(p.id))}
+              primaryProject={activeProject}
+            />
+          ) : activeProject ? (
             <ProjectCard
               project={activeProject}
               stageConfig={stages?.find(s => s.name === activeProject.currentStatus)}
               onOpenModal={() => navigateToProject(activeProject.id)}
               isDragging
             />
-          )}
+          ) : null}
         </DragOverlay>
       </DndContext>
 
