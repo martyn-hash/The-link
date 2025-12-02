@@ -159,6 +159,15 @@ export default function Projects() {
   const [dashboardClientFilter, setDashboardClientFilter] = useState("all");
   const [dashboardProjectTypeFilter, setDashboardProjectTypeFilter] = useState("all");
 
+  // Calendar settings state (for loading/saving calendar views)
+  const [calendarSettings, setCalendarSettings] = useState<{
+    calendarViewType: "month" | "week";
+    showProjectDueDates: boolean;
+    showProjectTargetDates: boolean;
+    showStageDeadlines: boolean;
+    showTaskDueDates: boolean;
+  } | undefined>(undefined);
+
   // Save view modal state
   const [saveViewDialogOpen, setSaveViewDialogOpen] = useState(false);
   const [newViewName, setNewViewName] = useState("");
@@ -315,8 +324,24 @@ export default function Projects() {
       // Switch to the appropriate view mode based on the saved view
       if (view.viewMode === "kanban") {
         setViewMode("kanban");
+        setCalendarSettings(undefined);
       } else if (view.viewMode === "list") {
         setViewMode("list");
+        setCalendarSettings(undefined);
+      } else if (view.viewMode === "calendar") {
+        setViewMode("calendar");
+        // Load calendar-specific settings if present
+        if (filters.calendarSettings) {
+          setCalendarSettings({
+            calendarViewType: filters.calendarSettings.calendarViewType || "month",
+            showProjectDueDates: filters.calendarSettings.showProjectDueDates ?? true,
+            showProjectTargetDates: filters.calendarSettings.showProjectTargetDates ?? true,
+            showStageDeadlines: filters.calendarSettings.showStageDeadlines ?? false,
+            showTaskDueDates: filters.calendarSettings.showTaskDueDates ?? true,
+          });
+        } else {
+          setCalendarSettings(undefined);
+        }
       }
       
       toast({
@@ -425,7 +450,7 @@ export default function Projects() {
 
   // Save view mutation
   const saveViewMutation = useMutation({
-    mutationFn: async (data: { name: string; filters: any; viewMode: "list" | "kanban" }) => {
+    mutationFn: async (data: { name: string; filters: any; viewMode: "list" | "kanban" | "calendar"; calendarSettings?: any }) => {
       return apiRequest("POST", "/api/project-views", data);
     },
     onSuccess: (savedView: any) => {
@@ -449,13 +474,13 @@ export default function Projects() {
       return;
     }
 
-    // Only save list/kanban views, dashboards use separate mutation
-    if (viewMode !== "list" && viewMode !== "kanban") {
+    // Only save list/kanban/calendar views, dashboards use separate mutation
+    if (viewMode !== "list" && viewMode !== "kanban" && viewMode !== "calendar") {
       showFriendlyError({ error: "Dashboard views must be saved using the dashboard creation dialog" });
       return;
     }
 
-    const filters = {
+    const filters: any = {
       serviceFilter,
       taskAssigneeFilter,
       serviceOwnerFilter,
@@ -466,6 +491,11 @@ export default function Projects() {
       behindScheduleOnly,
       serviceDueDateFilter,
     };
+
+    // Include calendar settings if saving a calendar view
+    if (viewMode === "calendar" && calendarSettings) {
+      filters.calendarSettings = calendarSettings;
+    }
 
     saveViewMutation.mutate({
       name: newViewName.trim(),
@@ -918,11 +948,12 @@ export default function Projects() {
                 currentViewMode={viewMode}
                 onLoadListView={handleLoadSavedView}
                 onLoadKanbanView={handleLoadSavedView}
+                onLoadCalendarView={handleLoadSavedView}
                 onLoadDashboard={handleLoadDashboard}
               />
 
-              {/* Save Current View button - only show for list/kanban */}
-              {(viewMode === "list" || viewMode === "kanban") && (
+              {/* Save Current View button - only show for list/kanban/calendar */}
+              {(viewMode === "list" || viewMode === "kanban" || viewMode === "calendar") && (
                 <Button
                   variant="outline"
                   size="sm"
@@ -1087,6 +1118,7 @@ export default function Projects() {
                 currentViewMode={viewMode}
                 onLoadListView={handleLoadSavedView}
                 onLoadKanbanView={handleLoadSavedView}
+                onLoadCalendarView={handleLoadSavedView}
                 onLoadDashboard={handleLoadDashboard}
                 isMobileIconOnly={true}
               />
@@ -1233,6 +1265,8 @@ export default function Projects() {
                     userFilter={userFilter}
                     showArchived={showArchived}
                     onEventClick={handleCalendarEventClick}
+                    initialSettings={calendarSettings}
+                    onSettingsChange={setCalendarSettings}
                   />
                 ) : (
                   <>
@@ -1348,6 +1382,8 @@ export default function Projects() {
                   userFilter={userFilter}
                   showArchived={showArchived}
                   onEventClick={handleCalendarEventClick}
+                  initialSettings={calendarSettings}
+                  onSettingsChange={setCalendarSettings}
                 />
               ) : (
                 <>
