@@ -36,6 +36,7 @@ import { registerPeopleImportRoutes } from "./routes/peopleImport";
 import { registerAIRoutes } from "./routes/ai";
 import { registerFriendlyErrorRoutes } from "./routes/friendlyErrors";
 import { registerQuickBooksRoutes } from "./routes/quickbooks";
+import { registerCalendarRoutes } from "./routes/calendar";
 
 /**
  * Register all application routes
@@ -116,6 +117,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerAIRoutes(app, isAuthenticated, resolveEffectiveUser);
   registerFriendlyErrorRoutes(app, isAuthenticated);
   registerQuickBooksRoutes(app, isAuthenticated, resolveEffectiveUser, requireSuperAdmin);
+  registerCalendarRoutes(app, isAuthenticated, resolveEffectiveUser);
 
   const httpServer = createServer(app);
   return httpServer;

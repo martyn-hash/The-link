@@ -54,10 +54,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Columns3, List, Filter, BarChart3, Plus, Trash2, X, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
+import { Columns3, List, Filter, BarChart3, Plus, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
+import { CalendarView } from "@/components/calendar";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
-type ViewMode = "kanban" | "list" | "dashboard";
+type ViewMode = "kanban" | "list" | "dashboard" | "calendar";
 
 export interface Widget {
   id: string;
@@ -384,6 +385,15 @@ export default function Projects() {
       });
     } catch (error) {
       showFriendlyError({ error });
+    }
+  };
+
+  // Handler for calendar event clicks - navigate to project or task detail
+  const handleCalendarEventClick = (event: any) => {
+    if (event.entityType === "project") {
+      setLocation(`/projects/${event.entityId}`);
+    } else if (event.entityType === "task") {
+      setLocation(`/tasks/${event.entityId}`);
     }
   };
 
@@ -1034,11 +1044,21 @@ export default function Projects() {
                     <BarChart3 className="w-4 h-4" />
                     <span className="hidden md:inline ml-2">Dashboard</span>
                   </Button>
+                  <Button
+                    variant={viewMode === "calendar" ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("calendar")}
+                    data-testid="button-view-calendar"
+                    className="h-11 md:h-8 px-2 md:px-3"
+                  >
+                    <CalendarIcon className="w-4 h-4" />
+                    <span className="hidden md:inline ml-2">Calendar</span>
+                  </Button>
                 </div>
               )}
               
-              {/* Filters Button - Only visible in list view */}
-              {viewMode === "list" && (
+              {/* Filters Button - Only visible in list or calendar view */}
+              {(viewMode === "list" || viewMode === "calendar") && (
                 <Button
                   variant="outline"
                   onClick={() => setFilterPanelOpen(true)}
@@ -1117,11 +1137,20 @@ export default function Projects() {
                   >
                     <BarChart3 className="w-4 h-4" />
                   </Button>
+                  <Button
+                    variant={viewMode === "calendar" ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("calendar")}
+                    data-testid="button-view-calendar-mobile"
+                    className="h-11 px-2"
+                  >
+                    <CalendarIcon className="w-4 h-4" />
+                  </Button>
                 </div>
               )}
               
-              {/* Filters Button - Only visible in list view */}
-              {viewMode === "list" && (
+              {/* Filters Button - Only visible in list or calendar view */}
+              {(viewMode === "list" || viewMode === "calendar") && (
                 <Button
                   variant="outline"
                   onClick={() => setFilterPanelOpen(true)}
@@ -1195,6 +1224,15 @@ export default function Projects() {
                   <KanbanBoard 
                     projects={paginatedProjects} 
                     user={user}
+                  />
+                ) : viewMode === "calendar" ? (
+                  <CalendarView
+                    serviceFilter={serviceFilter}
+                    taskAssigneeFilter={taskAssigneeFilter}
+                    serviceOwnerFilter={serviceOwnerFilter}
+                    userFilter={userFilter}
+                    showArchived={showArchived}
+                    onEventClick={handleCalendarEventClick}
                   />
                 ) : (
                   <>
@@ -1301,6 +1339,15 @@ export default function Projects() {
                 <KanbanBoard 
                   projects={paginatedProjects} 
                   user={user}
+                />
+              ) : viewMode === "calendar" ? (
+                <CalendarView
+                  serviceFilter={serviceFilter}
+                  taskAssigneeFilter={taskAssigneeFilter}
+                  serviceOwnerFilter={serviceOwnerFilter}
+                  userFilter={userFilter}
+                  showArchived={showArchived}
+                  onEventClick={handleCalendarEventClick}
                 />
               ) : (
                 <>

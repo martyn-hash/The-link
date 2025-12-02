@@ -63,8 +63,8 @@ interface FilterPanelProps {
   setCustomDateRange: (value: { from: Date | undefined; to: Date | undefined }) => void;
   serviceDueDateFilter: string;
   setServiceDueDateFilter: (value: string) => void;
-  viewMode: "kanban" | "list" | "dashboard";
-  setViewMode: (value: "kanban" | "list" | "dashboard") => void;
+  viewMode: "kanban" | "list" | "dashboard" | "calendar";
+  setViewMode: (value: "kanban" | "list" | "dashboard" | "calendar") => void;
   
   // Optional new filters for dashboards
   clientFilter?: string;

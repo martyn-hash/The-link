@@ -17,7 +17,7 @@ import type { ProjectView } from "@shared/schema";
 import type { Dashboard } from "@/pages/projects";
 
 interface ViewMegaMenuProps {
-  currentViewMode: "list" | "kanban" | "dashboard";
+  currentViewMode: "list" | "kanban" | "dashboard" | "calendar";
   onLoadListView: (view: ProjectView) => void;
   onLoadKanbanView: (view: ProjectView) => void;
   onLoadDashboard: (dashboard: Dashboard) => void;
