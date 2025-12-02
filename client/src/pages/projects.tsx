@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { showFriendlyError } from "@/lib/friendlyErrors";
-import { type ProjectWithRelations, type User, type ProjectView } from "@shared/schema";
+import { type ProjectWithRelations, type User, type ProjectView, type UserProjectPreferences } from "@shared/schema";
 import TopNavigation from "@/components/top-navigation";
 import BottomNav from "@/components/bottom-nav";
 import SuperSearch from "@/components/super-search";
@@ -54,7 +54,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Columns3, List, Filter, BarChart3, Plus, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
+import { Columns3, List, Filter, BarChart3, Plus, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Star } from "lucide-react";
 import { CalendarView } from "@/components/calendar";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -178,6 +178,9 @@ export default function Projects() {
   const [deleteDashboardDialogOpen, setDeleteDashboardDialogOpen] = useState(false);
   const [dashboardToDelete, setDashboardToDelete] = useState<Dashboard | null>(null);
 
+  // Track if default view has been applied (to prevent re-applying on URL changes)
+  const [defaultViewApplied, setDefaultViewApplied] = useState(false);
+
   // Read URL query parameters and set filters on mount
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -245,15 +248,22 @@ export default function Projects() {
   });
 
   // Fetch saved project views
-  const { data: savedViews = [] } = useQuery<ProjectView[]>({
+  const { data: savedViews = [], isLoading: savedViewsLoading } = useQuery<ProjectView[]>({
     queryKey: ["/api/project-views"],
     enabled: isAuthenticated && !!user,
     retry: false,
   });
 
   // Fetch saved dashboards
-  const { data: dashboards = [] } = useQuery<Dashboard[]>({
+  const { data: dashboards = [], isLoading: dashboardsLoading } = useQuery<Dashboard[]>({
     queryKey: ["/api/dashboards"],
+    enabled: isAuthenticated && !!user,
+    retry: false,
+  });
+
+  // Fetch user project preferences (for default view)
+  const { data: userProjectPreferences, isLoading: preferencesLoading } = useQuery<UserProjectPreferences>({
+    queryKey: ["/api/user-project-preferences"],
     enabled: isAuthenticated && !!user,
     retry: false,
   });
@@ -284,6 +294,83 @@ export default function Projects() {
     await queryClient.invalidateQueries({ queryKey: ["/api/project-views"] });
     await queryClient.invalidateQueries({ queryKey: ["/api/dashboards"] });
   };
+
+  // Apply default view on initial load based on user preferences
+  // This only runs once when preferences, savedViews, and dashboards are all loaded
+  useEffect(() => {
+    // Only apply once, and only if we have the data we need
+    if (defaultViewApplied) return;
+    if (!isAuthenticated || !user) return;
+    
+    // Wait for all relevant queries to finish loading before applying defaults
+    // This prevents race conditions where preferences arrive before saved views/dashboards
+    if (preferencesLoading || savedViewsLoading || dashboardsLoading) return;
+    
+    // If preferences query completed but returned undefined/null, mark as applied and exit
+    if (!userProjectPreferences) {
+      setDefaultViewApplied(true);
+      return;
+    }
+    
+    // Check if URL has specific filters (meaning user navigated with intent)
+    const searchParams = new URLSearchParams(window.location.search);
+    const hasUrlFilters = searchParams.toString().length > 0;
+    if (hasUrlFilters) {
+      setDefaultViewApplied(true);
+      return;
+    }
+
+    const { defaultViewType, defaultViewId } = userProjectPreferences;
+    
+    // No default set
+    if (!defaultViewType) {
+      setDefaultViewApplied(true);
+      return;
+    }
+
+    // If it's a simple view type (not a specific dashboard), just set the view mode
+    if (defaultViewType === 'list' && !defaultViewId) {
+      setViewMode('list');
+      setDefaultViewApplied(true);
+      return;
+    }
+    
+    if (defaultViewType === 'kanban' && !defaultViewId) {
+      // Kanban requires a service filter, so just set list mode as fallback
+      setViewMode('list');
+      setDefaultViewApplied(true);
+      return;
+    }
+    
+    if (defaultViewType === 'calendar' && !defaultViewId) {
+      setViewMode('calendar');
+      setDefaultViewApplied(true);
+      return;
+    }
+
+    // If there's a specific view ID, we need to load the saved view or dashboard
+    if (defaultViewId) {
+      if (defaultViewType === 'dashboard') {
+        // Wait for dashboards query to finish loading (not just empty)
+        if (dashboardsLoading) return;
+        
+        const dashboard = dashboards.find(d => d.id === defaultViewId);
+        if (dashboard) {
+          handleLoadDashboard(dashboard);
+        }
+      } else {
+        // Wait for saved views query to finish loading (not just empty)
+        if (savedViewsLoading) return;
+        
+        const savedView = savedViews.find(v => v.id === defaultViewId);
+        if (savedView) {
+          handleLoadSavedView(savedView);
+        }
+      }
+    }
+    
+    setDefaultViewApplied(true);
+  }, [userProjectPreferences, savedViews, dashboards, preferencesLoading, savedViewsLoading, dashboardsLoading, isAuthenticated, user, defaultViewApplied]);
 
   // Normalize dashboard service filter when allServices loads
   // This handles race condition where dashboard is loaded before services are available
@@ -438,9 +525,9 @@ export default function Projects() {
     // Switch to list view (default view mode)
     setViewMode("list");
     
-    // Use wouter's setLocation to navigate to clean URL
-    // This triggers the useEffect hook properly and clears any URL parameters
-    setLocation('/projects');
+    // Use wouter's setLocation to navigate with view=all query parameter
+    // This makes the URL shareable and matches sidebar navigation
+    setLocation('/?view=all');
     
     toast({
       title: "Filters Reset",
@@ -600,6 +687,77 @@ export default function Projects() {
       showFriendlyError({ error });
     },
   });
+
+  // Set default view mutation
+  const setDefaultViewMutation = useMutation({
+    mutationFn: async (data: { defaultViewType: string; defaultViewId?: string | null }) => {
+      return apiRequest("POST", "/api/user-project-preferences", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user-project-preferences"] });
+      toast({
+        title: "Default View Set",
+        description: "This view will load automatically when you visit Projects",
+      });
+    },
+    onError: (error) => {
+      showFriendlyError({ error });
+    },
+  });
+
+  // Clear default view mutation
+  const clearDefaultViewMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("DELETE", "/api/user-project-preferences");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/user-project-preferences"] });
+      toast({
+        title: "Default View Cleared",
+        description: "Projects will now load with the list view",
+      });
+    },
+    onError: (error) => {
+      showFriendlyError({ error });
+    },
+  });
+
+  // Handler to set current view/dashboard as default
+  const handleSetAsDefaultView = () => {
+    if (viewMode === 'dashboard' && currentDashboard) {
+      setDefaultViewMutation.mutate({
+        defaultViewType: 'dashboard',
+        defaultViewId: currentDashboard.id,
+      });
+    } else if (viewMode === 'calendar') {
+      setDefaultViewMutation.mutate({
+        defaultViewType: 'calendar',
+        defaultViewId: null,
+      });
+    } else if (viewMode === 'list') {
+      setDefaultViewMutation.mutate({
+        defaultViewType: 'list',
+        defaultViewId: null,
+      });
+    } else if (viewMode === 'kanban') {
+      setDefaultViewMutation.mutate({
+        defaultViewType: 'kanban',
+        defaultViewId: null,
+      });
+    }
+  };
+
+  // Check if current view is the user's default
+  const isCurrentViewDefault = useMemo(() => {
+    if (!userProjectPreferences) return false;
+    const { defaultViewType, defaultViewId } = userProjectPreferences;
+    
+    if (viewMode === 'dashboard' && currentDashboard) {
+      return defaultViewType === 'dashboard' && defaultViewId === currentDashboard.id;
+    }
+    
+    return defaultViewType === viewMode && !defaultViewId;
+  }, [userProjectPreferences, viewMode, currentDashboard]);
 
   // Handler to add widget to new dashboard
   const handleAddWidgetToNewDashboard = () => {
@@ -972,6 +1130,19 @@ export default function Projects() {
                 data-testid="button-view-all-projects"
               >
                 View All Projects
+              </Button>
+
+              {/* Set as Default View button */}
+              <Button
+                variant={isCurrentViewDefault ? "secondary" : "outline"}
+                size="sm"
+                onClick={isCurrentViewDefault ? () => clearDefaultViewMutation.mutate() : handleSetAsDefaultView}
+                disabled={setDefaultViewMutation.isPending || clearDefaultViewMutation.isPending || (viewMode === 'dashboard' && !currentDashboard)}
+                data-testid="button-set-default-view"
+                className="gap-2"
+              >
+                <Star className={`w-4 h-4 ${isCurrentViewDefault ? 'fill-current' : ''}`} />
+                {isCurrentViewDefault ? 'Default View' : 'Set as Default'}
               </Button>
 
               {/* Switch to List View button - only show in kanban view */}
@@ -1453,7 +1624,7 @@ export default function Projects() {
       </div>
 
       {/* Mobile Bottom Navigation */}
-      <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
+      <BottomNav user={user} onSearchClick={() => setMobileSearchOpen(true)} />
 
       {/* Mobile Search Modal */}
       <SuperSearch

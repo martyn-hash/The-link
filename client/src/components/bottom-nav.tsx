@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Home, FolderOpen, Search, MessageCircle } from "lucide-react";
+import { Home, Search, MessageCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import type { MouseEvent } from "react";
@@ -33,15 +33,9 @@ export default function BottomNav({ user, onSearchClick }: BottomNavProps) {
   const navItems = [
     { 
       href: "/", 
-      label: "Home", 
+      label: "Dashboard", 
       icon: Home,
       testId: "bottom-nav-home"
-    },
-    { 
-      href: "/projects", 
-      label: "Projects", 
-      icon: FolderOpen,
-      testId: "bottom-nav-projects"
     },
     { 
       href: "#search", 

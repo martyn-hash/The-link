@@ -155,9 +155,9 @@ function Router() {
         <Route path="/sign" component={SignPage} />
         
         {/* Home route - conditional based on auth */}
-        <Route path="/" component={isAuthenticated ? Dashboard : Landing} />
+        <Route path="/" component={isAuthenticated ? Projects : Landing} />
         
-        {/* Redirect /dashboard to root */}
+        {/* Redirect /dashboard to root (Projects is now the dashboard) */}
         <Route path="/dashboard">
           <Redirect to="/" />
         </Route>
@@ -166,11 +166,14 @@ function Router() {
         <Route path="/messages" component={Messages} />
         <Route path="/internal-chat" component={InternalChat} />
         <Route path="/client-requests" component={ClientRequests} />
-        <Route path="/projects" component={Projects} />
+        {/* Redirect /projects to root since Projects is now the home page */}
+        <Route path="/projects">
+          <Redirect to="/" />
+        </Route>
         <Route path="/projects/:id" component={ProjectDetail} />
-        {/* Redirect old /all-projects route to new /projects route */}
+        {/* Redirect old /all-projects route to root */}
         <Route path="/all-projects">
-          <Redirect to="/projects" />
+          <Redirect to="/" />
         </Route>
         <Route path="/clients" component={Clients} />
         <Route path="/clients/:id" component={ClientDetail} />

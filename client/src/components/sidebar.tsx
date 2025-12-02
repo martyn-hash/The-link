@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -8,6 +9,7 @@ import {
   Columns3, 
   List, 
   Folder, 
+  FolderOpen,
   Settings, 
   Settings2,
   Upload, 
@@ -29,6 +31,22 @@ interface SidebarProps {
 export default function Sidebar({ user }: SidebarProps) {
   const [location] = useLocation();
   const { isImpersonating } = useAuth();
+  
+  // Track search query string for active state detection
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  useEffect(() => {
+    // Update search query state when location or browser search changes
+    const updateSearch = () => {
+      setSearchQuery(window.location.search);
+    };
+    
+    updateSearch();
+    
+    // Listen for popstate events (browser back/forward)
+    window.addEventListener('popstate', updateSearch);
+    return () => window.removeEventListener('popstate', updateSearch);
+  }, [location]); // Re-run when wouter location changes
 
   const navigationItems = [
     {
@@ -37,19 +55,13 @@ export default function Sidebar({ user }: SidebarProps) {
       icon: Columns3,
       roles: ["admin", "manager", "client_manager", "bookkeeper"],
     },
-    {
-      label: "My Projects",
-      href: "/projects",
-      icon: Folder,
-      roles: ["client_manager", "bookkeeper"],
-    },
   ];
 
   const managementItems = [
     {
       label: "All Projects",
-      href: "/all-projects",
-      icon: Folder,
+      href: "/?view=all",
+      icon: FolderOpen,
       roles: ["admin", "manager"],
     },
     {
@@ -95,7 +107,10 @@ export default function Sidebar({ user }: SidebarProps) {
 
   const isActive = (href: string) => {
     if (href === "/") {
-      return location === "/";
+      return location === "/" && !searchQuery.includes("view=all");
+    }
+    if (href === "/?view=all") {
+      return location === "/" && searchQuery.includes("view=all");
     }
     return location === href;
   };
