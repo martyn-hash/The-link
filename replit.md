@@ -45,7 +45,7 @@ PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, sof
 
 ### Third-Party Services
 -   **Companies House API**: For UK company data integration, including nightly sync of date fields (accounts, confirmation statement) and registered office address changes with approval workflow.
--   **Microsoft Graph API**: For staff email integration.
+-   **Microsoft Graph API**: For tenant-wide email and calendar access using application permissions (client credentials flow). Super admins control access via boolean flags (`accessEmail`, `accessCalendar`) on user records through the Users management page. Calendar functionality includes Teams meeting creation support. Uses `applicationGraphClient.ts` for Azure AD GUID-based user lookups. Profile page shows admin-managed access status instead of individual OAuth flows.
 -   **RingCentral**: For VoIP phone system integration.
 -   **SendGrid**: For transactional email delivery.
 -   **VoodooSMS**: For client SMS delivery with UK phone formatting (+44).
