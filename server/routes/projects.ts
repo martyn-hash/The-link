@@ -627,6 +627,177 @@ export function registerProjectRoutes(
     }
   });
 
+  // Bulk update project status - for multi-select Kanban moves
+  // Only allows "simple moves" without approvals, custom fields, or client notifications
+  const bulkUpdateStatusSchema = z.object({
+    projectIds: z.array(z.string().uuid()).min(1, "At least one project is required"),
+    newStatus: z.string().min(1, "New status is required"),
+    changeReason: z.string().min(1, "Change reason is required"),
+    notesHtml: z.string().optional(),
+  });
+
+  app.post("/api/projects/bulk-status", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      const effectiveUser = req.user?.effectiveUser;
+
+      if (!effectiveUserId || !effectiveUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const { projectIds, newStatus, changeReason, notesHtml } = bulkUpdateStatusSchema.parse(req.body);
+
+      // Fetch all projects
+      const projects = await Promise.all(
+        projectIds.map(id => storage.getProject(id))
+      );
+
+      // Validate all projects exist
+      const missingProjects = projectIds.filter((id, index) => !projects[index]);
+      if (missingProjects.length > 0) {
+        return res.status(404).json({ 
+          message: `Projects not found: ${missingProjects.join(', ')}` 
+        });
+      }
+
+      // Ensure all projects are of the same type (required for consistent stage/reason resolution)
+      const projectTypeId = projects[0]!.projectTypeId;
+      const mixedTypes = projects.some(p => p!.projectTypeId !== projectTypeId);
+      if (mixedTypes) {
+        return res.status(400).json({ 
+          message: "All projects must be of the same type for bulk status update" 
+        });
+      }
+
+      // Ensure no projects are completed
+      const completedProjects = projects.filter(p => p!.completionStatus);
+      if (completedProjects.length > 0) {
+        return res.status(400).json({ 
+          message: "Cannot update status of completed projects" 
+        });
+      }
+
+      // Get the target stage scoped by project type
+      const stages = await storage.getAllKanbanStages();
+      const targetStage = stages.find(stage => 
+        stage.name === newStatus && 
+        stage.projectTypeId === projectTypeId
+      );
+      if (!targetStage) {
+        return res.status(400).json({ message: "Invalid project status for this project type" });
+      }
+
+      // VALIDATION 1: Block if stage has a stage approval
+      if (targetStage.stageApprovalId) {
+        return res.status(400).json({ 
+          message: "This stage requires approval fields. Projects must be moved individually.",
+          blockingReason: "stage_approval"
+        });
+      }
+
+      // Get the change reason scoped by project type
+      const reasons = await storage.getChangeReasonsByProjectTypeId(projectTypeId);
+      const reason = reasons.find(r => r.reason === changeReason);
+      if (!reason) {
+        return res.status(400).json({ message: "Invalid change reason" });
+      }
+
+      // VALIDATION 2: Block if reason has a stage approval
+      if (reason.stageApprovalId) {
+        return res.status(400).json({ 
+          message: "This change reason requires approval fields. Projects must be moved individually.",
+          blockingReason: "reason_approval"
+        });
+      }
+
+      // Validate stage-reason mapping
+      const mappingValidation = await storage.validateStageReasonMapping(targetStage.id, reason.id);
+      if (!mappingValidation.isValid) {
+        return res.status(400).json({ message: mappingValidation.reason || "Invalid change reason for this stage" });
+      }
+
+      // VALIDATION 3: Block if reason has custom fields
+      const customFields = await storage.getReasonCustomFieldsByReasonId(reason.id);
+      if (customFields.length > 0) {
+        return res.status(400).json({ 
+          message: "This change reason requires custom fields. Projects must be moved individually.",
+          blockingReason: "custom_fields"
+        });
+      }
+
+      // VALIDATION 4: Check for client notification templates on this stage
+      // Check for stage-triggered notifications configured for this stage
+      const projectTypeNotifications = await storage.getProjectTypeNotificationsByProjectTypeId(projectTypeId);
+      const activeStageNotifications = projectTypeNotifications.filter(
+        (n: any) => n.isActive && n.category === 'stage' && n.stageId === targetStage.id
+      );
+      if (activeStageNotifications.length > 0) {
+        return res.status(400).json({ 
+          message: "This stage has client notification templates configured. Projects must be moved individually.",
+          blockingReason: "client_notifications"
+        });
+      }
+
+      // All validations passed - perform the bulk update
+      const sharedTimestamp = new Date();
+      const updatedProjects: any[] = [];
+      const errors: { projectId: string; error: string }[] = [];
+
+      // Process each project in the bulk move
+      for (const project of projects) {
+        try {
+          // Use the existing updateProjectStatus method to ensure consistent behavior
+          // including chronology creation, assignee resolution, etc.
+          const updateData = {
+            projectId: project!.id,
+            newStatus,
+            changeReason,
+            notesHtml: notesHtml || undefined,
+            notes: undefined, // HTML will be converted to plain text by the storage method
+            fieldResponses: [], // No custom fields for bulk moves
+            attachments: [], // No attachments for bulk moves
+          };
+
+          const updatedProject = await storage.updateProjectStatus(updateData, effectiveUserId);
+          updatedProjects.push(updatedProject);
+        } catch (error) {
+          errors.push({
+            projectId: project!.id,
+            error: error instanceof Error ? error.message : "Unknown error"
+          });
+        }
+      }
+
+      // If any errors occurred, report them
+      if (errors.length > 0) {
+        console.error("[POST /api/projects/bulk-status] Partial failure:", errors);
+        return res.status(207).json({
+          message: `${updatedProjects.length} of ${projectIds.length} projects updated successfully`,
+          updatedProjects,
+          errors,
+          partialSuccess: true
+        });
+      }
+
+      console.log(`[POST /api/projects/bulk-status] Successfully updated ${updatedProjects.length} projects to ${newStatus}`);
+
+      res.json({
+        message: `Successfully moved ${updatedProjects.length} project${updatedProjects.length !== 1 ? 's' : ''} to ${newStatus}`,
+        updatedProjects,
+        count: updatedProjects.length
+      });
+    } catch (error) {
+      console.error("[POST /api/projects/bulk-status] Error:", error instanceof Error ? error.message : error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        res.status(400).json({ message: "Validation failed", errors: (error as any).issues });
+      } else if (error instanceof Error && error.message) {
+        res.status(400).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: "Failed to update project statuses" });
+      }
+    }
+  });
+
   // Generate upload URL for stage change attachments
   app.post("/api/projects/:id/stage-change-attachments/upload-url", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {

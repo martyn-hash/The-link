@@ -12,9 +12,11 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, AlertCircle, RefreshCw } from "lucide-react";
+import { Plus, AlertCircle, RefreshCw, X } from "lucide-react";
+import { BulkChangeStatusModal } from "./BulkChangeStatusModal";
 import type { ProjectWithRelations, User, KanbanStage } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 interface KanbanBoardProps {
   projects: ProjectWithRelations[];
@@ -52,6 +54,7 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [location, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   
   // State for ChangeStatusModal
   const [showChangeStatusModal, setShowChangeStatusModal] = useState(false);
@@ -67,8 +70,32 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
   // State for hover-based popover (desktop only)
   const [hoveredProjectId, setHoveredProjectId] = useState<string | null>(null);
   
+  // State for multi-select (CTRL+Click)
+  const [selectedProjectIds, setSelectedProjectIds] = useState<Set<string>>(new Set());
+  
+  // State for bulk change status modal
+  const [showBulkChangeStatusModal, setShowBulkChangeStatusModal] = useState(false);
+  
   // Get authentication state
   const { isAuthenticated, user: authUser } = useAuth();
+  
+  // Handler for toggling project selection (CTRL+Click)
+  const handleSelectToggle = (projectId: string) => {
+    setSelectedProjectIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(projectId)) {
+        newSet.delete(projectId);
+      } else {
+        newSet.add(projectId);
+      }
+      return newSet;
+    });
+  };
+  
+  // Clear selection when appropriate
+  const clearSelection = () => {
+    setSelectedProjectIds(new Set());
+  };
 
   // Handlers for quick actions
   const handleShowInfo = (projectId: string) => {
@@ -215,6 +242,12 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
     // Close any open hover popovers when drag starts
     setHoveredProjectId(null);
     
+    // When multi-select is active (>1 selected), keep selection for bulk move
+    // Only clear selection if dragging a non-selected project with no multi-select
+    if (selectedProjectIds.size <= 1 && !selectedProjectIds.has(draggedProjectId)) {
+      clearSelection();
+    }
+    
     setActiveId(draggedProjectId);
   };
 
@@ -261,11 +294,39 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
       const draggedProjectId = active.id as string;
       const draggedProject = projects.find(p => p.id === draggedProjectId);
       
-      // Check if the project is being moved to a different status
-      if (draggedProject && draggedProject.currentStatus !== targetStatusName) {
-        setSelectedProject(draggedProject);
-        setTargetStatus(targetStatusName);
-        setShowChangeStatusModal(true);
+      // Check if this is a bulk move - when multi-select is active (>1 selected), any drag uses the selection
+      const hasMultiSelect = selectedProjectIds.size > 1;
+      const isBulkMove = hasMultiSelect;
+      
+      if (isBulkMove) {
+        // Get all selected projects
+        const selectedProjects = projects.filter(p => selectedProjectIds.has(p.id));
+        
+        // Check that all selected projects are in the same current stage
+        const currentStages = new Set(selectedProjects.map(p => p.currentStatus));
+        if (currentStages.size > 1) {
+          toast({
+            title: "Cannot bulk move",
+            description: "Selected projects must be in the same stage. Please select projects from the same column.",
+            variant: "destructive",
+          });
+          setOveredColumn(null);
+          return;
+        }
+        
+        // Check if moving to a different status
+        const sourceStatus = selectedProjects[0].currentStatus;
+        if (sourceStatus !== targetStatusName) {
+          setTargetStatus(targetStatusName);
+          setShowBulkChangeStatusModal(true);
+        }
+      } else {
+        // Single project move
+        if (draggedProject && draggedProject.currentStatus !== targetStatusName) {
+          setSelectedProject(draggedProject);
+          setTargetStatus(targetStatusName);
+          setShowChangeStatusModal(true);
+        }
       }
     }
     
@@ -286,6 +347,21 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
     setShowChangeStatusModal(false);
     setSelectedProject(null);
     setTargetStatus(null);
+  };
+  
+  // Callback when bulk modal is closed
+  const handleBulkModalClose = () => {
+    setShowBulkChangeStatusModal(false);
+    setTargetStatus(null);
+    clearSelection();
+  };
+  
+  // Callback when bulk status update is successful
+  const handleBulkStatusUpdated = () => {
+    setShowBulkChangeStatusModal(false);
+    setTargetStatus(null);
+    clearSelection();
+    queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
   };
 
   const activeProject = activeId ? projects.find(p => p.id === activeId) : null;
@@ -355,6 +431,33 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
 
   return (
     <div className="p-6" data-testid="kanban-board">
+      {/* Selection indicator bar */}
+      {selectedProjectIds.size > 0 && (
+        <div 
+          className="mb-4 flex items-center justify-between bg-primary/10 border border-primary/20 rounded-lg p-3"
+          data-testid="selection-indicator-bar"
+        >
+          <div className="flex items-center gap-2">
+            <Badge variant="default" className="text-sm">
+              {selectedProjectIds.size} project{selectedProjectIds.size !== 1 ? 's' : ''} selected
+            </Badge>
+            <span className="text-sm text-muted-foreground">
+              Hold Ctrl/Cmd and click to select more, then drag to move
+            </span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearSelection}
+            className="gap-1"
+            data-testid="button-clear-selection"
+          >
+            <X className="h-4 w-4" />
+            Clear
+          </Button>
+        </div>
+      )}
+      
       <DndContext
         sensors={sensors}
         collisionDetection={customCollisionDetection}
@@ -418,6 +521,8 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
                                 onOpenModal={() => navigateToProject(project.id)}
                                 onShowInfo={handleShowInfo}
                                 onShowMessages={handleShowMessages}
+                                isSelected={selectedProjectIds.has(project.id)}
+                                onSelectToggle={handleSelectToggle}
                               />
                             </StageChangePopover>
                           );
@@ -478,6 +583,17 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
           onOpenChange={setShowMessagesModal}
         />
       )}
+
+      {/* Bulk Change Status Modal for multi-select moves */}
+      <BulkChangeStatusModal
+        isOpen={showBulkChangeStatusModal}
+        onClose={handleBulkModalClose}
+        projectIds={Array.from(selectedProjectIds)}
+        projects={projects.filter(p => selectedProjectIds.has(p.id))}
+        targetStatus={targetStatus || ""}
+        user={user}
+        onStatusUpdated={handleBulkStatusUpdated}
+      />
     </div>
   );
 }

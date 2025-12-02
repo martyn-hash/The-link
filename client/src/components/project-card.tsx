@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { GripVertical, AlertCircle, Clock, Info, MessageSquare } from "lucide-react";
+import { GripVertical, AlertCircle, Clock, Info, MessageSquare, Check } from "lucide-react";
 import type { ProjectWithRelations, KanbanStage, User } from "@shared/schema";
 import { calculateCurrentInstanceTime } from "@shared/businessTime";
 import { useAuth } from "@/hooks/useAuth";
@@ -26,6 +26,8 @@ interface ProjectCardProps extends React.HTMLAttributes<HTMLDivElement> {
   isDragging?: boolean;
   onShowInfo?: (projectId: string) => void;
   onShowMessages?: (projectId: string) => void;
+  isSelected?: boolean;
+  onSelectToggle?: (projectId: string) => void;
 }
 
 const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({ 
@@ -35,6 +37,8 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
   isDragging = false,
   onShowInfo,
   onShowMessages,
+  isSelected = false,
+  onSelectToggle,
   ...props
 }, forwardedRef) => {
   // Get authentication state
@@ -415,6 +419,16 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
     }
   };
 
+  const handleCardClick = (e: React.MouseEvent) => {
+    if ((e.ctrlKey || e.metaKey) && onSelectToggle) {
+      e.preventDefault();
+      e.stopPropagation();
+      onSelectToggle(project.id);
+    } else {
+      onOpenModal();
+    }
+  };
+
   return (
     <Card
       ref={mergedRef}
@@ -424,8 +438,10 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
       {...props}
       className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
         isSortableDragging ? "opacity-50" : ""
-      } ${isDragging ? "rotate-5 shadow-lg" : ""} ${projectStatus.bgColor} relative`}
-      onClick={onOpenModal}
+      } ${isDragging ? "rotate-5 shadow-lg" : ""} ${projectStatus.bgColor} relative ${
+        isSelected ? "ring-2 ring-primary ring-offset-2" : ""
+      }`}
+      onClick={handleCardClick}
       data-testid={`project-card-${project.id}`}
     >
       <CardContent className="p-4 flex flex-col">
@@ -464,6 +480,16 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
           </div>
         </div>
       </CardContent>
+
+      {/* Selection indicator in top-left corner */}
+      {isSelected && (
+        <div 
+          className="absolute top-2 left-2 z-10 h-5 w-5 bg-primary rounded-full flex items-center justify-center"
+          data-testid={`selection-indicator-${project.id}`}
+        >
+          <Check className="h-3 w-3 text-primary-foreground" />
+        </div>
+      )}
 
       {/* Info button in top-right corner - hidden on desktop (hover devices), visible on mobile */}
       {hasQuickActions && onShowInfo && (
