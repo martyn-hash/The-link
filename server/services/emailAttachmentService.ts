@@ -1,5 +1,5 @@
 import { storage } from '../storage/index';
-import { downloadEmailAttachment } from '../utils/userOutlookClient';
+import { downloadEmailAttachment } from '../utils/applicationGraphClient';
 import { Storage } from '@google-cloud/storage';
 import crypto from 'crypto';
 
@@ -57,9 +57,9 @@ export class EmailAttachmentService {
 
   /**
    * Process attachments for an email message
-   * Downloads attachments from Graph API, deduplicates, and stores
+   * Downloads attachments from Graph API using tenant-wide permissions, deduplicates, and stores
    * 
-   * @param userId - User ID who owns the mailbox
+   * @param userId - User ID who owns the mailbox (used to look up email for Graph API)
    * @param graphMessageId - Graph API message ID
    * @param internetMessageId - Global internet message ID for linking
    * @param attachments - Array of attachment metadata from Graph API
@@ -79,6 +79,14 @@ export class EmailAttachmentService {
     const stats = { processed: 0, skipped: 0, errors: 0 };
 
     console.log(`[Attachment Service] Processing ${attachments.length} attachments for message ${internetMessageId}`);
+    
+    // Look up the user's email for tenant-wide Graph API access
+    const user = await storage.getUser(userId);
+    if (!user || !user.email) {
+      console.error(`[Attachment Service] User ${userId} not found or has no email address`);
+      return { processed: 0, skipped: 0, errors: attachments.length };
+    }
+    const userEmail = user.email;
 
     for (let index = 0; index < attachments.length; index++) {
       const attachment = attachments[index];
@@ -99,9 +107,9 @@ export class EmailAttachmentService {
           continue;
         }
 
-        // Download attachment content from Graph API
+        // Download attachment content from Graph API using tenant-wide permissions
         console.log(`[Attachment Service] Downloading attachment: ${attachment.name} (${attachment.size} bytes)`);
-        const content = await downloadEmailAttachment(userId, graphMessageId, attachment.id);
+        const content = await downloadEmailAttachment(userEmail, graphMessageId, attachment.id);
 
         // Compute content hash for deduplication
         const contentHash = this.computeContentHash(content);

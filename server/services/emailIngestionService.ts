@@ -10,7 +10,7 @@
  */
 
 import { Client } from '@microsoft/microsoft-graph-client';
-import { getUserOutlookClient } from '../utils/userOutlookClient';
+import { getApplicationGraphClient, isApplicationGraphConfigured } from '../utils/applicationGraphClient';
 import { storage } from '../storage/index';
 import { nanoid } from 'nanoid';
 import type { EmailMessage, EmailThread, ClientDomainAllowlist, InsertEmailMessage } from '@shared/schema';
@@ -79,8 +79,20 @@ interface DeltaSyncResult {
 
 export class EmailIngestionService {
   /**
+   * Helper to get user email from userId for tenant-wide Graph API calls
+   */
+  private async getUserEmail(userId: string): Promise<string> {
+    const user = await storage.getUser(userId);
+    if (!user || !user.email) {
+      throw new Error(`User ${userId} not found or has no email address`);
+    }
+    return user.email;
+  }
+
+  /**
    * Subscribe to mailbox changes via webhooks
    * Creates subscriptions for both Inbox and Sent Items
+   * NOTE: Uses tenant-wide application permissions with /users/{email}/... endpoints
    */
   async createWebhookSubscription(
     userId: string,
@@ -88,7 +100,8 @@ export class EmailIngestionService {
     notificationUrl: string
   ): Promise<string> {
     try {
-      const client = await getUserOutlookClient(userId);
+      const client = await getApplicationGraphClient();
+      const userEmail = await this.getUserEmail(userId);
       
       // Generate client state for validation
       const clientState = nanoid(32);
@@ -97,10 +110,13 @@ export class EmailIngestionService {
       const expirationDateTime = new Date();
       expirationDateTime.setDate(expirationDateTime.getDate() + 3);
 
+      // Use /users/{email}/... endpoint for tenant-wide access
+      const resource = `users/${userEmail}/mailFolders('${folderType}')/messages`;
+      
       const subscription = await client.api('/subscriptions').post({
         changeType: 'created,updated',
         notificationUrl,
-        resource: `me/mailFolders('${folderType}')/messages`,
+        resource,
         expirationDateTime: expirationDateTime.toISOString(),
         clientState
       });
@@ -109,7 +125,7 @@ export class EmailIngestionService {
       await storage.createGraphWebhookSubscription({
         userId,
         subscriptionId: subscription.id,
-        resource: `me/mailFolders('${folderType}')/messages`,
+        resource,
         changeType: 'created,updated',
         expiresAt: new Date(subscription.expirationDateTime),
         clientState,
@@ -127,6 +143,7 @@ export class EmailIngestionService {
 
   /**
    * Renew an expiring webhook subscription
+   * NOTE: Uses tenant-wide application permissions
    */
   async renewWebhookSubscription(subscriptionId: string): Promise<void> {
     try {
@@ -136,7 +153,7 @@ export class EmailIngestionService {
         throw new Error(`Subscription ${subscriptionId} not found`);
       }
 
-      const client = await getUserOutlookClient(subscription.userId);
+      const client = await getApplicationGraphClient();
       
       // Extend expiration by 3 days
       const expirationDateTime = new Date();
@@ -161,6 +178,7 @@ export class EmailIngestionService {
 
   /**
    * Delete a webhook subscription
+   * NOTE: Uses tenant-wide application permissions
    */
   async deleteWebhookSubscription(subscriptionId: string): Promise<void> {
     try {
@@ -169,7 +187,7 @@ export class EmailIngestionService {
         throw new Error(`Subscription ${subscriptionId} not found`);
       }
 
-      const client = await getUserOutlookClient(subscription.userId);
+      const client = await getApplicationGraphClient();
       
       // Delete from Graph
       await client.api(`/subscriptions/${subscriptionId}`).delete();
@@ -189,13 +207,15 @@ export class EmailIngestionService {
   /**
    * Perform delta sync for a mailbox folder
    * Returns messages and new delta link for next sync
+   * NOTE: Uses tenant-wide application permissions with /users/{email}/... endpoints
    */
   async performDeltaSync(
     userId: string,
     folderType: 'Inbox' | 'SentItems'
   ): Promise<DeltaSyncResult> {
     try {
-      const client = await getUserOutlookClient(userId);
+      const client = await getApplicationGraphClient();
+      const userEmail = await this.getUserEmail(userId);
       
       // Get existing delta link from database
       const syncState = await storage.getGraphSyncState(userId, folderType);
@@ -214,8 +234,9 @@ export class EmailIngestionService {
         response = await client.api(deltaLink).get();
       } else {
         // Initial sync: start fresh delta with field selection
+        // Use /users/{email}/... endpoint for tenant-wide access
         response = await client
-          .api(`/me/mailFolders('${folderType}')/messages/delta`)
+          .api(`/users/${encodeURIComponent(userEmail)}/mailFolders('${folderType}')/messages/delta`)
           .select(MESSAGE_SELECT_FIELDS)
           .expand('attachments($select=id,name,size,contentType,isInline)') // Fetch attachment metadata
           .top(50) // Fetch in batches of 50
@@ -264,13 +285,15 @@ export class EmailIngestionService {
 
   /**
    * Fetch a single message by ID with full details
+   * NOTE: Uses tenant-wide application permissions with /users/{email}/... endpoints
    */
   async fetchMessage(userId: string, messageId: string): Promise<GraphMessage> {
     try {
-      const client = await getUserOutlookClient(userId);
+      const client = await getApplicationGraphClient();
+      const userEmail = await this.getUserEmail(userId);
       
       const message = await client
-        .api(`/me/messages/${messageId}`)
+        .api(`/users/${encodeURIComponent(userEmail)}/messages/${messageId}`)
         .select(MESSAGE_SELECT_FIELDS)
         .get();
 
@@ -283,13 +306,15 @@ export class EmailIngestionService {
 
   /**
    * Fetch message attachments
+   * NOTE: Uses tenant-wide application permissions with /users/{email}/... endpoints
    */
   async fetchMessageAttachments(userId: string, messageId: string) {
     try {
-      const client = await getUserOutlookClient(userId);
+      const client = await getApplicationGraphClient();
+      const userEmail = await this.getUserEmail(userId);
       
       const attachments = await client
-        .api(`/me/messages/${messageId}/attachments`)
+        .api(`/users/${encodeURIComponent(userEmail)}/messages/${messageId}/attachments`)
         .select('id,name,size,contentType,contentBytes,isInline')
         .get();
 
