@@ -641,7 +641,16 @@ export function registerProjectRoutes(
             }
 
             // Send emails to all assigned users who have notifications enabled
+            // Note: Skip sending email if the assignee hasn't changed (same person in old and new stage)
+            const previousAssigneeId = project.currentAssigneeId;
+            
             for (const user of usersToNotify) {
+              // Skip email if this user was already the assignee (no handoff occurred)
+              if (user.id === previousAssigneeId) {
+                console.log(`[Stage Change Email] User ${user.email} is same as previous assignee, skipping email notification`);
+                continue;
+              }
+              
               // Check user notification preferences
               const preferences = await storage.getUserNotificationPreferences(user.id);
               const notifyStageChanges = preferences?.notifyStageChanges ?? true; // Default to true
