@@ -339,6 +339,16 @@ export class DatabaseStorage implements IStorage {
       createProjectMessageParticipant: (data: any) => this.projectMessageParticipantStorage.createProjectMessageParticipant(data),
       createProjectMessage: (data: any) => this.projectMessageStorage.createProjectMessage(data),
       
+      // Auto-archive/unarchive message threads when project is completed/reopened
+      autoArchiveMessageThreadsByProjectId: (projectId: string, archivedBy: string) => 
+        this.messageThreadStorage.autoArchiveThreadsByProjectId(projectId, archivedBy),
+      autoArchiveProjectMessageThreadsByProjectId: (projectId: string, archivedBy: string) => 
+        this.projectMessageThreadStorage.autoArchiveThreadsByProjectId(projectId, archivedBy),
+      unarchiveAutoArchivedMessageThreadsByProjectId: (projectId: string) => 
+        this.messageThreadStorage.unarchiveAutoArchivedThreadsByProjectId(projectId),
+      unarchiveAutoArchivedProjectMessageThreadsByProjectId: (projectId: string) => 
+        this.projectMessageThreadStorage.unarchiveAutoArchivedThreadsByProjectId(projectId),
+      
       // Client domain - delegate to ClientStorage
       getClientByName: (name: string) => this.clientStorage.getClientByName(name),
       // User domain - delegate to UserStorage

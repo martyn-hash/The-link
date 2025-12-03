@@ -62,6 +62,10 @@ export class ProjectStorage extends BaseStorage {
     getProjectTypeByName?: (name: string) => Promise<any>;
     getClientByName?: (name: string) => Promise<any>;
     getUserByEmail?: (email: string) => Promise<any>;
+    autoArchiveMessageThreadsByProjectId?: (projectId: string, archivedBy: string) => Promise<number>;
+    autoArchiveProjectMessageThreadsByProjectId?: (projectId: string, archivedBy: string) => Promise<number>;
+    unarchiveAutoArchivedMessageThreadsByProjectId?: (projectId: string) => Promise<number>;
+    unarchiveAutoArchivedProjectMessageThreadsByProjectId?: (projectId: string) => Promise<number>;
   } = {};
   
   // Cache for recent notifications to prevent duplicates
@@ -272,6 +276,16 @@ export class ProjectStorage extends BaseStorage {
   }
 
   async updateProject(id: string, updateData: Partial<InsertProject>): Promise<Project> {
+    // Check if project is being unarchived (for auto-unarchiving message threads)
+    let wasArchived = false;
+    if (updateData.archived === false) {
+      const [existingProject] = await db
+        .select({ archived: projects.archived })
+        .from(projects)
+        .where(eq(projects.id, id));
+      wasArchived = existingProject?.archived === true;
+    }
+
     const [updatedProject] = await db
       .update(projects)
       .set(updateData)
@@ -280,6 +294,26 @@ export class ProjectStorage extends BaseStorage {
 
     if (!updatedProject) {
       throw new Error('Project not found');
+    }
+
+    // Auto-unarchive message threads that were auto-archived when this project was completed
+    if (wasArchived && updateData.archived === false) {
+      try {
+        let totalUnarchived = 0;
+        if (this.projectHelpers.unarchiveAutoArchivedMessageThreadsByProjectId) {
+          const clientThreadsUnarchived = await this.projectHelpers.unarchiveAutoArchivedMessageThreadsByProjectId(id);
+          totalUnarchived += clientThreadsUnarchived;
+        }
+        if (this.projectHelpers.unarchiveAutoArchivedProjectMessageThreadsByProjectId) {
+          const projectThreadsUnarchived = await this.projectHelpers.unarchiveAutoArchivedProjectMessageThreadsByProjectId(id);
+          totalUnarchived += projectThreadsUnarchived;
+        }
+        if (totalUnarchived > 0) {
+          console.log(`[Storage] Auto-unarchived ${totalUnarchived} message thread(s) for re-opened project ${id}`);
+        }
+      } catch (error) {
+        console.error(`[Storage] Failed to auto-unarchive message threads for project ${id}:`, error);
+      }
     }
 
     return updatedProject;
@@ -1479,6 +1513,24 @@ export class ProjectStorage extends BaseStorage {
         }
       } catch (error) {
         console.error(`[Storage] Failed to cancel notifications for project ${update.projectId}:`, error);
+      }
+
+      // Auto-archive message threads when project moves to a final stage
+      try {
+        let totalArchived = 0;
+        if (this.projectHelpers.autoArchiveMessageThreadsByProjectId) {
+          const clientThreadsArchived = await this.projectHelpers.autoArchiveMessageThreadsByProjectId(update.projectId, userId);
+          totalArchived += clientThreadsArchived;
+        }
+        if (this.projectHelpers.autoArchiveProjectMessageThreadsByProjectId) {
+          const projectThreadsArchived = await this.projectHelpers.autoArchiveProjectMessageThreadsByProjectId(update.projectId, userId);
+          totalArchived += projectThreadsArchived;
+        }
+        if (totalArchived > 0) {
+          console.log(`[Storage] Auto-archived ${totalArchived} message thread(s) for completed project ${update.projectId}`);
+        }
+      } catch (error) {
+        console.error(`[Storage] Failed to auto-archive message threads for project ${update.projectId}:`, error);
       }
     }
 

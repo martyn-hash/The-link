@@ -158,4 +158,52 @@ export class MessageThreadStorage {
   async deleteMessageThread(id: string): Promise<void> {
     await db.delete(messageThreads).where(eq(messageThreads.id, id));
   }
+
+  async getMessageThreadsByProjectId(projectId: string): Promise<MessageThread[]> {
+    return await db
+      .select()
+      .from(messageThreads)
+      .where(eq(messageThreads.projectId, projectId))
+      .orderBy(desc(messageThreads.lastMessageAt));
+  }
+
+  async autoArchiveThreadsByProjectId(projectId: string, archivedBy: string): Promise<number> {
+    const result = await db
+      .update(messageThreads)
+      .set({ 
+        isArchived: true, 
+        archivedAt: new Date(),
+        archivedBy,
+        autoArchivedByProject: true,
+        updatedAt: new Date() 
+      })
+      .where(
+        and(
+          eq(messageThreads.projectId, projectId),
+          eq(messageThreads.isArchived, false)
+        )
+      )
+      .returning();
+    return result.length;
+  }
+
+  async unarchiveAutoArchivedThreadsByProjectId(projectId: string): Promise<number> {
+    const result = await db
+      .update(messageThreads)
+      .set({ 
+        isArchived: false, 
+        archivedAt: null,
+        archivedBy: null,
+        autoArchivedByProject: false,
+        updatedAt: new Date() 
+      })
+      .where(
+        and(
+          eq(messageThreads.projectId, projectId),
+          eq(messageThreads.autoArchivedByProject, true)
+        )
+      )
+      .returning();
+    return result.length;
+  }
 }

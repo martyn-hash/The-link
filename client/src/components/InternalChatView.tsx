@@ -174,6 +174,7 @@ export function InternalChatView({
   const [selectedParticipants, setSelectedParticipants] = useState<string[]>([]);
   const [selectedThreadType, setSelectedThreadType] = useState<'project' | 'staff' | null>(null);
   const [participantSearch, setParticipantSearch] = useState('');
+  const [groupByProject, setGroupByProject] = useState(false);
   const [initialMessage, setInitialMessage] = useState('');
 
   // Voice recording state
@@ -591,6 +592,49 @@ export function InternalChatView({
     return true;
   });
 
+  // Clear stale selection when the selected thread is filtered out
+  useEffect(() => {
+    if (selectedThreadId && filteredThreads && !filteredThreads.find(t => t.id === selectedThreadId)) {
+      setSelectedThreadId(null);
+      setSelectedThreadType(null);
+    }
+  }, [filteredThreads, selectedThreadId]);
+
+  // Group threads by project when groupByProject is enabled
+  const groupedThreads = useMemo(() => {
+    if (!groupByProject || !filteredThreads) return null;
+    
+    const groups: Map<string, { projectName: string; clientName: string; threads: MessageThread[] }> = new Map();
+    const staffThreads: MessageThread[] = [];
+    
+    filteredThreads.forEach(thread => {
+      if (thread.threadType === 'project') {
+        const key = thread.project.id;
+        if (!groups.has(key)) {
+          groups.set(key, {
+            projectName: thread.project.description,
+            clientName: thread.client.name,
+            threads: []
+          });
+        }
+        groups.get(key)!.threads.push(thread);
+      } else {
+        staffThreads.push(thread);
+      }
+    });
+    
+    // Sort groups by most recent thread activity
+    const sortedGroups = Array.from(groups.entries())
+      .map(([projectId, data]) => ({
+        projectId,
+        ...data,
+        latestActivity: Math.max(...data.threads.map(t => new Date(t.lastMessageAt).getTime()))
+      }))
+      .sort((a, b) => b.latestActivity - a.latestActivity);
+    
+    return { projectGroups: sortedGroups, staffThreads };
+  }, [filteredThreads, groupByProject]);
+
   const getUserDisplayName = (user: { firstName: string | null; lastName: string | null; email: string }) => {
     if (user.firstName && user.lastName) {
       return `${user.firstName} ${user.lastName}`;
@@ -816,7 +860,7 @@ export function InternalChatView({
                   onChange={(e) => setThreadSearchTerm(e.target.value)}
                   data-testid="input-search-threads"
                 />
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button
                     variant={archiveFilter === 'open' ? 'default' : 'outline'}
                     size="sm"
@@ -833,6 +877,15 @@ export function InternalChatView({
                   >
                     Archived
                   </Button>
+                  <Button
+                    variant={groupByProject ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setGroupByProject(!groupByProject)}
+                    data-testid="button-group-by-project"
+                    title="Group conversations by project"
+                  >
+                    <FolderKanban className="w-4 h-4" />
+                  </Button>
                 </div>
               </div>
             </CardHeader>
@@ -842,6 +895,127 @@ export function InternalChatView({
                   {[1, 2, 3].map((i) => (
                     <Skeleton key={i} className="h-14 w-full" />
                   ))}
+                </div>
+              ) : groupByProject && groupedThreads ? (
+                <div className="divide-y divide-border">
+                  {/* Grouped Project Threads */}
+                  {groupedThreads.projectGroups.map((group) => (
+                    <div key={group.projectId} data-testid={`project-group-${group.projectId}`}>
+                      <div className="px-3 py-2 bg-muted/50 border-b">
+                        <div className="flex items-center gap-2">
+                          <FolderKanban className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate" data-testid={`text-group-client-${group.projectId}`}>
+                              {group.clientName}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate" data-testid={`text-group-project-${group.projectId}`}>
+                              {group.projectName}
+                            </p>
+                          </div>
+                          <Badge variant="secondary" className="flex-shrink-0">
+                            {group.threads.length}
+                          </Badge>
+                        </div>
+                      </div>
+                      {group.threads.map((thread) => (
+                        <button
+                          key={thread.id}
+                          onClick={() => {
+                            setSelectedThreadId(thread.id);
+                            setSelectedThreadType(thread.threadType);
+                          }}
+                          className={`w-full text-left p-2 pl-6 hover:bg-muted/50 transition-colors ${
+                            selectedThreadId === thread.id ? 'bg-muted' : ''
+                          }`}
+                          data-testid={`thread-item-${thread.id}`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm truncate" data-testid={`text-topic-${thread.id}`}>
+                                {thread.topic}
+                              </p>
+                              {thread.lastMessage && (
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  {stripHtml(thread.lastMessage.content)}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                {formatDistanceToNow(new Date(thread.lastMessageAt), { addSuffix: true })}
+                              </span>
+                              {thread.unreadCount > 0 && (
+                                <div className="w-2 h-2 rounded-full bg-primary" data-testid={`dot-unread-${thread.id}`} />
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                  
+                  {/* Staff Threads (not associated with projects) */}
+                  {groupedThreads.staffThreads.length > 0 && (
+                    <div data-testid="staff-threads-group">
+                      <div className="px-3 py-2 bg-muted/50 border-b">
+                        <div className="flex items-center gap-2">
+                          <Users className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                          <p className="text-sm font-medium">Staff Conversations</p>
+                          <Badge variant="secondary" className="flex-shrink-0">
+                            {groupedThreads.staffThreads.length}
+                          </Badge>
+                        </div>
+                      </div>
+                      {groupedThreads.staffThreads.map((thread) => (
+                        <button
+                          key={thread.id}
+                          onClick={() => {
+                            setSelectedThreadId(thread.id);
+                            setSelectedThreadType(thread.threadType);
+                          }}
+                          className={`w-full text-left p-2 pl-6 hover:bg-muted/50 transition-colors ${
+                            selectedThreadId === thread.id ? 'bg-muted' : ''
+                          }`}
+                          data-testid={`thread-item-${thread.id}`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-semibold text-sm truncate" data-testid={`text-topic-${thread.id}`}>
+                                {thread.topic}
+                              </p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <Users className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                                <span className="text-sm text-muted-foreground truncate">
+                                  {thread.participants.map(p => getUserDisplayName(p)).join(', ')}
+                                </span>
+                              </div>
+                              {thread.lastMessage && (
+                                <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                  {stripHtml(thread.lastMessage.content)}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                {formatDistanceToNow(new Date(thread.lastMessageAt), { addSuffix: true })}
+                              </span>
+                              {thread.unreadCount > 0 && (
+                                <div className="w-2 h-2 rounded-full bg-primary" data-testid={`dot-unread-${thread.id}`} />
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* Empty state for grouped view */}
+                  {groupedThreads.projectGroups.length === 0 && groupedThreads.staffThreads.length === 0 && (
+                    <div className="p-8 text-center text-muted-foreground">
+                      <MessageCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p>No threads found</p>
+                    </div>
+                  )}
                 </div>
               ) : filteredThreads && filteredThreads.length > 0 ? (
                 <div className="divide-y divide-border">

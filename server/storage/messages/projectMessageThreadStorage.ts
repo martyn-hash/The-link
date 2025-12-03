@@ -193,4 +193,44 @@ export class ProjectMessageThreadStorage {
     
     return (result.rows[0] as any)?.count || 0;
   }
+
+  async autoArchiveThreadsByProjectId(projectId: string, archivedBy: string): Promise<number> {
+    const result = await db
+      .update(projectMessageThreads)
+      .set({ 
+        isArchived: true, 
+        archivedAt: new Date(),
+        archivedBy,
+        autoArchivedByProject: true,
+        updatedAt: new Date() 
+      })
+      .where(
+        and(
+          eq(projectMessageThreads.projectId, projectId),
+          eq(projectMessageThreads.isArchived, false)
+        )
+      )
+      .returning();
+    return result.length;
+  }
+
+  async unarchiveAutoArchivedThreadsByProjectId(projectId: string): Promise<number> {
+    const result = await db
+      .update(projectMessageThreads)
+      .set({ 
+        isArchived: false, 
+        archivedAt: null,
+        archivedBy: null,
+        autoArchivedByProject: false,
+        updatedAt: new Date() 
+      })
+      .where(
+        and(
+          eq(projectMessageThreads.projectId, projectId),
+          eq(projectMessageThreads.autoArchivedByProject, true)
+        )
+      )
+      .returning();
+    return result.length;
+  }
 }
