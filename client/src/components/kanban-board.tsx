@@ -206,22 +206,15 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
   // Calculate max order from filtered stages
   const maxOrder = filteredStages.reduce((max, stage) => Math.max(max, stage.order ?? 0), 0);
   
-  // Add synthetic columns for benched and completed projects
+  // Add synthetic columns for completed and benched projects
+  // Order: active stages -> Completed - Unsuccessful -> Completed - Success -> On The Bench (very end)
   const stageConfigWithCompletions = stageConfig ? {
     ...stageConfig,
-    'On The Bench': {
-      title: 'On The Bench',
-      color: '#f59e0b', // Amber color for bench
-      assignedTo: 'Suspended',
-      order: maxOrder + 1,
-      isCompletionColumn: false,
-      isBenchColumn: true,
-    },
     'Completed - Unsuccessful': {
       title: 'Completed - Unsuccessful',
       color: '#ef4444',
       assignedTo: 'System',
-      order: maxOrder + 2,
+      order: maxOrder + 1,
       isCompletionColumn: true,
       isBenchColumn: false,
     },
@@ -229,9 +222,17 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
       title: 'Completed - Success',
       color: '#22c55e',
       assignedTo: 'System',
-      order: maxOrder + 3,
+      order: maxOrder + 2,
       isCompletionColumn: true,
       isBenchColumn: false,
+    },
+    'On The Bench': {
+      title: 'On The Bench',
+      color: '#f59e0b', // Amber color for bench
+      assignedTo: 'Suspended',
+      order: maxOrder + 3, // Very end - after all completion columns
+      isCompletionColumn: false,
+      isBenchColumn: true,
     },
   } : stageConfig;
 

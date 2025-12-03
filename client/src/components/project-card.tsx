@@ -259,9 +259,18 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
   };
 
   // Calculate project status (On Track, Behind Schedule, Late / Overdue)
-  // Priority: 1) Late/Overdue if past due date, 2) Behind Schedule if over stage time, 3) On Track
+  // Priority: 1) Benched (neutral), 2) Late/Overdue if past due date, 3) Behind Schedule if over stage time, 4) On Track
   // For COMPLETED projects: freeze the color based on status at completion time
   const projectStatus = useMemo(() => {
+    // For benched projects, show neutral/gray status - they're neither on track nor behind
+    if (project.isBenched) {
+      return { 
+        status: 'On The Bench' as const, 
+        color: 'bg-gray-500 text-white' as const,
+        bgColor: 'bg-gray-50 dark:bg-gray-800/30' as const
+      };
+    }
+    
     // For completed projects, determine status at completion time (not current time)
     if (project.completionStatus) {
       // For completed_unsuccessfully projects, ALWAYS show as red (Late/Overdue)
@@ -352,7 +361,7 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
       color: 'bg-green-600 text-white' as const,
       bgColor: 'bg-green-50 dark:bg-green-950/30' as const
     };
-  }, [currentBusinessHours, effectiveStageConfig?.maxInstanceTime, project.dueDate, project.completionStatus, project.chronology, project.updatedAt]);
+  }, [currentBusinessHours, effectiveStageConfig?.maxInstanceTime, project.dueDate, project.completionStatus, project.chronology, project.updatedAt, project.isBenched]);
 
   // Calculate time remaining until stage is due
   // This shows: max instance time for current stage - time already spent in this stage

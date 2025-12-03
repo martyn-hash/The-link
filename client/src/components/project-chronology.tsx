@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Eye, MessageSquare, CheckCircle, Mail, Phone, FileText, StickyNote, MessageCircle, Filter, Clock, User as UserIcon, ArrowRight, Paperclip, Download, ExternalLink, UserCog } from "lucide-react";
+import { Eye, MessageSquare, CheckCircle, Mail, Phone, FileText, StickyNote, MessageCircle, Filter, Clock, User as UserIcon, ArrowRight, Paperclip, Download, ExternalLink, UserCog, PauseCircle, PlayCircle } from "lucide-react";
 import DOMPurify from "isomorphic-dompurify";
 
 interface ProjectChronologyProps {
@@ -22,7 +22,7 @@ interface ProjectChronologyProps {
 interface TimelineEntry {
   id: string;
   timestamp: Date;
-  type: 'stage_change' | 'role_change' | 'task_created' | 'task_completed' | 'phone_call' | 'note' | 'sms_sent' | 'sms_received' | 'email_sent' | 'email_received' | 'message_thread';
+  type: 'stage_change' | 'role_change' | 'benched' | 'unbenched' | 'task_created' | 'task_completed' | 'phone_call' | 'note' | 'sms_sent' | 'sms_received' | 'email_sent' | 'email_received' | 'message_thread';
   detail: string;
   assignedTo?: string;
   changedBy?: string;
@@ -209,11 +209,20 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
         // Determine entry type and detail format
         const isInactiveEntry = entry.changeReason === 'project_inactive' || entry.changeReason === 'project_reactivated';
         const isRoleChange = entry.entryType === 'role_change';
+        const isBenchedEntry = entry.entryType === 'benched';
+        const isUnbenchedEntry = entry.entryType === 'unbenched';
         
         let detail: string;
         if (isRoleChange) {
           // Role change entries use notes field for "Changed from X to Y"
           detail = entry.notes || `Role changed`;
+        } else if (isBenchedEntry) {
+          // Benched entries show the reason
+          const reason = entry.changeReason || 'Moved to Bench';
+          detail = entry.notes ? `${reason}: ${entry.notes}` : reason;
+        } else if (isUnbenchedEntry) {
+          // Unbenched entries show the restored status
+          detail = entry.notes || `Removed from Bench → ${formatStageName(entry.toStatus)}`;
         } else if (isInactiveEntry) {
           detail = entry.notes || 'Project status changed';
         } else if (entry.fromStatus) {
@@ -260,10 +269,20 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
           stageChangeStatus = 'on_track';
         }
         
+        // Determine the timeline entry type
+        let timelineType: TimelineEntry['type'] = 'stage_change';
+        if (isRoleChange) {
+          timelineType = 'role_change';
+        } else if (isBenchedEntry) {
+          timelineType = 'benched';
+        } else if (isUnbenchedEntry) {
+          timelineType = 'unbenched';
+        }
+        
         entries.push({
           id: `stage-${entry.id}`,
           timestamp: new Date(entry.timestamp),
-          type: isRoleChange ? 'role_change' : 'stage_change',
+          type: timelineType,
           detail,
           assignedTo: entry.assignee ? `${entry.assignee.firstName} ${entry.assignee.lastName}` : undefined,
           changedBy: entry.changedBy ? `${entry.changedBy.firstName} ${entry.changedBy.lastName}` : 'System',
@@ -370,7 +389,7 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
   const filteredTimeline = useMemo(() => {
     return timeline.filter(entry => {
       // Map entry type to filter category
-      if (entry.type === 'stage_change' || entry.type === 'role_change') {
+      if (entry.type === 'stage_change' || entry.type === 'role_change' || entry.type === 'benched' || entry.type === 'unbenched') {
         return filters.stageChanges;
       }
       if (entry.type === 'task_created') {
@@ -396,6 +415,10 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
     switch (type) {
       case 'role_change':
         return <Badge variant="outline" className="gap-1 bg-purple-100 dark:bg-purple-900/20 text-purple-800 dark:text-purple-200"><UserCog className="w-3 h-3" />Role Change</Badge>;
+      case 'benched':
+        return <Badge variant="outline" className="gap-1 bg-amber-100 dark:bg-amber-900/20 text-amber-800 dark:text-amber-200"><PauseCircle className="w-3 h-3" />Moved to Bench</Badge>;
+      case 'unbenched':
+        return <Badge variant="outline" className="gap-1 bg-green-100 dark:bg-green-900/20 text-green-800 dark:text-green-200"><PlayCircle className="w-3 h-3" />Removed from Bench</Badge>;
       case 'stage_change':
         // Apply color coding based on stage change status
         // All stage changes now have a color: green (on track), amber (behind), or red (overdue)
