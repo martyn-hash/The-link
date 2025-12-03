@@ -79,6 +79,15 @@ interface ChangeStatusModalProps {
   initialNewStatus?: string; // Pre-select a status (for drag-and-drop from kanban)
 }
 
+interface StageChangeConfig {
+  projectTypeId: string;
+  currentStatus: string;
+  stages: (KanbanStage & { validReasonIds: string[] })[];
+  reasons: (ChangeReason & { customFields: ReasonCustomField[] })[];
+  stageApprovals: StageApproval[];
+  stageApprovalFields: StageApprovalField[];
+}
+
 // Helper function to format stage names for display
 const formatStageName = (stageName: string): string => {
   return stageName
@@ -636,61 +645,48 @@ export default function ChangeStatusModal({
     }
   }, [isOpen, initialNewStatus]);
 
-  // Fetch kanban stages for this project's project type
-  const { data: stages = [], isLoading: stagesLoading } = useQuery<KanbanStage[]>({
-    queryKey: ["/api/config/project-types", project.projectTypeId, "stages"],
-    enabled: !!project.projectTypeId && isOpen,
+  // Fetch all stage change configuration in a single request (eliminates 6+ cascading queries)
+  const { data: stageChangeConfig, isLoading: configLoading } = useQuery<StageChangeConfig>({
+    queryKey: ["/api/projects", project.id, "stage-change-config"],
+    enabled: !!project.id && isOpen,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
+
+  // Derive data from combined config (no additional network requests needed)
+  const stages = stageChangeConfig?.stages ?? [];
+  const stageApprovals = stageChangeConfig?.stageApprovals ?? [];
+  const stageApprovalFields = stageChangeConfig?.stageApprovalFields ?? [];
+  const allReasons = stageChangeConfig?.reasons ?? [];
 
   // Find the selected stage to get its ID
   const selectedStage = stages.find((stage) => stage.name === newStatus);
 
-  // Fetch valid change reasons for the selected stage
-  const { data: validStageReasons = [], isLoading: reasonsLoading } = useQuery<ChangeReason[]>({
-    queryKey: ["/api/config/stages", selectedStage?.id, "reasons"],
-    enabled: !!selectedStage?.id && isOpen,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-
-  // Use the valid reasons directly from the API
-  const filteredReasons = selectedStage ? validStageReasons : [];
+  // Filter to valid reasons for the selected stage (uses pre-computed validReasonIds)
+  const filteredReasons = useMemo(() => {
+    if (!selectedStage) return [];
+    const validIds = new Set(selectedStage.validReasonIds);
+    return allReasons.filter((r) => validIds.has(r.id));
+  }, [selectedStage, allReasons]);
 
   // Find the selected reason to get its ID
   const selectedReasonObj = filteredReasons.find(
     (reason) => reason.reason === changeReason
   );
 
-  // Fetch custom fields for the selected reason
-  const { data: customFields = [], isLoading: customFieldsLoading } = useQuery<
-    ReasonCustomField[]
-  >({
-    queryKey: [`/api/config/reasons/${selectedReasonObj?.id}/custom-fields`],
-    enabled: !!selectedReasonObj?.id && isOpen,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
+  // Get custom fields from the pre-loaded reason object (no network request needed)
+  const customFields = selectedReasonObj?.customFields ?? [];
 
-  // Fetch stage approvals for this project's project type
-  const { data: stageApprovals = [], isLoading: stageApprovalsLoading } = useQuery<
-    StageApproval[]
-  >({
-    queryKey: ["/api/config/project-types", project.projectTypeId, "stage-approvals"],
-    enabled: !!project.projectTypeId && isOpen,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
+  // Loading states for backward compatibility
+  const stagesLoading = configLoading;
+  const reasonsLoading = configLoading;
+  const customFieldsLoading = configLoading;
+  const stageApprovalsLoading = configLoading;
+  const stageApprovalFieldsLoading = configLoading;
 
   // Determine effective approval ID (reason-level takes precedence over stage-level)
   const effectiveApprovalId = useMemo(() => {
     return selectedReasonObj?.stageApprovalId || selectedStage?.stageApprovalId || null;
   }, [selectedReasonObj, selectedStage]);
-
-  // Fetch stage approval fields for the effective approval (reason-level or stage-level)
-  const { data: stageApprovalFields = [], isLoading: stageApprovalFieldsLoading } =
-    useQuery<StageApprovalField[]>({
-      queryKey: [`/api/config/stage-approval-fields`],
-      enabled: !!effectiveApprovalId && isOpen,
-      staleTime: 5 * 60 * 1000, // 5 minutes
-    });
 
   // Get target stage approval and fields using effective approval ID
   const targetStageApproval = useMemo(() => {

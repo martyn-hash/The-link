@@ -118,6 +118,15 @@ export default function ProjectDetail() {
     queryKey: ['/api/projects', projectId],
     enabled: isAuthenticated && !!user && !!projectId,
     retry: false,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  });
+
+  // Pre-fetch stage change config in background (will be used when modal opens)
+  // This eliminates the 5-6 second delay when clicking "Change Status"
+  useQuery({
+    queryKey: ["/api/projects", projectId, "stage-change-config"],
+    enabled: isAuthenticated && !!user && !!projectId && !!project,
+    staleTime: 5 * 60 * 1000, // 5 minutes - config rarely changes
   });
 
   // Fetch current stage assignee

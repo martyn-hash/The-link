@@ -225,6 +225,8 @@ export default function Projects() {
     }
   }, [behindScheduleOnly]);
 
+  // Main projects query with staleTime to prevent refetch on navigation
+  // Data is considered fresh for 2 minutes - returning to page uses cache
   const { data: projects, isLoading: projectsLoading, error } = useQuery<ProjectWithRelations[]>({
     queryKey: ["/api/projects", { 
       showArchived,
@@ -233,12 +235,14 @@ export default function Projects() {
     }],
     enabled: isAuthenticated && !!user,
     retry: false,
+    staleTime: 2 * 60 * 1000, // 2 minutes - cached data used on navigation
   });
 
   const { data: users, isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
     enabled: isAuthenticated && Boolean(user?.isAdmin || user?.canSeeAdminMenu),
     retry: false,
+    staleTime: 5 * 60 * 1000, // 5 minutes - user list rarely changes
   });
 
   // Fetch all services (for dropdown population)
@@ -246,6 +250,7 @@ export default function Projects() {
     queryKey: ["/api/services/active"],
     enabled: isAuthenticated && !!user,
     retry: false,
+    staleTime: 5 * 60 * 1000, // 5 minutes
     select: (data: any[]) => data.map((s: any) => ({ id: s.id, name: s.name })).sort((a, b) => a.name.localeCompare(b.name))
   });
 
@@ -254,6 +259,7 @@ export default function Projects() {
     queryKey: ["/api/project-views"],
     enabled: isAuthenticated && !!user,
     retry: false,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Fetch saved dashboards
@@ -261,6 +267,7 @@ export default function Projects() {
     queryKey: ["/api/dashboards"],
     enabled: isAuthenticated && !!user,
     retry: false,
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Fetch user project preferences (for default view)
@@ -268,6 +275,7 @@ export default function Projects() {
     queryKey: ["/api/user-project-preferences"],
     enabled: isAuthenticated && !!user,
     retry: false,
+    staleTime: 10 * 60 * 1000, // 10 minutes - preferences rarely change
   });
 
   // Fetch all clients (for dashboard filter)
@@ -275,6 +283,7 @@ export default function Projects() {
     queryKey: ["/api/clients"],
     enabled: isAuthenticated && !!user && viewMode === "dashboard",
     retry: false,
+    staleTime: 5 * 60 * 1000, // 5 minutes
     select: (data: any[]) => data.map((c: any) => ({ id: c.id, name: c.name })).sort((a, b) => a.name.localeCompare(b.name))
   });
 
@@ -283,6 +292,7 @@ export default function Projects() {
     queryKey: ["/api/project-types"],
     enabled: isAuthenticated && !!user && viewMode === "dashboard",
     retry: false,
+    staleTime: 5 * 60 * 1000, // 5 minutes
     select: (data: any[]) => data.map((pt: any) => ({ id: pt.id, name: pt.name })).sort((a, b) => a.name.localeCompare(b.name))
   });
 

@@ -30,6 +30,21 @@ export async function updateDashboardCache(userIdFilter?: string): Promise<Dashb
 
     console.log(`[Dashboard Cache] Processing ${allUsers.length} user(s)...`);
 
+    // Pre-fetch all stages by project type to avoid N+1 queries
+    // This is a significant performance optimization for the behind schedule calculation
+    const stagesByProjectType = new Map<string, Awaited<ReturnType<typeof storage.getKanbanStagesByProjectTypeId>>>();
+    
+    const getStagesForProjectType = async (projectTypeId: string) => {
+      if (!stagesByProjectType.has(projectTypeId)) {
+        const stages = await storage.getKanbanStagesByProjectTypeId(projectTypeId);
+        stagesByProjectType.set(projectTypeId, stages);
+      }
+      return stagesByProjectType.get(projectTypeId)!;
+    };
+
+    // Pre-import businessHours calculation once
+    const { calculateBusinessHours } = await import("@shared/businessTime");
+
     for (const user of allUsers) {
       try {
         usersProcessed++;
@@ -67,8 +82,8 @@ export async function updateDashboardCache(userIdFilter?: string): Promise<Dashb
           // Skip completed projects
           if (project.completionStatus) continue;
 
-          // Get stage config for this project
-          const stages = await storage.getKanbanStagesByProjectTypeId(project.projectTypeId);
+          // Get stage config from pre-fetched cache (fixes N+1 query problem)
+          const stages = await getStagesForProjectType(project.projectTypeId);
           const currentStageConfig = stages.find(s => s.name === project.currentStatus);
           
           if (currentStageConfig?.maxInstanceTime && currentStageConfig.maxInstanceTime > 0) {
@@ -82,7 +97,6 @@ export async function updateDashboardCache(userIdFilter?: string): Promise<Dashb
             const startTime = lastEntry?.timestamp || project.createdAt;
             
             if (startTime) {
-              const { calculateBusinessHours } = await import("@shared/businessTime");
               const currentHours = calculateBusinessHours(
                 new Date(startTime).toISOString(),
                 new Date().toISOString()

@@ -49,6 +49,7 @@ export function useClientData(clientId: string | undefined): UseClientDataResult
     queryKey: [`/api/clients/${clientId}`],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!clientId,
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
   const { 
@@ -60,6 +61,7 @@ export function useClientData(clientId: string | undefined): UseClientDataResult
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!clientId,
     retry: 1,
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
   const { 
@@ -71,6 +73,7 @@ export function useClientData(clientId: string | undefined): UseClientDataResult
     queryKey: [`/api/client-services/client/${clientId}`],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!clientId,
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
   const { 
@@ -82,12 +85,14 @@ export function useClientData(clientId: string | undefined): UseClientDataResult
     queryKey: [`/api/people-services/client/${clientId}`],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!clientId,
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
   const { data: servicesWithRoles } = useQuery<(Service & { roles: WorkRole[] })[]>({
     queryKey: ['/api/services'],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!clientId,
+    staleTime: 5 * 60 * 1000, // 5 minutes - services rarely change
   });
 
   const { 
@@ -98,7 +103,7 @@ export function useClientData(clientId: string | undefined): UseClientDataResult
     queryKey: [`/api/clients/${clientId}/projects`],
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!clientId,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000, // 2 minutes - projects change more frequently
     refetchOnMount: "always",
   });
 
@@ -108,6 +113,7 @@ export function useClientData(clientId: string | undefined): UseClientDataResult
   } = useQuery<any[]>({
     queryKey: [`/api/task-instances/client/${clientId}`],
     enabled: !!clientId,
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
   const { 
@@ -116,6 +122,7 @@ export function useClientData(clientId: string | undefined): UseClientDataResult
   } = useQuery<any[]>({
     queryKey: [`/api/internal-tasks/client/${clientId}`],
     enabled: !!clientId,
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
   const { 
@@ -124,6 +131,7 @@ export function useClientData(clientId: string | undefined): UseClientDataResult
   } = useQuery<Document[]>({
     queryKey: ['/api/clients', clientId, 'documents'],
     enabled: !!clientId,
+    staleTime: 2 * 60 * 1000, // 2 minutes
   });
 
   return {

@@ -346,6 +346,93 @@ export function registerProjectRoutes(
     }
   });
 
+  // GET /api/projects/:id/stage-change-config - Combined endpoint for all stage change configuration
+  // Returns stages, reasons, custom fields, approvals, and approval fields in a single request
+  // This eliminates 6+ sequential API calls when opening the stage change modal
+  // Optimized to use bulk queries instead of per-stage/per-reason N+1 queries
+  app.get("/api/projects/:id/stage-change-config", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const projectId = req.params.id;
+      
+      // Get project to retrieve projectTypeId
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+      
+      const projectTypeId = project.projectTypeId;
+      
+      // Fetch all configuration data in parallel using bulk methods
+      // This eliminates N+1 queries by fetching everything at once
+      const [stages, allReasons, stageApprovals, allApprovalFields, allStageReasonMaps, allCustomFields] = await Promise.all([
+        storage.getKanbanStagesByProjectTypeId(projectTypeId),
+        storage.getChangeReasonsByProjectTypeId(projectTypeId),
+        storage.getStageApprovalsByProjectTypeId(projectTypeId),
+        storage.getAllStageApprovalFields(),
+        storage.getAllStageReasonMaps(), // Bulk fetch all stage-reason mappings
+        storage.getAllReasonCustomFields(), // Bulk fetch all custom fields
+      ]);
+      
+      // Create sets for filtering
+      const stageIds = new Set(stages.map(s => s.id));
+      const reasonIds = new Set(allReasons.map(r => r.id));
+      
+      // Build stage -> valid reason IDs map from bulk-loaded mappings
+      // Only include mappings relevant to this project type's stages and reasons
+      const stageReasonMap = new Map<string, Set<string>>();
+      for (const stage of stages) {
+        stageReasonMap.set(stage.id, new Set());
+      }
+      for (const mapping of allStageReasonMaps) {
+        if (stageIds.has(mapping.stageId) && reasonIds.has(mapping.reasonId)) {
+          stageReasonMap.get(mapping.stageId)?.add(mapping.reasonId);
+        }
+      }
+      
+      // Build reason -> custom fields map from bulk-loaded fields
+      // Only include fields for reasons in this project type
+      const reasonCustomFieldsMap = new Map<string, any[]>();
+      for (const field of allCustomFields) {
+        if (reasonIds.has(field.reasonId)) {
+          if (!reasonCustomFieldsMap.has(field.reasonId)) {
+            reasonCustomFieldsMap.set(field.reasonId, []);
+          }
+          reasonCustomFieldsMap.get(field.reasonId)!.push(field);
+        }
+      }
+      
+      // Build enhanced stages with validReasonIds
+      const enhancedStages = stages.map(stage => ({
+        ...stage,
+        validReasonIds: Array.from(stageReasonMap.get(stage.id) || []),
+      }));
+      
+      // Build enhanced reasons with customFields
+      const enhancedReasons = allReasons.map(reason => ({
+        ...reason,
+        customFields: reasonCustomFieldsMap.get(reason.id) || [],
+      }));
+      
+      // Filter approval fields to only those relevant to this project type's approvals
+      const approvalIds = new Set(stageApprovals.map(a => a.id));
+      const relevantApprovalFields = allApprovalFields.filter(
+        field => approvalIds.has(field.stageApprovalId)
+      );
+      
+      res.json({
+        projectTypeId,
+        currentStatus: project.currentStatus,
+        stages: enhancedStages,
+        reasons: enhancedReasons,
+        stageApprovals,
+        stageApprovalFields: relevantApprovalFields,
+      });
+    } catch (error) {
+      console.error("Error fetching stage change config:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch stage change config" });
+    }
+  });
+
   app.patch("/api/projects/:id/status", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const effectiveUserId = req.user?.effectiveUserId;
