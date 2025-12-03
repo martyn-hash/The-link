@@ -162,6 +162,33 @@ const extractFirstName = (fullName: string): string => {
   return fullName.split(/\s+/)[0] || "";
 };
 
+// Helper function to get sender name with robust fallbacks
+const getSenderName = (user: User | null | undefined): string | undefined => {
+  if (!user) return undefined;
+  
+  // Try firstName first
+  if (user.firstName && user.firstName.trim()) {
+    return user.firstName.trim();
+  }
+  
+  // Try lastName if firstName empty
+  if (user.lastName && user.lastName.trim()) {
+    return extractFirstName(user.lastName);
+  }
+  
+  // Fallback to email username (before the @)
+  if (user.email) {
+    const emailUsername = user.email.split('@')[0];
+    // Capitalize first letter and handle common patterns like john.doe
+    const namePart = emailUsername.split(/[._-]/)[0];
+    if (namePart) {
+      return namePart.charAt(0).toUpperCase() + namePart.slice(1).toLowerCase();
+    }
+  }
+  
+  return undefined;
+};
+
 // Inline notification content component (used when stage change succeeds with notification preview)
 function NotificationContent({
   preview,
@@ -219,9 +246,14 @@ function NotificationContent({
   const smsEligibleRecipients = preview.recipients.filter(r => r.mobile);
   
   // Helper function to format recipient first names for personalization
+  // If no recipients selected, uses all email-eligible recipients for context
   const formatRecipientFirstNames = (recipientIds: Set<string>): string => {
-    const names = preview.recipients
-      .filter(r => recipientIds.has(r.userId))
+    // Use selected recipients if any, otherwise all email-eligible recipients
+    const recipientsToUse = recipientIds.size > 0 
+      ? preview.recipients.filter(r => recipientIds.has(r.userId))
+      : emailEligibleRecipients;
+    
+    const names = recipientsToUse
       .map(r => extractFirstName(r.name || ""))
       .filter(name => name.length > 0);
     
@@ -1384,7 +1416,7 @@ export default function ChangeStatusModal({
               }}
               onClose={handleFullClose}
               isSending={sendClientNotificationMutation.isPending}
-              senderName={user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.firstName || user?.email?.split('@')[0] || undefined}
+              senderName={getSenderName(user)}
               onAiRefine={async (prompt, currentSubject, currentBody, context) => {
                 const response = await fetch("/api/ai/refine-email", {
                   method: "POST",
@@ -1423,7 +1455,7 @@ export default function ChangeStatusModal({
               }}
               onClose={handleFullClose}
               isSending={sendNotificationMutation.isPending}
-              senderName={user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.firstName || user?.email?.split('@')[0] || undefined}
+              senderName={getSenderName(user)}
             />
           </>
         ) : (

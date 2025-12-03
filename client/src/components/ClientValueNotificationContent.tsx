@@ -112,9 +112,14 @@ export function ClientValueNotificationContent({
   };
   
   // Helper function to format recipient first names for personalization
+  // If no recipients selected, uses all email-eligible recipients for context
   const formatRecipientFirstNames = (recipientIds: Set<string>): string => {
-    const names = preview.recipients
-      .filter(r => recipientIds.has(r.personId))
+    // Use selected recipients if any, otherwise all email-eligible recipients
+    const recipientsToUse = recipientIds.size > 0 
+      ? preview.recipients.filter(r => recipientIds.has(r.personId))
+      : emailEligibleRecipients;
+    
+    const names = recipientsToUse
       .map(r => extractFirstName(r.fullName || ""))
       .filter(name => name.length > 0);
     

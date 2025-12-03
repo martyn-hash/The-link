@@ -124,9 +124,14 @@ export function EmailDialog({
   };
 
   // Get recipient first names for AI context
+  // If no recipients selected, use all available recipients for context
   const getRecipientFirstNames = (): string => {
-    const names = peopleWithEmail
-      .filter(r => selectedRecipients.has(r.personId))
+    // Use selected recipients if any, otherwise fall back to all available recipients
+    const recipientsToUse = selectedRecipients.size > 0 
+      ? peopleWithEmail.filter(r => selectedRecipients.has(r.personId))
+      : peopleWithEmail;
+    
+    const names = recipientsToUse
       .map(r => extractFirstName(r.fullName))
       .filter(name => name.length > 0);
     
@@ -139,13 +144,36 @@ export function EmailDialog({
     return [...rest, lastTwo].join(", ");
   };
 
-  // Get sender's first name
+  // Get sender's first name with robust fallbacks
   const getSenderFirstName = (): string => {
     if (!user) return "";
-    if (user.firstName) return user.firstName;
-    // Fallback to constructing from firstName/lastName if available
-    const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
-    if (fullName) return extractFirstName(fullName);
+    
+    // Try firstName first
+    if (user.firstName && user.firstName.trim()) {
+      return user.firstName.trim();
+    }
+    
+    // Try to extract from fullName if available
+    if ((user as any).fullName) {
+      const extracted = extractFirstName((user as any).fullName);
+      if (extracted) return extracted;
+    }
+    
+    // Try to construct from firstName/lastName
+    if (user.lastName) {
+      return extractFirstName(user.lastName);
+    }
+    
+    // Fallback to email username (before the @)
+    if (user.email) {
+      const emailUsername = user.email.split('@')[0];
+      // Capitalize first letter and handle common patterns like john.doe
+      const namePart = emailUsername.split(/[._-]/)[0];
+      if (namePart) {
+        return namePart.charAt(0).toUpperCase() + namePart.slice(1).toLowerCase();
+      }
+    }
+    
     return "";
   };
 

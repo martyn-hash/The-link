@@ -1480,9 +1480,6 @@ async function createProjectFromService(dueService: DueService): Promise<any> {
   }
 
   // Prepare project data
-  // BENCH FEATURE: When creating a benched project, use the first stage as currentStatus
-  // (not 'On The Bench' which is a synthetic display status, not a real kanban stage)
-  // The isBenched flag and preBenchStatus handle the bench state independently
   const projectData: InsertProject = {
     clientId: dueService.clientId,
     projectTypeId: projectType.id,
@@ -1490,7 +1487,7 @@ async function createProjectFromService(dueService: DueService): Promise<any> {
     bookkeeperId: finalAssigneeId,
     clientManagerId: finalAssigneeId,
     description,
-    currentStatus: firstStage.name, // Always use first stage - bench status is separate
+    currentStatus: shouldCreateAsBenched ? 'On The Bench' : firstStage.name,
     currentAssigneeId: finalAssigneeId,
     priority: 'medium',
     dueDate: dueService.nextDueDate,
