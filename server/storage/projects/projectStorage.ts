@@ -556,7 +556,7 @@ export class ProjectStorage extends BaseStorage {
       : new Map<string, User | undefined>();
 
     // Fetch priority service indicators for all projects
-    // This finds services that have showInProjectServiceId set, then checks if clients have those services
+    // This finds services that have showInProjectServiceId set, then checks if clients have ACTIVE PROJECTS for those services
     const priorityIndicatorsMap = await this.getPriorityServiceIndicatorsBatch(results);
 
     // Convert null relations to undefined and populate stage role assignee from batch result
@@ -582,10 +582,10 @@ export class ProjectStorage extends BaseStorage {
    * Batch lookup for priority service indicators
    * Returns a map of projectId -> array of service names that should show as priority indicators
    */
-  private async getPriorityServiceIndicatorsBatch(projects: any[]): Promise<Map<string, string[]>> {
+  private async getPriorityServiceIndicatorsBatch(projectList: any[]): Promise<Map<string, string[]>> {
     const priorityMap = new Map<string, string[]>();
     
-    if (projects.length === 0) {
+    if (projectList.length === 0) {
       return priorityMap;
     }
 
@@ -615,33 +615,39 @@ export class ProjectStorage extends BaseStorage {
       }
 
       // Step 3: Get unique client IDs and service IDs we need to check
-      const clientIds = [...new Set(projects.map(p => p.clientId))];
+      const clientIds = [...new Set(projectList.map(p => p.clientId))];
       const indicatorServiceIds = indicatorServices.map(s => s.id);
 
-      // Step 4: Fetch all client-service relationships for relevant clients and indicator services
-      const clientServiceRelations = await db
+      // Step 4: Fetch all ACTIVE PROJECTS for relevant clients and indicator services
+      // An active project is one where completionStatus is NULL and inactive is false
+      // We join projects with projectTypes to get the serviceId
+      const activeProjectsForIndicatorServices = await db
         .select({
-          clientId: clientServices.clientId,
-          serviceId: clientServices.serviceId,
+          clientId: projects.clientId,
+          serviceId: projectTypes.serviceId,
         })
-        .from(clientServices)
+        .from(projects)
+        .innerJoin(projectTypes, eq(projects.projectTypeId, projectTypes.id))
         .where(
           and(
-            inArray(clientServices.clientId, clientIds),
-            inArray(clientServices.serviceId, indicatorServiceIds),
-            eq(clientServices.isActive, true)
+            inArray(projects.clientId, clientIds),
+            inArray(projectTypes.serviceId, indicatorServiceIds),
+            isNull(projects.completionStatus),
+            eq(projects.inactive, false)
           )
         );
 
-      // Step 5: Build a set of (clientId, serviceId) pairs that exist
-      const clientHasService = new Set<string>();
-      for (const rel of clientServiceRelations) {
-        clientHasService.add(`${rel.clientId}:${rel.serviceId}`);
+      // Step 5: Build a set of (clientId, serviceId) pairs where an active project exists
+      const clientHasActiveProjectForService = new Set<string>();
+      for (const proj of activeProjectsForIndicatorServices) {
+        if (proj.serviceId) {
+          clientHasActiveProjectForService.add(`${proj.clientId}:${proj.serviceId}`);
+        }
       }
 
       // Step 6: For each project, determine which priority indicators to show
-      for (const project of projects) {
-        const projectServiceId = project.projectType?.serviceId;
+      for (const proj of projectList) {
+        const projectServiceId = proj.projectType?.serviceId;
         if (!projectServiceId) continue;
 
         const indicatorsForThisService = targetToIndicators.get(projectServiceId);
@@ -649,14 +655,14 @@ export class ProjectStorage extends BaseStorage {
 
         const indicators: string[] = [];
         for (const indicator of indicatorsForThisService) {
-          // Check if the client has this indicator service
-          if (clientHasService.has(`${project.clientId}:${indicator.id}`)) {
+          // Check if the client has an ACTIVE PROJECT for this indicator service
+          if (clientHasActiveProjectForService.has(`${proj.clientId}:${indicator.id}`)) {
             indicators.push(indicator.name);
           }
         }
 
         if (indicators.length > 0) {
-          priorityMap.set(project.id, indicators);
+          priorityMap.set(proj.id, indicators);
         }
       }
     } catch (error) {
