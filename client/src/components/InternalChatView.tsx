@@ -860,23 +860,27 @@ export function InternalChatView({
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           {thread.threadType === 'project' ? (
-                            <div className="flex items-center gap-2 mb-0.5">
-                              <FolderKanban className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                              <span className="text-sm text-muted-foreground truncate" data-testid={`text-project-${thread.id}`}>
+                            <>
+                              <p className="font-semibold text-sm truncate" data-testid={`text-client-${thread.id}`}>
+                                {thread.client.name}
+                              </p>
+                              <p className="text-sm text-muted-foreground truncate mt-0.5" data-testid={`text-project-${thread.id}`}>
                                 {thread.project.description}
-                              </span>
-                            </div>
+                              </p>
+                            </>
                           ) : (
-                            <div className="flex items-center gap-2 mb-0.5">
-                              <Users className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
-                              <span className="text-sm text-muted-foreground truncate">
-                                {thread.participants.map(p => getUserDisplayName(p)).join(', ')}
-                              </span>
-                            </div>
+                            <>
+                              <p className="font-semibold text-sm truncate" data-testid={`text-topic-${thread.id}`}>
+                                {thread.topic}
+                              </p>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <Users className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                                <span className="text-sm text-muted-foreground truncate">
+                                  {thread.participants.map(p => getUserDisplayName(p)).join(', ')}
+                                </span>
+                              </div>
+                            </>
                           )}
-                          <p className="font-semibold text-sm mt-0.5 truncate" data-testid={`text-topic-${thread.id}`}>
-                            {thread.topic}
-                          </p>
                           {thread.lastMessage && (
                             <p className="text-xs text-muted-foreground truncate mt-0.5">
                               {stripHtml(thread.lastMessage.content)}
