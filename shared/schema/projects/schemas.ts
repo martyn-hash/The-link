@@ -172,6 +172,10 @@ export const updateProjectStatusSchema = z.object({
   notes: z.string().optional(),
   notesHtml: z.string().optional(),
   changeReason: z.string().optional(),
+  // Optional IDs to skip lookup queries - if provided, we use these directly
+  // instead of looking up stage/reason by name
+  stageId: z.string().uuid().optional(),
+  reasonId: z.string().uuid().optional(),
   attachments: z.array(z.object({
     fileName: z.string(),
     fileSize: z.number(),

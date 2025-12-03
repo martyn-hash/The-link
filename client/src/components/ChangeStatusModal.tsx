@@ -834,6 +834,8 @@ export default function ChangeStatusModal({
       updateStatusMutation.mutate({
         newStatus,
         changeReason,
+        stageId: selectedStage?.id,
+        reasonId: selectedReasonObj?.id,
         notesHtml: notesHtml.trim() || undefined,
         attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
         fieldResponses: formatFieldResponses(),
@@ -848,6 +850,8 @@ export default function ChangeStatusModal({
     mutationFn: async (data: {
       newStatus: string;
       changeReason: string;
+      stageId?: string;
+      reasonId?: string;
       notesHtml?: string;
       attachments?: Array<{
         fileName: string;
@@ -1199,6 +1203,8 @@ export default function ChangeStatusModal({
       updateStatusMutation.mutate({
         newStatus,
         changeReason,
+        stageId: selectedStage?.id,
+        reasonId: selectedReasonObj?.id,
         notesHtml: notesHtml.trim() || undefined,
         attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
         fieldResponses: formatFieldResponses(),
