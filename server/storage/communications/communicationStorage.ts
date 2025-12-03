@@ -1,8 +1,8 @@
 import { BaseStorage } from '../base/BaseStorage.js';
 import { db } from '../../db.js';
-import { communications, clients, people, users } from '@shared/schema';
+import { communications, clients, people, users, projects } from '@shared/schema';
 import { eq, desc } from 'drizzle-orm';
-import type { Communication, InsertCommunication, Client, Person, User } from '@shared/schema';
+import type { Communication, InsertCommunication, Client, Person, User, Project } from '@shared/schema';
 
 /**
  * CommunicationStorage handles all communication tracking operations
@@ -35,16 +35,21 @@ export class CommunicationStorage extends BaseStorage {
     }));
   }
 
-  async getCommunicationsByClientId(clientId: string): Promise<(Communication & { person?: Person; user: User })[]> {
+  async getCommunicationsByClientId(clientId: string): Promise<(Communication & { person?: Person; user: User; project?: Pick<Project, 'id' | 'description'> })[]> {
     const results = await db
       .select({
         communication: communications,
         person: people,
         user: users,
+        project: {
+          id: projects.id,
+          description: projects.description,
+        },
       })
       .from(communications)
       .leftJoin(people, eq(communications.personId, people.id))
       .innerJoin(users, eq(communications.userId, users.id))
+      .leftJoin(projects, eq(communications.projectId, projects.id))
       .where(eq(communications.clientId, clientId))
       .orderBy(desc(communications.loggedAt));
 
@@ -52,6 +57,7 @@ export class CommunicationStorage extends BaseStorage {
       ...result.communication,
       person: result.person || undefined,
       user: result.user,
+      project: result.project?.id ? result.project : undefined,
     }));
   }
 

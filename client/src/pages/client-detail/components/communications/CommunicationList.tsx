@@ -110,7 +110,12 @@ export function CommunicationList({
               } : null}
               createdBy={item.kind === 'communication' ? item.data.userId : undefined}
               projectId={item.projectId}
-              projectName={projectCache[item.projectId!]?.description || projectCache[item.projectId!]?.client?.name}
+              projectName={
+                // First try embedded project data, then fallback to cache
+                (item.kind === 'communication' && item.data.project?.description) ||
+                projectCache[item.projectId!]?.description || 
+                projectCache[item.projectId!]?.client?.name
+              }
               messageCount={item.kind !== 'communication' ? item.messageCount : undefined}
               unreadCount={item.kind === 'message_thread' ? item.unreadCount : undefined}
               attachmentCount={item.kind === 'message_thread' ? item.attachmentCount : undefined}
@@ -210,7 +215,13 @@ export function CommunicationList({
               {item.projectId ? (
                 <ProjectLink 
                   projectId={item.projectId} 
-                  projectName={projectCache[item.projectId]?.description || projectCache[item.projectId]?.client?.name}
+                  projectName={
+                    // First try to get from embedded project data on communication
+                    (item.kind === 'communication' && item.data.project?.description) ||
+                    // Fallback to projectCache
+                    projectCache[item.projectId]?.description || 
+                    projectCache[item.projectId]?.client?.name
+                  }
                   onClick={onProjectClick ? () => onProjectClick(item.projectId!) : undefined}
                 />
               ) : (

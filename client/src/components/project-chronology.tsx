@@ -962,20 +962,39 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Progress Note Detail Modal */}
+      {/* Communication Detail Modal - consistent with ViewCommunicationDialog */}
       <Dialog open={isViewingProgressNote} onOpenChange={setIsViewingProgressNote}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Progress Note Details</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              {selectedProgressNote?.type === 'email_sent' || selectedProgressNote?.type === 'email_received' ? (
+                <Mail className="w-5 h-5" />
+              ) : selectedProgressNote?.type === 'sms_sent' || selectedProgressNote?.type === 'sms_received' ? (
+                <MessageCircle className="w-5 h-5" />
+              ) : selectedProgressNote?.type === 'phone_call' ? (
+                <Phone className="w-5 h-5" />
+              ) : (
+                <FileText className="w-5 h-5" />
+              )}
+              Communication Details
+            </DialogTitle>
           </DialogHeader>
           {selectedProgressNote && (
             <div className="space-y-4">
-              {/* Header Information */}
+              {/* Header Information - 2x2 grid matching ViewCommunicationDialog */}
               <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
                 <div>
                   <span className="text-xs text-muted-foreground">Type</span>
                   <div className="mt-1">
-                    <Badge variant="outline" data-testid="modal-badge-note-type">
+                    <Badge variant="secondary" className={
+                      selectedProgressNote.type === 'email_sent' || selectedProgressNote.type === 'email_received' 
+                        ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                        : selectedProgressNote.type === 'sms_sent' || selectedProgressNote.type === 'sms_received'
+                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                        : selectedProgressNote.type === 'phone_call'
+                        ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+                        : 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+                    } data-testid="modal-badge-note-type">
                       {selectedProgressNote.type === 'phone_call' && 'Phone Call'}
                       {selectedProgressNote.type === 'note' && 'Note'}
                       {selectedProgressNote.type === 'sms_sent' && 'SMS Sent'}
@@ -986,18 +1005,18 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                   </div>
                 </div>
                 <div>
-                  <span className="text-xs text-muted-foreground">Timestamp</span>
+                  <span className="text-xs text-muted-foreground">Date/Time</span>
                   <div className="mt-1 flex items-center gap-2">
                     <Clock className="w-4 h-4 text-muted-foreground" />
                     <span className="text-sm" data-testid="text-modal-note-timestamp">
                       {selectedProgressNote.actualContactTime || selectedProgressNote.loggedAt || selectedProgressNote.createdAt
-                        ? format(new Date(selectedProgressNote.actualContactTime || selectedProgressNote.loggedAt || selectedProgressNote.createdAt), 'MMM d, yyyy h:mm a')
+                        ? format(new Date(selectedProgressNote.actualContactTime || selectedProgressNote.loggedAt || selectedProgressNote.createdAt), 'dd/MM/yyyy, HH:mm:ss')
                         : 'Unknown time'}
                     </span>
                   </div>
                 </div>
-                <div className="col-span-2">
-                  <span className="text-xs text-muted-foreground">Logged By</span>
+                <div>
+                  <span className="text-xs text-muted-foreground">Created By</span>
                   <div className="mt-1">
                     {selectedProgressNote.user ? (
                       <div className="flex items-center gap-2">
@@ -1011,24 +1030,56 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
                     )}
                   </div>
                 </div>
+                <div>
+                  <span className="text-xs text-muted-foreground">Contact Person</span>
+                  <div className="mt-1">
+                    {selectedProgressNote.person ? (
+                      <div className="flex items-center gap-2">
+                        <UserIcon className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm" data-testid="text-modal-note-person">
+                          {selectedProgressNote.person.fullName || 
+                           `${selectedProgressNote.person.firstName || ''} ${selectedProgressNote.person.lastName || ''}`.trim() ||
+                           '—'}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground" data-testid="text-modal-note-no-person">—</span>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Subject */}
               {selectedProgressNote.subject && (
                 <div>
                   <span className="text-xs text-muted-foreground font-medium">Subject</span>
-                  <p className="text-sm font-medium mt-2" data-testid="text-modal-note-subject">
+                  <h4 className="font-medium text-lg mt-1" data-testid="text-modal-note-subject">
                     {selectedProgressNote.subject}
-                  </p>
+                  </h4>
                 </div>
               )}
 
-              {/* Content/Notes */}
-              {selectedProgressNote.notes && (
+              {/* Content - with HTML support for emails */}
+              {(selectedProgressNote.content || selectedProgressNote.notes) && (
                 <div>
                   <span className="text-xs text-muted-foreground font-medium">Content</span>
-                  <div className="mt-2 p-3 bg-muted/30 rounded-lg">
-                    <p className="text-sm whitespace-pre-wrap" data-testid="text-modal-note-content">{selectedProgressNote.notes}</p>
+                  <div className="mt-2 p-4 bg-muted/30 rounded-lg" data-testid="div-modal-note-content">
+                    {(selectedProgressNote.type === 'email_sent' || selectedProgressNote.type === 'email_received') ? (
+                      <div 
+                        className="prose prose-sm dark:prose-invert max-w-none"
+                        dangerouslySetInnerHTML={{ 
+                          __html: DOMPurify.sanitize(selectedProgressNote.content || selectedProgressNote.notes || '', {
+                            ALLOWED_TAGS: ['br', 'p', 'strong', 'em', 'b', 'i', 'u', 'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'div'],
+                            ALLOWED_ATTR: ['href', 'style', 'class'],
+                            ALLOW_DATA_ATTR: false
+                          })
+                        }}
+                      />
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap">
+                        {selectedProgressNote.content || selectedProgressNote.notes}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -1047,7 +1098,7 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
               <div className="flex justify-end pt-4">
                 <Button
                   onClick={() => setIsViewingProgressNote(false)}
-                  data-testid="button-close-progress-note-detail"
+                  data-testid="button-close-communication-detail"
                 >
                   Close
                 </Button>

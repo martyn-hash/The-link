@@ -7,6 +7,7 @@ export type CommunicationFilterSelection = CommunicationFilterType[];
 export interface CommunicationWithRelations extends Communication {
   user: User;
   person?: Person | null;
+  project?: { id: string; description: string | null } | null;
 }
 
 interface BaseTimelineDisplay {
