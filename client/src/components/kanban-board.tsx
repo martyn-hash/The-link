@@ -737,7 +737,6 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
             // Get the actual stage config from the API for schedule calculations
             const actualStageConfig = stages?.find(s => s.name === status);
             const scheduleCounts = getScheduleCounts(stageProjects, actualStageConfig);
-            const overdueCount = scheduleCounts.overdue;
             const isStageExpanded = expandedStages.has(status);
             const showCompact = isCompactMode && !isStageExpanded;
             
@@ -788,7 +787,7 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
                         
                         {!config.isCompletionColumn && !config.isBenchColumn && (
                           <>
-                            {/* On track - green */}
+                            {/* On track - green (matches card bg-green-600) */}
                             {scheduleCounts.onTrack > 0 && (
                               <TooltipProvider>
                                 <Tooltip>
@@ -806,7 +805,7 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
                               </TooltipProvider>
                             )}
                             
-                            {/* Behind schedule - orange */}
+                            {/* Behind schedule - amber (matches card bg-amber-500) */}
                             {scheduleCounts.behind > 0 && (
                               <TooltipProvider>
                                 <Tooltip>
@@ -824,14 +823,13 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
                               </TooltipProvider>
                             )}
                             
-                            {/* Overdue - red */}
+                            {/* Overdue - red (matches card bg-red-600) */}
                             {scheduleCounts.overdue > 0 && (
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Badge 
-                                      variant="destructive" 
-                                      className="text-xs w-full justify-center"
+                                      className="text-xs w-full justify-center bg-red-600 hover:bg-red-700 text-white"
                                     >
                                       {scheduleCounts.overdue}
                                     </Badge>
@@ -866,11 +864,25 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
                             <Badge variant="secondary" className={`text-xs ${config.isBenchColumn ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300' : ''}`}>
                               {stageProjects.length}
                             </Badge>
-                            {overdueCount > 0 && !config.isCompletionColumn && (
-                              <Badge variant="destructive" className="text-xs gap-1">
-                                <Clock className="w-3 h-3" />
-                                {overdueCount}
-                              </Badge>
+                            {!config.isCompletionColumn && !config.isBenchColumn && (
+                              <>
+                                {scheduleCounts.onTrack > 0 && (
+                                  <Badge className="text-xs bg-green-600 hover:bg-green-700 text-white">
+                                    {scheduleCounts.onTrack}
+                                  </Badge>
+                                )}
+                                {scheduleCounts.behind > 0 && (
+                                  <Badge className="text-xs bg-amber-500 hover:bg-amber-600 text-white">
+                                    {scheduleCounts.behind}
+                                  </Badge>
+                                )}
+                                {scheduleCounts.overdue > 0 && (
+                                  <Badge className="text-xs bg-red-600 hover:bg-red-700 text-white gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    {scheduleCounts.overdue}
+                                  </Badge>
+                                )}
+                              </>
                             )}
                           </div>
                           <div className="flex items-center gap-1">
