@@ -86,6 +86,7 @@ export const messageThreads = pgTable("message_threads", {
   isArchived: boolean("is_archived").default(false),
   archivedAt: timestamp("archived_at"),
   archivedBy: varchar("archived_by").references(() => users.id, { onDelete: "set null" }),
+  autoArchivedByProject: boolean("auto_archived_by_project").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -93,6 +94,7 @@ export const messageThreads = pgTable("message_threads", {
   statusIdx: index("message_threads_status_idx").on(table.status),
   isArchivedIdx: index("message_threads_is_archived_idx").on(table.isArchived),
   lastMessageByStaffIdx: index("message_threads_last_message_by_staff_idx").on(table.lastMessageByStaff),
+  projectIdIdx: index("message_threads_project_id_idx").on(table.projectId),
 }));
 
 export const messages = pgTable("messages", {
@@ -133,6 +135,7 @@ export const projectMessageThreads = pgTable("project_message_threads", {
   isArchived: boolean("is_archived").default(false),
   archivedAt: timestamp("archived_at"),
   archivedBy: varchar("archived_by").references(() => users.id, { onDelete: "set null" }),
+  autoArchivedByProject: boolean("auto_archived_by_project").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
