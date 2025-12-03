@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, useDroppable, DragOverEvent, PointerSensor, KeyboardSensor, useSensor, useSensors, pointerWithin, rectIntersection } from "@dnd-kit/core";
@@ -12,7 +12,8 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Plus, AlertCircle, RefreshCw, X } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Plus, AlertCircle, RefreshCw, X, Maximize2, Minimize2, ChevronDown, ChevronRight, Clock } from "lucide-react";
 import { BulkChangeStatusModal } from "./BulkChangeStatusModal";
 import { BulkMoveRestrictionDialog } from "./BulkMoveRestrictionDialog";
 import { BulkMoveStageConflictDialog } from "./BulkMoveStageConflictDialog";
@@ -21,6 +22,8 @@ import { apiRequest } from "@/lib/queryClient";
 import type { ProjectWithRelations, User, KanbanStage, ChangeReason } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+
+const COMPACT_MODE_STORAGE_KEY = "kanban-compact-mode";
 
 interface KanbanBoardProps {
   projects: ProjectWithRelations[];
@@ -49,9 +52,18 @@ const getColorStyle = (hexColor: string): { backgroundColor: string } => {
 };
 
 // Droppable Column component for drag-and-drop zones
-function DroppableColumn({ id, children }: { id: string; children: React.ReactNode }) {
+function DroppableColumn({ id, children, isCompact }: { id: string; children: React.ReactNode; isCompact?: boolean }) {
   const { setNodeRef } = useDroppable({ id });
-  return <div ref={setNodeRef} className="flex-1 min-w-80 h-full">{children}</div>;
+  return (
+    <div 
+      ref={setNodeRef} 
+      className={`h-full transition-all duration-300 ease-in-out ${
+        isCompact ? 'min-w-[140px] w-[140px] flex-shrink-0' : 'flex-1 min-w-80'
+      }`}
+    >
+      {children}
+    </div>
+  );
 }
 
 export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
@@ -59,6 +71,52 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
   const [location, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  
+  // Compact mode state - loads from localStorage
+  const [isCompactMode, setIsCompactMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(COMPACT_MODE_STORAGE_KEY);
+      return saved === 'true';
+    }
+    return false;
+  });
+  const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
+  
+  // Persist compact mode preference to localStorage
+  useEffect(() => {
+    localStorage.setItem(COMPACT_MODE_STORAGE_KEY, String(isCompactMode));
+  }, [isCompactMode]);
+  
+  // Toggle compact mode on/off
+  const toggleCompactMode = useCallback(() => {
+    setIsCompactMode(prev => {
+      const newValue = !prev;
+      if (newValue) {
+        // When entering compact mode, collapse all stages
+        setExpandedStages(new Set());
+      }
+      return newValue;
+    });
+  }, []);
+  
+  // Toggle a single stage expanded/collapsed in compact mode
+  const toggleStageExpanded = useCallback((stageName: string) => {
+    setExpandedStages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(stageName)) {
+        newSet.delete(stageName);
+      } else {
+        newSet.add(stageName);
+      }
+      return newSet;
+    });
+  }, []);
+  
+  // Expand all stages
+  const expandAllStages = useCallback(() => {
+    setIsCompactMode(false);
+    setExpandedStages(new Set());
+  }, []);
   
   // State for ChangeStatusModal
   const [showChangeStatusModal, setShowChangeStatusModal] = useState(false);
@@ -499,8 +557,73 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
     return orderA - orderB;
   });
 
+  // Calculate overdue counts per stage
+  const getOverdueCount = (stageProjects: ProjectWithRelations[]) => {
+    return stageProjects.filter(project => {
+      if (!project.dueDate) return false;
+      const dueDate = new Date(project.dueDate);
+      const now = new Date();
+      return dueDate < now && !project.completionStatus;
+    }).length;
+  };
+
   return (
     <div className="p-6" data-testid="kanban-board">
+      {/* Compact Mode Toolbar */}
+      <div className="mb-4 flex items-center justify-between" data-testid="kanban-toolbar">
+        <div className="flex items-center gap-2">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={isCompactMode ? "default" : "outline"}
+                  size="sm"
+                  onClick={toggleCompactMode}
+                  className="gap-2"
+                  data-testid="button-toggle-compact-mode"
+                >
+                  {isCompactMode ? (
+                    <>
+                      <Maximize2 className="h-4 w-4" />
+                      <span className="hidden sm:inline">Expand All</span>
+                    </>
+                  ) : (
+                    <>
+                      <Minimize2 className="h-4 w-4" />
+                      <span className="hidden sm:inline">Compact View</span>
+                    </>
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {isCompactMode 
+                  ? "Exit compact mode and show all stages fully expanded" 
+                  : "Switch to compact view to see all stages at a glance"}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          
+          {isCompactMode && expandedStages.size > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setExpandedStages(new Set())}
+              className="gap-1 text-muted-foreground"
+              data-testid="button-collapse-all-stages"
+            >
+              <X className="h-3 w-3" />
+              Collapse all ({expandedStages.size})
+            </Button>
+          )}
+        </div>
+        
+        {isCompactMode && (
+          <p className="text-xs text-muted-foreground hidden sm:block">
+            Click any stage to expand it
+          </p>
+        )}
+      </div>
+
       {/* Selection indicator bar */}
       {selectedProjectIds.size > 0 && (
         <div 
@@ -535,80 +658,174 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex space-x-6 h-full overflow-x-auto">
+        <div className={`flex h-full overflow-x-auto ${isCompactMode ? 'space-x-2' : 'space-x-6'}`}>
           {orderedStages.map(([status, config]) => {
             const stageProjects = projectsByStatus[status] || [];
+            const overdueCount = getOverdueCount(stageProjects);
+            const isStageExpanded = expandedStages.has(status);
+            const showCompact = isCompactMode && !isStageExpanded;
             
             // Determine if this is a special column (read-only)
             const isSpecialColumn = config.isCompletionColumn || config.isBenchColumn;
             
             return (
-              <DroppableColumn key={status} id={`column-${status}`}>
-                <Card className={`h-full ${config.isCompletionColumn ? 'border-2 border-dashed opacity-90' : ''} ${config.isBenchColumn ? 'border-2 border-amber-300 dark:border-amber-700' : ''}`}>
-                    <CardHeader className={`sticky top-0 bg-card border-b border-border rounded-t-lg ${config.isCompletionColumn ? 'bg-muted/50' : ''} ${config.isBenchColumn ? 'bg-amber-50 dark:bg-amber-950/30' : ''}`}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-2">
-                          <div 
-                            className="w-3 h-3 rounded-full" 
-                            style={getColorStyle(config.color)}
-                          />
-                          <h3 className={`font-semibold text-sm ${config.isCompletionColumn ? 'text-muted-foreground' : ''} ${config.isBenchColumn ? 'text-amber-700 dark:text-amber-400' : 'text-foreground'}`}>
-                            {config.title}
-                          </h3>
-                          <Badge variant="secondary" className={`text-xs ${config.isBenchColumn ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300' : ''}`}>
-                            {stageProjects.length}
-                          </Badge>
-                        </div>
-                        {!isSpecialColumn && <Plus className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground" />}
+              <DroppableColumn key={status} id={`column-${status}`} isCompact={showCompact}>
+                <Card 
+                  className={`h-full transition-all duration-300 ${config.isCompletionColumn ? 'border-2 border-dashed opacity-90' : ''} ${config.isBenchColumn ? 'border-2 border-amber-300 dark:border-amber-700' : ''} ${showCompact ? 'cursor-pointer hover:border-primary/50' : ''}`}
+                  onClick={showCompact ? () => toggleStageExpanded(status) : undefined}
+                >
+                  {/* Compact View Header */}
+                  {showCompact ? (
+                    <div className="p-3 h-full flex flex-col">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div 
+                          className="w-3 h-3 rounded-full flex-shrink-0" 
+                          style={getColorStyle(config.color)}
+                        />
+                        <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                       </div>
-                      <p className={`text-xs mt-1 ${config.isBenchColumn ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
-                        {config.isCompletionColumn ? 'Read-only' : config.isBenchColumn ? 'Temporarily suspended' : `Assigned to ${config.assignedTo}`}
-                      </p>
-                    </CardHeader>
-                    
-                    <CardContent className={`p-4 space-y-3 min-h-96 ${config.isCompletionColumn ? 'bg-muted/20' : ''} ${config.isBenchColumn ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
-                      <SortableContext
-                        items={stageProjects.map(p => p.id)}
-                        strategy={verticalListSortingStrategy}
-                      >
-                        {stageProjects.map((project) => {
-                          // Find the stage configuration for this project's current status
-                          const currentStageConfig = stages?.find(s => s.name === project.currentStatus);
-                          
-                          return (
-                            <StageChangePopover
-                              key={project.id}
-                              projectId={project.id}
-                              open={hoveredProjectId === project.id}
-                              onOpenChange={(open) => {
-                                if (open) {
-                                  setHoveredProjectId(project.id);
-                                } else if (hoveredProjectId === project.id) {
-                                  setHoveredProjectId(null);
-                                }
-                              }}
-                            >
-                              <ProjectCard
-                                project={project}
-                                stageConfig={currentStageConfig}
-                                onOpenModal={() => navigateToProject(project.id)}
-                                onShowInfo={handleShowInfo}
-                                onShowMessages={handleShowMessages}
-                                isSelected={selectedProjectIds.has(project.id)}
-                                onSelectToggle={handleSelectToggle}
-                              />
-                            </StageChangePopover>
-                          );
-                        })}
-                      </SortableContext>
                       
-                      {stageProjects.length === 0 && (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <p className="text-sm">No projects in this stage</p>
+                      <h3 
+                        className={`font-semibold text-xs leading-tight mb-2 ${config.isCompletionColumn ? 'text-muted-foreground' : ''} ${config.isBenchColumn ? 'text-amber-700 dark:text-amber-400' : 'text-foreground'}`}
+                        style={{ 
+                          writingMode: 'vertical-rl',
+                          textOrientation: 'mixed',
+                          transform: 'rotate(180deg)',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          maxHeight: '150px'
+                        }}
+                      >
+                        {config.title}
+                      </h3>
+                      
+                      <div className="mt-auto space-y-2">
+                        <Badge 
+                          variant="secondary" 
+                          className={`text-xs w-full justify-center ${config.isBenchColumn ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300' : ''}`}
+                        >
+                          {stageProjects.length}
+                        </Badge>
+                        
+                        {overdueCount > 0 && !config.isCompletionColumn && (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge 
+                                  variant="destructive" 
+                                  className="text-xs w-full justify-center gap-1"
+                                >
+                                  <Clock className="w-3 h-3" />
+                                  {overdueCount}
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {overdueCount} overdue project{overdueCount !== 1 ? 's' : ''}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* Full View */
+                    <>
+                      <CardHeader className={`sticky top-0 bg-card border-b border-border rounded-t-lg ${config.isCompletionColumn ? 'bg-muted/50' : ''} ${config.isBenchColumn ? 'bg-amber-50 dark:bg-amber-950/30' : ''}`}>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-2">
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={getColorStyle(config.color)}
+                            />
+                            <h3 className={`font-semibold text-sm ${config.isCompletionColumn ? 'text-muted-foreground' : ''} ${config.isBenchColumn ? 'text-amber-700 dark:text-amber-400' : 'text-foreground'}`}>
+                              {config.title}
+                            </h3>
+                            <Badge variant="secondary" className={`text-xs ${config.isBenchColumn ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300' : ''}`}>
+                              {stageProjects.length}
+                            </Badge>
+                            {overdueCount > 0 && !config.isCompletionColumn && (
+                              <Badge variant="destructive" className="text-xs gap-1">
+                                <Clock className="w-3 h-3" />
+                                {overdueCount}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            {isCompactMode && isStageExpanded && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleStageExpanded(status);
+                                      }}
+                                      className="h-6 w-6 p-0"
+                                      data-testid={`button-collapse-stage-${status}`}
+                                    >
+                                      <ChevronDown className="w-4 h-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Collapse this stage</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                            {!isSpecialColumn && <Plus className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground" />}
+                          </div>
                         </div>
-                      )}
-                    </CardContent>
-                  </Card>
+                        <p className={`text-xs mt-1 ${config.isBenchColumn ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
+                          {config.isCompletionColumn ? 'Read-only' : config.isBenchColumn ? 'Temporarily suspended' : `Assigned to ${config.assignedTo}`}
+                        </p>
+                      </CardHeader>
+                      
+                      <CardContent className={`p-4 space-y-3 min-h-96 ${config.isCompletionColumn ? 'bg-muted/20' : ''} ${config.isBenchColumn ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
+                        <SortableContext
+                          items={stageProjects.map(p => p.id)}
+                          strategy={verticalListSortingStrategy}
+                        >
+                          {stageProjects.map((project) => {
+                            // Find the stage configuration for this project's current status
+                            const currentStageConfig = stages?.find(s => s.name === project.currentStatus);
+                            
+                            return (
+                              <StageChangePopover
+                                key={project.id}
+                                projectId={project.id}
+                                open={hoveredProjectId === project.id}
+                                onOpenChange={(open) => {
+                                  if (open) {
+                                    setHoveredProjectId(project.id);
+                                  } else if (hoveredProjectId === project.id) {
+                                    setHoveredProjectId(null);
+                                  }
+                                }}
+                              >
+                                <ProjectCard
+                                  project={project}
+                                  stageConfig={currentStageConfig}
+                                  onOpenModal={() => navigateToProject(project.id)}
+                                  onShowInfo={handleShowInfo}
+                                  onShowMessages={handleShowMessages}
+                                  isSelected={selectedProjectIds.has(project.id)}
+                                  onSelectToggle={handleSelectToggle}
+                                />
+                              </StageChangePopover>
+                            );
+                          })}
+                        </SortableContext>
+                        
+                        {stageProjects.length === 0 && (
+                          <div className="text-center py-8 text-muted-foreground">
+                            <p className="text-sm">No projects in this stage</p>
+                          </div>
+                        )}
+                      </CardContent>
+                    </>
+                  )}
+                </Card>
               </DroppableColumn>
             );
           })}
