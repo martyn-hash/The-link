@@ -475,6 +475,8 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
         setIsViewingProgressNote(true);
         break;
       case 'stage_change':
+      case 'benched':
+      case 'unbenched':
         setSelectedStageChange(entry.rawData);
         setIsViewingStageChange(true);
         break;
