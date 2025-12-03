@@ -187,6 +187,53 @@ async function markLockAsFailed(lockId: string, errorMessage: string): Promise<v
   }
 }
 
+const LOCK_EXPIRY_MINUTES = 30;
+
+/**
+ * Expire stuck locks that have been in 'in_progress' status for too long
+ * This prevents a crashed run from blocking future scheduling attempts
+ */
+async function expireStuckLocks(): Promise<number> {
+  try {
+    const expiryThreshold = new Date(Date.now() - LOCK_EXPIRY_MINUTES * 60 * 1000);
+    
+    const stuckLocks = await db
+      .select()
+      .from(schedulingRunLogs)
+      .where(
+        and(
+          eq(schedulingRunLogs.status, 'in_progress'),
+          sql`${schedulingRunLogs.createdAt} < ${expiryThreshold}`
+        )
+      );
+    
+    if (stuckLocks.length === 0) {
+      return 0;
+    }
+    
+    console.log(`[Orchestrator] Found ${stuckLocks.length} stuck lock(s) older than ${LOCK_EXPIRY_MINUTES} minutes, expiring them...`);
+    
+    for (const lock of stuckLocks) {
+      const createdAt = lock.createdAt ? new Date(lock.createdAt) : new Date();
+      const lockAge = Math.round((Date.now() - createdAt.getTime()) / 60000);
+      console.log(`[Orchestrator] Expiring stuck lock ${lock.id} (age: ${lockAge} minutes)`);
+      
+      await db
+        .update(schedulingRunLogs)
+        .set({
+          status: 'failure',
+          summary: `Lock expired after ${lockAge} minutes - run likely crashed or was interrupted`
+        })
+        .where(eq(schedulingRunLogs.id, lock.id));
+    }
+    
+    return stuckLocks.length;
+  } catch (error) {
+    console.error('[Orchestrator] Error expiring stuck locks:', error);
+    return 0;
+  }
+}
+
 /**
  * Execute scheduling for a specific target date with idempotency protection and locking
  * IMPORTANT: targetDate is passed to runProjectScheduling so it evaluates due services for that specific day
@@ -208,6 +255,12 @@ export async function ensureRunForDate(
   };
 
   try {
+    // First, expire any stuck locks from previous crashed runs
+    const expiredLocks = await expireStuckLocks();
+    if (expiredLocks > 0) {
+      console.log(`[Orchestrator] Expired ${expiredLocks} stuck lock(s) before proceeding`);
+    }
+    
     const existingRun = await hasSuccessfulRunForDate(targetDateString);
     
     if (existingRun.exists) {
@@ -259,10 +312,21 @@ export async function ensureRunForDate(
       await updateLockWithResults(lockId, schedulingResult);
       
       result.schedulingResult = schedulingResult;
-      result.status = 'executed';
-      result.message = `Successfully ran scheduling for ${targetDateString}: ${schedulingResult.projectsCreated} projects created, ${schedulingResult.servicesRescheduled} services rescheduled`;
       
-      console.log(`[Orchestrator] ${result.message}`);
+      // Properly propagate the scheduler's status to the orchestrator result
+      if (schedulingResult.status === 'failure') {
+        result.status = 'error';
+        result.message = `Scheduling FAILED for ${targetDateString}: ${schedulingResult.summary}`;
+        console.error(`[Orchestrator] ${result.message}`);
+      } else if (schedulingResult.status === 'partial_failure') {
+        result.status = 'executed';
+        result.message = `Scheduling completed with errors for ${targetDateString}: ${schedulingResult.projectsCreated} projects created, ${schedulingResult.servicesRescheduled} services rescheduled, ${schedulingResult.errorsEncountered} errors`;
+        console.warn(`[Orchestrator] ${result.message}`);
+      } else {
+        result.status = 'executed';
+        result.message = `Successfully ran scheduling for ${targetDateString}: ${schedulingResult.projectsCreated} projects created, ${schedulingResult.servicesRescheduled} services rescheduled`;
+        console.log(`[Orchestrator] ${result.message}`);
+      }
       
       await sendSchedulingEmails(schedulingResult, triggerSource);
       
@@ -476,14 +540,84 @@ export async function runStartupCatchup(): Promise<CatchupResult> {
   }
 }
 
+const MIN_TRIGGER_INTERVAL_MS = 30000; // 30 seconds minimum between triggers
+const MAX_ORCHESTRATOR_RETRIES = 2;
+const ORCHESTRATOR_RETRY_DELAY_MS = 30000; // 30 seconds between retries
+let lastTriggerTime: number = 0;
+
+/**
+ * Check if an error is likely transient and worth retrying at the orchestrator level
+ */
+function isTransientSchedulingError(message: string): boolean {
+  const transientPatterns = [
+    'connection terminated',
+    'connection refused',
+    'connection reset',
+    'connection timeout',
+    'socket hang up',
+    'econnreset',
+    'database connection health check failed',
+    'network error',
+    'timeout',
+  ];
+  const lowerMessage = message.toLowerCase();
+  return transientPatterns.some(pattern => lowerMessage.includes(pattern));
+}
+
 /**
  * Execute scheduling via the orchestrator (for use in cron job)
  * This wraps the scheduling run with proper tracking and duplicate prevention
+ * Includes protection against rapid double-triggers (e.g., from cron race conditions)
+ * Also includes orchestrator-level retry for transient failures
  */
 export async function executeScheduledRun(): Promise<OrchestrationResult> {
   const now = new Date();
+  const currentTime = Date.now();
+  
+  // Guard against rapid successive triggers (double-trigger bug)
+  const timeSinceLastTrigger = currentTime - lastTriggerTime;
+  if (lastTriggerTime > 0 && timeSinceLastTrigger < MIN_TRIGGER_INTERVAL_MS) {
+    console.log(`[Orchestrator] Ignoring duplicate trigger (${Math.round(timeSinceLastTrigger / 1000)}s since last trigger, minimum ${MIN_TRIGGER_INTERVAL_MS / 1000}s required)`);
+    return {
+      status: 'skipped_locked',
+      targetDate: getDateString(now),
+      triggerSource: 'scheduled',
+      message: `Duplicate trigger ignored - less than ${MIN_TRIGGER_INTERVAL_MS / 1000} seconds since last trigger`
+    };
+  }
+  
+  lastTriggerTime = currentTime;
   console.log('[Orchestrator] Starting scheduled run...');
-  return ensureRunForDate(now, 'scheduled');
+  
+  // Attempt the run with orchestrator-level retry for transient failures
+  let lastResult: OrchestrationResult | null = null;
+  
+  for (let attempt = 1; attempt <= MAX_ORCHESTRATOR_RETRIES + 1; attempt++) {
+    const result = await ensureRunForDate(now, 'scheduled');
+    lastResult = result;
+    
+    // If successful or skipped (already ran, too early, locked), return immediately
+    if (result.status !== 'error') {
+      return result;
+    }
+    
+    // Check if the error is transient and worth retrying
+    const isTransient = isTransientSchedulingError(result.message);
+    
+    if (!isTransient || attempt > MAX_ORCHESTRATOR_RETRIES) {
+      // Not transient or exhausted retries
+      if (attempt > 1) {
+        console.error(`[Orchestrator] Scheduling failed after ${attempt} attempt(s): ${result.message}`);
+      }
+      return result;
+    }
+    
+    // Transient error - wait and retry
+    console.warn(`[Orchestrator] Transient error on attempt ${attempt}/${MAX_ORCHESTRATOR_RETRIES + 1}, retrying in ${ORCHESTRATOR_RETRY_DELAY_MS / 1000}s: ${result.message}`);
+    await new Promise(resolve => setTimeout(resolve, ORCHESTRATOR_RETRY_DELAY_MS));
+  }
+  
+  return lastResult!;
 }
 
 /**

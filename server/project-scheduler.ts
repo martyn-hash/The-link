@@ -11,6 +11,7 @@ import {
   type ServiceFrequency 
 } from "./frequency-calculator";
 import { normalizeProjectMonth } from "@shared/schema";
+import { withRetry, checkDatabaseConnection } from "./db";
 import type { 
   ClientService, 
   PeopleService, 
@@ -734,10 +735,24 @@ export async function runProjectSchedulingEnhanced(
   };
 
   try {
-    // Step 1: Get all client services and people services
+    // Step 0: Check database connection health before proceeding
+    console.log('[Project Scheduler] Checking database connection health...');
+    const isDbHealthy = await checkDatabaseConnection();
+    if (!isDbHealthy) {
+      throw new Error('Database connection health check failed - aborting scheduler run');
+    }
+    console.log('[Project Scheduler] Database connection healthy');
+
+    // Step 1: Get all client services and people services with retry logic
     let [clientServices, peopleServices] = await Promise.all([
-      storage.getAllClientServicesWithDetails(),
-      storage.getAllPeopleServicesWithDetails()
+      withRetry(
+        () => storage.getAllClientServicesWithDetails(),
+        { operationName: 'getAllClientServicesWithDetails', maxRetries: 3 }
+      ),
+      withRetry(
+        () => storage.getAllPeopleServicesWithDetails(),
+        { operationName: 'getAllPeopleServicesWithDetails', maxRetries: 3 }
+      )
     ]);
 
     // Apply filters if specified
@@ -767,7 +782,8 @@ export async function runProjectSchedulingEnhanced(
 
     console.log(`[Project Scheduler] Found ${analysisResult.dueServices.length} services due today${filterText}`);
 
-    // Step 3: Process each due service
+    // Step 3: Process each due service (no retry - processService is not idempotent)
+    // Orchestrator-level retry handles transient failures at the run level
     for (const dueService of analysisResult.dueServices) {
       try {
         await processService(dueService, result, targetDate, dryRun);
@@ -877,10 +893,24 @@ export async function runProjectScheduling(
   };
 
   try {
-    // Step 1: Get all client services and people services
+    // Step 0: Check database connection health before proceeding
+    console.log('[Project Scheduler] Checking database connection health...');
+    const isDbHealthy = await checkDatabaseConnection();
+    if (!isDbHealthy) {
+      throw new Error('Database connection health check failed - aborting scheduler run');
+    }
+    console.log('[Project Scheduler] Database connection healthy');
+
+    // Step 1: Get all client services and people services with retry logic
     const [clientServices, peopleServices] = await Promise.all([
-      storage.getAllClientServicesWithDetails(),
-      storage.getAllPeopleServicesWithDetails()
+      withRetry(
+        () => storage.getAllClientServicesWithDetails(),
+        { operationName: 'getAllClientServicesWithDetails', maxRetries: 3 }
+      ),
+      withRetry(
+        () => storage.getAllPeopleServicesWithDetails(),
+        { operationName: 'getAllPeopleServicesWithDetails', maxRetries: 3 }
+      )
     ]);
 
     console.log(`[Project Scheduler] Found ${clientServices.length} client services and ${peopleServices.length} people services`);
@@ -897,7 +927,8 @@ export async function runProjectScheduling(
 
     console.log(`[Project Scheduler] Found ${analysisResult.dueServices.length} services due today`);
 
-    // Step 3: Process each due service
+    // Step 3: Process each due service (no retry - processService is not idempotent)
+    // Orchestrator-level retry handles transient failures at the run level
     for (const dueService of analysisResult.dueServices) {
       try {
         await processService(dueService, result, targetDate, dryRun);
@@ -940,9 +971,12 @@ export async function runProjectScheduling(
     console.error('[Project Scheduler] Critical error during scheduling run:', error);
   }
 
-  // Step 5: Log the run results
+  // Step 5: Log the run results with retry
   try {
-    await logSchedulingRun(runDate, runType, result);
+    await withRetry(
+      () => logSchedulingRun(runDate, runType, result),
+      { operationName: 'logSchedulingRun', maxRetries: 2 }
+    );
   } catch (error) {
     console.error('[Project Scheduler] Failed to log scheduling run:', error);
   }
@@ -1124,7 +1158,16 @@ async function addWarningFromProcessingError(
 }
 
 /**
- * Process a single due service with atomic transaction
+ * Process a single due service - creates project, logs history, and reschedules.
+ * 
+ * IMPORTANT: This function is NOT idempotent due to multi-step mutations.
+ * Do NOT wrap with retry logic as partial failures can cause:
+ * - Duplicate projects if failure occurs after project creation
+ * - Missing history entries if failure occurs after project but before logging
+ * 
+ * Idempotency is handled at the orchestrator level via scheduling_run_logs.
+ * Within a run, duplicates are prevented by checking service_scheduling_history
+ * at the start of createProjectFromService().
  */
 async function processService(
   dueService: DueService,

@@ -1,0 +1,117 @@
+Do NOT approve the plan as-is.
+
+Because:
+
+1. “Run scheduler queries one by one” is a terrible idea
+
+You don’t fix database timeouts by slowing the system down even further.
+
+Your problem wasn’t concurrency load.
+Your problem was Neon killing the connection mid-run.
+
+Serialising work will:
+
+Make the scheduler slower
+
+Increase the time window in which Neon can kill the connection
+
+Achieve nothing meaningful
+
+Reject that part.
+
+2. The retry logic plan is correct but incomplete
+
+What you actually need is:
+
+Layer A — session-level resilience
+
+Automatic reconnection if Neon drops the WebSocket
+
+Retry-once if the connection dies mid-query
+
+Layer B — scheduler-specific guarantees
+
+If any step fails, release the lock properly
+
+If the lock is stuck, auto-expire it after X minutes
+
+If the scheduler fails, retry the whole run AFTER 10–30 seconds
+
+The agent is not proposing a proper transaction wrapper or lock expiry. It’s essential.
+
+3. “Improve server connection settings” only helps if you change Neon settings too
+
+The agent ignored the real Neon side:
+
+You MUST:
+
+Disable auto-pause
+
+Set idle timeout to 300–600 seconds
+
+Enable pooled mode
+
+Ensure the client uses keep-alives
+
+None of this appears in its plan.
+
+4. No mention of fixing the orchestrator’s false “success” reporting
+
+This is the embarrassing bit.
+
+Your logs show:
+
+Run logged with status: failure
+Successfully ran scheduling for 2025-12-03
+
+
+The agent’s plan doesn’t fix the reporting bug.
+
+That bug must be addressed or you’ll get future silent failures.
+
+5. No mention of preventing the double-trigger at 01:00
+
+Your logs clearly show:
+
+1:00:01 scheduler triggered
+1:00:02 scheduler triggered again
+
+
+You’re firing two schedulers.
+
+The agent’s plan ignores this completely.
+
+You either have:
+
+Replit cron firing
+
+express-cron firing
+
+plus a manual startup scheduler
+
+You should approve work ONLY if it de-duplicates the trigger logic.
+
+So here’s the real decision
+Approve the following parts:
+
+Connection retry logic
+
+Better DB client configuration
+
+Preflight DB health check
+
+Improved error handling
+
+Improved documentation
+
+Reject the following parts:
+
+Running queries “one-by-one”
+
+Missing Neon config changes
+
+Ignoring the double-trigger bug
+
+Ignoring orchestration mis-reporting
+
+Failing to auto-expire stuck locks
