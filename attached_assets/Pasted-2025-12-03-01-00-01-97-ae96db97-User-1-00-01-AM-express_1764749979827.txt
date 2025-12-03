@@ -1,0 +1,144 @@
+2025-12-03 01:00:01.97
+ae96db97
+User
+1:00:01 AM [express] [Scheduling Orchestrator] Starting scheduled nightly run...
+2025-12-03 01:00:01.97
+ae96db97
+User
+[Orchestrator] Checking if scheduling run needed for 2025-12-03 (trigger: scheduled)
+2025-12-03 01:00:01.98
+ae96db97
+User
+1:00:01 AM [express] [Project Message Reminders] Starting reminder check...
+2025-12-03 01:00:02.08
+ae96db97
+User
+[Project Message Reminders] Starting reminder check...
+2025-12-03 01:00:02.18
+ae96db97
+User
+[Orchestrator] Checking if scheduling run needed for 2025-12-03 (trigger: scheduled)
+2025-12-03 01:00:02.18
+ae96db97
+User
+[Orchestrator] Starting scheduled run...
+2025-12-03 01:00:02.18
+ae96db97
+User
+1:00:02 AM [express] [Scheduling Orchestrator] Starting scheduled nightly run...
+2025-12-03 01:00:02.77
+ae96db97
+User
+1:00:02 AM [express] [Project Message Reminders] Starting reminder check...
+2025-12-03 01:00:02.77
+ae96db97
+User
+[Project Message Reminders] Starting reminder check...
+2025-12-03 01:00:11.08
+ae96db97
+User
+[Orchestrator] Acquired lock 59f50d3e-d696-4f41-b5b1-32f58d895ac4 for 2025-12-03
+2025-12-03 01:00:11.08
+ae96db97
+User
+[Orchestrator] Acquired lock 59f50d3e-d696-4f41-b5b1-32f58d895ac4, executing scheduling for 2025-12-03...
+2025-12-03 01:00:11.08
+ae96db97
+User
+[Project Scheduler] Starting scheduled run for 2025-12-03T01:00:02.185Z
+2025-12-03 01:00:12.07
+ae96db97
+User
+[Orchestrator] Lock already held by run 59f50d3e-d696-4f41-b5b1-32f58d895ac4
+2025-12-03 01:00:12.07
+ae96db97
+User
+[Orchestrator] Could not acquire database lock for 2025-12-03 - another run may be in progress or already completed
+2025-12-03 01:00:12.38
+ae96db97
+User
+[Orchestrator] Run already exists or in progress for 2025-12-03: 59f50d3e-d696-4f41-b5b1-32f58d895ac4 (status: in_progress)
+2025-12-03 01:00:12.48
+ae96db97
+User
+[Orchestrator] Could not acquire database lock for 2025-12-03 - another run may be in progress or already completed
+2025-12-03 01:00:12.66
+ae96db97
+User
+1:00:12 AM [express] [Scheduling Orchestrator] Nightly run skipped_locked: Could not acquire database lock for 2025-12-03 - another run may be in progress or already completed
+2025-12-03 01:00:12.68
+ae96db97
+User
+1:00:12 AM [express] [Scheduling Orchestrator] Nightly run skipped_locked: Could not acquire database lock for 2025-12-03 - another run may be in progress or already completed
+2025-12-03 01:00:30.48
+ae96db97
+User
+at async ServiceAssignmentStorage.getAllPeopleServicesWithDetails (file:///home/runner/workspace/dist/index.js:12282:25)
+2025-12-03 01:00:30.48
+ae96db97
+User
+at async runProjectScheduling (file:///home/runner/workspace/dist/index.js:31578:48)
+2025-12-03 01:00:30.48
+ae96db97
+User
+[Project Scheduler] Critical error during scheduling run: Error: Connection terminated unexpectedly
+2025-12-03 01:00:30.48
+ae96db97
+User
+at async NeonPreparedQuery.execute (file:///home/runner/workspace/node_modules/drizzle-orm/neon-serverless/session.js:76:20)
+2025-12-03 01:00:30.48
+ae96db97
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-12-03 01:00:30.48
+ae96db97
+User
+at async Promise.all (index 1)
+2025-12-03 01:00:30.48
+ae96db97
+User
+at async cron3.schedule.timezone (file:///home/runner/workspace/dist/index.js:54079:24)
+2025-12-03 01:00:30.78
+ae96db97
+User
+[Project Scheduler] Run logged successfully with status: failure
+2025-12-03 01:00:31.08
+ae96db97
+User
+[Orchestrator] Sending notification emails (trigger: scheduled)...
+2025-12-03 01:00:31.08
+ae96db97
+User
+[Orchestrator] Successfully ran scheduling for 2025-12-03: 0 projects created, 0 services rescheduled
+2025-12-03 01:00:34.58
+ae96db97
+User
+[Orchestrator] Email notifications sent: 1 successful, 0 failed
+2025-12-03 01:00:34.78
+ae96db97
+User
+1:00:34 AM [express] [Scheduling Orchestrator] Nightly run executed: Successfully ran scheduling for 2025-12-03: 0 projects created, 0 services rescheduled
+2025-12-03 01:01:01.82
+ae96db97
+User
+[Project Message Reminders] Found 0 users with new unread messages older than 10 minutes
+2025-12-03 01:01:01.82
+ae96db97
+User
+[Project Message Reminders] Completed: 0/0 emails sent
+2025-12-03 01:01:01.88
+ae96db97
+User
+1:01:01 AM [express] [Project Message Reminders] Check completed: 0/0 emails sent
+2025-12-03 01:01:02.07
+ae96db97
+User
+1:01:02 AM [express] [Project Message Reminders] Check completed: 0/0 emails sent
+2025-12-03 01:01:02.07
+ae96db97
+User
+[Project Message Reminders] Found 0 users with new unread messages older than 10 minutes
+2025-12-03 01:01:02.07
+ae96db97
+User
+[Project Message Reminders] Completed: 0/0 emails sent
