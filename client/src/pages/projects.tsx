@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
@@ -54,7 +54,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Columns3, List, Filter, BarChart3, Plus, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
+import { Columns3, List, Filter, BarChart3, Plus, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Minimize2, Maximize2 } from "lucide-react";
 import { CalendarView } from "@/components/calendar";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -120,6 +120,32 @@ export default function Projects() {
   
   // Filter panel state
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+
+  // Kanban compact mode state (lifted from KanbanBoard for header button)
+  const COMPACT_MODE_STORAGE_KEY = "kanban-compact-mode";
+  const [kanbanCompactMode, setKanbanCompactMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(COMPACT_MODE_STORAGE_KEY);
+      return saved === 'true';
+    }
+    return false;
+  });
+  const [kanbanExpandedStages, setKanbanExpandedStages] = useState<Set<string>>(new Set());
+  
+  // Persist compact mode to localStorage
+  useEffect(() => {
+    localStorage.setItem(COMPACT_MODE_STORAGE_KEY, String(kanbanCompactMode));
+  }, [kanbanCompactMode]);
+  
+  const toggleKanbanCompactMode = useCallback(() => {
+    setKanbanCompactMode(prev => {
+      const newValue = !prev;
+      if (newValue) {
+        setKanbanExpandedStages(new Set());
+      }
+      return newValue;
+    });
+  }, []);
 
   // Dashboard state
   const [currentDashboard, setCurrentDashboard] = useState<Dashboard | null>(null);
@@ -1255,6 +1281,29 @@ export default function Projects() {
                   )}
                 </Button>
               )}
+              
+              {/* Compact View Toggle - only visible in kanban view */}
+              {viewMode === "kanban" && (
+                <Button
+                  variant={kanbanCompactMode ? "default" : "outline"}
+                  size="sm"
+                  onClick={toggleKanbanCompactMode}
+                  className="h-11 md:h-8 px-2 md:px-4 gap-2"
+                  data-testid="button-toggle-compact-mode"
+                >
+                  {kanbanCompactMode ? (
+                    <>
+                      <Maximize2 className="h-4 w-4" />
+                      <span className="hidden md:inline">Expand All</span>
+                    </>
+                  ) : (
+                    <>
+                      <Minimize2 className="h-4 w-4" />
+                      <span className="hidden md:inline">Compact View</span>
+                    </>
+                  )}
+                </Button>
+              )}
             </div>
 
             {/* Mobile View - Compact controls only */}
@@ -1347,6 +1396,23 @@ export default function Projects() {
                   )}
                 </Button>
               )}
+              
+              {/* Compact View Toggle - only visible in kanban view (mobile) */}
+              {viewMode === "kanban" && (
+                <Button
+                  variant={kanbanCompactMode ? "default" : "outline"}
+                  size="sm"
+                  onClick={toggleKanbanCompactMode}
+                  className="h-11 px-3"
+                  data-testid="button-toggle-compact-mode-mobile"
+                >
+                  {kanbanCompactMode ? (
+                    <Maximize2 className="h-4 w-4" />
+                  ) : (
+                    <Minimize2 className="h-4 w-4" />
+                  )}
+                </Button>
+              )}
             </div>
           </div>
         </header>
@@ -1402,6 +1468,10 @@ export default function Projects() {
                   <KanbanBoard 
                     projects={paginatedProjects} 
                     user={user}
+                    isCompactMode={kanbanCompactMode}
+                    onToggleCompactMode={toggleKanbanCompactMode}
+                    expandedStages={kanbanExpandedStages}
+                    onExpandedStagesChange={setKanbanExpandedStages}
                   />
                 ) : viewMode === "calendar" ? (
                   <CalendarView
@@ -1519,6 +1589,10 @@ export default function Projects() {
                 <KanbanBoard 
                   projects={paginatedProjects} 
                   user={user}
+                  isCompactMode={kanbanCompactMode}
+                  onToggleCompactMode={toggleKanbanCompactMode}
+                  expandedStages={kanbanExpandedStages}
+                  onExpandedStagesChange={setKanbanExpandedStages}
                 />
               ) : viewMode === "calendar" ? (
                 <CalendarView

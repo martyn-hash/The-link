@@ -29,6 +29,10 @@ const COMPACT_MODE_STORAGE_KEY = "kanban-compact-mode";
 interface KanbanBoardProps {
   projects: ProjectWithRelations[];
   user: User;
+  isCompactMode?: boolean;
+  onToggleCompactMode?: () => void;
+  expandedStages?: Set<string>;
+  onExpandedStagesChange?: (stages: Set<string>) => void;
 }
 
 // Transform user role enum values to display names
@@ -71,57 +75,88 @@ function DroppableColumn({ id, children, isCompact, isExpanded }: { id: string; 
   );
 }
 
-export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
+export default function KanbanBoard({ 
+  projects, 
+  user,
+  isCompactMode: externalCompactMode,
+  onToggleCompactMode: externalToggleCompactMode,
+  expandedStages: externalExpandedStages,
+  onExpandedStagesChange: externalExpandedStagesChange
+}: KanbanBoardProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [location, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
   
-  // Compact mode state - loads from localStorage
-  const [isCompactMode, setIsCompactMode] = useState<boolean>(() => {
+  // Internal compact mode state - only used if external props not provided
+  const [internalCompactMode, setInternalCompactMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem(COMPACT_MODE_STORAGE_KEY);
       return saved === 'true';
     }
     return false;
   });
-  const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
+  const [internalExpandedStages, setInternalExpandedStages] = useState<Set<string>>(new Set());
   
-  // Persist compact mode preference to localStorage
+  // Use external state if provided, otherwise internal
+  const isCompactMode = externalCompactMode !== undefined ? externalCompactMode : internalCompactMode;
+  const expandedStages = externalExpandedStages !== undefined ? externalExpandedStages : internalExpandedStages;
+  const setExpandedStages = externalExpandedStagesChange || setInternalExpandedStages;
+  
+  // Persist compact mode preference to localStorage (only for internal state)
   useEffect(() => {
-    localStorage.setItem(COMPACT_MODE_STORAGE_KEY, String(isCompactMode));
-  }, [isCompactMode]);
+    if (externalCompactMode === undefined) {
+      localStorage.setItem(COMPACT_MODE_STORAGE_KEY, String(internalCompactMode));
+    }
+  }, [internalCompactMode, externalCompactMode]);
   
   // Toggle compact mode on/off
   const toggleCompactMode = useCallback(() => {
-    setIsCompactMode(prev => {
-      const newValue = !prev;
-      if (newValue) {
-        // When entering compact mode, collapse all stages
-        setExpandedStages(new Set());
-      }
-      return newValue;
-    });
-  }, []);
+    if (externalToggleCompactMode) {
+      externalToggleCompactMode();
+    } else {
+      setInternalCompactMode(prev => {
+        const newValue = !prev;
+        if (newValue) {
+          setInternalExpandedStages(new Set());
+        }
+        return newValue;
+      });
+    }
+  }, [externalToggleCompactMode]);
   
   // Toggle a single stage expanded/collapsed in compact mode
   const toggleStageExpanded = useCallback((stageName: string) => {
-    setExpandedStages(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(stageName)) {
-        newSet.delete(stageName);
-      } else {
-        newSet.add(stageName);
-      }
-      return newSet;
-    });
-  }, []);
+    const currentStages = externalExpandedStages !== undefined ? externalExpandedStages : internalExpandedStages;
+    const newSet = new Set(currentStages);
+    if (newSet.has(stageName)) {
+      newSet.delete(stageName);
+    } else {
+      newSet.add(stageName);
+    }
+    if (externalExpandedStagesChange) {
+      externalExpandedStagesChange(newSet);
+    } else {
+      setInternalExpandedStages(newSet);
+    }
+  }, [externalExpandedStages, externalExpandedStagesChange, internalExpandedStages]);
   
   // Expand all stages
   const expandAllStages = useCallback(() => {
-    setIsCompactMode(false);
-    setExpandedStages(new Set());
-  }, []);
+    if (externalToggleCompactMode) {
+      externalToggleCompactMode();
+    } else {
+      setInternalCompactMode(false);
+    }
+    if (externalExpandedStagesChange) {
+      externalExpandedStagesChange(new Set());
+    } else {
+      setInternalExpandedStages(new Set());
+    }
+  }, [externalToggleCompactMode, externalExpandedStagesChange]);
+  
+  // Check if external control is being used (to hide internal toolbar)
+  const isExternallyControlled = externalCompactMode !== undefined;
   
   // State for ChangeStatusModal
   const [showChangeStatusModal, setShowChangeStatusModal] = useState(false);
@@ -641,61 +676,63 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
   };
 
   return (
-    <div className="p-6" data-testid="kanban-board">
-      {/* Compact Mode Toolbar */}
-      <div className="mb-4 flex items-center justify-between" data-testid="kanban-toolbar">
-        <div className="flex items-center gap-2">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={isCompactMode ? "default" : "outline"}
-                  size="sm"
-                  onClick={toggleCompactMode}
-                  className="gap-2"
-                  data-testid="button-toggle-compact-mode"
-                >
-                  {isCompactMode ? (
-                    <>
-                      <Maximize2 className="h-4 w-4" />
-                      <span className="hidden sm:inline">Expand All</span>
-                    </>
-                  ) : (
-                    <>
-                      <Minimize2 className="h-4 w-4" />
-                      <span className="hidden sm:inline">Compact View</span>
-                    </>
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {isCompactMode 
-                  ? "Exit compact mode and show all stages fully expanded" 
-                  : "Switch to compact view to see all stages at a glance"}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+    <div className={isExternallyControlled ? "px-6 pb-6" : "p-6"} data-testid="kanban-board">
+      {/* Compact Mode Toolbar - only shown when not externally controlled */}
+      {!isExternallyControlled && (
+        <div className="mb-4 flex items-center justify-between" data-testid="kanban-toolbar">
+          <div className="flex items-center gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={isCompactMode ? "default" : "outline"}
+                    size="sm"
+                    onClick={toggleCompactMode}
+                    className="gap-2"
+                    data-testid="button-toggle-compact-mode"
+                  >
+                    {isCompactMode ? (
+                      <>
+                        <Maximize2 className="h-4 w-4" />
+                        <span className="hidden sm:inline">Expand All</span>
+                      </>
+                    ) : (
+                      <>
+                        <Minimize2 className="h-4 w-4" />
+                        <span className="hidden sm:inline">Compact View</span>
+                      </>
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {isCompactMode 
+                    ? "Exit compact mode and show all stages fully expanded" 
+                    : "Switch to compact view to see all stages at a glance"}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            
+            {isCompactMode && expandedStages.size > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setExpandedStages(new Set())}
+                className="gap-1 text-muted-foreground"
+                data-testid="button-collapse-all-stages"
+              >
+                <X className="h-3 w-3" />
+                Collapse all ({expandedStages.size})
+              </Button>
+            )}
+          </div>
           
-          {isCompactMode && expandedStages.size > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setExpandedStages(new Set())}
-              className="gap-1 text-muted-foreground"
-              data-testid="button-collapse-all-stages"
-            >
-              <X className="h-3 w-3" />
-              Collapse all ({expandedStages.size})
-            </Button>
+          {isCompactMode && (
+            <p className="text-xs text-muted-foreground hidden sm:block">
+              Click any stage to expand it
+            </p>
           )}
         </div>
-        
-        {isCompactMode && (
-          <p className="text-xs text-muted-foreground hidden sm:block">
-            Click any stage to expand it
-          </p>
-        )}
-      </div>
+      )}
 
       {/* Selection indicator bar */}
       {selectedProjectIds.size > 0 && (
