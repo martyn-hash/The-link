@@ -777,10 +777,9 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
                       
                       {/* Color-coded counts */}
                       <div className="mt-auto space-y-1">
-                        {/* Total count - neutral/black */}
+                        {/* Total count - soft gray (pastel of black) */}
                         <Badge 
-                          variant="secondary" 
-                          className={`text-xs w-full justify-center ${config.isBenchColumn ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300' : ''}`}
+                          className={`text-xs w-full justify-center ${config.isBenchColumn ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600 dark:bg-gray-800/50 dark:text-gray-300 dark:hover:bg-gray-700/50'}`}
                         >
                           {scheduleCounts.total}
                         </Badge>
@@ -861,7 +860,7 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
                             <h3 className={`font-semibold text-sm ${config.isCompletionColumn ? 'text-muted-foreground' : ''} ${config.isBenchColumn ? 'text-amber-700 dark:text-amber-400' : 'text-foreground'}`}>
                               {config.title}
                             </h3>
-                            <Badge variant="secondary" className={`text-xs ${config.isBenchColumn ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300' : ''}`}>
+                            <Badge className={`text-xs ${config.isBenchColumn ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600 dark:bg-gray-800/50 dark:text-gray-300'}`}>
                               {stageProjects.length}
                             </Badge>
                             {!config.isCompletionColumn && !config.isBenchColumn && (
