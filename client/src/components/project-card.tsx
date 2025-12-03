@@ -474,18 +474,21 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
             >
               {assigneeFirstName}
             </span>
-            <span 
-              data-testid={`time-until-due-${project.id}`} 
-              className={`text-xs whitespace-nowrap ${
-                projectStatus.status === 'Late / Overdue' 
-                  ? 'text-red-600 dark:text-red-400' 
-                  : projectStatus.status === 'Behind Schedule' 
-                  ? 'text-amber-600 dark:text-amber-400' 
-                  : 'text-green-600 dark:text-green-400'
-              }`}
-            >
-              {formattedTimeUntilDue}
-            </span>
+            {/* Hide deadline indicator for benched projects - they're suspended */}
+            {!project.isBenched && (
+              <span 
+                data-testid={`time-until-due-${project.id}`} 
+                className={`text-xs whitespace-nowrap ${
+                  projectStatus.status === 'Late / Overdue' 
+                    ? 'text-red-600 dark:text-red-400' 
+                    : projectStatus.status === 'Behind Schedule' 
+                    ? 'text-amber-600 dark:text-amber-400' 
+                    : 'text-green-600 dark:text-green-400'
+                }`}
+              >
+                {formattedTimeUntilDue}
+              </span>
+            )}
           </div>
         </div>
       </CardContent>
