@@ -98,6 +98,7 @@ export interface PersonOption {
 
 export interface DialogBaseProps {
   clientId: string;
+  projectId?: string;
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;

@@ -68,7 +68,8 @@ const formatRole = (role: string | null | undefined): string => {
 };
 
 export function EmailDialog({ 
-  clientId, 
+  clientId,
+  projectId,
   clientPeople,
   user,
   isOpen, 
@@ -161,7 +162,8 @@ export function EmailDialog({
       recipients: { email: string; personId: string }[]; 
       subject: string; 
       content: string; 
-      clientId: string; 
+      clientId: string;
+      projectId?: string;
       isHtml?: boolean; 
       attachments?: EmailAttachment[] 
     }) => {
@@ -173,6 +175,7 @@ export function EmailDialog({
           subject: data.subject,
           content: data.content,
           clientId: data.clientId,
+          projectId: data.projectId,
           personId: recipient.personId,
           isHtml: data.isHtml,
           attachments: data.attachments,
@@ -183,6 +186,9 @@ export function EmailDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/communications/client', clientId] });
+      if (projectId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/communications`] });
+      }
       handleClose();
       const recipientCount = selectedRecipients.size;
       toast({
@@ -248,6 +254,7 @@ export function EmailDialog({
       content: finalEmailContent,
       isHtml: true,
       clientId: clientId,
+      projectId: projectId,
       attachments: attachments.length > 0 ? attachments : undefined,
     });
   };

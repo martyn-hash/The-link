@@ -1042,10 +1042,10 @@ export function registerIntegrationRoutes(
         });
       }
 
-      const { to, subject, content, clientId, personId, isHtml, attachments } = bodyValidation.data;
+      const { to, subject, content, clientId, personId, projectId, isHtml, attachments } = bodyValidation.data;
 
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
-      console.log('[EMAIL SEND] User ID:', effectiveUserId, 'Client ID:', clientId || 'none', 'Attachments:', attachments?.length || 0);
+      console.log('[EMAIL SEND] User ID:', effectiveUserId, 'Client ID:', clientId || 'none', 'Project ID:', projectId || 'none', 'Attachments:', attachments?.length || 0);
 
       // Check if user has access to this client (only if clientId is provided)
       if (clientId) {
@@ -1065,18 +1065,21 @@ export function registerIntegrationRoutes(
       console.log('[EMAIL SEND] Email sent successfully via Outlook:', { to, subject, result: emailResult });
 
       // Log the email as a communication record (only if linked to a client)
+      // Note: If projectId is provided, the communication will automatically appear 
+      // in the project chronology timeline (which queries communications by projectId)
       let communication = null;
       if (clientId) {
         communication = await storage.createCommunication({
           clientId,
           personId: personId || null,
+          projectId: projectId || null,
           type: 'email_sent',
           subject: subject,
           content: content,
           actualContactTime: new Date(),
           userId: effectiveUserId
         });
-        console.log('[EMAIL SEND] Communication logged with ID:', communication.id);
+        console.log('[EMAIL SEND] Communication logged with ID:', communication.id, projectId ? `(linked to project ${projectId})` : '');
       }
 
       res.json({
@@ -1210,7 +1213,7 @@ export function registerIntegrationRoutes(
         });
       }
 
-      const { to, message, clientId, personId } = bodyValidation.data;
+      const { to, message, clientId, personId, projectId } = bodyValidation.data;
 
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
 
@@ -1271,15 +1274,19 @@ export function registerIntegrationRoutes(
       const smsResponse = await response.json();
 
       // Log the SMS as a communication record
+      // Note: If projectId is provided, the communication will automatically appear 
+      // in the project chronology timeline (which queries communications by projectId)
       const communication = await storage.createCommunication({
         clientId,
         personId: personId || null,
+        projectId: projectId || null,
         type: 'sms_sent',
         subject: 'SMS Sent',
         content: message,
         actualContactTime: new Date(),
         userId: effectiveUserId
       });
+      console.log('[SMS SEND] Communication logged with ID:', communication.id, projectId ? `(linked to project ${projectId})` : '');
 
       res.json({
         success: true,

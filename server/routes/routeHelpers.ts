@@ -17,6 +17,7 @@ export const sendEmailSchema = z.object({
   content: z.string().min(1, "Email content is required"),
   clientId: z.string().optional(),
   personId: z.string().optional(),
+  projectId: z.string().optional(),
   isHtml: z.boolean().optional(),
   attachments: z.array(emailAttachmentSchema).optional(),
 });
@@ -118,6 +119,7 @@ export const sendSmsSchema = z.object({
   message: z.string().min(1, "SMS message is required"),
   clientId: z.string().min(1, "Client ID is required"),
   personId: z.string().optional(),
+  projectId: z.string().optional(),
 });
 
 // Resource-specific parameter validation schemas

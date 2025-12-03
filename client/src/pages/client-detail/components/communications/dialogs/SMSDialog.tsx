@@ -25,6 +25,7 @@ import type { SMSDialogProps } from "../types";
 
 export function SMSDialog({ 
   clientId, 
+  projectId,
   clientPeople,
   isOpen, 
   onClose,
@@ -40,10 +41,13 @@ export function SMSDialog({
   });
 
   const sendSmsMutation = useMutation({
-    mutationFn: (data: { to: string; message: string; clientId: string; personId?: string }) => 
+    mutationFn: (data: { to: string; message: string; clientId: string; personId?: string; projectId?: string }) => 
       apiRequest('POST', '/api/sms/send', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/communications/client', clientId] });
+      if (projectId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/communications`] });
+      }
       handleClose();
       toast({
         title: "SMS sent successfully",
@@ -87,6 +91,7 @@ export function SMSDialog({
       message,
       clientId,
       personId: smsPersonId,
+      projectId,
     });
   };
 
