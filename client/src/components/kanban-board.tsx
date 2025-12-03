@@ -22,6 +22,7 @@ import { apiRequest } from "@/lib/queryClient";
 import type { ProjectWithRelations, User, KanbanStage, ChangeReason } from "@shared/schema";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
+import { calculateCurrentInstanceTime } from "@shared/businessTime";
 
 const COMPACT_MODE_STORAGE_KEY = "kanban-compact-mode";
 
@@ -52,13 +53,17 @@ const getColorStyle = (hexColor: string): { backgroundColor: string } => {
 };
 
 // Droppable Column component for drag-and-drop zones
-function DroppableColumn({ id, children, isCompact }: { id: string; children: React.ReactNode; isCompact?: boolean }) {
+function DroppableColumn({ id, children, isCompact, isExpanded }: { id: string; children: React.ReactNode; isCompact?: boolean; isExpanded?: boolean }) {
   const { setNodeRef } = useDroppable({ id });
   return (
     <div 
       ref={setNodeRef} 
       className={`h-full transition-all duration-300 ease-in-out ${
-        isCompact ? 'min-w-[140px] w-[140px] flex-shrink-0' : 'flex-1 min-w-80'
+        isCompact && !isExpanded
+          ? 'flex-1 min-w-[100px]' // Compact: grow equally to fill available width
+          : isCompact && isExpanded
+          ? 'flex-[2] min-w-80' // Expanded in compact mode: takes 2x the space of compact columns
+          : 'flex-1 min-w-80' // Normal mode: equal flex
       }`}
     >
       {children}
@@ -557,7 +562,75 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
     return orderA - orderB;
   });
 
-  // Calculate overdue counts per stage
+  // Calculate schedule status counts for a group of projects
+  const getScheduleCounts = (stageProjects: ProjectWithRelations[], stageConfig?: KanbanStage) => {
+    const now = new Date();
+    let overdueCount = 0;
+    let behindCount = 0;
+    let onTrackCount = 0;
+    
+    stageProjects.forEach(project => {
+      // Skip completed projects
+      if (project.completionStatus) return;
+      
+      // Check if overdue (past due date) - highest priority
+      if (project.dueDate) {
+        const dueDate = new Date(project.dueDate);
+        if (dueDate < now) {
+          overdueCount++;
+          return;
+        }
+      }
+      
+      // Check if behind schedule (exceeded stage time limit)
+      if (stageConfig?.maxInstanceTime && stageConfig.maxInstanceTime > 0) {
+        try {
+          const createdAt = project.createdAt 
+            ? (typeof project.createdAt === 'string' ? project.createdAt : new Date(project.createdAt).toISOString())
+            : undefined;
+          
+          const transformedChronology = (project.chronology || [])
+            .filter((entry): entry is typeof entry & { timestamp: NonNullable<typeof entry.timestamp> } => {
+              return entry.timestamp !== null && entry.timestamp !== undefined;
+            })
+            .map((entry) => ({
+              toStatus: entry.toStatus,
+              timestamp: entry.timestamp instanceof Date 
+                ? entry.timestamp.toISOString() 
+                : typeof entry.timestamp === 'string'
+                ? entry.timestamp
+                : new Date(entry.timestamp).toISOString()
+            }));
+          
+          const currentBusinessHours = calculateCurrentInstanceTime(
+            transformedChronology,
+            project.currentStatus,
+            createdAt
+          );
+          
+          if (currentBusinessHours > stageConfig.maxInstanceTime) {
+            behindCount++;
+            return;
+          }
+        } catch (error) {
+          // Log calculation errors for debugging, treat project as on-track
+          console.warn(`[Kanban] Failed to calculate business hours for project ${project.id}:`, error);
+        }
+      }
+      
+      // Otherwise, on track
+      onTrackCount++;
+    });
+    
+    return { 
+      total: stageProjects.length, 
+      onTrack: onTrackCount, 
+      behind: behindCount, 
+      overdue: overdueCount 
+    };
+  };
+
+  // Legacy function for backward compatibility
   const getOverdueCount = (stageProjects: ProjectWithRelations[]) => {
     return stageProjects.filter(project => {
       if (!project.dueDate) return false;
@@ -658,10 +731,13 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className={`flex h-full overflow-x-auto ${isCompactMode ? 'space-x-2' : 'space-x-6'}`}>
+        <div className={`flex h-full overflow-x-auto ${isCompactMode ? 'gap-1' : 'space-x-6'}`}>
           {orderedStages.map(([status, config]) => {
             const stageProjects = projectsByStatus[status] || [];
-            const overdueCount = getOverdueCount(stageProjects);
+            // Get the actual stage config from the API for schedule calculations
+            const actualStageConfig = stages?.find(s => s.name === status);
+            const scheduleCounts = getScheduleCounts(stageProjects, actualStageConfig);
+            const overdueCount = scheduleCounts.overdue;
             const isStageExpanded = expandedStages.has(status);
             const showCompact = isCompactMode && !isStageExpanded;
             
@@ -669,7 +745,7 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
             const isSpecialColumn = config.isCompletionColumn || config.isBenchColumn;
             
             return (
-              <DroppableColumn key={status} id={`column-${status}`} isCompact={showCompact}>
+              <DroppableColumn key={status} id={`column-${status}`} isCompact={isCompactMode} isExpanded={isStageExpanded}>
                 <Card 
                   className={`h-full transition-all duration-300 ${config.isCompletionColumn ? 'border-2 border-dashed opacity-90' : ''} ${config.isBenchColumn ? 'border-2 border-amber-300 dark:border-amber-700' : ''} ${showCompact ? 'cursor-pointer hover:border-primary/50' : ''}`}
                   onClick={showCompact ? () => toggleStageExpanded(status) : undefined}
@@ -700,38 +776,84 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
                         {config.title}
                       </h3>
                       
-                      <div className="mt-auto space-y-2">
+                      {/* Color-coded counts */}
+                      <div className="mt-auto space-y-1">
+                        {/* Total count - neutral/black */}
                         <Badge 
                           variant="secondary" 
                           className={`text-xs w-full justify-center ${config.isBenchColumn ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300' : ''}`}
                         >
-                          {stageProjects.length}
+                          {scheduleCounts.total}
                         </Badge>
                         
-                        {overdueCount > 0 && !config.isCompletionColumn && (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Badge 
-                                  variant="destructive" 
-                                  className="text-xs w-full justify-center gap-1"
-                                >
-                                  <Clock className="w-3 h-3" />
-                                  {overdueCount}
-                                </Badge>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                {overdueCount} overdue project{overdueCount !== 1 ? 's' : ''}
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                        {!config.isCompletionColumn && !config.isBenchColumn && (
+                          <>
+                            {/* On track - green */}
+                            {scheduleCounts.onTrack > 0 && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge 
+                                      className="text-xs w-full justify-center bg-green-600 hover:bg-green-700 text-white"
+                                    >
+                                      {scheduleCounts.onTrack}
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    {scheduleCounts.onTrack} on track
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                            
+                            {/* Behind schedule - orange */}
+                            {scheduleCounts.behind > 0 && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge 
+                                      className="text-xs w-full justify-center bg-amber-500 hover:bg-amber-600 text-white"
+                                    >
+                                      {scheduleCounts.behind}
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    {scheduleCounts.behind} behind schedule
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                            
+                            {/* Overdue - red */}
+                            {scheduleCounts.overdue > 0 && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Badge 
+                                      variant="destructive" 
+                                      className="text-xs w-full justify-center"
+                                    >
+                                      {scheduleCounts.overdue}
+                                    </Badge>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    {scheduleCounts.overdue} overdue
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+                          </>
                         )}
                       </div>
                     </div>
                   ) : (
                     /* Full View */
                     <>
-                      <CardHeader className={`sticky top-0 bg-card border-b border-border rounded-t-lg ${config.isCompletionColumn ? 'bg-muted/50' : ''} ${config.isBenchColumn ? 'bg-amber-50 dark:bg-amber-950/30' : ''}`}>
+                      <CardHeader 
+                        className={`sticky top-0 bg-card border-b border-border rounded-t-lg ${config.isCompletionColumn ? 'bg-muted/50' : ''} ${config.isBenchColumn ? 'bg-amber-50 dark:bg-amber-950/30' : ''} ${isCompactMode && isStageExpanded ? 'cursor-pointer hover:bg-muted/50 transition-colors' : ''}`}
+                        onClick={isCompactMode && isStageExpanded ? () => toggleStageExpanded(status) : undefined}
+                        data-testid={isCompactMode && isStageExpanded ? `header-collapse-${status}` : undefined}
+                      >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center space-x-2">
                             <div 
@@ -756,24 +878,13 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        toggleStageExpanded(status);
-                                      }}
-                                      className="h-6 w-6 p-0"
-                                      data-testid={`button-collapse-stage-${status}`}
-                                    >
-                                      <ChevronDown className="w-4 h-4" />
-                                    </Button>
+                                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
                                   </TooltipTrigger>
-                                  <TooltipContent>Collapse this stage</TooltipContent>
+                                  <TooltipContent>Click header to collapse</TooltipContent>
                                 </Tooltip>
                               </TooltipProvider>
                             )}
-                            {!isSpecialColumn && <Plus className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground" />}
+                            {!isSpecialColumn && !isCompactMode && <Plus className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground" />}
                           </div>
                         </div>
                         <p className={`text-xs mt-1 ${config.isBenchColumn ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
