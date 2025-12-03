@@ -74,7 +74,8 @@ export function EmailDialog({
   user,
   isOpen, 
   onClose,
-  onSuccess 
+  onSuccess,
+  clientCompany
 }: EmailDialogProps) {
   const { toast } = useToast();
   const [emailSubject, setEmailSubject] = useState<string>('');
@@ -104,6 +105,56 @@ export function EmailDialog({
       email: cp.person.primaryEmail || cp.person.email,
       role: cp.role || null,
     }));
+
+  // Helper function to extract first name from various formats
+  const extractFirstName = (fullName: string): string => {
+    if (!fullName) return "";
+    
+    // Handle "LASTNAME, Firstname" format (common in UK/formal systems)
+    if (fullName.includes(",")) {
+      const parts = fullName.split(",");
+      if (parts.length >= 2) {
+        const afterComma = parts[1].trim();
+        return afterComma.split(/\s+/)[0] || "";
+      }
+    }
+    
+    // Handle "Firstname Lastname" format
+    return fullName.split(/\s+/)[0] || "";
+  };
+
+  // Get recipient first names for AI context
+  const getRecipientFirstNames = (): string => {
+    const names = peopleWithEmail
+      .filter(r => selectedRecipients.has(r.personId))
+      .map(r => extractFirstName(r.fullName))
+      .filter(name => name.length > 0);
+    
+    if (names.length === 0) return "";
+    if (names.length === 1) return names[0];
+    if (names.length === 2) return `${names[0]} and ${names[1]}`;
+    
+    const lastTwo = names.slice(-2).join(" and ");
+    const rest = names.slice(0, -2);
+    return [...rest, lastTwo].join(", ");
+  };
+
+  // Get sender's first name
+  const getSenderFirstName = (): string => {
+    if (!user) return "";
+    if (user.firstName) return user.firstName;
+    // Fallback to constructing from firstName/lastName if available
+    const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ');
+    if (fullName) return extractFirstName(fullName);
+    return "";
+  };
+
+  // Build AI context for personalization
+  const getAiContext = () => ({
+    recipientNames: getRecipientFirstNames() || undefined,
+    senderName: getSenderFirstName() || undefined,
+    clientCompany: clientCompany || undefined,
+  });
 
   // Toggle a single recipient
   const toggleRecipient = (personId: string) => {
@@ -265,6 +316,7 @@ export function EmailDialog({
     
     setIsRefining(true);
     try {
+      const context = getAiContext();
       const response = await fetch("/api/ai/refine-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -272,6 +324,9 @@ export function EmailDialog({
           prompt: aiPrompt,
           currentSubject: emailSubject,
           currentBody: emailContent,
+          recipientNames: context.recipientNames,
+          senderName: context.senderName,
+          clientCompany: context.clientCompany,
         }),
         credentials: "include",
       });
@@ -413,6 +468,7 @@ export function EmailDialog({
                       <AudioRecorder
                         mode="email"
                         disabled={sendEmailMutation.isPending}
+                        context={getAiContext()}
                         onResult={(result) => {
                           if (result.subject) setEmailSubject(result.subject);
                           if (result.content) setEmailContent(result.content);

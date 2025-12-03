@@ -5,14 +5,21 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { showFriendlyError } from "@/lib/friendlyErrors";
 
+interface EmailContext {
+  recipientNames?: string;
+  senderName?: string;
+  clientCompany?: string;
+}
+
 interface AudioRecorderProps {
   onResult: (result: { content: string; subject?: string; transcription?: string }) => void;
   mode: "notes" | "email";
   disabled?: boolean;
   className?: string;
+  context?: EmailContext;
 }
 
-export function AudioRecorder({ onResult, mode, disabled, className }: AudioRecorderProps) {
+export function AudioRecorder({ onResult, mode, disabled, className, context }: AudioRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -82,6 +89,19 @@ export function AudioRecorder({ onResult, mode, disabled, className }: AudioReco
     try {
       const formData = new FormData();
       formData.append("audio", audioBlob, "recording.webm");
+
+      // Add personalization context for email mode
+      if (mode === "email" && context) {
+        if (context.recipientNames) {
+          formData.append("recipientNames", context.recipientNames);
+        }
+        if (context.senderName) {
+          formData.append("senderName", context.senderName);
+        }
+        if (context.clientCompany) {
+          formData.append("clientCompany", context.clientCompany);
+        }
+      }
 
       const endpoint = mode === "email" ? "/api/ai/audio/email" : "/api/ai/audio/notes";
       

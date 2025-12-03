@@ -158,20 +158,51 @@ export function registerAIRoutes(
           return res.status(400).json({ error: "No audio file provided" });
         }
 
+        // Extract context from request body (passed as form data fields)
+        const { recipientNames, senderName, clientCompany } = req.body;
+
         console.log("[AI] Processing audio for email, size:", req.file.size);
+        if (recipientNames || senderName || clientCompany) {
+          console.log("[AI] Context - Recipients:", recipientNames, "Sender:", senderName, "Company:", clientCompany);
+        }
 
         // Get system prompt from company settings
         const settings = await storage.getCompanySettings();
-        const systemPrompt =
+        let systemPrompt =
           settings?.aiSystemPromptEmails ||
           `You are a professional assistant that helps draft client emails from spoken notes. 
 Convert the audio transcription into a well-written, professional email.
+
+FORMATTING REQUIREMENTS:
+- Structure the email with clear paragraph breaks between distinct thoughts or topics
+- Use HTML paragraph tags (<p>) to separate paragraphs naturally
+- Avoid long run-on sentences - break content into digestible paragraphs of 2-3 sentences each
+- Start with a greeting, then body paragraphs, then a professional sign-off
+
 You must respond with valid JSON in this exact format:
 {
   "subject": "A clear, concise email subject line",
-  "body": "The full email body with proper formatting, paragraphs, and professional tone"
+  "body": "The full email body with proper HTML paragraph formatting (<p> tags)"
 }
 Do not include any text outside the JSON object.`;
+
+        // Add personalization context if provided
+        let contextSection = "";
+        if (recipientNames || senderName || clientCompany) {
+          contextSection = "\n\n--- PERSONALIZATION CONTEXT ---";
+          if (recipientNames) {
+            contextSection += `\nRecipient name(s): ${recipientNames} - Address them by name in the greeting`;
+          }
+          if (senderName) {
+            contextSection += `\nSender's name: ${senderName} - Use this name in the sign-off`;
+          }
+          if (clientCompany) {
+            contextSection += `\nClient company: ${clientCompany} - You may reference this if contextually appropriate`;
+          }
+          contextSection += "\n--- END OF CONTEXT ---";
+          contextSection += "\n\nIMPORTANT: Use the actual names provided above. Do NOT use placeholders like [Name] or {name}.";
+          systemPrompt += contextSection;
+        }
 
         // Transcribe audio
         const transcription = await transcribeAudio(
@@ -211,12 +242,15 @@ Do not include any text outside the JSON object.`;
           return res.status(400).json({ error: "No audio file provided" });
         }
 
-        const { projectId, existingSubject, existingBody } = req.body;
+        const { projectId, existingSubject, existingBody, recipientNames, senderName, clientCompany } = req.body;
         if (!projectId) {
           return res.status(400).json({ error: "Project ID is required" });
         }
 
         console.log("[AI] Processing audio for stage notification, project:", projectId, "size:", req.file.size);
+        if (recipientNames || senderName || clientCompany) {
+          console.log("[AI] Context - Recipients:", recipientNames, "Sender:", senderName, "Company:", clientCompany);
+        }
 
         // Fetch the most recent stage approval responses for context
         const stageApprovalContext = await getStageApprovalContext(projectId);
@@ -230,10 +264,16 @@ Your task is to convert the spoken audio into a professional email notification 
 When "Completed Work Items" are provided, naturally incorporate them into the message to highlight what has been accomplished.
 Use a friendly but professional tone that celebrates progress and keeps clients informed.
 
+FORMATTING REQUIREMENTS:
+- Structure the email with clear paragraph breaks between distinct thoughts or topics
+- Use HTML paragraph tags (<p>) to separate paragraphs naturally
+- Avoid long run-on sentences - break content into digestible paragraphs of 2-3 sentences each
+- Start with a greeting, then body paragraphs, then a professional sign-off
+
 You must respond with valid JSON in this exact format:
 {
   "subject": "A clear, concise email subject line about the project update",
-  "body": "The full email body with proper formatting, paragraphs, and professional tone",
+  "body": "The full email body with proper HTML paragraph formatting (<p> tags)",
   "pushTitle": "Short push notification title (max 50 chars)",
   "pushBody": "Brief push notification message (max 150 chars)"
 }
@@ -241,6 +281,23 @@ Do not include any text outside the JSON object.`;
 
         // Build the full prompt with stage approval context
         let fullSystemPrompt = basePrompt;
+        
+        // Add personalization context if provided
+        if (recipientNames || senderName || clientCompany) {
+          fullSystemPrompt += "\n\n--- PERSONALIZATION CONTEXT ---";
+          if (recipientNames) {
+            fullSystemPrompt += `\nRecipient name(s): ${recipientNames} - Address them by name in the greeting`;
+          }
+          if (senderName) {
+            fullSystemPrompt += `\nSender's name: ${senderName} - Use this name in the sign-off`;
+          }
+          if (clientCompany) {
+            fullSystemPrompt += `\nClient company: ${clientCompany} - You may reference this if contextually appropriate`;
+          }
+          fullSystemPrompt += "\n--- END OF CONTEXT ---";
+          fullSystemPrompt += "\n\nIMPORTANT: Use the actual names provided above. Do NOT use placeholders like [Name] or {name}.";
+        }
+        
         if (stageApprovalContext) {
           fullSystemPrompt += `\n\n--- COMPLETED WORK ITEMS ---\n${stageApprovalContext}\n--- END OF COMPLETED WORK ITEMS ---`;
         }
@@ -331,7 +388,7 @@ Incorporate elements from this template into your response if appropriate.`;
     resolveEffectiveUser,
     async (req: Request, res: Response) => {
       try {
-        const { projectId, prompt, currentSubject, currentBody } = req.body;
+        const { projectId, prompt, currentSubject, currentBody, recipientNames, senderName, clientCompany } = req.body;
         
         if (!prompt || !prompt.trim()) {
           return res.status(400).json({ error: "Prompt is required" });
@@ -342,6 +399,9 @@ Incorporate elements from this template into your response if appropriate.`;
         
         console.log("[AI] " + (isGenerating ? "Generating" : "Refining") + " email with text prompt for project:", projectId);
         console.log("[AI] Prompt:", prompt);
+        if (recipientNames || senderName || clientCompany) {
+          console.log("[AI] Context - Recipients:", recipientNames, "Sender:", senderName, "Company:", clientCompany);
+        }
 
         // Fetch stage approval context if project ID provided
         let stageApprovalContext = null;
@@ -354,6 +414,23 @@ Incorporate elements from this template into your response if appropriate.`;
         const basePrompt = settings?.aiSystemPromptStageNotifications ||
           `You are a professional assistant helping to compose client notification emails for an accounting/bookkeeping firm.`;
 
+        // Build personalization context section
+        let personalizationContext = "";
+        if (recipientNames || senderName || clientCompany) {
+          personalizationContext = "\n\n--- PERSONALIZATION CONTEXT ---";
+          if (recipientNames) {
+            personalizationContext += `\nRecipient name(s): ${recipientNames} - Address them by name in the greeting`;
+          }
+          if (senderName) {
+            personalizationContext += `\nSender's name: ${senderName} - Use this name in the sign-off`;
+          }
+          if (clientCompany) {
+            personalizationContext += `\nClient company: ${clientCompany} - You may reference this if contextually appropriate`;
+          }
+          personalizationContext += "\n--- END OF CONTEXT ---";
+          personalizationContext += "\n\nIMPORTANT: Use the actual names provided above. Do NOT use placeholders like [Name] or {name}.";
+        }
+
         // Build different prompts based on whether we're generating or refining
         let fullSystemPrompt: string;
         let userMessage: string;
@@ -365,14 +442,23 @@ Incorporate elements from this template into your response if appropriate.`;
 You are helping a staff member compose a new email to a client. They will provide instructions on what the email should say.
 
 Create a professional, friendly email based on their instructions.
-You may include merge fields like {client_company_name}, {client_first_name}, {project_name}, {due_date} where appropriate.
+
+FORMATTING REQUIREMENTS:
+- Structure the email with clear paragraph breaks between distinct thoughts or topics
+- Use HTML paragraph tags (<p>) to separate paragraphs naturally
+- Avoid long run-on sentences - break content into digestible paragraphs of 2-3 sentences each
+- Start with a greeting, then body paragraphs, then a professional sign-off
 
 You must respond with valid JSON in this exact format:
 {
   "subject": "A clear, appropriate email subject line",
-  "body": "The email body with proper HTML formatting (paragraphs, etc.)"
+  "body": "The email body with proper HTML paragraph formatting (<p> tags)"
 }
 Do not include any text outside the JSON object.`;
+
+          if (personalizationContext) {
+            fullSystemPrompt += personalizationContext;
+          }
 
           if (stageApprovalContext) {
             fullSystemPrompt += `\n\n--- COMPLETED WORK ITEMS (Available for context) ---\n${stageApprovalContext}\n--- END OF COMPLETED WORK ITEMS ---`;
@@ -392,14 +478,22 @@ You are helping a staff member refine an existing email. They will provide:
 2. Instructions on how to modify it
 
 Apply their requested changes while maintaining a professional, friendly tone appropriate for client communications.
-Preserve any merge fields like {client_company_name}, {client_first_name}, {project_name}, {due_date} in the output.
+
+FORMATTING REQUIREMENTS:
+- Structure the email with clear paragraph breaks between distinct thoughts or topics
+- Use HTML paragraph tags (<p>) to separate paragraphs naturally
+- Avoid long run-on sentences - break content into digestible paragraphs of 2-3 sentences each
 
 You must respond with valid JSON in this exact format:
 {
   "subject": "The refined email subject line",
-  "body": "The refined email body with proper HTML formatting (paragraphs, etc.)"
+  "body": "The refined email body with proper HTML paragraph formatting (<p> tags)"
 }
 Do not include any text outside the JSON object.`;
+
+          if (personalizationContext) {
+            fullSystemPrompt += personalizationContext;
+          }
 
           if (stageApprovalContext) {
             fullSystemPrompt += `\n\n--- COMPLETED WORK ITEMS (Available for context) ---\n${stageApprovalContext}\n--- END OF COMPLETED WORK ITEMS ---`;

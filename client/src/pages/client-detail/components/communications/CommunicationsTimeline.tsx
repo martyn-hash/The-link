@@ -40,9 +40,10 @@ import type {
 interface CommunicationsTimelineProps {
   clientId: string;
   user: any;
+  clientCompany?: string;
 }
 
-export function CommunicationsTimeline({ clientId, user }: CommunicationsTimelineProps) {
+export function CommunicationsTimeline({ clientId, user, clientCompany }: CommunicationsTimelineProps) {
   const isMobile = useIsMobile();
   const [, setLocation] = useLocation();
   
@@ -386,6 +387,7 @@ export function CommunicationsTimeline({ clientId, user }: CommunicationsTimelin
         user={user}
         isOpen={isSendingEmail}
         onClose={() => setIsSendingEmail(false)}
+        clientCompany={clientCompany}
       />
 
       <ViewCommunicationDialog

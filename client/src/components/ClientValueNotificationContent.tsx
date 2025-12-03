@@ -32,6 +32,12 @@ import { StageNotificationAudioRecorder } from "./StageNotificationAudioRecorder
 import { useToast } from "@/hooks/use-toast";
 import type { ClientValueNotificationPreview } from "@shared/schema";
 
+interface EmailContext {
+  recipientNames?: string;
+  senderName?: string;
+  clientCompany?: string;
+}
+
 interface ClientValueNotificationContentProps {
   preview: ClientValueNotificationPreview;
   projectId: string;
@@ -47,7 +53,8 @@ interface ClientValueNotificationContentProps {
   }) => Promise<void>;
   onClose: () => void;
   isSending: boolean;
-  onAiRefine?: (prompt: string, currentSubject: string, currentBody: string) => Promise<{ subject: string; body: string }>;
+  onAiRefine?: (prompt: string, currentSubject: string, currentBody: string, context?: EmailContext) => Promise<{ subject: string; body: string }>;
+  senderName?: string;
 }
 
 export function ClientValueNotificationContent({
@@ -57,6 +64,7 @@ export function ClientValueNotificationContent({
   onClose,
   isSending,
   onAiRefine,
+  senderName,
 }: ClientValueNotificationContentProps) {
   const { toast } = useToast();
   const [emailSubject, setEmailSubject] = useState(preview.emailSubject);
@@ -122,6 +130,13 @@ export function ClientValueNotificationContent({
   
   // Get current recipient names
   const recipientNames = formatRecipientFirstNames(emailRecipients);
+  
+  // Build AI context for personalization
+  const getAiContext = (): EmailContext => ({
+    recipientNames: recipientNames || undefined,
+    senderName: senderName || undefined,
+    clientCompany: preview.metadata.clientName || undefined,
+  });
   
   // Effect to update email content when recipients change
   useEffect(() => {
@@ -201,7 +216,8 @@ export function ClientValueNotificationContent({
     
     setIsRefining(true);
     try {
-      const result = await onAiRefine(aiPrompt, emailSubject, emailBody);
+      const context = getAiContext();
+      const result = await onAiRefine(aiPrompt, emailSubject, emailBody, context);
       if (result.subject) setEmailSubject(result.subject);
       if (result.body) setEmailBody(result.body);
       setAiPrompt("");
@@ -361,6 +377,7 @@ export function ClientValueNotificationContent({
                     existingSubject={emailSubject}
                     existingBody={emailBody}
                     compact
+                    context={getAiContext()}
                   />
                 </div>
 

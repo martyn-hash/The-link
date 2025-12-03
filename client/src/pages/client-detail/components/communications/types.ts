@@ -112,6 +112,7 @@ export interface SMSDialogProps extends DialogBaseProps {
 export interface EmailDialogProps extends DialogBaseProps {
   clientPeople: PersonOption[];
   user: User | null;
+  clientCompany?: string;
 }
 
 export interface AddCommunicationDialogProps extends DialogBaseProps {

@@ -64,6 +64,11 @@ export default function ClientCommsPanel({ projectId, clientId }: ClientCommsPan
   const [selectedCommunication, setSelectedCommunication] = useState<CommunicationWithRelations | null>(null);
   const [isViewingCommunication, setIsViewingCommunication] = useState(false);
 
+  const { data: clientData } = useQuery<{ name: string }>({
+    queryKey: ['/api/clients', clientId],
+    enabled: !!clientId,
+  });
+
   const { data: clientPeople, isLoading: isLoadingPeople } = useQuery<PersonOption[]>({
     queryKey: ['/api/clients', clientId, 'people'],
     enabled: !!clientId,
@@ -326,6 +331,7 @@ export default function ClientCommsPanel({ projectId, clientId }: ClientCommsPan
         user={user || null}
         isOpen={isSendingEmail}
         onClose={() => setIsSendingEmail(false)}
+        clientCompany={clientData?.name}
       />
 
       <ViewCommunicationDialog

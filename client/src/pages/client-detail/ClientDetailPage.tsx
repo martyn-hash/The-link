@@ -238,7 +238,7 @@ export default function ClientDetail() {
           </TabsContent>
 
           <TabsContent value="communications" className="space-y-8 mt-6">
-            <CommunicationsTimeline clientId={id!} user={user} />
+            <CommunicationsTimeline clientId={id!} user={user} clientCompany={client?.name} />
           </TabsContent>
 
           <TabsContent value="chronology" className="space-y-8 mt-6">

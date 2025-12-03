@@ -6,6 +6,12 @@ import { cn } from "@/lib/utils";
 import { showFriendlyError } from "@/lib/friendlyErrors";
 import { getSupportedAudioMimeType, createAudioBlob } from "@/lib/audioRecording";
 
+interface EmailContext {
+  recipientNames?: string;
+  senderName?: string;
+  clientCompany?: string;
+}
+
 interface StageNotificationAudioRecorderProps {
   projectId: string;
   onResult: (result: {
@@ -20,6 +26,7 @@ interface StageNotificationAudioRecorderProps {
   existingSubject?: string;
   existingBody?: string;
   compact?: boolean;
+  context?: EmailContext;
 }
 
 export function StageNotificationAudioRecorder({
@@ -30,6 +37,7 @@ export function StageNotificationAudioRecorder({
   existingSubject,
   existingBody,
   compact,
+  context,
 }: StageNotificationAudioRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -115,6 +123,19 @@ export function StageNotificationAudioRecorder({
       }
       if (existingBody) {
         formData.append("existingBody", existingBody);
+      }
+      
+      // Add personalization context
+      if (context) {
+        if (context.recipientNames) {
+          formData.append("recipientNames", context.recipientNames);
+        }
+        if (context.senderName) {
+          formData.append("senderName", context.senderName);
+        }
+        if (context.clientCompany) {
+          formData.append("clientCompany", context.clientCompany);
+        }
       }
 
       const response = await fetch("/api/ai/audio/stage-notification", {

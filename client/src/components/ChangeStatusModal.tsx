@@ -145,6 +145,23 @@ const getComparisonIcon = (
   }
 };
 
+// Helper function to extract first name from various formats
+const extractFirstName = (fullName: string): string => {
+  if (!fullName) return "";
+  
+  // Handle "LASTNAME, Firstname" format (common in UK/formal systems)
+  if (fullName.includes(",")) {
+    const parts = fullName.split(",");
+    if (parts.length >= 2) {
+      const afterComma = parts[1].trim();
+      return afterComma.split(/\s+/)[0] || "";
+    }
+  }
+  
+  // Handle "Firstname Lastname" format
+  return fullName.split(/\s+/)[0] || "";
+};
+
 // Inline notification content component (used when stage change succeeds with notification preview)
 function NotificationContent({
   preview,
@@ -152,6 +169,7 @@ function NotificationContent({
   onSend,
   onClose,
   isSending,
+  senderName,
 }: {
   preview: StageChangeNotificationPreview;
   projectId: string;
@@ -171,6 +189,7 @@ function NotificationContent({
   }) => Promise<void>;
   onClose: () => void;
   isSending: boolean;
+  senderName?: string;
 }) {
   const [emailSubject, setEmailSubject] = useState(preview.emailSubject);
   const [emailBody, setEmailBody] = useState(preview.emailBody);
@@ -198,6 +217,30 @@ function NotificationContent({
   const emailEligibleRecipients = preview.recipients.filter(r => r.email);
   const pushEligibleRecipients = preview.recipients.filter(r => r.hasPushSubscription);
   const smsEligibleRecipients = preview.recipients.filter(r => r.mobile);
+  
+  // Helper function to format recipient first names for personalization
+  const formatRecipientFirstNames = (recipientIds: Set<string>): string => {
+    const names = preview.recipients
+      .filter(r => recipientIds.has(r.userId))
+      .map(r => extractFirstName(r.name || ""))
+      .filter(name => name.length > 0);
+    
+    if (names.length === 0) return "";
+    if (names.length === 1) return names[0];
+    if (names.length === 2) return `${names[0]} and ${names[1]}`;
+    
+    // For 3+ names: "John, Sarah and Mike"
+    const lastTwo = names.slice(-2).join(" and ");
+    const rest = names.slice(0, -2);
+    return [...rest, lastTwo].join(", ");
+  };
+  
+  // Build AI context for personalization (for staff notifications)
+  const getAiContext = () => ({
+    recipientNames: formatRecipientFirstNames(emailRecipients) || undefined,
+    senderName: senderName || undefined,
+    // Staff notifications don't have client company context
+  });
   
   // Toggle a recipient for a channel
   const toggleRecipient = (
@@ -287,6 +330,7 @@ function NotificationContent({
                 projectId={projectId}
                 onResult={handleVoiceResult}
                 disabled={isSending}
+                context={getAiContext()}
               />
             </div>
           </div>
@@ -1340,7 +1384,8 @@ export default function ChangeStatusModal({
               }}
               onClose={handleFullClose}
               isSending={sendClientNotificationMutation.isPending}
-              onAiRefine={async (prompt, currentSubject, currentBody) => {
+              senderName={user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.firstName || user?.email?.split('@')[0] || undefined}
+              onAiRefine={async (prompt, currentSubject, currentBody, context) => {
                 const response = await fetch("/api/ai/refine-email", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
@@ -1349,6 +1394,7 @@ export default function ChangeStatusModal({
                     prompt,
                     currentSubject,
                     currentBody,
+                    ...(context || {}),
                   }),
                   credentials: "include",
                 });
@@ -1377,6 +1423,7 @@ export default function ChangeStatusModal({
               }}
               onClose={handleFullClose}
               isSending={sendNotificationMutation.isPending}
+              senderName={user?.firstName && user?.lastName ? `${user.firstName} ${user.lastName}` : user?.firstName || user?.email?.split('@')[0] || undefined}
             />
           </>
         ) : (
