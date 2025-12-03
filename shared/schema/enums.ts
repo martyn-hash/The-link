@@ -43,7 +43,9 @@ export const internalTaskStatusEnum = pgEnum("internal_task_status", ["open", "i
 
 export const internalTaskPriorityEnum = pgEnum("internal_task_priority", ["low", "medium", "high", "urgent"]);
 
-export const inactiveReasonEnum = pgEnum("inactive_reason", ["created_in_error", "no_longer_required", "client_doing_work_themselves"]);
+export const inactiveReasonEnum = pgEnum("inactive_reason", ["created_in_error", "no_longer_required", "client_doing_work_themselves", "benched_at_deadline"]);
+
+export const benchReasonEnum = pgEnum("bench_reason", ["legacy_work", "missing_data", "other"]);
 
 export const communicationMethodEnum = pgEnum("communication_method", ["phone", "email", "video_call", "in_person", "text_message"]);
 

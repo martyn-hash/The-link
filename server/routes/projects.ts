@@ -7,6 +7,8 @@ import {
   insertUserProjectPreferencesSchema,
   updateProjectStatusSchema,
   completeProjectSchema,
+  benchProjectSchema,
+  unbenchProjectSchema,
   csvProjectSchema,
   insertStageApprovalResponseSchema,
   dashboardCache,
@@ -1819,6 +1821,155 @@ export function registerProjectRoutes(
         res.status(404).json({ message: error.message });
       } else {
         res.status(500).json({ message: "Failed to complete project" });
+      }
+    }
+  });
+
+  // ==================================================
+  // BENCH PROJECT API ROUTES
+  // ==================================================
+
+  app.post("/api/projects/:id/bench", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      const effectiveUser = req.user?.effectiveUser;
+
+      if (!effectiveUserId || !effectiveUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Check if user has bench permission
+      if (!effectiveUser.canBenchProjects && !effectiveUser.superAdmin && !effectiveUser.isAdmin) {
+        return res.status(403).json({ message: "You do not have permission to bench projects" });
+      }
+
+      // Validate request body
+      const { benchReason, benchReasonOtherText } = benchProjectSchema.parse(req.body);
+
+      // Verify project exists
+      const project = await storage.getProject(req.params.id);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Check if project is already benched
+      if (project.isBenched) {
+        return res.status(400).json({ message: "Project is already on the bench" });
+      }
+
+      // Cannot bench completed or inactive projects
+      if (project.completionStatus || project.inactive) {
+        return res.status(400).json({ message: "Cannot bench a completed or inactive project" });
+      }
+
+      // Store the current status before benching
+      const preBenchStatus = project.currentStatus;
+
+      // Update the project to benched state
+      const updatedProject = await storage.updateProject(req.params.id, {
+        isBenched: true,
+        benchedAt: new Date(),
+        benchedByUserId: effectiveUserId,
+        benchReason: benchReason as any,
+        benchReasonOtherText: benchReasonOtherText || null,
+        preBenchStatus: preBenchStatus,
+        currentStatus: 'On The Bench',
+      });
+
+      // Create chronology entry for benching
+      const benchReasonLabel = benchReason === 'legacy_work' ? 'Legacy Work' 
+        : benchReason === 'missing_data' ? 'Missing Data' 
+        : 'Other';
+      
+      await storage.createChronologyEntry({
+        projectId: req.params.id,
+        entryType: 'benched',
+        fromStatus: preBenchStatus,
+        toStatus: 'On The Bench',
+        assigneeId: project.currentAssigneeId,
+        changedById: effectiveUserId,
+        changeReason: `Moved to Bench - ${benchReasonLabel}`,
+        notes: benchReasonOtherText || `Project moved to bench. Reason: ${benchReasonLabel}`,
+      });
+
+      res.json(updatedProject);
+    } catch (error) {
+      console.error("Error benching project:", error instanceof Error ? error.message : error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        console.error("Validation errors:", (error as any).issues);
+        res.status(400).json({ message: "Validation failed", errors: (error as any).issues });
+      } else if (error instanceof Error && error.message && error.message.includes("not found")) {
+        res.status(404).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: "Failed to bench project" });
+      }
+    }
+  });
+
+  app.post("/api/projects/:id/unbench", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      const effectiveUser = req.user?.effectiveUser;
+
+      if (!effectiveUserId || !effectiveUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Check if user has bench permission
+      if (!effectiveUser.canBenchProjects && !effectiveUser.superAdmin && !effectiveUser.isAdmin) {
+        return res.status(403).json({ message: "You do not have permission to unbench projects" });
+      }
+
+      // Validate request body
+      const { notes } = unbenchProjectSchema.parse(req.body);
+
+      // Verify project exists
+      const project = await storage.getProject(req.params.id);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Check if project is on the bench
+      if (!project.isBenched) {
+        return res.status(400).json({ message: "Project is not on the bench" });
+      }
+
+      // Restore to previous status
+      const restoredStatus = project.preBenchStatus || 'No Latest Action';
+
+      // Update the project to remove from bench
+      const updatedProject = await storage.updateProject(req.params.id, {
+        isBenched: false,
+        benchedAt: null,
+        benchedByUserId: null,
+        benchReason: null,
+        benchReasonOtherText: null,
+        preBenchStatus: null,
+        currentStatus: restoredStatus,
+      });
+
+      // Create chronology entry for unbenching
+      await storage.createChronologyEntry({
+        projectId: req.params.id,
+        entryType: 'unbenched',
+        fromStatus: 'On The Bench',
+        toStatus: restoredStatus,
+        assigneeId: project.currentAssigneeId,
+        changedById: effectiveUserId,
+        changeReason: 'Removed from Bench',
+        notes: notes || `Project removed from bench. Returned to stage: ${restoredStatus}`,
+      });
+
+      res.json(updatedProject);
+    } catch (error) {
+      console.error("Error unbenching project:", error instanceof Error ? error.message : error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        console.error("Validation errors:", (error as any).issues);
+        res.status(400).json({ message: "Validation failed", errors: (error as any).issues });
+      } else if (error instanceof Error && error.message && error.message.includes("not found")) {
+        res.status(404).json({ message: error.message });
+      } else {
+        res.status(500).json({ message: "Failed to unbench project" });
       }
     }
   });

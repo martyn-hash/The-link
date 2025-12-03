@@ -198,38 +198,52 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
       assignedTo: "Role-based", // This will be determined by role assignments
       order: stage.order ?? index,
       isCompletionColumn: false,
+      isBenchColumn: false,
     };
     return acc;
-  }, {} as Record<string, { title: string; color: string; assignedTo: string; order: number; isCompletionColumn: boolean }>);
+  }, {} as Record<string, { title: string; color: string; assignedTo: string; order: number; isCompletionColumn: boolean; isBenchColumn: boolean }>);
   
   // Calculate max order from filtered stages
   const maxOrder = filteredStages.reduce((max, stage) => Math.max(max, stage.order ?? 0), 0);
   
-  // Add synthetic completion columns for completed projects
+  // Add synthetic columns for benched and completed projects
   const stageConfigWithCompletions = stageConfig ? {
     ...stageConfig,
+    'On The Bench': {
+      title: 'On The Bench',
+      color: '#f59e0b', // Amber color for bench
+      assignedTo: 'Suspended',
+      order: maxOrder + 1,
+      isCompletionColumn: false,
+      isBenchColumn: true,
+    },
     'Completed - Unsuccessful': {
       title: 'Completed - Unsuccessful',
       color: '#ef4444',
       assignedTo: 'System',
-      order: maxOrder + 1,
+      order: maxOrder + 2,
       isCompletionColumn: true,
+      isBenchColumn: false,
     },
     'Completed - Success': {
       title: 'Completed - Success',
       color: '#22c55e',
       assignedTo: 'System',
-      order: maxOrder + 2,
+      order: maxOrder + 3,
       isCompletionColumn: true,
+      isBenchColumn: false,
     },
   } : stageConfig;
 
-  // Group projects by status, mapping completion statuses to synthetic columns
+  // Group projects by status, mapping benched and completion statuses to synthetic columns
   const projectsByStatus = projects.reduce((acc, project) => {
     let status: string;
     
+    // Map benched projects to the bench column
+    if (project.isBenched) {
+      status = 'On The Bench';
     // Map completion statuses to synthetic column names
-    if (project.completionStatus === 'completed_successfully') {
+    } else if (project.completionStatus === 'completed_successfully') {
       status = 'Completed - Success';
     } else if (project.completionStatus === 'completed_unsuccessfully') {
       status = 'Completed - Unsuccessful';
@@ -248,8 +262,8 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
     const draggedProjectId = event.active.id as string;
     const draggedProject = projects.find(p => p.id === draggedProjectId);
     
-    // Block drag operations for completed projects (read-only)
-    if (draggedProject?.completionStatus) {
+    // Block drag operations for completed or benched projects (read-only)
+    if (draggedProject?.completionStatus || draggedProject?.isBenched) {
       return;
     }
     
@@ -301,9 +315,10 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
       }
     }
 
-    // Prevent drops into completion columns (read-only)
+    // Prevent drops into completion or bench columns (read-only)
     const isCompletionColumn = targetStatusName === 'Completed - Success' || targetStatusName === 'Completed - Unsuccessful';
-    if (isCompletionColumn) {
+    const isBenchColumn = targetStatusName === 'On The Bench';
+    if (isCompletionColumn || isBenchColumn) {
       setOveredColumn(null);
       return;
     }
@@ -523,31 +538,34 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
           {orderedStages.map(([status, config]) => {
             const stageProjects = projectsByStatus[status] || [];
             
+            // Determine if this is a special column (read-only)
+            const isSpecialColumn = config.isCompletionColumn || config.isBenchColumn;
+            
             return (
               <DroppableColumn key={status} id={`column-${status}`}>
-                <Card className={`h-full ${config.isCompletionColumn ? 'border-2 border-dashed opacity-90' : ''}`}>
-                    <CardHeader className={`sticky top-0 bg-card border-b border-border rounded-t-lg ${config.isCompletionColumn ? 'bg-muted/50' : ''}`}>
+                <Card className={`h-full ${config.isCompletionColumn ? 'border-2 border-dashed opacity-90' : ''} ${config.isBenchColumn ? 'border-2 border-amber-300 dark:border-amber-700' : ''}`}>
+                    <CardHeader className={`sticky top-0 bg-card border-b border-border rounded-t-lg ${config.isCompletionColumn ? 'bg-muted/50' : ''} ${config.isBenchColumn ? 'bg-amber-50 dark:bg-amber-950/30' : ''}`}>
                       <div className="flex items-center justify-between">
                         <div className="flex items-center space-x-2">
                           <div 
                             className="w-3 h-3 rounded-full" 
                             style={getColorStyle(config.color)}
                           />
-                          <h3 className={`font-semibold text-sm ${config.isCompletionColumn ? 'text-muted-foreground' : 'text-foreground'}`}>
+                          <h3 className={`font-semibold text-sm ${config.isCompletionColumn ? 'text-muted-foreground' : ''} ${config.isBenchColumn ? 'text-amber-700 dark:text-amber-400' : 'text-foreground'}`}>
                             {config.title}
                           </h3>
-                          <Badge variant="secondary" className="text-xs">
+                          <Badge variant="secondary" className={`text-xs ${config.isBenchColumn ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300' : ''}`}>
                             {stageProjects.length}
                           </Badge>
                         </div>
-                        {!config.isCompletionColumn && <Plus className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground" />}
+                        {!isSpecialColumn && <Plus className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground" />}
                       </div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {config.isCompletionColumn ? 'Read-only' : `Assigned to ${config.assignedTo}`}
+                      <p className={`text-xs mt-1 ${config.isBenchColumn ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
+                        {config.isCompletionColumn ? 'Read-only' : config.isBenchColumn ? 'Temporarily suspended' : `Assigned to ${config.assignedTo}`}
                       </p>
                     </CardHeader>
                     
-                    <CardContent className={`p-4 space-y-3 min-h-96 ${config.isCompletionColumn ? 'bg-muted/20' : ''}`}>
+                    <CardContent className={`p-4 space-y-3 min-h-96 ${config.isCompletionColumn ? 'bg-muted/20' : ''} ${config.isBenchColumn ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
                       <SortableContext
                         items={stageProjects.map(p => p.id)}
                         strategy={verticalListSortingStrategy}

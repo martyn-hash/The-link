@@ -1339,6 +1339,11 @@ async function createProjectFromService(dueService: DueService): Promise<any> {
   // NEW: SINGLE PROJECT PER CLIENT CONSTRAINT (opt-in via projectType.singleProjectPerClient flag)
   // This runs AFTER projectType validation but BEFORE the rest of project creation
   // If enabled, auto-archives any active projects of this type for this client before creating a new one
+  // BENCH FEATURE: Benched projects get special handling - marked inactive with 'benched_at_deadline' instead
+  let shouldCreateAsBenched = false;
+  let inheritedBenchReason: string | null = null;
+  let inheritedBenchNotes: string | null = null;
+  
   if (projectType.singleProjectPerClient && dueService.clientId) {
     console.log(`[Project Scheduler] Checking single-project-per-client constraint for ${projectType.name}`);
     
@@ -1348,27 +1353,62 @@ async function createProjectFromService(dueService: DueService): Promise<any> {
     );
     
     if (activeProjects.length > 0) {
-      console.log(`[Project Scheduler] Found ${activeProjects.length} active project(s) for client ${dueService.clientId} and type ${projectType.name} - auto-marking as unsuccessful`);
+      console.log(`[Project Scheduler] Found ${activeProjects.length} active project(s) for client ${dueService.clientId} and type ${projectType.name}`);
       
       for (const oldProject of activeProjects) {
-        // Mark the old project as completed unsuccessfully and archive it
-        await storage.updateProject(oldProject.id, {
-          completionStatus: 'completed_unsuccessfully',
-          archived: true,
-          inactive: true
-        });
-        
-        // Log this action in project chronology
-        await storage.createChronologyEntry({
-          projectId: oldProject.id,
-          fromStatus: oldProject.currentStatus,
-          toStatus: 'Archived (Auto-closed)',
-          assigneeId: oldProject.currentAssigneeId || undefined,
-          changeReason: 'Automatic closure - new project scheduled',
-          notes: `Automatically archived because new ${projectType.name} project was scheduled for ${dueService.nextStartDate.toISOString().split('T')[0]}`
-        });
-        
-        console.log(`[Project Scheduler] Auto-archived project ${oldProject.id} as unsuccessful due to single-project-per-client constraint`);
+        // Check if the old project was benched
+        if (oldProject.isBenched) {
+          console.log(`[Project Scheduler] Old project ${oldProject.id} was benched - marking as inactive with 'benched_at_deadline'`);
+          
+          // Mark the benched project as inactive with special reason (not counted as unsuccessful for staff)
+          await storage.updateProject(oldProject.id, {
+            inactive: true,
+            inactiveReason: 'benched_at_deadline' as any,
+            inactiveAt: new Date(),
+            isBenched: false,
+            benchedAt: null,
+            benchedByUserId: null,
+          });
+          
+          // Log this action in project chronology
+          await storage.createChronologyEntry({
+            projectId: oldProject.id,
+            fromStatus: oldProject.currentStatus || 'On The Bench',
+            toStatus: 'Inactive (Benched at Deadline)',
+            assigneeId: oldProject.currentAssigneeId || undefined,
+            changeReason: 'Benched at Deadline',
+            notes: `Project was benched and has been automatically made inactive because new ${projectType.name} project was scheduled for ${dueService.nextStartDate.toISOString().split('T')[0]}. This is not counted as unsuccessful completion.`
+          });
+          
+          console.log(`[Project Scheduler] Benched project ${oldProject.id} marked inactive with 'benched_at_deadline'`);
+          
+          // Inherit bench status for continuity - new project should also start benched
+          shouldCreateAsBenched = true;
+          inheritedBenchReason = oldProject.benchReason;
+          inheritedBenchNotes = oldProject.benchReasonOtherText ? `Continued from previous benched project. Original notes: ${oldProject.benchReasonOtherText}` : 'Continued from previous benched project';
+          
+        } else {
+          // Non-benched projects are marked as completed unsuccessfully (existing behavior)
+          console.log(`[Project Scheduler] Auto-marking project ${oldProject.id} as unsuccessful`);
+          
+          await storage.updateProject(oldProject.id, {
+            completionStatus: 'completed_unsuccessfully',
+            archived: true,
+            inactive: true
+          });
+          
+          // Log this action in project chronology
+          await storage.createChronologyEntry({
+            projectId: oldProject.id,
+            fromStatus: oldProject.currentStatus,
+            toStatus: 'Archived (Auto-closed)',
+            assigneeId: oldProject.currentAssigneeId || undefined,
+            changeReason: 'Automatic closure - new project scheduled',
+            notes: `Automatically archived because new ${projectType.name} project was scheduled for ${dueService.nextStartDate.toISOString().split('T')[0]}`
+          });
+          
+          console.log(`[Project Scheduler] Auto-archived project ${oldProject.id} as unsuccessful due to single-project-per-client constraint`);
+        }
       }
     } else {
       console.log(`[Project Scheduler] No active projects found - proceeding with new project creation`);
@@ -1447,16 +1487,38 @@ async function createProjectFromService(dueService: DueService): Promise<any> {
     bookkeeperId: finalAssigneeId,
     clientManagerId: finalAssigneeId,
     description,
-    currentStatus: firstStage.name,
+    currentStatus: shouldCreateAsBenched ? 'On The Bench' : firstStage.name,
     currentAssigneeId: finalAssigneeId,
     priority: 'medium',
     dueDate: dueService.nextDueDate,
     targetDeliveryDate: dueService.targetDeliveryDate,
-    projectMonth: formatProjectMonth(dueService.nextStartDate)
+    projectMonth: formatProjectMonth(dueService.nextStartDate),
+    // BENCH FEATURE: If inheriting bench status from previous project, set bench fields
+    ...(shouldCreateAsBenched && {
+      isBenched: true,
+      benchedAt: new Date(),
+      benchReason: inheritedBenchReason as any,
+      benchReasonOtherText: inheritedBenchNotes,
+      preBenchStatus: firstStage.name,
+    }),
   };
 
   // Create the project
   const project = await storage.createProject(projectData);
+  
+  // If created as benched, add chronology entry for bench status
+  if (shouldCreateAsBenched) {
+    console.log(`[Project Scheduler] New project ${project.id} created as benched (inherited from previous benched project)`);
+    await storage.createChronologyEntry({
+      projectId: project.id,
+      entryType: 'benched',
+      fromStatus: firstStage.name,
+      toStatus: 'On The Bench',
+      assigneeId: finalAssigneeId,
+      changeReason: 'Created on Bench (Continuity)',
+      notes: inheritedBenchNotes || 'Project automatically created on the bench for continuity with previous benched project',
+    });
+  }
 
   // Send notifications to relevant users
   await sendProjectCreatedNotifications(project, dueService);

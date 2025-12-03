@@ -86,6 +86,7 @@ export default function UserDetailPage() {
     superAdmin: false,
     canMakeProjectsInactive: false,
     canMakeServicesInactive: false,
+    canBenchProjects: false,
     accessEmail: false,
     accessCalendar: false,
   });
@@ -113,6 +114,7 @@ export default function UserDetailPage() {
         superAdmin: targetUser.superAdmin || false,
         canMakeProjectsInactive: targetUser.canMakeProjectsInactive || false,
         canMakeServicesInactive: targetUser.canMakeServicesInactive || false,
+        canBenchProjects: targetUser.canBenchProjects || false,
         accessEmail: targetUser.accessEmail || false,
         accessCalendar: targetUser.accessCalendar || false,
       });
@@ -422,6 +424,22 @@ export default function UserDetailPage() {
                     onCheckedChange={(checked) => handlePermissionChange("canMakeServicesInactive", checked)}
                     disabled={updatePermissionsMutation.isPending}
                     data-testid="switch-can-make-services-inactive"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between py-2 border-b">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="canBenchProjects">Can Bench Projects</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Ability to move projects to and from the bench
+                    </p>
+                  </div>
+                  <Switch
+                    id="canBenchProjects"
+                    checked={permissions.canBenchProjects}
+                    onCheckedChange={(checked) => handlePermissionChange("canBenchProjects", checked)}
+                    disabled={updatePermissionsMutation.isPending}
+                    data-testid="switch-can-bench-projects"
                   />
                 </div>
               </div>

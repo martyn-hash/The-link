@@ -2,7 +2,7 @@ import { pgTable, varchar, text, timestamp, boolean, index, unique, jsonb, integ
 import { sql } from 'drizzle-orm';
 import { users } from '../users/tables';
 import { clients } from '../clients/tables';
-import { inactiveReasonEnum, stageApprovalFieldTypeEnum, comparisonTypeEnum, customFieldTypeEnum } from '../enums';
+import { inactiveReasonEnum, benchReasonEnum, stageApprovalFieldTypeEnum, comparisonTypeEnum, customFieldTypeEnum } from '../enums';
 import { services, workRoles, clientServices, peopleServices } from '../services/tables';
 import { projectTypes } from './base';
 
@@ -28,6 +28,12 @@ export const projects = pgTable("projects", {
   inactiveByUserId: varchar("inactive_by_user_id").references(() => users.id),
   completionStatus: varchar("completion_status"),
   projectMonth: varchar("project_month"),
+  isBenched: boolean("is_benched").default(false),
+  benchedAt: timestamp("benched_at"),
+  benchedByUserId: varchar("benched_by_user_id").references(() => users.id),
+  benchReason: benchReasonEnum("bench_reason"),
+  benchReasonOtherText: text("bench_reason_other_text"),
+  preBenchStatus: varchar("pre_bench_status"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
@@ -41,6 +47,7 @@ export const projects = pgTable("projects", {
   index("idx_projects_target_delivery_date").on(table.targetDeliveryDate),
   index("idx_projects_inactive").on(table.inactive),
   index("idx_projects_project_month").on(table.projectMonth),
+  index("idx_projects_is_benched").on(table.isBenched),
 ]);
 
 export const projectChronology = pgTable("project_chronology", {

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowLeft, AlertCircle, User as UserIcon, CheckCircle2, XCircle, Info, Plus, CheckSquare, Ban, Calendar } from "lucide-react";
+import { ArrowLeft, AlertCircle, User as UserIcon, CheckCircle2, XCircle, Info, Plus, CheckSquare, Ban, Calendar, PauseCircle, PlayCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -25,6 +25,8 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Textarea } from "@/components/ui/textarea";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import TopNavigation from "@/components/top-navigation";
 import BottomNav from "@/components/bottom-nav";
 import SuperSearch from "@/components/super-search";
@@ -62,6 +64,25 @@ const makeProjectInactiveSchema = z.object({
 
 type MakeProjectInactiveData = z.infer<typeof makeProjectInactiveSchema>;
 
+// Form schema for moving project to bench
+const benchProjectSchema = z.object({
+  benchReason: z.enum(["legacy_work", "missing_data", "other"], {
+    required_error: "Please select a reason for benching this project",
+  }),
+  benchReasonOtherText: z.string().optional(),
+}).refine((data) => {
+  // If reason is "other", notes are required
+  if (data.benchReason === "other" && (!data.benchReasonOtherText || data.benchReasonOtherText.trim() === "")) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Please provide details for the 'Other' reason",
+  path: ["benchReasonOtherText"],
+});
+
+type BenchProjectData = z.infer<typeof benchProjectSchema>;
+
 // Utility function to format dates
 function formatDate(date: string | Date | null): string {
   if (!date) return 'Not provided';
@@ -92,12 +113,23 @@ export default function ProjectDetail() {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [showInactiveDialog, setShowInactiveDialog] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
+  const [showBenchDialog, setShowBenchDialog] = useState(false);
+  const [showUnbenchConfirm, setShowUnbenchConfirm] = useState(false);
   
   // Form for making project inactive
   const inactiveForm = useForm<MakeProjectInactiveData>({
     resolver: zodResolver(makeProjectInactiveSchema),
     defaultValues: {
       inactiveReason: undefined,
+    },
+  });
+  
+  // Form for benching project
+  const benchForm = useForm<BenchProjectData>({
+    resolver: zodResolver(benchProjectSchema),
+    defaultValues: {
+      benchReason: undefined,
+      benchReasonOtherText: "",
     },
   });
 
@@ -236,6 +268,76 @@ export default function ProjectDetail() {
   // Handler for making project inactive
   const handleMakeInactive = (data: MakeProjectInactiveData) => {
     makeInactiveMutation.mutate(data);
+  };
+  
+  // Mutation to bench project
+  const benchMutation = useMutation({
+    mutationFn: async (data: BenchProjectData) => {
+      // Trim the text before sending to ensure no whitespace-only values
+      const trimmedText = data.benchReasonOtherText?.trim();
+      return await apiRequest('POST', `/api/projects/${projectId}/bench`, {
+        benchReason: data.benchReason,
+        benchReasonOtherText: trimmedText || undefined,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      if (project?.clientId) {
+        queryClient.invalidateQueries({ 
+          predicate: (query) => {
+            const key = query.queryKey[0] as string;
+            return key?.includes(`/api/clients/${project.clientId}/projects`);
+          }
+        });
+      }
+      toast({
+        title: "Project moved to bench",
+        description: "The project has been temporarily suspended.",
+      });
+      setShowBenchDialog(false);
+      benchForm.reset();
+    },
+    onError: (error: any) => {
+      showFriendlyError({ error });
+    },
+  });
+  
+  // Mutation to unbench project
+  const unbenchMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('POST', `/api/projects/${projectId}/unbench`, {});
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      if (project?.clientId) {
+        queryClient.invalidateQueries({ 
+          predicate: (query) => {
+            const key = query.queryKey[0] as string;
+            return key?.includes(`/api/clients/${project.clientId}/projects`);
+          }
+        });
+      }
+      toast({
+        title: "Project taken off bench",
+        description: "The project has been reactivated and returned to its previous status.",
+      });
+      setShowUnbenchConfirm(false);
+    },
+    onError: (error: any) => {
+      showFriendlyError({ error });
+    },
+  });
+  
+  // Handler for benching project
+  const handleBench = (data: BenchProjectData) => {
+    benchMutation.mutate(data);
+  };
+  
+  // Handler for unbenching project
+  const handleUnbench = () => {
+    unbenchMutation.mutate();
   };
 
   // Redirect to login if not authenticated
@@ -512,6 +614,36 @@ export default function ProjectDetail() {
                   Make Inactive
                 </Button>
               )}
+              
+              {/* Move to Bench Button - Only visible when user has permission, project is not benched, and not completed/inactive */}
+              {user?.canBenchProjects && !project.isBenched && !project.completionStatus && !project.inactive && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowBenchDialog(true)}
+                  disabled={benchMutation.isPending}
+                  data-testid="button-move-to-bench"
+                  className="border-amber-500 text-amber-700 hover:bg-amber-50 dark:border-amber-400 dark:text-amber-400 dark:hover:bg-amber-950"
+                >
+                  <PauseCircle className="w-4 h-4 mr-2" />
+                  Move to Bench
+                </Button>
+              )}
+              
+              {/* Take Off Bench Button - Only visible when user has permission and project is benched */}
+              {user?.canBenchProjects && project.isBenched && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setShowUnbenchConfirm(true)}
+                  disabled={unbenchMutation.isPending}
+                  data-testid="button-take-off-bench"
+                  className="bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  <PlayCircle className="w-4 h-4 mr-2" />
+                  Take Off Bench
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -541,6 +673,50 @@ export default function ProjectDetail() {
                     <div>
                       <span className="font-medium">Marked Inactive On:</span>{" "}
                       <span data-testid="text-inactive-date-value">{formatDate(project.inactiveAt)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Bench Status Display */}
+        {project.isBenched && (
+          <div className="mb-6 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4" data-testid="section-bench-status">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0">
+                <PauseCircle className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-2" data-testid="text-bench-status">
+                  On The Bench
+                </h3>
+                <div className="space-y-1 text-sm text-amber-800 dark:text-amber-200">
+                  <div>
+                    <span className="font-medium">Reason:</span>{" "}
+                    <span data-testid="text-bench-reason-value">
+                      {project.benchReason === 'legacy_work' && 'Legacy Work'}
+                      {project.benchReason === 'missing_data' && 'Missing Data'}
+                      {project.benchReason === 'other' && 'Other'}
+                    </span>
+                  </div>
+                  {project.benchReasonOtherText && (
+                    <div>
+                      <span className="font-medium">Notes:</span>{" "}
+                      <span data-testid="text-bench-notes-value">{project.benchReasonOtherText}</span>
+                    </div>
+                  )}
+                  {project.benchedAt && (
+                    <div>
+                      <span className="font-medium">Benched On:</span>{" "}
+                      <span data-testid="text-bench-date-value">{formatDate(project.benchedAt)}</span>
+                    </div>
+                  )}
+                  {project.preBenchStatus && (
+                    <div>
+                      <span className="font-medium">Previous Status:</span>{" "}
+                      <span data-testid="text-pre-bench-status-value">{project.preBenchStatus}</span>
                     </div>
                   )}
                 </div>
@@ -1077,6 +1253,130 @@ export default function ProjectDetail() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Move to Bench Dialog */}
+      <Dialog open={showBenchDialog} onOpenChange={setShowBenchDialog}>
+        <DialogContent data-testid="dialog-move-to-bench">
+          <DialogHeader>
+            <DialogTitle>Move Project to Bench</DialogTitle>
+            <DialogDescription>
+              Temporarily suspend this project. It will be excluded from deadline tracking and overdue calculations.
+            </DialogDescription>
+          </DialogHeader>
+          <Form {...benchForm}>
+            <form onSubmit={benchForm.handleSubmit(handleBench)} className="space-y-4">
+              <FormField
+                control={benchForm.control}
+                name="benchReason"
+                render={({ field }) => (
+                  <FormItem className="space-y-3">
+                    <FormLabel>Reason for Benching</FormLabel>
+                    <FormControl>
+                      <RadioGroup
+                        onValueChange={field.onChange}
+                        value={field.value}
+                        className="flex flex-col space-y-1"
+                      >
+                        <div className="flex items-center space-x-3 space-y-0">
+                          <RadioGroupItem value="legacy_work" id="legacy_work" data-testid="radio-legacy-work" />
+                          <label htmlFor="legacy_work" className="font-normal cursor-pointer">
+                            Legacy Work - Work from before the service started
+                          </label>
+                        </div>
+                        <div className="flex items-center space-x-3 space-y-0">
+                          <RadioGroupItem value="missing_data" id="missing_data" data-testid="radio-missing-data" />
+                          <label htmlFor="missing_data" className="font-normal cursor-pointer">
+                            Missing Data - Waiting for client to provide information
+                          </label>
+                        </div>
+                        <div className="flex items-center space-x-3 space-y-0">
+                          <RadioGroupItem value="other" id="other" data-testid="radio-other" />
+                          <label htmlFor="other" className="font-normal cursor-pointer">
+                            Other - Specify reason in notes
+                          </label>
+                        </div>
+                      </RadioGroup>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={benchForm.control}
+                name="benchReasonOtherText"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Notes {benchForm.watch("benchReason") === "other" && <span className="text-destructive">*</span>}
+                    </FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Add any additional details about why this project is being benched..."
+                        className="resize-none"
+                        {...field}
+                        data-testid="textarea-bench-notes"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowBenchDialog(false);
+                    benchForm.reset();
+                  }}
+                  data-testid="button-cancel-bench"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={benchMutation.isPending}
+                  data-testid="button-confirm-bench"
+                  className="bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  <PauseCircle className="w-4 h-4 mr-2" />
+                  Move to Bench
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Unbench Confirmation Dialog */}
+      <AlertDialog open={showUnbenchConfirm} onOpenChange={setShowUnbenchConfirm}>
+        <AlertDialogContent data-testid="dialog-unbench-confirmation">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Take Project Off Bench</AlertDialogTitle>
+            <AlertDialogDescription>
+              This project will be reactivated and returned to its previous status: <strong className="text-foreground">{project.preBenchStatus || "the first stage"}</strong>.
+              Deadline tracking will resume.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              onClick={() => setShowUnbenchConfirm(false)}
+              data-testid="button-cancel-unbench"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleUnbench}
+              disabled={unbenchMutation.isPending}
+              data-testid="button-confirm-unbench"
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              <PlayCircle className="w-4 h-4 mr-2" />
+              Take Off Bench
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Change Status Modal */}
       <ChangeStatusModal

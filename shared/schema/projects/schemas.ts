@@ -166,6 +166,15 @@ export const completeProjectSchema = z.object({
   completionStatus: z.enum(["completed_successfully", "completed_unsuccessfully"]),
 });
 
+export const benchProjectSchema = z.object({
+  benchReason: z.enum(["legacy_work", "missing_data", "other"]),
+  benchReasonOtherText: z.string().optional(),
+});
+
+export const unbenchProjectSchema = z.object({
+  notes: z.string().optional(),
+});
+
 export const updateProjectStatusSchema = z.object({
   projectId: z.string(),
   newStatus: z.string(),

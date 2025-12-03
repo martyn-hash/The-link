@@ -114,12 +114,21 @@ export function ProjectsList({ projects, isLoading, clientId, isCompleted = fals
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap">
-                    <Badge 
-                      className={`text-xs ${getStatusColor(project.currentStatus)}`} 
-                      data-testid={`badge-status-${project.id}`}
-                    >
-                      {formatStatus(project.currentStatus)}
-                    </Badge>
+                    {project.isBenched ? (
+                      <Badge 
+                        className="text-xs bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" 
+                        data-testid={`badge-status-${project.id}`}
+                      >
+                        On The Bench
+                      </Badge>
+                    ) : (
+                      <Badge 
+                        className={`text-xs ${getStatusColor(project.currentStatus)}`} 
+                        data-testid={`badge-status-${project.id}`}
+                      >
+                        {formatStatus(project.currentStatus)}
+                      </Badge>
+                    )}
                     {project.inactive && (
                       <Badge 
                         className="text-xs bg-muted text-muted-foreground dark:bg-slate-800 dark:text-slate-200 border border-border"

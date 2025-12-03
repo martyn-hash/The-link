@@ -69,18 +69,20 @@ export async function updateDashboardCache(userIdFilter?: string): Promise<Dashb
         );
 
         // Calculate overdue tasks (due date in the past)
+        // Exclude benched and completed projects from overdue calculations
         const now = new Date();
         const overdueProjects = myRelevantProjects.filter(p => {
-          if (!p.dueDate || p.completionStatus) return false;
+          if (!p.dueDate || p.completionStatus || p.isBenched) return false;
           return new Date(p.dueDate) < now;
         });
         const overdueTasksCount = overdueProjects.length;
 
         // Calculate behind schedule count (time in current stage > maxInstanceTime)
+        // Exclude benched and completed projects from behind schedule calculations
         let behindScheduleCount = 0;
         for (const project of myRelevantProjects) {
-          // Skip completed projects
-          if (project.completionStatus) continue;
+          // Skip completed and benched projects
+          if (project.completionStatus || project.isBenched) continue;
 
           // Get stage config from pre-fetched cache (fixes N+1 query problem)
           const stages = await getStagesForProjectType(project.projectTypeId);
