@@ -756,7 +756,12 @@ export default function UserManagement() {
                     </TableHeader>
                     <TableBody>
                       {usersWithFlags?.map((rowUser: UserWithAccessFlags) => (
-                        <TableRow key={rowUser.id} data-testid={`row-user-${rowUser.id}`}>
+                        <TableRow 
+                          key={rowUser.id} 
+                          data-testid={`row-user-${rowUser.id}`}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => setLocation(`/users/${rowUser.id}`)}
+                        >
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2">
                               <span>{rowUser.firstName} {rowUser.lastName}</span>
@@ -785,7 +790,7 @@ export default function UserManagement() {
                           </TableCell>
                           {user?.superAdmin && (
                             <>
-                              <TableCell className="text-center">
+                              <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                                 <Switch
                                   checked={rowUser.accessEmail ?? false}
                                   onCheckedChange={() => handleToggleAccessEmail(rowUser.id, rowUser.accessEmail ?? false)}
@@ -793,7 +798,7 @@ export default function UserManagement() {
                                   data-testid={`switch-access-email-${rowUser.id}`}
                                 />
                               </TableCell>
-                              <TableCell className="text-center">
+                              <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                                 <Switch
                                   checked={rowUser.accessCalendar ?? false}
                                   onCheckedChange={() => handleToggleAccessCalendar(rowUser.id, rowUser.accessCalendar ?? false)}
@@ -828,7 +833,7 @@ export default function UserManagement() {
                               )}
                             </div>
                           </TableCell>
-                          <TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center gap-1">
                               <Button
                                 variant="ghost"

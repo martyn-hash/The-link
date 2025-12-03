@@ -345,6 +345,32 @@ export async function registerAuthAndMiscRoutes(
     }
   });
 
+  // Get a single user by ID
+  app.get("/api/users/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      // Validate path parameters
+      const paramValidation = validateParams(paramUserIdAsIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid path parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      const user = await storage.getUser(req.params.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Strip password hash from response
+      const { passwordHash, ...userResponse } = user;
+      res.json(userResponse);
+    } catch (error) {
+      console.error("Error fetching user:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
   // Get users for messaging - accessible to all authenticated users
   app.get("/api/users/for-messaging", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
