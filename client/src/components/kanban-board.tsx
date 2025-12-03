@@ -787,13 +787,13 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
                         
                         {!config.isCompletionColumn && !config.isBenchColumn && (
                           <>
-                            {/* On track - green (matches card bg-green-600) */}
+                            {/* On track - soft green (matches card background) */}
                             {scheduleCounts.onTrack > 0 && (
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Badge 
-                                      className="text-xs w-full justify-center bg-green-600 hover:bg-green-700 text-white"
+                                      className="text-xs w-full justify-center bg-green-50 hover:bg-green-100 text-green-800 dark:bg-green-950/30 dark:text-green-200 dark:hover:bg-green-900/50"
                                     >
                                       {scheduleCounts.onTrack}
                                     </Badge>
@@ -805,13 +805,13 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
                               </TooltipProvider>
                             )}
                             
-                            {/* Behind schedule - amber (matches card bg-amber-500) */}
+                            {/* Behind schedule - soft amber (matches card background) */}
                             {scheduleCounts.behind > 0 && (
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Badge 
-                                      className="text-xs w-full justify-center bg-amber-500 hover:bg-amber-600 text-white"
+                                      className="text-xs w-full justify-center bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-200 dark:hover:bg-amber-900/50"
                                     >
                                       {scheduleCounts.behind}
                                     </Badge>
@@ -823,13 +823,13 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
                               </TooltipProvider>
                             )}
                             
-                            {/* Overdue - red (matches card bg-red-600) */}
+                            {/* Overdue - soft red (matches card background) */}
                             {scheduleCounts.overdue > 0 && (
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
                                     <Badge 
-                                      className="text-xs w-full justify-center bg-red-600 hover:bg-red-700 text-white"
+                                      className="text-xs w-full justify-center bg-red-50 hover:bg-red-100 text-red-800 dark:bg-red-950/30 dark:text-red-200 dark:hover:bg-red-900/50"
                                     >
                                       {scheduleCounts.overdue}
                                     </Badge>
@@ -867,17 +867,17 @@ export default function KanbanBoard({ projects, user }: KanbanBoardProps) {
                             {!config.isCompletionColumn && !config.isBenchColumn && (
                               <>
                                 {scheduleCounts.onTrack > 0 && (
-                                  <Badge className="text-xs bg-green-600 hover:bg-green-700 text-white">
+                                  <Badge className="text-xs bg-green-50 hover:bg-green-100 text-green-800 dark:bg-green-950/30 dark:text-green-200">
                                     {scheduleCounts.onTrack}
                                   </Badge>
                                 )}
                                 {scheduleCounts.behind > 0 && (
-                                  <Badge className="text-xs bg-amber-500 hover:bg-amber-600 text-white">
+                                  <Badge className="text-xs bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
                                     {scheduleCounts.behind}
                                   </Badge>
                                 )}
                                 {scheduleCounts.overdue > 0 && (
-                                  <Badge className="text-xs bg-red-600 hover:bg-red-700 text-white gap-1">
+                                  <Badge className="text-xs bg-red-50 hover:bg-red-100 text-red-800 dark:bg-red-950/30 dark:text-red-200 gap-1">
                                     <Clock className="w-3 h-3" />
                                     {scheduleCounts.overdue}
                                   </Badge>
