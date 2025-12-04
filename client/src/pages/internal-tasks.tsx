@@ -43,9 +43,11 @@ import {
   Eye,
   ChevronLeft,
   ChevronRight,
+  Bell,
 } from "lucide-react";
 import type { InternalTask, TaskType, User } from "@shared/schema";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
+import { CreateReminderDialog } from "@/components/create-reminder-dialog";
 import { SwipeableTaskCard } from "@/components/swipeable-task-card";
 import TopNavigation from "@/components/top-navigation";
 import { format } from "date-fns";
@@ -164,6 +166,7 @@ export default function InternalTasks() {
   const [, setLocation] = useLocation();
   const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState<"assigned" | "created" | "all">("assigned");
+  const [categoryFilter, setCategoryFilter] = useState<"tasks" | "reminders">("tasks");
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
@@ -235,20 +238,52 @@ export default function InternalTasks() {
   };
 
   const getCurrentTasks = () => {
+    let baseTasks: InternalTaskWithRelations[] = [];
     switch (activeTab) {
       case "assigned":
-        return assignedTasks || [];
+        baseTasks = assignedTasks || [];
+        break;
       case "created":
-        return createdTasks || [];
+        baseTasks = createdTasks || [];
+        break;
       case "all":
-        return allTasks || [];
+        baseTasks = allTasks || [];
+        break;
       default:
-        return [];
+        baseTasks = [];
+    }
+    
+    // Filter by category (tasks vs reminders)
+    if (categoryFilter === "reminders") {
+      return baseTasks.filter(t => t.isQuickReminder === true);
+    } else {
+      return baseTasks.filter(t => !t.isQuickReminder);
     }
   };
 
   const isLoading = activeTab === "assigned" ? isLoadingAssigned : activeTab === "created" ? isLoadingCreated : isLoadingAll;
   const allTasksData = getCurrentTasks();
+  
+  // Get counts for category badges
+  const getTaskCounts = () => {
+    let baseTasks: InternalTaskWithRelations[] = [];
+    switch (activeTab) {
+      case "assigned":
+        baseTasks = assignedTasks || [];
+        break;
+      case "created":
+        baseTasks = createdTasks || [];
+        break;
+      case "all":
+        baseTasks = allTasks || [];
+        break;
+    }
+    return {
+      tasks: baseTasks.filter(t => !t.isQuickReminder).length,
+      reminders: baseTasks.filter(t => t.isQuickReminder === true).length,
+    };
+  };
+  const categoryCounts = getTaskCounts();
   
   // Pagination calculations
   const totalPages = Math.ceil(allTasksData.length / ITEMS_PER_PAGE);
@@ -259,6 +294,12 @@ export default function InternalTasks() {
   // Reset to page 1 and clear selections when filters or tab changes
   const handleTabChange = (value: typeof activeTab) => {
     setActiveTab(value);
+    setCurrentPage(1);
+    setSelectedTasks([]);
+  };
+  
+  const handleCategoryChange = (value: typeof categoryFilter) => {
+    setCategoryFilter(value);
     setCurrentPage(1);
     setSelectedTasks([]);
   };
@@ -542,11 +583,14 @@ export default function InternalTasks() {
             <div>
               <h1 className="text-2xl md:text-3xl font-semibold tracking-tight flex items-center gap-2" data-testid="heading-tasks">
                 <ClipboardList className="w-6 h-6 md:w-7 md:h-7" />
-                Internal Tasks
+                Tasks & Reminders
               </h1>
-              <p className="text-meta mt-1">Manage staff tasks and track progress</p>
+              <p className="text-meta mt-1">Manage staff tasks and reminders</p>
             </div>
-            <CreateTaskDialog />
+            <div className="flex items-center gap-2">
+              <CreateReminderDialog />
+              <CreateTaskDialog />
+            </div>
           </div>
         </div>
       </div>
@@ -561,27 +605,12 @@ export default function InternalTasks() {
                 <TabsList>
                   <TabsTrigger value="assigned" data-testid="tab-assigned">
                     Assigned to Me
-                    {assignedTasks && assignedTasks.length > 0 && (
-                      <Badge variant="secondary" className="ml-2" data-testid="count-assigned">
-                        {assignedTasks.length}
-                      </Badge>
-                    )}
                   </TabsTrigger>
                   <TabsTrigger value="created" data-testid="tab-created">
                     Created by Me
-                    {createdTasks && createdTasks.length > 0 && (
-                      <Badge variant="secondary" className="ml-2" data-testid="count-created">
-                        {createdTasks.length}
-                      </Badge>
-                    )}
                   </TabsTrigger>
                   <TabsTrigger value="all" data-testid="tab-all">
-                    All Tasks
-                    {allTasks && allTasks.length > 0 && (
-                      <Badge variant="secondary" className="ml-2" data-testid="count-all">
-                        {allTasks.length}
-                      </Badge>
-                    )}
+                    All
                   </TabsTrigger>
                 </TabsList>
 
@@ -611,6 +640,40 @@ export default function InternalTasks() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+              
+              {/* Category Toggle: Tasks vs Reminders */}
+              <div className="flex items-center gap-2 mb-4 pb-4 border-b">
+                <Button
+                  variant={categoryFilter === "tasks" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleCategoryChange("tasks")}
+                  className="flex items-center gap-2"
+                  data-testid="button-category-tasks"
+                >
+                  <ClipboardList className="w-4 h-4" />
+                  Tasks
+                  {categoryCounts.tasks > 0 && (
+                    <Badge variant={categoryFilter === "tasks" ? "secondary" : "outline"} className="ml-1">
+                      {categoryCounts.tasks}
+                    </Badge>
+                  )}
+                </Button>
+                <Button
+                  variant={categoryFilter === "reminders" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleCategoryChange("reminders")}
+                  className="flex items-center gap-2"
+                  data-testid="button-category-reminders"
+                >
+                  <Bell className="w-4 h-4" />
+                  Reminders
+                  {categoryCounts.reminders > 0 && (
+                    <Badge variant={categoryFilter === "reminders" ? "secondary" : "outline"} className="ml-1">
+                      {categoryCounts.reminders}
+                    </Badge>
+                  )}
+                </Button>
               </div>
 
               {/* Bulk Actions Bar */}
@@ -652,11 +715,13 @@ export default function InternalTasks() {
                 <TabContentWrapper>
                   {isLoading ? (
                     <div className="text-center py-12 text-muted-foreground" data-testid="text-loading">
-                      Loading tasks...
+                      Loading {categoryFilter}...
                     </div>
                   ) : tasks.length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground" data-testid="text-no-tasks">
-                      No tasks assigned to you
+                      {categoryFilter === "reminders" 
+                        ? "No reminders assigned to you" 
+                        : "No tasks assigned to you"}
                     </div>
                   ) : (
                     <>
@@ -702,11 +767,13 @@ export default function InternalTasks() {
                 <TabContentWrapper>
                   {isLoading ? (
                     <div className="text-center py-12 text-muted-foreground" data-testid="text-loading">
-                      Loading tasks...
+                      Loading {categoryFilter}...
                     </div>
                   ) : tasks.length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground" data-testid="text-no-tasks">
-                      No tasks created by you
+                      {categoryFilter === "reminders" 
+                        ? "No reminders created by you" 
+                        : "No tasks created by you"}
                     </div>
                   ) : (
                     <>
@@ -752,11 +819,13 @@ export default function InternalTasks() {
                 <TabContentWrapper>
                   {isLoading ? (
                     <div className="text-center py-12 text-muted-foreground" data-testid="text-loading">
-                      Loading tasks...
+                      Loading {categoryFilter}...
                     </div>
                   ) : tasks.length === 0 ? (
                     <div className="text-center py-12 text-muted-foreground" data-testid="text-no-tasks">
-                      No tasks found
+                      {categoryFilter === "reminders" 
+                        ? "No reminders found" 
+                        : "No tasks found"}
                     </div>
                   ) : (
                     <>

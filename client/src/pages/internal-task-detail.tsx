@@ -41,6 +41,8 @@ import {
   Download,
   Trash2,
   Upload,
+  ClipboardList,
+  Bell,
 } from "lucide-react";
 import TopNavigation from "@/components/top-navigation";
 import EntitySearch from "@/components/entity-search";
@@ -357,6 +359,30 @@ export default function InternalTaskDetail() {
     },
   });
 
+  // Convert reminder to task mutation
+  const convertToTaskMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("PATCH", `/api/internal-tasks/${taskId}`, {
+        isQuickReminder: false,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          typeof query.queryKey[0] === "string" &&
+          query.queryKey[0].startsWith("/api/internal-tasks"),
+      });
+      toast({
+        title: "Converted to task",
+        description: "This reminder has been converted to a full task. You can now access all task features.",
+      });
+    },
+    onError: () => {
+      showFriendlyError({ error: "Failed to convert reminder. Please try again." });
+    },
+  });
+
   // Task connections query
   const { data: taskConnections = [] } = useQuery<Array<{ id: string; taskId: string; entityType: string; entityId: string; createdAt: Date }>>({
     queryKey: [`/api/internal-tasks/${taskId}/connections`],
@@ -532,28 +558,55 @@ export default function InternalTaskDetail() {
             {getBackButtonText()}
           </Button>
 
-          <div>
-            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight mb-3" data-testid="text-task-title">
-              {task.title}
-            </h1>
-            <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant={getPriorityColor(task.priority)} data-testid="badge-priority">
-                {task.priority}
-              </Badge>
-              <Badge variant={getStatusColor(task.status)} data-testid="badge-status">
-                {task.status === "in_progress" ? "In Progress" : task.status}
-              </Badge>
-              {task.taskType && (
-                <Badge variant="outline" data-testid="badge-task-type">
-                  {task.taskType.name}
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                {task.isQuickReminder ? (
+                  <Bell className="w-6 h-6 md:w-7 md:h-7 text-muted-foreground" />
+                ) : (
+                  <ClipboardList className="w-6 h-6 md:w-7 md:h-7 text-muted-foreground" />
+                )}
+                <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" data-testid="text-task-title">
+                  {task.title}
+                </h1>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {task.isQuickReminder && (
+                  <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200" data-testid="badge-reminder">
+                    <Bell className="w-3 h-3 mr-1" />
+                    Reminder
+                  </Badge>
+                )}
+                <Badge variant={getPriorityColor(task.priority)} data-testid="badge-priority">
+                  {task.priority}
                 </Badge>
-              )}
-              {task.dueDate && (
-                <Badge variant="outline" data-testid="badge-due-date">
-                  Due: {format(new Date(task.dueDate), 'MMM d, yyyy')}
+                <Badge variant={getStatusColor(task.status)} data-testid="badge-status">
+                  {task.status === "in_progress" ? "In Progress" : task.status}
                 </Badge>
-              )}
+                {task.taskType && (
+                  <Badge variant="outline" data-testid="badge-task-type">
+                    {task.taskType.name}
+                  </Badge>
+                )}
+                {task.dueDate && (
+                  <Badge variant="outline" data-testid="badge-due-date">
+                    Due: {format(new Date(task.dueDate), 'MMM d, yyyy h:mm a')}
+                  </Badge>
+                )}
+              </div>
             </div>
+            {task.isQuickReminder && task.status !== "closed" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => convertToTaskMutation.mutate()}
+                disabled={convertToTaskMutation.isPending}
+                data-testid="button-convert-to-task"
+              >
+                <ClipboardList className="w-4 h-4 mr-2" />
+                {convertToTaskMutation.isPending ? "Converting..." : "Convert to Task"}
+              </Button>
+            )}
           </div>
         </div>
       </div>
