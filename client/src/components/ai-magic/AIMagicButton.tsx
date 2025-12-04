@@ -25,8 +25,8 @@ export function AIMagicButton() {
         e.preventDefault();
         togglePanel();
       }
-      // CMD/CTRL+;: Open panel with voice input
-      if ((e.metaKey || e.ctrlKey) && e.key === ';') {
+      // CMD/CTRL+I: Open panel with voice input
+      if ((e.metaKey || e.ctrlKey) && e.key === 'i') {
         e.preventDefault();
         if (!isOpen) {
           setIsOpen(true);

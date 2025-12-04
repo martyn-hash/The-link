@@ -416,8 +416,18 @@ export function AIMagicChatPanel({ onClose, triggerVoice, onVoiceTriggered, onRe
           functionCall: data.functionCall,
         };
         
-        // Set action status to pending so the card shows
-        setActionStatuses(prev => ({ ...prev, [messageId]: 'pending' }));
+        // Dismiss all previous pending action cards before adding new one
+        // This ensures only the latest action is shown (fixes context confusion when user changes intent)
+        setActionStatuses(prev => {
+          const updated = { ...prev };
+          Object.keys(updated).forEach(key => {
+            if (updated[key] === 'pending') {
+              updated[key] = 'dismissed';
+            }
+          });
+          updated[messageId] = 'pending';
+          return updated;
+        });
         
         // Update conversation context from function call for pronoun resolution
         updateContextFromFunctionCall(data.functionCall);
@@ -462,6 +472,8 @@ export function AIMagicChatPanel({ onClose, triggerVoice, onVoiceTriggered, onRe
       ]);
     } finally {
       setIsLoading(false);
+      // Keep cursor focused in input after sending
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
   };
 

@@ -244,12 +244,24 @@ function RecipientSelector({
 
   const personName = matchedPerson 
     ? `${matchedPerson.firstName || ''} ${matchedPerson.lastName || ''}`.trim() 
-    : originalName;
+    : '';
   const contactInfo = contactType === 'email' ? matchedPerson?.email : matchedPerson?.telephone;
+  
+  // If no match found at all, auto-open search mode
+  const hasValidMatch = matchedPerson && (personName || contactInfo);
 
-  if (isSearchMode) {
+  if (isSearchMode || !hasValidMatch) {
     return (
       <div ref={containerRef} className="space-y-2">
+        {/* Show message when no match found */}
+        {!hasValidMatch && !isSearchMode && (
+          <div className="flex items-center gap-2 px-2 py-1.5 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+            <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
+            <span className="text-sm text-amber-700 dark:text-amber-400">
+              Couldn't find "{originalName}". Search below to select the right person.
+            </span>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
@@ -262,18 +274,21 @@ function RecipientSelector({
               data-testid="input-recipient-search"
             />
           </div>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => {
-              setIsSearchMode(false);
-              setSearchValue('');
-            }}
-            className="h-8 px-2"
-            data-testid="button-cancel-search"
-          >
-            <X className="w-3.5 h-3.5" />
-          </Button>
+          {/* Only show cancel button if we have a valid match to go back to */}
+          {hasValidMatch && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setIsSearchMode(false);
+                setSearchValue('');
+              }}
+              className="h-8 px-2"
+              data-testid="button-cancel-search"
+            >
+              <X className="w-3.5 h-3.5" />
+            </Button>
+          )}
         </div>
         
         {/* Search results dropdown */}
