@@ -811,4 +811,107 @@ export function registerInternalTaskRoutes(
       res.status(500).json({ message: "Failed to trigger reminder notifications" });
     }
   });
+
+  // Test endpoint to send a sample reminder email
+  app.post("/api/admin/test-reminder-email", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const { email, reminderTitle, reminderDescription } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ message: "Email address is required" });
+      }
+
+      const { sendEmail } = await import("../emailService");
+      
+      const baseUrl = 'https://flow.growth.accountants';
+      const logoUrl = `${baseUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
+      const subject = `Reminder: ${reminderTitle || 'Test Reminder'} - The Link`;
+      const formattedDueDate = new Date().toLocaleString('en-GB', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
+          <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
+            <div style="background-color: #ffffff; padding: 30px 20px; text-align: center; border-bottom: 1px solid #e5e7eb;">
+              <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 120px; height: auto; margin-bottom: 10px;" />
+              <h1 style="color: #1e293b; margin: 0; font-size: 20px;">The Link</h1>
+            </div>
+            <div style="padding: 40px 30px;">
+              <h2 style="color: #1e293b; margin-top: 0;">⏰ Reminder Due</h2>
+              <p style="color: #475569; font-size: 16px;">Hello,</p>
+              <p style="color: #475569; font-size: 16px;">Your reminder is now due:</p>
+              
+              <div style="background-color: #fef3c7; padding: 25px; border-radius: 12px; margin: 25px 0; border: 2px solid #fcd34d;">
+                <h3 style="margin-top: 0; color: #92400e; font-size: 18px;">🔔 ${reminderTitle || 'Test Reminder'}</h3>
+                ${reminderDescription ? `<p style="margin-bottom: 12px; color: #374151;">${reminderDescription}</p>` : '<p style="margin-bottom: 12px; color: #374151;">This is a test reminder email to verify the notification system is working correctly.</p>'}
+                <p style="margin-bottom: 0; color: #374151;"><strong>Due:</strong> ${formattedDueDate}</p>
+              </div>
+              
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${baseUrl}/internal-tasks" 
+                   style="display: inline-block; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);">
+                  View Reminders
+                </a>
+              </div>
+              
+              <p style="color: #475569; font-size: 16px;">Log into The Link to view or complete this reminder.</p>
+            </div>
+            <div style="background-color: #f1f5f9; padding: 30px; text-align: center; color: #64748b; font-size: 14px;">
+              <p style="margin: 0 0 10px 0;">
+                <strong style="color: #0A7BBF;">The Link</strong> by Growth Accountants
+              </p>
+              <p style="margin: 0; font-size: 13px;">
+                Your workflow management partner
+              </p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      const text = `
+Hello,
+
+Your reminder is now due:
+
+REMINDER: ${reminderTitle || 'Test Reminder'}
+${reminderDescription ? `Details: ${reminderDescription}` : 'Details: This is a test reminder email to verify the notification system is working correctly.'}
+Due: ${formattedDueDate}
+
+Log into The Link to view or complete this reminder.
+
+View Reminders: ${baseUrl}/internal-tasks
+
+Best regards,
+The Link Team
+      `;
+
+      const emailSent = await sendEmail({
+        to: email,
+        subject,
+        text,
+        html,
+      });
+
+      if (emailSent) {
+        res.json({ message: `Test reminder email sent to ${email}`, success: true });
+      } else {
+        res.status(500).json({ message: "Failed to send test email", success: false });
+      }
+    } catch (error) {
+      console.error("Error sending test reminder email:", error);
+      res.status(500).json({ message: "Failed to send test reminder email" });
+    }
+  });
 }
