@@ -10,6 +10,7 @@ import { PortalPushNotificationPrompt } from "@/components/PortalPushNotificatio
 import { PWAUpdatePrompt } from "@/components/PWAUpdatePrompt";
 import { FirstLoginPasswordDialog } from "@/components/FirstLoginPasswordDialog";
 import { PortalAuthProvider, usePortalAuth } from "@/contexts/PortalAuthContext";
+import { AIMagicButton } from "@/components/ai-magic";
 import logoPath from "@assets/full_logo_transparent_600_1761924125378.png";
 
 const NotFound = lazy(() => import("@/pages/not-found"));
@@ -257,6 +258,8 @@ function App() {
 function AppContent() {
   const { isAuthenticated } = useAuth();
   const { isAuthenticated: isPortalAuthenticated } = usePortalAuth();
+  const [location] = useLocation();
+  const isPortalRoute = location.startsWith('/portal');
 
   return (
     <>
@@ -265,6 +268,7 @@ function AppContent() {
       <PWAUpdatePrompt />
       {isAuthenticated && <PushNotificationPrompt />}
       {isAuthenticated && <FirstLoginPasswordDialog />}
+      {isAuthenticated && !isPortalRoute && <AIMagicButton />}
       {isPortalAuthenticated && <PortalPushNotificationPrompt />}
     </>
   );
