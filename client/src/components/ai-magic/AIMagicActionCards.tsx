@@ -395,13 +395,11 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
   const { toast } = useToast();
   const { user } = useAuth();
   const args = functionCall.arguments;
-  const suggestedClientName = args.clientName as string | undefined;
   const suggestedAssigneeName = args.assigneeName as string | undefined;
   
   const [title, setTitle] = useState(args.title as string || '');
   const [description, setDescription] = useState(args.details as string || '');
-  const [clientId, setClientId] = useState<string | null>(null); // null = use AI suggestion, '' = explicitly cleared
-  const [assigneeId, setAssigneeId] = useState<string | null>(null); // null = use AI suggestion, '' = explicitly cleared
+  const [assigneeId, setAssigneeId] = useState<string | null>(null); // null = not yet set by user
   const [dueDate, setDueDate] = useState(() => {
     if (args.dateTime) {
       try {
@@ -422,34 +420,66 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
   });
   const [isEditing, setIsEditing] = useState(false);
 
-  const { data: clients } = useQuery<{ id: string; name: string }[]>({
-    queryKey: ['/api/clients'],
-  });
-
   const { data: staffMembers } = useQuery<UserType[]>({
     queryKey: ['/api/staff'],
   });
 
-  const matchedClient = clients?.find(c => {
-    const clientName = suggestedClientName?.toLowerCase() || '';
-    return c.name.toLowerCase().includes(clientName) || clientName.includes(c.name.toLowerCase());
-  });
+  // Determine if AI tried to assign to someone else (vs current user)
+  const aiTriedToAssignOther = suggestedAssigneeName && 
+    suggestedAssigneeName.trim().length > 0 && 
+    suggestedAssigneeName.toLowerCase() !== 'me' && 
+    suggestedAssigneeName.toLowerCase() !== 'myself';
 
-  // Only try to match assignee if AI actually suggested a name (non-empty)
-  const matchedAssignee = suggestedAssigneeName && suggestedAssigneeName.trim().length > 0
-    ? staffMembers?.find(u => {
-        const assigneeName = suggestedAssigneeName.toLowerCase().trim();
-        const fullName = `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase().trim();
-        return fullName.includes(assigneeName) || assigneeName.includes(fullName);
-      })
-    : undefined;
+  // Better matching: require first name or last name match, not just partial includes
+  const matchedAssignee = useMemo(() => {
+    if (!aiTriedToAssignOther || !staffMembers) return undefined;
+    
+    const searchTerms = suggestedAssigneeName!.toLowerCase().trim().split(/\s+/);
+    
+    // Find best match with scoring
+    let bestMatch: { user: UserType; score: number } | undefined;
+    
+    for (const staff of staffMembers) {
+      const firstName = (staff.firstName || '').toLowerCase();
+      const lastName = (staff.lastName || '').toLowerCase();
+      let score = 0;
+      
+      for (const term of searchTerms) {
+        // Exact first name match (high confidence)
+        if (firstName === term) score += 50;
+        // Exact last name match (high confidence)
+        else if (lastName === term) score += 50;
+        // First name starts with search term
+        else if (firstName.startsWith(term) && term.length >= 2) score += 30;
+        // Last name starts with search term
+        else if (lastName.startsWith(term) && term.length >= 2) score += 30;
+      }
+      
+      // Only consider if we have a reasonable match (at least one name component matched)
+      if (score >= 30 && (!bestMatch || score > bestMatch.score)) {
+        bestMatch = { user: staff, score };
+      }
+    }
+    
+    return bestMatch?.user;
+  }, [aiTriedToAssignOther, suggestedAssigneeName, staffMembers]);
 
-  // If clientId is null, use AI suggestion. If '', user explicitly cleared it.
-  const effectiveClientId = clientId === null ? (matchedClient?.id || '') : clientId;
-  // If assigneeId is null, use AI suggestion or default to current user. If '', user explicitly cleared it.
-  const effectiveAssigneeId = assigneeId === null 
-    ? (matchedAssignee?.id || user?.id || '') 
-    : (assigneeId || user?.id || '');
+  // Determine effective assignee:
+  // - If user manually selected someone (non-empty value) → use that
+  // - If AI found a match → use that (but user can change)
+  // - If AI tried to find someone but failed → require user to select (don't default to current user)
+  // - If AI didn't try to assign someone else → default to current user
+  const effectiveAssigneeId = useMemo(() => {
+    // User manually selected a valid staff member (non-empty)
+    if (assigneeId !== null && assigneeId.length > 0) return assigneeId;
+    if (matchedAssignee) return matchedAssignee.id; // AI found a match
+    if (aiTriedToAssignOther) return ''; // AI tried but failed - require selection
+    return user?.id || ''; // Default to current user
+  }, [assigneeId, matchedAssignee, aiTriedToAssignOther, user?.id]);
+
+  // Track if we need user to select an assignee
+  // This is true when AI tried to assign to someone, couldn't match, and user hasn't selected a valid option
+  const assigneeRequired = aiTriedToAssignOther && !matchedAssignee && (!assigneeId || assigneeId.length === 0);
 
   const isValid = title.trim().length > 0 && dueDate.length > 0 && dueTime.length > 0 && effectiveAssigneeId.length > 0;
   
@@ -457,6 +487,9 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
     mutationFn: async () => {
       if (!isValid) {
         throw new Error('Please fill in all required fields');
+      }
+      if (!effectiveAssigneeId || effectiveAssigneeId.length === 0) {
+        throw new Error('Please select who to assign this reminder to');
       }
       const dueDateTime = new Date(`${dueDate}T${dueTime}`);
       if (isNaN(dueDateTime.getTime())) {
@@ -471,16 +504,6 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
         isQuickReminder: true,
         priority: 'medium',
       });
-      
-      if (effectiveClientId && reminder.id) {
-        try {
-          await apiRequest('POST', `/api/internal-tasks/${reminder.id}/connections`, {
-            connections: [{ entityType: 'client', entityId: effectiveClientId }]
-          });
-        } catch (e) {
-          console.warn('Failed to link client to reminder:', e);
-        }
-      }
       
       return reminder;
     },
@@ -498,12 +521,16 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
     }
   });
   
-  const clientName = clients?.find(c => c.id === effectiveClientId)?.name 
-    || (suggestedClientName ? `${suggestedClientName} (suggested)` : 'None');
-
-  const assigneeName = staffMembers?.find(u => u.id === effectiveAssigneeId)
-    ? `${staffMembers.find(u => u.id === effectiveAssigneeId)?.firstName} ${staffMembers.find(u => u.id === effectiveAssigneeId)?.lastName}`
-    : (suggestedAssigneeName || 'Me');
+  const assigneeName = useMemo(() => {
+    if (assigneeRequired) {
+      return `${suggestedAssigneeName} (not found - please select)`;
+    }
+    const matchedStaff = staffMembers?.find(u => u.id === effectiveAssigneeId);
+    if (matchedStaff) {
+      return `${matchedStaff.firstName} ${matchedStaff.lastName}`.trim();
+    }
+    return 'Me';
+  }, [assigneeRequired, suggestedAssigneeName, staffMembers, effectiveAssigneeId]);
 
   const formattedDateTime = dueDate && dueTime 
     ? format(new Date(`${dueDate}T${dueTime}`), "d MMM yyyy 'at' h:mm a")
@@ -569,32 +596,23 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
             </div>
           </div>
           <div>
-            <Label className="text-xs text-muted-foreground">
-              Assign to {matchedAssignee ? '(AI suggested)' : ''}
+            <Label className={`text-xs ${assigneeRequired ? 'text-red-600 dark:text-red-400 font-medium' : 'text-muted-foreground'}`}>
+              Assign to {matchedAssignee ? '(AI matched)' : assigneeRequired ? '(required - select staff member)' : ''}
             </Label>
             <SearchableSelect
               value={effectiveAssigneeId}
               onValueChange={setAssigneeId}
               options={staffOptions}
-              placeholder="Type to search staff..."
+              placeholder={assigneeRequired ? `Select staff (searching for "${suggestedAssigneeName}")...` : "Type to search staff..."}
               suggestedName={suggestedAssigneeName}
               icon={<User className="w-3 h-3" />}
               testId="search-reminder-assignee"
             />
-          </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">
-              Link to Client {matchedClient ? '(AI suggested)' : '(optional)'}
-            </Label>
-            <SearchableSelect
-              value={effectiveClientId}
-              onValueChange={setClientId}
-              options={clients || []}
-              placeholder="Type to search clients..."
-              suggestedName={suggestedClientName}
-              icon={<Building2 className="w-3 h-3" />}
-              testId="search-reminder-client"
-            />
+            {assigneeRequired && (
+              <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                Could not find "{suggestedAssigneeName}" - please select a staff member
+              </p>
+            )}
           </div>
         </div>
       ) : (
@@ -605,16 +623,10 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
             <Calendar className="w-3 h-3" />
             {formattedDateTime}
           </div>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+          <div className={`flex items-center gap-1 text-xs ${assigneeRequired ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'}`}>
             <User className="w-3 h-3" />
             {assigneeName}
           </div>
-          {effectiveClientId && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Building2 className="w-3 h-3" />
-              {clientName}
-            </div>
-          )}
         </div>
       )}
 
@@ -2445,12 +2457,20 @@ export function PhoneNumberCard({ functionCall, onComplete, onDismiss }: ActionC
         clientName: bestMatch.clientName
       });
       setStatus('found');
-      onComplete(true, `Found phone number for ${bestMatch.person.firstName} ${bestMatch.person.lastName}`);
     } else {
       setStatus('not_found');
+    }
+    // Note: Don't call onComplete here - let the card stay visible until user dismisses it
+  }, [people, clients, personName, clientName]);
+
+  const handleDismiss = () => {
+    if (status === 'found' && matchedPerson) {
+      onComplete(true, `Found phone number for ${matchedPerson.name}`);
+    } else {
       onComplete(false, `No phone number found for ${personName}`);
     }
-  }, [people, clients, personName, clientName, onComplete]);
+    onDismiss();
+  };
 
   return (
     <motion.div
@@ -2467,7 +2487,7 @@ export function PhoneNumberCard({ functionCall, onComplete, onDismiss }: ActionC
         <Button
           size="sm"
           variant="ghost"
-          onClick={onDismiss}
+          onClick={handleDismiss}
           className="h-6 w-6 p-0"
           data-testid="button-dismiss-phone"
         >

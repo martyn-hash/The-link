@@ -75,7 +75,7 @@ const AI_MAGIC_FUNCTIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "create_reminder",
-      description: "Create a quick reminder. Reminders are simple time-based notifications. Can be assigned to the current user or another team member.",
+      description: "Create a quick reminder. Reminders are simple time-based notifications. Can be assigned to the current user or another team member. Do NOT attempt to link reminders to clients or projects.",
       parameters: {
         type: "object",
         properties: {
@@ -93,11 +93,7 @@ const AI_MAGIC_FUNCTIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           },
           assigneeName: {
             type: "string",
-            description: "Name of the team member to assign this reminder to. If not specified or 'me'/'myself', assigns to current user. Look for phrases like 'remind Bob', 'for Sarah', 'assign to John'."
-          },
-          clientName: { 
-            type: "string", 
-            description: "Name of the client to link to this reminder (optional). Use for context like 'remind me to call Smith & Co'" 
+            description: "Name of the team member to assign this reminder to. Extract the EXACT name mentioned (e.g., 'Bob', 'Sarah Smith'). If the user says 'remind me' or 'myself', leave this empty to assign to current user."
           }
         },
         required: ["title", "dateTime"]
