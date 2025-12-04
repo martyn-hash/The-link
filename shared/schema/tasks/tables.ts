@@ -69,6 +69,7 @@ export const internalTasks = pgTable("internal_tasks", {
   closedBy: varchar("closed_by").references(() => users.id),
   closureNote: text("closure_note"),
   totalTimeSpentMinutes: integer("total_time_spent_minutes").default(0),
+  isQuickReminder: boolean("is_quick_reminder").default(false),
   isArchived: boolean("is_archived").default(false),
   archivedAt: timestamp("archived_at"),
   archivedBy: varchar("archived_by").references(() => users.id),
@@ -81,6 +82,7 @@ export const internalTasks = pgTable("internal_tasks", {
   index("idx_internal_tasks_assigned_to").on(table.assignedTo),
   index("idx_internal_tasks_task_type_id").on(table.taskTypeId),
   index("idx_internal_tasks_due_date").on(table.dueDate),
+  index("idx_internal_tasks_is_quick_reminder").on(table.isQuickReminder),
   index("idx_internal_tasks_is_archived").on(table.isArchived),
 ]);
 
