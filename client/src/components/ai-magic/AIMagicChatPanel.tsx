@@ -14,9 +14,10 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useToast } from '@/hooks/use-toast';
 import { AIMessage, AIBackendResponse, AIFunctionCall } from './types';
-import { AIMagicHelpModal } from './AIMagicHelpModal';
 import { ActionCard } from './AIMagicActionCards';
+import { AIMagicHelpModal } from './AIMagicHelpModal';
 import { nanoid } from 'nanoid';
 
 interface SpeechRecognitionEvent {
@@ -39,13 +40,18 @@ interface SpeechRecognitionAlternative {
   confidence: number;
 }
 
+interface SpeechRecognitionErrorEvent {
+  error: string;
+  message?: string;
+}
+
 interface ISpeechRecognition extends EventTarget {
   continuous: boolean;
   interimResults: boolean;
   lang: string;
   onstart: (() => void) | null;
   onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: (() => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
   onend: (() => void) | null;
   start: () => void;
   stop: () => void;
@@ -67,6 +73,7 @@ interface AIMagicChatPanelProps {
 type ActionStatus = 'pending' | 'completed' | 'dismissed';
 
 export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
+  const { toast } = useToast();
   const [messages, setMessages] = useState<AIMessage[]>([
     {
       id: 'welcome',
@@ -241,7 +248,7 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
 
     const recognition = new SpeechRecognition();
     recognition.lang = 'en-GB';
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.interimResults = true;
 
     recognition.onstart = () => {
@@ -253,10 +260,39 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
         .map(result => result[0].transcript)
         .join('');
       setInputValue(transcript);
+      
+      // Auto-stop after getting a final result to allow user to send
+      const lastResult = event.results[event.results.length - 1];
+      if (lastResult.isFinal) {
+        // Give a brief moment for the user to see the result, then stop
+        setTimeout(() => {
+          if (recognitionRef.current) {
+            recognitionRef.current.stop();
+          }
+        }, 500);
+      }
     };
 
-    recognition.onerror = () => {
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
       setIsRecording(false);
+      
+      // Show user-friendly error for common issues
+      if (event.error === 'not-allowed') {
+        toast({
+          title: 'Microphone access denied',
+          description: 'Please allow microphone access in your browser settings.',
+          variant: 'destructive'
+        });
+      } else if (event.error === 'no-speech') {
+        // No speech detected - this is normal, just stop quietly
+      } else if (event.error === 'network') {
+        toast({
+          title: 'Voice recognition unavailable',
+          description: 'Please check your internet connection.',
+          variant: 'destructive'
+        });
+      }
     };
 
     recognition.onend = () => {
@@ -264,7 +300,13 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
     };
 
     recognitionRef.current = recognition;
-    recognition.start();
+    
+    try {
+      recognition.start();
+    } catch (error) {
+      console.error('Failed to start speech recognition:', error);
+      setIsRecording(false);
+    }
   };
 
   const stopRecording = () => {
