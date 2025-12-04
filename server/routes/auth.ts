@@ -345,6 +345,26 @@ export async function registerAuthAndMiscRoutes(
     }
   });
 
+  // Get users for messaging - accessible to all authenticated users
+  // IMPORTANT: This route MUST come before /api/users/:id to avoid "for-messaging" being matched as an ID
+  app.get("/api/users/for-messaging", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const users = await storage.getAllUsers();
+      
+      // Strip password hash and sensitive fields from response
+      const sanitizedUsers = users.map(({ passwordHash, ...user }) => ({
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+      }));
+      res.json(sanitizedUsers);
+    } catch (error) {
+      console.error("Error fetching users for messaging:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
+      res.status(500).json({ message: "Failed to fetch users" });
+    }
+  });
+
   // Get a single user by ID
   app.get("/api/users/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
@@ -368,25 +388,6 @@ export async function registerAuthAndMiscRoutes(
     } catch (error) {
       console.error("Error fetching user:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to fetch user" });
-    }
-  });
-
-  // Get users for messaging - accessible to all authenticated users
-  app.get("/api/users/for-messaging", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
-    try {
-      const users = await storage.getAllUsers();
-      
-      // Strip password hash and sensitive fields from response
-      const sanitizedUsers = users.map(({ passwordHash, ...user }) => ({
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-      }));
-      res.json(sanitizedUsers);
-    } catch (error) {
-      console.error("Error fetching users for messaging:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
-      res.status(500).json({ message: "Failed to fetch users" });
     }
   });
 
