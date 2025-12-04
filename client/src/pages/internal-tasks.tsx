@@ -48,6 +48,7 @@ import {
 import type { InternalTask, TaskType, User } from "@shared/schema";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { CreateReminderDialog } from "@/components/create-reminder-dialog";
+import { ReminderViewModal } from "@/components/reminder-view-modal";
 import { SwipeableTaskCard } from "@/components/swipeable-task-card";
 import TopNavigation from "@/components/top-navigation";
 import { format } from "date-fns";
@@ -158,6 +159,96 @@ function TaskRow({ task, selected, onSelect, onViewClick }: {
   );
 }
 
+function ReminderRow({ task, selected, onSelect, onViewClick }: {
+  task: InternalTaskWithRelations;
+  selected: boolean;
+  onSelect: (checked: boolean) => void;
+  onViewClick: () => void;
+}) {
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "open":
+        return "bg-blue-500 text-white";
+      case "in_progress":
+        return "bg-yellow-500 text-white";
+      case "closed":
+        return "bg-green-500 text-white";
+      default:
+        return "bg-gray-500 text-white";
+    }
+  };
+
+  const formatDate = (date: Date | string | null) => {
+    if (!date) return '-';
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    return format(dateObj, 'd MMM yyyy');
+  };
+
+  const formatTime = (date: Date | string | null) => {
+    if (!date) return '';
+    const dateObj = typeof date === 'string' ? new Date(date) : date;
+    return format(dateObj, 'h:mm a');
+  };
+
+  return (
+    <TableRow data-testid={`row-reminder-${task.id}`}>
+      <TableCell className="w-12">
+        <Checkbox
+          checked={selected}
+          onCheckedChange={onSelect}
+          data-testid={`checkbox-reminder-${task.id}`}
+        />
+      </TableCell>
+      <TableCell className="font-medium">
+        <div className="flex items-center gap-2">
+          <Bell className="w-4 h-4 text-amber-500" />
+          <span data-testid={`text-title-${task.id}`}>
+            {task.title}
+          </span>
+        </div>
+        {task.description && (
+          <p className="text-xs text-muted-foreground mt-1 ml-6 line-clamp-1" data-testid={`text-description-${task.id}`}>
+            {task.description}
+          </p>
+        )}
+      </TableCell>
+      <TableCell>
+        <Badge variant="outline" className={`text-xs ${getStatusColor(task.status)}`} data-testid={`badge-status-${task.id}`}>
+          {task.status === "in_progress" ? "In Progress" : task.status}
+        </Badge>
+      </TableCell>
+      <TableCell>
+        <span className="text-sm" data-testid={`text-assignee-${task.id}`}>
+          {task.assignee ? `${task.assignee.firstName} ${task.assignee.lastName}` : '-'}
+        </span>
+      </TableCell>
+      <TableCell>
+        <div className="flex flex-col">
+          <span className="text-sm" data-testid={`text-due-${task.id}`}>
+            {formatDate(task.dueDate)}
+          </span>
+          {task.dueDate && (
+            <span className="text-xs text-muted-foreground">
+              {formatTime(task.dueDate)}
+            </span>
+          )}
+        </div>
+      </TableCell>
+      <TableCell className="text-right">
+        <Button
+          variant="default"
+          size="sm"
+          onClick={onViewClick}
+          data-testid={`button-view-${task.id}`}
+        >
+          <Eye className="h-4 w-4 mr-2" />
+          View
+        </Button>
+      </TableCell>
+    </TableRow>
+  );
+}
+
 const ITEMS_PER_PAGE = 15;
 
 export default function InternalTasks() {
@@ -176,6 +267,8 @@ export default function InternalTasks() {
   const [selectedStatus, setSelectedStatus] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [deleteTaskId, setDeleteTaskId] = useState<string | null>(null);
+  const [selectedReminder, setSelectedReminder] = useState<InternalTaskWithRelations | null>(null);
+  const [reminderModalOpen, setReminderModalOpen] = useState(false);
 
   // Fetch staff members for bulk reassign
   const { data: staff = [] } = useQuery<User[]>({
@@ -341,7 +434,13 @@ export default function InternalTasks() {
   };
 
   const handleViewTask = (taskId: string) => {
-    setLocation(`/internal-tasks/${taskId}`);
+    const task = allTasksData.find(t => t.id === taskId);
+    if (task?.isQuickReminder) {
+      setSelectedReminder(task);
+      setReminderModalOpen(true);
+    } else {
+      setLocation(`/internal-tasks/${taskId}`);
+    }
   };
 
   // Bulk reassign mutation
@@ -536,6 +635,40 @@ export default function InternalTasks() {
     </div>
   );
 
+  const ReminderTable = () => (
+    <div className="border rounded-lg">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-12">
+              <Checkbox
+                checked={allCurrentPageSelected}
+                onCheckedChange={handleSelectAll}
+                data-testid="checkbox-select-all"
+              />
+            </TableHead>
+            <TableHead>Reminder</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Assigned To</TableHead>
+            <TableHead>Due Date & Time</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {tasks.map((task) => (
+            <ReminderRow
+              key={task.id}
+              task={task}
+              selected={selectedTasks.includes(task.id)}
+              onSelect={(checked) => handleSelectTask(task.id, checked)}
+              onViewClick={() => handleViewTask(task.id)}
+            />
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+
   const TaskMobileList = () => (
     <div className="space-y-2" data-testid="task-mobile-list">
       {tasks.map((task) => (
@@ -627,18 +760,20 @@ export default function InternalTasks() {
                     </SelectContent>
                   </Select>
 
-                  <Select value={priorityFilter} onValueChange={(value) => handleFilterChange('priority', value)}>
-                    <SelectTrigger className="w-[150px]" data-testid="select-priority-filter">
-                      <SelectValue placeholder="Priority" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all" data-testid="option-priority-all">All Priorities</SelectItem>
-                      <SelectItem value="low" data-testid="option-priority-low">Low</SelectItem>
-                      <SelectItem value="medium" data-testid="option-priority-medium">Medium</SelectItem>
-                      <SelectItem value="high" data-testid="option-priority-high">High</SelectItem>
-                      <SelectItem value="urgent" data-testid="option-priority-urgent">Urgent</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  {categoryFilter === "tasks" && (
+                    <Select value={priorityFilter} onValueChange={(value) => handleFilterChange('priority', value)}>
+                      <SelectTrigger className="w-[150px]" data-testid="select-priority-filter">
+                        <SelectValue placeholder="Priority" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all" data-testid="option-priority-all">All Priorities</SelectItem>
+                        <SelectItem value="low" data-testid="option-priority-low">Low</SelectItem>
+                        <SelectItem value="medium" data-testid="option-priority-medium">Medium</SelectItem>
+                        <SelectItem value="high" data-testid="option-priority-high">High</SelectItem>
+                        <SelectItem value="urgent" data-testid="option-priority-urgent">Urgent</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </div>
               
@@ -725,7 +860,7 @@ export default function InternalTasks() {
                     </div>
                   ) : (
                     <>
-                      {isMobile ? <TaskMobileList /> : <TaskTable />}
+                      {isMobile ? <TaskMobileList /> : (categoryFilter === "reminders" ? <ReminderTable /> : <TaskTable />)}
                       {totalPages > 1 && (
                         <div className="flex items-center justify-between mt-4 px-2">
                           <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
@@ -777,7 +912,7 @@ export default function InternalTasks() {
                     </div>
                   ) : (
                     <>
-                      {isMobile ? <TaskMobileList /> : <TaskTable />}
+                      {isMobile ? <TaskMobileList /> : (categoryFilter === "reminders" ? <ReminderTable /> : <TaskTable />)}
                       {totalPages > 1 && (
                         <div className="flex items-center justify-between mt-4 px-2">
                           <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
@@ -829,7 +964,7 @@ export default function InternalTasks() {
                     </div>
                   ) : (
                     <>
-                      {isMobile ? <TaskMobileList /> : <TaskTable />}
+                      {isMobile ? <TaskMobileList /> : (categoryFilter === "reminders" ? <ReminderTable /> : <TaskTable />)}
                     {totalPages > 1 && (
                       <div className="flex items-center justify-between mt-4 px-2">
                         <div className="text-sm text-muted-foreground" data-testid="text-pagination-info">
@@ -972,6 +1107,13 @@ export default function InternalTasks() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reminder View Modal */}
+      <ReminderViewModal
+        reminder={selectedReminder}
+        open={reminderModalOpen}
+        onOpenChange={setReminderModalOpen}
+      />
     </div>
   );
 }

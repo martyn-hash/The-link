@@ -129,7 +129,6 @@ export function CreateReminderDialog({
       const reminder = await apiRequest("POST", "/api/internal-tasks", {
         title: data.title,
         description: data.description || "",
-        priority: "low",
         status: "open",
         assignedTo: currentUserId,
         dueDate: dueDateTime.toISOString(),
