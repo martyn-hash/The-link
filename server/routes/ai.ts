@@ -1,7 +1,18 @@
 import { Router, Request, Response } from "express";
 import multer from "multer";
 import { storage } from "../storage/index";
-import { processAIMagicChat, fuzzyMatchClients, fuzzyMatchUsers, fuzzyMatchPeople, chatRequestSchema, needsDisambiguation, CONFIDENCE_THRESHOLDS } from "../services/ai-magic-service";
+import { 
+  processAIMagicChat, 
+  fuzzyMatchClients, 
+  fuzzyMatchUsers, 
+  fuzzyMatchPeople, 
+  fuzzyMatchProjects,
+  getProjectAnalytics,
+  chatRequestSchema, 
+  needsDisambiguation, 
+  CONFIDENCE_THRESHOLDS,
+  type AnalyticsQueryType
+} from "../services/ai-magic-service";
 
 const router = Router();
 
@@ -697,6 +708,196 @@ Please refine the email according to the request above.`;
       } catch (error: any) {
         console.error("[AI Magic] Error matching people:", error);
         res.status(500).json({ error: "Failed to match people" });
+      }
+    }
+  );
+
+  // Project matching endpoint for AI Magic
+  router.get(
+    "/match/projects",
+    isAuthenticated,
+    async (req: Request, res: Response) => {
+      try {
+        const searchTerm = req.query.q as string;
+        
+        if (!searchTerm) {
+          return res.status(400).json({ error: "Search term is required" });
+        }
+
+        const matches = await fuzzyMatchProjects(searchTerm);
+        const requiresDisambiguation = needsDisambiguation(matches);
+        
+        res.json({
+          matches,
+          requiresDisambiguation,
+          bestMatch: matches.length > 0 ? matches[0] : null,
+          confidenceThresholds: CONFIDENCE_THRESHOLDS
+        });
+      } catch (error: any) {
+        console.error("[AI Magic] Error matching projects:", error);
+        res.status(500).json({ error: "Failed to match projects" });
+      }
+    }
+  );
+
+  // Get project details for AI Magic (includes stage info)
+  router.get(
+    "/projects/:id/details",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res: Response) => {
+      try {
+        const projectId = req.params.id;
+        const project = await storage.getProject(projectId);
+        
+        if (!project) {
+          return res.status(404).json({ error: "Project not found" });
+        }
+
+        // Get related data
+        const client = await storage.getClientById(project.clientId);
+        const projectType = project.projectTypeId 
+          ? await storage.getProjectTypeById(project.projectTypeId) 
+          : null;
+        const assignee = project.currentAssigneeId 
+          ? await storage.getUser(project.currentAssigneeId) 
+          : null;
+
+        // Get available stages for this project type
+        let stages: Array<{ id: string; name: string; order: number }> = [];
+        if (project.projectTypeId) {
+          const kanbanStages = await storage.getKanbanStagesByProjectTypeId(project.projectTypeId);
+          stages = kanbanStages
+            .filter((s: any) => !s.deletedAt)
+            .sort((a: any, b: any) => a.stageOrder - b.stageOrder)
+            .map((s: any) => ({
+              id: s.id,
+              name: s.name,
+              order: s.stageOrder
+            }));
+        }
+
+        // Find current stage index for "next stage" logic
+        const currentStageIndex = stages.findIndex(s => s.name === project.currentStatus);
+        const nextStage = currentStageIndex >= 0 && currentStageIndex < stages.length - 1
+          ? stages[currentStageIndex + 1]
+          : null;
+
+        res.json({
+          id: project.id,
+          description: project.description,
+          clientId: project.clientId,
+          clientName: client?.name || 'Unknown Client',
+          projectTypeId: project.projectTypeId,
+          projectTypeName: projectType?.name || 'Unknown Type',
+          currentStatus: project.currentStatus,
+          currentAssigneeId: project.currentAssigneeId,
+          assigneeName: assignee ? `${assignee.firstName || ''} ${assignee.lastName || ''}`.trim() : null,
+          dueDate: project.dueDate,
+          isBenched: project.isBenched,
+          benchReason: project.benchReason,
+          preBenchStatus: project.preBenchStatus,
+          stages,
+          nextStage,
+          currentStageIndex
+        });
+      } catch (error: any) {
+        console.error("[AI Magic] Error getting project details:", error);
+        res.status(500).json({ error: "Failed to get project details" });
+      }
+    }
+  );
+
+  // Get stage change reasons for a specific stage
+  router.get(
+    "/projects/:projectId/stages/:stageId/reasons",
+    isAuthenticated,
+    async (req: Request, res: Response) => {
+      try {
+        const { projectId, stageId } = req.params;
+        
+        // Get the project to verify it exists
+        const project = await storage.getProject(projectId);
+        if (!project) {
+          return res.status(404).json({ error: "Project not found" });
+        }
+
+        // Get change reasons mapped to this stage
+        const stageReasonMaps = await storage.getStageReasonMapsByStageId(stageId);
+        const reasons: Array<{ id: string; name: string }> = [];
+        
+        for (const map of stageReasonMaps) {
+          const reason = await storage.getChangeReasonById(map.reasonId);
+          if (reason) {
+            reasons.push({
+              id: reason.id,
+              name: reason.reason
+            });
+          }
+        }
+
+        // Get stage approval fields if any
+        const stageApprovals = await storage.getStageApprovalsByStageId(stageId);
+        const fields: Array<{ id: string; fieldName: string; fieldType: string; isRequired: boolean; options: string[] | null }> = [];
+        
+        for (const approval of stageApprovals) {
+          const approvalFields = await storage.getStageApprovalFieldsByApprovalId(approval.id);
+          for (const f of approvalFields) {
+            fields.push({
+              id: f.id,
+              fieldName: f.fieldName,
+              fieldType: f.fieldType,
+              isRequired: f.isRequired || false,
+              options: f.options as string[] | null
+            });
+          }
+        }
+
+        res.json({
+          stageId,
+          reasons,
+          approvalFields: fields,
+          requiresNotes: true // Can be made configurable per stage
+        });
+      } catch (error: any) {
+        console.error("[AI Magic] Error getting stage reasons:", error);
+        res.status(500).json({ error: "Failed to get stage reasons" });
+      }
+    }
+  );
+
+  // Analytics endpoint for AI Magic
+  router.get(
+    "/analytics",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res: Response) => {
+      try {
+        const queryType = req.query.queryType as AnalyticsQueryType;
+        
+        if (!queryType) {
+          return res.status(400).json({ error: "Query type is required" });
+        }
+
+        const validTypes = ['overdue_count', 'workload', 'stage_breakdown', 'bench_count', 'completion_stats', 'project_summary'];
+        if (!validTypes.includes(queryType)) {
+          return res.status(400).json({ error: "Invalid query type" });
+        }
+
+        const userId = req.user?.effectiveUserId || req.user?.id;
+        
+        const result = await getProjectAnalytics(queryType, {
+          projectTypeName: req.query.projectTypeName as string | undefined,
+          userName: req.query.userName as string | undefined,
+          clientName: req.query.clientName as string | undefined,
+          timeframe: req.query.timeframe as string | undefined,
+          userId
+        });
+
+        res.json(result);
+      } catch (error: any) {
+        console.error("[AI Magic] Error getting analytics:", error);
+        res.status(500).json({ error: "Failed to get analytics" });
       }
     }
   );

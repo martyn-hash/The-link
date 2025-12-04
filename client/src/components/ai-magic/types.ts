@@ -25,7 +25,76 @@ export type AIActionType =
   | 'navigate_to_person'
   | 'search_clients'
   | 'ask_clarification'
-  | 'request_missing_info';
+  | 'request_missing_info'
+  | 'get_project_status'
+  | 'bench_project'
+  | 'unbench_project'
+  | 'move_project_stage'
+  | 'get_analytics';
+
+// Project match result for AI Magic
+export interface ProjectMatch {
+  id: string;
+  description: string;
+  clientName: string;
+  projectTypeName: string;
+  currentStatus: string;
+  assigneeName: string | null;
+  dueDate: string | null;
+  isBenched: boolean;
+  confidence: number;
+  matchType: string;
+}
+
+// Project details response
+export interface ProjectDetails {
+  id: string;
+  description: string;
+  clientId: string;
+  clientName: string;
+  projectTypeId: string;
+  projectTypeName: string;
+  currentStatus: string;
+  currentAssigneeId: string | null;
+  assigneeName: string | null;
+  dueDate: string | null;
+  isBenched: boolean;
+  benchReason: string | null;
+  preBenchStatus: string | null;
+  stages: Array<{ id: string; name: string; order: number }>;
+  nextStage: { id: string; name: string; order: number } | null;
+  currentStageIndex: number;
+}
+
+// Stage reasons response
+export interface StageReasonsResponse {
+  stageId: string;
+  reasons: Array<{ id: string; name: string }>;
+  approvalFields: Array<{ id: string; fieldName: string; fieldType: string; isRequired: boolean; options: string[] | null }>;
+  requiresNotes: boolean;
+}
+
+// Analytics result
+export interface AnalyticsResult {
+  queryType: string;
+  title: string;
+  summary: string;
+  data: Record<string, unknown>;
+  items?: Array<{ label: string; value: number; subtext?: string }>;
+}
+
+// Project match response
+export interface ProjectMatchResponse {
+  matches: ProjectMatch[];
+  requiresDisambiguation: boolean;
+  bestMatch: ProjectMatch | null;
+  confidenceThresholds: {
+    HIGH: number;
+    MEDIUM: number;
+    LOW: number;
+    MINIMUM: number;
+  };
+}
 
 export interface AIBackendResponse {
   type: 'function_call' | 'message' | 'clarification' | 'error';

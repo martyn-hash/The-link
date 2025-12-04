@@ -336,6 +336,126 @@ const AI_MAGIC_FUNCTIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         required: ["intent", "missingField", "question"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_project_status",
+      description: "Get the current status, stage, and details of ONE specific project for a specific client. Use when user mentions a client name or asks 'status of [client name]', 'what's the status of [company] project', 'check [client] bookkeeping'. This is for individual project lookup, NOT for analytics or counts.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectIdentifier: {
+            type: "string",
+            description: "Identifier for the project - can be client name + project type (e.g., 'Victoriam bookkeeping', 'ABC Ltd VAT', 'Smith payroll'). Include enough context to identify the specific project."
+          }
+        },
+        required: ["projectIdentifier"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "bench_project",
+      description: "Move a project to the bench (temporarily suspend it). Projects can be benched for legacy work, missing data, or other reasons.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectIdentifier: {
+            type: "string",
+            description: "Identifier for the project - client name + project type (e.g., 'Victoriam bookkeeping')"
+          },
+          benchReason: {
+            type: "string",
+            enum: ["legacy_work", "missing_data", "other"],
+            description: "Reason for benching: 'legacy_work' for historical/legacy work, 'missing_data' for awaiting information, 'other' for any other reason"
+          },
+          benchReasonOtherText: {
+            type: "string",
+            description: "Explanation when benchReason is 'other'"
+          }
+        },
+        required: ["projectIdentifier"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "unbench_project",
+      description: "Remove a project from the bench and restore it to its previous stage.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectIdentifier: {
+            type: "string",
+            description: "Identifier for the project to unbench"
+          },
+          notes: {
+            type: "string",
+            description: "Optional notes about why the project is being unbenched"
+          }
+        },
+        required: ["projectIdentifier"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "move_project_stage",
+      description: "Move a project to a different stage in its workflow. This will prompt the user to select a change reason and optionally add notes.",
+      parameters: {
+        type: "object",
+        properties: {
+          projectIdentifier: {
+            type: "string",
+            description: "Identifier for the project - client name + project type"
+          },
+          targetStageName: {
+            type: "string",
+            description: "Name of the target stage to move to. If not specified or 'next', will move to the next stage in the workflow."
+          }
+        },
+        required: ["projectIdentifier"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_analytics",
+      description: "Get aggregate analytics, counts, and statistics across MULTIPLE projects. Use for questions like 'how many projects are overdue', 'count of VAT returns', 'what's my workload', 'show benched projects count'. NOT for looking up a specific client's project - use get_project_status for that.",
+      parameters: {
+        type: "object",
+        properties: {
+          queryType: {
+            type: "string",
+            enum: ["overdue_count", "workload", "stage_breakdown", "bench_count", "completion_stats", "project_summary"],
+            description: "Type of analytics query: 'overdue_count' for overdue projects, 'workload' for user workload stats, 'stage_breakdown' for projects by stage, 'bench_count' for benched projects, 'completion_stats' for completed projects, 'project_summary' for general overview"
+          },
+          projectTypeName: {
+            type: "string",
+            description: "Filter by project type (e.g., 'VAT', 'Bookkeeping', 'Payroll')"
+          },
+          userName: {
+            type: "string",
+            description: "Filter by user/assignee. Use 'me' for current user."
+          },
+          clientName: {
+            type: "string",
+            description: "Filter by client name"
+          },
+          timeframe: {
+            type: "string",
+            enum: ["today", "this_week", "this_month", "last_30_days", "all"],
+            description: "Time period for the query"
+          }
+        },
+        required: ["queryType"]
+      }
+    }
   }
 ];
 
@@ -978,4 +1098,406 @@ export function needsDisambiguation(matches: Array<{ confidence: number }>): boo
   }
   
   return false;
+}
+
+// Project match result type
+export interface ProjectMatch {
+  id: string;
+  description: string;
+  clientName: string;
+  projectTypeName: string;
+  currentStatus: string;
+  assigneeName: string | null;
+  dueDate: Date | null;
+  isBenched: boolean;
+  confidence: number;
+  matchType: string;
+}
+
+// Fuzzy match projects by identifier (client name + project type)
+export async function fuzzyMatchProjects(
+  searchTerm: string,
+  limit: number = 5
+): Promise<ProjectMatch[]> {
+  try {
+    // Get all active projects with their related data
+    const allProjects = await storage.getAllProjects({});
+    const clients = await storage.getAllClients();
+    const projectTypes = await storage.getAllProjectTypes();
+    const users = await storage.getAllUsers();
+    
+    // Create lookup maps
+    const clientMap = new Map(clients.map(c => [c.id, c.name]));
+    const projectTypeMap = new Map(projectTypes.map(pt => [pt.id, pt.name]));
+    const userMap = new Map(users.map(u => [u.id, `${u.firstName || ''} ${u.lastName || ''}`.trim()]));
+    
+    const searchLower = searchTerm.toLowerCase().trim();
+    const searchWords = searchLower.split(/\s+/).filter(w => w.length >= 2);
+    
+    const results: ProjectMatch[] = [];
+    
+    for (const project of allProjects) {
+      // Skip completed or inactive projects unless explicitly searching
+      if (project.completionStatus && !searchLower.includes('completed')) continue;
+      if (project.inactive && !searchLower.includes('inactive')) continue;
+      
+      const clientName = clientMap.get(project.clientId) || '';
+      const projectTypeName = projectTypeMap.get(project.projectTypeId || '') || '';
+      const assigneeName = project.currentAssigneeId ? userMap.get(project.currentAssigneeId) || null : null;
+      
+      const clientLower = clientName.toLowerCase();
+      const typeLower = projectTypeName.toLowerCase();
+      const descLower = (project.description || '').toLowerCase();
+      
+      // Create combined search text
+      const combinedText = `${clientLower} ${typeLower} ${descLower}`;
+      
+      let confidence = 0;
+      let matchType = '';
+      
+      // Check for exact phrase match
+      if (combinedText.includes(searchLower)) {
+        confidence = 0.95;
+        matchType = 'exact_phrase';
+      }
+      // Check if all search words are present
+      else if (searchWords.length > 0 && searchWords.every(word => combinedText.includes(word))) {
+        confidence = 0.85;
+        matchType = 'all_words';
+      }
+      // Check for partial matches
+      else {
+        let wordMatches = 0;
+        for (const word of searchWords) {
+          if (combinedText.includes(word)) {
+            wordMatches++;
+          } else {
+            // Try fuzzy matching for each word
+            const clientSim = calculateSimilarity(word, clientLower);
+            const typeSim = calculateSimilarity(word, typeLower);
+            if (clientSim > 0.7 || typeSim > 0.7) {
+              wordMatches += 0.5;
+            }
+          }
+        }
+        
+        if (wordMatches > 0 && searchWords.length > 0) {
+          confidence = (wordMatches / searchWords.length) * 0.7;
+          matchType = 'partial';
+        }
+      }
+      
+      // Boost confidence for client name matches
+      if (clientLower.includes(searchLower) || searchLower.includes(clientLower)) {
+        confidence = Math.min(1, confidence + 0.15);
+      }
+      
+      // Boost for project type matches
+      const commonTypes = ['vat', 'bookkeeping', 'payroll', 'accounts', 'tax', 'annual'];
+      for (const type of commonTypes) {
+        if (searchLower.includes(type) && typeLower.includes(type)) {
+          confidence = Math.min(1, confidence + 0.1);
+          break;
+        }
+      }
+      
+      if (confidence > 0.3) {
+        results.push({
+          id: project.id,
+          description: project.description || projectTypeName,
+          clientName,
+          projectTypeName,
+          currentStatus: project.currentStatus || 'Unknown',
+          assigneeName,
+          dueDate: project.dueDate,
+          isBenched: project.isBenched || false,
+          confidence,
+          matchType
+        });
+      }
+    }
+    
+    return results
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, limit);
+  } catch (error) {
+    console.error('[AI Magic] Error matching projects:', error);
+    return [];
+  }
+}
+
+// Analytics query types
+export type AnalyticsQueryType = 
+  | 'overdue_count' 
+  | 'workload' 
+  | 'stage_breakdown' 
+  | 'bench_count' 
+  | 'completion_stats' 
+  | 'project_summary';
+
+// Analytics result interface
+export interface AnalyticsResult {
+  queryType: AnalyticsQueryType;
+  title: string;
+  summary: string;
+  data: Record<string, any>;
+  items?: Array<{ label: string; value: number; subtext?: string }>;
+}
+
+// Get project analytics
+export async function getProjectAnalytics(
+  queryType: AnalyticsQueryType,
+  filters?: {
+    projectTypeName?: string;
+    userName?: string;
+    clientName?: string;
+    timeframe?: string;
+    userId?: string; // Current user ID for "me" queries
+  }
+): Promise<AnalyticsResult> {
+  try {
+    const allProjects = await storage.getAllProjects({});
+    const projectTypes = await storage.getAllProjectTypes();
+    const users = await storage.getAllUsers();
+    const clients = await storage.getAllClients();
+    
+    // Create lookup maps
+    const projectTypeMap = new Map(projectTypes.map(pt => [pt.id, pt.name]));
+    const projectTypeIdMap = new Map(projectTypes.map(pt => [pt.name.toLowerCase(), pt.id]));
+    const userMap = new Map(users.map(u => [u.id, `${u.firstName || ''} ${u.lastName || ''}`.trim()]));
+    const userIdMap = new Map(users.map(u => [`${u.firstName || ''} ${u.lastName || ''}`.trim().toLowerCase(), u.id]));
+    const clientMap = new Map(clients.map(c => [c.id, c.name]));
+    
+    // Apply filters
+    let filteredProjects = allProjects.filter(p => !p.inactive && !p.completionStatus);
+    
+    if (filters?.projectTypeName) {
+      const typeIdFilter = projectTypeIdMap.get(filters.projectTypeName.toLowerCase());
+      if (typeIdFilter) {
+        filteredProjects = filteredProjects.filter(p => p.projectTypeId === typeIdFilter);
+      }
+    }
+    
+    if (filters?.userName) {
+      let targetUserId = filters.userId;
+      if (filters.userName.toLowerCase() !== 'me') {
+        targetUserId = userIdMap.get(filters.userName.toLowerCase());
+      }
+      if (targetUserId) {
+        filteredProjects = filteredProjects.filter(p => p.currentAssigneeId === targetUserId);
+      }
+    }
+    
+    if (filters?.clientName) {
+      const clientIds = Array.from(clientMap.entries())
+        .filter(([_, name]) => name.toLowerCase().includes(filters.clientName!.toLowerCase()))
+        .map(([id]) => id);
+      filteredProjects = filteredProjects.filter(p => clientIds.includes(p.clientId));
+    }
+    
+    // Apply timeframe filter
+    const now = new Date();
+    if (filters?.timeframe) {
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const startOfWeek = new Date(startOfDay);
+      startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      
+      switch (filters.timeframe) {
+        case 'today':
+          filteredProjects = filteredProjects.filter(p => 
+            p.dueDate && new Date(p.dueDate) >= startOfDay && new Date(p.dueDate) < new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000)
+          );
+          break;
+        case 'this_week':
+          filteredProjects = filteredProjects.filter(p => 
+            p.dueDate && new Date(p.dueDate) >= startOfWeek
+          );
+          break;
+        case 'this_month':
+          filteredProjects = filteredProjects.filter(p => 
+            p.dueDate && new Date(p.dueDate) >= startOfMonth
+          );
+          break;
+        case 'last_30_days':
+          filteredProjects = filteredProjects.filter(p => 
+            p.dueDate && new Date(p.dueDate) >= thirtyDaysAgo
+          );
+          break;
+      }
+    }
+    
+    // Execute query based on type
+    switch (queryType) {
+      case 'overdue_count': {
+        const overdueProjects = filteredProjects.filter(p => 
+          p.dueDate && new Date(p.dueDate) < now && !p.isBenched
+        );
+        
+        // Group by project type
+        const byType: Record<string, number> = {};
+        for (const p of overdueProjects) {
+          const typeName = projectTypeMap.get(p.projectTypeId || '') || 'Other';
+          byType[typeName] = (byType[typeName] || 0) + 1;
+        }
+        
+        const items = Object.entries(byType)
+          .map(([label, value]) => ({ label, value }))
+          .sort((a, b) => b.value - a.value);
+        
+        return {
+          queryType,
+          title: 'Overdue Projects',
+          summary: `${overdueProjects.length} project${overdueProjects.length !== 1 ? 's' : ''} overdue`,
+          data: { total: overdueProjects.length, byType },
+          items
+        };
+      }
+      
+      case 'workload': {
+        // Group by assignee
+        const byAssignee: Record<string, { total: number; overdue: number }> = {};
+        
+        for (const p of filteredProjects) {
+          if (!p.isBenched) {
+            const assigneeName = p.currentAssigneeId ? (userMap.get(p.currentAssigneeId) || 'Unassigned') : 'Unassigned';
+            if (!byAssignee[assigneeName]) {
+              byAssignee[assigneeName] = { total: 0, overdue: 0 };
+            }
+            byAssignee[assigneeName].total++;
+            if (p.dueDate && new Date(p.dueDate) < now) {
+              byAssignee[assigneeName].overdue++;
+            }
+          }
+        }
+        
+        const items = Object.entries(byAssignee)
+          .map(([label, data]) => ({ 
+            label, 
+            value: data.total,
+            subtext: data.overdue > 0 ? `${data.overdue} overdue` : undefined
+          }))
+          .sort((a, b) => b.value - a.value);
+        
+        const totalProjects = filteredProjects.filter(p => !p.isBenched).length;
+        
+        return {
+          queryType,
+          title: 'Team Workload',
+          summary: `${totalProjects} active project${totalProjects !== 1 ? 's' : ''} across ${items.length} team member${items.length !== 1 ? 's' : ''}`,
+          data: { totalProjects, byAssignee },
+          items
+        };
+      }
+      
+      case 'stage_breakdown': {
+        const byStage: Record<string, number> = {};
+        
+        for (const p of filteredProjects) {
+          if (!p.isBenched) {
+            const stage = p.currentStatus || 'Unknown';
+            byStage[stage] = (byStage[stage] || 0) + 1;
+          }
+        }
+        
+        const items = Object.entries(byStage)
+          .map(([label, value]) => ({ label, value }))
+          .sort((a, b) => b.value - a.value);
+        
+        return {
+          queryType,
+          title: 'Projects by Stage',
+          summary: `${filteredProjects.filter(p => !p.isBenched).length} projects across ${items.length} stages`,
+          data: { byStage },
+          items
+        };
+      }
+      
+      case 'bench_count': {
+        const benchedProjects = allProjects.filter(p => p.isBenched && !p.inactive && !p.completionStatus);
+        
+        // Group by bench reason
+        const byReason: Record<string, number> = {};
+        for (const p of benchedProjects) {
+          const reason = p.benchReason || 'unknown';
+          const reasonLabel = reason === 'legacy_work' ? 'Legacy Work' 
+            : reason === 'missing_data' ? 'Missing Data' 
+            : reason === 'other' ? 'Other' : 'Unknown';
+          byReason[reasonLabel] = (byReason[reasonLabel] || 0) + 1;
+        }
+        
+        const items = Object.entries(byReason)
+          .map(([label, value]) => ({ label, value }))
+          .sort((a, b) => b.value - a.value);
+        
+        return {
+          queryType,
+          title: 'Benched Projects',
+          summary: `${benchedProjects.length} project${benchedProjects.length !== 1 ? 's' : ''} on the bench`,
+          data: { total: benchedProjects.length, byReason },
+          items
+        };
+      }
+      
+      case 'completion_stats': {
+        const completedProjects = allProjects.filter(p => p.completionStatus && !p.inactive);
+        
+        // Group by completion month
+        const byMonth: Record<string, number> = {};
+        for (const p of completedProjects) {
+          if (p.completedAt) {
+            const date = new Date(p.completedAt);
+            const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            byMonth[monthKey] = (byMonth[monthKey] || 0) + 1;
+          }
+        }
+        
+        const items = Object.entries(byMonth)
+          .sort((a, b) => b[0].localeCompare(a[0]))
+          .slice(0, 6)
+          .map(([label, value]) => ({ label, value }));
+        
+        return {
+          queryType,
+          title: 'Completion Statistics',
+          summary: `${completedProjects.length} projects completed`,
+          data: { total: completedProjects.length, byMonth },
+          items
+        };
+      }
+      
+      case 'project_summary':
+      default: {
+        const activeCount = filteredProjects.filter(p => !p.isBenched).length;
+        const benchedCount = filteredProjects.filter(p => p.isBenched).length;
+        const overdueCount = filteredProjects.filter(p => 
+          p.dueDate && new Date(p.dueDate) < now && !p.isBenched
+        ).length;
+        
+        const items = [
+          { label: 'Active Projects', value: activeCount },
+          { label: 'Overdue', value: overdueCount },
+          { label: 'On Bench', value: benchedCount }
+        ];
+        
+        return {
+          queryType,
+          title: 'Project Summary',
+          summary: `${activeCount} active, ${overdueCount} overdue, ${benchedCount} benched`,
+          data: { activeCount, benchedCount, overdueCount },
+          items
+        };
+      }
+    }
+  } catch (error) {
+    console.error('[AI Magic] Error getting analytics:', error);
+    return {
+      queryType,
+      title: 'Error',
+      summary: 'Failed to fetch analytics',
+      data: { error: String(error) },
+      items: []
+    };
+  }
 }

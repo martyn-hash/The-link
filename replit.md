@@ -36,7 +36,7 @@ Neon database configuration recommendations for production include disabling aut
 -   **RingCentral**: For VoIP phone system integration.
 -   **SendGrid**: For transactional email delivery.
 -   **VoodooSMS**: For client SMS delivery.
--   **OpenAI API**: Whisper for audio transcription and GPT-4o-mini for AI text processing.
+-   **OpenAI API**: Whisper for audio transcription, GPT-4o-mini for AI text processing, and function-calling for the AI Magic Assistant.
 -   **Replit Platform Services**: For object storage, authentication, and deployment.
 
 ### Frontend Libraries

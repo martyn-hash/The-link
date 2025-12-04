@@ -19,7 +19,15 @@ import {
   Calendar,
   Clock,
   AlertCircle,
-  Building2
+  Building2,
+  Briefcase,
+  PauseCircle,
+  PlayCircle,
+  ArrowRightCircle,
+  BarChart3,
+  FileText,
+  ChevronRight,
+  ExternalLink
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -35,7 +43,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { cn } from '@/lib/utils';
-import { AIFunctionCall } from './types';
+import { AIFunctionCall, ProjectMatchResponse, ProjectDetails, StageReasonsResponse, AnalyticsResult } from './types';
 import type { User as UserType } from '@shared/schema';
 
 interface SearchableSelectProps {
@@ -1283,6 +1291,711 @@ export function SmsActionCard({ functionCall, onComplete, onDismiss }: ActionCar
   );
 }
 
+// Project Status Action Card
+function ProjectStatusCard({ functionCall, onComplete, onDismiss }: ActionCardProps) {
+  const [, setLocation] = useLocation();
+  const projectIdentifier = functionCall.arguments.projectIdentifier as string;
+
+  // Fetch matching projects
+  const { data: matchData, isLoading: isMatching, error: matchError } = useQuery<ProjectMatchResponse>({
+    queryKey: ['/api/ai/match/projects', { q: projectIdentifier }],
+    enabled: !!projectIdentifier,
+  });
+
+  const matches = matchData?.matches || [];
+  const bestMatch = matches[0];
+
+  // Fetch project details if we have a match
+  const { data: projectDetails, isLoading: isLoadingDetails, error: detailsError } = useQuery<ProjectDetails>({
+    queryKey: ['/api/ai/projects', bestMatch?.id, 'details'],
+    enabled: !!bestMatch?.id,
+  });
+
+  const isLoading = isMatching || isLoadingDetails;
+  const hasError = matchError || detailsError;
+
+  const handleViewProject = () => {
+    if (bestMatch?.id) {
+      setLocation(`/projects/${bestMatch.id}`);
+      onComplete(true, `Viewing project: ${bestMatch.clientName}`);
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-4 space-y-3"
+      data-testid="action-card-project-status"
+    >
+      <div className="flex items-center gap-2 text-blue-700 dark:text-blue-400">
+        <Briefcase className="w-4 h-4" />
+        <span className="font-medium text-sm">Project Status</span>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Finding project...
+        </div>
+      ) : hasError ? (
+        <div className="text-sm text-red-600 dark:text-red-400">
+          Unable to find project. Try again or be more specific.
+        </div>
+      ) : !bestMatch ? (
+        <div className="text-sm text-muted-foreground">
+          No project found matching "{projectIdentifier}"
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="text-sm font-medium">{bestMatch.clientName}</div>
+          <div className="text-xs text-muted-foreground">{bestMatch.projectTypeName}</div>
+          
+          <div className="flex items-center gap-4 text-xs">
+            <div className="flex items-center gap-1">
+              <FileText className="w-3 h-3 text-muted-foreground" />
+              <span className={cn(
+                "font-medium px-2 py-0.5 rounded",
+                bestMatch.isBenched 
+                  ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                  : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+              )}>
+                {bestMatch.currentStatus}
+              </span>
+            </div>
+            {bestMatch.assigneeName && (
+              <div className="flex items-center gap-1">
+                <User className="w-3 h-3 text-muted-foreground" />
+                <span>{bestMatch.assigneeName}</span>
+              </div>
+            )}
+            {bestMatch.dueDate && (
+              <div className="flex items-center gap-1">
+                <Calendar className="w-3 h-3 text-muted-foreground" />
+                <span>{format(new Date(bestMatch.dueDate), 'dd MMM yyyy')}</span>
+              </div>
+            )}
+          </div>
+
+          {projectDetails?.nextStage && (
+            <div className="text-xs text-muted-foreground mt-2">
+              Next stage: <span className="font-medium">{projectDetails.nextStage.name}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 pt-1">
+        {bestMatch && (
+          <Button
+            size="sm"
+            onClick={handleViewProject}
+            className="h-7 text-xs bg-blue-600 hover:bg-blue-700"
+            data-testid="button-view-project"
+          >
+            <ExternalLink className="w-3 h-3 mr-1" />
+            View Project
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onDismiss}
+          className="h-7 text-xs ml-auto"
+          data-testid="button-dismiss-project-status"
+        >
+          <X className="w-3 h-3" />
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
+// Bench Project Action Card
+function BenchProjectCard({ functionCall, onComplete, onDismiss }: ActionCardProps) {
+  const { toast } = useToast();
+  const projectIdentifier = functionCall.arguments.projectIdentifier as string;
+  const benchReason = functionCall.arguments.benchReason as string | undefined;
+  const benchReasonOtherText = functionCall.arguments.benchReasonOtherText as string | undefined;
+  const [selectedReason, setSelectedReason] = useState<string>(benchReason || '');
+  const [otherText, setOtherText] = useState<string>(benchReasonOtherText || '');
+
+  // Fetch matching projects
+  const { data: matchData, isLoading: isMatching } = useQuery<ProjectMatchResponse>({
+    queryKey: ['/api/ai/match/projects', { q: projectIdentifier }],
+    enabled: !!projectIdentifier,
+  });
+
+  const matches = matchData?.matches || [];
+  const bestMatch = matches[0];
+
+  const benchMutation = useMutation({
+    mutationFn: async () => {
+      if (!bestMatch?.id) throw new Error('No project selected');
+      return apiRequest('POST', `/api/projects/${bestMatch.id}/bench`, {
+        benchReason: selectedReason,
+        benchReasonOtherText: selectedReason === 'other' ? otherText : undefined
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Project benched',
+        description: `${bestMatch?.clientName} - ${bestMatch?.projectTypeName} moved to bench`
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      onComplete(true, `Benched: ${bestMatch?.clientName}`);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to bench project',
+        description: error.message || 'Something went wrong',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  const isValid = bestMatch && selectedReason && (selectedReason !== 'other' || otherText.trim());
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-4 space-y-3"
+      data-testid="action-card-bench-project"
+    >
+      <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+        <PauseCircle className="w-4 h-4" />
+        <span className="font-medium text-sm">Bench Project</span>
+      </div>
+
+      {isMatching ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Finding project...
+        </div>
+      ) : !bestMatch ? (
+        <div className="text-sm text-muted-foreground">
+          No project found matching "{projectIdentifier}"
+        </div>
+      ) : bestMatch.isBenched ? (
+        <div className="text-sm text-amber-600">
+          This project is already on the bench
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div>
+            <div className="text-sm font-medium">{bestMatch.clientName}</div>
+            <div className="text-xs text-muted-foreground">{bestMatch.projectTypeName}</div>
+          </div>
+
+          <div>
+            <Label className="text-xs text-muted-foreground">Reason for benching</Label>
+            <Select value={selectedReason} onValueChange={setSelectedReason}>
+              <SelectTrigger className="h-8 text-sm" data-testid="select-bench-reason">
+                <SelectValue placeholder="Select reason..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="legacy_work">Legacy Work</SelectItem>
+                <SelectItem value="missing_data">Missing Data</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {selectedReason === 'other' && (
+            <div>
+              <Label className="text-xs text-muted-foreground">Explain reason</Label>
+              <Input
+                value={otherText}
+                onChange={e => setOtherText(e.target.value)}
+                placeholder="Enter reason..."
+                className="h-8 text-sm"
+                data-testid="input-bench-reason-other"
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 pt-1">
+        <Button
+          size="sm"
+          onClick={() => benchMutation.mutate()}
+          disabled={!isValid || benchMutation.isPending || bestMatch?.isBenched}
+          className="h-7 text-xs bg-amber-600 hover:bg-amber-700"
+          data-testid="button-confirm-bench"
+        >
+          {benchMutation.isPending ? (
+            <Loader2 className="w-3 h-3 animate-spin mr-1" />
+          ) : (
+            <PauseCircle className="w-3 h-3 mr-1" />
+          )}
+          Bench Project
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onDismiss}
+          className="h-7 text-xs ml-auto"
+          data-testid="button-dismiss-bench"
+        >
+          <X className="w-3 h-3" />
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
+// Unbench Project Action Card
+function UnbenchProjectCard({ functionCall, onComplete, onDismiss }: ActionCardProps) {
+  const { toast } = useToast();
+  const projectIdentifier = functionCall.arguments.projectIdentifier as string;
+  const notes = functionCall.arguments.notes as string | undefined;
+  const [unbenchNotes, setUnbenchNotes] = useState<string>(notes || '');
+
+  // Fetch matching projects
+  const { data: matchData, isLoading: isMatching } = useQuery<ProjectMatchResponse>({
+    queryKey: ['/api/ai/match/projects', { q: projectIdentifier }],
+    enabled: !!projectIdentifier,
+  });
+
+  const matches = matchData?.matches || [];
+  const bestMatch = matches[0];
+
+  const unbenchMutation = useMutation({
+    mutationFn: async () => {
+      if (!bestMatch?.id) throw new Error('No project selected');
+      return apiRequest('POST', `/api/projects/${bestMatch.id}/unbench`, { 
+        notes: unbenchNotes || undefined 
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: 'Project unbenched',
+        description: `${bestMatch?.clientName} - ${bestMatch?.projectTypeName} removed from bench`
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      onComplete(true, `Unbenched: ${bestMatch?.clientName}`);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to unbench project',
+        description: error.message || 'Something went wrong',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border border-green-200 dark:border-green-800 rounded-xl p-4 space-y-3"
+      data-testid="action-card-unbench-project"
+    >
+      <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+        <PlayCircle className="w-4 h-4" />
+        <span className="font-medium text-sm">Unbench Project</span>
+      </div>
+
+      {isMatching ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Finding project...
+        </div>
+      ) : !bestMatch ? (
+        <div className="text-sm text-muted-foreground">
+          No project found matching "{projectIdentifier}"
+        </div>
+      ) : !bestMatch.isBenched ? (
+        <div className="text-sm text-green-600">
+          This project is not on the bench
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div>
+            <div className="text-sm font-medium">{bestMatch.clientName}</div>
+            <div className="text-xs text-muted-foreground">{bestMatch.projectTypeName}</div>
+            <div className="text-xs text-amber-600 mt-1">Currently on bench</div>
+          </div>
+
+          <div>
+            <Label className="text-xs text-muted-foreground">Notes (optional)</Label>
+            <Textarea
+              value={unbenchNotes}
+              onChange={e => setUnbenchNotes(e.target.value)}
+              placeholder="Add notes about unbenching..."
+              className="text-sm min-h-[60px]"
+              data-testid="input-unbench-notes"
+            />
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 pt-1">
+        <Button
+          size="sm"
+          onClick={() => unbenchMutation.mutate()}
+          disabled={!bestMatch?.isBenched || unbenchMutation.isPending}
+          className="h-7 text-xs bg-green-600 hover:bg-green-700"
+          data-testid="button-confirm-unbench"
+        >
+          {unbenchMutation.isPending ? (
+            <Loader2 className="w-3 h-3 animate-spin mr-1" />
+          ) : (
+            <PlayCircle className="w-3 h-3 mr-1" />
+          )}
+          Unbench Project
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onDismiss}
+          className="h-7 text-xs ml-auto"
+          data-testid="button-dismiss-unbench"
+        >
+          <X className="w-3 h-3" />
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
+// Move Project Stage Action Card
+function MoveProjectStageCard({ functionCall, onComplete, onDismiss }: ActionCardProps) {
+  const { toast } = useToast();
+  const projectIdentifier = functionCall.arguments.projectIdentifier as string;
+  const targetStageName = functionCall.arguments.targetStageName as string | undefined;
+  const [selectedStageId, setSelectedStageId] = useState<string>('');
+  const [selectedReasonId, setSelectedReasonId] = useState<string>('');
+  const [stageNotes, setStageNotes] = useState<string>('');
+  const [step, setStep] = useState<'stage' | 'reason' | 'notes'>('stage');
+
+  // Fetch matching projects
+  const { data: matchData, isLoading: isMatching } = useQuery<ProjectMatchResponse>({
+    queryKey: ['/api/ai/match/projects', { q: projectIdentifier }],
+    enabled: !!projectIdentifier,
+  });
+
+  const matches = matchData?.matches || [];
+  const bestMatch = matches[0];
+
+  // Fetch project details with stages
+  const { data: projectDetails, isLoading: isLoadingDetails } = useQuery<ProjectDetails>({
+    queryKey: ['/api/ai/projects', bestMatch?.id, 'details'],
+    enabled: !!bestMatch?.id,
+  });
+
+  // Fetch reasons for selected stage
+  const { data: stageReasons } = useQuery<StageReasonsResponse>({
+    queryKey: ['/api/ai/projects', bestMatch?.id, 'stages', selectedStageId, 'reasons'],
+    enabled: !!bestMatch?.id && !!selectedStageId,
+  });
+
+  // Auto-select next stage or target stage
+  useEffect(() => {
+    if (projectDetails?.stages) {
+      if (targetStageName && targetStageName.toLowerCase() !== 'next') {
+        const targetStage = projectDetails.stages.find(
+          (s) => s.name.toLowerCase().includes(targetStageName.toLowerCase())
+        );
+        if (targetStage) {
+          setSelectedStageId(targetStage.id);
+          setStep('reason');
+        }
+      } else if (projectDetails.nextStage) {
+        setSelectedStageId(projectDetails.nextStage.id);
+        setStep('reason');
+      }
+    }
+  }, [projectDetails, targetStageName]);
+
+  const moveStageMutation = useMutation({
+    mutationFn: async () => {
+      if (!bestMatch?.id || !selectedStageId || !selectedReasonId) {
+        throw new Error('Missing required data');
+      }
+      
+      const selectedStage = projectDetails?.stages?.find((s) => s.id === selectedStageId);
+      const selectedReason = stageReasons?.reasons?.find((r) => r.id === selectedReasonId);
+      
+      return apiRequest('PATCH', `/api/projects/${bestMatch.id}/status`, {
+        newStatus: selectedStage?.name,
+        stageId: selectedStageId,
+        reasonId: selectedReasonId,
+        changeReason: selectedReason?.name,
+        notes: stageNotes || undefined
+      });
+    },
+    onSuccess: () => {
+      const selectedStage = projectDetails?.stages?.find((s) => s.id === selectedStageId);
+      toast({
+        title: 'Stage updated',
+        description: `${bestMatch?.clientName} moved to "${selectedStage?.name}"`
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects'] });
+      onComplete(true, `Moved: ${bestMatch?.clientName} to ${selectedStage?.name}`);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to move project',
+        description: error.message || 'Something went wrong',
+        variant: 'destructive'
+      });
+    }
+  });
+
+  const isLoading = isMatching || isLoadingDetails;
+  const selectedStage = projectDetails?.stages?.find((s) => s.id === selectedStageId);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="bg-gradient-to-br from-purple-50 to-violet-50 dark:from-purple-950/30 dark:to-violet-950/30 border border-purple-200 dark:border-purple-800 rounded-xl p-4 space-y-3"
+      data-testid="action-card-move-stage"
+    >
+      <div className="flex items-center gap-2 text-purple-700 dark:text-purple-400">
+        <ArrowRightCircle className="w-4 h-4" />
+        <span className="font-medium text-sm">Move Project Stage</span>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Finding project...
+        </div>
+      ) : !bestMatch ? (
+        <div className="text-sm text-muted-foreground">
+          No project found matching "{projectIdentifier}"
+        </div>
+      ) : bestMatch.isBenched ? (
+        <div className="text-sm text-amber-600">
+          Cannot change stage - project is on the bench
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div>
+            <div className="text-sm font-medium">{bestMatch.clientName}</div>
+            <div className="text-xs text-muted-foreground">{bestMatch.projectTypeName}</div>
+            <div className="flex items-center gap-2 mt-1 text-xs">
+              <span className="text-muted-foreground">Current:</span>
+              <span className="font-medium text-purple-600">{bestMatch.currentStatus}</span>
+              {selectedStage && (
+                <>
+                  <ChevronRight className="w-3 h-3 text-muted-foreground" />
+                  <span className="font-medium text-green-600">{selectedStage.name}</span>
+                </>
+              )}
+            </div>
+          </div>
+
+          {step === 'stage' && (
+            <div>
+              <Label className="text-xs text-muted-foreground">Select stage</Label>
+              <Select value={selectedStageId} onValueChange={(v) => { setSelectedStageId(v); setStep('reason'); }}>
+                <SelectTrigger className="h-8 text-sm" data-testid="select-target-stage">
+                  <SelectValue placeholder="Select stage..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {projectDetails?.stages?.map((stage: any) => (
+                    <SelectItem 
+                      key={stage.id} 
+                      value={stage.id}
+                      disabled={stage.name === bestMatch.currentStatus}
+                    >
+                      {stage.name}
+                      {stage.id === projectDetails?.nextStage?.id && ' (Next)'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {step === 'reason' && stageReasons?.reasons && stageReasons.reasons.length > 0 && (
+            <div>
+              <Label className="text-xs text-muted-foreground">Change reason</Label>
+              <Select value={selectedReasonId} onValueChange={(v) => { setSelectedReasonId(v); setStep('notes'); }}>
+                <SelectTrigger className="h-8 text-sm" data-testid="select-change-reason">
+                  <SelectValue placeholder="Select reason..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {stageReasons.reasons.map((reason) => (
+                    <SelectItem key={reason.id} value={reason.id}>
+                      {reason.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {step === 'notes' && (
+            <div>
+              <Label className="text-xs text-muted-foreground">Notes (optional)</Label>
+              <Textarea
+                value={stageNotes}
+                onChange={e => setStageNotes(e.target.value)}
+                placeholder="Add notes about this stage change..."
+                className="text-sm min-h-[60px]"
+                data-testid="input-stage-notes"
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 pt-1">
+        {step !== 'stage' && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setStep(step === 'notes' ? 'reason' : 'stage')}
+            className="h-7 text-xs"
+            data-testid="button-back-stage"
+          >
+            Back
+          </Button>
+        )}
+        <Button
+          size="sm"
+          onClick={() => moveStageMutation.mutate()}
+          disabled={!selectedStageId || !selectedReasonId || moveStageMutation.isPending || bestMatch?.isBenched}
+          className="h-7 text-xs bg-purple-600 hover:bg-purple-700"
+          data-testid="button-confirm-move-stage"
+        >
+          {moveStageMutation.isPending ? (
+            <Loader2 className="w-3 h-3 animate-spin mr-1" />
+          ) : (
+            <ArrowRightCircle className="w-3 h-3 mr-1" />
+          )}
+          Move Stage
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onDismiss}
+          className="h-7 text-xs ml-auto"
+          data-testid="button-dismiss-move-stage"
+        >
+          <X className="w-3 h-3" />
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
+// Analytics Action Card
+function AnalyticsCard({ functionCall, onComplete, onDismiss }: ActionCardProps) {
+  const [, setLocation] = useLocation();
+  const queryType = functionCall.arguments.queryType as string;
+  const projectTypeName = functionCall.arguments.projectTypeName as string | undefined;
+  const userName = functionCall.arguments.userName as string | undefined;
+  const clientName = functionCall.arguments.clientName as string | undefined;
+  const timeframe = functionCall.arguments.timeframe as string | undefined;
+
+  // Build query params object for useQuery
+  const queryParamsObj: Record<string, string> = { queryType };
+  if (projectTypeName) queryParamsObj.projectTypeName = projectTypeName;
+  if (userName) queryParamsObj.userName = userName;
+  if (clientName) queryParamsObj.clientName = clientName;
+  if (timeframe) queryParamsObj.timeframe = timeframe;
+
+  const { data: analytics, isLoading, error } = useQuery<AnalyticsResult>({
+    queryKey: ['/api/ai/analytics', queryParamsObj],
+    enabled: !!queryType,
+  });
+
+  const handleViewProjects = () => {
+    // Navigate to projects with filters
+    const filterParams = new URLSearchParams();
+    if (queryType === 'overdue_count') filterParams.set('filter', 'overdue');
+    if (queryType === 'bench_count') filterParams.set('filter', 'benched');
+    if (projectTypeName) filterParams.set('type', projectTypeName);
+    
+    setLocation(`/projects${filterParams.toString() ? '?' + filterParams.toString() : ''}`);
+    onComplete(true, `Viewing ${queryType.replace(/_/g, ' ')} analytics`);
+  };
+
+  const getIcon = () => {
+    switch (queryType) {
+      case 'overdue_count': return <Clock className="w-4 h-4" />;
+      case 'workload': return <User className="w-4 h-4" />;
+      case 'bench_count': return <PauseCircle className="w-4 h-4" />;
+      default: return <BarChart3 className="w-4 h-4" />;
+    }
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="bg-gradient-to-br from-cyan-50 to-teal-50 dark:from-cyan-950/30 dark:to-teal-950/30 border border-cyan-200 dark:border-cyan-800 rounded-xl p-4 space-y-3"
+      data-testid="action-card-analytics"
+    >
+      <div className="flex items-center gap-2 text-cyan-700 dark:text-cyan-400">
+        {getIcon()}
+        <span className="font-medium text-sm">{analytics?.title || 'Analytics'}</span>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Loading analytics...
+        </div>
+      ) : error ? (
+        <div className="text-sm text-red-600 dark:text-red-400">
+          Unable to load analytics data. Try again later.
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <div className="text-lg font-semibold text-foreground">
+            {analytics?.summary || 'No data available'}
+          </div>
+          
+          {analytics?.items && analytics.items.length > 0 && (
+            <div className="space-y-1">
+              {analytics.items.slice(0, 5).map((item: any, i: number) => (
+                <div key={i} className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">{item.label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{item.value}</span>
+                    {item.subtext && (
+                      <span className="text-amber-600">{item.subtext}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 pt-1">
+        <Button
+          size="sm"
+          onClick={handleViewProjects}
+          className="h-7 text-xs bg-cyan-600 hover:bg-cyan-700"
+          data-testid="button-view-analytics"
+        >
+          <ExternalLink className="w-3 h-3 mr-1" />
+          View in Projects
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onDismiss}
+          className="h-7 text-xs ml-auto"
+          data-testid="button-dismiss-analytics"
+        >
+          <X className="w-3 h-3" />
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
 export function ActionCard({ functionCall, onComplete, onDismiss }: ActionCardProps) {
   switch (functionCall.name) {
     case 'create_reminder':
@@ -1302,6 +2015,16 @@ export function ActionCard({ functionCall, onComplete, onDismiss }: ActionCardPr
       return <EmailActionCard functionCall={functionCall} onComplete={onComplete} onDismiss={onDismiss} />;
     case 'send_sms':
       return <SmsActionCard functionCall={functionCall} onComplete={onComplete} onDismiss={onDismiss} />;
+    case 'get_project_status':
+      return <ProjectStatusCard functionCall={functionCall} onComplete={onComplete} onDismiss={onDismiss} />;
+    case 'bench_project':
+      return <BenchProjectCard functionCall={functionCall} onComplete={onComplete} onDismiss={onDismiss} />;
+    case 'unbench_project':
+      return <UnbenchProjectCard functionCall={functionCall} onComplete={onComplete} onDismiss={onDismiss} />;
+    case 'move_project_stage':
+      return <MoveProjectStageCard functionCall={functionCall} onComplete={onComplete} onDismiss={onDismiss} />;
+    case 'get_analytics':
+      return <AnalyticsCard functionCall={functionCall} onComplete={onComplete} onDismiss={onDismiss} />;
     default:
       return (
         <motion.div

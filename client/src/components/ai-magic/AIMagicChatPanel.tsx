@@ -342,6 +342,16 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
           description = `Here are your tasks.`;
         } else if (data.functionCall.name === 'show_reminders') {
           description = `Here are your reminders.`;
+        } else if (data.functionCall.name === 'get_project_status') {
+          description = `Looking up that project for you.`;
+        } else if (data.functionCall.name === 'bench_project') {
+          description = `I'll help you bench that project.`;
+        } else if (data.functionCall.name === 'unbench_project') {
+          description = `I'll help you unbench that project.`;
+        } else if (data.functionCall.name === 'move_project_stage') {
+          description = `I'll help you move that project to a new stage.`;
+        } else if (data.functionCall.name === 'get_analytics') {
+          description = `Let me get that data for you.`;
         }
         
         responseMessage = {
