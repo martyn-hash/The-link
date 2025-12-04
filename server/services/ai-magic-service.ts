@@ -101,6 +101,10 @@ const AI_MAGIC_FUNCTIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
             enum: ["low", "medium", "high"],
             description: "Priority level of the task" 
           },
+          taskTypeName: {
+            type: "string",
+            description: "Type of task. Use context clues to suggest an appropriate type from available options."
+          },
           clientName: { 
             type: "string", 
             description: "Name of the client this task relates to (optional)" 
@@ -315,11 +319,15 @@ const AI_MAGIC_FUNCTIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
 ];
 
 // Build the system prompt with current context
-function buildSystemPrompt(userName: string, currentDateTime: string): string {
+function buildSystemPrompt(userName: string, currentDateTime: string, taskTypes?: string[]): string {
+  const taskTypesContext = taskTypes && taskTypes.length > 0 
+    ? `\n\nAvailable task types: ${taskTypes.join(', ')}`
+    : '';
+    
   return `You are an AI assistant for The Link, a CRM system for accounting and bookkeeping firms. You help users create reminders, tasks, send emails/SMS, and navigate to data.
 
 Current user: ${userName}
-Current date/time: ${currentDateTime} (UK timezone - Europe/London)
+Current date/time: ${currentDateTime} (UK timezone - Europe/London)${taskTypesContext}
 
 ## Your Capabilities:
 - Create quick reminders (time-based personal notifications)
@@ -380,7 +388,16 @@ export async function processAIMagicChat(
       minute: '2-digit'
     });
 
-    const systemPrompt = buildSystemPrompt(context.currentUserName, ukDateTime);
+    // Fetch task types to provide context to the AI
+    let taskTypeNames: string[] = [];
+    try {
+      const taskTypes = await storage.getAllTaskTypes();
+      taskTypeNames = taskTypes.map((t: { name: string }) => t.name);
+    } catch (e) {
+      console.warn('[AI Magic] Could not fetch task types:', e);
+    }
+
+    const systemPrompt = buildSystemPrompt(context.currentUserName, ukDateTime, taskTypeNames);
 
     // Build messages array for OpenAI
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [

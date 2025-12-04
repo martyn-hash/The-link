@@ -15,6 +15,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { AIMessage, AIBackendResponse, AIFunctionCall } from './types';
 import { AIMagicHelpModal } from './AIMagicHelpModal';
+import { ActionCard } from './AIMagicActionCards';
 import { nanoid } from 'nanoid';
 
 interface SpeechRecognitionEvent {
@@ -62,6 +63,8 @@ interface AIMagicChatPanelProps {
   onClose: () => void;
 }
 
+type ActionStatus = 'pending' | 'completed' | 'dismissed';
+
 export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
   const [messages, setMessages] = useState<AIMessage[]>([
     {
@@ -76,6 +79,7 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(true);
+  const [actionStatuses, setActionStatuses] = useState<Record<string, ActionStatus>>({});
   
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -139,60 +143,43 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
       
       // Handle different response types
       let responseMessage: AIMessage;
+      const messageId = nanoid();
       
       if (data.type === 'function_call' && data.functionCall) {
-        // AI detected an action - for now show what was understood
+        // AI detected an action - show action card for confirmation
         const actionName = data.functionCall.name.replace(/_/g, ' ');
         const args = data.functionCall.arguments;
-        let description = `I'll help you ${actionName}.`;
+        let description = `I understood: ${actionName}`;
         
         // Build a friendly description based on the function
         if (data.functionCall.name === 'create_reminder') {
-          description = `I'll create a reminder: "${args.title}"`;
-          if (args.dateTime) {
-            const date = new Date(args.dateTime as string);
-            description += ` for ${date.toLocaleString('en-GB', { 
-              dateStyle: 'medium', 
-              timeStyle: 'short',
-              timeZone: 'Europe/London'
-            })}`;
-          }
+          description = `Got it! I'll help you create a reminder.`;
         } else if (data.functionCall.name === 'create_task') {
-          description = `I'll create a task: "${args.title}"`;
-          if (args.assigneeName) {
-            description += ` assigned to ${args.assigneeName}`;
-          }
+          description = `Got it! I'll help you create a task.`;
         } else if (data.functionCall.name === 'send_email') {
-          description = `I'll help you compose an email to ${args.recipientName}`;
+          description = `Got it! I'll help you compose an email.`;
         } else if (data.functionCall.name === 'send_sms') {
-          description = `I'll help you send an SMS to ${args.recipientName}`;
-        } else if (data.functionCall.name === 'navigate_to_client') {
-          description = `I'll take you to ${args.clientName}'s page`;
-        } else if (data.functionCall.name === 'navigate_to_person') {
-          description = `I'll take you to ${args.personName}'s profile`;
+          description = `Got it! I'll help you send an SMS.`;
+        } else if (data.functionCall.name === 'navigate_to_client' || data.functionCall.name === 'navigate_to_person') {
+          description = `Found it! Let me take you there.`;
         } else if (data.functionCall.name === 'search_clients') {
-          description = `I'll search for clients matching "${args.searchTerm}"`;
+          description = `I'll search for that.`;
         } else if (data.functionCall.name === 'show_tasks') {
-          description = `I'll show you tasks`;
-          if (args.assigneeName) {
-            description += ` for ${args.assigneeName === 'me' ? 'you' : args.assigneeName}`;
-          }
+          description = `Here are your tasks.`;
         } else if (data.functionCall.name === 'show_reminders') {
-          description = `I'll show you reminders`;
-          if (args.timeframe) {
-            description += ` (${(args.timeframe as string).replace(/_/g, ' ')})`;
-          }
+          description = `Here are your reminders.`;
         }
         
-        description += '\n\n(Action forms coming in the next update!)';
-        
         responseMessage = {
-          id: nanoid(),
+          id: messageId,
           role: 'assistant',
           content: description,
           timestamp: new Date(),
           functionCall: data.functionCall,
         };
+        
+        // Set action status to pending so the card shows
+        setActionStatuses(prev => ({ ...prev, [messageId]: 'pending' }));
       } else if (data.type === 'clarification') {
         responseMessage = {
           id: nanoid(),
@@ -338,7 +325,25 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
         >
           <div className="space-y-4">
             {messages.map((message) => (
-              <MessageBubble key={message.id} message={message} />
+              <MessageBubble 
+                key={message.id} 
+                message={message}
+                actionStatus={actionStatuses[message.id]}
+                onActionComplete={(success, resultMessage) => {
+                  setActionStatuses(prev => ({ ...prev, [message.id]: 'completed' }));
+                  if (success) {
+                    setMessages(prev => [...prev, {
+                      id: nanoid(),
+                      role: 'assistant',
+                      content: resultMessage,
+                      timestamp: new Date(),
+                    }]);
+                  }
+                }}
+                onActionDismiss={() => {
+                  setActionStatuses(prev => ({ ...prev, [message.id]: 'dismissed' }));
+                }}
+              />
             ))}
             <div ref={messagesEndRef} />
           </div>
@@ -402,7 +407,14 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
   );
 }
 
-function MessageBubble({ message }: { message: AIMessage }) {
+interface MessageBubbleProps {
+  message: AIMessage;
+  actionStatus?: ActionStatus;
+  onActionComplete?: (success: boolean, message: string) => void;
+  onActionDismiss?: () => void;
+}
+
+function MessageBubble({ message, actionStatus, onActionComplete, onActionDismiss }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   
   if (message.isLoading) {
@@ -422,41 +434,58 @@ function MessageBubble({ message }: { message: AIMessage }) {
     );
   }
 
+  const showActionCard = message.functionCall && actionStatus === 'pending' && onActionComplete && onActionDismiss;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       className={cn(
-        "flex items-start gap-2",
-        isUser && "flex-row-reverse"
+        "flex flex-col gap-2",
+        isUser && "items-end"
       )}
       data-testid={`message-${isUser ? 'user' : 'assistant'}-${message.id}`}
     >
       <div className={cn(
-        "w-7 h-7 rounded-full flex items-center justify-center shrink-0",
-        isUser 
-          ? "bg-primary text-primary-foreground" 
-          : "bg-gradient-to-br from-primary to-accent"
+        "flex items-start gap-2",
+        isUser && "flex-row-reverse"
       )}>
-        {isUser ? (
-          <User className="w-3.5 h-3.5" />
-        ) : (
-          <Sparkles className="w-3.5 h-3.5 text-white" />
-        )}
+        <div className={cn(
+          "w-7 h-7 rounded-full flex items-center justify-center shrink-0",
+          isUser 
+            ? "bg-primary text-primary-foreground" 
+            : "bg-gradient-to-br from-primary to-accent"
+        )}>
+          {isUser ? (
+            <User className="w-3.5 h-3.5" />
+          ) : (
+            <Sparkles className="w-3.5 h-3.5 text-white" />
+          )}
+        </div>
+        <div className={cn(
+          "rounded-2xl px-4 py-2 max-w-[85%]",
+          isUser 
+            ? "bg-primary text-primary-foreground rounded-tr-sm" 
+            : "bg-muted rounded-tl-sm"
+        )}>
+          <p 
+            className="text-sm whitespace-pre-wrap"
+            data-testid={`text-message-${message.id}`}
+          >
+            {message.content}
+          </p>
+        </div>
       </div>
-      <div className={cn(
-        "rounded-2xl px-4 py-2 max-w-[85%]",
-        isUser 
-          ? "bg-primary text-primary-foreground rounded-tr-sm" 
-          : "bg-muted rounded-tl-sm"
-      )}>
-        <p 
-          className="text-sm whitespace-pre-wrap"
-          data-testid={`text-message-${message.id}`}
-        >
-          {message.content}
-        </p>
-      </div>
+      
+      {showActionCard && (
+        <div className="w-full max-w-[95%] ml-9">
+          <ActionCard
+            functionCall={message.functionCall!}
+            onComplete={onActionComplete}
+            onDismiss={onActionDismiss}
+          />
+        </div>
+      )}
     </motion.div>
   );
 }
