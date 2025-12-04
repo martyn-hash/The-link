@@ -1,0 +1,38 @@
+I would like you to help plan and implement a state of the art AI implementation in the system to help creating and accessing data in the system. 
+
+What I would like is a floating ai button that exists in the bottom left of the screen. When pressed a chat box appears, big enough to type a message, and also with a voice prompt button. 
+
+The user should be able to speak or type a request that we send to the open ai api. The purpose of sending the request would be to get back into the system a structured json request that the system can then easily process. 
+
+For example, the system should be able support: 
+
+Creating reminders
+Creating tasks
+Showing reminders
+showing tasks
+sending an email to a client
+sending a text message to a client
+searching for and loading a client
+
+It would work like this:
+
+1) User says something like 'I need to be reminded on Wednesday at 12:00 to call Victoriam Sales'. 
+2) System sends this to open ai api with the catalogue of possible events that the system can receive back and the json structures required
+3) Open ai either finds an exact match, for example it recognizes it's a reminder for the current user and can send back the full json. 
+4) The system pre-populates the reminder creation form and displays it as a modal for the user to commit. 
+
+In the scenario where the AI categorises correctly, but a piece of info is missing, the chat box should seek this info back from the user - 'What time did you want the reminder on Wednesday?' for example, the user answers, we resubmit and the process continues. 
+
+If the ai cannot categorise and start to complete any json, it should seek clarification from the user, by asking what it's trying to do. Maybe the system could give some categories that the user has to pick from. 
+
+The system would need to deploy sophisticated matching for the client in case what comes back is not an exact match to a client name. where the system is not sure of the client but has the rest of the info to proceed, it could show the options it's narrowed down to, let the user select the correct one, or do their own search and continue and the system then pre-populates the task / reminder / email as outlined above. 
+
+We should support 'show me' of tasks, reminder, projects - 'Show me all of Harry's tasks'. For the 'show me' option we employ an almost full screen modal to allow for easy viewing. 
+
+'Show me' or 'take me to' of a client name should load the client detail screen. 
+
+I think understanding the context of the current logged in user will be key - 'Show me my VAT projects' could load a Kanban view of VAT projects where the user is the service owner for example. As opposed to 'Show me the VAT projects' that shows it all. 
+
+The trick here is am looking to make interaction with the system as current, modern and easy as possible. They should just be able to speak or type what they want to create, or view and the interactions between ai and the system just makes it feel like magic.
+
+Can you help me brainstorm this idea? Review the codebase, let's see what other commands we could support? How can we make this a feature that captures the sharp edge of what's possible right now? And what pitfalls and other risks should we think through. 
