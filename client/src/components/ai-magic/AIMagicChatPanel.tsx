@@ -297,6 +297,22 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
         contextToSend.lastAction = conversationContext.lastAction;
       }
       
+      // Build current view context - what page the user is currently viewing
+      const currentViewContext: {
+        clientId?: string;
+        clientName?: string;
+        personId?: string;
+        personName?: string;
+      } = {};
+      if (currentClient) {
+        currentViewContext.clientId = currentClient.id;
+        currentViewContext.clientName = currentClient.name;
+      }
+      if (currentPerson) {
+        currentViewContext.personId = currentPerson.id;
+        currentViewContext.personName = `${currentPerson.firstName || ''} ${currentPerson.lastName || ''}`.trim();
+      }
+      
       const response = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -306,6 +322,7 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
             .filter(m => m.id !== 'welcome' && !m.isLoading)
             .map(m => ({ role: m.role, content: m.content })),
           conversationContext: Object.keys(contextToSend).length > 0 ? contextToSend : undefined,
+          currentViewContext: Object.keys(currentViewContext).length > 0 ? currentViewContext : undefined,
         }),
       });
 

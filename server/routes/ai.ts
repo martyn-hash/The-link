@@ -593,7 +593,7 @@ Please refine the email according to the request above.`;
           });
         }
         
-        const { message, conversationHistory, conversationContext } = parseResult.data;
+        const { message, conversationHistory, conversationContext, currentViewContext } = parseResult.data;
 
         // Get current user details
         const user = await storage.getUser(userId);
@@ -607,6 +607,9 @@ Please refine the email according to the request above.`;
         const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'User';
 
         console.log("[AI Magic] Processing chat for user:", userName, userId);
+        if (currentViewContext) {
+          console.log("[AI Magic] Current view context:", currentViewContext);
+        }
 
         // Process with OpenAI function calling
         const result = await processAIMagicChat(
@@ -616,7 +619,8 @@ Please refine the email according to the request above.`;
             currentUserId: userId,
             currentUserName: userName
           },
-          conversationContext
+          conversationContext,
+          currentViewContext
         );
 
         res.json(result);

@@ -947,6 +947,81 @@ export function SearchClientsActionCard({ functionCall, onComplete, onDismiss }:
   );
 }
 
+// Improved fuzzy matching for people that considers both person name and client name
+function matchPersonWithClientContext(
+  searchQuery: string,
+  suggestedClient: string | undefined,
+  people: { id: string; firstName: string | null; lastName: string | null; email: string | null; clientId: string }[],
+  clients: { id: string; name: string }[]
+): { person: typeof people[0]; score: number; clientName: string } | null {
+  if (!people || people.length === 0) return null;
+  
+  const query = searchQuery.toLowerCase().trim();
+  if (!query) return null;
+  
+  // Create a map of client IDs to names
+  const clientMap = new Map(clients.map(c => [c.id, c.name]));
+  
+  // Score each person
+  const scored = people
+    .filter(p => p.email) // Only consider people with emails
+    .map(p => {
+      const firstName = (p.firstName || '').toLowerCase();
+      const lastName = (p.lastName || '').toLowerCase();
+      const fullName = `${firstName} ${lastName}`.trim();
+      const clientName = (clientMap.get(p.clientId) || '').toLowerCase();
+      
+      let score = 0;
+      
+      // Check if query contains "from" pattern like "mark from monkey access"
+      const fromMatch = query.match(/^(.+?)\s+from\s+(.+)$/i);
+      if (fromMatch) {
+        const personSearch = fromMatch[1].toLowerCase().trim();
+        const clientSearch = fromMatch[2].toLowerCase().trim();
+        
+        // Match person name
+        if (firstName === personSearch || lastName === personSearch) {
+          score += 50;
+        } else if (fullName.includes(personSearch) || personSearch.includes(fullName)) {
+          score += 30;
+        } else if (firstName.includes(personSearch) || lastName.includes(personSearch)) {
+          score += 20;
+        }
+        
+        // Match client name
+        if (clientName.includes(clientSearch) || clientSearch.includes(clientName)) {
+          score += 40;
+        } else if (clientName.split(/\s+/).some(word => clientSearch.includes(word))) {
+          score += 20;
+        }
+      } else {
+        // Simple matching - check if query matches person name or includes client context
+        if (firstName === query || lastName === query || fullName === query) {
+          score += 60;
+        } else if (fullName.includes(query) || query.includes(fullName)) {
+          score += 40;
+        } else if (firstName.includes(query) || query.includes(firstName) || 
+                   lastName.includes(query) || query.includes(lastName)) {
+          score += 25;
+        }
+        
+        // Boost if suggested client matches
+        if (suggestedClient) {
+          const suggestedLower = suggestedClient.toLowerCase();
+          if (clientName.includes(suggestedLower) || suggestedLower.includes(clientName)) {
+            score += 30;
+          }
+        }
+      }
+      
+      return { person: p, score, clientName: clientMap.get(p.clientId) || '' };
+    })
+    .filter(item => item.score > 0)
+    .sort((a, b) => b.score - a.score);
+  
+  return scored.length > 0 ? scored[0] : null;
+}
+
 export function EmailActionCard({ functionCall, onComplete, onDismiss }: ActionCardProps) {
   const { toast } = useToast();
   const args = functionCall.arguments;
@@ -967,11 +1042,11 @@ export function EmailActionCard({ functionCall, onComplete, onDismiss }: ActionC
     queryKey: ['/api/clients'],
   });
 
-  const matchedPerson = people?.find(p => {
-    const fullName = `${p.firstName || ''} ${p.lastName || ''}`.toLowerCase().trim();
-    const searchName = recipientName.toLowerCase().trim();
-    return fullName.includes(searchName) || searchName.includes(fullName);
-  });
+  // Use improved matching that considers both person name and client name
+  const matchResult = people && clients 
+    ? matchPersonWithClientContext(recipientName, suggestedClientName, people, clients)
+    : null;
+  const matchedPerson = matchResult?.person;
 
   const effectivePersonId = selectedPersonId || matchedPerson?.id || '';
   const selectedPerson = people?.find(p => p.id === effectivePersonId);
@@ -1024,10 +1099,13 @@ export function EmailActionCard({ functionCall, onComplete, onDismiss }: ActionC
             <SearchableSelect
               value={effectivePersonId}
               onValueChange={setSelectedPersonId}
-              options={(people || []).filter(p => p.email).map(p => ({
-                id: p.id,
-                name: `${p.firstName || ''} ${p.lastName || ''} (${p.email})`
-              }))}
+              options={(people || []).filter(p => p.email).map(p => {
+                const clientName = clients?.find(c => c.id === p.clientId)?.name;
+                return {
+                  id: p.id,
+                  name: `${p.firstName || ''} ${p.lastName || ''}${clientName ? ` @ ${clientName}` : ''} (${p.email})`
+                };
+              })}
               placeholder="Type to search contacts with email..."
               suggestedName={recipientName}
               icon={<User className="w-3 h-3" />}

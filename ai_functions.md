@@ -47,15 +47,18 @@ This document describes all the features available in the AI Magic Assistant, ho
 | Test Case | What to Say | Expected Result |
 |-----------|-------------|-----------------|
 | Basic email | "Send an email to John Smith" | Opens email card with John selected |
-| With client context | "Send an email to Mark from Monkey Access Limited" | Should match Mark at that client |
+| With client context | "Send an email to Mark from Monkey Access" | Matches Mark at Monkey Access Limited (uses "person from client" pattern) |
 | With subject | "Email John about the VAT deadline" | Opens email with subject pre-filled |
-| From client page | "Send an email to this client" | Should use current client context |
+| From client page | Go to a client page, then say "Send an email to this client" | Uses current client context |
+
+### Features
+- **Smart matching**: Recognizes "person from client" pattern (e.g., "Mark from Monkey Access")
+- **Page context**: When on a client page, "this client" refers to that client
+- **Client display**: Dropdown shows contacts with their client names (e.g., "Mark @ Monkey Access Limited")
+- Requires person to have email address on file
 
 ### Known Limitations
-- **BUG:** Person matching doesn't include client name in search
-- **BUG:** "This client" context not passed when on client page
-- Currently uses simple form, not the full email dialog with rich text editor
-- Requires person to have email address on file
+- Currently uses simple form, not the full email dialog with rich text editor and attachments
 
 ---
 
@@ -217,21 +220,21 @@ This document describes all the features available in the AI Magic Assistant, ho
 
 ## Context Awareness
 
-The AI assistant tries to understand context from:
-1. **Current page** - If you're on a client page, it knows which client
+The AI assistant understands context from:
+1. **Current page** - If you're on a client page, "this client" refers to that client
 2. **Conversation history** - Remembers recently mentioned clients/people
 3. **Pronouns** - Understands "them", "this client", "that person"
 
 ### How to Test
 | Test Case | Steps | Expected Result |
 |-----------|-------|-----------------|
-| Page context | Go to client page, say "Email this client" | Should know the client |
+| Page context | Go to client page, say "Email this client" | AI knows the client name from the page |
 | Conversation memory | "Find ABC Ltd", then "Email them" | Should email ABC Ltd |
 | Pronoun resolution | "Check Smith VAT", then "Bench it" | Should bench the VAT project |
+| Person on client | Go to person page, say "Email this person" | AI knows the person from the page |
 
 ### Known Limitations
-- **BUG:** "This client" not working when on client page (context not passed)
-- Page context only works for client/person pages, not project pages
+- Page context only works for client/person pages, not project pages yet
 
 ---
 

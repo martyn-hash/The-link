@@ -39,10 +39,21 @@ export const conversationContextSchema = z.object({
   lastAction: z.string().optional()
 }).optional();
 
+// Current page context - what the user is viewing when they make a request
+export const currentViewContextSchema = z.object({
+  clientId: z.string().optional(),
+  clientName: z.string().optional(),
+  personId: z.string().optional(),
+  personName: z.string().optional(),
+  projectId: z.string().optional(),
+  projectName: z.string().optional(),
+}).optional();
+
 export const chatRequestSchema = z.object({
   message: z.string().min(1, "Message is required"),
   conversationHistory: z.array(conversationMessageSchema).default([]),
-  conversationContext: conversationContextSchema.optional()
+  conversationContext: conversationContextSchema.optional(),
+  currentViewContext: currentViewContextSchema
 });
 
 // Types for AI Magic responses
@@ -468,15 +479,47 @@ interface ConversationContext {
 }
 
 // Build the system prompt with current context
+// Type for current view context
+interface CurrentViewContext {
+  clientId?: string;
+  clientName?: string;
+  personId?: string;
+  personName?: string;
+  projectId?: string;
+  projectName?: string;
+}
+
 function buildSystemPrompt(
   userName: string, 
   currentDateTime: string, 
   taskTypes?: string[],
-  conversationContext?: ConversationContext
+  conversationContext?: ConversationContext,
+  currentViewContext?: CurrentViewContext
 ): string {
   const taskTypesContext = taskTypes && taskTypes.length > 0 
     ? `\n\nAvailable task types: ${taskTypes.join(', ')}`
     : '';
+  
+  // Build current page context section - this takes priority for "this client", "this person" etc.
+  let pageContextSection = '';
+  if (currentViewContext && (currentViewContext.clientName || currentViewContext.personName || currentViewContext.projectName)) {
+    const pageParts: string[] = [];
+    if (currentViewContext.clientName) {
+      pageParts.push(`- User is viewing client page: "${currentViewContext.clientName}" (ID: ${currentViewContext.clientId})`);
+    }
+    if (currentViewContext.personName) {
+      pageParts.push(`- User is viewing person page: "${currentViewContext.personName}" (ID: ${currentViewContext.personId})`);
+    }
+    if (currentViewContext.projectName) {
+      pageParts.push(`- User is viewing project: "${currentViewContext.projectName}" (ID: ${currentViewContext.projectId})`);
+    }
+    pageContextSection = `\n\n## Current Page Context (IMPORTANT - use this for "this client", "this person", etc.):
+${pageParts.join('\n')}
+
+When user says "this client", "this person", "the current client", "this project", or refers to what they're looking at:
+- Use the client/person/project from the Current Page Context above
+- This takes precedence over conversation history`;
+  }
   
   // Build conversation context section for pronoun resolution
   let contextSection = '';
@@ -495,21 +538,20 @@ function buildSystemPrompt(
       contextParts.push(`Last action: ${conversationContext.lastAction}`);
     }
     if (contextParts.length > 0) {
-      contextSection = `\n\n## Conversation Context (for pronoun resolution):
+      contextSection = `\n\n## Conversation History Context (for pronoun resolution when not on a specific page):
 ${contextParts.join('\n')}
 
-When user says "them", "they", "this client", "that person", "him", "her", or similar pronouns:
+When user says "them", "they", "him", "her", or refers to someone/something mentioned earlier:
 - Use the last mentioned person/client/user from above
-- For "this client" or "the client" -> use the last mentioned client
-- For "them", "they", "him", "her" when referring to a person -> use the last mentioned person
-- For "them", "they" when referring to a team member -> use the last mentioned team member`;
+- For pronouns referring to a person -> use the last mentioned person
+- For pronouns referring to a team member -> use the last mentioned team member`;
     }
   }
     
   return `You are an AI assistant for The Link, a CRM system for accounting and bookkeeping firms. You help users create reminders, tasks, send emails/SMS, and navigate to data.
 
 Current user: ${userName}
-Current date/time: ${currentDateTime} (UK timezone - Europe/London)${taskTypesContext}${contextSection}
+Current date/time: ${currentDateTime} (UK timezone - Europe/London)${taskTypesContext}${pageContextSection}${contextSection}
 
 ## Your Capabilities:
 - Create quick reminders (time-based personal notifications)
@@ -551,7 +593,8 @@ export async function processAIMagicChat(
     currentUserId: string;
     currentUserName: string;
   },
-  conversationContext?: ConversationContext
+  conversationContext?: ConversationContext,
+  currentViewContext?: CurrentViewContext
 ): Promise<AIMagicResponse> {
   if (!process.env.OPENAI_API_KEY) {
     return {
@@ -581,10 +624,13 @@ export async function processAIMagicChat(
       console.warn('[AI Magic] Could not fetch task types:', e);
     }
 
-    const systemPrompt = buildSystemPrompt(context.currentUserName, ukDateTime, taskTypeNames, conversationContext);
+    const systemPrompt = buildSystemPrompt(context.currentUserName, ukDateTime, taskTypeNames, conversationContext, currentViewContext);
     
     if (conversationContext) {
       console.log('[AI Magic] Using conversation context:', conversationContext);
+    }
+    if (currentViewContext) {
+      console.log('[AI Magic] Using current view context:', currentViewContext);
     }
 
     // Build messages array for OpenAI
@@ -1443,11 +1489,12 @@ export async function getProjectAnalytics(
       case 'completion_stats': {
         const completedProjects = allProjects.filter(p => p.completionStatus && !p.inactive);
         
-        // Group by completion month
+        // Group by completion month - use updatedAt as proxy for completion date
         const byMonth: Record<string, number> = {};
         for (const p of completedProjects) {
-          if (p.completedAt) {
-            const date = new Date(p.completedAt);
+          const completionDate = (p as any).completedAt || p.updatedAt;
+          if (completionDate) {
+            const date = new Date(completionDate);
             const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
             byMonth[monthKey] = (byMonth[monthKey] || 0) + 1;
           }
