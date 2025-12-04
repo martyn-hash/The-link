@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Send, 
   Mic, 
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { AIMessage, AIBackendResponse, AIFunctionCall } from './types';
 import { AIMagicHelpModal } from './AIMagicHelpModal';
 import { ActionCard } from './AIMagicActionCards';
@@ -282,125 +283,181 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
     }
   };
 
+  // Find the active action card (first pending action)
+  const activeActionMessage = messages.find(
+    m => m.functionCall && actionStatuses[m.id] === 'pending'
+  );
+  const hasActiveAction = !!activeActionMessage;
+  
+  // Use inline cards on mobile, side panel on desktop
+  const isMobile = useIsMobile();
+  const showSidePanel = !isMobile && hasActiveAction;
+  const showInlineCards = isMobile;
+
   return (
     <>
-      <motion.div
-        initial={{ opacity: 0, y: 20, scale: 0.95 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 20, scale: 0.95 }}
-        transition={{ type: "spring", stiffness: 300, damping: 30 }}
-        className={cn(
-          "fixed bottom-24 left-6 z-50",
-          "w-[400px] max-w-[calc(100vw-3rem)]",
-          "bg-card border border-border rounded-2xl shadow-2xl",
-          "flex flex-col overflow-hidden"
-        )}
-        style={{ height: 'calc(100vh - 10rem)', maxHeight: '700px' }}
-        data-testid="panel-ai-chat"
-      >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-sm">AI Assistant</h3>
-              <p className="text-xs text-muted-foreground">Ask me anything</p>
-            </div>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setShowHelp(true)}
-            data-testid="button-ai-help"
-          >
-            <Info className="w-4 h-4" />
-          </Button>
-        </div>
-
-        <ScrollArea 
-          className="flex-1 p-4 overflow-y-auto" 
-          style={{ minHeight: '200px' }}
+      <div className={cn(
+        "fixed bottom-24 z-50 flex items-end gap-3",
+        isMobile ? "left-4 right-4" : "left-6"
+      )}>
+        {/* Main Chat Panel */}
+        <motion.div
+          initial={{ opacity: 0, y: 20, scale: 0.95 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 20, scale: 0.95 }}
+          transition={{ type: "spring", stiffness: 300, damping: 30 }}
+          className={cn(
+            "bg-card border border-border rounded-2xl shadow-2xl",
+            "flex flex-col overflow-hidden",
+            isMobile ? "w-full" : "w-[340px] max-w-[calc(100vw-3rem)]"
+          )}
+          style={{ height: isMobile ? 'min(450px, calc(100vh - 10rem))' : 'min(500px, calc(100vh - 10rem))' }}
+          data-testid="panel-ai-chat"
         >
-          <div className="space-y-4">
-            {messages.map((message) => (
-              <MessageBubble 
-                key={message.id} 
-                message={message}
-                actionStatus={actionStatuses[message.id]}
-                onActionComplete={(success, resultMessage) => {
-                  setActionStatuses(prev => ({ ...prev, [message.id]: 'completed' }));
-                  if (success) {
-                    setMessages(prev => [...prev, {
-                      id: nanoid(),
-                      role: 'assistant',
-                      content: resultMessage,
-                      timestamp: new Date(),
-                    }]);
-                  }
-                }}
-                onActionDismiss={() => {
-                  setActionStatuses(prev => ({ ...prev, [message.id]: 'dismissed' }));
-                }}
-              />
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-        </ScrollArea>
-
-        <div className="p-3 border-t border-border bg-muted/20">
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1">
-              <Input
-                ref={inputRef}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={isRecording ? "Listening..." : "Type or speak your request..."}
-                className={cn(
-                  "pr-10 bg-background",
-                  isRecording && "border-red-500 animate-pulse"
-                )}
-                disabled={isLoading}
-                data-testid="input-ai-message"
-              />
-              {voiceSupported && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7",
-                    isRecording && "text-red-500"
-                  )}
-                  onClick={toggleRecording}
-                  disabled={isLoading}
-                  data-testid="button-ai-voice"
-                >
-                  {isRecording ? (
-                    <MicOff className="w-4 h-4" />
-                  ) : (
-                    <Mic className="w-4 h-4" />
-                  )}
-                </Button>
-              )}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
+                <Sparkles className="w-4 h-4 text-white" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-sm">AI Assistant</h3>
+                <p className="text-xs text-muted-foreground">Ask me anything</p>
+              </div>
             </div>
             <Button
-              onClick={handleSend}
-              disabled={!inputValue.trim() || isLoading}
+              variant="ghost"
               size="icon"
-              className="shrink-0"
-              data-testid="button-ai-send"
+              className="h-8 w-8"
+              onClick={() => setShowHelp(true)}
+              data-testid="button-ai-help"
             >
-              {isLoading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Send className="w-4 h-4" />
-              )}
+              <Info className="w-4 h-4" />
             </Button>
           </div>
-        </div>
-      </motion.div>
+
+          <ScrollArea 
+            className="flex-1 p-4 overflow-y-auto" 
+            style={{ minHeight: '150px' }}
+          >
+            <div className="space-y-4">
+              {messages.map((message) => (
+                <MessageBubble 
+                  key={message.id} 
+                  message={message}
+                  actionStatus={actionStatuses[message.id]}
+                  showActionInline={showInlineCards}
+                  onActionComplete={(success, resultMessage) => {
+                    setActionStatuses(prev => ({ ...prev, [message.id]: 'completed' }));
+                    if (success) {
+                      setMessages(prev => [...prev, {
+                        id: nanoid(),
+                        role: 'assistant',
+                        content: resultMessage,
+                        timestamp: new Date(),
+                      }]);
+                    }
+                  }}
+                  onActionDismiss={() => {
+                    setActionStatuses(prev => ({ ...prev, [message.id]: 'dismissed' }));
+                  }}
+                />
+              ))}
+              <div ref={messagesEndRef} />
+            </div>
+          </ScrollArea>
+
+          <div className="p-3 border-t border-border bg-muted/20">
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Input
+                  ref={inputRef}
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={isRecording ? "Listening..." : "Type or speak your request..."}
+                  className={cn(
+                    "pr-10 bg-background",
+                    isRecording && "border-red-500 animate-pulse"
+                  )}
+                  disabled={isLoading}
+                  data-testid="input-ai-message"
+                />
+                {voiceSupported && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      "absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7",
+                      isRecording && "text-red-500"
+                    )}
+                    onClick={toggleRecording}
+                    disabled={isLoading}
+                    data-testid="button-ai-voice"
+                  >
+                    {isRecording ? (
+                      <MicOff className="w-4 h-4" />
+                    ) : (
+                      <Mic className="w-4 h-4" />
+                    )}
+                  </Button>
+                )}
+              </div>
+              <Button
+                onClick={handleSend}
+                disabled={!inputValue.trim() || isLoading}
+                size="icon"
+                className="shrink-0"
+                data-testid="button-ai-send"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Side Panel for Action Cards (desktop only) */}
+        <AnimatePresence>
+          {showSidePanel && activeActionMessage && (
+            <motion.div
+              initial={{ opacity: 0, x: -20, scale: 0.95 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: -20, scale: 0.95 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className={cn(
+                "w-[360px]",
+                "bg-card border border-border rounded-2xl shadow-2xl",
+                "flex flex-col overflow-hidden"
+              )}
+              style={{ maxHeight: 'min(600px, calc(100vh - 10rem))' }}
+              data-testid="panel-ai-action"
+            >
+              <ScrollArea className="flex-1 p-4 overflow-y-auto">
+                <ActionCard
+                  functionCall={activeActionMessage.functionCall!}
+                  onComplete={(success, resultMessage) => {
+                    setActionStatuses(prev => ({ ...prev, [activeActionMessage.id]: 'completed' }));
+                    if (success) {
+                      setMessages(prev => [...prev, {
+                        id: nanoid(),
+                        role: 'assistant',
+                        content: resultMessage,
+                        timestamp: new Date(),
+                      }]);
+                    }
+                  }}
+                  onDismiss={() => {
+                    setActionStatuses(prev => ({ ...prev, [activeActionMessage.id]: 'dismissed' }));
+                  }}
+                />
+              </ScrollArea>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       <AIMagicHelpModal open={showHelp} onOpenChange={setShowHelp} />
     </>
@@ -410,11 +467,12 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
 interface MessageBubbleProps {
   message: AIMessage;
   actionStatus?: ActionStatus;
+  showActionInline?: boolean;
   onActionComplete?: (success: boolean, message: string) => void;
   onActionDismiss?: () => void;
 }
 
-function MessageBubble({ message, actionStatus, onActionComplete, onActionDismiss }: MessageBubbleProps) {
+function MessageBubble({ message, actionStatus, showActionInline = true, onActionComplete, onActionDismiss }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   
   if (message.isLoading) {
@@ -434,7 +492,7 @@ function MessageBubble({ message, actionStatus, onActionComplete, onActionDismis
     );
   }
 
-  const showActionCard = message.functionCall && actionStatus === 'pending' && onActionComplete && onActionDismiss;
+  const showActionCard = showActionInline && message.functionCall && actionStatus === 'pending' && onActionComplete && onActionDismiss;
 
   return (
     <motion.div

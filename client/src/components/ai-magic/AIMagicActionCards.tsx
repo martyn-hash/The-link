@@ -198,12 +198,15 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
             <Label className="text-xs text-muted-foreground">
               Link to Client {matchedClient ? '(AI suggested)' : '(optional)'}
             </Label>
-            <Select value={effectiveClientId} onValueChange={setClientId}>
+            <Select 
+              value={effectiveClientId || "none"} 
+              onValueChange={(val) => setClientId(val === "none" ? "" : val)}
+            >
               <SelectTrigger className="h-8 text-sm" data-testid="select-reminder-client">
                 <SelectValue placeholder="Select client..." />
               </SelectTrigger>
               <SelectContent className="z-[100]">
-                <SelectItem value="">None</SelectItem>
+                <SelectItem value="none">None</SelectItem>
                 {clients?.map(c => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.name}
