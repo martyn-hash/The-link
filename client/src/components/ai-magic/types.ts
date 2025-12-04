@@ -21,6 +21,8 @@ export type AIActionType =
   | 'show_tasks'
   | 'show_reminders'
   | 'show_projects'
+  | 'show_tasks_modal'
+  | 'get_phone_number'
   | 'navigate_to_client'
   | 'navigate_to_person'
   | 'search_clients'

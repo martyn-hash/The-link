@@ -392,10 +392,11 @@ export function AIMagicChatPanel({ onClose, triggerVoice, onVoiceTriggered, onRe
           description = `Found it! Let me take you there.`;
         } else if (data.functionCall.name === 'search_clients') {
           description = `I'll search for that.`;
-        } else if (data.functionCall.name === 'show_tasks') {
-          description = `Here are your tasks.`;
-        } else if (data.functionCall.name === 'show_reminders') {
-          description = `Here are your reminders.`;
+        } else if (data.functionCall.name === 'show_tasks_modal') {
+          const initialTab = data.functionCall.arguments?.initialTab;
+          description = initialTab === 'reminders' ? `Opening your reminders...` : `Opening your tasks...`;
+        } else if (data.functionCall.name === 'get_phone_number') {
+          description = `Looking up that phone number...`;
         } else if (data.functionCall.name === 'get_project_status') {
           description = `Looking up that project for you.`;
         } else if (data.functionCall.name === 'bench_project') {

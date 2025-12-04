@@ -27,7 +27,9 @@ import {
   BarChart3,
   FileText,
   ChevronRight,
-  ExternalLink
+  ExternalLink,
+  Phone,
+  ClipboardList
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,6 +47,7 @@ import { apiRequest, queryClient } from '@/lib/queryClient';
 import { cn } from '@/lib/utils';
 import { getBestMatch } from '@/lib/peopleMatcher';
 import { AIFunctionCall, ProjectMatchResponse, ProjectDetails, StageReasonsResponse, AnalyticsResult } from './types';
+import { TasksRemindersModal } from './TasksRemindersModal';
 import type { User as UserType } from '@shared/schema';
 
 interface SearchableSelectProps {
@@ -2374,6 +2377,237 @@ function AnalyticsCard({ functionCall, onComplete, onDismiss }: ActionCardProps)
   );
 }
 
+export function PhoneNumberCard({ functionCall, onComplete, onDismiss }: ActionCardProps) {
+  const args = functionCall.arguments;
+  const personName = args.personName as string || 'Unknown';
+  const clientName = args.clientName as string | undefined;
+  const [status, setStatus] = useState<'loading' | 'found' | 'not_found'>('loading');
+  const [phoneNumber, setPhoneNumber] = useState<string | null>(null);
+  const [matchedPerson, setMatchedPerson] = useState<{ name: string; clientName: string } | null>(null);
+
+  const { data: people } = useQuery<{ 
+    id: string; 
+    firstName: string | null; 
+    lastName: string | null; 
+    primaryPhone: string | null;
+    telephone: string | null;
+    relatedCompanies: { id: string; name: string }[] 
+  }[]>({
+    queryKey: ['/api/people'],
+  });
+
+  const { data: clients } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ['/api/clients'],
+  });
+
+  useEffect(() => {
+    if (!people || !clients) return;
+
+    const searchLower = personName.toLowerCase().trim();
+    const clientLower = clientName?.toLowerCase().trim();
+
+    let bestMatch: { person: typeof people[0]; score: number; clientName: string } | null = null;
+
+    for (const person of people) {
+      const firstName = (person.firstName || '').toLowerCase();
+      const lastName = (person.lastName || '').toLowerCase();
+      const fullName = `${firstName} ${lastName}`.trim();
+      const personClientName = person.relatedCompanies?.[0]?.name || '';
+      const personClientLower = personClientName.toLowerCase();
+
+      let score = 0;
+
+      if (fullName === searchLower || firstName === searchLower || lastName === searchLower) {
+        score += 60;
+      } else if (fullName.includes(searchLower) || searchLower.includes(fullName)) {
+        score += 40;
+      } else if (firstName.includes(searchLower) || lastName.includes(searchLower)) {
+        score += 25;
+      }
+
+      if (clientLower && personClientLower) {
+        if (personClientLower.includes(clientLower) || clientLower.includes(personClientLower)) {
+          score += 30;
+        }
+      }
+
+      if (score > 0 && (person.primaryPhone || person.telephone)) {
+        if (!bestMatch || score > bestMatch.score) {
+          bestMatch = { person, score, clientName: personClientName };
+        }
+      }
+    }
+
+    if (bestMatch) {
+      setPhoneNumber(bestMatch.person.primaryPhone || bestMatch.person.telephone || null);
+      setMatchedPerson({
+        name: `${bestMatch.person.firstName || ''} ${bestMatch.person.lastName || ''}`.trim(),
+        clientName: bestMatch.clientName
+      });
+      setStatus('found');
+      onComplete(true, `Found phone number for ${bestMatch.person.firstName} ${bestMatch.person.lastName}`);
+    } else {
+      setStatus('not_found');
+      onComplete(false, `No phone number found for ${personName}`);
+    }
+  }, [people, clients, personName, clientName, onComplete]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="bg-gradient-to-br from-teal-50 to-cyan-50 dark:from-teal-950/30 dark:to-cyan-950/30 border border-teal-200 dark:border-teal-800 rounded-xl p-4 space-y-3"
+      data-testid="action-card-phone"
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-teal-700 dark:text-teal-400">
+          <Phone className="w-4 h-4" />
+          <span className="font-medium text-sm">Phone Number Lookup</span>
+        </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onDismiss}
+          className="h-6 w-6 p-0"
+          data-testid="button-dismiss-phone"
+        >
+          <X className="w-3.5 h-3.5" />
+        </Button>
+      </div>
+
+      {status === 'loading' && (
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          <span className="text-sm">Searching for {personName}...</span>
+        </div>
+      )}
+
+      {status === 'found' && matchedPerson && phoneNumber && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <User className="w-4 h-4 text-muted-foreground" />
+            <span className="font-medium">{matchedPerson.name}</span>
+            {matchedPerson.clientName && (
+              <span className="text-muted-foreground text-sm">- {matchedPerson.clientName}</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 bg-teal-100 dark:bg-teal-900/50 rounded-lg px-3 py-2">
+            <Phone className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+            <a 
+              href={`tel:${phoneNumber}`}
+              className="font-mono text-lg font-medium text-teal-700 dark:text-teal-300 hover:underline"
+              data-testid="link-phone-number"
+            >
+              {phoneNumber}
+            </a>
+          </div>
+        </div>
+      )}
+
+      {status === 'not_found' && (
+        <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+          <AlertCircle className="w-4 h-4" />
+          <span className="text-sm">No phone number found for "{personName}"</span>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+export function TasksModalCard({ functionCall, onComplete, onDismiss }: ActionCardProps) {
+  const { user } = useAuth();
+  const args = functionCall.arguments;
+  const userName = args.userName as string | undefined;
+  const initialTab = args.initialTab as 'tasks' | 'reminders' | undefined;
+  
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [resolvedUserId, setResolvedUserId] = useState<string | undefined>(undefined);
+  const [resolvedUserName, setResolvedUserName] = useState<string | undefined>(undefined);
+  const openedRef = useRef(false);
+
+  const { data: users } = useQuery<UserType[]>({
+    queryKey: ['/api/users'],
+  });
+
+  useEffect(() => {
+    if (openedRef.current) return;
+    if (!users) return;
+
+    let targetUserId: string | undefined;
+    let targetUserName: string | undefined;
+
+    if (!userName || userName === 'me' || userName.toLowerCase() === 'my') {
+      targetUserId = user?.id;
+      targetUserName = user ? `${user.firstName} ${user.lastName}` : undefined;
+    } else {
+      const searchLower = userName.toLowerCase().trim();
+      const matchedUser = users.find(u => {
+        const fullName = `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase().trim();
+        const firstName = (u.firstName || '').toLowerCase();
+        const lastName = (u.lastName || '').toLowerCase();
+        return fullName === searchLower || 
+               firstName === searchLower || 
+               lastName === searchLower ||
+               fullName.includes(searchLower);
+      });
+      if (matchedUser) {
+        targetUserId = matchedUser.id;
+        targetUserName = `${matchedUser.firstName || ''} ${matchedUser.lastName || ''}`.trim();
+      }
+    }
+
+    setResolvedUserId(targetUserId);
+    setResolvedUserName(targetUserName);
+
+    openedRef.current = true;
+    setTimeout(() => {
+      setIsModalOpen(true);
+    }, 300);
+  }, [users, userName, user]);
+
+  const handleClose = () => {
+    setIsModalOpen(false);
+    onComplete(true, 'Closed tasks modal');
+  };
+
+  return (
+    <>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border border-green-200 dark:border-green-800 rounded-xl p-4 space-y-3"
+        data-testid="action-card-tasks-modal"
+      >
+        <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+          {isModalOpen ? (
+            <ClipboardList className="w-4 h-4" />
+          ) : (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          )}
+          <span className="font-medium text-sm">
+            {isModalOpen ? 'Tasks & Reminders' : 'Opening tasks...'}
+          </span>
+        </div>
+
+        {resolvedUserName && (
+          <div className="text-sm text-muted-foreground flex items-center gap-1.5">
+            <User className="w-3.5 h-3.5" />
+            Showing {resolvedUserName}'s {initialTab === 'reminders' ? 'reminders' : 'tasks'}
+          </div>
+        )}
+      </motion.div>
+
+      <TasksRemindersModal
+        isOpen={isModalOpen}
+        onClose={handleClose}
+        initialTab={initialTab || 'tasks'}
+        filterUserId={resolvedUserId}
+        filterUserName={resolvedUserName}
+      />
+    </>
+  );
+}
+
 export function ActionCard({ functionCall, onComplete, onDismiss }: ActionCardProps) {
   switch (functionCall.name) {
     case 'create_reminder':
@@ -2387,6 +2621,10 @@ export function ActionCard({ functionCall, onComplete, onDismiss }: ActionCardPr
       return <ShowTasksActionCard functionCall={functionCall} onComplete={onComplete} onDismiss={onDismiss} />;
     case 'show_reminders':
       return <ShowRemindersActionCard functionCall={functionCall} onComplete={onComplete} onDismiss={onDismiss} />;
+    case 'show_tasks_modal':
+      return <TasksModalCard functionCall={functionCall} onComplete={onComplete} onDismiss={onDismiss} />;
+    case 'get_phone_number':
+      return <PhoneNumberCard functionCall={functionCall} onComplete={onComplete} onDismiss={onDismiss} />;
     case 'search_clients':
       return <SearchClientsActionCard functionCall={functionCall} onComplete={onComplete} onDismiss={onDismiss} />;
     case 'send_email':

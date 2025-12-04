@@ -203,52 +203,6 @@ const AI_MAGIC_FUNCTIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
-      name: "show_tasks",
-      description: "Display a list of internal tasks, optionally filtered by various criteria.",
-      parameters: {
-        type: "object",
-        properties: {
-          assigneeName: { 
-            type: "string", 
-            description: "Filter by assignee name. Use 'me' for current user's tasks." 
-          },
-          status: { 
-            type: "string", 
-            enum: ["open", "in_progress", "closed", "all"],
-            description: "Filter by task status" 
-          },
-          clientName: { 
-            type: "string",
-            description: "Filter by tasks linked to a specific client" 
-          }
-        }
-      }
-    }
-  },
-  {
-    type: "function",
-    function: {
-      name: "show_reminders",
-      description: "Display a list of quick reminders for the current user or a specified team member.",
-      parameters: {
-        type: "object",
-        properties: {
-          assigneeName: { 
-            type: "string", 
-            description: "Whose reminders to show. Use 'me' for current user's reminders." 
-          },
-          timeframe: { 
-            type: "string", 
-            enum: ["today", "this_week", "overdue", "upcoming", "all"],
-            description: "Filter by timeframe" 
-          }
-        }
-      }
-    }
-  },
-  {
-    type: "function",
-    function: {
       name: "navigate_to_client",
       description: "Open a client's detail page directly. Use for commands like 'go to', 'find', 'open', 'show', 'take me to', 'view', or when user references a specific client by name. This should be preferred over search_clients when user wants to view ONE specific client. Examples: 'go to Victoriam', 'find Monkey Access', 'take me to ABC Ltd'.",
       parameters: {
@@ -465,6 +419,48 @@ const AI_MAGIC_FUNCTIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
           }
         },
         required: ["queryType"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_phone_number",
+      description: "Look up a phone/mobile number for a person (contact). Use for requests like 'find phone number for John', 'what's Jane's mobile', 'do we have a contact number for Bob from ABC Ltd', 'get me martyn's number'.",
+      parameters: {
+        type: "object",
+        properties: {
+          personName: {
+            type: "string",
+            description: "Name of the person to look up the phone number for"
+          },
+          clientName: {
+            type: "string",
+            description: "Name of the client/company they belong to (helps disambiguate if multiple people have same name)"
+          }
+        },
+        required: ["personName"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "show_tasks_modal",
+      description: "Open an interactive modal showing tasks and reminders. Use for requests like 'show my tasks', 'tasks', 'show reminders', 'my reminders', 'what's on my plate', 'show Sarah's tasks'. The modal has tabs for Internal Tasks and Reminders, and also shows projects where the user is the current assignee.",
+      parameters: {
+        type: "object",
+        properties: {
+          userName: {
+            type: "string",
+            description: "Name of the team member whose tasks to show. Use 'me' for current user's tasks, or a name like 'Sarah' to view their tasks."
+          },
+          initialTab: {
+            type: "string",
+            enum: ["tasks", "reminders"],
+            description: "Which tab to open initially. Use 'tasks' for task requests, 'reminders' for reminder requests. Defaults to 'tasks'."
+          }
+        }
       }
     }
   }
