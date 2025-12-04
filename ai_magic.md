@@ -417,48 +417,89 @@ recognition.onresult = (event) => {
 
 ---
 
-## Implementation Order
+## Implementation Status
 
-### Phase 1: Core UI (Stage 1)
-- [ ] 1.1 Create `AIMagicButton` component
-- [ ] 1.2 Create `AIMagicChatPanel` component with message display
-- [ ] 1.3 Create `AIMagicHelpModal` showing capabilities
-- [ ] 1.4 Add to App.tsx (only for authenticated staff users)
+### Phase 1: Core UI (Stage 1) ✅ COMPLETE
+- [x] 1.1 Create `AIMagicButton` component - Floating button, bottom-left, with pulse animation
+- [x] 1.2 Create `AIMagicChatPanel` component - Side panel with message history, input, typing indicator
+- [x] 1.3 Create `AIMagicHelpModal` showing capabilities - Command categories with example phrases
+- [x] 1.4 Add to App.tsx (only for authenticated staff users)
 
-### Phase 2: OpenAI Backend (Stage 2)
-- [ ] 2.1 Create `/api/ai/chat` endpoint
-- [ ] 2.2 Define function catalog
-- [ ] 2.3 Implement conversation handling with memory
-- [ ] 2.4 Add proper error handling
+### Phase 2: OpenAI Backend (Stage 2) ✅ COMPLETE
+- [x] 2.1 Create `/api/ai/chat` endpoint - POST with message and conversation history
+- [x] 2.2 Define function catalog - All 11 functions defined (create_reminder, create_task, send_email, send_sms, show_tasks, show_reminders, navigate_to_client, navigate_to_person, search_clients, ask_clarification, request_missing_info)
+- [x] 2.3 Implement conversation handling with basic memory - Conversation history passed between calls
+- [x] 2.4 Add proper error handling - Validation, API errors, user-friendly messages
 
-### Phase 3: Fuzzy Matching (Stage 3)
-- [ ] 3.1 Create `FuzzyMatcherService` with Levenshtein/trigram
-- [ ] 3.2 Implement endpoints for client/user/project-type matching
-- [ ] 3.3 Create disambiguation UI component
+### Phase 3: Fuzzy Matching (Stage 3) ⚠️ PARTIAL
+- [ ] 3.1 Create `FuzzyMatcherService` with Levenshtein/trigram - NOT STARTED
+- [x] 3.2 Basic client/user matching - Simple string includes() matching implemented in ActionCards
+- [ ] 3.3 Create disambiguation UI component - NOT STARTED (no multiple match handling)
+- [ ] 3.4 Confidence scoring and threshold behavior - NOT STARTED
 
-### Phase 4: Action Execution (Stage 5)
-- [ ] 4.1 Wire up reminder creation (reuse existing dialog)
-- [ ] 4.2 Wire up task creation (reuse existing dialog)
-- [ ] 4.3 Wire up email composition (reuse existing dialog)
-- [ ] 4.4 Wire up SMS composition (reuse existing dialog)
-- [ ] 4.5 Create "show me" data viewer modal
-- [ ] 4.6 Implement navigation actions
+### Phase 4: Action Execution (Stage 5) ⚠️ PARTIAL
+- [x] 4.1 Wire up reminder creation - Custom inline form with type-to-search client/assignee, auto-close on success
+- [x] 4.2 Wire up task creation - Custom inline form with priority, assignee, client selection
+- [x] 4.3 Wire up email composition - Basic form (displays prefilled email data)
+- [x] 4.4 Wire up SMS composition - Basic form (displays prefilled SMS data)
+- [x] 4.5 Show tasks/reminders - Display lists with filtering, includes navigation
+- [x] 4.6 Implement navigation actions - Navigate to client/person detail pages
+- [x] 4.7 Search clients action - Display search results with quick navigation
+- [ ] 4.8 Full email/SMS actual sending integration - NOT CONNECTED (forms only, no backend send)
 
-### Phase 5: Voice Input (Stage 6)
-- [ ] 5.1 Implement Web Speech API integration
-- [ ] 5.2 Add visual recording feedback
-- [ ] 5.3 Handle browser compatibility
+### Phase 5: Voice Input (Stage 6) ✅ COMPLETE
+- [x] 5.1 Implement Web Speech API integration - webkitSpeechRecognition with en-GB
+- [x] 5.2 Add visual recording feedback - Recording state indicator, live transcription
+- [x] 5.3 Handle browser compatibility - voiceSupported check, hide mic if unsupported
 
-### Phase 6: Context & Memory (Stage 4)
-- [ ] 6.1 Implement conversation context tracking
-- [ ] 6.2 Add pronoun resolution
-- [ ] 6.3 Test multi-turn conversations
+### Phase 6: Context & Memory (Stage 4) ❌ NOT STARTED
+- [ ] 6.1 Implement conversation context tracking - No lastMentionedClient/Person tracking
+- [ ] 6.2 Add pronoun resolution - "Send them an email" not supported
+- [ ] 6.3 Test multi-turn conversations - Basic history works, no entity memory
 
-### Phase 7: Polish (Stage 8)
-- [ ] 7.1 Add animations and transitions
-- [ ] 7.2 Implement keyboard shortcuts
-- [ ] 7.3 Add smart suggestions
-- [ ] 7.4 Testing and refinement
+### Phase 7: Polish (Stage 8) ⚠️ PARTIAL
+- [x] 7.1 Add animations and transitions - Framer Motion slide in/out, message animations
+- [ ] 7.2 Implement keyboard shortcuts - Cmd+K to open NOT IMPLEMENTED
+- [ ] 7.3 Add smart suggestions - No contextual command chips
+- [x] 7.4 Auto-close panel after success - Implemented with 500ms delay
+
+---
+
+## What's Left To Do (Priority Order)
+
+### High Priority - Core Functionality Gaps
+1. **Email/SMS Actual Sending** - Connect action forms to real email/SMS APIs
+2. **Fuzzy Matching Service** - Implement proper fuzzy search with confidence scoring
+3. **Disambiguation UI** - Handle multiple matches gracefully
+
+### Medium Priority - UX Improvements  
+4. **Keyboard Shortcut (Cmd+K)** - Quick access to AI panel
+5. **Conversation Context Memory** - Track last mentioned entities for pronoun resolution
+6. **Smart Suggestions** - Contextual command chips based on current page
+
+### Lower Priority - Nice to Have
+7. **Sound Effects** - Subtle audio feedback
+8. **TTS Response Reading** - Optional voice responses
+9. **Offline Mode** - Queue commands when offline
+
+---
+
+## Current Files
+
+### Implemented
+- `client/src/components/ai-magic/AIMagicButton.tsx` ✅
+- `client/src/components/ai-magic/AIMagicChatPanel.tsx` ✅
+- `client/src/components/ai-magic/AIMagicHelpModal.tsx` ✅
+- `client/src/components/ai-magic/AIMagicActionCards.tsx` ✅ (replaces planned DataViewer/Disambiguation)
+- `client/src/components/ai-magic/types.ts` ✅
+- `client/src/components/ai-magic/index.ts` ✅
+- `server/routes/ai.ts` ✅
+- `server/services/ai-magic-service.ts` ✅
+
+### Not Implemented
+- `client/src/components/ai-magic/hooks/useAIChat.ts` - Logic is inline in ChatPanel
+- `client/src/components/ai-magic/hooks/useVoiceInput.ts` - Logic is inline in ChatPanel
+- `server/services/fuzzy-matcher.ts` - Not created, basic matching inline
 
 ---
 
