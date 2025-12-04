@@ -107,12 +107,23 @@ export interface DialogBaseProps {
 
 export interface SMSDialogProps extends DialogBaseProps {
   clientPeople: PersonOption[];
+  /** Optional initial values for AI Magic integration */
+  initialValues?: {
+    personId?: string;
+    message?: string;
+  };
 }
 
 export interface EmailDialogProps extends DialogBaseProps {
   clientPeople: PersonOption[];
   user: User | null;
   clientCompany?: string;
+  /** Optional initial values for AI Magic integration */
+  initialValues?: {
+    recipientIds?: string[];
+    subject?: string;
+    content?: string;
+  };
 }
 
 export interface AddCommunicationDialogProps extends DialogBaseProps {

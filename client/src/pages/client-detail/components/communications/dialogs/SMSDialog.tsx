@@ -29,10 +29,12 @@ export function SMSDialog({
   clientPeople,
   isOpen, 
   onClose,
-  onSuccess 
+  onSuccess,
+  initialValues
 }: SMSDialogProps) {
   const { toast } = useToast();
-  const [smsPersonId, setSmsPersonId] = useState<string | undefined>();
+  const [smsPersonId, setSmsPersonId] = useState<string | undefined>(initialValues?.personId);
+  const [initialMessage] = useState(initialValues?.message || '');
   
   // Filter to only show people with mobile numbers (check primaryPhone first, fallback to telephone)
   const peopleWithMobile = (clientPeople || []).filter((cp: any) => {
@@ -138,6 +140,7 @@ export function SMSDialog({
               placeholder="Enter your SMS message..."
               className="min-h-[100px]"
               required
+              defaultValue={initialMessage}
               data-testid="textarea-sms-message"
             />
             <p className="text-xs text-muted-foreground">Maximum 160 characters for a single SMS</p>

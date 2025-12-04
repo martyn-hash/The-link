@@ -75,18 +75,21 @@ export function EmailDialog({
   isOpen, 
   onClose,
   onSuccess,
-  clientCompany
+  clientCompany,
+  initialValues
 }: EmailDialogProps) {
   const { toast } = useToast();
-  const [emailSubject, setEmailSubject] = useState<string>('');
-  const [emailContent, setEmailContent] = useState<string>('');
+  const [emailSubject, setEmailSubject] = useState<string>(initialValues?.subject || '');
+  const [emailContent, setEmailContent] = useState<string>(initialValues?.content || '');
   const [attachments, setAttachments] = useState<EmailAttachment[]>([]);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isAttachmentsOpen, setIsAttachmentsOpen] = useState(false);
   const subjectInputRef = useRef<HTMLInputElement>(null);
   
-  // Multiple recipient selection
-  const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(new Set());
+  // Multiple recipient selection - initialize with AI-suggested recipients if provided
+  const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(
+    new Set(initialValues?.recipientIds || [])
+  );
   
   // AI prompt state
   const [aiPrompt, setAiPrompt] = useState("");

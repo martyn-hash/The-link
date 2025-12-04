@@ -7,7 +7,8 @@ import {
   Info, 
   Loader2,
   Sparkles,
-  User
+  User,
+  Bug
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { AIMessage, AIBackendResponse, AIFunctionCall, ConversationContext } from './types';
 import { ActionCard } from './AIMagicActionCards';
 import { AIMagicHelpModal } from './AIMagicHelpModal';
+import { MatcherDebugPanel } from './MatcherDebugPanel';
 import { nanoid } from 'nanoid';
 import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
@@ -95,6 +97,7 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showMatcherDebug, setShowMatcherDebug] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(true);
   const [actionStatuses, setActionStatuses] = useState<Record<string, ActionStatus>>({});
   const [conversationContext, setConversationContext] = useState<ConversationContext>({});
@@ -571,6 +574,16 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
             >
               <Info className="w-4 h-4" />
             </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setShowMatcherDebug(true)}
+              title="Matcher Debug Panel"
+              data-testid="button-matcher-debug"
+            >
+              <Bug className="w-4 h-4" />
+            </Button>
           </div>
 
           <ScrollArea 
@@ -718,6 +731,7 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
       </div>
 
       <AIMagicHelpModal open={showHelp} onOpenChange={setShowHelp} />
+      <MatcherDebugPanel isOpen={showMatcherDebug} onClose={() => setShowMatcherDebug(false)} />
     </>
   );
 }

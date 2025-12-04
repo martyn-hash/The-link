@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
@@ -43,6 +43,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { cn } from '@/lib/utils';
+import { getBestMatch } from '@/lib/peopleMatcher';
 import { AIFunctionCall, ProjectMatchResponse, ProjectDetails, StageReasonsResponse, AnalyticsResult } from './types';
 import type { User as UserType } from '@shared/schema';
 
@@ -1029,17 +1030,17 @@ function matchPersonWithClientContext<T extends { id: string; firstName: string 
 
 export function EmailActionCard({ functionCall, onComplete, onDismiss }: ActionCardProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const args = functionCall.arguments;
   
-  const [subject, setSubject] = useState(args.subject as string || '');
-  const [body, setBody] = useState(args.body as string || '');
-  const [isEditing, setIsEditing] = useState(false);
-  const [selectedPersonId, setSelectedPersonId] = useState<string>('');
-
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
   const recipientName = args.recipientName as string || 'Unknown';
   const suggestedClientName = args.clientName as string | undefined;
+  const suggestedSubject = args.subject as string || '';
+  const suggestedBody = args.body as string || '';
 
-  // People API returns relatedCompanies array, not a single clientId
+  // Fetch all people for matching
   const { data: rawPeople } = useQuery<{ 
     id: string; 
     firstName: string | null; 
@@ -1055,170 +1056,165 @@ export function EmailActionCard({ functionCall, onComplete, onDismiss }: ActionC
     queryKey: ['/api/clients'],
   });
 
-  // Transform to include clientId (use first related company)
-  const people = rawPeople?.map(p => ({
-    ...p,
-    email: p.email || p.primaryEmail,
-    clientId: p.relatedCompanies?.[0]?.id || ''
-  }));
+  // Use the shared matcher to find the best matching person
+  const matchResult = useMemo(() => {
+    if (!rawPeople || !clients) return null;
+    
+    // Transform people for matching
+    const people = rawPeople.map(p => ({
+      ...p,
+      email: p.email || p.primaryEmail,
+      clientId: p.relatedCompanies?.[0]?.id || ''
+    }));
+    
+    return getBestMatch(
+      { personTerm: recipientName, companyTerm: suggestedClientName },
+      people,
+      clients,
+      { requireEmail: true }
+    );
+  }, [rawPeople, clients, recipientName, suggestedClientName]);
 
-  // Use improved matching that considers both person name and client name
-  // Only match people who have email addresses
-  const matchResult = people && clients 
-    ? matchPersonWithClientContext(recipientName, suggestedClientName, people, clients, (p) => !!(p.email || p.primaryEmail))
-    : null;
   const matchedPerson = matchResult?.person;
+  const matchedClientId = matchResult?.clientId || '';
+  const matchedClientName = matchResult?.clientName || '';
 
-  const effectivePersonId = selectedPersonId || matchedPerson?.id || '';
-  const selectedPerson = people?.find(p => p.id === effectivePersonId);
-  const personClient = selectedPerson?.relatedCompanies?.[0] || clients?.find(c => c.id === selectedPerson?.clientId);
-
-  const sendMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedPerson?.email) {
-        throw new Error('No email address found for this person');
-      }
-      const response = await apiRequest('POST', '/api/email/send', {
-        to: selectedPerson.email,
-        subject,
-        content: body,
-        isHtml: false,
-        clientId: selectedPerson.clientId,
-        personId: selectedPerson.id
-      });
-      return response;
-    },
-    onSuccess: () => {
-      toast({ title: 'Email sent!', description: `Email sent to ${selectedPerson?.email}` });
-      onComplete(true, `Email sent to ${recipientName}`);
-    },
-    onError: (error: Error) => {
-      toast({ title: 'Failed to send email', description: error.message, variant: 'destructive' });
-    }
+  // Fetch client's people for the EmailDialog
+  const { data: clientPeople } = useQuery({
+    queryKey: ['/api/clients', matchedClientId, 'people'],
+    enabled: !!matchedClientId && isDialogOpen,
   });
 
-  const isValid = subject.trim().length > 0 && body.trim().length > 0 && selectedPerson?.email;
+  // Transform to PersonOption format expected by EmailDialog
+  const clientPeopleForDialog = useMemo(() => {
+    if (!clientPeople) return [];
+    return (clientPeople as any[]).map((cp: any) => ({
+      person: {
+        id: cp.person?.id || cp.id,
+        firstName: cp.person?.firstName || cp.firstName || '',
+        lastName: cp.person?.lastName || cp.lastName || '',
+        fullName: cp.person?.fullName || cp.fullName || '',
+        primaryEmail: cp.person?.primaryEmail || cp.primaryEmail || '',
+        email: cp.person?.email || cp.email || '',
+        primaryPhone: cp.person?.primaryPhone || cp.primaryPhone || '',
+        telephone: cp.person?.telephone || cp.telephone || '',
+      },
+      role: cp.role || null
+    }));
+  }, [clientPeople]);
+
+  const handleDialogSuccess = () => {
+    toast({ title: 'Email sent!', description: `Email sent successfully` });
+    onComplete(true, `Email sent to ${recipientName}`);
+    setIsDialogOpen(false);
+  };
+
+  const handleDialogClose = () => {
+    setIsDialogOpen(false);
+  };
+
+  const handleOpenDialog = () => {
+    if (!matchedClientId) {
+      toast({ 
+        title: 'No match found', 
+        description: 'Could not find a matching contact. Please check the name and try again.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    setIsDialogOpen(true);
+  };
+
+  // Dynamically import the EmailDialog to avoid circular dependencies
+  const EmailDialogComponent = useMemo(() => {
+    // Lazy load
+    return lazy(() => import('@/pages/client-detail/components/communications/dialogs/EmailDialog').then(m => ({ default: m.EmailDialog })));
+  }, []);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className="bg-gradient-to-br from-sky-50 to-blue-50 dark:from-sky-950/30 dark:to-blue-950/30 border border-sky-200 dark:border-sky-800 rounded-xl p-4 space-y-3"
-      data-testid="action-card-email"
-    >
-      <div className="flex items-center gap-2 text-sky-700 dark:text-sky-400">
-        <Mail className="w-4 h-4" />
-        <span className="font-medium text-sm">Send Email</span>
-      </div>
-
-      {isEditing ? (
-        <div className="space-y-3">
-          <div>
-            <Label className="text-xs text-muted-foreground">
-              To {matchedPerson ? '(AI suggested)' : ''}
-            </Label>
-            <SearchableSelect
-              value={effectivePersonId}
-              onValueChange={setSelectedPersonId}
-              options={(people || []).filter(p => p.email).map(p => {
-                const clientName = p.relatedCompanies?.[0]?.name;
-                return {
-                  id: p.id,
-                  name: `${p.firstName || ''} ${p.lastName || ''}${clientName ? ` @ ${clientName}` : ''} (${p.email})`
-                };
-              })}
-              placeholder="Type to search contacts with email..."
-              suggestedName={recipientName}
-              icon={<User className="w-3 h-3" />}
-              testId="search-email-recipient"
-            />
-            {selectedPerson && !selectedPerson.email && (
-              <div className="text-xs text-amber-600 mt-1">This person has no email address</div>
-            )}
-          </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Subject</Label>
-            <Input 
-              value={subject} 
-              onChange={e => setSubject(e.target.value)}
-              className="h-8 text-sm"
-              data-testid="input-email-subject"
-            />
-          </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Message</Label>
-            <Textarea 
-              value={body} 
-              onChange={e => setBody(e.target.value)}
-              className="text-sm min-h-[80px]"
-              data-testid="input-email-body"
-            />
-          </div>
+    <>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-gradient-to-br from-sky-50 to-blue-50 dark:from-sky-950/30 dark:to-blue-950/30 border border-sky-200 dark:border-sky-800 rounded-xl p-4 space-y-3"
+        data-testid="action-card-email"
+      >
+        <div className="flex items-center gap-2 text-sky-700 dark:text-sky-400">
+          <Mail className="w-4 h-4" />
+          <span className="font-medium text-sm">Send Email</span>
         </div>
-      ) : (
+
         <div className="space-y-1 text-sm">
           <div className="flex items-center gap-1">
             <span className="text-muted-foreground">To:</span>
             <span className="font-medium">
-              {selectedPerson ? `${selectedPerson.firstName} ${selectedPerson.lastName}` : recipientName}
+              {matchedPerson ? `${matchedPerson.firstName} ${matchedPerson.lastName}` : recipientName}
             </span>
-            {selectedPerson?.email && <span className="text-xs text-muted-foreground">({selectedPerson.email})</span>}
-            {!selectedPerson && <span className="text-xs text-amber-600">(no match found - click Edit)</span>}
-            {selectedPerson && !selectedPerson.email && <span className="text-xs text-amber-600">(no email)</span>}
+            {matchedPerson?.email && <span className="text-xs text-muted-foreground">({matchedPerson.email})</span>}
+            {!matchedPerson && <span className="text-xs text-amber-600">(no match found)</span>}
           </div>
-          {personClient && (
-            <div className="text-xs text-muted-foreground">{personClient.name}</div>
-          )}
-          {subject && (
-            <div className="flex items-center gap-1">
-              <span className="text-muted-foreground">Subject:</span>
-              <span>{subject}</span>
+          {matchedClientName && (
+            <div className="text-xs text-muted-foreground flex items-center gap-1">
+              <Building2 className="w-3 h-3" />
+              {matchedClientName}
             </div>
           )}
-          {body && (
-            <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
-              {body}
+          {matchResult && (
+            <div className="text-xs text-muted-foreground">
+              Match confidence: {Math.round(matchResult.score)}%
+            </div>
+          )}
+          {suggestedSubject && (
+            <div className="flex items-center gap-1 mt-2">
+              <span className="text-muted-foreground">Subject:</span>
+              <span className="truncate">{suggestedSubject}</span>
             </div>
           )}
         </div>
-      )}
 
-      <div className="flex items-center gap-2 pt-1">
-        <Button
-          size="sm"
-          onClick={() => sendMutation.mutate()}
-          disabled={!isValid || sendMutation.isPending}
-          className="h-7 text-xs bg-sky-600 hover:bg-sky-700"
-          data-testid="button-confirm-email"
-        >
-          {sendMutation.isPending ? (
-            <Loader2 className="w-3 h-3 animate-spin mr-1" />
-          ) : (
+        <div className="flex items-center gap-2 pt-1">
+          <Button
+            size="sm"
+            onClick={handleOpenDialog}
+            disabled={!matchedClientId}
+            className="h-7 text-xs bg-sky-600 hover:bg-sky-700"
+            data-testid="button-open-email-dialog"
+          >
             <Mail className="w-3 h-3 mr-1" />
-          )}
-          Send Email
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setIsEditing(!isEditing)}
-          className="h-7 text-xs"
-          data-testid="button-edit-email"
-        >
-          <Edit2 className="w-3 h-3 mr-1" />
-          {isEditing ? 'Preview' : 'Edit'}
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onDismiss}
-          className="h-7 text-xs ml-auto"
-          data-testid="button-dismiss-email"
-        >
-          <X className="w-3 h-3" />
-        </Button>
-      </div>
-    </motion.div>
+            Open Email Composer
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onDismiss}
+            className="h-7 text-xs ml-auto"
+            data-testid="button-dismiss-email"
+          >
+            <X className="w-3 h-3" />
+          </Button>
+        </div>
+      </motion.div>
+
+      {/* Use the real EmailDialog from client detail */}
+      {isDialogOpen && matchedClientId && (
+        <Suspense fallback={null}>
+          <EmailDialogComponent
+            clientId={matchedClientId}
+            clientPeople={clientPeopleForDialog}
+            user={user || null}
+            isOpen={isDialogOpen}
+            onClose={handleDialogClose}
+            onSuccess={handleDialogSuccess}
+            clientCompany={matchedClientName}
+            initialValues={{
+              recipientIds: matchedPerson?.id ? [matchedPerson.id] : [],
+              subject: suggestedSubject,
+              content: suggestedBody
+            }}
+          />
+        </Suspense>
+      )}
+    </>
   );
 }
 
@@ -1226,14 +1222,13 @@ export function SmsActionCard({ functionCall, onComplete, onDismiss }: ActionCar
   const { toast } = useToast();
   const args = functionCall.arguments;
   
-  const [message, setMessage] = useState(args.message as string || '');
-  const [isEditing, setIsEditing] = useState(false);
-  const [selectedPersonId, setSelectedPersonId] = useState<string>('');
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const recipientName = args.recipientName as string || 'Unknown';
   const suggestedClientName = args.clientName as string | undefined;
+  const suggestedMessage = args.message as string || '';
 
-  // People API returns relatedCompanies array, not a single clientId
+  // Fetch all people for matching
   const { data: rawPeople } = useQuery<{ 
     id: string; 
     firstName: string | null; 
@@ -1249,163 +1244,160 @@ export function SmsActionCard({ functionCall, onComplete, onDismiss }: ActionCar
     queryKey: ['/api/clients'],
   });
 
-  // Transform to include mobile and clientId
-  const people = rawPeople?.map(p => ({
-    ...p,
-    mobile: p.telephone || p.primaryPhone,
-    clientId: p.relatedCompanies?.[0]?.id || ''
-  }));
+  // Use the shared matcher to find the best matching person
+  const matchResult = useMemo(() => {
+    if (!rawPeople || !clients) return null;
+    
+    // Transform people for matching
+    const people = rawPeople.map(p => ({
+      ...p,
+      telephone: p.telephone || p.primaryPhone,
+      clientId: p.relatedCompanies?.[0]?.id || ''
+    }));
+    
+    return getBestMatch(
+      { personTerm: recipientName, companyTerm: suggestedClientName },
+      people,
+      clients,
+      { requireMobile: true }
+    );
+  }, [rawPeople, clients, recipientName, suggestedClientName]);
 
-  // Use improved matching that considers both person name and client name
-  // Only match people who have mobile numbers
-  const matchResult = people && clients 
-    ? matchPersonWithClientContext(recipientName, suggestedClientName, people, clients, (p) => !!(p.mobile))
-    : null;
   const matchedPerson = matchResult?.person;
+  const matchedClientId = matchResult?.clientId || '';
+  const matchedClientName = matchResult?.clientName || '';
 
-  const effectivePersonId = selectedPersonId || matchedPerson?.id || '';
-  const selectedPerson = people?.find(p => p.id === effectivePersonId);
-  const personClient = selectedPerson?.relatedCompanies?.[0] || clients?.find(c => c.id === selectedPerson?.clientId);
-
-  const sendMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedPerson?.mobile) {
-        throw new Error('No mobile number found for this person');
-      }
-      if (!selectedPerson?.clientId) {
-        throw new Error('Person must be linked to a client to send SMS');
-      }
-      const response = await apiRequest('POST', '/api/sms/send', {
-        to: selectedPerson.mobile,
-        message,
-        clientId: selectedPerson.clientId,
-        personId: selectedPerson.id
-      });
-      return response;
-    },
-    onSuccess: () => {
-      toast({ title: 'SMS sent!', description: `SMS sent to ${selectedPerson?.mobile}` });
-      onComplete(true, `SMS sent to ${recipientName}`);
-    },
-    onError: (error: Error) => {
-      toast({ title: 'Failed to send SMS', description: error.message, variant: 'destructive' });
-    }
+  // Fetch client's people for the SMSDialog
+  const { data: clientPeople } = useQuery({
+    queryKey: ['/api/clients', matchedClientId, 'people'],
+    enabled: !!matchedClientId && isDialogOpen,
   });
 
-  const isValid = message.trim().length > 0 && selectedPerson?.mobile && selectedPerson?.clientId;
+  // Transform to PersonOption format expected by SMSDialog
+  const clientPeopleForDialog = useMemo(() => {
+    if (!clientPeople) return [];
+    return (clientPeople as any[]).map((cp: any) => ({
+      person: {
+        id: cp.person?.id || cp.id,
+        firstName: cp.person?.firstName || cp.firstName || '',
+        lastName: cp.person?.lastName || cp.lastName || '',
+        fullName: cp.person?.fullName || cp.fullName || '',
+        primaryEmail: cp.person?.primaryEmail || cp.primaryEmail || '',
+        email: cp.person?.email || cp.email || '',
+        primaryPhone: cp.person?.primaryPhone || cp.primaryPhone || '',
+        telephone: cp.person?.telephone || cp.telephone || '',
+      },
+      role: cp.role || null
+    }));
+  }, [clientPeople]);
+
+  const handleDialogSuccess = () => {
+    toast({ title: 'SMS sent!', description: `SMS sent successfully` });
+    onComplete(true, `SMS sent to ${recipientName}`);
+    setIsDialogOpen(false);
+  };
+
+  const handleDialogClose = () => {
+    setIsDialogOpen(false);
+  };
+
+  const handleOpenDialog = () => {
+    if (!matchedClientId) {
+      toast({ 
+        title: 'No match found', 
+        description: 'Could not find a matching contact with a mobile number. Please check the name and try again.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    setIsDialogOpen(true);
+  };
+
+  // Dynamically import the SMSDialog to avoid circular dependencies
+  const SMSDialogComponent = useMemo(() => {
+    return lazy(() => import('@/pages/client-detail/components/communications/dialogs/SMSDialog').then(m => ({ default: m.SMSDialog })));
+  }, []);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 space-y-3"
-      data-testid="action-card-sms"
-    >
-      <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
-        <MessageSquare className="w-4 h-4" />
-        <span className="font-medium text-sm">Send SMS</span>
-      </div>
-
-      {isEditing ? (
-        <div className="space-y-3">
-          <div>
-            <Label className="text-xs text-muted-foreground">
-              To {matchedPerson ? '(AI suggested)' : ''}
-            </Label>
-            <SearchableSelect
-              value={effectivePersonId}
-              onValueChange={setSelectedPersonId}
-              options={(people || []).filter(p => p.mobile).map(p => {
-                const clientName = p.relatedCompanies?.[0]?.name;
-                return {
-                  id: p.id,
-                  name: `${p.firstName || ''} ${p.lastName || ''}${clientName ? ` @ ${clientName}` : ''} (${p.mobile})`
-                };
-              })}
-              placeholder="Type to search contacts with mobile..."
-              suggestedName={recipientName}
-              icon={<User className="w-3 h-3" />}
-              testId="search-sms-recipient"
-            />
-            {selectedPerson && !selectedPerson.mobile && (
-              <div className="text-xs text-amber-600 mt-1">This person has no mobile number</div>
-            )}
-            {selectedPerson && !selectedPerson.clientId && (
-              <div className="text-xs text-amber-600 mt-1">Person must be linked to a client</div>
-            )}
-          </div>
-          <div>
-            <Label className="text-xs text-muted-foreground">Message</Label>
-            <Textarea 
-              value={message} 
-              onChange={e => setMessage(e.target.value)}
-              className="text-sm min-h-[60px]"
-              maxLength={160}
-              data-testid="input-sms-message"
-            />
-            <div className="text-xs text-muted-foreground mt-1">
-              {message.length}/160 characters
-            </div>
-          </div>
+    <>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 space-y-3"
+        data-testid="action-card-sms"
+      >
+        <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+          <MessageSquare className="w-4 h-4" />
+          <span className="font-medium text-sm">Send SMS</span>
         </div>
-      ) : (
+
         <div className="space-y-1 text-sm">
           <div className="flex items-center gap-1">
             <span className="text-muted-foreground">To:</span>
             <span className="font-medium">
-              {selectedPerson ? `${selectedPerson.firstName} ${selectedPerson.lastName}` : recipientName}
+              {matchedPerson ? `${matchedPerson.firstName} ${matchedPerson.lastName}` : recipientName}
             </span>
-            {selectedPerson?.mobile && <span className="text-xs text-muted-foreground">({selectedPerson.mobile})</span>}
-            {!selectedPerson && <span className="text-xs text-amber-600">(no match found - click Edit)</span>}
-            {selectedPerson && !selectedPerson.mobile && <span className="text-xs text-amber-600">(no mobile)</span>}
+            {matchedPerson?.telephone && <span className="text-xs text-muted-foreground">({matchedPerson.telephone})</span>}
+            {!matchedPerson && <span className="text-xs text-amber-600">(no match found)</span>}
           </div>
-          {personClient && (
-            <div className="text-xs text-muted-foreground">{personClient.name}</div>
+          {matchedClientName && (
+            <div className="text-xs text-muted-foreground flex items-center gap-1">
+              <Building2 className="w-3 h-3" />
+              {matchedClientName}
+            </div>
           )}
-          {message && (
-            <div className="text-xs text-muted-foreground mt-1">
-              {message}
+          {matchResult && (
+            <div className="text-xs text-muted-foreground">
+              Match confidence: {Math.round(matchResult.score)}%
+            </div>
+          )}
+          {suggestedMessage && (
+            <div className="text-xs text-muted-foreground mt-2 line-clamp-2">
+              Message: {suggestedMessage}
             </div>
           )}
         </div>
-      )}
 
-      <div className="flex items-center gap-2 pt-1">
-        <Button
-          size="sm"
-          onClick={() => sendMutation.mutate()}
-          disabled={!isValid || sendMutation.isPending}
-          className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700"
-          data-testid="button-confirm-sms"
-        >
-          {sendMutation.isPending ? (
-            <Loader2 className="w-3 h-3 animate-spin mr-1" />
-          ) : (
+        <div className="flex items-center gap-2 pt-1">
+          <Button
+            size="sm"
+            onClick={handleOpenDialog}
+            disabled={!matchedClientId}
+            className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700"
+            data-testid="button-open-sms-dialog"
+          >
             <MessageSquare className="w-3 h-3 mr-1" />
-          )}
-          Send SMS
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setIsEditing(!isEditing)}
-          className="h-7 text-xs"
-          data-testid="button-edit-sms"
-        >
-          <Edit2 className="w-3 h-3 mr-1" />
-          {isEditing ? 'Preview' : 'Edit'}
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onDismiss}
-          className="h-7 text-xs ml-auto"
-          data-testid="button-dismiss-sms"
-        >
-          <X className="w-3 h-3" />
-        </Button>
-      </div>
-    </motion.div>
+            Open SMS Dialog
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onDismiss}
+            className="h-7 text-xs ml-auto"
+            data-testid="button-dismiss-sms"
+          >
+            <X className="w-3 h-3" />
+          </Button>
+        </div>
+      </motion.div>
+
+      {/* Use the real SMSDialog from client detail */}
+      {isDialogOpen && matchedClientId && (
+        <Suspense fallback={null}>
+          <SMSDialogComponent
+            clientId={matchedClientId}
+            clientPeople={clientPeopleForDialog}
+            isOpen={isDialogOpen}
+            onClose={handleDialogClose}
+            onSuccess={handleDialogSuccess}
+            initialValues={{
+              personId: matchedPerson?.id,
+              message: suggestedMessage
+            }}
+          />
+        </Suspense>
+      )}
+    </>
   );
 }
 
