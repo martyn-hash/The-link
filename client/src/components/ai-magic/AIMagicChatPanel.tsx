@@ -15,10 +15,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useToast } from '@/hooks/use-toast';
-import { AIMessage, AIBackendResponse, AIFunctionCall } from './types';
+import { AIMessage, AIBackendResponse, AIFunctionCall, ConversationContext } from './types';
 import { ActionCard } from './AIMagicActionCards';
 import { AIMagicHelpModal } from './AIMagicHelpModal';
 import { nanoid } from 'nanoid';
+import { useLocation } from 'wouter';
+import { useQuery } from '@tanstack/react-query';
 
 interface SpeechRecognitionEvent {
   results: SpeechRecognitionResultList;
@@ -72,8 +74,15 @@ interface AIMagicChatPanelProps {
 
 type ActionStatus = 'pending' | 'completed' | 'dismissed';
 
+// Smart suggestion type
+interface SmartSuggestion {
+  label: string;
+  command: string;
+}
+
 export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
   const { toast } = useToast();
+  const [location] = useLocation();
   const [messages, setMessages] = useState<AIMessage[]>([
     {
       id: 'welcome',
@@ -88,10 +97,151 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
   const [showHelp, setShowHelp] = useState(false);
   const [voiceSupported, setVoiceSupported] = useState(true);
   const [actionStatuses, setActionStatuses] = useState<Record<string, ActionStatus>>({});
+  const [conversationContext, setConversationContext] = useState<ConversationContext>({});
   
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
+
+  // Parse current location for context
+  const clientIdMatch = location.match(/\/clients\/([^/]+)/);
+  const personIdMatch = location.match(/\/people\/([^/]+)/);
+  const currentClientId = clientIdMatch?.[1];
+  const currentPersonId = personIdMatch?.[1];
+
+  // Fetch current client data if on a client page
+  const { data: currentClient } = useQuery<{ id: string; name: string }>({
+    queryKey: ['/api/clients', currentClientId],
+    enabled: !!currentClientId,
+  });
+
+  // Fetch current person data if on a person page
+  const { data: currentPerson } = useQuery<{ id: string; firstName: string | null; lastName: string | null; clientId: string }>({
+    queryKey: ['/api/people', currentPersonId],
+    enabled: !!currentPersonId,
+  });
+
+  // Generate smart suggestions based on current context
+  const getSmartSuggestions = (): SmartSuggestion[] => {
+    const suggestions: SmartSuggestion[] = [];
+
+    // Client-specific suggestions
+    if (currentClient) {
+      suggestions.push(
+        { label: `Remind about ${currentClient.name}`, command: `Remind me to follow up with ${currentClient.name} tomorrow` },
+        { label: `Email ${currentClient.name}`, command: `Send an email to ${currentClient.name}` }
+      );
+    }
+
+    // Person-specific suggestions
+    if (currentPerson) {
+      const personName = `${currentPerson.firstName || ''} ${currentPerson.lastName || ''}`.trim();
+      if (personName) {
+        suggestions.push(
+          { label: `Email ${personName}`, command: `Send an email to ${personName}` },
+          { label: `SMS ${personName}`, command: `Send a text to ${personName}` }
+        );
+      }
+    }
+
+    // Page-specific suggestions
+    if (location.includes('/internal-tasks')) {
+      suggestions.push(
+        { label: 'My tasks', command: 'Show me my tasks' },
+        { label: 'Overdue tasks', command: 'Show me overdue tasks' }
+      );
+    } else if (location.includes('/clients')) {
+      suggestions.push(
+        { label: 'Search clients', command: 'Find client ' }
+      );
+    }
+
+    // Context-based suggestions (from conversation memory)
+    if (conversationContext.lastMentionedClient?.name && !currentClient) {
+      suggestions.push(
+        { label: `More about ${conversationContext.lastMentionedClient.name}`, command: `Take me to ${conversationContext.lastMentionedClient.name}` }
+      );
+    }
+    if (conversationContext.lastMentionedPerson?.name && !currentPerson) {
+      suggestions.push(
+        { label: `Email ${conversationContext.lastMentionedPerson.name}`, command: `Send an email to ${conversationContext.lastMentionedPerson.name}` }
+      );
+    }
+
+    // Default suggestions if nothing context-specific
+    if (suggestions.length === 0) {
+      suggestions.push(
+        { label: 'New reminder', command: 'Remind me to ' },
+        { label: 'My tasks', command: 'Show me my tasks' },
+        { label: 'Find client', command: 'Find client ' }
+      );
+    }
+
+    // Limit to 3 suggestions
+    return suggestions.slice(0, 3);
+  };
+
+  const smartSuggestions = getSmartSuggestions();
+
+  const handleSuggestionClick = (command: string) => {
+    setInputValue(command);
+    inputRef.current?.focus();
+    // If the command doesn't end with a space (meaning it's complete), send it
+    if (!command.endsWith(' ')) {
+      setTimeout(() => {
+        // Simulate sending after a brief delay to let state update
+        const input = inputRef.current;
+        if (input) {
+          const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+          input.dispatchEvent(event);
+        }
+      }, 50);
+    }
+  };
+  
+  // Helper to update context based on function call - uses functional update to avoid stale closure
+  const updateContextFromFunctionCall = (functionCall: AIFunctionCall) => {
+    const args = functionCall.arguments as Record<string, unknown>;
+    
+    setConversationContext(prev => {
+      const newContext: ConversationContext = { ...prev };
+      
+      // Extract client context
+      if (args.clientName && typeof args.clientName === 'string') {
+        newContext.lastMentionedClient = { id: '', name: args.clientName };
+      }
+      
+      // For navigation to client, extract the client name
+      if (functionCall.name === 'navigate_to_client' && args.clientName && typeof args.clientName === 'string') {
+        newContext.lastMentionedClient = { id: '', name: args.clientName };
+      }
+      
+      // For search clients, extract the search term as potential client
+      if (functionCall.name === 'search_clients' && args.searchTerm && typeof args.searchTerm === 'string') {
+        newContext.lastMentionedClient = { id: '', name: args.searchTerm };
+      }
+      
+      // Extract person context (for emails/SMS)
+      if (args.recipientName && typeof args.recipientName === 'string') {
+        newContext.lastMentionedPerson = { id: '', name: args.recipientName };
+      }
+      if (args.personName && typeof args.personName === 'string') {
+        newContext.lastMentionedPerson = { id: '', name: args.personName };
+      }
+      
+      // Extract assignee context (for tasks/reminders)
+      if (args.assigneeName && typeof args.assigneeName === 'string' && 
+          args.assigneeName !== 'me' && args.assigneeName !== 'myself') {
+        newContext.lastMentionedUser = { id: '', name: args.assigneeName };
+      }
+      
+      // Track last action
+      newContext.lastAction = functionCall.name;
+      
+      console.log('[AI Magic] Updated conversation context:', newContext);
+      return newContext;
+    });
+  };
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -132,6 +282,21 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
     setMessages(prev => [...prev, loadingMessage]);
 
     try {
+      // Build context to send - only include non-empty values
+      const contextToSend: ConversationContext = {};
+      if (conversationContext.lastMentionedClient?.name) {
+        contextToSend.lastMentionedClient = conversationContext.lastMentionedClient;
+      }
+      if (conversationContext.lastMentionedPerson?.name) {
+        contextToSend.lastMentionedPerson = conversationContext.lastMentionedPerson;
+      }
+      if (conversationContext.lastMentionedUser?.name) {
+        contextToSend.lastMentionedUser = conversationContext.lastMentionedUser;
+      }
+      if (conversationContext.lastAction) {
+        contextToSend.lastAction = conversationContext.lastAction;
+      }
+      
       const response = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -140,6 +305,7 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
           conversationHistory: messages
             .filter(m => m.id !== 'welcome' && !m.isLoading)
             .map(m => ({ role: m.role, content: m.content })),
+          conversationContext: Object.keys(contextToSend).length > 0 ? contextToSend : undefined,
         }),
       });
 
@@ -188,6 +354,9 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
         
         // Set action status to pending so the card shows
         setActionStatuses(prev => ({ ...prev, [messageId]: 'pending' }));
+        
+        // Update conversation context from function call for pronoun resolution
+        updateContextFromFunctionCall(data.functionCall);
       } else if (data.type === 'clarification') {
         responseMessage = {
           id: nanoid(),
@@ -410,7 +579,23 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
             </div>
           </ScrollArea>
 
-          <div className="p-3 border-t border-border bg-muted/20">
+          <div className="p-3 border-t border-border bg-muted/20 space-y-2">
+            {/* Smart Suggestions */}
+            {smartSuggestions.length > 0 && !isLoading && !inputValue && (
+              <div className="flex flex-wrap gap-1.5">
+                {smartSuggestions.map((suggestion, index) => (
+                  <button
+                    key={index}
+                    onClick={() => handleSuggestionClick(suggestion.command)}
+                    className="px-2.5 py-1 text-xs bg-primary/10 hover:bg-primary/20 text-primary rounded-full transition-colors border border-primary/20"
+                    data-testid={`suggestion-chip-${index}`}
+                  >
+                    {suggestion.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <Input

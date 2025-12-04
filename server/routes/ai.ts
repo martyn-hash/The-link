@@ -582,7 +582,7 @@ Please refine the email according to the request above.`;
           });
         }
         
-        const { message, conversationHistory } = parseResult.data;
+        const { message, conversationHistory, conversationContext } = parseResult.data;
 
         // Get current user details
         const user = await storage.getUser(userId);
@@ -604,7 +604,8 @@ Please refine the email according to the request above.`;
           {
             currentUserId: userId,
             currentUserName: userName
-          }
+          },
+          conversationContext
         );
 
         res.json(result);

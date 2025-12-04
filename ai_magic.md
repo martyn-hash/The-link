@@ -455,15 +455,15 @@ recognition.onresult = (event) => {
 - [x] 5.4 Error handling with toast notifications - Mic permission, network errors handled gracefully
 - [x] 5.5 Auto-stop after final result - Stops recording 500ms after speech ends
 
-### Phase 6: Context & Memory (Stage 4) ❌ NOT STARTED
-- [ ] 6.1 Implement conversation context tracking - No lastMentionedClient/Person tracking
-- [ ] 6.2 Add pronoun resolution - "Send them an email" not supported
-- [ ] 6.3 Test multi-turn conversations - Basic history works, no entity memory
+### Phase 6: Context & Memory (Stage 4) ✅ COMPLETE
+- [x] 6.1 Implement conversation context tracking - Tracks lastMentionedClient, lastMentionedPerson, lastMentionedUser, lastAction
+- [x] 6.2 Add pronoun resolution - System prompt updated to resolve "them", "they", "this client" using context
+- [x] 6.3 Test multi-turn conversations - Context passed to backend for each request
 
 ### Phase 7: Polish (Stage 8) ✅ COMPLETE
 - [x] 7.1 Add animations and transitions - Framer Motion slide in/out, message animations
 - [x] 7.2 Implement keyboard shortcuts - Cmd/Ctrl+K to open, Escape to close
-- [ ] 7.3 Add smart suggestions - No contextual command chips (nice-to-have)
+- [x] 7.3 Add smart suggestions - Contextual suggestion chips based on current page and conversation context
 - [x] 7.4 Auto-close panel after success - Implemented with 500ms delay
 
 ---
@@ -477,8 +477,8 @@ recognition.onresult = (event) => {
 
 ### Medium Priority - UX Improvements  
 4. ~~**Keyboard Shortcut (Cmd+K)**~~ ✅ DONE - Opens/closes AI panel
-5. **Conversation Context Memory** - Track last mentioned entities for pronoun resolution
-6. **Smart Suggestions** - Contextual command chips based on current page
+5. ~~**Conversation Context Memory**~~ ✅ DONE - Tracks last mentioned client/person/user for pronoun resolution
+6. ~~**Smart Suggestions**~~ ✅ DONE - Contextual command chips based on current page and conversation context
 
 ### Lower Priority - Nice to Have
 7. **Sound Effects** - Subtle audio feedback

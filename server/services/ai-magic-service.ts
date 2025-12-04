@@ -23,9 +23,26 @@ export const conversationMessageSchema = z.object({
   content: z.string()
 });
 
+export const conversationContextSchema = z.object({
+  lastMentionedClient: z.object({
+    id: z.string(),
+    name: z.string()
+  }).optional(),
+  lastMentionedPerson: z.object({
+    id: z.string(),
+    name: z.string()
+  }).optional(),
+  lastMentionedUser: z.object({
+    id: z.string(),
+    name: z.string()
+  }).optional(),
+  lastAction: z.string().optional()
+}).optional();
+
 export const chatRequestSchema = z.object({
   message: z.string().min(1, "Message is required"),
-  conversationHistory: z.array(conversationMessageSchema).default([])
+  conversationHistory: z.array(conversationMessageSchema).default([]),
+  conversationContext: conversationContextSchema.optional()
 });
 
 // Types for AI Magic responses
@@ -322,16 +339,57 @@ const AI_MAGIC_FUNCTIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   }
 ];
 
+// Conversation context type for pronoun resolution
+interface ConversationContext {
+  lastMentionedClient?: { id: string; name: string };
+  lastMentionedPerson?: { id: string; name: string };
+  lastMentionedUser?: { id: string; name: string };
+  lastAction?: string;
+}
+
 // Build the system prompt with current context
-function buildSystemPrompt(userName: string, currentDateTime: string, taskTypes?: string[]): string {
+function buildSystemPrompt(
+  userName: string, 
+  currentDateTime: string, 
+  taskTypes?: string[],
+  conversationContext?: ConversationContext
+): string {
   const taskTypesContext = taskTypes && taskTypes.length > 0 
     ? `\n\nAvailable task types: ${taskTypes.join(', ')}`
     : '';
+  
+  // Build conversation context section for pronoun resolution
+  let contextSection = '';
+  if (conversationContext) {
+    const contextParts: string[] = [];
+    if (conversationContext.lastMentionedClient) {
+      contextParts.push(`Last mentioned client: "${conversationContext.lastMentionedClient.name}"`);
+    }
+    if (conversationContext.lastMentionedPerson) {
+      contextParts.push(`Last mentioned person/contact: "${conversationContext.lastMentionedPerson.name}"`);
+    }
+    if (conversationContext.lastMentionedUser) {
+      contextParts.push(`Last mentioned team member: "${conversationContext.lastMentionedUser.name}"`);
+    }
+    if (conversationContext.lastAction) {
+      contextParts.push(`Last action: ${conversationContext.lastAction}`);
+    }
+    if (contextParts.length > 0) {
+      contextSection = `\n\n## Conversation Context (for pronoun resolution):
+${contextParts.join('\n')}
+
+When user says "them", "they", "this client", "that person", "him", "her", or similar pronouns:
+- Use the last mentioned person/client/user from above
+- For "this client" or "the client" -> use the last mentioned client
+- For "them", "they", "him", "her" when referring to a person -> use the last mentioned person
+- For "them", "they" when referring to a team member -> use the last mentioned team member`;
+    }
+  }
     
   return `You are an AI assistant for The Link, a CRM system for accounting and bookkeeping firms. You help users create reminders, tasks, send emails/SMS, and navigate to data.
 
 Current user: ${userName}
-Current date/time: ${currentDateTime} (UK timezone - Europe/London)${taskTypesContext}
+Current date/time: ${currentDateTime} (UK timezone - Europe/London)${taskTypesContext}${contextSection}
 
 ## Your Capabilities:
 - Create quick reminders (time-based personal notifications)
@@ -355,6 +413,7 @@ Current date/time: ${currentDateTime} (UK timezone - Europe/London)${taskTypesCo
 6. For ambiguous names, include what you understood so the system can offer matches
 7. Default priority is "medium" if not specified
 8. Default to the current user as assignee for tasks if not specified
+9. Use conversation context to resolve pronouns like "them", "they", "this client"
 
 ## Important:
 - You cannot directly access or modify the database
@@ -371,7 +430,8 @@ export async function processAIMagicChat(
   context: {
     currentUserId: string;
     currentUserName: string;
-  }
+  },
+  conversationContext?: ConversationContext
 ): Promise<AIMagicResponse> {
   if (!process.env.OPENAI_API_KEY) {
     return {
@@ -401,7 +461,11 @@ export async function processAIMagicChat(
       console.warn('[AI Magic] Could not fetch task types:', e);
     }
 
-    const systemPrompt = buildSystemPrompt(context.currentUserName, ukDateTime, taskTypeNames);
+    const systemPrompt = buildSystemPrompt(context.currentUserName, ukDateTime, taskTypeNames, conversationContext);
+    
+    if (conversationContext) {
+      console.log('[AI Magic] Using conversation context:', conversationContext);
+    }
 
     // Build messages array for OpenAI
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
