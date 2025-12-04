@@ -593,50 +593,160 @@ export async function processAIMagicChat(
   }
 }
 
-// Fuzzy match clients by name
+// Levenshtein distance algorithm for typo tolerance
+function levenshteinDistance(str1: string, str2: string): number {
+  const len1 = str1.length;
+  const len2 = str2.length;
+  
+  if (len1 === 0) return len2;
+  if (len2 === 0) return len1;
+  
+  const matrix: number[][] = [];
+  
+  for (let i = 0; i <= len1; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= len2; j++) {
+    matrix[0][j] = j;
+  }
+  
+  for (let i = 1; i <= len1; i++) {
+    for (let j = 1; j <= len2; j++) {
+      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,      // deletion
+        matrix[i][j - 1] + 1,      // insertion
+        matrix[i - 1][j - 1] + cost // substitution
+      );
+    }
+  }
+  
+  return matrix[len1][len2];
+}
+
+// Calculate similarity score (0-1) based on Levenshtein distance
+function calculateSimilarity(str1: string, str2: string): number {
+  const maxLen = Math.max(str1.length, str2.length);
+  if (maxLen === 0) return 1;
+  const distance = levenshteinDistance(str1, str2);
+  return 1 - (distance / maxLen);
+}
+
+// Check if search term matches as an abbreviation (e.g., "ABC" matches "ABC Limited")
+function matchesAbbreviation(searchTerm: string, targetName: string): boolean {
+  const searchUpper = searchTerm.toUpperCase();
+  const targetWords = targetName.toUpperCase().split(/\s+/);
+  
+  // Check if it's an exact abbreviation match (first word)
+  if (targetWords[0] === searchUpper) {
+    return true;
+  }
+  
+  // Check if search term matches initials
+  if (searchTerm.length <= 5) {
+    const initials = targetWords.map(w => w[0]).join('');
+    if (initials.startsWith(searchUpper) || searchUpper === initials) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// Enhanced fuzzy matching result type
+export interface FuzzyMatchResult<T = unknown> {
+  id: string;
+  name: string;
+  confidence: number;
+  matchType: 'exact' | 'starts_with' | 'abbreviation' | 'contains' | 'fuzzy' | 'word_match';
+  data?: T;
+}
+
+// Fuzzy match clients by name with enhanced algorithm
 export async function fuzzyMatchClients(searchTerm: string, limit: number = 5): Promise<Array<{
   id: string;
   name: string;
   confidence: number;
+  matchType?: string;
 }>> {
   try {
     const allClients = await storage.getAllClients();
     const searchLower = searchTerm.toLowerCase().trim();
     
-    const results: Array<{ id: string; name: string; confidence: number }> = [];
+    const results: Array<{ id: string; name: string; confidence: number; matchType: string }> = [];
     
     for (const client of allClients) {
       const clientName = (client.name || '').toLowerCase();
+      const originalName = client.name || 'Unknown';
       let confidence = 0;
+      let matchType = '';
       
       // Exact match
       if (clientName === searchLower) {
         confidence = 1.0;
+        matchType = 'exact';
+      }
+      // Abbreviation match (e.g., "ABC" matches "ABC Limited")
+      else if (matchesAbbreviation(searchTerm, originalName)) {
+        confidence = 0.95;
+        matchType = 'abbreviation';
       }
       // Starts with
       else if (clientName.startsWith(searchLower)) {
         confidence = 0.9;
+        matchType = 'starts_with';
       }
-      // Contains
+      // Contains as a word boundary
+      else if (new RegExp(`\\b${searchLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`).test(clientName)) {
+        confidence = 0.8;
+        matchType = 'word_match';
+      }
+      // Contains anywhere
       else if (clientName.includes(searchLower)) {
         confidence = 0.7;
+        matchType = 'contains';
       }
-      // Word match (any word in company name matches)
+      // Word match (any word in company name starts with search term)
       else {
         const words = clientName.split(/\s+/);
         for (const word of words) {
           if (word.startsWith(searchLower)) {
-            confidence = 0.6;
+            confidence = 0.65;
+            matchType = 'word_match';
             break;
           }
+        }
+      }
+      
+      // Fuzzy match using Levenshtein distance for typo tolerance
+      if (confidence === 0 && searchLower.length >= 3) {
+        // Compare with each word and full name
+        const similarity = calculateSimilarity(searchLower, clientName);
+        const words = clientName.split(/\s+/);
+        
+        let bestWordSimilarity = 0;
+        for (const word of words) {
+          if (word.length >= 3) {
+            const wordSim = calculateSimilarity(searchLower, word);
+            bestWordSimilarity = Math.max(bestWordSimilarity, wordSim);
+          }
+        }
+        
+        const bestSimilarity = Math.max(similarity, bestWordSimilarity);
+        
+        // Only accept fuzzy matches with >70% similarity
+        if (bestSimilarity > 0.7) {
+          confidence = bestSimilarity * 0.6; // Cap fuzzy matches at 0.6 max
+          matchType = 'fuzzy';
         }
       }
       
       if (confidence > 0) {
         results.push({
           id: client.id,
-          name: client.name || 'Unknown',
-          confidence
+          name: originalName,
+          confidence,
+          matchType
         });
       }
     }
@@ -651,18 +761,19 @@ export async function fuzzyMatchClients(searchTerm: string, limit: number = 5): 
   }
 }
 
-// Fuzzy match users/staff by name
+// Fuzzy match users/staff by name with enhanced algorithm
 export async function fuzzyMatchUsers(searchTerm: string, limit: number = 5): Promise<Array<{
   id: string;
   name: string;
   email: string;
   confidence: number;
+  matchType?: string;
 }>> {
   try {
     const allUsers = await storage.getAllUsers();
     const searchLower = searchTerm.toLowerCase().trim();
     
-    const results: Array<{ id: string; name: string; email: string; confidence: number }> = [];
+    const results: Array<{ id: string; name: string; email: string; confidence: number; matchType: string }> = [];
     
     for (const user of allUsers) {
       const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim().toLowerCase();
@@ -670,30 +781,51 @@ export async function fuzzyMatchUsers(searchTerm: string, limit: number = 5): Pr
       const lastName = (user.lastName || '').toLowerCase();
       
       let confidence = 0;
+      let matchType = '';
       
       // Exact full name match
       if (fullName === searchLower) {
         confidence = 1.0;
+        matchType = 'exact';
       }
       // First name exact match
       else if (firstName === searchLower) {
         confidence = 0.95;
+        matchType = 'exact';
       }
       // Last name exact match
       else if (lastName === searchLower) {
         confidence = 0.9;
+        matchType = 'exact';
       }
       // Full name starts with
       else if (fullName.startsWith(searchLower)) {
         confidence = 0.85;
+        matchType = 'starts_with';
       }
       // First or last name starts with
       else if (firstName.startsWith(searchLower) || lastName.startsWith(searchLower)) {
         confidence = 0.8;
+        matchType = 'starts_with';
       }
       // Contains
       else if (fullName.includes(searchLower)) {
         confidence = 0.6;
+        matchType = 'contains';
+      }
+      
+      // Fuzzy match using Levenshtein distance for typo tolerance
+      if (confidence === 0 && searchLower.length >= 3) {
+        const firstNameSim = firstName.length >= 3 ? calculateSimilarity(searchLower, firstName) : 0;
+        const lastNameSim = lastName.length >= 3 ? calculateSimilarity(searchLower, lastName) : 0;
+        const fullNameSim = calculateSimilarity(searchLower, fullName);
+        
+        const bestSimilarity = Math.max(firstNameSim, lastNameSim, fullNameSim);
+        
+        if (bestSimilarity > 0.7) {
+          confidence = bestSimilarity * 0.5; // Cap fuzzy matches at 0.5 max for users
+          matchType = 'fuzzy';
+        }
       }
       
       if (confidence > 0) {
@@ -702,7 +834,8 @@ export async function fuzzyMatchUsers(searchTerm: string, limit: number = 5): Pr
           id: user.id,
           name: displayName || user.email || 'Unknown',
           email: user.email || '',
-          confidence
+          confidence,
+          matchType
         });
       }
     }
@@ -716,7 +849,7 @@ export async function fuzzyMatchUsers(searchTerm: string, limit: number = 5): Pr
   }
 }
 
-// Fuzzy match people/contacts by name
+// Fuzzy match people/contacts by name with enhanced algorithm
 export async function fuzzyMatchPeople(
   searchTerm: string, 
   clientId?: string,
@@ -726,6 +859,7 @@ export async function fuzzyMatchPeople(
   name: string;
   email: string | null;
   confidence: number;
+  matchType?: string;
 }>> {
   try {
     // Get all people - we filter by client separately if needed
@@ -738,6 +872,7 @@ export async function fuzzyMatchPeople(
       name: string;
       email: string | null;
       confidence: number;
+      matchType: string;
     }> = [];
     
     for (const person of allPeople) {
@@ -746,17 +881,46 @@ export async function fuzzyMatchPeople(
       const lastName = (person.lastName || '').toLowerCase();
       
       let confidence = 0;
+      let matchType = '';
       
+      // Exact full name match
       if (fullName === searchLower) {
         confidence = 1.0;
-      } else if (firstName === searchLower || lastName === searchLower) {
+        matchType = 'exact';
+      }
+      // First or last name exact match
+      else if (firstName === searchLower || lastName === searchLower) {
         confidence = 0.9;
-      } else if (fullName.startsWith(searchLower)) {
+        matchType = 'exact';
+      }
+      // Full name starts with
+      else if (fullName.startsWith(searchLower)) {
         confidence = 0.85;
-      } else if (firstName.startsWith(searchLower) || lastName.startsWith(searchLower)) {
+        matchType = 'starts_with';
+      }
+      // First or last name starts with
+      else if (firstName.startsWith(searchLower) || lastName.startsWith(searchLower)) {
         confidence = 0.75;
-      } else if (fullName.includes(searchLower)) {
+        matchType = 'starts_with';
+      }
+      // Contains
+      else if (fullName.includes(searchLower)) {
         confidence = 0.6;
+        matchType = 'contains';
+      }
+      
+      // Fuzzy match using Levenshtein distance for typo tolerance
+      if (confidence === 0 && searchLower.length >= 3) {
+        const firstNameSim = firstName.length >= 3 ? calculateSimilarity(searchLower, firstName) : 0;
+        const lastNameSim = lastName.length >= 3 ? calculateSimilarity(searchLower, lastName) : 0;
+        const fullNameSim = calculateSimilarity(searchLower, fullName);
+        
+        const bestSimilarity = Math.max(firstNameSim, lastNameSim, fullNameSim);
+        
+        if (bestSimilarity > 0.7) {
+          confidence = bestSimilarity * 0.5; // Cap fuzzy matches at 0.5 max
+          matchType = 'fuzzy';
+        }
       }
       
       if (confidence > 0) {
@@ -764,7 +928,8 @@ export async function fuzzyMatchPeople(
           id: person.id,
           name: `${person.firstName || ''} ${person.lastName || ''}`.trim(),
           email: person.email || null,
-          confidence
+          confidence,
+          matchType
         });
       }
     }
@@ -776,4 +941,41 @@ export async function fuzzyMatchPeople(
     console.error('[AI Magic] Error matching people:', error);
     return [];
   }
+}
+
+// Confidence thresholds for disambiguation
+export const CONFIDENCE_THRESHOLDS = {
+  HIGH: 0.9,      // High confidence - proceed automatically
+  MEDIUM: 0.7,    // Medium confidence - may need confirmation
+  LOW: 0.5,       // Low confidence - likely needs disambiguation
+  MINIMUM: 0.3    // Minimum to include in results
+};
+
+// Check if disambiguation is needed based on matches
+export function needsDisambiguation(matches: Array<{ confidence: number }>): boolean {
+  if (matches.length === 0) return false;
+  if (matches.length === 1 && matches[0].confidence >= CONFIDENCE_THRESHOLDS.HIGH) return false;
+  
+  // Check if top match is significantly better than second
+  if (matches.length >= 2) {
+    const topConfidence = matches[0].confidence;
+    const secondConfidence = matches[1].confidence;
+    
+    // If top match is high confidence and significantly better, no disambiguation needed
+    if (topConfidence >= CONFIDENCE_THRESHOLDS.HIGH && (topConfidence - secondConfidence) > 0.2) {
+      return false;
+    }
+    
+    // If multiple close matches, disambiguation is needed
+    if ((topConfidence - secondConfidence) < 0.1) {
+      return true;
+    }
+  }
+  
+  // If top match is below medium confidence, ask for clarification
+  if (matches[0].confidence < CONFIDENCE_THRESHOLDS.MEDIUM) {
+    return true;
+  }
+  
+  return false;
 }

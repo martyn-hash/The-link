@@ -41,6 +41,34 @@ export interface ConversationContext {
   lastAction?: AIActionType;
 }
 
+export interface FuzzyMatchResult {
+  id: string;
+  name: string;
+  confidence: number;
+  matchType?: 'exact' | 'starts_with' | 'abbreviation' | 'contains' | 'fuzzy' | 'word_match';
+  email?: string | null;
+}
+
+export interface MatchResponse {
+  matches: FuzzyMatchResult[];
+  requiresDisambiguation: boolean;
+  bestMatch: FuzzyMatchResult | null;
+  confidenceThresholds: {
+    HIGH: number;
+    MEDIUM: number;
+    LOW: number;
+    MINIMUM: number;
+  };
+}
+
+export interface DisambiguationData {
+  entityType: 'client' | 'user' | 'person';
+  searchTerm: string;
+  matches: FuzzyMatchResult[];
+  onSelect: (match: FuzzyMatchResult) => void;
+  onCancel: () => void;
+}
+
 export interface AICommandCategory {
   title: string;
   icon: string;

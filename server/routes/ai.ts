@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import multer from "multer";
 import { storage } from "../storage/index";
-import { processAIMagicChat, fuzzyMatchClients, fuzzyMatchUsers, fuzzyMatchPeople, chatRequestSchema } from "../services/ai-magic-service";
+import { processAIMagicChat, fuzzyMatchClients, fuzzyMatchUsers, fuzzyMatchPeople, chatRequestSchema, needsDisambiguation, CONFIDENCE_THRESHOLDS } from "../services/ai-magic-service";
 
 const router = Router();
 
@@ -620,7 +620,7 @@ Please refine the email according to the request above.`;
     }
   );
 
-  // Fuzzy match endpoints for entity resolution
+  // Fuzzy match endpoints for entity resolution with disambiguation support
   router.get(
     "/match/clients",
     isAuthenticated,
@@ -632,7 +632,14 @@ Please refine the email according to the request above.`;
         }
 
         const matches = await fuzzyMatchClients(searchTerm);
-        res.json(matches);
+        const requiresDisambiguation = needsDisambiguation(matches);
+        
+        res.json({
+          matches,
+          requiresDisambiguation,
+          bestMatch: matches.length > 0 ? matches[0] : null,
+          confidenceThresholds: CONFIDENCE_THRESHOLDS
+        });
       } catch (error: any) {
         console.error("[AI Magic] Error matching clients:", error);
         res.status(500).json({ error: "Failed to match clients" });
@@ -651,7 +658,14 @@ Please refine the email according to the request above.`;
         }
 
         const matches = await fuzzyMatchUsers(searchTerm);
-        res.json(matches);
+        const requiresDisambiguation = needsDisambiguation(matches);
+        
+        res.json({
+          matches,
+          requiresDisambiguation,
+          bestMatch: matches.length > 0 ? matches[0] : null,
+          confidenceThresholds: CONFIDENCE_THRESHOLDS
+        });
       } catch (error: any) {
         console.error("[AI Magic] Error matching users:", error);
         res.status(500).json({ error: "Failed to match users" });
@@ -672,7 +686,14 @@ Please refine the email according to the request above.`;
         }
 
         const matches = await fuzzyMatchPeople(searchTerm, clientId);
-        res.json(matches);
+        const requiresDisambiguation = needsDisambiguation(matches);
+        
+        res.json({
+          matches,
+          requiresDisambiguation,
+          bestMatch: matches.length > 0 ? matches[0] : null,
+          confidenceThresholds: CONFIDENCE_THRESHOLDS
+        });
       } catch (error: any) {
         console.error("[AI Magic] Error matching people:", error);
         res.status(500).json({ error: "Failed to match people" });
