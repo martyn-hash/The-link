@@ -355,6 +355,8 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
                         content: resultMessage,
                         timestamp: new Date(),
                       }]);
+                      // Close AI panel after successful action
+                      setTimeout(() => onClose(), 500);
                     }
                   }}
                   onActionDismiss={() => {
@@ -447,6 +449,8 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
                         content: resultMessage,
                         timestamp: new Date(),
                       }]);
+                      // Close AI panel after successful action
+                      setTimeout(() => onClose(), 500);
                     }
                   }}
                   onDismiss={() => {

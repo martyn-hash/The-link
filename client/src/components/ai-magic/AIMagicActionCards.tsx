@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
@@ -18,7 +18,8 @@ import {
   User,
   Calendar,
   Clock,
-  AlertCircle
+  AlertCircle,
+  Building2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,6 +38,112 @@ import { cn } from '@/lib/utils';
 import { AIFunctionCall } from './types';
 import type { User as UserType } from '@shared/schema';
 
+interface SearchableSelectProps {
+  value: string;
+  onValueChange: (value: string) => void;
+  options: { id: string; name: string }[];
+  placeholder: string;
+  suggestedName?: string;
+  icon?: JSX.Element;
+  testId?: string;
+}
+
+function SearchableSelect({ 
+  value, 
+  onValueChange, 
+  options, 
+  placeholder, 
+  suggestedName,
+  icon,
+  testId 
+}: SearchableSelectProps) {
+  const [searchValue, setSearchValue] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchValue), 200);
+    return () => clearTimeout(timer);
+  }, [searchValue]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredOptions = debouncedSearch.length >= 1
+    ? options.filter(o => o.name.toLowerCase().includes(debouncedSearch.toLowerCase()))
+    : options.slice(0, 10);
+
+  const selectedOption = options.find(o => o.id === value);
+  const displayValue = selectedOption?.name || (suggestedName ? `${suggestedName} (type to search)` : '');
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="relative">
+        {icon && (
+          <div className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground">
+            {icon}
+          </div>
+        )}
+        <Input
+          value={showDropdown ? searchValue : displayValue}
+          onChange={(e) => {
+            setSearchValue(e.target.value);
+            if (!showDropdown) setShowDropdown(true);
+          }}
+          onFocus={() => {
+            setShowDropdown(true);
+            setSearchValue('');
+          }}
+          placeholder={placeholder}
+          className={cn("h-8 text-sm", icon && "pl-8")}
+          data-testid={testId}
+        />
+      </div>
+      {showDropdown && (
+        <div className="absolute z-[100] mt-1 w-full max-h-48 overflow-auto bg-popover border border-border rounded-md shadow-lg">
+          <div
+            className="px-3 py-2 text-sm cursor-pointer hover:bg-accent text-muted-foreground"
+            onClick={() => {
+              onValueChange('');
+              setShowDropdown(false);
+              setSearchValue('');
+            }}
+          >
+            None
+          </div>
+          {filteredOptions.length === 0 && debouncedSearch.length >= 1 && (
+            <div className="px-3 py-2 text-sm text-muted-foreground">No matches found</div>
+          )}
+          {filteredOptions.map((option) => (
+            <div
+              key={option.id}
+              className={cn(
+                "px-3 py-2 text-sm cursor-pointer hover:bg-accent",
+                option.id === value && "bg-accent"
+              )}
+              onClick={() => {
+                onValueChange(option.id);
+                setShowDropdown(false);
+                setSearchValue('');
+              }}
+            >
+              {option.name}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface ActionCardProps {
   functionCall: AIFunctionCall;
   onComplete: (success: boolean, message: string) => void;
@@ -48,10 +155,12 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
   const { user } = useAuth();
   const args = functionCall.arguments;
   const suggestedClientName = args.clientName as string | undefined;
+  const suggestedAssigneeName = args.assigneeName as string | undefined;
   
   const [title, setTitle] = useState(args.title as string || '');
   const [description, setDescription] = useState(args.details as string || '');
-  const [clientId, setClientId] = useState<string>('');
+  const [clientId, setClientId] = useState<string | null>(null); // null = use AI suggestion, '' = explicitly cleared
+  const [assigneeId, setAssigneeId] = useState<string | null>(null); // null = use AI suggestion, '' = explicitly cleared
   const [dueDate, setDueDate] = useState(() => {
     if (args.dateTime) {
       try {
@@ -76,22 +185,37 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
     queryKey: ['/api/clients'],
   });
 
+  const { data: staffMembers } = useQuery<UserType[]>({
+    queryKey: ['/api/staff'],
+  });
+
   const matchedClient = clients?.find(c => {
     const clientName = suggestedClientName?.toLowerCase() || '';
     return c.name.toLowerCase().includes(clientName) || clientName.includes(c.name.toLowerCase());
   });
 
-  const effectiveClientId = clientId || matchedClient?.id || '';
+  // Only try to match assignee if AI actually suggested a name (non-empty)
+  const matchedAssignee = suggestedAssigneeName && suggestedAssigneeName.trim().length > 0
+    ? staffMembers?.find(u => {
+        const assigneeName = suggestedAssigneeName.toLowerCase().trim();
+        const fullName = `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase().trim();
+        return fullName.includes(assigneeName) || assigneeName.includes(fullName);
+      })
+    : undefined;
 
-  const isValid = title.trim().length > 0 && dueDate.length > 0 && dueTime.length > 0;
+  // If clientId is null, use AI suggestion. If '', user explicitly cleared it.
+  const effectiveClientId = clientId === null ? (matchedClient?.id || '') : clientId;
+  // If assigneeId is null, use AI suggestion or default to current user. If '', user explicitly cleared it.
+  const effectiveAssigneeId = assigneeId === null 
+    ? (matchedAssignee?.id || user?.id || '') 
+    : (assigneeId || user?.id || '');
+
+  const isValid = title.trim().length > 0 && dueDate.length > 0 && dueTime.length > 0 && effectiveAssigneeId.length > 0;
   
   const createMutation = useMutation({
     mutationFn: async () => {
       if (!isValid) {
         throw new Error('Please fill in all required fields');
-      }
-      if (!user?.id) {
-        throw new Error('You must be logged in to create a reminder');
       }
       const dueDateTime = new Date(`${dueDate}T${dueTime}`);
       if (isNaN(dueDateTime.getTime())) {
@@ -102,7 +226,7 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
         title: title.trim(),
         description: description?.trim() || undefined,
         dueDate: dueDateTime.toISOString(),
-        assignedTo: user.id,
+        assignedTo: effectiveAssigneeId,
         isQuickReminder: true,
         priority: 'medium',
       });
@@ -136,9 +260,18 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
   const clientName = clients?.find(c => c.id === effectiveClientId)?.name 
     || (suggestedClientName ? `${suggestedClientName} (suggested)` : 'None');
 
+  const assigneeName = staffMembers?.find(u => u.id === effectiveAssigneeId)
+    ? `${staffMembers.find(u => u.id === effectiveAssigneeId)?.firstName} ${staffMembers.find(u => u.id === effectiveAssigneeId)?.lastName}`
+    : (suggestedAssigneeName || 'Me');
+
   const formattedDateTime = dueDate && dueTime 
     ? format(new Date(`${dueDate}T${dueTime}`), "d MMM yyyy 'at' h:mm a")
     : 'Not set';
+  
+  const staffOptions = staffMembers?.map(u => ({
+    id: u.id,
+    name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email || 'Unknown'
+  })) || [];
 
   return (
     <motion.div
@@ -196,24 +329,31 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">
+              Assign to {matchedAssignee ? '(AI suggested)' : ''}
+            </Label>
+            <SearchableSelect
+              value={effectiveAssigneeId}
+              onValueChange={setAssigneeId}
+              options={staffOptions}
+              placeholder="Type to search staff..."
+              suggestedName={suggestedAssigneeName}
+              icon={<User className="w-3 h-3" />}
+              testId="search-reminder-assignee"
+            />
+          </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">
               Link to Client {matchedClient ? '(AI suggested)' : '(optional)'}
             </Label>
-            <Select 
-              value={effectiveClientId || "none"} 
-              onValueChange={(val) => setClientId(val === "none" ? "" : val)}
-            >
-              <SelectTrigger className="h-8 text-sm" data-testid="select-reminder-client">
-                <SelectValue placeholder="Select client..." />
-              </SelectTrigger>
-              <SelectContent className="z-[100]">
-                <SelectItem value="none">None</SelectItem>
-                {clients?.map(c => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SearchableSelect
+              value={effectiveClientId}
+              onValueChange={setClientId}
+              options={clients || []}
+              placeholder="Type to search clients..."
+              suggestedName={suggestedClientName}
+              icon={<Building2 className="w-3 h-3" />}
+              testId="search-reminder-client"
+            />
           </div>
         </div>
       ) : (
@@ -224,9 +364,13 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
             <Calendar className="w-3 h-3" />
             {formattedDateTime}
           </div>
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <User className="w-3 h-3" />
+            {assigneeName}
+          </div>
           {effectiveClientId && (
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <User className="w-3 h-3" />
+              <Building2 className="w-3 h-3" />
               {clientName}
             </div>
           )}
