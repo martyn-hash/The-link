@@ -153,6 +153,215 @@ function SearchableSelect({
   );
 }
 
+// Person search result from /api/search
+interface PersonSearchResult {
+  id: string;
+  type: 'person';
+  title: string;
+  description?: string;
+  metadata?: {
+    clientId?: string;
+    clientName?: string;
+    primaryEmail?: string;
+    primaryPhone?: string;
+  };
+}
+
+interface RecipientSelectorProps {
+  matchedPerson: { id: string; firstName: string | null; lastName: string | null; email?: string | null; telephone?: string | null } | null;
+  matchedClientName: string;
+  matchConfidence: number;
+  originalName: string;
+  contactType: 'email' | 'mobile';
+  onPersonChange: (person: { id: string; firstName: string; lastName: string; email?: string; telephone?: string; clientId: string; clientName: string }) => void;
+}
+
+function RecipientSelector({
+  matchedPerson,
+  matchedClientName,
+  matchConfidence,
+  originalName,
+  contactType,
+  onPersonChange
+}: RecipientSelectorProps) {
+  const [isSearchMode, setIsSearchMode] = useState(false);
+  const [searchValue, setSearchValue] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchValue), 300);
+    return () => clearTimeout(timer);
+  }, [searchValue]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsSearchMode(false);
+        setSearchValue('');
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Fetch search results
+  const { data: searchResults, isLoading } = useQuery<{ people: PersonSearchResult[] }>({
+    queryKey: ['/api/search', { q: debouncedSearch }],
+    enabled: debouncedSearch.length >= 2,
+  });
+
+  // Filter to only show people with the required contact type
+  const filteredResults = (searchResults?.people || []).filter(p => {
+    if (contactType === 'email') {
+      return p.metadata?.primaryEmail && p.metadata.primaryEmail.trim() !== '';
+    } else {
+      return p.metadata?.primaryPhone && p.metadata.primaryPhone.trim() !== '';
+    }
+  });
+
+  const handleSelectPerson = (person: PersonSearchResult) => {
+    const nameParts = person.title.split(' ');
+    const firstName = nameParts[0] || '';
+    const lastName = nameParts.slice(1).join(' ') || '';
+    
+    onPersonChange({
+      id: person.id,
+      firstName,
+      lastName,
+      email: person.metadata?.primaryEmail,
+      telephone: person.metadata?.primaryPhone,
+      clientId: person.metadata?.clientId || '',
+      clientName: person.metadata?.clientName || ''
+    });
+    setIsSearchMode(false);
+    setSearchValue('');
+  };
+
+  const personName = matchedPerson 
+    ? `${matchedPerson.firstName || ''} ${matchedPerson.lastName || ''}`.trim() 
+    : originalName;
+  const contactInfo = contactType === 'email' ? matchedPerson?.email : matchedPerson?.telephone;
+
+  if (isSearchMode) {
+    return (
+      <div ref={containerRef} className="space-y-2">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              value={searchValue}
+              onChange={(e) => setSearchValue(e.target.value)}
+              placeholder={`Search for a person with ${contactType}...`}
+              className="h-8 text-sm pl-8"
+              autoFocus
+              data-testid="input-recipient-search"
+            />
+          </div>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              setIsSearchMode(false);
+              setSearchValue('');
+            }}
+            className="h-8 px-2"
+            data-testid="button-cancel-search"
+          >
+            <X className="w-3.5 h-3.5" />
+          </Button>
+        </div>
+        
+        {/* Search results dropdown */}
+        {debouncedSearch.length >= 2 && (
+          <div className="bg-popover border border-border rounded-lg shadow-lg max-h-48 overflow-auto">
+            {isLoading && (
+              <div className="px-3 py-2 text-sm text-muted-foreground flex items-center gap-2">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                Searching...
+              </div>
+            )}
+            {!isLoading && filteredResults.length === 0 && (
+              <div className="px-3 py-2 text-sm text-muted-foreground">
+                No people found with {contactType === 'email' ? 'email address' : 'mobile number'}
+              </div>
+            )}
+            {filteredResults.map((person) => (
+              <div
+                key={person.id}
+                className="px-3 py-2 cursor-pointer hover:bg-accent transition-colors"
+                onClick={() => handleSelectPerson(person)}
+                data-testid={`search-result-${person.id}`}
+              >
+                <div className="flex items-center gap-2">
+                  <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm truncate">{person.title}</div>
+                    <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                      {person.metadata?.clientName && (
+                        <span className="flex items-center gap-1">
+                          <Building2 className="w-3 h-3" />
+                          {person.metadata.clientName}
+                        </span>
+                      )}
+                      {contactType === 'email' && person.metadata?.primaryEmail && (
+                        <span className="text-sky-600 dark:text-sky-400">{person.metadata.primaryEmail}</span>
+                      )}
+                      {contactType === 'mobile' && person.metadata?.primaryPhone && (
+                        <span className="text-emerald-600 dark:text-emerald-400">{person.metadata.primaryPhone}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-muted-foreground text-sm">To:</span>
+            <span className="font-medium text-sm">{personName}</span>
+            {contactInfo && (
+              <span className="text-xs text-muted-foreground">({contactInfo})</span>
+            )}
+            {!matchedPerson && (
+              <span className="text-xs text-amber-600 font-medium">(no match found)</span>
+            )}
+          </div>
+          {matchedClientName && (
+            <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+              <Building2 className="w-3 h-3" />
+              {matchedClientName}
+            </div>
+          )}
+          {matchedPerson && matchConfidence > 0 && (
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Match confidence: {Math.round(matchConfidence)}%
+            </div>
+          )}
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setIsSearchMode(true)}
+          className="h-7 px-2 text-xs shrink-0"
+          data-testid="button-change-recipient"
+        >
+          <Edit2 className="w-3 h-3 mr-1" />
+          Change
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 interface ActionCardProps {
   functionCall: AIFunctionCall;
   onComplete: (success: boolean, message: string) => void;
@@ -1035,6 +1244,16 @@ export function EmailActionCard({ functionCall, onComplete, onDismiss }: ActionC
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   
+  // User-overridden selection (null = use AI match)
+  const [overriddenPerson, setOverriddenPerson] = useState<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    email?: string;
+    clientId: string;
+    clientName: string;
+  } | null>(null);
+  
   const recipientName = args.recipientName as string || 'Unknown';
   const suggestedClientName = args.clientName as string | undefined;
   const suggestedSubject = args.subject as string || '';
@@ -1075,14 +1294,24 @@ export function EmailActionCard({ functionCall, onComplete, onDismiss }: ActionC
     );
   }, [rawPeople, clients, recipientName, suggestedClientName]);
 
-  const matchedPerson = matchResult?.person;
-  const matchedClientId = matchResult?.clientId || '';
-  const matchedClientName = matchResult?.clientName || '';
+  // Use overridden person if set, otherwise use AI match
+  const effectivePerson = overriddenPerson || (matchResult?.person ? {
+    id: matchResult.person.id,
+    firstName: matchResult.person.firstName || '',
+    lastName: matchResult.person.lastName || '',
+    email: matchResult.person.email || undefined,
+    clientId: matchResult.clientId || '',
+    clientName: matchResult.clientName || ''
+  } : null);
+  
+  const effectiveClientId = effectivePerson?.clientId || '';
+  const effectiveClientName = effectivePerson?.clientName || '';
+  const matchConfidence = overriddenPerson ? 100 : (matchResult?.score || 0);
 
   // Fetch client's people for the EmailDialog
   const { data: clientPeople } = useQuery({
-    queryKey: ['/api/clients', matchedClientId, 'people'],
-    enabled: !!matchedClientId && isDialogOpen,
+    queryKey: ['/api/clients', effectiveClientId, 'people'],
+    enabled: !!effectiveClientId && isDialogOpen,
   });
 
   // Transform to PersonOption format expected by EmailDialog
@@ -1103,9 +1332,14 @@ export function EmailActionCard({ functionCall, onComplete, onDismiss }: ActionC
     }));
   }, [clientPeople]);
 
+  const handlePersonChange = (person: { id: string; firstName: string; lastName: string; email?: string; clientId: string; clientName: string }) => {
+    setOverriddenPerson(person);
+  };
+
   const handleDialogSuccess = () => {
+    const personName = effectivePerson ? `${effectivePerson.firstName} ${effectivePerson.lastName}` : recipientName;
     toast({ title: 'Email sent!', description: `Email sent successfully` });
-    onComplete(true, `Email sent to ${recipientName}`);
+    onComplete(true, `Email sent to ${personName}`);
     setIsDialogOpen(false);
   };
 
@@ -1114,10 +1348,10 @@ export function EmailActionCard({ functionCall, onComplete, onDismiss }: ActionC
   };
 
   const handleOpenDialog = () => {
-    if (!matchedClientId) {
+    if (!effectiveClientId) {
       toast({ 
-        title: 'No match found', 
-        description: 'Could not find a matching contact. Please check the name and try again.',
+        title: 'No contact selected', 
+        description: 'Please select a contact using the search above.',
         variant: 'destructive'
       });
       return;
@@ -1127,7 +1361,6 @@ export function EmailActionCard({ functionCall, onComplete, onDismiss }: ActionC
 
   // Dynamically import the EmailDialog to avoid circular dependencies
   const EmailDialogComponent = useMemo(() => {
-    // Lazy load
     return lazy(() => import('@/pages/client-detail/components/communications/dialogs/EmailDialog').then(m => ({ default: m.EmailDialog })));
   }, []);
 
@@ -1139,75 +1372,70 @@ export function EmailActionCard({ functionCall, onComplete, onDismiss }: ActionC
         className="bg-gradient-to-br from-sky-50 to-blue-50 dark:from-sky-950/30 dark:to-blue-950/30 border border-sky-200 dark:border-sky-800 rounded-xl p-4 space-y-3"
         data-testid="action-card-email"
       >
-        <div className="flex items-center gap-2 text-sky-700 dark:text-sky-400">
-          <Mail className="w-4 h-4" />
-          <span className="font-medium text-sm">Send Email</span>
-        </div>
-
-        <div className="space-y-1 text-sm">
-          <div className="flex items-center gap-1">
-            <span className="text-muted-foreground">To:</span>
-            <span className="font-medium">
-              {matchedPerson ? `${matchedPerson.firstName} ${matchedPerson.lastName}` : recipientName}
-            </span>
-            {matchedPerson?.email && <span className="text-xs text-muted-foreground">({matchedPerson.email})</span>}
-            {!matchedPerson && <span className="text-xs text-amber-600">(no match found)</span>}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sky-700 dark:text-sky-400">
+            <Mail className="w-4 h-4" />
+            <span className="font-medium text-sm">Send Email</span>
           </div>
-          {matchedClientName && (
-            <div className="text-xs text-muted-foreground flex items-center gap-1">
-              <Building2 className="w-3 h-3" />
-              {matchedClientName}
-            </div>
-          )}
-          {matchResult && (
-            <div className="text-xs text-muted-foreground">
-              Match confidence: {Math.round(matchResult.score)}%
-            </div>
-          )}
-          {suggestedSubject && (
-            <div className="flex items-center gap-1 mt-2">
-              <span className="text-muted-foreground">Subject:</span>
-              <span className="truncate">{suggestedSubject}</span>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 pt-1">
-          <Button
-            size="sm"
-            onClick={handleOpenDialog}
-            disabled={!matchedClientId}
-            className="h-7 text-xs bg-sky-600 hover:bg-sky-700"
-            data-testid="button-open-email-dialog"
-          >
-            <Mail className="w-3 h-3 mr-1" />
-            Open Email Composer
-          </Button>
           <Button
             size="sm"
             variant="ghost"
             onClick={onDismiss}
-            className="h-7 text-xs ml-auto"
+            className="h-6 w-6 p-0"
             data-testid="button-dismiss-email"
           >
-            <X className="w-3 h-3" />
+            <X className="w-3.5 h-3.5" />
           </Button>
         </div>
+
+        {/* Recipient selector with search capability */}
+        <RecipientSelector
+          matchedPerson={effectivePerson ? {
+            id: effectivePerson.id,
+            firstName: effectivePerson.firstName,
+            lastName: effectivePerson.lastName,
+            email: effectivePerson.email
+          } : null}
+          matchedClientName={effectiveClientName}
+          matchConfidence={matchConfidence}
+          originalName={recipientName}
+          contactType="email"
+          onPersonChange={handlePersonChange}
+        />
+
+        {/* Subject preview */}
+        {suggestedSubject && (
+          <div className="flex items-center gap-1.5 text-sm border-t border-sky-100 dark:border-sky-800 pt-2 mt-1">
+            <span className="text-muted-foreground">Subject:</span>
+            <span className="truncate">{suggestedSubject}</span>
+          </div>
+        )}
+
+        <Button
+          size="sm"
+          onClick={handleOpenDialog}
+          disabled={!effectiveClientId}
+          className="h-7 text-xs bg-sky-600 hover:bg-sky-700 w-full"
+          data-testid="button-open-email-dialog"
+        >
+          <Mail className="w-3 h-3 mr-1" />
+          Open Email Composer
+        </Button>
       </motion.div>
 
       {/* Use the real EmailDialog from client detail */}
-      {isDialogOpen && matchedClientId && (
+      {isDialogOpen && effectiveClientId && (
         <Suspense fallback={null}>
           <EmailDialogComponent
-            clientId={matchedClientId}
+            clientId={effectiveClientId}
             clientPeople={clientPeopleForDialog}
             user={user || null}
             isOpen={isDialogOpen}
             onClose={handleDialogClose}
             onSuccess={handleDialogSuccess}
-            clientCompany={matchedClientName}
+            clientCompany={effectiveClientName}
             initialValues={{
-              recipientIds: matchedPerson?.id ? [matchedPerson.id] : [],
+              recipientIds: effectivePerson?.id ? [effectivePerson.id] : [],
               subject: suggestedSubject,
               content: suggestedBody
             }}
@@ -1223,6 +1451,16 @@ export function SmsActionCard({ functionCall, onComplete, onDismiss }: ActionCar
   const args = functionCall.arguments;
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  
+  // User-overridden selection (null = use AI match)
+  const [overriddenPerson, setOverriddenPerson] = useState<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    telephone?: string;
+    clientId: string;
+    clientName: string;
+  } | null>(null);
 
   const recipientName = args.recipientName as string || 'Unknown';
   const suggestedClientName = args.clientName as string | undefined;
@@ -1263,14 +1501,24 @@ export function SmsActionCard({ functionCall, onComplete, onDismiss }: ActionCar
     );
   }, [rawPeople, clients, recipientName, suggestedClientName]);
 
-  const matchedPerson = matchResult?.person;
-  const matchedClientId = matchResult?.clientId || '';
-  const matchedClientName = matchResult?.clientName || '';
+  // Use overridden person if set, otherwise use AI match
+  const effectivePerson = overriddenPerson || (matchResult?.person ? {
+    id: matchResult.person.id,
+    firstName: matchResult.person.firstName || '',
+    lastName: matchResult.person.lastName || '',
+    telephone: matchResult.person.telephone || undefined,
+    clientId: matchResult.clientId || '',
+    clientName: matchResult.clientName || ''
+  } : null);
+  
+  const effectiveClientId = effectivePerson?.clientId || '';
+  const effectiveClientName = effectivePerson?.clientName || '';
+  const matchConfidence = overriddenPerson ? 100 : (matchResult?.score || 0);
 
   // Fetch client's people for the SMSDialog
   const { data: clientPeople } = useQuery({
-    queryKey: ['/api/clients', matchedClientId, 'people'],
-    enabled: !!matchedClientId && isDialogOpen,
+    queryKey: ['/api/clients', effectiveClientId, 'people'],
+    enabled: !!effectiveClientId && isDialogOpen,
   });
 
   // Transform to PersonOption format expected by SMSDialog
@@ -1291,9 +1539,14 @@ export function SmsActionCard({ functionCall, onComplete, onDismiss }: ActionCar
     }));
   }, [clientPeople]);
 
+  const handlePersonChange = (person: { id: string; firstName: string; lastName: string; telephone?: string; clientId: string; clientName: string }) => {
+    setOverriddenPerson(person);
+  };
+
   const handleDialogSuccess = () => {
+    const personName = effectivePerson ? `${effectivePerson.firstName} ${effectivePerson.lastName}` : recipientName;
     toast({ title: 'SMS sent!', description: `SMS sent successfully` });
-    onComplete(true, `SMS sent to ${recipientName}`);
+    onComplete(true, `SMS sent to ${personName}`);
     setIsDialogOpen(false);
   };
 
@@ -1302,10 +1555,10 @@ export function SmsActionCard({ functionCall, onComplete, onDismiss }: ActionCar
   };
 
   const handleOpenDialog = () => {
-    if (!matchedClientId) {
+    if (!effectiveClientId) {
       toast({ 
-        title: 'No match found', 
-        description: 'Could not find a matching contact with a mobile number. Please check the name and try again.',
+        title: 'No contact selected', 
+        description: 'Please select a contact with a mobile number using the search above.',
         variant: 'destructive'
       });
       return;
@@ -1326,72 +1579,67 @@ export function SmsActionCard({ functionCall, onComplete, onDismiss }: ActionCar
         className="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-950/30 dark:to-green-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 space-y-3"
         data-testid="action-card-sms"
       >
-        <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
-          <MessageSquare className="w-4 h-4" />
-          <span className="font-medium text-sm">Send SMS</span>
-        </div>
-
-        <div className="space-y-1 text-sm">
-          <div className="flex items-center gap-1">
-            <span className="text-muted-foreground">To:</span>
-            <span className="font-medium">
-              {matchedPerson ? `${matchedPerson.firstName} ${matchedPerson.lastName}` : recipientName}
-            </span>
-            {matchedPerson?.telephone && <span className="text-xs text-muted-foreground">({matchedPerson.telephone})</span>}
-            {!matchedPerson && <span className="text-xs text-amber-600">(no match found)</span>}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
+            <MessageSquare className="w-4 h-4" />
+            <span className="font-medium text-sm">Send SMS</span>
           </div>
-          {matchedClientName && (
-            <div className="text-xs text-muted-foreground flex items-center gap-1">
-              <Building2 className="w-3 h-3" />
-              {matchedClientName}
-            </div>
-          )}
-          {matchResult && (
-            <div className="text-xs text-muted-foreground">
-              Match confidence: {Math.round(matchResult.score)}%
-            </div>
-          )}
-          {suggestedMessage && (
-            <div className="text-xs text-muted-foreground mt-2 line-clamp-2">
-              Message: {suggestedMessage}
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 pt-1">
-          <Button
-            size="sm"
-            onClick={handleOpenDialog}
-            disabled={!matchedClientId}
-            className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700"
-            data-testid="button-open-sms-dialog"
-          >
-            <MessageSquare className="w-3 h-3 mr-1" />
-            Open SMS Dialog
-          </Button>
           <Button
             size="sm"
             variant="ghost"
             onClick={onDismiss}
-            className="h-7 text-xs ml-auto"
+            className="h-6 w-6 p-0"
             data-testid="button-dismiss-sms"
           >
-            <X className="w-3 h-3" />
+            <X className="w-3.5 h-3.5" />
           </Button>
         </div>
+
+        {/* Recipient selector with search capability */}
+        <RecipientSelector
+          matchedPerson={effectivePerson ? {
+            id: effectivePerson.id,
+            firstName: effectivePerson.firstName,
+            lastName: effectivePerson.lastName,
+            telephone: effectivePerson.telephone
+          } : null}
+          matchedClientName={effectiveClientName}
+          matchConfidence={matchConfidence}
+          originalName={recipientName}
+          contactType="mobile"
+          onPersonChange={handlePersonChange}
+        />
+
+        {/* Message preview */}
+        {suggestedMessage && (
+          <div className="text-xs text-muted-foreground border-t border-emerald-100 dark:border-emerald-800 pt-2 mt-1 line-clamp-2">
+            Message: {suggestedMessage}
+          </div>
+        )}
+
+        <Button
+          size="sm"
+          onClick={handleOpenDialog}
+          disabled={!effectiveClientId}
+          className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 w-full"
+          data-testid="button-open-sms-dialog"
+        >
+          <MessageSquare className="w-3 h-3 mr-1" />
+          Open SMS Dialog
+        </Button>
       </motion.div>
 
       {/* Use the real SMSDialog from client detail */}
-      {isDialogOpen && matchedClientId && (
+      {isDialogOpen && effectiveClientId && (
         <Suspense fallback={null}>
           <SMSDialogComponent
-            clientId={matchedClientId}
+            clientId={effectiveClientId}
             clientPeople={clientPeopleForDialog}
             isOpen={isDialogOpen}
             onClose={handleDialogClose}
             onSuccess={handleDialogSuccess}
             initialValues={{
-              personId: matchedPerson?.id,
+              personId: effectivePerson?.id,
               message: suggestedMessage
             }}
           />
