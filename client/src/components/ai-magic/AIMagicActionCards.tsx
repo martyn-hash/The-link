@@ -864,18 +864,54 @@ export function SearchClientsActionCard({ functionCall, onComplete, onDismiss }:
   const args = functionCall.arguments;
   const searchTerm = args.searchTerm as string || '';
   const navigatedRef = useRef(false);
+  const [status, setStatus] = useState<'searching' | 'found' | 'navigating'>('searching');
+  const [matchedClient, setMatchedClient] = useState<{ id: string; name: string } | null>(null);
+
+  const { data: clients } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ['/api/clients'],
+  });
 
   useEffect(() => {
-    if (navigatedRef.current) return;
-    navigatedRef.current = true;
+    if (navigatedRef.current || !clients) return;
     
-    const timer = setTimeout(() => {
-      const path = `/clients?search=${encodeURIComponent(searchTerm)}`;
-      setLocation(path);
-      onComplete(true, `Searching for "${searchTerm}"...`);
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [searchTerm, setLocation, onComplete]);
+    // Check for exact match (case-insensitive)
+    const searchLower = searchTerm.toLowerCase().trim();
+    const exactMatch = clients.find(c => c.name.toLowerCase().trim() === searchLower);
+    
+    // Also check for very close matches (starts with, or search term is substantial part of name)
+    const closeMatch = !exactMatch ? clients.find(c => {
+      const nameLower = c.name.toLowerCase().trim();
+      // Match if the name starts with search term and search is at least 4 chars
+      // Or if search term is contained and is at least 60% of the name length
+      return (nameLower.startsWith(searchLower) && searchLower.length >= 4) ||
+             (nameLower.includes(searchLower) && searchLower.length >= nameLower.length * 0.6);
+    }) : null;
+
+    const matched = exactMatch || closeMatch;
+
+    if (matched) {
+      setMatchedClient(matched);
+      setStatus('found');
+      
+      navigatedRef.current = true;
+      const timer = setTimeout(() => {
+        setStatus('navigating');
+        setLocation(`/clients/${matched.id}`);
+        onComplete(true, `Opening ${matched.name}...`);
+      }, 400);
+      return () => clearTimeout(timer);
+    } else {
+      // No exact match - go to search results
+      navigatedRef.current = true;
+      const timer = setTimeout(() => {
+        setStatus('navigating');
+        const path = `/clients?search=${encodeURIComponent(searchTerm)}`;
+        setLocation(path);
+        onComplete(true, `Searching for "${searchTerm}"...`);
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+  }, [clients, searchTerm, setLocation, onComplete]);
 
   return (
     <motion.div
@@ -886,12 +922,18 @@ export function SearchClientsActionCard({ functionCall, onComplete, onDismiss }:
     >
       <div className="flex items-center gap-2 text-cyan-700 dark:text-cyan-400">
         <Loader2 className="w-4 h-4 animate-spin" />
-        <span className="font-medium text-sm">Searching Clients...</span>
+        <span className="font-medium text-sm">
+          {matchedClient ? `Opening ${matchedClient.name}...` : 'Searching Clients...'}
+        </span>
       </div>
 
       <div className="text-sm">
-        <span className="text-muted-foreground">Looking for: </span>
-        <span className="font-medium">"{searchTerm}"</span>
+        <span className="text-muted-foreground">
+          {matchedClient ? 'Found: ' : 'Looking for: '}
+        </span>
+        <span className="font-medium">
+          {matchedClient ? matchedClient.name : `"${searchTerm}"`}
+        </span>
       </div>
     </motion.div>
   );
