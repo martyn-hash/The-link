@@ -144,9 +144,11 @@ export function registerInternalTaskRoutes(
     try {
       const requestedUserId = req.params.userId;
       const actualUserId = req.user?.effectiveUserId || req.user?.id;
+      const currentUser = await storage.getUser(actualUserId);
       
-      // Only allow users to view their own assigned tasks
-      if (requestedUserId !== actualUserId) {
+      // Allow users to view their own tasks, or managers/admins to view any user's tasks
+      const isManager = currentUser?.isAdmin || currentUser?.canSeeAdminMenu || currentUser?.superAdmin;
+      if (requestedUserId !== actualUserId && !isManager) {
         return res.status(403).json({ message: "Not authorized to view other users' tasks" });
       }
 
@@ -154,7 +156,8 @@ export function registerInternalTaskRoutes(
       if (req.query.status) filters.status = req.query.status as string;
       if (req.query.priority) filters.priority = req.query.priority as string;
 
-      const tasks = await storage.getInternalTasksByAssignee(actualUserId, filters);
+      // Use the requested user ID to fetch their tasks (not the current user's)
+      const tasks = await storage.getInternalTasksByAssignee(requestedUserId, filters);
       const tasksWithConnections = await addConnectionsToTasks(tasks);
       res.json(tasksWithConnections);
     } catch (error) {
