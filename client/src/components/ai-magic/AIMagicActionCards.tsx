@@ -700,21 +700,31 @@ export function NavigationActionCard({ functionCall, onComplete, onDismiss }: Ac
   const isClient = functionCall.name === 'navigate_to_client';
   const entityName = isClient ? args.clientName : args.personName;
   const entityId = isClient ? args.clientId : args.personId;
+  const navigatedRef = useRef(false);
+  const [status, setStatus] = useState<'searching' | 'navigating' | 'not_found'>('searching');
 
-  const handleNavigate = () => {
-    if (entityId) {
-      const path = isClient ? `/clients/${entityId}` : `/people/${entityId}`;
-      setLocation(path);
-      onComplete(true, `Navigated to ${entityName}`);
-    } else {
-      toast({ 
-        title: 'Not found', 
-        description: `Could not find ${isClient ? 'client' : 'person'} "${entityName}"`,
-        variant: 'destructive'
-      });
-      onComplete(false, `Could not find ${entityName}`);
-    }
-  };
+  useEffect(() => {
+    if (navigatedRef.current) return;
+    
+    const timer = setTimeout(() => {
+      if (entityId) {
+        navigatedRef.current = true;
+        setStatus('navigating');
+        const path = isClient ? `/clients/${entityId}` : `/people/${entityId}`;
+        setLocation(path);
+        onComplete(true, `Navigating to ${entityName}...`);
+      } else {
+        setStatus('not_found');
+        toast({ 
+          title: 'Not found', 
+          description: `Could not find ${isClient ? 'client' : 'person'} "${entityName}"`,
+          variant: 'destructive'
+        });
+        onComplete(false, `Could not find ${entityName}`);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [entityId, entityName, isClient, setLocation, onComplete, toast]);
 
   return (
     <motion.div
@@ -724,41 +734,20 @@ export function NavigationActionCard({ functionCall, onComplete, onDismiss }: Ac
       data-testid="action-card-navigate"
     >
       <div className="flex items-center gap-2 text-purple-700 dark:text-purple-400">
-        <Navigation className="w-4 h-4" />
+        {status === 'not_found' ? (
+          <AlertCircle className="w-4 h-4" />
+        ) : (
+          <Loader2 className="w-4 h-4 animate-spin" />
+        )}
         <span className="font-medium text-sm">
-          Navigate to {isClient ? 'Client' : 'Person'}
+          {status === 'not_found' 
+            ? `${isClient ? 'Client' : 'Person'} not found`
+            : `Opening ${isClient ? 'Client' : 'Person'}...`}
         </span>
       </div>
 
       <div className="text-sm font-medium">
         {String(entityName || 'Unknown')}
-        {!entityId && (
-          <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">
-            (searching...)
-          </span>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2 pt-1">
-        <Button
-          size="sm"
-          onClick={handleNavigate}
-          disabled={!entityId}
-          className="h-7 text-xs"
-          data-testid="button-confirm-navigate"
-        >
-          <Navigation className="w-3 h-3 mr-1" />
-          Go
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onDismiss}
-          className="h-7 text-xs ml-auto"
-          data-testid="button-dismiss-navigate"
-        >
-          <X className="w-3 h-3" />
-        </Button>
       </div>
     </motion.div>
   );
@@ -769,17 +758,12 @@ export function ShowTasksActionCard({ functionCall, onComplete, onDismiss }: Act
   const args = functionCall.arguments;
   const assigneeName = args.assigneeName as string | undefined;
   const rawStatus = args.status as string | undefined;
+  const navigatedRef = useRef(false);
   
   const validStatuses = ['all', 'open', 'in_progress', 'closed'];
   const status = rawStatus && validStatuses.includes(rawStatus.toLowerCase()) 
     ? rawStatus.toLowerCase() 
     : 'all';
-
-  const handleNavigate = () => {
-    const path = `/internal-tasks?tab=tasks&status=${encodeURIComponent(status)}`;
-    setLocation(path);
-    onComplete(true, 'Showing tasks');
-  };
 
   const getDescription = () => {
     const parts: string[] = [];
@@ -792,6 +776,18 @@ export function ShowTasksActionCard({ functionCall, onComplete, onDismiss }: Act
     return parts.length > 0 ? parts.join(' • ') : 'View all your tasks';
   };
 
+  useEffect(() => {
+    if (navigatedRef.current) return;
+    navigatedRef.current = true;
+    
+    const timer = setTimeout(() => {
+      const path = `/internal-tasks?tab=tasks&status=${encodeURIComponent(status)}`;
+      setLocation(path);
+      onComplete(true, 'Navigating to tasks...');
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [status, setLocation, onComplete]);
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -800,33 +796,12 @@ export function ShowTasksActionCard({ functionCall, onComplete, onDismiss }: Act
       data-testid="action-card-show-tasks"
     >
       <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-        <CheckSquare className="w-4 h-4" />
-        <span className="font-medium text-sm">Show Tasks</span>
+        <Loader2 className="w-4 h-4 animate-spin" />
+        <span className="font-medium text-sm">Opening Tasks...</span>
       </div>
 
       <div className="text-sm text-muted-foreground">
         {getDescription()}
-      </div>
-
-      <div className="flex items-center gap-2 pt-1">
-        <Button
-          size="sm"
-          onClick={handleNavigate}
-          className="h-7 text-xs"
-          data-testid="button-confirm-show-tasks"
-        >
-          <CheckSquare className="w-3 h-3 mr-1" />
-          View Tasks
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onDismiss}
-          className="h-7 text-xs ml-auto"
-          data-testid="button-dismiss-show-tasks"
-        >
-          <X className="w-3 h-3" />
-        </Button>
       </div>
     </motion.div>
   );
@@ -836,20 +811,34 @@ export function ShowRemindersActionCard({ functionCall, onComplete, onDismiss }:
   const [, setLocation] = useLocation();
   const args = functionCall.arguments;
   const rawTimeframe = args.timeframe as string | undefined;
+  const navigatedRef = useRef(false);
   
   const validTimeframes = ['overdue', 'today', 'this_week', 'all'];
   const timeframe = rawTimeframe && validTimeframes.includes(rawTimeframe.toLowerCase())
     ? rawTimeframe.toLowerCase()
     : 'all';
 
-  const handleNavigate = () => {
-    let path = '/internal-tasks?tab=reminders';
-    if (timeframe === 'overdue') {
-      path += '&filter=overdue';
-    }
-    setLocation(path);
-    onComplete(true, 'Showing reminders');
+  const getDescription = () => {
+    if (timeframe === 'overdue') return 'Overdue reminders';
+    if (timeframe === 'today') return "Today's reminders";
+    if (timeframe === 'this_week') return "This week's reminders";
+    return 'View all your reminders';
   };
+
+  useEffect(() => {
+    if (navigatedRef.current) return;
+    navigatedRef.current = true;
+    
+    const timer = setTimeout(() => {
+      let path = '/internal-tasks?tab=reminders';
+      if (timeframe === 'overdue') {
+        path += '&filter=overdue';
+      }
+      setLocation(path);
+      onComplete(true, 'Navigating to reminders...');
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [timeframe, setLocation, onComplete]);
 
   return (
     <motion.div
@@ -859,36 +848,12 @@ export function ShowRemindersActionCard({ functionCall, onComplete, onDismiss }:
       data-testid="action-card-show-reminders"
     >
       <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
-        <Bell className="w-4 h-4" />
-        <span className="font-medium text-sm">Show Reminders</span>
+        <Loader2 className="w-4 h-4 animate-spin" />
+        <span className="font-medium text-sm">Opening Reminders...</span>
       </div>
 
       <div className="text-sm text-muted-foreground">
-        {args.timeframe === 'overdue' && 'Overdue reminders'}
-        {args.timeframe === 'today' && "Today's reminders"}
-        {args.timeframe === 'this_week' && "This week's reminders"}
-        {!args.timeframe && 'View all your reminders'}
-      </div>
-
-      <div className="flex items-center gap-2 pt-1">
-        <Button
-          size="sm"
-          onClick={handleNavigate}
-          className="h-7 text-xs"
-          data-testid="button-confirm-show-reminders"
-        >
-          <Bell className="w-3 h-3 mr-1" />
-          View Reminders
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onDismiss}
-          className="h-7 text-xs ml-auto"
-          data-testid="button-dismiss-show-reminders"
-        >
-          <X className="w-3 h-3" />
-        </Button>
+        {getDescription()}
       </div>
     </motion.div>
   );
@@ -898,12 +863,19 @@ export function SearchClientsActionCard({ functionCall, onComplete, onDismiss }:
   const [, setLocation] = useLocation();
   const args = functionCall.arguments;
   const searchTerm = args.searchTerm as string || '';
+  const navigatedRef = useRef(false);
 
-  const handleNavigate = () => {
-    const path = `/clients?search=${encodeURIComponent(searchTerm)}`;
-    setLocation(path);
-    onComplete(true, `Searching for "${searchTerm}"`);
-  };
+  useEffect(() => {
+    if (navigatedRef.current) return;
+    navigatedRef.current = true;
+    
+    const timer = setTimeout(() => {
+      const path = `/clients?search=${encodeURIComponent(searchTerm)}`;
+      setLocation(path);
+      onComplete(true, `Searching for "${searchTerm}"...`);
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [searchTerm, setLocation, onComplete]);
 
   return (
     <motion.div
@@ -913,34 +885,13 @@ export function SearchClientsActionCard({ functionCall, onComplete, onDismiss }:
       data-testid="action-card-search-clients"
     >
       <div className="flex items-center gap-2 text-cyan-700 dark:text-cyan-400">
-        <Search className="w-4 h-4" />
-        <span className="font-medium text-sm">Search Clients</span>
+        <Loader2 className="w-4 h-4 animate-spin" />
+        <span className="font-medium text-sm">Searching Clients...</span>
       </div>
 
       <div className="text-sm">
         <span className="text-muted-foreground">Looking for: </span>
         <span className="font-medium">"{searchTerm}"</span>
-      </div>
-
-      <div className="flex items-center gap-2 pt-1">
-        <Button
-          size="sm"
-          onClick={handleNavigate}
-          className="h-7 text-xs"
-          data-testid="button-confirm-search-clients"
-        >
-          <Search className="w-3 h-3 mr-1" />
-          Search
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onDismiss}
-          className="h-7 text-xs ml-auto"
-          data-testid="button-dismiss-search-clients"
-        >
-          <X className="w-3 h-3" />
-        </Button>
       </div>
     </motion.div>
   );
@@ -953,16 +904,54 @@ export function EmailActionCard({ functionCall, onComplete, onDismiss }: ActionC
   const [subject, setSubject] = useState(args.subject as string || '');
   const [body, setBody] = useState(args.body as string || '');
   const [isEditing, setIsEditing] = useState(false);
+  const [selectedPersonId, setSelectedPersonId] = useState<string>('');
 
   const recipientName = args.recipientName as string || 'Unknown';
+  const suggestedClientName = args.clientName as string | undefined;
 
-  const handleSend = () => {
-    toast({ 
-      title: 'Email draft prepared', 
-      description: 'Opening email composer...' 
-    });
-    onComplete(true, `Email draft to ${recipientName} prepared`);
-  };
+  const { data: people } = useQuery<{ id: string; firstName: string | null; lastName: string | null; email: string | null; clientId: string }[]>({
+    queryKey: ['/api/people'],
+  });
+
+  const { data: clients } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ['/api/clients'],
+  });
+
+  const matchedPerson = people?.find(p => {
+    const fullName = `${p.firstName || ''} ${p.lastName || ''}`.toLowerCase().trim();
+    const searchName = recipientName.toLowerCase().trim();
+    return fullName.includes(searchName) || searchName.includes(fullName);
+  });
+
+  const effectivePersonId = selectedPersonId || matchedPerson?.id || '';
+  const selectedPerson = people?.find(p => p.id === effectivePersonId);
+  const personClient = clients?.find(c => c.id === selectedPerson?.clientId);
+
+  const sendMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedPerson?.email) {
+        throw new Error('No email address found for this person');
+      }
+      const response = await apiRequest('POST', '/api/email/send', {
+        to: selectedPerson.email,
+        subject,
+        content: body,
+        isHtml: false,
+        clientId: selectedPerson.clientId,
+        personId: selectedPerson.id
+      });
+      return response;
+    },
+    onSuccess: () => {
+      toast({ title: 'Email sent!', description: `Email sent to ${selectedPerson?.email}` });
+      onComplete(true, `Email sent to ${recipientName}`);
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to send email', description: error.message, variant: 'destructive' });
+    }
+  });
+
+  const isValid = subject.trim().length > 0 && body.trim().length > 0 && selectedPerson?.email;
 
   return (
     <motion.div
@@ -973,14 +962,30 @@ export function EmailActionCard({ functionCall, onComplete, onDismiss }: ActionC
     >
       <div className="flex items-center gap-2 text-sky-700 dark:text-sky-400">
         <Mail className="w-4 h-4" />
-        <span className="font-medium text-sm">Compose Email</span>
+        <span className="font-medium text-sm">Send Email</span>
       </div>
 
       {isEditing ? (
         <div className="space-y-3">
           <div>
-            <Label className="text-xs text-muted-foreground">To</Label>
-            <div className="text-sm font-medium">{recipientName}</div>
+            <Label className="text-xs text-muted-foreground">
+              To {matchedPerson ? '(AI suggested)' : ''}
+            </Label>
+            <SearchableSelect
+              value={effectivePersonId}
+              onValueChange={setSelectedPersonId}
+              options={(people || []).filter(p => p.email).map(p => ({
+                id: p.id,
+                name: `${p.firstName || ''} ${p.lastName || ''} (${p.email})`
+              }))}
+              placeholder="Type to search contacts with email..."
+              suggestedName={recipientName}
+              icon={<User className="w-3 h-3" />}
+              testId="search-email-recipient"
+            />
+            {selectedPerson && !selectedPerson.email && (
+              <div className="text-xs text-amber-600 mt-1">This person has no email address</div>
+            )}
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Subject</Label>
@@ -1005,8 +1010,16 @@ export function EmailActionCard({ functionCall, onComplete, onDismiss }: ActionC
         <div className="space-y-1 text-sm">
           <div className="flex items-center gap-1">
             <span className="text-muted-foreground">To:</span>
-            <span className="font-medium">{recipientName}</span>
+            <span className="font-medium">
+              {selectedPerson ? `${selectedPerson.firstName} ${selectedPerson.lastName}` : recipientName}
+            </span>
+            {selectedPerson?.email && <span className="text-xs text-muted-foreground">({selectedPerson.email})</span>}
+            {!selectedPerson && <span className="text-xs text-amber-600">(no match found - click Edit)</span>}
+            {selectedPerson && !selectedPerson.email && <span className="text-xs text-amber-600">(no email)</span>}
           </div>
+          {personClient && (
+            <div className="text-xs text-muted-foreground">{personClient.name}</div>
+          )}
           {subject && (
             <div className="flex items-center gap-1">
               <span className="text-muted-foreground">Subject:</span>
@@ -1024,13 +1037,17 @@ export function EmailActionCard({ functionCall, onComplete, onDismiss }: ActionC
       <div className="flex items-center gap-2 pt-1">
         <Button
           size="sm"
-          onClick={handleSend}
-          disabled={!subject}
-          className="h-7 text-xs"
+          onClick={() => sendMutation.mutate()}
+          disabled={!isValid || sendMutation.isPending}
+          className="h-7 text-xs bg-sky-600 hover:bg-sky-700"
           data-testid="button-confirm-email"
         >
-          <Mail className="w-3 h-3 mr-1" />
-          Open Composer
+          {sendMutation.isPending ? (
+            <Loader2 className="w-3 h-3 animate-spin mr-1" />
+          ) : (
+            <Mail className="w-3 h-3 mr-1" />
+          )}
+          Send Email
         </Button>
         <Button
           size="sm"
@@ -1062,16 +1079,55 @@ export function SmsActionCard({ functionCall, onComplete, onDismiss }: ActionCar
   
   const [message, setMessage] = useState(args.message as string || '');
   const [isEditing, setIsEditing] = useState(false);
+  const [selectedPersonId, setSelectedPersonId] = useState<string>('');
 
   const recipientName = args.recipientName as string || 'Unknown';
+  const suggestedClientName = args.clientName as string | undefined;
 
-  const handleSend = () => {
-    toast({ 
-      title: 'SMS draft prepared', 
-      description: 'Opening SMS composer...' 
-    });
-    onComplete(true, `SMS draft to ${recipientName} prepared`);
-  };
+  const { data: people } = useQuery<{ id: string; firstName: string | null; lastName: string | null; mobile: string | null; clientId: string }[]>({
+    queryKey: ['/api/people'],
+  });
+
+  const { data: clients } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ['/api/clients'],
+  });
+
+  const matchedPerson = people?.find(p => {
+    const fullName = `${p.firstName || ''} ${p.lastName || ''}`.toLowerCase().trim();
+    const searchName = recipientName.toLowerCase().trim();
+    return fullName.includes(searchName) || searchName.includes(fullName);
+  });
+
+  const effectivePersonId = selectedPersonId || matchedPerson?.id || '';
+  const selectedPerson = people?.find(p => p.id === effectivePersonId);
+  const personClient = clients?.find(c => c.id === selectedPerson?.clientId);
+
+  const sendMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedPerson?.mobile) {
+        throw new Error('No mobile number found for this person');
+      }
+      if (!selectedPerson?.clientId) {
+        throw new Error('Person must be linked to a client to send SMS');
+      }
+      const response = await apiRequest('POST', '/api/sms/send', {
+        to: selectedPerson.mobile,
+        message,
+        clientId: selectedPerson.clientId,
+        personId: selectedPerson.id
+      });
+      return response;
+    },
+    onSuccess: () => {
+      toast({ title: 'SMS sent!', description: `SMS sent to ${selectedPerson?.mobile}` });
+      onComplete(true, `SMS sent to ${recipientName}`);
+    },
+    onError: (error: Error) => {
+      toast({ title: 'Failed to send SMS', description: error.message, variant: 'destructive' });
+    }
+  });
+
+  const isValid = message.trim().length > 0 && selectedPerson?.mobile && selectedPerson?.clientId;
 
   return (
     <motion.div
@@ -1088,8 +1144,27 @@ export function SmsActionCard({ functionCall, onComplete, onDismiss }: ActionCar
       {isEditing ? (
         <div className="space-y-3">
           <div>
-            <Label className="text-xs text-muted-foreground">To</Label>
-            <div className="text-sm font-medium">{recipientName}</div>
+            <Label className="text-xs text-muted-foreground">
+              To {matchedPerson ? '(AI suggested)' : ''}
+            </Label>
+            <SearchableSelect
+              value={effectivePersonId}
+              onValueChange={setSelectedPersonId}
+              options={(people || []).filter(p => p.mobile).map(p => ({
+                id: p.id,
+                name: `${p.firstName || ''} ${p.lastName || ''} (${p.mobile})`
+              }))}
+              placeholder="Type to search contacts with mobile..."
+              suggestedName={recipientName}
+              icon={<User className="w-3 h-3" />}
+              testId="search-sms-recipient"
+            />
+            {selectedPerson && !selectedPerson.mobile && (
+              <div className="text-xs text-amber-600 mt-1">This person has no mobile number</div>
+            )}
+            {selectedPerson && !selectedPerson.clientId && (
+              <div className="text-xs text-amber-600 mt-1">Person must be linked to a client</div>
+            )}
           </div>
           <div>
             <Label className="text-xs text-muted-foreground">Message</Label>
@@ -1109,8 +1184,16 @@ export function SmsActionCard({ functionCall, onComplete, onDismiss }: ActionCar
         <div className="space-y-1 text-sm">
           <div className="flex items-center gap-1">
             <span className="text-muted-foreground">To:</span>
-            <span className="font-medium">{recipientName}</span>
+            <span className="font-medium">
+              {selectedPerson ? `${selectedPerson.firstName} ${selectedPerson.lastName}` : recipientName}
+            </span>
+            {selectedPerson?.mobile && <span className="text-xs text-muted-foreground">({selectedPerson.mobile})</span>}
+            {!selectedPerson && <span className="text-xs text-amber-600">(no match found - click Edit)</span>}
+            {selectedPerson && !selectedPerson.mobile && <span className="text-xs text-amber-600">(no mobile)</span>}
           </div>
+          {personClient && (
+            <div className="text-xs text-muted-foreground">{personClient.name}</div>
+          )}
           {message && (
             <div className="text-xs text-muted-foreground mt-1">
               {message}
@@ -1122,13 +1205,17 @@ export function SmsActionCard({ functionCall, onComplete, onDismiss }: ActionCar
       <div className="flex items-center gap-2 pt-1">
         <Button
           size="sm"
-          onClick={handleSend}
-          disabled={!message}
-          className="h-7 text-xs"
+          onClick={() => sendMutation.mutate()}
+          disabled={!isValid || sendMutation.isPending}
+          className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700"
           data-testid="button-confirm-sms"
         >
-          <MessageSquare className="w-3 h-3 mr-1" />
-          Open Composer
+          {sendMutation.isPending ? (
+            <Loader2 className="w-3 h-3 animate-spin mr-1" />
+          ) : (
+            <MessageSquare className="w-3 h-3 mr-1" />
+          )}
+          Send SMS
         </Button>
         <Button
           size="sm"

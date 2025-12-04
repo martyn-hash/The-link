@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -6,6 +6,25 @@ import { AIMagicChatPanel } from './AIMagicChatPanel';
 
 export function AIMagicButton() {
   const [isOpen, setIsOpen] = useState(false);
+
+  const togglePanel = useCallback(() => {
+    setIsOpen(prev => !prev);
+  }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        togglePanel();
+      }
+      if (e.key === 'Escape' && isOpen) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, togglePanel]);
 
   return (
     <>
