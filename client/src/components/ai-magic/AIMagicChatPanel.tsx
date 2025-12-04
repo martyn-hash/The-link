@@ -295,7 +295,7 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
           "bg-card border border-border rounded-2xl shadow-2xl",
           "flex flex-col overflow-hidden"
         )}
-        style={{ maxHeight: 'calc(100vh - 8rem)' }}
+        style={{ height: 'calc(100vh - 10rem)', maxHeight: '700px' }}
         data-testid="panel-ai-chat"
       >
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/30">
@@ -320,8 +320,8 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
         </div>
 
         <ScrollArea 
-          className="flex-1 p-4" 
-          style={{ minHeight: '300px', maxHeight: '400px' }}
+          className="flex-1 p-4 overflow-y-auto" 
+          style={{ minHeight: '200px' }}
         >
           <div className="space-y-4">
             {messages.map((message) => (
