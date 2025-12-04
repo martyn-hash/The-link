@@ -421,7 +421,7 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
   const [isEditing, setIsEditing] = useState(false);
 
   const { data: staffMembers } = useQuery<UserType[]>({
-    queryKey: ['/api/staff'],
+    queryKey: ['/api/users/for-messaging'],
   });
 
   // Determine if AI tried to assign to someone else (vs current user)
@@ -697,7 +697,7 @@ export function TaskActionCard({ functionCall, onComplete, onDismiss }: ActionCa
   const [isEditing, setIsEditing] = useState(false);
 
   const { data: users } = useQuery<UserType[]>({
-    queryKey: ['/api/staff'],
+    queryKey: ['/api/users/for-messaging'],
   });
 
   const { data: taskTypes } = useQuery<{ id: string; name: string }[]>({
@@ -2412,38 +2412,85 @@ export function PhoneNumberCard({ functionCall, onComplete, onDismiss }: ActionC
     queryKey: ['/api/clients'],
   });
 
+  // Validate phone number format - must look like a real phone number
+  const isValidPhoneNumber = (phone: string | null): boolean => {
+    if (!phone) return false;
+    // Remove common formatting characters
+    const cleaned = phone.replace(/[\s\-\(\)\.\+]/g, '');
+    // Must be at least 7 digits, at most 15, and primarily numeric
+    if (cleaned.length < 7 || cleaned.length > 15) return false;
+    // Must be mostly digits (allow for some non-digit chars in original)
+    const digitCount = (cleaned.match(/\d/g) || []).length;
+    if (digitCount < 7) return false;
+    // Reject obvious test/fake patterns (sequential or repeated digits)
+    if (/^(\d)\1{6,}$/.test(cleaned)) return false; // All same digit (1111111)
+    if (/0?1234567890?/.test(cleaned) || /9876543210?/.test(cleaned)) return false; // Sequential
+    if (/123456789/.test(cleaned) || /987654321/.test(cleaned)) return false; // Sequential partial
+    return true;
+  };
+
   useEffect(() => {
     if (!people || !clients) return;
 
     const searchLower = personName.toLowerCase().trim();
     const clientLower = clientName?.toLowerCase().trim();
+    
+    // Must have a meaningful search term
+    if (searchLower.length < 2) {
+      setStatus('not_found');
+      return;
+    }
 
     let bestMatch: { person: typeof people[0]; score: number; clientName: string } | null = null;
+    const MIN_MATCH_SCORE = 40; // Require at least a partial name match
 
     for (const person of people) {
-      const firstName = (person.firstName || '').toLowerCase();
-      const lastName = (person.lastName || '').toLowerCase();
+      const firstName = (person.firstName || '').toLowerCase().trim();
+      const lastName = (person.lastName || '').toLowerCase().trim();
       const fullName = `${firstName} ${lastName}`.trim();
+      
+      // Skip people with no name - they can't be matched by name
+      if (!firstName && !lastName) continue;
+      
+      // Skip people without a valid phone number
+      const phoneToUse = person.primaryPhone || person.telephone;
+      if (!isValidPhoneNumber(phoneToUse)) continue;
+      
       const personClientName = person.relatedCompanies?.[0]?.name || '';
       const personClientLower = personClientName.toLowerCase();
 
       let score = 0;
 
-      if (fullName === searchLower || firstName === searchLower || lastName === searchLower) {
+      // Exact matches (high confidence)
+      if (fullName === searchLower) {
+        score += 80;
+      } else if (firstName === searchLower || lastName === searchLower) {
         score += 60;
-      } else if (fullName.includes(searchLower) || searchLower.includes(fullName)) {
-        score += 40;
-      } else if (firstName.includes(searchLower) || lastName.includes(searchLower)) {
-        score += 25;
+      } 
+      // Partial matches - but only if both strings are non-empty and meaningful
+      else if (fullName.length >= 2 && searchLower.length >= 2) {
+        if (fullName.includes(searchLower)) {
+          score += 50;
+        } else if (firstName.length >= 2 && firstName.includes(searchLower)) {
+          score += 40;
+        } else if (lastName.length >= 2 && lastName.includes(searchLower)) {
+          score += 40;
+        }
+        // Also check if search terms match start of name (e.g., "ser" matches "sergei")
+        else if (firstName.startsWith(searchLower) || lastName.startsWith(searchLower)) {
+          score += 45;
+        }
       }
 
-      if (clientLower && personClientLower) {
+      // Boost score if client name also matches
+      if (clientLower && clientLower.length >= 2 && personClientLower.length >= 2) {
         if (personClientLower.includes(clientLower) || clientLower.includes(personClientLower)) {
           score += 30;
         }
       }
 
-      if (score > 0 && (person.primaryPhone || person.telephone)) {
+      // Only consider if score meets minimum threshold
+      if (score >= MIN_MATCH_SCORE) {
         if (!bestMatch || score > bestMatch.score) {
           bestMatch = { person, score, clientName: personClientName };
         }
@@ -2546,7 +2593,7 @@ export function TasksModalCard({ functionCall, onComplete, onDismiss }: ActionCa
   const openedRef = useRef(false);
 
   const { data: users } = useQuery<UserType[]>({
-    queryKey: ['/api/users'],
+    queryKey: ['/api/users/for-messaging'],
   });
 
   useEffect(() => {
