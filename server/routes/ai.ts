@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import multer from "multer";
 import { storage } from "../storage/index";
+import { processAIMagicChat, fuzzyMatchClients, fuzzyMatchUsers, fuzzyMatchPeople, chatRequestSchema } from "../services/ai-magic-service";
 
 const router = Router();
 
@@ -559,6 +560,121 @@ Please refine the email according to the request above.`;
         res.status(500).json({
           error: error.message || "Failed to process email",
         });
+      }
+    }
+  );
+
+  // AI Magic Chat endpoint - main interface for the AI Assistant
+  router.post(
+    "/chat",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res: Response) => {
+      try {
+        const userId = req.user?.effectiveUserId || req.user?.id;
+        
+        // Validate request body with Zod
+        const parseResult = chatRequestSchema.safeParse(req.body);
+        if (!parseResult.success) {
+          return res.status(400).json({ 
+            type: 'error',
+            message: "Invalid request: " + parseResult.error.errors.map(e => e.message).join(', ')
+          });
+        }
+        
+        const { message, conversationHistory } = parseResult.data;
+
+        // Get current user details
+        const user = await storage.getUser(userId);
+        if (!user) {
+          return res.status(401).json({ 
+            type: 'error',
+            message: "User not found" 
+          });
+        }
+
+        const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'User';
+
+        console.log("[AI Magic] Processing chat for user:", userName, userId);
+
+        // Process with OpenAI function calling
+        const result = await processAIMagicChat(
+          message,
+          conversationHistory,
+          {
+            currentUserId: userId,
+            currentUserName: userName
+          }
+        );
+
+        res.json(result);
+      } catch (error: any) {
+        console.error("[AI Magic] Error:", error);
+        // Always return structured error response
+        res.status(500).json({
+          type: 'error',
+          message: error.message || "Something went wrong. Please try again."
+        });
+      }
+    }
+  );
+
+  // Fuzzy match endpoints for entity resolution
+  router.get(
+    "/match/clients",
+    isAuthenticated,
+    async (req: Request, res: Response) => {
+      try {
+        const searchTerm = req.query.q as string;
+        if (!searchTerm) {
+          return res.status(400).json({ error: "Search term is required" });
+        }
+
+        const matches = await fuzzyMatchClients(searchTerm);
+        res.json(matches);
+      } catch (error: any) {
+        console.error("[AI Magic] Error matching clients:", error);
+        res.status(500).json({ error: "Failed to match clients" });
+      }
+    }
+  );
+
+  router.get(
+    "/match/users",
+    isAuthenticated,
+    async (req: Request, res: Response) => {
+      try {
+        const searchTerm = req.query.q as string;
+        if (!searchTerm) {
+          return res.status(400).json({ error: "Search term is required" });
+        }
+
+        const matches = await fuzzyMatchUsers(searchTerm);
+        res.json(matches);
+      } catch (error: any) {
+        console.error("[AI Magic] Error matching users:", error);
+        res.status(500).json({ error: "Failed to match users" });
+      }
+    }
+  );
+
+  router.get(
+    "/match/people",
+    isAuthenticated,
+    async (req: Request, res: Response) => {
+      try {
+        const searchTerm = req.query.q as string;
+        const clientId = req.query.clientId as string | undefined;
+        
+        if (!searchTerm) {
+          return res.status(400).json({ error: "Search term is required" });
+        }
+
+        const matches = await fuzzyMatchPeople(searchTerm, clientId);
+        res.json(matches);
+      } catch (error: any) {
+        console.error("[AI Magic] Error matching people:", error);
+        res.status(500).json({ error: "Failed to match people" });
       }
     }
   );

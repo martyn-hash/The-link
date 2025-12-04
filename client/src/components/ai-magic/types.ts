@@ -4,13 +4,13 @@ export interface AIMessage {
   content: string;
   timestamp: Date;
   isLoading?: boolean;
-  action?: AIAction;
+  functionCall?: AIFunctionCall;
+  suggestions?: string[];
 }
 
-export interface AIAction {
-  type: AIActionType;
-  data: Record<string, unknown>;
-  status: 'pending' | 'ready' | 'completed' | 'cancelled';
+export interface AIFunctionCall {
+  name: AIActionType;
+  arguments: Record<string, unknown>;
 }
 
 export type AIActionType = 
@@ -26,6 +26,13 @@ export type AIActionType =
   | 'search_clients'
   | 'ask_clarification'
   | 'request_missing_info';
+
+export interface AIBackendResponse {
+  type: 'function_call' | 'message' | 'clarification' | 'error';
+  functionCall?: AIFunctionCall;
+  message?: string;
+  suggestions?: string[];
+}
 
 export interface ConversationContext {
   lastMentionedClient?: { id: string; name: string };

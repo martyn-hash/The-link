@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
-import { AIMessage } from './types';
+import { AIMessage, AIBackendResponse, AIFunctionCall } from './types';
 import { AIMagicHelpModal } from './AIMagicHelpModal';
 import { nanoid } from 'nanoid';
 
@@ -135,17 +135,92 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
         throw new Error('Failed to get response');
       }
 
-      const data = await response.json();
+      const data: AIBackendResponse = await response.json();
+      
+      // Handle different response types
+      let responseMessage: AIMessage;
+      
+      if (data.type === 'function_call' && data.functionCall) {
+        // AI detected an action - for now show what was understood
+        const actionName = data.functionCall.name.replace(/_/g, ' ');
+        const args = data.functionCall.arguments;
+        let description = `I'll help you ${actionName}.`;
+        
+        // Build a friendly description based on the function
+        if (data.functionCall.name === 'create_reminder') {
+          description = `I'll create a reminder: "${args.title}"`;
+          if (args.dateTime) {
+            const date = new Date(args.dateTime as string);
+            description += ` for ${date.toLocaleString('en-GB', { 
+              dateStyle: 'medium', 
+              timeStyle: 'short',
+              timeZone: 'Europe/London'
+            })}`;
+          }
+        } else if (data.functionCall.name === 'create_task') {
+          description = `I'll create a task: "${args.title}"`;
+          if (args.assigneeName) {
+            description += ` assigned to ${args.assigneeName}`;
+          }
+        } else if (data.functionCall.name === 'send_email') {
+          description = `I'll help you compose an email to ${args.recipientName}`;
+        } else if (data.functionCall.name === 'send_sms') {
+          description = `I'll help you send an SMS to ${args.recipientName}`;
+        } else if (data.functionCall.name === 'navigate_to_client') {
+          description = `I'll take you to ${args.clientName}'s page`;
+        } else if (data.functionCall.name === 'navigate_to_person') {
+          description = `I'll take you to ${args.personName}'s profile`;
+        } else if (data.functionCall.name === 'search_clients') {
+          description = `I'll search for clients matching "${args.searchTerm}"`;
+        } else if (data.functionCall.name === 'show_tasks') {
+          description = `I'll show you tasks`;
+          if (args.assigneeName) {
+            description += ` for ${args.assigneeName === 'me' ? 'you' : args.assigneeName}`;
+          }
+        } else if (data.functionCall.name === 'show_reminders') {
+          description = `I'll show you reminders`;
+          if (args.timeframe) {
+            description += ` (${(args.timeframe as string).replace(/_/g, ' ')})`;
+          }
+        }
+        
+        description += '\n\n(Action forms coming in the next update!)';
+        
+        responseMessage = {
+          id: nanoid(),
+          role: 'assistant',
+          content: description,
+          timestamp: new Date(),
+          functionCall: data.functionCall,
+        };
+      } else if (data.type === 'clarification') {
+        responseMessage = {
+          id: nanoid(),
+          role: 'assistant',
+          content: data.message || "Could you tell me more about what you'd like to do?",
+          timestamp: new Date(),
+          suggestions: data.suggestions,
+        };
+      } else if (data.type === 'error') {
+        responseMessage = {
+          id: nanoid(),
+          role: 'assistant',
+          content: data.message || "Something went wrong. Please try again.",
+          timestamp: new Date(),
+        };
+      } else {
+        // Regular message response
+        responseMessage = {
+          id: nanoid(),
+          role: 'assistant',
+          content: data.message || "I'm not sure how to help with that. Try asking me to create a reminder or task.",
+          timestamp: new Date(),
+        };
+      }
       
       setMessages(prev => [
         ...prev.filter(m => m.id !== 'loading'),
-        {
-          id: nanoid(),
-          role: 'assistant',
-          content: data.message || "I'm sorry, I couldn't process that request.",
-          timestamp: new Date(),
-          action: data.action,
-        }
+        responseMessage
       ]);
     } catch (error) {
       setMessages(prev => [
