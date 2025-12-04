@@ -87,11 +87,16 @@ This document describes all the features available in the AI Magic Assistant, ho
 |-----------|-------------|-----------------|
 | Full name | "Take me to ABC Ltd" | Navigates to client page |
 | Partial name | "Find Monkey Access" | Navigates to Monkey Access Limited |
-| Search | "Search for clients named Smith" | Shows matching results |
+| Go to | "Go to Victoriam Sales" | Navigates to VICTORIAM SALES LIMITED |
+| Open | "Open Smith & Co" | Navigates to that client |
+
+### Features
+- **Fuzzy matching**: Uses Levenshtein distance for typo tolerance
+- **Multiple verbs**: Supports "go to", "find", "open", "show", "take me to", "view"
+- **Smart upgrade**: Even if AI initially calls search, high-confidence matches auto-navigate
 
 ### Known Limitations
-- Fuzzy matching based on Levenshtein distance
-- May ask for clarification if multiple matches
+- May ask for clarification if multiple clients match similarly
 
 ---
 

@@ -250,7 +250,7 @@ const AI_MAGIC_FUNCTIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "navigate_to_client",
-      description: "Open a client's detail page. Use when user wants to view a specific client's information.",
+      description: "Open a client's detail page directly. Use for commands like 'go to', 'find', 'open', 'show', 'take me to', 'view', or when user references a specific client by name. This should be preferred over search_clients when user wants to view ONE specific client. Examples: 'go to Victoriam', 'find Monkey Access', 'take me to ABC Ltd'.",
       parameters: {
         type: "object",
         properties: {
@@ -288,7 +288,7 @@ const AI_MAGIC_FUNCTIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "search_clients",
-      description: "Search for clients by name or other criteria. Returns a list of matching clients.",
+      description: "Search for multiple clients or browse clients by criteria. Use ONLY when user explicitly wants to see a LIST of matching clients, wants to browse, or is unsure which client they want. If user mentions a specific client name, use navigate_to_client instead.",
       parameters: {
         type: "object",
         properties: {
@@ -714,6 +714,55 @@ export async function processAIMagicChat(
           message: functionArgs.question,
           suggestions: [functionArgs.intent]
         };
+      }
+
+      // Enrich navigation function calls with actual entity IDs
+      if (functionName === 'navigate_to_client' && functionArgs.clientName) {
+        const matches = await fuzzyMatchClients(functionArgs.clientName, 1);
+        if (matches.length > 0 && matches[0].confidence >= 0.4) {
+          functionArgs.clientId = matches[0].id;
+          functionArgs.clientName = matches[0].name; // Use the actual matched name
+          console.log('[AI Magic] Found client:', matches[0].name, 'ID:', matches[0].id, 'confidence:', matches[0].confidence);
+        } else {
+          console.log('[AI Magic] No client match found for:', functionArgs.clientName);
+        }
+      }
+      
+      if (functionName === 'navigate_to_person' && functionArgs.personName) {
+        const matches = await fuzzyMatchPeople(functionArgs.personName, undefined, 1);
+        if (matches.length > 0 && matches[0].confidence >= 0.4) {
+          functionArgs.personId = matches[0].id;
+          functionArgs.personName = matches[0].name; // Use the actual matched name
+          console.log('[AI Magic] Found person:', matches[0].name, 'ID:', matches[0].id, 'confidence:', matches[0].confidence);
+        } else {
+          console.log('[AI Magic] No person match found for:', functionArgs.personName);
+        }
+      }
+      
+      // Runtime guardrail: Upgrade search_clients to navigate_to_client if high-confidence match
+      // This handles cases where the AI interprets "find X" as search instead of navigation
+      if (functionName === 'search_clients' && functionArgs.searchTerm) {
+        const matches = await fuzzyMatchClients(functionArgs.searchTerm, 2);
+        if (matches.length > 0 && matches[0].confidence >= 0.7) {
+          // High confidence match - check if second match is much lower (unique match)
+          const hasUniqueMatch = matches.length === 1 || 
+            (matches.length > 1 && matches[0].confidence - matches[1].confidence >= 0.2);
+          
+          if (hasUniqueMatch) {
+            console.log('[AI Magic] Upgrading search_clients to navigate_to_client:', matches[0].name, 'confidence:', matches[0].confidence);
+            // Upgrade to navigation
+            return {
+              type: 'function_call',
+              functionCall: {
+                name: 'navigate_to_client',
+                arguments: {
+                  clientName: matches[0].name,
+                  clientId: matches[0].id
+                }
+              }
+            };
+          }
+        }
       }
 
       // Return the function call for the frontend to handle
