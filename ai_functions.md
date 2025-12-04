@@ -71,10 +71,12 @@ This document describes all the features available in the AI Magic Assistant, ho
 |-----------|-------------|-----------------|
 | Basic SMS | "Text John Smith" | Opens SMS card |
 | With message | "Send a text to Sarah saying we received the documents" | Opens with message pre-filled |
+| With client context | "Send a text to Josie from Victoriam saying hello" | Matches Josie at Victoriam Sales Limited |
 
-### Known Limitations
+### Features
+- **Smart matching**: Recognizes "person from client" pattern (e.g., "Josie from Victoriam")
+- **Client display**: Dropdown shows contacts with their client names (e.g., "Josie @ VICTORIAM SALES LIMITED")
 - Person must have mobile number on file
-- Same matching limitations as email
 
 ---
 

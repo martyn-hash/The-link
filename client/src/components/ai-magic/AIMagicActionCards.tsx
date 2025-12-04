@@ -948,12 +948,15 @@ export function SearchClientsActionCard({ functionCall, onComplete, onDismiss }:
 }
 
 // Improved fuzzy matching for people that considers both person name and client name
-function matchPersonWithClientContext(
+// Generic to work with both email and mobile contacts
+// filterFn: Optional filter to only consider people with required contact method (email or mobile)
+function matchPersonWithClientContext<T extends { id: string; firstName: string | null; lastName: string | null; clientId: string }>(
   searchQuery: string,
   suggestedClient: string | undefined,
-  people: { id: string; firstName: string | null; lastName: string | null; email: string | null; clientId: string }[],
-  clients: { id: string; name: string }[]
-): { person: typeof people[0]; score: number; clientName: string } | null {
+  people: T[],
+  clients: { id: string; name: string }[],
+  filterFn?: (person: T) => boolean
+): { person: T; score: number; clientName: string } | null {
   if (!people || people.length === 0) return null;
   
   const query = searchQuery.toLowerCase().trim();
@@ -962,9 +965,11 @@ function matchPersonWithClientContext(
   // Create a map of client IDs to names
   const clientMap = new Map(clients.map(c => [c.id, c.name]));
   
+  // Filter people by required contact method if provided
+  const filteredPeople = filterFn ? people.filter(filterFn) : people;
+  
   // Score each person
-  const scored = people
-    .filter(p => p.email) // Only consider people with emails
+  const scored = filteredPeople
     .map(p => {
       const firstName = (p.firstName || '').toLowerCase();
       const lastName = (p.lastName || '').toLowerCase();
@@ -1034,7 +1039,15 @@ export function EmailActionCard({ functionCall, onComplete, onDismiss }: ActionC
   const recipientName = args.recipientName as string || 'Unknown';
   const suggestedClientName = args.clientName as string | undefined;
 
-  const { data: people } = useQuery<{ id: string; firstName: string | null; lastName: string | null; email: string | null; clientId: string }[]>({
+  // People API returns relatedCompanies array, not a single clientId
+  const { data: rawPeople } = useQuery<{ 
+    id: string; 
+    firstName: string | null; 
+    lastName: string | null; 
+    email: string | null; 
+    primaryEmail: string | null;
+    relatedCompanies: { id: string; name: string }[] 
+  }[]>({
     queryKey: ['/api/people'],
   });
 
@@ -1042,15 +1055,23 @@ export function EmailActionCard({ functionCall, onComplete, onDismiss }: ActionC
     queryKey: ['/api/clients'],
   });
 
+  // Transform to include clientId (use first related company)
+  const people = rawPeople?.map(p => ({
+    ...p,
+    email: p.email || p.primaryEmail,
+    clientId: p.relatedCompanies?.[0]?.id || ''
+  }));
+
   // Use improved matching that considers both person name and client name
+  // Only match people who have email addresses
   const matchResult = people && clients 
-    ? matchPersonWithClientContext(recipientName, suggestedClientName, people, clients)
+    ? matchPersonWithClientContext(recipientName, suggestedClientName, people, clients, (p) => !!(p.email || p.primaryEmail))
     : null;
   const matchedPerson = matchResult?.person;
 
   const effectivePersonId = selectedPersonId || matchedPerson?.id || '';
   const selectedPerson = people?.find(p => p.id === effectivePersonId);
-  const personClient = clients?.find(c => c.id === selectedPerson?.clientId);
+  const personClient = selectedPerson?.relatedCompanies?.[0] || clients?.find(c => c.id === selectedPerson?.clientId);
 
   const sendMutation = useMutation({
     mutationFn: async () => {
@@ -1100,7 +1121,7 @@ export function EmailActionCard({ functionCall, onComplete, onDismiss }: ActionC
               value={effectivePersonId}
               onValueChange={setSelectedPersonId}
               options={(people || []).filter(p => p.email).map(p => {
-                const clientName = clients?.find(c => c.id === p.clientId)?.name;
+                const clientName = p.relatedCompanies?.[0]?.name;
                 return {
                   id: p.id,
                   name: `${p.firstName || ''} ${p.lastName || ''}${clientName ? ` @ ${clientName}` : ''} (${p.email})`
@@ -1212,7 +1233,15 @@ export function SmsActionCard({ functionCall, onComplete, onDismiss }: ActionCar
   const recipientName = args.recipientName as string || 'Unknown';
   const suggestedClientName = args.clientName as string | undefined;
 
-  const { data: people } = useQuery<{ id: string; firstName: string | null; lastName: string | null; mobile: string | null; clientId: string }[]>({
+  // People API returns relatedCompanies array, not a single clientId
+  const { data: rawPeople } = useQuery<{ 
+    id: string; 
+    firstName: string | null; 
+    lastName: string | null; 
+    telephone: string | null;
+    primaryPhone: string | null;
+    relatedCompanies: { id: string; name: string }[] 
+  }[]>({
     queryKey: ['/api/people'],
   });
 
@@ -1220,15 +1249,23 @@ export function SmsActionCard({ functionCall, onComplete, onDismiss }: ActionCar
     queryKey: ['/api/clients'],
   });
 
-  const matchedPerson = people?.find(p => {
-    const fullName = `${p.firstName || ''} ${p.lastName || ''}`.toLowerCase().trim();
-    const searchName = recipientName.toLowerCase().trim();
-    return fullName.includes(searchName) || searchName.includes(fullName);
-  });
+  // Transform to include mobile and clientId
+  const people = rawPeople?.map(p => ({
+    ...p,
+    mobile: p.telephone || p.primaryPhone,
+    clientId: p.relatedCompanies?.[0]?.id || ''
+  }));
+
+  // Use improved matching that considers both person name and client name
+  // Only match people who have mobile numbers
+  const matchResult = people && clients 
+    ? matchPersonWithClientContext(recipientName, suggestedClientName, people, clients, (p) => !!(p.mobile))
+    : null;
+  const matchedPerson = matchResult?.person;
 
   const effectivePersonId = selectedPersonId || matchedPerson?.id || '';
   const selectedPerson = people?.find(p => p.id === effectivePersonId);
-  const personClient = clients?.find(c => c.id === selectedPerson?.clientId);
+  const personClient = selectedPerson?.relatedCompanies?.[0] || clients?.find(c => c.id === selectedPerson?.clientId);
 
   const sendMutation = useMutation({
     mutationFn: async () => {
@@ -1278,10 +1315,13 @@ export function SmsActionCard({ functionCall, onComplete, onDismiss }: ActionCar
             <SearchableSelect
               value={effectivePersonId}
               onValueChange={setSelectedPersonId}
-              options={(people || []).filter(p => p.mobile).map(p => ({
-                id: p.id,
-                name: `${p.firstName || ''} ${p.lastName || ''} (${p.mobile})`
-              }))}
+              options={(people || []).filter(p => p.mobile).map(p => {
+                const clientName = p.relatedCompanies?.[0]?.name;
+                return {
+                  id: p.id,
+                  name: `${p.firstName || ''} ${p.lastName || ''}${clientName ? ` @ ${clientName}` : ''} (${p.mobile})`
+                };
+              })}
               placeholder="Type to search contacts with mobile..."
               suggestedName={recipientName}
               icon={<User className="w-3 h-3" />}
