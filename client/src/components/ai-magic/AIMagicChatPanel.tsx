@@ -468,7 +468,12 @@ export function AIMagicChatPanel({ onClose, triggerVoice, onVoiceTriggered, onRe
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      // If recording, stop it (which triggers auto-send)
+      if (isRecording) {
+        stopRecording();
+      } else if (inputValue.trim()) {
+        handleSend();
+      }
     }
     if (e.key === 'Escape') {
       onClose();
@@ -877,14 +882,22 @@ export function AIMagicChatPanel({ onClose, triggerVoice, onVoiceTriggered, onRe
                 )}
               </div>
               <Button
-                onClick={() => handleSend()}
-                disabled={!inputValue.trim() || isLoading}
+                onClick={() => {
+                  if (isRecording) {
+                    stopRecording();
+                  } else {
+                    handleSend();
+                  }
+                }}
+                disabled={(!inputValue.trim() && !isRecording) || isLoading || isTranscribing}
                 size="icon"
                 className="shrink-0"
                 data-testid="button-ai-send"
               >
                 {isLoading ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
+                ) : isRecording ? (
+                  <Send className="w-4 h-4 text-red-500" />
                 ) : (
                   <Send className="w-4 h-4" />
                 )}
