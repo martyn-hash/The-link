@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -6,16 +6,34 @@ import { AIMagicChatPanel } from './AIMagicChatPanel';
 
 export function AIMagicButton() {
   const [isOpen, setIsOpen] = useState(false);
+  const [triggerVoice, setTriggerVoice] = useState(false);
+  const voiceTriggerRef = useRef<(() => void) | null>(null);
 
   const togglePanel = useCallback(() => {
     setIsOpen(prev => !prev);
   }, []);
 
+  // Handler to trigger voice recording from the chat panel
+  const handleVoiceTrigger = useCallback((toggleFn: () => void) => {
+    voiceTriggerRef.current = toggleFn;
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // CMD/CTRL+K: Open panel (text input)
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         togglePanel();
+      }
+      // CMD/CTRL+L: Open panel with voice input
+      if ((e.metaKey || e.ctrlKey) && e.key === 'l') {
+        e.preventDefault();
+        if (!isOpen) {
+          setIsOpen(true);
+          setTriggerVoice(true);
+        } else if (voiceTriggerRef.current) {
+          voiceTriggerRef.current();
+        }
       }
       if (e.key === 'Escape' && isOpen) {
         setIsOpen(false);
@@ -30,7 +48,16 @@ export function AIMagicButton() {
     <>
       <AnimatePresence>
         {isOpen && (
-          <AIMagicChatPanel onClose={() => setIsOpen(false)} />
+          <AIMagicChatPanel 
+            onClose={() => {
+              setIsOpen(false);
+              setTriggerVoice(false);
+              voiceTriggerRef.current = null;
+            }}
+            triggerVoice={triggerVoice}
+            onVoiceTriggered={() => setTriggerVoice(false)}
+            onRegisterVoiceTrigger={handleVoiceTrigger}
+          />
         )}
       </AnimatePresence>
 

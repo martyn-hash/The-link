@@ -635,6 +635,40 @@ Please refine the email according to the request above.`;
     }
   );
 
+  // AI Magic simple audio transcription endpoint (uses Whisper API)
+  router.post(
+    "/transcribe",
+    isAuthenticated,
+    resolveEffectiveUser,
+    audioUpload.single("audio"),
+    async (req: Request, res: Response) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({ error: "Audio file is required" });
+        }
+
+        console.log("[AI Magic] Transcribing audio:", req.file.size, "bytes");
+
+        const transcription = await transcribeAudio(
+          req.file.buffer,
+          req.file.originalname || "recording.webm"
+        );
+
+        console.log("[AI Magic] Transcription complete:", transcription.length, "chars");
+
+        res.json({
+          success: true,
+          transcription,
+        });
+      } catch (error: any) {
+        console.error("[AI Magic] Transcription error:", error);
+        res.status(500).json({
+          error: error.message || "Failed to transcribe audio",
+        });
+      }
+    }
+  );
+
   // Fuzzy match endpoints for entity resolution with disambiguation support
   router.get(
     "/match/clients",

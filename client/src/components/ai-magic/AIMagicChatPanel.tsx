@@ -72,6 +72,9 @@ declare global {
 
 interface AIMagicChatPanelProps {
   onClose: () => void;
+  triggerVoice?: boolean;
+  onVoiceTriggered?: () => void;
+  onRegisterVoiceTrigger?: (toggleFn: () => void) => void;
 }
 
 type ActionStatus = 'pending' | 'completed' | 'dismissed';
@@ -82,7 +85,7 @@ interface SmartSuggestion {
   command: string;
 }
 
-export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
+export function AIMagicChatPanel({ onClose, triggerVoice, onVoiceTriggered, onRegisterVoiceTrigger }: AIMagicChatPanelProps) {
   const { toast } = useToast();
   const [location] = useLocation();
   const [messages, setMessages] = useState<AIMessage[]>([
@@ -105,6 +108,10 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<ISpeechRecognition | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const [useWhisperFallback, setUseWhisperFallback] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
 
   // Parse current location for context
   const clientIdMatch = location.match(/\/clients\/([^/]+)/);
@@ -260,6 +267,32 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  // Register voice toggle function for keyboard shortcut
+  useEffect(() => {
+    if (onRegisterVoiceTrigger) {
+      onRegisterVoiceTrigger(() => {
+        if (voiceSupported && !isLoading) {
+          if (isRecording) {
+            stopRecording();
+          } else {
+            startRecording();
+          }
+        }
+      });
+    }
+  }, [onRegisterVoiceTrigger, voiceSupported, isLoading, isRecording]);
+
+  // Handle voice trigger from keyboard shortcut
+  useEffect(() => {
+    if (triggerVoice) {
+      if (voiceSupported && !isLoading && !isRecording && !isTranscribing) {
+        startRecording();
+      }
+      // Always clear the trigger regardless of whether recording started
+      onVoiceTriggered?.();
+    }
+  }, [triggerVoice, voiceSupported, isLoading, isRecording, isTranscribing, onVoiceTriggered]);
 
   const handleSend = async () => {
     if (!inputValue.trim() || isLoading) return;
@@ -441,9 +474,120 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
     }
   };
 
-  const startRecording = () => {
+  // Whisper API fallback: record audio with MediaRecorder and send to backend
+  const startWhisperRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Check MediaRecorder support
+      let mimeType = 'audio/webm';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/mp4';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'audio/ogg';
+          if (!MediaRecorder.isTypeSupported(mimeType)) {
+            mimeType = ''; // Let browser choose
+          }
+        }
+      }
+      
+      const mediaRecorder = mimeType 
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      
+      mediaRecorder.onstop = async () => {
+        stream.getTracks().forEach(track => track.stop());
+        setIsRecording(false); // Reset recording state immediately
+        
+        const audioBlob = new Blob(audioChunksRef.current, { type: mimeType || 'audio/webm' });
+        
+        if (audioBlob.size > 0) {
+          setIsTranscribing(true);
+          try {
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'recording.webm');
+            
+            const response = await fetch('/api/ai/transcribe', {
+              method: 'POST',
+              credentials: 'include',
+              body: formData
+            });
+            
+            if (response.ok) {
+              const { transcription } = await response.json();
+              if (transcription) {
+                setInputValue(transcription);
+              }
+            } else {
+              toast({
+                title: 'Transcription failed',
+                description: 'Could not process your voice input. Please try again.',
+                variant: 'destructive'
+              });
+            }
+          } catch (error) {
+            console.error('Transcription error:', error);
+            toast({
+              title: 'Transcription failed', 
+              description: 'Could not process your voice input. Please try again.',
+              variant: 'destructive'
+            });
+          } finally {
+            setIsTranscribing(false);
+          }
+        }
+      };
+      
+      mediaRecorder.onerror = () => {
+        stream.getTracks().forEach(track => track.stop());
+        setIsRecording(false);
+        toast({
+          title: 'Recording failed',
+          description: 'Could not record audio. Please try again.',
+          variant: 'destructive'
+        });
+      };
+      
+      mediaRecorder.start();
+      mediaRecorderRef.current = mediaRecorder;
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Failed to start recording:', error);
+      setIsRecording(false);
+      setVoiceSupported(false);
+      toast({
+        title: 'Microphone access denied',
+        description: 'Please allow microphone access in your browser settings.',
+        variant: 'destructive'
+      });
+    }
+  };
+  
+  const stopWhisperRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      mediaRecorderRef.current = null;
+    }
+    // Note: isRecording is reset in onstop handler
+  };
+
+  // Web Speech API: browser-native speech recognition
+  const startWebSpeechRecording = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+      // Fall back to Whisper if Web Speech not available
+      console.log('[AI Magic] Web Speech API not available, using Whisper fallback');
+      setUseWhisperFallback(true);
+      startWhisperRecording();
+      return;
+    }
 
     const recognition = new SpeechRecognition();
     recognition.lang = 'en-GB';
@@ -463,7 +607,6 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
       // Auto-stop after getting a final result to allow user to send
       const lastResult = event.results[event.results.length - 1];
       if (lastResult.isFinal) {
-        // Give a brief moment for the user to see the result, then stop
         setTimeout(() => {
           if (recognitionRef.current) {
             recognitionRef.current.stop();
@@ -474,27 +617,38 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
 
     recognition.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
+      recognitionRef.current = null;
       setIsRecording(false);
       
-      // Show user-friendly error for common issues
       if (event.error === 'not-allowed') {
+        setVoiceSupported(false);
         toast({
           title: 'Microphone access denied',
           description: 'Please allow microphone access in your browser settings.',
           variant: 'destructive'
         });
       } else if (event.error === 'no-speech') {
-        // No speech detected - this is normal, just stop quietly
+        // No speech detected - normal, just stop quietly
       } else if (event.error === 'network') {
+        // Network error - switch to Whisper fallback for future recordings
+        console.log('[AI Magic] Switching to Whisper fallback due to network error');
+        setUseWhisperFallback(true);
         toast({
-          title: 'Voice recognition unavailable',
-          description: 'Please check your internet connection.',
-          variant: 'destructive'
+          title: 'Switching to backup voice mode',
+          description: 'Browser speech unavailable. Using AI transcription instead.',
         });
+        // Start Whisper recording immediately
+        startWhisperRecording();
+      } else {
+        // Other errors - try Whisper fallback
+        console.log('[AI Magic] Speech recognition error, trying Whisper fallback:', event.error);
+        setUseWhisperFallback(true);
+        startWhisperRecording();
       }
     };
 
     recognition.onend = () => {
+      recognitionRef.current = null;
       setIsRecording(false);
     };
 
@@ -504,11 +658,16 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
       recognition.start();
     } catch (error) {
       console.error('Failed to start speech recognition:', error);
+      recognitionRef.current = null;
       setIsRecording(false);
+      // Try Whisper fallback
+      console.log('[AI Magic] Web Speech start failed, using Whisper fallback');
+      setUseWhisperFallback(true);
+      startWhisperRecording();
     }
   };
-
-  const stopRecording = () => {
+  
+  const stopWebSpeechRecording = () => {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       recognitionRef.current = null;
@@ -516,9 +675,38 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
     setIsRecording(false);
   };
 
+  // Main recording functions - choose mode based on fallback state
+  const startRecording = () => {
+    if (!voiceSupported) {
+      toast({
+        title: 'Voice input unavailable',
+        description: 'Microphone access was denied. Please enable it in your browser settings.',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    if (useWhisperFallback) {
+      startWhisperRecording();
+    } else {
+      startWebSpeechRecording();
+    }
+  };
+
+  const stopRecording = () => {
+    if (useWhisperFallback) {
+      stopWhisperRecording();
+    } else {
+      stopWebSpeechRecording();
+    }
+  };
+
   const toggleRecording = () => {
     if (isRecording) {
       stopRecording();
+    } else if (isTranscribing) {
+      // Don't do anything if still transcribing
+      return;
     } else {
       startRecording();
     }
@@ -643,12 +831,18 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  placeholder={isRecording ? "Listening..." : "Type or speak your request..."}
+                  placeholder={
+                    isTranscribing 
+                      ? "Transcribing..." 
+                      : isRecording 
+                        ? (useWhisperFallback ? "Recording..." : "Listening...") 
+                        : "Type or speak your request..."
+                  }
                   className={cn(
                     "pr-10 bg-background",
-                    isRecording && "border-red-500 animate-pulse"
+                    (isRecording || isTranscribing) && "border-red-500 animate-pulse"
                   )}
-                  disabled={isLoading}
+                  disabled={isLoading || isTranscribing}
                   data-testid="input-ai-message"
                 />
                 {voiceSupported && (
@@ -657,13 +851,16 @@ export function AIMagicChatPanel({ onClose }: AIMagicChatPanelProps) {
                     size="icon"
                     className={cn(
                       "absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7",
-                      isRecording && "text-red-500"
+                      (isRecording || isTranscribing) && "text-red-500"
                     )}
                     onClick={toggleRecording}
-                    disabled={isLoading}
+                    disabled={isLoading || isTranscribing}
                     data-testid="button-ai-voice"
+                    title={useWhisperFallback ? "Voice input (AI transcription)" : "Voice input"}
                   >
-                    {isRecording ? (
+                    {isTranscribing ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : isRecording ? (
                       <MicOff className="w-4 h-4" />
                     ) : (
                       <Mic className="w-4 h-4" />

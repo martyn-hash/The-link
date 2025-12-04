@@ -30,7 +30,7 @@ export class SearchStorage extends BaseStorage {
       )
       .limit(limit);
 
-    // Search people by name, email, phone
+    // Search people by name, email, phone - include their first related client
     const peopleResults = await db
       .select({
         id: people.id,
@@ -41,8 +41,13 @@ export class SearchStorage extends BaseStorage {
         primaryEmail: people.primaryEmail,
         primaryPhone: people.primaryPhone,
         occupation: people.occupation,
+        clientId: clientPeople.clientId,
+        clientName: clients.name,
+        isPrimaryContact: clientPeople.isPrimaryContact,
       })
       .from(people)
+      .leftJoin(clientPeople, eq(people.id, clientPeople.personId))
+      .leftJoin(clients, eq(clientPeople.clientId, clients.id))
       .where(
         or(
           ilike(people.fullName, searchTerm),
@@ -152,6 +157,9 @@ export class SearchStorage extends BaseStorage {
           description: person.occupation,
           metadata: {
             phone: person.primaryPhone,
+            primaryPhone: person.primaryPhone,
+            primaryEmail: person.primaryEmail || (person as any).email,
+            clientId: (person as any).clientId,
             clientName: (person as any).clientName,
             isPrimaryContact: (person as any).isPrimaryContact,
           }

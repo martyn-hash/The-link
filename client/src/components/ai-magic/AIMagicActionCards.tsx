@@ -158,12 +158,14 @@ interface PersonSearchResult {
   id: string;
   type: 'person';
   title: string;
+  subtitle?: string;
   description?: string;
   metadata?: {
     clientId?: string;
     clientName?: string;
     primaryEmail?: string;
     primaryPhone?: string;
+    phone?: string;
   };
 }
 
@@ -214,7 +216,9 @@ function RecipientSelector({
   // Filter to only show people with the required contact type
   const filteredResults = (searchResults?.people || []).filter(p => {
     if (contactType === 'email') {
-      return p.metadata?.primaryEmail && p.metadata.primaryEmail.trim() !== '';
+      // Check both metadata.primaryEmail and subtitle (fallback) for email
+      const email = p.metadata?.primaryEmail || p.subtitle;
+      return email && email.trim() !== '';
     } else {
       return p.metadata?.primaryPhone && p.metadata.primaryPhone.trim() !== '';
     }
@@ -229,7 +233,7 @@ function RecipientSelector({
       id: person.id,
       firstName,
       lastName,
-      email: person.metadata?.primaryEmail,
+      email: person.metadata?.primaryEmail || person.subtitle,
       telephone: person.metadata?.primaryPhone,
       clientId: person.metadata?.clientId || '',
       clientName: person.metadata?.clientName || ''
@@ -296,16 +300,17 @@ function RecipientSelector({
                 <div className="flex items-center gap-2">
                   <User className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm truncate">{person.title}</div>
-                    <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
+                    {/* Primary display: Person Name - Company Name */}
+                    <div className="font-medium text-sm truncate">
+                      {person.title}
                       {person.metadata?.clientName && (
-                        <span className="flex items-center gap-1">
-                          <Building2 className="w-3 h-3" />
-                          {person.metadata.clientName}
-                        </span>
+                        <span className="text-muted-foreground font-normal"> - {person.metadata.clientName}</span>
                       )}
-                      {contactType === 'email' && person.metadata?.primaryEmail && (
-                        <span className="text-sky-600 dark:text-sky-400">{person.metadata.primaryEmail}</span>
+                    </div>
+                    {/* Secondary: contact info */}
+                    <div className="text-xs text-muted-foreground">
+                      {contactType === 'email' && (person.metadata?.primaryEmail || person.subtitle) && (
+                        <span className="text-sky-600 dark:text-sky-400">{person.metadata?.primaryEmail || person.subtitle}</span>
                       )}
                       {contactType === 'mobile' && person.metadata?.primaryPhone && (
                         <span className="text-emerald-600 dark:text-emerald-400">{person.metadata.primaryPhone}</span>
