@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { format, parseISO } from 'date-fns';
+import { useAuth } from '@/hooks/useAuth';
 import { 
   Bell, 
   CheckSquare, 
@@ -44,10 +45,13 @@ interface ActionCardProps {
 
 export function ReminderActionCard({ functionCall, onComplete, onDismiss }: ActionCardProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const args = functionCall.arguments;
+  const suggestedClientName = args.clientName as string | undefined;
   
   const [title, setTitle] = useState(args.title as string || '');
   const [description, setDescription] = useState(args.details as string || '');
+  const [clientId, setClientId] = useState<string>('');
   const [dueDate, setDueDate] = useState(() => {
     if (args.dateTime) {
       try {
@@ -68,6 +72,17 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
   });
   const [isEditing, setIsEditing] = useState(false);
 
+  const { data: clients } = useQuery<{ id: string; name: string }[]>({
+    queryKey: ['/api/clients'],
+  });
+
+  const matchedClient = clients?.find(c => {
+    const clientName = suggestedClientName?.toLowerCase() || '';
+    return c.name.toLowerCase().includes(clientName) || clientName.includes(c.name.toLowerCase());
+  });
+
+  const effectiveClientId = clientId || matchedClient?.id || '';
+
   const isValid = title.trim().length > 0 && dueDate.length > 0 && dueTime.length > 0;
   
   const createMutation = useMutation({
@@ -75,19 +90,39 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
       if (!isValid) {
         throw new Error('Please fill in all required fields');
       }
+      if (!user?.id) {
+        throw new Error('You must be logged in to create a reminder');
+      }
       const dueDateTime = new Date(`${dueDate}T${dueTime}`);
       if (isNaN(dueDateTime.getTime())) {
         throw new Error('Invalid date/time');
       }
-      return await apiRequest('POST', '/api/reminders', {
-        name: title.trim(),
-        details: description?.trim() || undefined,
+      
+      const reminder = await apiRequest('POST', '/api/internal-tasks', {
+        title: title.trim(),
+        description: description?.trim() || undefined,
         dueDate: dueDateTime.toISOString(),
+        assignedTo: user.id,
+        isQuickReminder: true,
+        priority: 'medium',
       });
+      
+      if (effectiveClientId && reminder.id) {
+        try {
+          await apiRequest('POST', `/api/internal-tasks/${reminder.id}/connections`, {
+            connections: [{ entityType: 'client', entityId: effectiveClientId }]
+          });
+        } catch (e) {
+          console.warn('Failed to link client to reminder:', e);
+        }
+      }
+      
+      return reminder;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ predicate: q => 
-        typeof q.queryKey[0] === 'string' && q.queryKey[0].includes('reminder')
+        typeof q.queryKey[0] === 'string' && 
+        (q.queryKey[0].includes('reminder') || q.queryKey[0].includes('internal-task'))
       });
       toast({ title: 'Reminder created', description: `"${title}" has been set.` });
       onComplete(true, `Created reminder: "${title}"`);
@@ -97,6 +132,9 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
       onComplete(false, error.message);
     }
   });
+  
+  const clientName = clients?.find(c => c.id === effectiveClientId)?.name 
+    || (suggestedClientName ? `${suggestedClientName} (suggested)` : 'None');
 
   const formattedDateTime = dueDate && dueTime 
     ? format(new Date(`${dueDate}T${dueTime}`), "d MMM yyyy 'at' h:mm a")
@@ -156,6 +194,24 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
               />
             </div>
           </div>
+          <div>
+            <Label className="text-xs text-muted-foreground">
+              Link to Client {matchedClient ? '(AI suggested)' : '(optional)'}
+            </Label>
+            <Select value={effectiveClientId} onValueChange={setClientId}>
+              <SelectTrigger className="h-8 text-sm" data-testid="select-reminder-client">
+                <SelectValue placeholder="Select client..." />
+              </SelectTrigger>
+              <SelectContent className="z-[100]">
+                <SelectItem value="">None</SelectItem>
+                {clients?.map(c => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       ) : (
         <div className="space-y-1 text-sm">
@@ -165,6 +221,12 @@ export function ReminderActionCard({ functionCall, onComplete, onDismiss }: Acti
             <Calendar className="w-3 h-3" />
             {formattedDateTime}
           </div>
+          {effectiveClientId && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <User className="w-3 h-3" />
+              {clientName}
+            </div>
+          )}
         </div>
       )}
 
@@ -362,7 +424,7 @@ export function TaskActionCard({ functionCall, onComplete, onDismiss }: ActionCa
                 <SelectTrigger className={cn("h-8 text-sm", !effectiveTaskTypeId && "border-amber-400")} data-testid="select-task-type">
                   <SelectValue placeholder="Select type..." />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[100]">
                   {taskTypes?.map(t => (
                     <SelectItem key={t.id} value={t.id}>
                       {t.name}
@@ -377,7 +439,7 @@ export function TaskActionCard({ functionCall, onComplete, onDismiss }: ActionCa
                 <SelectTrigger className="h-8 text-sm" data-testid="select-task-priority">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[100]">
                   <SelectItem value="low">Low</SelectItem>
                   <SelectItem value="medium">Medium</SelectItem>
                   <SelectItem value="high">High</SelectItem>
@@ -393,7 +455,7 @@ export function TaskActionCard({ functionCall, onComplete, onDismiss }: ActionCa
                 <SelectTrigger className="h-8 text-sm" data-testid="select-task-assignee">
                   <SelectValue placeholder="Select..." />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[100]">
                   {users?.map(u => (
                     <SelectItem key={u.id} value={u.id}>
                       {u.firstName} {u.lastName}
