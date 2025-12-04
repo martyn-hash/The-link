@@ -294,13 +294,14 @@ export function AIMagicChatPanel({ onClose, triggerVoice, onVoiceTriggered, onRe
     }
   }, [triggerVoice, voiceSupported, isLoading, isRecording, isTranscribing, onVoiceTriggered]);
 
-  const handleSend = async () => {
-    if (!inputValue.trim() || isLoading) return;
+  const handleSend = async (directMessage?: string) => {
+    const messageText = directMessage || inputValue.trim();
+    if (!messageText || isLoading) return;
 
     const userMessage: AIMessage = {
       id: nanoid(),
       role: 'user',
-      content: inputValue.trim(),
+      content: messageText,
       timestamp: new Date(),
     };
 
@@ -523,7 +524,10 @@ export function AIMagicChatPanel({ onClose, triggerVoice, onVoiceTriggered, onRe
             if (response.ok) {
               const { transcription } = await response.json();
               if (transcription) {
-                setInputValue(transcription);
+                // Auto-send the transcription directly to the AI
+                setIsTranscribing(false);
+                handleSend(transcription);
+                return;
               }
             } else {
               toast({
@@ -539,9 +543,8 @@ export function AIMagicChatPanel({ onClose, triggerVoice, onVoiceTriggered, onRe
               description: 'Could not process your voice input. Please try again.',
               variant: 'destructive'
             });
-          } finally {
-            setIsTranscribing(false);
           }
+          setIsTranscribing(false);
         }
       };
       
@@ -598,20 +601,30 @@ export function AIMagicChatPanel({ onClose, triggerVoice, onVoiceTriggered, onRe
       setIsRecording(true);
     };
 
+    let finalTranscript = '';
+    
     recognition.onresult = (event) => {
       const transcript = Array.from(event.results)
         .map(result => result[0].transcript)
         .join('');
-      setInputValue(transcript);
       
-      // Auto-stop after getting a final result to allow user to send
+      // Check if we have a final result
       const lastResult = event.results[event.results.length - 1];
       if (lastResult.isFinal) {
-        setTimeout(() => {
-          if (recognitionRef.current) {
-            recognitionRef.current.stop();
-          }
-        }, 500);
+        finalTranscript = transcript;
+        // Stop recognition and auto-send will happen in onend
+        if (recognitionRef.current) {
+          recognitionRef.current.stop();
+        }
+      }
+    };
+    
+    recognition.onend = () => {
+      recognitionRef.current = null;
+      setIsRecording(false);
+      // Auto-send the final transcript if we have one
+      if (finalTranscript.trim()) {
+        handleSend(finalTranscript.trim());
       }
     };
 
@@ -645,11 +658,6 @@ export function AIMagicChatPanel({ onClose, triggerVoice, onVoiceTriggered, onRe
         setUseWhisperFallback(true);
         startWhisperRecording();
       }
-    };
-
-    recognition.onend = () => {
-      recognitionRef.current = null;
-      setIsRecording(false);
     };
 
     recognitionRef.current = recognition;
@@ -869,7 +877,7 @@ export function AIMagicChatPanel({ onClose, triggerVoice, onVoiceTriggered, onRe
                 )}
               </div>
               <Button
-                onClick={handleSend}
+                onClick={() => handleSend()}
                 disabled={!inputValue.trim() || isLoading}
                 size="icon"
                 className="shrink-0"
