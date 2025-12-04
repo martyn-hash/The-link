@@ -70,6 +70,7 @@ export const internalTasks = pgTable("internal_tasks", {
   closureNote: text("closure_note"),
   totalTimeSpentMinutes: integer("total_time_spent_minutes").default(0),
   isQuickReminder: boolean("is_quick_reminder").default(false),
+  reminderNotificationSentAt: timestamp("reminder_notification_sent_at"),
   isArchived: boolean("is_archived").default(false),
   archivedAt: timestamp("archived_at"),
   archivedBy: varchar("archived_by").references(() => users.id),

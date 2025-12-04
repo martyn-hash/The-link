@@ -45,7 +45,7 @@ import {
   ChevronRight,
   Bell,
 } from "lucide-react";
-import type { InternalTask, TaskType, User } from "@shared/schema";
+import type { InternalTask, TaskType, User, Client, Project, Person } from "@shared/schema";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { CreateReminderDialog } from "@/components/create-reminder-dialog";
 import { ReminderViewModal } from "@/components/reminder-view-modal";
@@ -54,10 +54,20 @@ import TopNavigation from "@/components/top-navigation";
 import { format } from "date-fns";
 import PullToRefresh from "react-simple-pull-to-refresh";
 
+interface TaskConnection {
+  id: string;
+  entityType: string;
+  entityId: string;
+  client?: Client | null;
+  project?: Project | null;
+  person?: Person | null;
+}
+
 interface InternalTaskWithRelations extends InternalTask {
   taskType?: TaskType | null;
   assignee?: User | null;
   creator?: User | null;
+  connections?: TaskConnection[];
 }
 
 function TaskRow({ task, selected, onSelect, onViewClick }: {
@@ -190,6 +200,23 @@ function ReminderRow({ task, selected, onSelect, onViewClick }: {
     return format(dateObj, 'h:mm a');
   };
 
+  const getLinkedEntityName = () => {
+    if (!task.connections || task.connections.length === 0) return null;
+    const conn = task.connections[0];
+    if (conn.entityType === 'client' && conn.client) {
+      return conn.client.name;
+    }
+    if (conn.entityType === 'project' && conn.project) {
+      return conn.project.description || 'Project';
+    }
+    if (conn.entityType === 'person' && conn.person) {
+      return `${conn.person.firstName} ${conn.person.lastName}`;
+    }
+    return null;
+  };
+
+  const linkedEntityName = getLinkedEntityName();
+
   return (
     <TableRow data-testid={`row-reminder-${task.id}`}>
       <TableCell className="w-12">
@@ -211,6 +238,11 @@ function ReminderRow({ task, selected, onSelect, onViewClick }: {
             {task.description}
           </p>
         )}
+      </TableCell>
+      <TableCell>
+        <span className="text-sm text-primary" data-testid={`text-linked-${task.id}`}>
+          {linkedEntityName || '-'}
+        </span>
       </TableCell>
       <TableCell>
         <Badge variant="outline" className={`text-xs ${getStatusColor(task.status)}`} data-testid={`badge-status-${task.id}`}>
@@ -648,6 +680,7 @@ export default function InternalTasks() {
               />
             </TableHead>
             <TableHead>Reminder</TableHead>
+            <TableHead>Linked To</TableHead>
             <TableHead>Status</TableHead>
             <TableHead>Assigned To</TableHead>
             <TableHead>Due Date & Time</TableHead>

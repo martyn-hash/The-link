@@ -24,7 +24,7 @@ import {
   Loader2,
   X,
 } from "lucide-react";
-import type { InternalTask, TaskType, User as UserType, Client, Project } from "@shared/schema";
+import type { InternalTask, TaskType, User as UserType, Client, Project, Person } from "@shared/schema";
 import { format } from "date-fns";
 
 interface InternalTaskWithRelations extends InternalTask {
@@ -39,6 +39,7 @@ interface TaskConnection {
   entityId: string;
   client?: Client | null;
   project?: Project | null;
+  person?: Person | null;
 }
 
 interface ReminderViewModalProps {
@@ -213,6 +214,11 @@ export function ReminderViewModal({ reminder, open, onOpenChange }: ReminderView
                       )}
                       {conn.entityType === 'project' && conn.project && (
                         <span className="text-primary">{conn.project.description || 'Project'}</span>
+                      )}
+                      {conn.entityType === 'person' && conn.person && (
+                        <span className="text-primary">
+                          {conn.person.firstName} {conn.person.lastName}
+                        </span>
                       )}
                     </div>
                   ))}

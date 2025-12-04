@@ -30,6 +30,31 @@ const taskDocumentUpload = multer({
 // Use Replit object storage client
 const privateDir = process.env.PRIVATE_OBJECT_DIR || '';
 
+// Helper function to add connections with entity data to tasks
+async function addConnectionsToTasks(tasks: any[]) {
+  return Promise.all(tasks.map(async (task) => {
+    const connections = await storage.getTaskConnectionsByTaskId(task.id);
+    const connectionsWithEntities = await Promise.all(
+      connections.map(async (conn) => {
+        let client = null;
+        let project = null;
+        let person = null;
+        
+        if (conn.entityType === 'client') {
+          client = await storage.getClientById(conn.entityId);
+        } else if (conn.entityType === 'project') {
+          project = await storage.getProject(conn.entityId);
+        } else if (conn.entityType === 'person') {
+          person = await storage.getPersonById(conn.entityId);
+        }
+        
+        return { ...conn, client, project, person };
+      })
+    );
+    return { ...task, connections: connectionsWithEntities };
+  }));
+}
+
 export function registerInternalTaskRoutes(
   app: Express,
   isAuthenticated: any,
@@ -107,7 +132,8 @@ export function registerInternalTaskRoutes(
       if (req.query.creatorId) filters.creatorId = req.query.creatorId as string;
 
       const tasks = await storage.getAllInternalTasks(filters);
-      res.json(tasks);
+      const tasksWithConnections = await addConnectionsToTasks(tasks);
+      res.json(tasksWithConnections);
     } catch (error) {
       console.error("Error fetching internal tasks:", error);
       res.status(500).json({ message: "Failed to fetch internal tasks" });
@@ -129,7 +155,8 @@ export function registerInternalTaskRoutes(
       if (req.query.priority) filters.priority = req.query.priority as string;
 
       const tasks = await storage.getInternalTasksByAssignee(actualUserId, filters);
-      res.json(tasks);
+      const tasksWithConnections = await addConnectionsToTasks(tasks);
+      res.json(tasksWithConnections);
     } catch (error) {
       console.error("Error fetching assigned tasks:", error);
       res.status(500).json({ message: "Failed to fetch assigned tasks" });
@@ -151,7 +178,8 @@ export function registerInternalTaskRoutes(
       if (req.query.priority) filters.priority = req.query.priority as string;
 
       const tasks = await storage.getInternalTasksByCreator(actualUserId, filters);
-      res.json(tasks);
+      const tasksWithConnections = await addConnectionsToTasks(tasks);
+      res.json(tasksWithConnections);
     } catch (error) {
       console.error("Error fetching created tasks:", error);
       res.status(500).json({ message: "Failed to fetch created tasks" });
@@ -484,7 +512,32 @@ export function registerInternalTaskRoutes(
   app.get("/api/internal-tasks/:taskId/connections", isAuthenticated, async (req, res) => {
     try {
       const connections = await storage.getTaskConnectionsByTaskId(req.params.taskId);
-      res.json(connections);
+      
+      // Fetch related entities for each connection
+      const connectionsWithEntities = await Promise.all(
+        connections.map(async (conn) => {
+          let client = null;
+          let project = null;
+          let person = null;
+          
+          if (conn.entityType === 'client') {
+            client = await storage.getClientById(conn.entityId);
+          } else if (conn.entityType === 'project') {
+            project = await storage.getProject(conn.entityId);
+          } else if (conn.entityType === 'person') {
+            person = await storage.getPersonById(conn.entityId);
+          }
+          
+          return {
+            ...conn,
+            client,
+            project,
+            person,
+          };
+        })
+      );
+      
+      res.json(connectionsWithEntities);
     } catch (error) {
       console.error("Error fetching task connections:", error);
       res.status(500).json({ message: "Failed to fetch task connections" });
@@ -745,6 +798,17 @@ export function registerInternalTaskRoutes(
     } catch (error) {
       console.error("Error deleting task document:", error);
       res.status(400).json({ message: "Failed to delete document" });
+    }
+  });
+
+  app.post("/api/admin/trigger-reminder-notifications", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const { triggerReminderProcessing } = await import("../reminder-notification-cron");
+      await triggerReminderProcessing();
+      res.json({ message: "Reminder notification processing triggered" });
+    } catch (error) {
+      console.error("Error triggering reminder notifications:", error);
+      res.status(500).json({ message: "Failed to trigger reminder notifications" });
     }
   });
 }
