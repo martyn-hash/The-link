@@ -1,9 +1,11 @@
 import { z } from 'zod';
-import { bookkeepingQueries } from './tables';
+import { bookkeepingQueries, queryResponseTokens } from './tables';
 import {
   insertBookkeepingQuerySchema,
   updateBookkeepingQuerySchema,
   bulkCreateQueriesSchema,
+  insertQueryResponseTokenSchema,
+  sendToClientSchema,
 } from './schemas';
 import type { User } from '../users/types';
 import type { Project } from '../projects/types';
@@ -18,4 +20,14 @@ export type BookkeepingQueryWithRelations = BookkeepingQuery & {
   answeredBy?: User;
   resolvedBy?: User;
   project?: Project;
+};
+
+export type QueryResponseToken = typeof queryResponseTokens.$inferSelect;
+export type InsertQueryResponseToken = z.infer<typeof insertQueryResponseTokenSchema>;
+export type SendToClientInput = z.infer<typeof sendToClientSchema>;
+
+export type QueryResponseTokenWithRelations = QueryResponseToken & {
+  createdBy?: User;
+  project?: Project;
+  queries?: BookkeepingQuery[];
 };

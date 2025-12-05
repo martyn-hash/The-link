@@ -1,6 +1,6 @@
 import { createInsertSchema } from 'drizzle-zod';
 import { z } from 'zod';
-import { bookkeepingQueries } from './tables';
+import { bookkeepingQueries, queryResponseTokens } from './tables';
 
 const baseInsertSchema = createInsertSchema(bookkeepingQueries).omit({
   id: true,
@@ -36,4 +36,29 @@ export const bulkCreateQueriesSchema = z.object({
     createdById: true,
     status: true,
   })),
+});
+
+// Query Response Token schemas
+const baseTokenInsertSchema = createInsertSchema(queryResponseTokens).omit({
+  id: true,
+  createdAt: true,
+  accessedAt: true,
+  completedAt: true,
+});
+
+export const insertQueryResponseTokenSchema = baseTokenInsertSchema.extend({
+  expiresAt: z.union([z.string(), z.date()]).transform((val) => {
+    if (val instanceof Date) return val;
+    return new Date(val);
+  }),
+});
+
+export const sendToClientSchema = z.object({
+  queryIds: z.array(z.string()).min(1, "At least one query is required"),
+  recipientEmail: z.string().email("Valid email required"),
+  recipientName: z.string().optional(),
+  expiryDays: z.number().min(1).max(30).default(14),
+  sendEmail: z.boolean().default(true),
+  emailSubject: z.string().optional(),
+  emailMessage: z.string().optional(),
 });
