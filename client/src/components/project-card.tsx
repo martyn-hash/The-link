@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { GripVertical, AlertCircle, Clock, Info, MessageSquare, Check } from "lucide-react";
+import { GripVertical, AlertCircle, Clock, Info, MessageSquare, Check, HelpCircle } from "lucide-react";
 import type { ProjectWithRelations, KanbanStage, User } from "@shared/schema";
 import { calculateCurrentInstanceTime } from "@shared/businessTime";
 import { useAuth } from "@/hooks/useAuth";
@@ -28,6 +28,7 @@ interface ProjectCardProps extends React.HTMLAttributes<HTMLDivElement> {
   onShowMessages?: (projectId: string) => void;
   isSelected?: boolean;
   onSelectToggle?: (projectId: string) => void;
+  openQueryCount?: number; // Number of open bookkeeping queries
 }
 
 const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({ 
@@ -39,6 +40,7 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
   onShowMessages,
   isSelected = false,
   onSelectToggle,
+  openQueryCount = 0,
   ...props
 }, forwardedRef) => {
   // Get authentication state
@@ -233,27 +235,23 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
     }
   }, [project.chronology, project.currentStatus, project.createdAt]);
 
-  // Format business hours for display
-  const formatBusinessHours = (hours: number): string => {
-    if (hours === 0) return "0 business hours";
-    if (hours < 1) return "< 1 business hour";
+  // Format business hours for compact display (e.g., "2D 7H")
+  const formatBusinessHoursCompact = (hours: number): string => {
+    if (hours === 0) return "0H";
+    if (hours < 1) return "< 1H";
     
-    const roundedHours = Math.round(hours * 10) / 10; // Round to 1 decimal place
+    const roundedHours = Math.round(hours);
     
-    if (roundedHours === 1) {
-      return "1 business hour";
-    } else if (roundedHours < 24) {
-      return `${roundedHours} business hours`;
+    if (roundedHours < 24) {
+      return `${roundedHours}H`;
     } else {
       const days = Math.floor(roundedHours / 24);
-      const remainingHours = Math.round((roundedHours % 24) * 10) / 10;
+      const remainingHours = Math.round(roundedHours % 24);
       
       if (remainingHours === 0) {
-        return days === 1 ? "1 business day" : `${days} business days`;
+        return `${days}D`;
       } else {
-        const dayText = days === 1 ? "day" : "days";
-        const hourText = remainingHours === 1 ? "hour" : "hours";
-        return `${days} business ${dayText}, ${remainingHours} ${hourText}`;
+        return `${days}D ${remainingHours}H`;
       }
     }
   };
@@ -374,24 +372,23 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
     return remaining;
   }, [currentBusinessHours, effectiveStageConfig?.maxInstanceTime]);
 
-  // Format time for display (without "business" keyword)
+  // Format time for compact display (e.g., "2D 7H to go" or "Overdue")
   const formatTimeUntilDue = (hours: number | null): string => {
     if (hours === null) return "No deadline";
     if (hours <= 0) return "Overdue";
     
-    const roundedHours = Math.round(hours * 10) / 10;
+    const roundedHours = Math.round(hours);
     
-    if (roundedHours < 1) return "< 1 hour until due";
-    if (roundedHours === 1) return "1 hour until due";
-    if (roundedHours < 24) return `${roundedHours} hours until due`;
+    if (roundedHours < 1) return "< 1H to go";
+    if (roundedHours < 24) return `${roundedHours}H to go`;
     
     const days = Math.floor(roundedHours / 24);
-    const remainingHours = Math.round((roundedHours % 24) * 10) / 10;
+    const remainingHours = Math.round(roundedHours % 24);
     
     if (remainingHours === 0) {
-      return days === 1 ? "1 day until due" : `${days} days until due`;
+      return `${days}D to go`;
     } else {
-      return `${days} ${days === 1 ? 'day' : 'days'}, ${remainingHours} hours until due`;
+      return `${days}D ${remainingHours}H to go`;
     }
   };
 
@@ -487,6 +484,17 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
                 }`}
               >
                 {formattedTimeUntilDue}
+              </span>
+            )}
+            {/* Open queries indicator */}
+            {openQueryCount > 0 && (
+              <span 
+                className="inline-flex items-center gap-0.5 text-xs text-amber-600 dark:text-amber-400 whitespace-nowrap"
+                title={`${openQueryCount} open ${openQueryCount === 1 ? 'query' : 'queries'}`}
+                data-testid={`query-count-${project.id}`}
+              >
+                <HelpCircle className="w-3 h-3" />
+                {openQueryCount}
               </span>
             )}
           </div>

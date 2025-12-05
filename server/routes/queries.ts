@@ -93,6 +93,28 @@ export function registerQueryRoutes(
     }
   });
 
+  // GET /api/queries/counts - Get open query counts for multiple projects (batch)
+  app.get("/api/queries/counts", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Get all projects for the current user context
+      const projects = await storage.getAllProjects({ archived: false });
+      const projectIds = projects.map((p: any) => p.id);
+      
+      const countsMap = await storage.getOpenQueryCountsBatch(projectIds);
+      
+      // Convert Map to object for JSON response
+      const counts: Record<string, number> = {};
+      countsMap.forEach((count, projectId) => {
+        counts[projectId] = count;
+      });
+      
+      res.json(counts);
+    } catch (error) {
+      console.error("Error fetching query counts:", error);
+      res.status(500).json({ message: "Failed to fetch query counts" });
+    }
+  });
+
   // GET /api/queries/:id - Get a specific query by ID
   app.get("/api/queries/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {

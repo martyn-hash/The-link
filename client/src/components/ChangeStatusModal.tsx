@@ -1033,6 +1033,7 @@ export default function ChangeStatusModal({
       // Refresh data immediately so user sees the change
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id, "queries"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/queries/counts"] });
       onStatusUpdated?.();
       
       // Reset form state - stage change is complete

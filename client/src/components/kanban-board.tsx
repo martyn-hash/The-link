@@ -191,6 +191,14 @@ export default function KanbanBoard({
   // Get authentication state
   const { isAuthenticated, user: authUser } = useAuth();
   
+  // Fetch query counts for all projects (batch query)
+  const { data: queryCounts = {} } = useQuery<Record<string, number>>({
+    queryKey: ['/api/queries/counts'],
+    enabled: isAuthenticated && !!authUser,
+    staleTime: 30 * 1000, // 30 seconds - refresh frequently for query counts
+    refetchInterval: 60 * 1000, // Refetch every minute
+  });
+  
   // Handler for toggling project selection (CTRL+Click)
   const handleSelectToggle = (projectId: string) => {
     setSelectedProjectIds(prev => {
@@ -970,6 +978,7 @@ export default function KanbanBoard({
                                   onShowMessages={handleShowMessages}
                                   isSelected={selectedProjectIds.has(project.id)}
                                   onSelectToggle={handleSelectToggle}
+                                  openQueryCount={queryCounts[project.id] || 0}
                                 />
                               </StageChangePopover>
                             );
@@ -1002,6 +1011,7 @@ export default function KanbanBoard({
               stageConfig={stages?.find(s => s.name === activeProject.currentStatus)}
               onOpenModal={() => navigateToProject(activeProject.id)}
               isDragging
+              openQueryCount={queryCounts[activeProject.id] || 0}
             />
           ) : null}
         </DragOverlay>

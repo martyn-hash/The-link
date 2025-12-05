@@ -179,6 +179,7 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/queries/counts'] });
       resetAddForm();
       setIsAddDialogOpen(false);
       toast({ title: "Query created", description: "Your query has been added." });
@@ -205,6 +206,7 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/queries/counts'] });
       setIsEditDialogOpen(false);
       setEditingQuery(null);
       toast({ title: "Query updated", description: "Query has been updated." });
@@ -220,6 +222,7 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/queries/counts'] });
       toast({ title: "Query deleted", description: "Query has been removed." });
     },
     onError: () => {
@@ -233,6 +236,7 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/queries/counts'] });
       setSelectedQueries([]);
       toast({ 
         title: "Queries updated", 
@@ -250,6 +254,7 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
     },
     onSuccess: (_, ids) => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/queries/counts'] });
       setSelectedQueries([]);
       toast({ 
         title: "Queries sent", 

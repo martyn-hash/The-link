@@ -86,6 +86,34 @@ export class QueryStorage extends BaseStorage {
     return result?.count || 0;
   }
 
+  async getOpenQueryCountsBatch(projectIds: string[]): Promise<Map<string, number>> {
+    const result = new Map<string, number>();
+    
+    if (projectIds.length === 0) {
+      return result;
+    }
+
+    const counts = await db
+      .select({
+        projectId: bookkeepingQueries.projectId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(bookkeepingQueries)
+      .where(
+        and(
+          inArray(bookkeepingQueries.projectId, projectIds),
+          inArray(bookkeepingQueries.status, ['open', 'sent_to_client'])
+        )
+      )
+      .groupBy(bookkeepingQueries.projectId);
+
+    for (const row of counts) {
+      result.set(row.projectId, row.count);
+    }
+
+    return result;
+  }
+
   async updateQuery(id: string, data: UpdateBookkeepingQuery, userId?: string): Promise<BookkeepingQuery> {
     const updates: any = { ...data };
     

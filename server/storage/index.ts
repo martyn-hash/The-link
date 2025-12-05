@@ -3435,8 +3435,12 @@ export class DatabaseStorage implements IStorage {
     return this.queryStorage.getOpenQueryCountByProjectId(projectId);
   }
 
-  async updateQuery(id: string, query: any) {
-    return this.queryStorage.updateQuery(id, query);
+  async getOpenQueryCountsBatch(projectIds: string[]) {
+    return this.queryStorage.getOpenQueryCountsBatch(projectIds);
+  }
+
+  async updateQuery(id: string, query: any, userId?: string) {
+    return this.queryStorage.updateQuery(id, query, userId);
   }
 
   async deleteQuery(id: string) {
