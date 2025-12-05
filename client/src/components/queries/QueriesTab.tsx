@@ -163,7 +163,13 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   
   // Email dialog state
   const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
-  const [emailInitialValues, setEmailInitialValues] = useState<{ subject?: string; content?: string }>({});
+  const [emailInitialValues, setEmailInitialValues] = useState<{ 
+    subject?: string; 
+    content?: string;
+    emailIntro?: string;
+    protectedHtml?: string;
+    emailSignoff?: string;
+  }>({});
   const [pendingEmailQueryIds, setPendingEmailQueryIds] = useState<string[]>([]);
   const [pendingEmailTokenId, setPendingEmailTokenId] = useState<string | null>(null);
   const [isPreparingEmail, setIsPreparingEmail] = useState(false);
@@ -484,10 +490,14 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
       setPendingEmailTokenId(includeOnlineLink ? response.tokenId : null);
       setPendingEmailQueryIds(sendOptionsQueryIds);
       
-      // Set initial values for email dialog
+      // Set initial values for email dialog with structured content for protected HTML
       setEmailInitialValues({
         subject: response.emailSubject,
         content: response.emailContent,
+        // Structured content for protected HTML handling
+        emailIntro: response.emailIntro,
+        protectedHtml: response.protectedHtml,
+        emailSignoff: response.emailSignoff,
       });
       
       // Open the email dialog

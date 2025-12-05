@@ -675,9 +675,10 @@ export function registerQueryRoutes(
   `).join('')}
 </table>`;
 
-      // Build the full email content - conditionally include link based on includeOnlineLink
+      // Build the email content in separate parts for protected HTML handling
       const emailSubject = `Bookkeeping Queries - ${project?.description || 'Your Account'}`;
       
+      // Link section (part of protected HTML)
       const linkSection = includeOnlineLink && fullResponseUrl ? `
 <p style="margin: 24px 0;">
   <a href="${fullResponseUrl}" style="display: inline-block; background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
@@ -688,19 +689,27 @@ export function registerQueryRoutes(
 <p style="color: #64748b; font-size: 14px;">This link will expire on ${formatDate(expiresAt)}.</p>
 ` : '';
 
-      const emailContent = `
-<p>Hello,</p>
+      // Editable intro section
+      const emailIntro = `<p>Hello,</p>
 
-<p>We have some questions about the following transactions that we need your help to clarify:</p>
+<p>We have some questions about the following transactions that we need your help to clarify:</p>`;
 
-${queriesTableHtml}
+      // Protected HTML block (table + button) - should not go through rich text editor
+      const protectedHtml = `${queriesTableHtml}
 
-${linkSection}
+${linkSection}`;
 
-<p>If you have any questions, please don't hesitate to get in touch.</p>
+      // Editable sign-off section
+      const emailSignoff = `<p>If you have any questions, please don't hesitate to get in touch.</p>
 
-<p>Best regards,<br>${sender?.firstName || 'The Team'}</p>
-`;
+<p>Best regards,<br>${sender?.firstName || 'The Team'}</p>`;
+
+      // Full combined content (for backward compatibility and final email)
+      const emailContent = `${emailIntro}
+
+${protectedHtml}
+
+${emailSignoff}`;
 
       res.json({
         tokenId: token?.id || null,
@@ -711,6 +720,10 @@ ${linkSection}
         fullResponseUrl,
         emailSubject,
         emailContent,
+        // New structured content for protected HTML handling
+        emailIntro,
+        protectedHtml,
+        emailSignoff,
         includeOnlineLink,
         project: project ? { id: project.id, description: project.description, clientId: project.clientId } : null,
         client: client ? { id: client.id, name: client.name } : null,

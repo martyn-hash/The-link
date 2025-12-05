@@ -123,6 +123,10 @@ export interface EmailDialogProps extends DialogBaseProps {
     recipientIds?: string[];
     subject?: string;
     content?: string;
+    /** Structured content for protected HTML handling (query emails) */
+    emailIntro?: string;
+    protectedHtml?: string;
+    emailSignoff?: string;
   };
 }
 

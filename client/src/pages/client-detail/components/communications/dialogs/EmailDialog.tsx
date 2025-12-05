@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Mail, Paperclip, Sparkles, Mic } from "lucide-react";
+import { Mail, Paperclip, Sparkles, Mic, Eye, Edit3, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { AudioRecorder } from "@/components/AudioRecorder";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -86,6 +87,15 @@ export function EmailDialog({
   const [isAttachmentsOpen, setIsAttachmentsOpen] = useState(false);
   const subjectInputRef = useRef<HTMLInputElement>(null);
   
+  // Protected HTML mode state (for query emails with tables/buttons)
+  const [emailIntro, setEmailIntro] = useState<string>('');
+  const [emailSignoff, setEmailSignoff] = useState<string>('');
+  const [showPreview, setShowPreview] = useState(false);
+  
+  // Check if we're in protected HTML mode
+  const hasProtectedHtml = Boolean(initialValues?.protectedHtml);
+  const protectedHtml = initialValues?.protectedHtml || '';
+  
   // Multiple recipient selection - initialize with AI-suggested recipients if provided
   const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(
     new Set(initialValues?.recipientIds || [])
@@ -102,14 +112,28 @@ export function EmailDialog({
       if (initialValues.subject) {
         setEmailSubject(initialValues.subject);
       }
-      if (initialValues.content) {
+      // Handle protected HTML mode separately
+      if (initialValues.protectedHtml) {
+        // Use structured content
+        setEmailIntro(initialValues.emailIntro || '');
+        setEmailSignoff(initialValues.emailSignoff || '');
+        // Don't set emailContent - we'll combine at send time
+      } else if (initialValues.content) {
         setEmailContent(initialValues.content);
       }
       if (initialValues.recipientIds && initialValues.recipientIds.length > 0) {
         setSelectedRecipients(new Set(initialValues.recipientIds));
       }
     }
-  }, [isOpen, initialValues?.subject, initialValues?.content, initialValues?.recipientIds]);
+  }, [isOpen, initialValues?.subject, initialValues?.content, initialValues?.recipientIds, initialValues?.protectedHtml, initialValues?.emailIntro, initialValues?.emailSignoff]);
+  
+  // Build the final email content for sending (combines intro + protected HTML + signoff)
+  const getFinalEmailContent = useCallback(() => {
+    if (hasProtectedHtml) {
+      return `${emailIntro}\n\n${protectedHtml}\n\n${emailSignoff}`;
+    }
+    return emailContent;
+  }, [hasProtectedHtml, emailIntro, protectedHtml, emailSignoff, emailContent]);
   
   // Filter to only show people with email addresses (check primaryEmail first, fallback to email)
   const peopleWithEmail: RecipientInfo[] = (clientPeople || [])
@@ -303,6 +327,9 @@ export function EmailDialog({
     setSelectedRecipients(new Set());
     setEmailSubject('');
     setEmailContent('');
+    setEmailIntro('');
+    setEmailSignoff('');
+    setShowPreview(false);
     setAttachments([]);
     setPendingFiles([]);
     setIsAttachmentsOpen(false);
@@ -329,7 +356,10 @@ export function EmailDialog({
       return;
     }
     
-    const textContent = emailContent
+    // Get the combined content (handles both regular and protected HTML modes)
+    const combinedContent = getFinalEmailContent();
+    
+    const textContent = combinedContent
       .replace(/<[^>]*>/g, '')
       .replace(/&nbsp;/g, ' ')
       .replace(/&[a-zA-Z]+;/g, '')
@@ -339,10 +369,10 @@ export function EmailDialog({
       return;
     }
     
-    let finalEmailContent = emailContent;
+    let finalEmailContent = combinedContent;
     if (user?.emailSignature && user.emailSignature.trim()) {
-      const spacing = emailContent.trim() ? '<br><br>' : '';
-      finalEmailContent = emailContent + spacing + user.emailSignature;
+      const spacing = combinedContent.trim() ? '<br><br>' : '';
+      finalEmailContent = combinedContent + spacing + user.emailSignature;
     }
     
     sendEmailMutation.mutate({
@@ -593,17 +623,104 @@ export function EmailDialog({
                   />
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="email-content" className="text-sm">Message <span className="text-destructive">*</span></Label>
-                  <div data-testid="input-email-content-editor" className="border rounded-md">
-                    <TiptapEditor
-                      content={emailContent}
-                      onChange={setEmailContent}
-                      placeholder="Enter your email message..."
-                      editorHeight="250px"
-                    />
+                {/* Protected HTML Mode (Query Emails with tables/buttons) */}
+                {hasProtectedHtml ? (
+                  <div className="space-y-3">
+                    {/* Toggle between Edit and Preview */}
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm">Message <span className="text-destructive">*</span></Label>
+                      <div className="flex gap-1">
+                        <Button
+                          type="button"
+                          variant={showPreview ? "ghost" : "secondary"}
+                          size="sm"
+                          className="h-7 text-xs gap-1"
+                          onClick={() => setShowPreview(false)}
+                        >
+                          <Edit3 className="h-3 w-3" />
+                          Edit
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={showPreview ? "secondary" : "ghost"}
+                          size="sm"
+                          className="h-7 text-xs gap-1"
+                          onClick={() => setShowPreview(true)}
+                        >
+                          <Eye className="h-3 w-3" />
+                          Preview
+                        </Button>
+                      </div>
+                    </div>
+
+                    {showPreview ? (
+                      /* Full Preview Mode */
+                      <div className="border rounded-md bg-white dark:bg-gray-950 overflow-y-auto" style={{ maxHeight: '350px' }}>
+                        <div 
+                          className="p-4 prose prose-sm max-w-none dark:prose-invert"
+                          dangerouslySetInnerHTML={{ __html: getFinalEmailContent() }}
+                        />
+                      </div>
+                    ) : (
+                      /* Edit Mode with structured sections */
+                      <div className="space-y-3">
+                        {/* Intro Section (Editable) */}
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Introduction</Label>
+                          <div data-testid="input-email-intro-editor" className="border rounded-md">
+                            <TiptapEditor
+                              content={emailIntro}
+                              onChange={setEmailIntro}
+                              placeholder="Hello, ..."
+                              editorHeight="80px"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Protected HTML Section (Read-only preview) */}
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-1">
+                            <Lock className="h-3 w-3 text-muted-foreground" />
+                            <Label className="text-xs text-muted-foreground">Query Table & Response Link (Protected)</Label>
+                          </div>
+                          <div className="border rounded-md bg-muted/30 overflow-x-auto" style={{ maxHeight: '180px', overflowY: 'auto' }}>
+                            <div 
+                              className="p-3 prose prose-sm max-w-none dark:prose-invert scale-90 origin-top-left"
+                              style={{ width: '111%' }}
+                              dangerouslySetInnerHTML={{ __html: protectedHtml }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Sign-off Section (Editable) */}
+                        <div className="space-y-1">
+                          <Label className="text-xs text-muted-foreground">Sign-off</Label>
+                          <div data-testid="input-email-signoff-editor" className="border rounded-md">
+                            <TiptapEditor
+                              content={emailSignoff}
+                              onChange={setEmailSignoff}
+                              placeholder="Best regards, ..."
+                              editorHeight="80px"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
+                ) : (
+                  /* Standard Mode (single editor) */
+                  <div className="space-y-1.5">
+                    <Label htmlFor="email-content" className="text-sm">Message <span className="text-destructive">*</span></Label>
+                    <div data-testid="input-email-content-editor" className="border rounded-md">
+                      <TiptapEditor
+                        content={emailContent}
+                        onChange={setEmailContent}
+                        placeholder="Enter your email message..."
+                        editorHeight="250px"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
