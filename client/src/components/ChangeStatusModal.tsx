@@ -47,8 +47,10 @@ import {
   HelpCircle,
   Plus,
   CalendarIcon,
-  Trash2
+  Trash2,
+  Upload
 } from "lucide-react";
+import { QueryBulkImport, ParsedQuery } from "@/components/queries/QueryBulkImport";
 import { format } from "date-fns";
 import { StageNotificationAudioRecorder } from "./StageNotificationAudioRecorder";
 import type {
@@ -1474,6 +1476,19 @@ export default function ChangeStatusModal({
     setPendingQueries(prev => prev.filter(q => q.id !== id));
   }, []);
 
+  // Handle bulk import of queries
+  const handleBulkImportQueries = useCallback((importedQueries: ParsedQuery[]) => {
+    const newQueries = importedQueries.map(q => ({
+      id: crypto.randomUUID(),
+      date: q.date,
+      description: q.description,
+      moneyIn: q.moneyIn,
+      moneyOut: q.moneyOut,
+      ourQuery: q.ourQuery,
+    }));
+    setPendingQueries(prev => [...prev, ...newQueries]);
+  }, []);
+
   return (
     <Dialog open={isOpen} onOpenChange={handleFullClose}>
       <DialogContent 
@@ -2107,17 +2122,34 @@ export default function ChangeStatusModal({
                   </div>
                 )}
 
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddQueryRow}
-                  className="w-full"
-                  data-testid="button-add-query-row"
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Query Row
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddQueryRow}
+                    className="flex-1"
+                    data-testid="button-add-query-row"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Row
+                  </Button>
+                  <QueryBulkImport
+                    onImport={handleBulkImportQueries}
+                    trigger={
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        data-testid="button-import-queries"
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        Import File
+                      </Button>
+                    }
+                  />
+                </div>
               </div>
             </div>
           )}
