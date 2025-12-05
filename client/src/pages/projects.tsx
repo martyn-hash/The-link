@@ -1351,77 +1351,79 @@ export default function Projects() {
                       </Button>
                     }
                   />
-                  <Popover open={tasksFilterOpen} onOpenChange={setTasksFilterOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="relative" data-testid="button-tasks-filters">
-                        <Filter className="h-4 w-4 mr-2" />
-                        Filters
-                        {tasksActiveFilterCount > 0 && (
-                          <Badge variant="secondary" className="ml-2 h-5 w-5 p-0 flex items-center justify-center text-xs">
-                            {tasksActiveFilterCount}
-                          </Badge>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-72" align="end">
-                      <div className="space-y-4">
-                        <div>
-                          <Label className="text-sm font-medium">Show</Label>
-                          <Select value={tasksOwnershipFilter} onValueChange={(v) => setTasksOwnershipFilter(v as OwnershipFilter)}>
-                            <SelectTrigger className="mt-1" data-testid="select-ownership-filter">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="assigned">Assigned to Me</SelectItem>
-                              <SelectItem value="created">Created by Me</SelectItem>
-                              <SelectItem value="all">All Team Items</SelectItem>
-                            </SelectContent>
-                          </Select>
+                  {!isMobile && (
+                    <Popover open={tasksFilterOpen} onOpenChange={setTasksFilterOpen}>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="relative" data-testid="button-tasks-filters">
+                          <Filter className="h-4 w-4 mr-2" />
+                          Filters
+                          {tasksActiveFilterCount > 0 && (
+                            <Badge variant="secondary" className="ml-2 h-5 w-5 p-0 flex items-center justify-center text-xs">
+                              {tasksActiveFilterCount}
+                            </Badge>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72" align="end">
+                        <div className="space-y-4">
+                          <div>
+                            <Label className="text-sm font-medium">Show</Label>
+                            <Select value={tasksOwnershipFilter} onValueChange={(v) => setTasksOwnershipFilter(v as OwnershipFilter)}>
+                              <SelectTrigger className="mt-1" data-testid="select-ownership-filter">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="assigned">Assigned to Me</SelectItem>
+                                <SelectItem value="created">Created by Me</SelectItem>
+                                <SelectItem value="all">All Team Items</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium">Status</Label>
+                            <Select value={tasksStatusFilter} onValueChange={setTasksStatusFilter}>
+                              <SelectTrigger className="mt-1" data-testid="select-status-filter">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">All Statuses</SelectItem>
+                                <SelectItem value="open">Open</SelectItem>
+                                <SelectItem value="in_progress">In Progress</SelectItem>
+                                <SelectItem value="closed">Closed</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium">Priority</Label>
+                            <Select value={tasksPriorityFilter} onValueChange={setTasksPriorityFilter}>
+                              <SelectTrigger className="mt-1" data-testid="select-priority-filter">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">All Priorities</SelectItem>
+                                <SelectItem value="low">Low</SelectItem>
+                                <SelectItem value="medium">Medium</SelectItem>
+                                <SelectItem value="high">High</SelectItem>
+                                <SelectItem value="urgent">Urgent</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          {tasksActiveFilterCount > 0 && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={clearTasksFilters}
+                              className="w-full"
+                              data-testid="button-clear-filters"
+                            >
+                              <X className="h-4 w-4 mr-2" />
+                              Clear All Filters
+                            </Button>
+                          )}
                         </div>
-                        <div>
-                          <Label className="text-sm font-medium">Status</Label>
-                          <Select value={tasksStatusFilter} onValueChange={setTasksStatusFilter}>
-                            <SelectTrigger className="mt-1" data-testid="select-status-filter">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="all">All Statuses</SelectItem>
-                              <SelectItem value="open">Open</SelectItem>
-                              <SelectItem value="in_progress">In Progress</SelectItem>
-                              <SelectItem value="closed">Closed</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label className="text-sm font-medium">Priority</Label>
-                          <Select value={tasksPriorityFilter} onValueChange={setTasksPriorityFilter}>
-                            <SelectTrigger className="mt-1" data-testid="select-priority-filter">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="all">All Priorities</SelectItem>
-                              <SelectItem value="low">Low</SelectItem>
-                              <SelectItem value="medium">Medium</SelectItem>
-                              <SelectItem value="high">High</SelectItem>
-                              <SelectItem value="urgent">Urgent</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {tasksActiveFilterCount > 0 && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={clearTasksFilters}
-                            className="w-full"
-                            data-testid="button-clear-filters"
-                          >
-                            <X className="h-4 w-4 mr-2" />
-                            Clear All Filters
-                          </Button>
-                        )}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
+                      </PopoverContent>
+                    </Popover>
+                  )}
                 </>
               )}
             </div>
@@ -1505,75 +1507,77 @@ export default function Projects() {
                       </Button>
                     }
                   />
-                  <Popover open={tasksFilterOpen} onOpenChange={setTasksFilterOpen}>
-                    <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className="relative h-11 px-3" data-testid="button-tasks-filters-mobile">
-                        <Filter className="h-4 w-4" />
-                        {tasksActiveFilterCount > 0 && (
-                          <Badge variant="secondary" className="ml-1.5 h-5 w-5 p-0 flex items-center justify-center text-xs">
-                            {tasksActiveFilterCount}
-                          </Badge>
-                        )}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-72" align="end">
-                      <div className="space-y-4">
-                        <div>
-                          <Label className="text-sm font-medium">Show</Label>
-                          <Select value={tasksOwnershipFilter} onValueChange={(v) => setTasksOwnershipFilter(v as OwnershipFilter)}>
-                            <SelectTrigger className="mt-1">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="assigned">Assigned to Me</SelectItem>
-                              <SelectItem value="created">Created by Me</SelectItem>
-                              <SelectItem value="all">All Team Items</SelectItem>
-                            </SelectContent>
-                          </Select>
+                  {isMobile && (
+                    <Popover open={tasksFilterOpen} onOpenChange={setTasksFilterOpen}>
+                      <PopoverTrigger asChild>
+                        <Button variant="outline" size="sm" className="relative h-11 px-3" data-testid="button-tasks-filters-mobile">
+                          <Filter className="h-4 w-4" />
+                          {tasksActiveFilterCount > 0 && (
+                            <Badge variant="secondary" className="ml-1.5 h-5 w-5 p-0 flex items-center justify-center text-xs">
+                              {tasksActiveFilterCount}
+                            </Badge>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-72" align="end">
+                        <div className="space-y-4">
+                          <div>
+                            <Label className="text-sm font-medium">Show</Label>
+                            <Select value={tasksOwnershipFilter} onValueChange={(v) => setTasksOwnershipFilter(v as OwnershipFilter)}>
+                              <SelectTrigger className="mt-1">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="assigned">Assigned to Me</SelectItem>
+                                <SelectItem value="created">Created by Me</SelectItem>
+                                <SelectItem value="all">All Team Items</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium">Status</Label>
+                            <Select value={tasksStatusFilter} onValueChange={setTasksStatusFilter}>
+                              <SelectTrigger className="mt-1">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">All Statuses</SelectItem>
+                                <SelectItem value="open">Open</SelectItem>
+                                <SelectItem value="in_progress">In Progress</SelectItem>
+                                <SelectItem value="closed">Closed</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium">Priority</Label>
+                            <Select value={tasksPriorityFilter} onValueChange={setTasksPriorityFilter}>
+                              <SelectTrigger className="mt-1">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="all">All Priorities</SelectItem>
+                                <SelectItem value="low">Low</SelectItem>
+                                <SelectItem value="medium">Medium</SelectItem>
+                                <SelectItem value="high">High</SelectItem>
+                                <SelectItem value="urgent">Urgent</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          {tasksActiveFilterCount > 0 && (
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={clearTasksFilters}
+                              className="w-full"
+                            >
+                              <X className="h-4 w-4 mr-2" />
+                              Clear All Filters
+                            </Button>
+                          )}
                         </div>
-                        <div>
-                          <Label className="text-sm font-medium">Status</Label>
-                          <Select value={tasksStatusFilter} onValueChange={setTasksStatusFilter}>
-                            <SelectTrigger className="mt-1">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="all">All Statuses</SelectItem>
-                              <SelectItem value="open">Open</SelectItem>
-                              <SelectItem value="in_progress">In Progress</SelectItem>
-                              <SelectItem value="closed">Closed</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label className="text-sm font-medium">Priority</Label>
-                          <Select value={tasksPriorityFilter} onValueChange={setTasksPriorityFilter}>
-                            <SelectTrigger className="mt-1">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="all">All Priorities</SelectItem>
-                              <SelectItem value="low">Low</SelectItem>
-                              <SelectItem value="medium">Medium</SelectItem>
-                              <SelectItem value="high">High</SelectItem>
-                              <SelectItem value="urgent">Urgent</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        {tasksActiveFilterCount > 0 && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            onClick={clearTasksFilters}
-                            className="w-full"
-                          >
-                            <X className="h-4 w-4 mr-2" />
-                            Clear All Filters
-                          </Button>
-                        )}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
+                      </PopoverContent>
+                    </Popover>
+                  )}
                 </>
               )}
             </div>

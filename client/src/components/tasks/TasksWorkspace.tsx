@@ -111,6 +111,11 @@ interface TaskRowProps {
 }
 
 function TaskRow({ task, selected, onSelect, onViewClick, isMobile }: TaskRowProps) {
+  const truncateDescription = (text: string | null, maxLength: number = 50) => {
+    if (!text) return '-';
+    return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+  };
+
   return (
     <TableRow data-testid={`row-task-${task.id}`}>
       <TableCell className="w-10">
@@ -120,18 +125,18 @@ function TaskRow({ task, selected, onSelect, onViewClick, isMobile }: TaskRowPro
           data-testid={`checkbox-task-${task.id}`}
         />
       </TableCell>
-      <TableCell className="font-medium">
-        <div className="flex items-center gap-2">
-          <span className="truncate" data-testid={`text-title-${task.id}`}>
-            {task.title}
-          </span>
-        </div>
-        {task.description && (
-          <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
-            {task.description}
-          </p>
-        )}
+      <TableCell className="font-medium min-w-[150px]">
+        <span className="truncate" data-testid={`text-title-${task.id}`}>
+          {task.title}
+        </span>
       </TableCell>
+      {!isMobile && (
+        <TableCell className="text-sm text-muted-foreground max-w-[200px]">
+          <span className="line-clamp-1" data-testid={`text-description-${task.id}`}>
+            {truncateDescription(task.description)}
+          </span>
+        </TableCell>
+      )}
       <TableCell>
         <div className="flex items-center gap-1">
           <Badge className={`text-xs ${getPriorityColor(task.priority)}`}>
@@ -180,6 +185,11 @@ interface ReminderRowProps {
 }
 
 function ReminderRow({ reminder, selected, onSelect, onViewClick, isMobile }: ReminderRowProps) {
+  const truncateDescription = (text: string | null, maxLength: number = 50) => {
+    if (!text) return '-';
+    return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+  };
+
   return (
     <TableRow data-testid={`row-reminder-${reminder.id}`}>
       <TableCell className="w-10">
@@ -189,19 +199,21 @@ function ReminderRow({ reminder, selected, onSelect, onViewClick, isMobile }: Re
           data-testid={`checkbox-reminder-${reminder.id}`}
         />
       </TableCell>
-      <TableCell className="font-medium">
+      <TableCell className="font-medium min-w-[150px]">
         <div className="flex items-center gap-2">
           <Bell className="h-4 w-4 text-amber-500 flex-shrink-0" />
           <span className="truncate" data-testid={`text-title-${reminder.id}`}>
             {reminder.title}
           </span>
         </div>
-        {reminder.description && (
-          <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
-            {reminder.description}
-          </p>
-        )}
       </TableCell>
+      {!isMobile && (
+        <TableCell className="text-sm text-muted-foreground max-w-[200px]">
+          <span className="line-clamp-1" data-testid={`text-description-${reminder.id}`}>
+            {truncateDescription(reminder.description)}
+          </span>
+        </TableCell>
+      )}
       <TableCell>
         <Badge className={`text-xs ${getStatusColor(reminder.status)}`}>
           {reminder.status === "in_progress" ? "In Progress" : reminder.status}
@@ -322,8 +334,9 @@ function TasksSection({
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-10"></TableHead>
-                    <TableHead>{isReminders ? 'Reminder' : 'Task'}</TableHead>
-                    <TableHead>{isReminders ? 'Status' : 'Priority / Status'}</TableHead>
+                    <TableHead className="min-w-[150px]">{isReminders ? 'Reminder' : 'Task'}</TableHead>
+                    {!isMobile && <TableHead className="max-w-[200px]">Description</TableHead>}
+                    <TableHead>Status</TableHead>
                     {!isMobile && <TableHead>Assigned To</TableHead>}
                     {!isMobile && <TableHead>Due Date</TableHead>}
                     <TableHead className="text-right">Actions</TableHead>
