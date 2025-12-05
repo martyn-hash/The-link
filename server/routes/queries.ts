@@ -609,9 +609,25 @@ export function registerQueryRoutes(
           queryIds,
         });
 
-        // Build the response URL
+        // Build the response URL with proper domain handling
         responseUrl = `/queries/respond/${token.token}`;
-        fullResponseUrl = `${process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0] || 'https://yourapp.replit.app'}${responseUrl}`;
+        
+        // Get base URL: APP_URL for production, or Replit domain for dev
+        let baseUrl = process.env.APP_URL;
+        if (!baseUrl) {
+          // Fall back to Replit domains
+          const replitDomain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0];
+          if (replitDomain) {
+            // Clean up the domain and ensure https:// prefix
+            baseUrl = replitDomain.replace(/^render:\/\/\//, '').replace(/^\/+/, '');
+            if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+              baseUrl = `https://${baseUrl}`;
+            }
+          } else {
+            baseUrl = 'https://yourapp.replit.app';
+          }
+        }
+        fullResponseUrl = `${baseUrl}${responseUrl}`;
       }
 
       // Format currency helper
@@ -852,9 +868,25 @@ ${linkSection}
       // Get the queries for this token
       const queries = await storage.getQueriesForToken(token.token);
 
-      // Build the response URL
+      // Build the response URL with proper domain handling
       const responseUrl = `/queries/respond/${token.token}`;
-      const fullResponseUrl = `${process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0] || 'https://yourapp.replit.app'}${responseUrl}`;
+      
+      // Get base URL: APP_URL for production, or Replit domain for dev
+      let baseUrl = process.env.APP_URL;
+      if (!baseUrl) {
+        // Fall back to Replit domains
+        const replitDomain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0];
+        if (replitDomain) {
+          // Clean up the domain and ensure https:// prefix
+          baseUrl = replitDomain.replace(/^render:\/\/\//, '').replace(/^\/+/, '');
+          if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
+            baseUrl = `https://${baseUrl}`;
+          }
+        } else {
+          baseUrl = 'https://yourapp.replit.app';
+        }
+      }
+      const fullResponseUrl = `${baseUrl}${responseUrl}`;
 
       // Format date helper
       const formatDate = (date: Date | string | null) => {
