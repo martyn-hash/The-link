@@ -16,6 +16,7 @@ import DashboardBuilder from "@/components/dashboard-builder";
 import FilterPanel from "@/components/filter-panel";
 import ViewMegaMenu from "@/components/ViewMegaMenu";
 import LayoutsMenu from "@/components/LayoutsMenu";
+import { TasksWorkspace } from "@/components/tasks/TasksWorkspace";
 import PullToRefresh from "react-simple-pull-to-refresh";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -55,7 +56,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Columns3, List, Filter, BarChart3, Plus, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Minimize2, Maximize2 } from "lucide-react";
+import { Columns3, List, Filter, BarChart3, Plus, Trash2, X, ChevronDown, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Minimize2, Maximize2, ClipboardList, FolderKanban } from "lucide-react";
 import { CalendarView } from "@/components/calendar";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
@@ -86,12 +87,15 @@ export interface Dashboard {
 
 const ITEMS_PER_PAGE = 15;
 
+type WorkspaceMode = "projects" | "tasks";
+
 export default function Projects() {
   const { user, isLoading, isAuthenticated } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [location, setLocation] = useLocation();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("projects");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [serviceFilter, setServiceFilter] = useState("all");
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState("all");
@@ -1146,16 +1150,6 @@ export default function Projects() {
     }
   }, [currentPage, totalPages]);
 
-  const getPageTitle = () => {
-    return isManagerOrAdmin ? "All Projects" : "Projects";
-  };
-
-  const getPageDescription = () => {
-    return isManagerOrAdmin 
-      ? "Complete overview of all projects across the organization"
-      : "Project overview and task management";
-  };
-
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <TopNavigation user={user} />
@@ -1164,31 +1158,50 @@ export default function Projects() {
         {/* Header */}
         <header className="bg-card border-b border-border page-container py-6">
           <div className="flex items-center justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground truncate" data-testid="text-page-title">
-                {getPageTitle()}
-              </h2>
+            {/* Workspace Mode Toggle */}
+            <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
+              <Button
+                variant={workspaceMode === "projects" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setWorkspaceMode("projects")}
+                className="gap-2"
+                data-testid="button-workspace-projects"
+              >
+                <FolderKanban className="h-4 w-4" />
+                Projects
+              </Button>
+              <Button
+                variant={workspaceMode === "tasks" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setWorkspaceMode("tasks")}
+                className="gap-2"
+                data-testid="button-workspace-tasks"
+              >
+                <ClipboardList className="h-4 w-4" />
+                Tasks
+              </Button>
             </div>
             
-            {/* Desktop View - Reorganized toolbar */}
-            <div className="hidden md:flex items-center space-x-3 flex-shrink-0">
-              {/* Layouts Menu - for switching between list/kanban/dashboard/calendar */}
-              <LayoutsMenu
-                currentViewMode={viewMode}
-                onViewModeChange={handleManualViewModeChange}
-              />
+            {/* Desktop View - Toolbar (Projects mode only) */}
+            {workspaceMode === "projects" && (
+              <div className="hidden md:flex items-center space-x-3 flex-shrink-0">
+                {/* Layouts Menu - for switching between list/kanban/dashboard/calendar */}
+                <LayoutsMenu
+                  currentViewMode={viewMode}
+                  onViewModeChange={handleManualViewModeChange}
+                />
 
-              {/* Views Mega Menu - for loading/saving views */}
-              <ViewMegaMenu
-                currentViewMode={viewMode}
-                currentSavedViewId={currentSavedViewId}
-                onLoadListView={handleLoadSavedView}
-                onLoadKanbanView={handleLoadSavedView}
-                onLoadCalendarView={handleLoadSavedView}
-                onLoadDashboard={handleLoadDashboard}
-                onSaveNewView={() => setSaveViewDialogOpen(true)}
-                onUpdateCurrentView={handleUpdateCurrentView}
-              />
+                {/* Views Mega Menu - for loading/saving views */}
+                <ViewMegaMenu
+                  currentViewMode={viewMode}
+                  currentSavedViewId={currentSavedViewId}
+                  onLoadListView={handleLoadSavedView}
+                  onLoadKanbanView={handleLoadSavedView}
+                  onLoadCalendarView={handleLoadSavedView}
+                  onLoadDashboard={handleLoadDashboard}
+                  onSaveNewView={() => setSaveViewDialogOpen(true)}
+                  onUpdateCurrentView={handleUpdateCurrentView}
+                />
 
               {/* Dashboard-specific buttons */}
               {viewMode === "dashboard" && (
@@ -1294,74 +1307,80 @@ export default function Projects() {
                   )}
                 </Button>
               )}
-            </div>
+              </div>
+            )}
 
-            {/* Mobile View - Compact controls only */}
-            <div className="flex md:hidden items-center gap-2 flex-shrink-0">
-              {/* Layouts Menu */}
-              <LayoutsMenu
-                currentViewMode={viewMode}
-                onViewModeChange={handleManualViewModeChange}
-                isMobileIconOnly={true}
-              />
+            {/* Mobile View - Compact controls only (Projects mode) */}
+            {workspaceMode === "projects" && (
+              <div className="flex md:hidden items-center gap-2 flex-shrink-0">
+                {/* Layouts Menu */}
+                <LayoutsMenu
+                  currentViewMode={viewMode}
+                  onViewModeChange={handleManualViewModeChange}
+                  isMobileIconOnly={true}
+                />
 
-              {/* Views Menu */}
-              <ViewMegaMenu
-                currentViewMode={viewMode}
-                currentSavedViewId={currentSavedViewId}
-                onLoadListView={handleLoadSavedView}
-                onLoadKanbanView={handleLoadSavedView}
-                onLoadCalendarView={handleLoadSavedView}
-                onLoadDashboard={handleLoadDashboard}
-                onSaveNewView={() => setSaveViewDialogOpen(true)}
-                onUpdateCurrentView={handleUpdateCurrentView}
-                isMobileIconOnly={true}
-              />
-              
-              {/* Filters Button - visible in list, kanban, or calendar view */}
-              {(viewMode === "list" || viewMode === "kanban" || viewMode === "calendar") && (
-                <Button
-                  variant="outline"
-                  onClick={() => setFilterPanelOpen(true)}
-                  className="relative h-11 px-3"
-                  data-testid="button-open-filters-mobile"
-                >
-                  <Filter className="w-4 h-4" />
-                  {activeFilterCount() > 0 && (
-                    <Badge 
-                      variant="secondary" 
-                      className="ml-1.5 rounded-full px-1.5 text-xs"
-                      data-testid="badge-active-filters-count-mobile"
-                    >
-                      {activeFilterCount()}
-                    </Badge>
-                  )}
-                </Button>
-              )}
-              
-              {/* Compact View Toggle - only visible in kanban view (mobile) */}
-              {viewMode === "kanban" && (
-                <Button
-                  variant={kanbanCompactMode ? "default" : "outline"}
-                  size="sm"
-                  onClick={toggleKanbanCompactMode}
-                  className="h-11 px-3"
-                  data-testid="button-toggle-compact-mode-mobile"
-                >
-                  {kanbanCompactMode ? (
-                    <Maximize2 className="h-4 w-4" />
-                  ) : (
-                    <Minimize2 className="h-4 w-4" />
-                  )}
-                </Button>
-              )}
-            </div>
+                {/* Views Menu */}
+                <ViewMegaMenu
+                  currentViewMode={viewMode}
+                  currentSavedViewId={currentSavedViewId}
+                  onLoadListView={handleLoadSavedView}
+                  onLoadKanbanView={handleLoadSavedView}
+                  onLoadCalendarView={handleLoadSavedView}
+                  onLoadDashboard={handleLoadDashboard}
+                  onSaveNewView={() => setSaveViewDialogOpen(true)}
+                  onUpdateCurrentView={handleUpdateCurrentView}
+                  isMobileIconOnly={true}
+                />
+                
+                {/* Filters Button - visible in list, kanban, or calendar view */}
+                {(viewMode === "list" || viewMode === "kanban" || viewMode === "calendar") && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setFilterPanelOpen(true)}
+                    className="relative h-11 px-3"
+                    data-testid="button-open-filters-mobile"
+                  >
+                    <Filter className="w-4 h-4" />
+                    {activeFilterCount() > 0 && (
+                      <Badge 
+                        variant="secondary" 
+                        className="ml-1.5 rounded-full px-1.5 text-xs"
+                        data-testid="badge-active-filters-count-mobile"
+                      >
+                        {activeFilterCount()}
+                      </Badge>
+                    )}
+                  </Button>
+                )}
+                
+                {/* Compact View Toggle - only visible in kanban view (mobile) */}
+                {viewMode === "kanban" && (
+                  <Button
+                    variant={kanbanCompactMode ? "default" : "outline"}
+                    size="sm"
+                    onClick={toggleKanbanCompactMode}
+                    className="h-11 px-3"
+                    data-testid="button-toggle-compact-mode-mobile"
+                  >
+                    {kanbanCompactMode ? (
+                      <Maximize2 className="h-4 w-4" />
+                    ) : (
+                      <Minimize2 className="h-4 w-4" />
+                    )}
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         </header>
         
         {/* Main Content */}
         <main className="flex-1 overflow-auto w-full px-4 md:px-6 lg:px-8 py-6 md:py-8" style={{ paddingBottom: isMobile ? '4rem' : '0' }}>
-          {isMobile ? (
+          {/* Tasks Workspace Mode */}
+          {workspaceMode === "tasks" ? (
+            <TasksWorkspace />
+          ) : isMobile ? (
             <PullToRefresh
               onRefresh={handleRefresh}
               pullingContent=""
