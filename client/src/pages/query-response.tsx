@@ -342,6 +342,50 @@ export default function QueryResponsePage() {
   };
 
   const handleSubmit = () => {
+    // Check for unanswered queries and provide specific, friendly feedback
+    const unansweredQueries: { index: number; description: string }[] = [];
+    data?.queries.forEach((query, index) => {
+      const response = responses[query.id];
+      const hasResponse = response?.clientResponse?.trim();
+      const hasAttachments = (response?.attachments?.length ?? 0) > 0;
+      if (!hasResponse && !hasAttachments) {
+        unansweredQueries.push({
+          index: index + 1,
+          description: query.description || query.ourQuery?.slice(0, 30) || 'Transaction'
+        });
+      }
+    });
+
+    if (unansweredQueries.length > 0) {
+      if (unansweredQueries.length === 1) {
+        const q = unansweredQueries[0];
+        toast({
+          title: "One more answer needed",
+          description: `Please answer Query ${q.index} (${q.description}) before submitting.`,
+          variant: "destructive",
+        });
+        // Navigate to the unanswered query
+        setCurrentIndex(q.index - 1);
+      } else if (unansweredQueries.length <= 3) {
+        const queryNumbers = unansweredQueries.map(q => q.index).join(', ');
+        toast({
+          title: `${unansweredQueries.length} answers still needed`,
+          description: `Please answer Queries ${queryNumbers} before submitting.`,
+          variant: "destructive",
+        });
+        // Navigate to the first unanswered query
+        setCurrentIndex(unansweredQueries[0].index - 1);
+      } else {
+        toast({
+          title: `${unansweredQueries.length} answers still needed`,
+          description: `Please answer all queries before submitting. Starting with Query ${unansweredQueries[0].index}.`,
+          variant: "destructive",
+        });
+        setCurrentIndex(unansweredQueries[0].index - 1);
+      }
+      return;
+    }
+
     const responseArray = Object.values(responses);
     submitMutation.mutate(responseArray);
   };
@@ -489,135 +533,100 @@ export default function QueryResponsePage() {
   const currentQuery = data.queries[currentIndex];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex flex-col">
+      {/* Compact header */}
       <header className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 py-4">
+        <div className="max-w-4xl mx-auto px-3 py-2">
           <div className="flex items-center justify-between">
-            <img src={logoPath} alt="Logo" className="h-10" />
+            <img src={logoPath} alt="Logo" className="h-7" />
             <div className="text-right">
-              <p className="text-sm font-medium">{data.clientName}</p>
-              <p className="text-xs text-muted-foreground">{data.projectDescription}</p>
+              <p className="text-xs font-medium">{data.clientName}</p>
+              <p className="text-[10px] text-muted-foreground">{data.projectDescription}</p>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-6">
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-2">
-            <h1 className="text-xl font-semibold">
-              {data.recipientName ? `Hello ${data.recipientName}` : 'Hello'}
-            </h1>
-            <div className="flex items-center gap-2">
-              <Button
-                variant={viewMode === 'cards' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('cards')}
-                className="hidden sm:inline-flex"
-                data-testid="button-view-cards"
-              >
-                Cards
-              </Button>
-              <Button
-                variant={viewMode === 'list' ? 'default' : 'outline'}
-                size="sm"
-                onClick={() => setViewMode('list')}
-                className="hidden sm:inline-flex"
-                data-testid="button-view-list"
-              >
-                List
-              </Button>
-            </div>
-          </div>
-          <p className="text-muted-foreground text-sm mb-4">
-            Please help us by answering the following {totalCount} {totalCount === 1 ? 'query' : 'queries'} about your transactions.
-          </p>
-          
-          <div className="flex items-center gap-3 bg-white rounded-lg p-3 border">
-            <div className="flex-1">
-              <Progress value={progress} className="h-2" />
-            </div>
-            <div className="text-sm font-medium whitespace-nowrap">
-              {answeredCount} / {totalCount} answered
-            </div>
-          </div>
+      <main className="flex-1 max-w-4xl mx-auto px-3 py-3 w-full">
+        {/* View mode toggle - desktop only */}
+        <div className="hidden sm:flex justify-end gap-2 mb-3">
+          <Button
+            variant={viewMode === 'cards' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setViewMode('cards')}
+            data-testid="button-view-cards"
+          >
+            Cards
+          </Button>
+          <Button
+            variant={viewMode === 'list' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setViewMode('list')}
+            data-testid="button-view-list"
+          >
+            List
+          </Button>
         </div>
 
         {viewMode === 'cards' ? (
-          <div className="space-y-4" {...swipeHandlers}>
-            <div className="sm:hidden flex items-center justify-center gap-2 text-xs text-muted-foreground mb-2">
-              <Hand className="w-3 h-3" />
-              <span>Swipe left or right to navigate</span>
-            </div>
+          <div className="space-y-3" {...swipeHandlers}>
             <Card className="overflow-hidden touch-pan-y" data-testid={`query-card-${currentQuery.id}`}>
-              <CardHeader className="bg-slate-50 border-b pb-4">
+              <CardHeader className="bg-slate-50 border-b py-2 px-3">
                 <div className="flex items-center justify-between">
-                  <Badge variant="outline" className="text-sm">
+                  <Badge variant="outline" className="text-xs">
                     Query {currentIndex + 1} of {totalCount}
                   </Badge>
                   {responses[currentQuery.id]?.clientResponse?.trim() && (
-                    <Badge variant="default" className="bg-green-600">
+                    <Badge variant="default" className="bg-green-600 text-xs py-0">
                       <CheckCircle2 className="w-3 h-3 mr-1" />
                       Answered
                     </Badge>
                   )}
                 </div>
               </CardHeader>
-              <CardContent className="pt-6 space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg">
+              <CardContent className="pt-3 pb-3 px-3 space-y-3">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                   {currentQuery.date && (
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-muted-foreground" />
-                      <div>
-                        <p className="text-xs text-muted-foreground">Date</p>
-                        <p className="text-sm font-medium">{formatDate(currentQuery.date)}</p>
-                      </div>
-                    </div>
-                  )}
-                  {currentQuery.description && (
-                    <div className="flex items-center gap-2 sm:col-span-2">
-                      <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-xs text-muted-foreground">Description</p>
-                        <p className="text-sm font-medium truncate">{currentQuery.description}</p>
-                      </div>
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="font-medium">{formatDate(currentQuery.date)}</span>
                     </div>
                   )}
                   {formatAmount(currentQuery.moneyIn, currentQuery.moneyOut) && (
-                    <div className="flex items-center gap-2">
-                      <PoundSterling className="w-4 h-4 text-muted-foreground" />
-                      <div>
-                        <p className="text-xs text-muted-foreground">Amount</p>
-                        <p className={cn(
-                          "text-sm font-medium",
-                          formatAmount(currentQuery.moneyIn, currentQuery.moneyOut)?.type === 'in' 
-                            ? "text-green-600" 
-                            : "text-red-600"
-                        )}>
-                          {formatAmount(currentQuery.moneyIn, currentQuery.moneyOut)?.amount}
-                          <span className="text-xs text-muted-foreground ml-1">
-                            ({formatAmount(currentQuery.moneyIn, currentQuery.moneyOut)?.type})
-                          </span>
-                        </p>
-                      </div>
+                    <div className="flex items-center gap-1.5">
+                      <PoundSterling className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className={cn(
+                        "font-medium",
+                        formatAmount(currentQuery.moneyIn, currentQuery.moneyOut)?.type === 'in' 
+                          ? "text-green-600" 
+                          : "text-red-600"
+                      )}>
+                        {formatAmount(currentQuery.moneyIn, currentQuery.moneyOut)?.amount}
+                        <span className="text-xs text-muted-foreground ml-1">
+                          ({formatAmount(currentQuery.moneyIn, currentQuery.moneyOut)?.type})
+                        </span>
+                      </span>
+                    </div>
+                  )}
+                  {currentQuery.description && (
+                    <div className="flex items-center gap-1.5 w-full">
+                      <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                      <span className="text-muted-foreground truncate">{currentQuery.description}</span>
                     </div>
                   )}
                 </div>
 
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="flex items-start gap-2">
-                    <HelpCircle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="text-sm font-medium text-blue-800 mb-1">Our Question</p>
-                      <p className="text-blue-700">{currentQuery.ourQuery}</p>
-                    </div>
+                    <HelpCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                    <p className="text-sm text-blue-700">{currentQuery.ourQuery}</p>
                   </div>
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-sm font-medium flex items-center gap-2">
-                      <MessageSquare className="w-4 h-4" />
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-sm font-medium flex items-center gap-1.5">
+                      <MessageSquare className="w-3.5 h-3.5" />
                       Your Response
                     </label>
                     <SaveStatusIndicator queryId={currentQuery.id} />
@@ -626,16 +635,13 @@ export default function QueryResponsePage() {
                     value={responses[currentQuery.id]?.clientResponse || ''}
                     onChange={(e) => updateResponse(currentQuery.id, 'clientResponse', e.target.value)}
                     placeholder="Type your answer here..."
-                    className="min-h-[120px] resize-none"
+                    className="min-h-[80px] resize-none text-sm"
                     data-testid={`textarea-response-${currentQuery.id}`}
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                  <div>
-                    <label className="text-sm font-medium">Does this include VAT?</label>
-                    <p className="text-xs text-muted-foreground">Toggle if this transaction includes VAT</p>
-                  </div>
+                <div className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded-lg">
+                  <label className="text-sm font-medium">Includes VAT?</label>
                   <Switch
                     checked={responses[currentQuery.id]?.hasVat || false}
                     onCheckedChange={(checked) => updateResponse(currentQuery.id, 'hasVat', checked)}
@@ -643,9 +649,9 @@ export default function QueryResponsePage() {
                   />
                 </div>
 
-                <div className="border-t pt-4">
-                  <label className="text-sm font-medium flex items-center gap-2 mb-3">
-                    <Paperclip className="w-4 h-4" />
+                <div className="border-t pt-3">
+                  <label className="text-sm font-medium flex items-center gap-1.5 mb-2">
+                    <Paperclip className="w-3.5 h-3.5" />
                     Attachments
                     <span className="text-xs text-muted-foreground font-normal">(optional)</span>
                   </label>
@@ -692,93 +698,35 @@ export default function QueryResponsePage() {
                       data-testid={`input-file-${currentQuery.id}`}
                     />
                     <div className={cn(
-                      "flex items-center justify-center gap-2 p-3 border-2 border-dashed rounded-lg transition-colors",
+                      "flex items-center justify-center gap-2 py-2 px-3 border-2 border-dashed rounded-lg transition-colors text-sm",
                       uploadingFiles[currentQuery.id] 
                         ? "bg-slate-100 border-slate-300 cursor-wait"
                         : "border-slate-300 hover:border-primary hover:bg-slate-50"
                     )}>
                       {uploadingFiles[currentQuery.id] ? (
                         <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span className="text-sm text-muted-foreground">Uploading...</span>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span className="text-muted-foreground">Uploading...</span>
                         </>
                       ) : (
                         <>
-                          <Upload className="w-4 h-4 text-muted-foreground" />
-                          <span className="text-sm text-muted-foreground">
+                          <Upload className="w-3.5 h-3.5 text-muted-foreground" />
+                          <span className="text-muted-foreground">
                             Click to upload a file
                           </span>
                         </>
                       )}
                     </div>
                   </label>
-                  <p className="text-xs text-muted-foreground mt-1 text-center">
+                  <p className="text-[10px] text-muted-foreground mt-1 text-center">
                     Max 10MB. Images, PDFs, and Office documents accepted.
                   </p>
                 </div>
               </CardContent>
             </Card>
-
-            <div className="flex items-center justify-between">
-              <Button
-                variant="outline"
-                onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
-                disabled={currentIndex === 0}
-                data-testid="button-previous"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Previous
-              </Button>
-              
-              <div className="flex gap-1">
-                {data.queries.map((_, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setCurrentIndex(idx)}
-                    className={cn(
-                      "w-2 h-2 rounded-full transition-colors",
-                      idx === currentIndex 
-                        ? "bg-primary" 
-                        : responses[data.queries[idx].id]?.clientResponse?.trim()
-                          ? "bg-green-500"
-                          : "bg-slate-300"
-                    )}
-                    data-testid={`dot-${idx}`}
-                  />
-                ))}
-              </div>
-              
-              {currentIndex < totalCount - 1 ? (
-                <Button
-                  onClick={() => setCurrentIndex(prev => Math.min(totalCount - 1, prev + 1))}
-                  data-testid="button-next"
-                >
-                  Next
-                  <ArrowRight className="w-4 h-4 ml-2" />
-                </Button>
-              ) : (
-                <Button
-                  onClick={handleSubmit}
-                  disabled={submitMutation.isPending}
-                  className="bg-green-600 hover:bg-green-700"
-                  data-testid="button-submit"
-                >
-                  {submitMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Submitting...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4 mr-2" />
-                      Submit All
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
           </div>
         ) : (
+          /* List view */
           <div className="space-y-4">
             {data.queries.map((query, index) => (
               <QueryListItem
@@ -822,11 +770,91 @@ export default function QueryResponsePage() {
         )}
       </main>
 
-      <footer className="border-t bg-white mt-8 py-4">
-        <div className="max-w-4xl mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>If you have any questions, please contact your accountant.</p>
-        </div>
-      </footer>
+      {/* Sticky footer navigation with compact progress - cards view only */}
+      {viewMode === 'cards' && (
+        <footer className="sticky bottom-0 bg-white border-t py-2 px-3 safe-area-pb">
+          <div className="max-w-4xl mx-auto">
+            <div className="flex items-center justify-between gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
+                disabled={currentIndex === 0}
+                className="h-9"
+                data-testid="button-previous"
+              >
+                <ArrowLeft className="w-4 h-4 mr-1" />
+                Previous
+              </Button>
+              
+              {/* Compact progress dots with count */}
+              <div className="flex items-center gap-1.5">
+                <div className="flex gap-1">
+                  {data.queries.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentIndex(idx)}
+                      className={cn(
+                        "w-2 h-2 rounded-full transition-colors",
+                        idx === currentIndex 
+                          ? "bg-primary" 
+                          : responses[data.queries[idx].id]?.clientResponse?.trim()
+                            ? "bg-green-500"
+                            : "bg-slate-300"
+                      )}
+                      data-testid={`dot-${idx}`}
+                    />
+                  ))}
+                </div>
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  {answeredCount}/{totalCount}
+                </span>
+              </div>
+              
+              {currentIndex < totalCount - 1 ? (
+                <Button
+                  size="sm"
+                  onClick={() => setCurrentIndex(prev => Math.min(totalCount - 1, prev + 1))}
+                  className="h-9"
+                  data-testid="button-next"
+                >
+                  Next
+                  <ArrowRight className="w-4 h-4 ml-1" />
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  onClick={handleSubmit}
+                  disabled={submitMutation.isPending}
+                  className="h-9 bg-green-600 hover:bg-green-700"
+                  data-testid="button-submit"
+                >
+                  {submitMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4 mr-1" />
+                      Submit All
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+          </div>
+        </footer>
+      )}
+
+      {/* Contact footer - list view only */}
+      {viewMode === 'list' && (
+        <footer className="border-t bg-white mt-8 py-4">
+          <div className="max-w-4xl mx-auto px-4 text-center text-sm text-muted-foreground">
+            <p>If you have any questions, please contact your accountant.</p>
+          </div>
+        </footer>
+      )}
     </div>
   );
 }
