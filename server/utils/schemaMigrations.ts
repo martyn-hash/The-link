@@ -529,6 +529,73 @@ async function ensureAiButtonEnabledColumn(): Promise<void> {
 }
 
 /**
+ * Add quick reminder and archive columns to internal_tasks table if they don't exist
+ */
+async function ensureInternalTaskColumns(): Promise<void> {
+  const isQuickReminderExists = await columnExists('internal_tasks', 'is_quick_reminder');
+  const reminderSentAtExists = await columnExists('internal_tasks', 'reminder_notification_sent_at');
+  const isArchivedExists = await columnExists('internal_tasks', 'is_archived');
+  const archivedAtExists = await columnExists('internal_tasks', 'archived_at');
+  const archivedByExists = await columnExists('internal_tasks', 'archived_by');
+  
+  if (isQuickReminderExists && reminderSentAtExists && isArchivedExists && archivedAtExists && archivedByExists) {
+    console.log('[Schema Migration] ✓ All internal_tasks columns already exist');
+    return;
+  }
+  
+  console.log('[Schema Migration] Adding missing columns to internal_tasks table...');
+  
+  try {
+    await db.transaction(async (tx) => {
+      if (!isQuickReminderExists) {
+        await tx.execute(sql`
+          ALTER TABLE internal_tasks 
+          ADD COLUMN is_quick_reminder BOOLEAN DEFAULT false;
+        `);
+        console.log('[Schema Migration] ✓ Added is_quick_reminder column');
+      }
+      
+      if (!reminderSentAtExists) {
+        await tx.execute(sql`
+          ALTER TABLE internal_tasks 
+          ADD COLUMN reminder_notification_sent_at TIMESTAMP WITH TIME ZONE;
+        `);
+        console.log('[Schema Migration] ✓ Added reminder_notification_sent_at column');
+      }
+      
+      if (!isArchivedExists) {
+        await tx.execute(sql`
+          ALTER TABLE internal_tasks 
+          ADD COLUMN is_archived BOOLEAN DEFAULT false;
+        `);
+        console.log('[Schema Migration] ✓ Added is_archived column');
+      }
+      
+      if (!archivedAtExists) {
+        await tx.execute(sql`
+          ALTER TABLE internal_tasks 
+          ADD COLUMN archived_at TIMESTAMP WITH TIME ZONE;
+        `);
+        console.log('[Schema Migration] ✓ Added archived_at column');
+      }
+      
+      if (!archivedByExists) {
+        await tx.execute(sql`
+          ALTER TABLE internal_tasks 
+          ADD COLUMN archived_by VARCHAR REFERENCES users(id);
+        `);
+        console.log('[Schema Migration] ✓ Added archived_by column');
+      }
+    });
+    
+    console.log('[Schema Migration] ✓ Successfully added all missing internal_tasks columns');
+  } catch (error) {
+    console.error('[Schema Migration] ✗ Failed to add internal_tasks columns:', error);
+    throw error;
+  }
+}
+
+/**
  * Add inactive project columns to projects table
  * Uses the same inactive_reason enum created for client services
  */
@@ -612,6 +679,7 @@ export async function runSchemaMigrations(): Promise<void> {
     await ensureCanMakeProjectsInactiveColumn();
     await ensureInactiveProjectColumns();
     await ensureAiButtonEnabledColumn();
+    await ensureInternalTaskColumns();
     
     console.log('[Schema Migration] All schema migrations completed successfully');
   } catch (error) {

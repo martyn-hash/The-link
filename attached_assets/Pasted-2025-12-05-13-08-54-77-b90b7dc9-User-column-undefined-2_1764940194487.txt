@@ -1,0 +1,132 @@
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+column: undefined,
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+line: '3722',
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+constraint: undefined,
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+internalPosition: undefined,
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+hint: undefined,
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+code: '42703',
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+detail: undefined,
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+routine: 'errorMissingColumn'
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+Error fetching internal tasks: error: column internal_tasks.is_quick_reminder does not exist
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+file: 'parse_relation.c',
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+where: undefined,
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+at async NeonPreparedQuery.execute (file:///home/runner/workspace/node_modules/drizzle-orm/neon-serverless/session.js:76:20)
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+position: '408',
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+at async file:///home/runner/workspace/dist/index.js:42028:21 {
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+severity: 'ERROR',
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+table: undefined,
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+dataType: undefined,
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+internalQuery: undefined,
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+at async InternalTaskStorage.getAllInternalTasks (file:///home/runner/workspace/dist/index.js:16628:25)
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345:74
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+length: 131,
+2025-12-05 13:08:54.77
+b90b7dc9
+User
+schema: undefined,
+2025-12-05 13:08:54.81
+b90b7dc9
+User
+1:08:54 PM [express] GET /api/internal-tasks 500 in 218ms :: {"message":"Failed to fetch internal ta…
+2025-12-05 13:08:55.34
+b90b7dc9
+User
+at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345:74
+2025-12-05 13:08:55.34
+b90b7dc9
+User
+schema: undefined,
+2025-12-05 13:08:55.34
+b90b7dc9
+User
+Error fetching created tasks: error: column internal_tasks.is_quick_reminder does not exist
+2025-12-05 13:08:55.34
+b90b7dc9
+User
+hint: undefined,
+2025-12-05 13:08:55.34
+b90b7dc9
+User
+position: '408',
+2025-12-05 13:08:55.34
+b90b7dc9
+User
+}
+2025-12-05 13:08:55.98
+b90b7dc9
+User
+at async file:///home/runner/workspace/dist/index.js:42048:21 {
+2025-12-05 13:08:55.98
+b90b7dc9
+User
+Error fetching assigned tasks: error: column internal_tasks.is_quick_reminder does not exist
+2025-12-05 13:08:55.98
+b90b7dc9
+User
+at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345:74
