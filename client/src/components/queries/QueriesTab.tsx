@@ -161,6 +161,12 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   const [pendingEmailQueryIds, setPendingEmailQueryIds] = useState<string[]>([]);
   const [pendingEmailTokenId, setPendingEmailTokenId] = useState<string | null>(null);
   const [isPreparingEmail, setIsPreparingEmail] = useState(false);
+  
+  // Send Options dialog state
+  const [isSendOptionsOpen, setIsSendOptionsOpen] = useState(false);
+  const [sendOptionsQueryIds, setSendOptionsQueryIds] = useState<string[]>([]);
+  const [includeOnlineLink, setIncludeOnlineLink] = useState(true);
+  const [linkExpiryDays, setLinkExpiryDays] = useState(3);
 
   // Add Query form state
   const [newQueryText, setNewQueryText] = useState("");
@@ -401,23 +407,39 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     }
   };
 
-  // Prepare email content and open email dialog
-  const handlePrepareEmail = async (queryIds: string[]) => {
+  // Open send options dialog before preparing email
+  const handleOpenSendOptions = (queryIds: string[]) => {
     if (!clientId) {
       toast({ title: "Error", description: "Client ID is required to send queries.", variant: "destructive" });
       return;
     }
-    
+    setSendOptionsQueryIds(queryIds);
+    setIncludeOnlineLink(true);
+    setLinkExpiryDays(3);
+    setIsSendOptionsOpen(true);
+  };
+
+  // Confirm send options and prepare email
+  const handleConfirmSendOptions = async () => {
+    setIsSendOptionsOpen(false);
     setIsPreparingEmail(true);
+    
     try {
-      const response = await apiRequest('POST', `/api/projects/${projectId}/queries/prepare-email`, {
-        queryIds,
-        expiryDays: 14,
-      });
+      // Only include expiryDays if online link is requested
+      const requestBody: { queryIds: string[]; includeOnlineLink: boolean; expiryDays?: number } = {
+        queryIds: sendOptionsQueryIds,
+        includeOnlineLink,
+      };
+      
+      if (includeOnlineLink) {
+        requestBody.expiryDays = linkExpiryDays;
+      }
+      
+      const response = await apiRequest('POST', `/api/projects/${projectId}/queries/prepare-email`, requestBody);
       
       // Store the token ID and query IDs for after email is sent
-      setPendingEmailTokenId(response.tokenId);
-      setPendingEmailQueryIds(queryIds);
+      setPendingEmailTokenId(includeOnlineLink ? response.tokenId : null);
+      setPendingEmailQueryIds(sendOptionsQueryIds);
       
       // Set initial values for email dialog
       setEmailInitialValues({
@@ -432,7 +454,13 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
       toast({ title: "Error", description: "Failed to prepare email content.", variant: "destructive" });
     } finally {
       setIsPreparingEmail(false);
+      setSendOptionsQueryIds([]);
     }
+  };
+
+  // Legacy function for backward compatibility
+  const handlePrepareEmail = async (queryIds: string[]) => {
+    handleOpenSendOptions(queryIds);
   };
 
   // Called when email is successfully sent
@@ -1087,6 +1115,80 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
               data-testid="button-save-edit"
             >
               Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send Options Dialog - appears before email dialog */}
+      <Dialog open={isSendOptionsOpen} onOpenChange={setIsSendOptionsOpen}>
+        <DialogContent className="sm:max-w-md" data-testid="dialog-send-options">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="w-5 h-5" />
+              Send Options
+            </DialogTitle>
+            <DialogDescription>
+              Configure how you want to send {sendOptionsQueryIds.length} {sendOptionsQueryIds.length === 1 ? 'query' : 'queries'} to the client.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 py-4">
+            {/* Include Online Link Option */}
+            <div className="flex items-start space-x-3">
+              <Checkbox 
+                id="include-online-link"
+                checked={includeOnlineLink}
+                onCheckedChange={(checked) => setIncludeOnlineLink(checked === true)}
+                data-testid="checkbox-include-online-link"
+              />
+              <div className="grid gap-1.5">
+                <label 
+                  htmlFor="include-online-link" 
+                  className="text-sm font-medium cursor-pointer"
+                >
+                  Include online completion link
+                </label>
+                <p className="text-sm text-muted-foreground">
+                  Adds a secure link for the client to respond to queries online
+                </p>
+              </div>
+            </div>
+
+            {/* Link Expiry Days (only shown if online link is included) */}
+            {includeOnlineLink && (
+              <div className="pl-7 space-y-2">
+                <label className="text-sm font-medium">Link valid for</label>
+                <Select 
+                  value={String(linkExpiryDays)} 
+                  onValueChange={(val) => setLinkExpiryDays(Number(val))}
+                >
+                  <SelectTrigger className="w-full" data-testid="select-link-expiry">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">1 day</SelectItem>
+                    <SelectItem value="3">3 days</SelectItem>
+                    <SelectItem value="7">7 days</SelectItem>
+                    <SelectItem value="14">14 days</SelectItem>
+                    <SelectItem value="30">30 days</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  The link will expire after this period
+                </p>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsSendOptionsOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleConfirmSendOptions}
+              disabled={isPreparingEmail}
+              data-testid="button-confirm-send-options"
+            >
+              {isPreparingEmail ? "Preparing..." : "Continue to Email"}
             </Button>
           </DialogFooter>
         </DialogContent>

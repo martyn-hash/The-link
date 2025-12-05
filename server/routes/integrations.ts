@@ -27,6 +27,7 @@ import {
   isApplicationGraphConfigured,
   sendEmailAsUser as sendEmailAsUserTenantWide,
 } from "../utils/applicationGraphClient";
+import { getUncachableSendGridClient } from "../sendgridService";
 import {
   generateUserRingCentralAuthUrl,
   exchangeCodeForRingCentralTokens,
@@ -1023,7 +1024,7 @@ export function registerIntegrationRoutes(
   // EMAIL API ROUTES
   // ==================================================
 
-  // POST /api/email/send - Send email via Microsoft Graph (Outlook)
+  // POST /api/email/send - Send email via Microsoft Graph (Outlook) with SendGrid fallback
   app.post("/api/email/send", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       console.log('[EMAIL SEND] Starting email send request:', {
@@ -1056,56 +1057,100 @@ export function registerIntegrationRoutes(
         }
       }
 
-      // Check if tenant-wide Graph is configured
-      if (!isApplicationGraphConfigured()) {
-        return res.status(503).json({
-          message: "Email service not configured. Please contact administrator."
-        });
-      }
-
-      // Get the user to verify they have email access and get their email address
+      // Get the user
       const user = await storage.getUser(effectiveUserId);
       if (!user) {
         return res.status(400).json({ message: "User not found." });
       }
 
-      // Check if user has email access enabled by admin
-      if (!user.accessEmail) {
-        return res.status(403).json({
-          message: "Email access is not enabled for your account. Please contact your administrator."
-        });
+      let emailResult: any = null;
+      let sentVia = 'unknown';
+      let outlookError: Error | null = null;
+
+      // Try Outlook (Microsoft Graph) first if configured and user has access
+      const outlookConfigured = isApplicationGraphConfigured();
+      const userHasOutlookAccess = user.accessEmail && user.email;
+
+      if (outlookConfigured && userHasOutlookAccess) {
+        try {
+          console.log('[EMAIL SEND] Attempting to send email via Outlook (Microsoft Graph) as:', user.email);
+          
+          // Convert attachments format for tenant-wide API
+          const formattedAttachments = attachments?.map(att => ({
+            name: att.filename,
+            contentType: att.contentType,
+            contentBytes: att.content // Already base64 encoded
+          }));
+
+          emailResult = await sendEmailAsUserTenantWide(
+            user.email!,
+            to,
+            subject,
+            content,
+            isHtml || false,
+            { attachments: formattedAttachments }
+          );
+          sentVia = 'outlook';
+          console.log('[EMAIL SEND] Email sent successfully via Outlook:', { to, subject });
+        } catch (err) {
+          outlookError = err instanceof Error ? err : new Error(String(err));
+          console.error('[EMAIL SEND] Outlook failed, will try SendGrid fallback:', outlookError.message);
+          // Continue to SendGrid fallback
+        }
       }
 
-      // User must have an email address to send from
-      if (!user.email) {
-        return res.status(400).json({
-          message: "No email address configured for your account."
-        });
+      // Fallback to SendGrid if Outlook failed or wasn't available
+      if (!emailResult) {
+        try {
+          console.log('[EMAIL SEND] Attempting to send email via SendGrid fallback');
+          
+          const { client: sgMail, fromEmail } = await getUncachableSendGridClient();
+          
+          // Use sender name from user if available, otherwise use "The Link"
+          const senderName = user.firstName && user.lastName 
+            ? `${user.firstName} ${user.lastName}` 
+            : 'The Link';
+          
+          // Build SendGrid message
+          const sgMessage: any = {
+            to,
+            from: {
+              email: fromEmail,
+              name: senderName
+            },
+            subject,
+            ...(isHtml ? { html: content } : { text: content }),
+          };
+          
+          // Add attachments if present
+          if (attachments && attachments.length > 0) {
+            sgMessage.attachments = attachments.map(att => ({
+              filename: att.filename,
+              content: att.content, // Already base64 encoded
+              type: att.contentType,
+              disposition: 'attachment',
+            }));
+          }
+          
+          emailResult = await sgMail.send(sgMessage);
+          sentVia = 'sendgrid';
+          console.log('[EMAIL SEND] Email sent successfully via SendGrid:', { to, subject });
+        } catch (sendgridError) {
+          const sgErr = sendgridError instanceof Error ? sendgridError.message : String(sendgridError);
+          console.error('[EMAIL SEND] SendGrid also failed:', sgErr);
+          
+          // Provide helpful error message based on what failed
+          if (outlookError && !userHasOutlookAccess) {
+            throw new Error('Email access is not enabled for your account and SendGrid fallback failed. Please contact your administrator.');
+          } else if (outlookError) {
+            throw new Error(`Outlook failed (${outlookError.message}) and SendGrid fallback also failed. Please try again later.`);
+          } else {
+            throw new Error('Email service (SendGrid) failed. Please try again later.');
+          }
+        }
       }
-
-      console.log('[EMAIL SEND] Attempting to send email via tenant-wide Graph API as:', user.email);
-      
-      // Convert attachments format for tenant-wide API (filename -> name, content -> contentBytes)
-      const formattedAttachments = attachments?.map(att => ({
-        name: att.filename,
-        contentType: att.contentType,
-        contentBytes: att.content // Already base64 encoded
-      }));
-
-      // Send email via Microsoft Graph API using tenant-wide permissions (sends AS the user, not the connector)
-      const emailResult = await sendEmailAsUserTenantWide(
-        user.email,
-        to,
-        subject,
-        content,
-        isHtml || false,
-        { attachments: formattedAttachments }
-      );
-      console.log('[EMAIL SEND] Email sent successfully via Outlook:', { to, subject, result: emailResult });
 
       // Log the email as a communication record (only if linked to a client)
-      // Note: If projectId is provided, the communication will automatically appear 
-      // in the project chronology timeline (which queries communications by projectId)
       let communication = null;
       if (clientId) {
         communication = await storage.createCommunication({
@@ -1123,8 +1168,9 @@ export function registerIntegrationRoutes(
 
       res.json({
         success: true,
-        message: "Email sent successfully",
+        message: `Email sent successfully via ${sentVia === 'outlook' ? 'Outlook' : 'SendGrid'}`,
         emailResult,
+        sentVia,
         ...(communication && { communication: await storage.getCommunicationById(communication.id) })
       });
 
@@ -1140,15 +1186,15 @@ export function registerIntegrationRoutes(
       let message = "Failed to send email";
 
       if (error instanceof Error) {
-        if (error.message.includes('Outlook not connected')) {
+        if (error.message.includes('Both Outlook and SendGrid')) {
+          statusCode = 503;
+          message = error.message;
+        } else if (error.message.includes('SendGrid not connected')) {
           statusCode = 503;
           message = "Email service not configured. Please contact administrator.";
         } else if (error.message.includes('X_REPLIT_TOKEN')) {
           statusCode = 503;
           message = "Email service authentication error. Please try again later.";
-        } else if (error.message.includes('access_token')) {
-          statusCode = 401;
-          message = "Email service authorization expired. Please reconnect your email account.";
         } else {
           message = `Email sending failed: ${error.message}`;
         }

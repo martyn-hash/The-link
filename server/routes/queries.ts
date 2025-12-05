@@ -514,10 +514,18 @@ export function registerQueryRoutes(
         return res.status(401).json({ message: "User not authenticated" });
       }
 
-      const { queryIds, expiryDays = 14 } = req.body;
+      const { queryIds, expiryDays, includeOnlineLink = true } = req.body;
       
       if (!queryIds || !Array.isArray(queryIds) || queryIds.length === 0) {
         return res.status(400).json({ message: "queryIds is required and must be a non-empty array" });
+      }
+      
+      // Validate expiryDays if link is included
+      if (includeOnlineLink) {
+        const days = expiryDays ?? 3; // Default to 3 days
+        if (typeof days !== 'number' || days < 1 || days > 30) {
+          return res.status(400).json({ message: "expiryDays must be between 1 and 30 when including online link" });
+        }
       }
 
       const { projectId } = req.params;
@@ -540,24 +548,33 @@ export function registerQueryRoutes(
       const client = project ? await storage.getClientById(project.clientId) : null;
       const sender = await storage.getUser(userId);
 
-      // Calculate expiry date
-      const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + expiryDays);
+      // Only create token and URLs if online link is requested
+      let token = null;
+      let responseUrl = null;
+      let fullResponseUrl = null;
+      let expiresAt = null;
+      const effectiveExpiryDays = expiryDays ?? 3; // Default to 3 days
 
-      // Create token (we'll use a placeholder email for now, updated when actually sent)
-      const token = await storage.createQueryResponseToken({
-        projectId,
-        expiresAt,
-        createdById: userId,
-        recipientEmail: 'pending@placeholder.com', // Will be updated when email is sent
-        recipientName: null,
-        queryCount: queryIds.length,
-        queryIds,
-      });
+      if (includeOnlineLink) {
+        // Calculate expiry date
+        expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + effectiveExpiryDays);
 
-      // Build the response URL
-      const responseUrl = `/queries/respond/${token.token}`;
-      const fullResponseUrl = `${process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0] || 'https://yourapp.replit.app'}${responseUrl}`;
+        // Create token (we'll use a placeholder email for now, updated when actually sent)
+        token = await storage.createQueryResponseToken({
+          projectId,
+          expiresAt,
+          createdById: userId,
+          recipientEmail: 'pending@placeholder.com', // Will be updated when email is sent
+          recipientName: null,
+          queryCount: queryIds.length,
+          queryIds,
+        });
+
+        // Build the response URL
+        responseUrl = `/queries/respond/${token.token}`;
+        fullResponseUrl = `${process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0] || 'https://yourapp.replit.app'}${responseUrl}`;
+      }
 
       // Format currency helper
       const formatCurrency = (amount: string | null) => {
@@ -599,15 +616,10 @@ export function registerQueryRoutes(
   </tbody>
 </table>`;
 
-      // Build the full email content
+      // Build the full email content - conditionally include link based on includeOnlineLink
       const emailSubject = `Bookkeeping Queries - ${project?.description || 'Your Account'}`;
-      const emailContent = `
-<p>Hello,</p>
-
-<p>We have some questions about the following transactions that we need your help to clarify:</p>
-
-${queriesTableHtml}
-
+      
+      const linkSection = includeOnlineLink && fullResponseUrl ? `
 <p style="margin: 24px 0;">
   <a href="${fullResponseUrl}" style="display: inline-block; background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
     Click here to respond to these queries
@@ -615,6 +627,16 @@ ${queriesTableHtml}
 </p>
 
 <p style="color: #64748b; font-size: 14px;">This link will expire on ${formatDate(expiresAt)}.</p>
+` : '';
+
+      const emailContent = `
+<p>Hello,</p>
+
+<p>We have some questions about the following transactions that we need your help to clarify:</p>
+
+${queriesTableHtml}
+
+${linkSection}
 
 <p>If you have any questions, please don't hesitate to get in touch.</p>
 
@@ -622,14 +644,15 @@ ${queriesTableHtml}
 `;
 
       res.json({
-        tokenId: token.id,
-        token: token.token,
-        expiresAt: token.expiresAt,
+        tokenId: token?.id || null,
+        token: token?.token || null,
+        expiresAt: expiresAt,
         queryCount: queryIds.length,
         responseUrl,
         fullResponseUrl,
         emailSubject,
         emailContent,
+        includeOnlineLink,
         project: project ? { id: project.id, description: project.description, clientId: project.clientId } : null,
         client: client ? { id: client.id, name: client.name } : null,
       });
