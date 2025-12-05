@@ -27,6 +27,15 @@ export class ViewsStorage {
     return views;
   }
 
+  async updateProjectView(id: string, updates: Partial<InsertProjectView>): Promise<ProjectView | null> {
+    const [updated] = await db
+      .update(projectViews)
+      .set(updates)
+      .where(eq(projectViews.id, id))
+      .returning();
+    return updated || null;
+  }
+
   async deleteProjectView(id: string): Promise<void> {
     await db
       .delete(projectViews)

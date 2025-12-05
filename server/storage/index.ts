@@ -3002,6 +3002,10 @@ export class DatabaseStorage implements IStorage {
     return this.viewsStorage.getProjectViewsByUserId(userId);
   }
 
+  async updateProjectView(id: string, updates: any) {
+    return this.viewsStorage.updateProjectView(id, updates);
+  }
+
   async deleteProjectView(id: string) {
     return this.viewsStorage.deleteProjectView(id);
   }

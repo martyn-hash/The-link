@@ -15,6 +15,7 @@ import TaskList from "@/components/task-list";
 import DashboardBuilder from "@/components/dashboard-builder";
 import FilterPanel from "@/components/filter-panel";
 import ViewMegaMenu from "@/components/ViewMegaMenu";
+import LayoutsMenu from "@/components/LayoutsMenu";
 import PullToRefresh from "react-simple-pull-to-refresh";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -622,6 +623,23 @@ export default function Projects() {
     },
   });
 
+  // Update view mutation
+  const updateViewMutation = useMutation({
+    mutationFn: async (data: { id: string; filters: any; viewMode: "list" | "kanban" | "calendar" }) => {
+      return apiRequest("PATCH", `/api/project-views/${data.id}`, data);
+    },
+    onSuccess: (updatedView: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/project-views"] });
+      toast({
+        title: "View updated",
+        description: `"${updatedView.name}" has been updated with current filters`,
+      });
+    },
+    onError: (error) => {
+      showFriendlyError({ error });
+    },
+  });
+
   // Handler to save current view
   const handleSaveCurrentView = () => {
     if (!newViewName.trim()) {
@@ -655,6 +673,45 @@ export default function Projects() {
 
     saveViewMutation.mutate({
       name: newViewName.trim(),
+      filters: JSON.stringify(filters),
+      viewMode,
+    });
+  };
+
+  // Handler to update current saved view with current filters
+  const handleUpdateCurrentView = () => {
+    // If no view is currently loaded, open save dialog as "save new"
+    if (!currentSavedViewId) {
+      setSaveViewDialogOpen(true);
+      return;
+    }
+
+    // Only update list/kanban/calendar views
+    if (viewMode !== "list" && viewMode !== "kanban" && viewMode !== "calendar") {
+      showFriendlyError({ error: "Dashboard views must be updated using the dashboard edit dialog" });
+      return;
+    }
+
+    const filters: any = {
+      serviceFilter,
+      taskAssigneeFilter,
+      serviceOwnerFilter,
+      userFilter,
+      showArchived,
+      behindScheduleOnly,
+      showCompletedRegardless,
+      dynamicDateFilter,
+      customDateRange,
+      serviceDueDateFilter,
+    };
+
+    // Include calendar settings if updating a calendar view
+    if (viewMode === "calendar" && calendarSettings) {
+      filters.calendarSettings = calendarSettings;
+    }
+
+    updateViewMutation.mutate({
+      id: currentSavedViewId,
       filters: JSON.stringify(filters),
       viewMode,
     });
@@ -1113,57 +1170,29 @@ export default function Projects() {
               </h2>
             </div>
             
-            {/* Desktop View - Full buttons */}
-            <div className="hidden md:flex items-center space-x-4 flex-shrink-0">
-              {/* Unified View Mega Menu */}
+            {/* Desktop View - Reorganized toolbar */}
+            <div className="hidden md:flex items-center space-x-3 flex-shrink-0">
+              {/* Layouts Menu - for switching between list/kanban/dashboard/calendar */}
+              <LayoutsMenu
+                currentViewMode={viewMode}
+                onViewModeChange={handleManualViewModeChange}
+              />
+
+              {/* Views Mega Menu - for loading/saving views */}
               <ViewMegaMenu
                 currentViewMode={viewMode}
+                currentSavedViewId={currentSavedViewId}
                 onLoadListView={handleLoadSavedView}
                 onLoadKanbanView={handleLoadSavedView}
                 onLoadCalendarView={handleLoadSavedView}
                 onLoadDashboard={handleLoadDashboard}
+                onSaveNewView={() => setSaveViewDialogOpen(true)}
+                onUpdateCurrentView={handleUpdateCurrentView}
               />
-
-              {/* Save Current View button - only show for list/kanban/calendar */}
-              {(viewMode === "list" || viewMode === "kanban" || viewMode === "calendar") && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSaveViewDialogOpen(true)}
-                  data-testid="button-save-view"
-                >
-                  Save Current View
-                </Button>
-              )}
-
-              {/* View All Projects button */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleViewAllProjects}
-                data-testid="button-view-all-projects"
-              >
-                View All Projects
-              </Button>
-
-              {/* Switch to List View button - only show in kanban view */}
-              {viewMode === "kanban" && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleManualViewModeChange("list")}
-                  data-testid="button-switch-to-list-view"
-                  className="gap-2"
-                >
-                  <List className="w-4 h-4" />
-                  Switch to List View
-                </Button>
-              )}
 
               {/* Dashboard-specific buttons */}
               {viewMode === "dashboard" && (
                 <>
-                  {/* Create Dashboard button always visible */}
                   <Button
                     variant="outline"
                     size="sm"
@@ -1175,7 +1204,6 @@ export default function Projects() {
                       setNewDashboardIsHomescreen(false);
                       setNewDashboardVisibility("private");
                       setNewDashboardWidgets([]);
-                      // Reset dashboard filters to default
                       setDashboardServiceFilter("all");
                       setDashboardTaskAssigneeFilter("all");
                       setDashboardServiceOwnerFilter("all");
@@ -1188,17 +1216,15 @@ export default function Projects() {
                     data-testid="button-create-dashboard"
                   >
                     <Plus className="w-4 h-4 mr-2" />
-                    Create New Dashboard
+                    Create Dashboard
                   </Button>
                   
-                  {/* Show Save/Edit buttons when dashboard is loaded */}
                   {currentDashboard && (
                     <>
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          // Edit current dashboard - populate all fields
                           setIsCreatingDashboard(false);
                           setNewDashboardName(currentDashboard.name);
                           setNewDashboardDescription(dashboardDescription);
@@ -1222,42 +1248,6 @@ export default function Projects() {
                     </>
                   )}
                 </>
-              )}
-
-              {/* View Mode Toggle */}
-              {isManagerOrAdmin && (
-                <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-lg">
-                  <Button
-                    variant={viewMode === "list" ? "secondary" : "ghost"}
-                    size="sm"
-                    onClick={() => handleManualViewModeChange("list")}
-                    data-testid="button-view-list"
-                    className="h-11 md:h-8 px-2 md:px-3"
-                  >
-                    <List className="w-4 h-4" />
-                    <span className="hidden md:inline ml-2">List</span>
-                  </Button>
-                  <Button
-                    variant={viewMode === "dashboard" ? "secondary" : "ghost"}
-                    size="sm"
-                    onClick={() => handleManualViewModeChange("dashboard")}
-                    data-testid="button-view-dashboard"
-                    className="h-11 md:h-8 px-2 md:px-3"
-                  >
-                    <BarChart3 className="w-4 h-4" />
-                    <span className="hidden md:inline ml-2">Dashboard</span>
-                  </Button>
-                  <Button
-                    variant={viewMode === "calendar" ? "secondary" : "ghost"}
-                    size="sm"
-                    onClick={() => handleManualViewModeChange("calendar")}
-                    data-testid="button-view-calendar"
-                    className="h-11 md:h-8 px-2 md:px-3"
-                  >
-                    <CalendarIcon className="w-4 h-4" />
-                    <span className="hidden md:inline ml-2">Calendar</span>
-                  </Button>
-                </div>
               )}
               
               {/* Filters Button - visible in list, kanban, or calendar view */}
@@ -1308,73 +1298,25 @@ export default function Projects() {
 
             {/* Mobile View - Compact controls only */}
             <div className="flex md:hidden items-center gap-2 flex-shrink-0">
-              {/* Saved Views Menu */}
+              {/* Layouts Menu */}
+              <LayoutsMenu
+                currentViewMode={viewMode}
+                onViewModeChange={handleManualViewModeChange}
+                isMobileIconOnly={true}
+              />
+
+              {/* Views Menu */}
               <ViewMegaMenu
                 currentViewMode={viewMode}
+                currentSavedViewId={currentSavedViewId}
                 onLoadListView={handleLoadSavedView}
                 onLoadKanbanView={handleLoadSavedView}
                 onLoadCalendarView={handleLoadSavedView}
                 onLoadDashboard={handleLoadDashboard}
+                onSaveNewView={() => setSaveViewDialogOpen(true)}
+                onUpdateCurrentView={handleUpdateCurrentView}
                 isMobileIconOnly={true}
               />
-
-              {/* View All Projects Button */}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleViewAllProjects}
-                data-testid="button-view-all-projects-mobile"
-                className="h-11 px-3"
-              >
-                <List className="w-4 h-4" />
-              </Button>
-
-              {/* Switch to List View button - only show in kanban view */}
-              {viewMode === "kanban" && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleManualViewModeChange("list")}
-                  data-testid="button-switch-to-list-view-mobile"
-                  className="h-11 px-3 gap-2"
-                >
-                  <List className="w-4 h-4" />
-                  <span className="hidden sm:inline">List View</span>
-                </Button>
-              )}
-
-              {/* View Mode Toggle */}
-              {isManagerOrAdmin && (
-                <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-lg">
-                  <Button
-                    variant={viewMode === "list" ? "secondary" : "ghost"}
-                    size="sm"
-                    onClick={() => handleManualViewModeChange("list")}
-                    data-testid="button-view-list"
-                    className="h-11 px-2"
-                  >
-                    <List className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant={viewMode === "dashboard" ? "secondary" : "ghost"}
-                    size="sm"
-                    onClick={() => handleManualViewModeChange("dashboard")}
-                    data-testid="button-view-dashboard"
-                    className="h-11 px-2"
-                  >
-                    <BarChart3 className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant={viewMode === "calendar" ? "secondary" : "ghost"}
-                    size="sm"
-                    onClick={() => handleManualViewModeChange("calendar")}
-                    data-testid="button-view-calendar-mobile"
-                    className="h-11 px-2"
-                  >
-                    <CalendarIcon className="w-4 h-4" />
-                  </Button>
-                </div>
-              )}
               
               {/* Filters Button - visible in list, kanban, or calendar view */}
               {(viewMode === "list" || viewMode === "kanban" || viewMode === "calendar") && (
@@ -1382,14 +1324,14 @@ export default function Projects() {
                   variant="outline"
                   onClick={() => setFilterPanelOpen(true)}
                   className="relative h-11 px-3"
-                  data-testid="button-open-filters"
+                  data-testid="button-open-filters-mobile"
                 >
                   <Filter className="w-4 h-4" />
                   {activeFilterCount() > 0 && (
                     <Badge 
                       variant="secondary" 
                       className="ml-1.5 rounded-full px-1.5 text-xs"
-                      data-testid="badge-active-filters-count"
+                      data-testid="badge-active-filters-count-mobile"
                     >
                       {activeFilterCount()}
                     </Badge>

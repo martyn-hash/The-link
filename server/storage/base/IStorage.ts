@@ -393,6 +393,7 @@ export interface IStorage {
   
   createProjectView(view: InsertProjectView): Promise<ProjectView>;
   getProjectViewsByUserId(userId: string): Promise<ProjectView[]>;
+  updateProjectView(id: string, updates: Partial<InsertProjectView>): Promise<ProjectView | null>;
   deleteProjectView(id: string): Promise<void>;
   
   createCompanyView(view: InsertCompanyView): Promise<CompanyView>;

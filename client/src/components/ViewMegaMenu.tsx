@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Trash2, List, Columns3, LayoutDashboard, Calendar } from "lucide-react";
+import { Trash2, List, Columns3, LayoutDashboard, Calendar, Save, RefreshCw, Bookmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -18,41 +18,43 @@ import type { Dashboard } from "@/pages/projects";
 
 interface ViewMegaMenuProps {
   currentViewMode: "list" | "kanban" | "dashboard" | "calendar";
+  currentSavedViewId: string | null;
   onLoadListView: (view: ProjectView) => void;
   onLoadKanbanView: (view: ProjectView) => void;
   onLoadCalendarView: (view: ProjectView) => void;
   onLoadDashboard: (dashboard: Dashboard) => void;
+  onSaveNewView: () => void;
+  onUpdateCurrentView: () => void;
   isMobileIconOnly?: boolean;
 }
 
 export default function ViewMegaMenu({
   currentViewMode,
+  currentSavedViewId,
   onLoadListView,
   onLoadKanbanView,
   onLoadCalendarView,
   onLoadDashboard,
+  onSaveNewView,
+  onUpdateCurrentView,
   isMobileIconOnly = false,
 }: ViewMegaMenuProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
 
-  // Fetch all saved views
   const { data: savedViews = [] } = useQuery<ProjectView[]>({
     queryKey: ["/api/project-views"],
   });
 
-  // Fetch all dashboards
   const { data: dashboards = [] } = useQuery<Dashboard[]>({
     queryKey: ["/api/dashboards"],
   });
 
-  // Separate views by type
   const listViews = savedViews.filter(v => v.viewMode === "list");
   const kanbanViews = savedViews.filter(v => v.viewMode === "kanban");
   const calendarViews = savedViews.filter(v => v.viewMode === "calendar");
 
-  // Delete view mutation
   const deleteViewMutation = useMutation({
     mutationFn: async (viewId: string) => {
       return apiRequest("DELETE", `/api/project-views/${viewId}`);
@@ -69,7 +71,6 @@ export default function ViewMegaMenu({
     },
   });
 
-  // Delete dashboard mutation
   const deleteDashboardMutation = useMutation({
     mutationFn: async (dashboardId: string) => {
       return apiRequest("DELETE", `/api/dashboards/${dashboardId}`);
@@ -102,11 +103,21 @@ export default function ViewMegaMenu({
     setMenuOpen(false);
   };
 
-  const hasAnyViews = listViews.length > 0 || kanbanViews.length > 0 || calendarViews.length > 0 || dashboards.length > 0;
+  const handleSaveNewView = () => {
+    onSaveNewView();
+    setMenuOpen(false);
+  };
 
-  if (!hasAnyViews) {
-    return null; // Don't show the menu if there are no saved views
-  }
+  const handleUpdateCurrentView = () => {
+    onUpdateCurrentView();
+    setMenuOpen(false);
+  };
+
+  const currentViewName = currentSavedViewId 
+    ? savedViews.find(v => v.id === currentSavedViewId)?.name 
+    : null;
+
+  const showSaveButtons = currentViewMode !== "dashboard";
 
   return (
     <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
@@ -116,8 +127,8 @@ export default function ViewMegaMenu({
           data-testid="button-view-mega-menu"
           className={isMobileIconOnly ? "h-11 px-3" : "gap-2"}
         >
-          <LayoutDashboard className="h-4 w-4" />
-          {!isMobileIconOnly && <span>Saved Views</span>}
+          <Bookmark className="h-4 w-4" />
+          {!isMobileIconOnly && <span>Views</span>}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -125,8 +136,42 @@ export default function ViewMegaMenu({
         className={isMobile ? "w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto p-0" : "w-[900px] p-0"}
         onMouseLeave={() => !isMobile && setMenuOpen(false)}
       >
+        {showSaveButtons && (
+          <>
+            <div className="p-3 bg-muted/30">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSaveNewView}
+                  className="gap-2"
+                  data-testid="button-save-new-view"
+                >
+                  <Save className="h-4 w-4" />
+                  Save New View
+                </Button>
+                <Button
+                  variant={currentSavedViewId ? "default" : "outline"}
+                  size="sm"
+                  onClick={handleUpdateCurrentView}
+                  className="gap-2"
+                  data-testid="button-update-current-view"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  {currentSavedViewId ? `Update "${currentViewName}"` : "Update Current View"}
+                </Button>
+              </div>
+              {currentViewName && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  Currently viewing: <span className="font-medium">{currentViewName}</span>
+                </p>
+              )}
+            </div>
+            <Separator />
+          </>
+        )}
+        
         <div className={isMobile ? "flex flex-col divide-y" : "grid grid-cols-4 divide-x"}>
-          {/* Lists Column */}
           <div className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <List className="h-4 w-4 text-muted-foreground" />
@@ -142,7 +187,7 @@ export default function ViewMegaMenu({
                 listViews.map((view) => (
                   <div
                     key={view.id}
-                    className="flex items-center gap-1 group hover:bg-accent rounded-sm p-1.5"
+                    className={`flex items-center gap-1 group hover:bg-accent rounded-sm p-1.5 ${currentSavedViewId === view.id ? 'bg-accent/50 ring-1 ring-primary/20' : ''}`}
                   >
                     <button
                       onClick={() => handleLoadView(view)}
@@ -167,7 +212,6 @@ export default function ViewMegaMenu({
             </div>
           </div>
 
-          {/* Kanbans Column */}
           <div className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <Columns3 className="h-4 w-4 text-muted-foreground" />
@@ -183,7 +227,7 @@ export default function ViewMegaMenu({
                 kanbanViews.map((view) => (
                   <div
                     key={view.id}
-                    className="flex items-center gap-1 group hover:bg-accent rounded-sm p-1.5"
+                    className={`flex items-center gap-1 group hover:bg-accent rounded-sm p-1.5 ${currentSavedViewId === view.id ? 'bg-accent/50 ring-1 ring-primary/20' : ''}`}
                   >
                     <button
                       onClick={() => handleLoadView(view)}
@@ -208,7 +252,6 @@ export default function ViewMegaMenu({
             </div>
           </div>
 
-          {/* Calendars Column */}
           <div className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -224,7 +267,7 @@ export default function ViewMegaMenu({
                 calendarViews.map((view) => (
                   <div
                     key={view.id}
-                    className="flex items-center gap-1 group hover:bg-accent rounded-sm p-1.5"
+                    className={`flex items-center gap-1 group hover:bg-accent rounded-sm p-1.5 ${currentSavedViewId === view.id ? 'bg-accent/50 ring-1 ring-primary/20' : ''}`}
                   >
                     <button
                       onClick={() => handleLoadView(view)}
@@ -249,7 +292,6 @@ export default function ViewMegaMenu({
             </div>
           </div>
 
-          {/* Dashboards Column */}
           <div className="p-4">
             <div className="flex items-center gap-2 mb-3">
               <LayoutDashboard className="h-4 w-4 text-muted-foreground" />

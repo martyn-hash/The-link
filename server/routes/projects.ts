@@ -116,6 +116,45 @@ export function registerProjectRoutes(
     }
   });
 
+  app.patch("/api/project-views/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      if (!effectiveUserId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      // Validate path parameters
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid path parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      // First, verify the view belongs to the user
+      const views = await storage.getProjectViewsByUserId(effectiveUserId);
+      const viewToUpdate = views.find(v => v.id === req.params.id);
+
+      if (!viewToUpdate) {
+        return res.status(404).json({ message: "Project view not found or access denied" });
+      }
+
+      // Only allow updating certain fields (not userId or id)
+      const { name, filters, viewMode } = req.body;
+      const updates: any = {};
+      if (name !== undefined) updates.name = name;
+      if (filters !== undefined) updates.filters = filters;
+      if (viewMode !== undefined) updates.viewMode = viewMode;
+
+      const updatedView = await storage.updateProjectView(req.params.id, updates);
+      res.json(updatedView);
+    } catch (error) {
+      console.error("Error updating project view:", error instanceof Error ? error.message : error);
+      res.status(400).json({ message: "Failed to update project view" });
+    }
+  });
+
   app.delete("/api/project-views/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const effectiveUserId = req.user?.effectiveUserId;
