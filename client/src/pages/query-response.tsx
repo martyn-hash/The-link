@@ -200,6 +200,25 @@ export default function QueryResponsePage() {
     }
   }, [data]);
 
+  // Swipe handlers - must be called before any early returns to satisfy React hooks rules
+  const totalCount = data?.queries?.length || 0;
+  const swipeHandlers = useSwipeable({
+    onSwipedLeft: () => {
+      if (currentIndex < totalCount - 1) {
+        setCurrentIndex(prev => prev + 1);
+      }
+    },
+    onSwipedRight: () => {
+      if (currentIndex > 0) {
+        setCurrentIndex(prev => prev - 1);
+      }
+    },
+    preventScrollOnSwipe: true,
+    trackMouse: false,
+    trackTouch: true,
+    delta: 50,
+  });
+
   const updateResponse = (queryId: string, field: 'clientResponse' | 'hasVat', value: string | boolean | null) => {
     setResponses(prev => {
       const updated = {
@@ -328,7 +347,6 @@ export default function QueryResponsePage() {
   };
 
   const answeredCount = Object.values(responses).filter(r => r.clientResponse?.trim()).length;
-  const totalCount = data?.queries?.length || 0;
   const progress = totalCount > 0 ? (answeredCount / totalCount) * 100 : 0;
 
   const formatDate = (date: string | null) => {
@@ -469,23 +487,6 @@ export default function QueryResponsePage() {
   }
 
   const currentQuery = data.queries[currentIndex];
-
-  const swipeHandlers = useSwipeable({
-    onSwipedLeft: () => {
-      if (currentIndex < totalCount - 1) {
-        setCurrentIndex(prev => prev + 1);
-      }
-    },
-    onSwipedRight: () => {
-      if (currentIndex > 0) {
-        setCurrentIndex(prev => prev - 1);
-      }
-    },
-    preventScrollOnSwipe: true,
-    trackMouse: false,
-    trackTouch: true,
-    delta: 50,
-  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
