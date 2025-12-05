@@ -140,7 +140,6 @@ export function registerQueryRoutes(
         ...req.body,
         projectId,
         createdById: userId,
-        updatedById: userId,
       });
 
       if (!validationResult.success) {
@@ -184,7 +183,6 @@ export function registerQueryRoutes(
         ...q,
         projectId,
         createdById: userId,
-        updatedById: userId,
       }));
 
       const validationResults = queriesData.map((q: any) => 
@@ -234,10 +232,7 @@ export function registerQueryRoutes(
         return res.status(404).json({ message: "Query not found" });
       }
 
-      const validationResult = updateBookkeepingQuerySchema.safeParse({
-        ...req.body,
-        updatedById: userId,
-      });
+      const validationResult = updateBookkeepingQuerySchema.safeParse(req.body);
 
       if (!validationResult.success) {
         return res.status(400).json({
@@ -246,7 +241,7 @@ export function registerQueryRoutes(
         });
       }
 
-      const query = await storage.updateQuery(id, validationResult.data);
+      const query = await storage.updateQuery(id, validationResult.data, userId);
       res.json(query);
     } catch (error) {
       console.error("Error updating query:", error);

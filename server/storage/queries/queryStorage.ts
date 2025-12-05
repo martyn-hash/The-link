@@ -86,18 +86,24 @@ export class QueryStorage extends BaseStorage {
     return result?.count || 0;
   }
 
-  async updateQuery(id: string, data: UpdateBookkeepingQuery): Promise<BookkeepingQuery> {
+  async updateQuery(id: string, data: UpdateBookkeepingQuery, userId?: string): Promise<BookkeepingQuery> {
     const updates: any = { ...data };
     
     if (data.status === 'answered_by_staff' || data.status === 'answered_by_client') {
       if (!updates.answeredAt) {
         updates.answeredAt = new Date();
       }
+      if (userId) {
+        updates.answeredById = userId;
+      }
     }
     
     if (data.status === 'resolved') {
       if (!updates.resolvedAt) {
         updates.resolvedAt = new Date();
+      }
+      if (userId) {
+        updates.resolvedById = userId;
       }
     }
     

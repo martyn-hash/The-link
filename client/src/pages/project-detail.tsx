@@ -1048,6 +1048,10 @@ export default function ProjectDetail() {
                 <ProjectMessaging projectId={project.id} project={project} />
               </TabsContent>
 
+              <TabsContent value="queries" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
+                <QueriesTab projectId={project.id} />
+              </TabsContent>
+
               <TabsContent value="tasks" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
                 <Card>
                     <CardHeader>

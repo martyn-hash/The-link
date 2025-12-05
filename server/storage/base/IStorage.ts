@@ -933,7 +933,7 @@ export interface IStorage {
   getQueriesByProjectId(projectId: string): Promise<BookkeepingQueryWithRelations[]>;
   getQueryCountByProjectId(projectId: string): Promise<number>;
   getOpenQueryCountByProjectId(projectId: string): Promise<number>;
-  updateQuery(id: string, query: UpdateBookkeepingQuery): Promise<BookkeepingQuery>;
+  updateQuery(id: string, query: UpdateBookkeepingQuery, userId?: string): Promise<BookkeepingQuery>;
   deleteQuery(id: string): Promise<void>;
   deleteQueriesByProjectId(projectId: string): Promise<number>;
   bulkUpdateQueryStatus(ids: string[], status: BookkeepingQuery['status'], updatedById: string): Promise<number>;
