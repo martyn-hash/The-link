@@ -1,0 +1,1 @@
+export { QueriesTab } from './QueriesTab';
