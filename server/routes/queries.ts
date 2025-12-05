@@ -612,10 +612,15 @@ export function registerQueryRoutes(
         // Build the response URL with proper domain handling
         responseUrl = `/queries/respond/${token.token}`;
         
-        // Get base URL: APP_URL for production, or Replit domain for dev
-        let baseUrl = process.env.APP_URL;
-        if (!baseUrl) {
-          // Fall back to Replit domains
+        // Get base URL: APP_URL for production only, Replit domain for dev
+        let baseUrl: string;
+        const isProduction = process.env.NODE_ENV === 'production';
+        
+        if (isProduction && process.env.APP_URL) {
+          // Production: use the configured APP_URL
+          baseUrl = process.env.APP_URL;
+        } else {
+          // Development: use Replit dev domain
           const replitDomain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0];
           if (replitDomain) {
             // Clean up the domain and ensure https:// prefix
@@ -624,7 +629,7 @@ export function registerQueryRoutes(
               baseUrl = `https://${baseUrl}`;
             }
           } else {
-            baseUrl = 'https://yourapp.replit.app';
+            baseUrl = 'http://localhost:5000';
           }
         }
         fullResponseUrl = `${baseUrl}${responseUrl}`;
@@ -871,10 +876,15 @@ ${linkSection}
       // Build the response URL with proper domain handling
       const responseUrl = `/queries/respond/${token.token}`;
       
-      // Get base URL: APP_URL for production, or Replit domain for dev
-      let baseUrl = process.env.APP_URL;
-      if (!baseUrl) {
-        // Fall back to Replit domains
+      // Get base URL: APP_URL for production only, Replit domain for dev
+      let baseUrl: string;
+      const isProduction = process.env.NODE_ENV === 'production';
+      
+      if (isProduction && process.env.APP_URL) {
+        // Production: use the configured APP_URL
+        baseUrl = process.env.APP_URL;
+      } else {
+        // Development: use Replit dev domain
         const replitDomain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0];
         if (replitDomain) {
           // Clean up the domain and ensure https:// prefix
@@ -883,7 +893,7 @@ ${linkSection}
             baseUrl = `https://${baseUrl}`;
           }
         } else {
-          baseUrl = 'https://yourapp.replit.app';
+          baseUrl = 'http://localhost:5000';
         }
       }
       const fullResponseUrl = `${baseUrl}${responseUrl}`;
@@ -1230,6 +1240,104 @@ ${linkSection}
     } catch (error) {
       console.error("Error fetching query tokens:", error);
       res.status(500).json({ message: "Failed to fetch query tokens" });
+    }
+  });
+
+  // POST /api/test/query-email - Send a test query email via SendGrid (protected by secret token)
+  app.post("/api/test/query-email", async (req: any, res: any) => {
+    try {
+      const { to, secret } = req.body;
+      
+      // Require a secret token for security (use TEST_ADMIN_PASSWORD as the secret)
+      const expectedSecret = process.env.TEST_ADMIN_PASSWORD;
+      if (!expectedSecret || secret !== expectedSecret) {
+        return res.status(401).json({ message: "Invalid or missing secret token" });
+      }
+      
+      if (!to) {
+        return res.status(400).json({ message: "Recipient email (to) is required" });
+      }
+
+      // Import SendGrid dynamically
+      const { getUncachableSendGridClient } = await import('../sendgridService');
+      const { client, fromEmail } = await getUncachableSendGridClient();
+
+      // Sample data for testing the table
+      const sampleData = [
+        { date: '01 Dec 2024', description: 'Payment from Customer XYZ', moneyIn: '£500.00', moneyOut: '-', query: 'What is this payment for?' },
+        { date: '05 Dec 2024', description: 'Transfer to ABC Ltd', moneyIn: '-', moneyOut: '£250.00', query: 'Please provide invoice for this payment' },
+        { date: '10 Dec 2024', description: 'Cash deposit', moneyIn: '£150.00', moneyOut: '-', query: 'What is the source of this deposit?' },
+      ];
+
+      // Build the email table HTML (exact same format as production emails)
+      const borderColor = '#d0d7de';
+      const cellStyle = `border:1px solid ${borderColor}; padding:8px; font-size:13px;`;
+      const headerStyle = `border:1px solid ${borderColor}; padding:8px; font-weight:bold; font-size:13px; background-color:#f6f8fa;`;
+      
+      const tableHtml = `
+<table border="1" cellpadding="0" cellspacing="0" bordercolor="${borderColor}" style="border-collapse:collapse; mso-table-lspace:0pt; mso-table-rspace:0pt; width:100%; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin:16px 0; border:1px solid ${borderColor};">
+  <tr>
+    <th align="left" style="${headerStyle} color:#334155;">Date</th>
+    <th align="left" style="${headerStyle} color:#334155;">Description</th>
+    <th align="right" style="${headerStyle} color:#16a34a;">Money In</th>
+    <th align="right" style="${headerStyle} color:#dc2626;">Money Out</th>
+    <th align="left" style="${headerStyle} color:#334155;">Our Query</th>
+  </tr>
+  ${sampleData.map((row, i) => `
+  <tr${i % 2 === 1 ? ' style="background-color:#f8fafc;"' : ''}>
+    <td align="left" style="${cellStyle} color:#475569;">${row.date}</td>
+    <td align="left" style="${cellStyle} color:#475569;">${row.description}</td>
+    <td align="right" style="${cellStyle} color:#16a34a;">${row.moneyIn}</td>
+    <td align="right" style="${cellStyle} color:#dc2626;">${row.moneyOut}</td>
+    <td align="left" style="${cellStyle} color:#1e293b; font-weight:500;">${row.query}</td>
+  </tr>
+  `).join('')}
+</table>`;
+
+      const emailContent = `
+<p>Hello,</p>
+
+<p>This is a <strong>test email</strong> to verify the bookkeeping query table renders correctly with borders in your email client.</p>
+
+<p>We have some questions about the following transactions that we need your help to clarify:</p>
+
+${tableHtml}
+
+<p style="margin: 24px 0;">
+  <a href="https://example.com/test-link" style="display: inline-block; background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+    Click here to respond to these queries
+  </a>
+</p>
+
+<p style="color: #64748b; font-size: 14px;">This is a test email - no action required.</p>
+
+<p>Best regards,<br>The Link Test</p>
+`;
+
+      const msg = {
+        to,
+        from: {
+          email: fromEmail,
+          name: 'The Link (Test)'
+        },
+        subject: 'TEST: Bookkeeping Query Table Email',
+        html: emailContent,
+        text: 'This is a test email to verify the bookkeeping query table renders correctly. Please view this email in HTML mode.',
+      };
+
+      await client.send(msg);
+
+      res.json({
+        success: true,
+        message: `Test email sent to ${to}`,
+        tableHtml,
+      });
+    } catch (error) {
+      console.error("Error sending test query email:", error);
+      res.status(500).json({ 
+        message: "Failed to send test email",
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
     }
   });
 }
