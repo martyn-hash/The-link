@@ -9,8 +9,10 @@ import {
   insertBookkeepingQuerySchema,
   updateBookkeepingQuerySchema,
   sendToClientSchema,
+  type QueryAttachment,
 } from "@shared/schema";
 import { sendBookkeepingQueryEmail } from "../emailService";
+import { ObjectStorageService, ObjectNotFoundError } from "../objectStorage";
 
 const paramProjectIdSchema = z.object({
   projectId: z.string().uuid("Invalid project ID format")
@@ -29,13 +31,38 @@ const markSentToClientSchema = z.object({
   ids: z.array(z.string().uuid()),
 });
 
+const attachmentSchema = z.object({
+  objectPath: z.string(),
+  fileName: z.string(),
+  fileType: z.string(),
+  fileSize: z.number(),
+  uploadedAt: z.string(),
+});
+
 const clientResponseSchema = z.object({
   responses: z.array(z.object({
     queryId: z.string().uuid(),
     clientResponse: z.string().optional(),
     hasVat: z.boolean().optional(),
+    attachments: z.array(attachmentSchema).optional(),
   }))
 });
+
+const uploadUrlRequestSchema = z.object({
+  fileName: z.string().min(1),
+  fileType: z.string().min(1),
+  fileSize: z.number().positive(),
+  queryId: z.string().uuid(),
+});
+
+const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_FILE_TYPES = [
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'application/pdf',
+  'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/plain', 'text/csv',
+];
 
 export function registerQueryRoutes(
   app: Express,
@@ -920,12 +947,77 @@ ${linkSection}
           hasVat: q.hasVat,
           ourQuery: q.ourQuery,
           clientResponse: q.clientResponse,
+          clientAttachments: q.clientAttachments,
           status: q.status,
         })),
       });
     } catch (error) {
       console.error("Error validating query response token:", error);
       res.status(500).json({ message: "Failed to validate token" });
+    }
+  });
+
+  // POST /api/query-response/:token/upload-url - Generate upload URL for attachment (public endpoint)
+  app.post("/api/query-response/:token/upload-url", async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramTokenSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid token format",
+          errors: paramValidation.errors
+        });
+      }
+
+      const { token } = req.params;
+      const validation = await storage.validateQueryResponseToken(token);
+
+      if (!validation.valid) {
+        return res.status(400).json({ 
+          message: validation.reason,
+          expired: validation.reason === 'Token has expired',
+          completed: validation.reason === 'Responses already submitted'
+        });
+      }
+
+      const bodyValidation = uploadUrlRequestSchema.safeParse(req.body);
+      if (!bodyValidation.success) {
+        return res.status(400).json({
+          message: "Invalid request data",
+          errors: bodyValidation.error.issues
+        });
+      }
+
+      const { fileName, fileType, fileSize, queryId } = bodyValidation.data;
+
+      // Validate file size
+      if (fileSize > MAX_ATTACHMENT_SIZE) {
+        return res.status(400).json({ message: "File is too large. Maximum size is 10MB." });
+      }
+
+      // Validate file type
+      if (!ALLOWED_FILE_TYPES.includes(fileType)) {
+        return res.status(400).json({ message: "File type not allowed. Please upload images, PDFs, or Office documents." });
+      }
+
+      // Verify the query belongs to this token
+      const tokenQueries = await storage.getQueriesForToken(token);
+      const tokenQueryIds = new Set(tokenQueries.map(q => q.id));
+      if (!tokenQueryIds.has(queryId)) {
+        return res.status(400).json({ message: "Query not found in this response session" });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const { uploadURL, objectPath } = await objectStorageService.getObjectEntityUploadURL();
+
+      res.json({
+        url: uploadURL,
+        objectPath,
+        fileName,
+        fileType,
+      });
+    } catch (error) {
+      console.error("Error generating upload URL:", error);
+      res.status(500).json({ message: "Failed to generate upload URL" });
     }
   });
 
@@ -972,15 +1064,27 @@ ${linkSection}
         }
       }
 
-      // Update each query with the client response
+      // Update each query with the client response and attachments
       let updatedCount = 0;
       for (const response of responses) {
-        if (response.clientResponse || response.hasVat !== undefined) {
-          await storage.updateQuery(response.queryId, {
-            clientResponse: response.clientResponse,
-            hasVat: response.hasVat,
+        if (response.clientResponse || response.hasVat !== undefined || response.attachments?.length) {
+          const updateData: any = {
             status: 'answered_by_client',
-          });
+          };
+          
+          if (response.clientResponse !== undefined) {
+            updateData.clientResponse = response.clientResponse;
+          }
+          
+          if (response.hasVat !== undefined) {
+            updateData.hasVat = response.hasVat;
+          }
+          
+          if (response.attachments?.length) {
+            updateData.clientAttachments = response.attachments as QueryAttachment[];
+          }
+          
+          await storage.updateQuery(response.queryId, updateData);
           updatedCount++;
         }
       }

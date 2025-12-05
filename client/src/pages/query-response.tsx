@@ -30,7 +30,20 @@ import {
   HelpCircle,
   MessageSquare,
   Hand,
+  Paperclip,
+  Upload,
+  X,
+  File,
+  Image,
 } from "lucide-react";
+
+interface QueryAttachment {
+  objectPath: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  uploadedAt: string;
+}
 
 interface Query {
   id: string;
@@ -41,6 +54,7 @@ interface Query {
   hasVat: boolean | null;
   ourQuery: string;
   clientResponse: string | null;
+  clientAttachments: QueryAttachment[] | null;
   status: string;
 }
 
@@ -60,6 +74,7 @@ interface QueryResponse {
   queryId: string;
   clientResponse: string;
   hasVat: boolean | null;
+  attachments?: QueryAttachment[];
 }
 
 export default function QueryResponsePage() {
@@ -69,6 +84,7 @@ export default function QueryResponsePage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState<Record<string, boolean>>({});
 
   const { data, isLoading, error, isError } = useQuery<TokenData>({
     queryKey: ['/api/query-response', token],
@@ -109,6 +125,7 @@ export default function QueryResponsePage() {
           queryId: q.id,
           clientResponse: q.clientResponse || '',
           hasVat: q.hasVat,
+          attachments: q.clientAttachments || [],
         };
       });
       setResponses(initialResponses);
@@ -123,6 +140,103 @@ export default function QueryResponsePage() {
         [field]: value,
       },
     }));
+  };
+
+  const addAttachment = (queryId: string, attachment: QueryAttachment) => {
+    setResponses(prev => ({
+      ...prev,
+      [queryId]: {
+        ...prev[queryId],
+        attachments: [...(prev[queryId]?.attachments || []), attachment],
+      },
+    }));
+  };
+
+  const removeAttachment = (queryId: string, objectPath: string) => {
+    setResponses(prev => ({
+      ...prev,
+      [queryId]: {
+        ...prev[queryId],
+        attachments: prev[queryId]?.attachments?.filter(a => a.objectPath !== objectPath) || [],
+      },
+    }));
+  };
+
+  const handleFileUpload = async (queryId: string, file: File) => {
+    if (file.size > 10 * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: "Maximum file size is 10MB",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingFiles(prev => ({ ...prev, [queryId]: true }));
+
+    try {
+      const uploadUrlResponse = await fetch(`/api/query-response/${token}/upload-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          queryId,
+        }),
+      });
+
+      if (!uploadUrlResponse.ok) {
+        const error = await uploadUrlResponse.json();
+        throw new Error(error.message || 'Failed to get upload URL');
+      }
+
+      const { url, objectPath, fileName } = await uploadUrlResponse.json();
+
+      const uploadResponse = await fetch(url, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+        },
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload file');
+      }
+
+      addAttachment(queryId, {
+        objectPath,
+        fileName,
+        fileType: file.type,
+        fileSize: file.size,
+        uploadedAt: new Date().toISOString(),
+      });
+
+      toast({
+        title: "File uploaded",
+        description: fileName,
+      });
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : 'Failed to upload file',
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingFiles(prev => ({ ...prev, [queryId]: false }));
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const getFileIcon = (fileType: string) => {
+    if (fileType.startsWith('image/')) return <Image className="w-4 h-4" />;
+    return <File className="w-4 h-4" />;
   };
 
   const handleSubmit = () => {
@@ -398,6 +512,80 @@ export default function QueryResponsePage() {
                     data-testid={`switch-vat-${currentQuery.id}`}
                   />
                 </div>
+
+                <div className="border-t pt-4">
+                  <label className="text-sm font-medium flex items-center gap-2 mb-3">
+                    <Paperclip className="w-4 h-4" />
+                    Attachments
+                    <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+                  </label>
+                  
+                  {responses[currentQuery.id]?.attachments?.length > 0 && (
+                    <div className="space-y-2 mb-3">
+                      {responses[currentQuery.id].attachments!.map((attachment) => (
+                        <div 
+                          key={attachment.objectPath}
+                          className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border"
+                        >
+                          {getFileIcon(attachment.fileType)}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{attachment.fileName}</p>
+                            <p className="text-xs text-muted-foreground">{formatFileSize(attachment.fileSize)}</p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                            onClick={() => removeAttachment(currentQuery.id, attachment.objectPath)}
+                            data-testid={`button-remove-attachment-${attachment.objectPath}`}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          handleFileUpload(currentQuery.id, file);
+                          e.target.value = '';
+                        }
+                      }}
+                      disabled={uploadingFiles[currentQuery.id]}
+                      data-testid={`input-file-${currentQuery.id}`}
+                    />
+                    <div className={cn(
+                      "flex items-center justify-center gap-2 p-3 border-2 border-dashed rounded-lg transition-colors",
+                      uploadingFiles[currentQuery.id] 
+                        ? "bg-slate-100 border-slate-300 cursor-wait"
+                        : "border-slate-300 hover:border-primary hover:bg-slate-50"
+                    )}>
+                      {uploadingFiles[currentQuery.id] ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span className="text-sm text-muted-foreground">Uploading...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm text-muted-foreground">
+                            Click to upload a file
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </label>
+                  <p className="text-xs text-muted-foreground mt-1 text-center">
+                    Max 10MB. Images, PDFs, and Office documents accepted.
+                  </p>
+                </div>
               </CardContent>
             </Card>
 
@@ -469,8 +657,13 @@ export default function QueryResponsePage() {
                 index={index}
                 response={responses[query.id]}
                 onUpdateResponse={updateResponse}
+                onFileUpload={handleFileUpload}
+                onRemoveAttachment={removeAttachment}
+                isUploading={uploadingFiles[query.id] || false}
                 formatDate={formatDate}
                 formatAmount={formatAmount}
+                formatFileSize={formatFileSize}
+                getFileIcon={getFileIcon}
               />
             ))}
             
@@ -512,11 +705,28 @@ interface QueryListItemProps {
   index: number;
   response: QueryResponse;
   onUpdateResponse: (queryId: string, field: 'clientResponse' | 'hasVat', value: string | boolean | null) => void;
+  onFileUpload: (queryId: string, file: File) => void;
+  onRemoveAttachment: (queryId: string, objectPath: string) => void;
+  isUploading: boolean;
   formatDate: (date: string | null) => string | null;
   formatAmount: (moneyIn: string | null, moneyOut: string | null) => { amount: string; type: 'in' | 'out' } | null;
+  formatFileSize: (bytes: number) => string;
+  getFileIcon: (fileType: string) => JSX.Element;
 }
 
-function QueryListItem({ query, index, response, onUpdateResponse, formatDate, formatAmount }: QueryListItemProps) {
+function QueryListItem({ 
+  query, 
+  index, 
+  response, 
+  onUpdateResponse, 
+  onFileUpload,
+  onRemoveAttachment,
+  isUploading,
+  formatDate, 
+  formatAmount,
+  formatFileSize,
+  getFileIcon,
+}: QueryListItemProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const isAnswered = response?.clientResponse?.trim();
   const amountInfo = formatAmount(query.moneyIn, query.moneyOut);
@@ -547,6 +757,12 @@ function QueryListItem({ query, index, response, onUpdateResponse, formatDate, f
               {amountInfo && (
                 <span className={amountInfo.type === 'in' ? 'text-green-600' : 'text-red-600'}>
                   {amountInfo.amount}
+                </span>
+              )}
+              {response?.attachments?.length > 0 && (
+                <span className="flex items-center gap-1">
+                  <Paperclip className="w-3 h-3" />
+                  {response.attachments.length}
                 </span>
               )}
             </div>
@@ -582,6 +798,70 @@ function QueryListItem({ query, index, response, onUpdateResponse, formatDate, f
               onCheckedChange={(checked) => onUpdateResponse(query.id, 'hasVat', checked)}
               data-testid={`switch-list-vat-${query.id}`}
             />
+          </div>
+
+          <div className="border-t pt-3">
+            <label className="text-sm font-medium flex items-center gap-2 mb-2">
+              <Paperclip className="w-3 h-3" />
+              Attachments
+            </label>
+            
+            {response?.attachments?.length > 0 && (
+              <div className="space-y-1 mb-2">
+                {response.attachments.map((attachment) => (
+                  <div 
+                    key={attachment.objectPath}
+                    className="flex items-center gap-2 p-2 bg-slate-50 rounded border text-sm"
+                  >
+                    {getFileIcon(attachment.fileType)}
+                    <span className="flex-1 truncate">{attachment.fileName}</span>
+                    <span className="text-xs text-muted-foreground">{formatFileSize(attachment.fileSize)}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-red-500 hover:text-red-600"
+                      onClick={() => onRemoveAttachment(query.id, attachment.objectPath)}
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <label className="cursor-pointer block">
+              <input
+                type="file"
+                className="hidden"
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    onFileUpload(query.id, file);
+                    e.target.value = '';
+                  }
+                }}
+                disabled={isUploading}
+              />
+              <div className={cn(
+                "flex items-center justify-center gap-2 p-2 border border-dashed rounded text-sm transition-colors",
+                isUploading 
+                  ? "bg-slate-100 border-slate-300 cursor-wait"
+                  : "border-slate-300 hover:border-primary hover:bg-slate-50"
+              )}>
+                {isUploading ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <span className="text-muted-foreground">Uploading...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-3 h-3 text-muted-foreground" />
+                    <span className="text-muted-foreground">Upload file</span>
+                  </>
+                )}
+              </div>
+            </label>
           </div>
         </div>
       )}

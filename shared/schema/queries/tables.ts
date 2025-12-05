@@ -1,8 +1,16 @@
-import { pgTable, varchar, text, timestamp, boolean, index, decimal, integer } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, text, timestamp, boolean, index, decimal, integer, jsonb } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from '../users/tables';
 import { projects } from '../projects/tables';
 import { queryStatusEnum } from '../enums';
+
+export interface QueryAttachment {
+  objectPath: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  uploadedAt: string;
+}
 
 export const bookkeepingQueries = pgTable("bookkeeping_queries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -15,6 +23,7 @@ export const bookkeepingQueries = pgTable("bookkeeping_queries", {
   ourQuery: text("our_query"),
   comment: text("comment"),
   clientResponse: text("client_response"),
+  clientAttachments: jsonb("client_attachments").$type<QueryAttachment[]>(),
   status: queryStatusEnum("status").notNull().default("open"),
   createdById: varchar("created_by_id").notNull().references(() => users.id),
   answeredById: varchar("answered_by_id").references(() => users.id),
