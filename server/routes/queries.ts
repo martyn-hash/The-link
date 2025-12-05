@@ -55,6 +55,17 @@ const uploadUrlRequestSchema = z.object({
   queryId: z.string().uuid(),
 });
 
+const saveIndividualResponseSchema = z.object({
+  clientResponse: z.string().optional(),
+  hasVat: z.boolean().nullable().optional(),
+  attachments: z.array(attachmentSchema).optional(),
+});
+
+const paramTokenQueryIdSchema = z.object({
+  token: z.string().min(32, "Invalid token format"),
+  queryId: z.string().uuid("Invalid query ID format"),
+});
+
 const MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_FILE_TYPES = [
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
@@ -1018,6 +1029,75 @@ ${linkSection}
     } catch (error) {
       console.error("Error generating upload URL:", error);
       res.status(500).json({ message: "Failed to generate upload URL" });
+    }
+  });
+
+  // PATCH /api/query-response/:token/queries/:queryId - Save individual query response (public endpoint, auto-save)
+  app.patch("/api/query-response/:token/queries/:queryId", async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramTokenQueryIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      const { token, queryId } = req.params;
+      const validation = await storage.validateQueryResponseToken(token);
+
+      if (!validation.valid) {
+        return res.status(400).json({ 
+          message: validation.reason,
+          expired: validation.reason === 'Token has expired',
+          completed: validation.reason === 'Responses already submitted'
+        });
+      }
+
+      const bodyValidation = saveIndividualResponseSchema.safeParse(req.body);
+      if (!bodyValidation.success) {
+        return res.status(400).json({
+          message: "Invalid response data",
+          errors: bodyValidation.error.issues
+        });
+      }
+
+      // Verify the query belongs to this token
+      const tokenQueries = await storage.getQueriesForToken(token);
+      const tokenQueryIds = new Set(tokenQueries.map(q => q.id));
+      if (!tokenQueryIds.has(queryId)) {
+        return res.status(400).json({ message: "Query not found in this response session" });
+      }
+
+      const { clientResponse, hasVat, attachments } = bodyValidation.data;
+
+      // Build update data - only include fields that were actually sent
+      const updateData: any = {};
+      
+      if (clientResponse !== undefined) {
+        updateData.clientResponse = clientResponse;
+      }
+      
+      if (hasVat !== undefined) {
+        updateData.hasVat = hasVat;
+      }
+      
+      if (attachments !== undefined) {
+        updateData.clientAttachments = attachments as QueryAttachment[];
+      }
+
+      // Only update if there's something to update
+      if (Object.keys(updateData).length > 0) {
+        await storage.updateQuery(queryId, updateData);
+      }
+
+      res.json({
+        success: true,
+        savedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Error saving individual query response:", error);
+      res.status(500).json({ message: "Failed to save response" });
     }
   });
 

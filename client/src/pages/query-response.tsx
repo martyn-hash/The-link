@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -35,6 +35,10 @@ import {
   X,
   File,
   Image,
+  Save,
+  Cloud,
+  CloudOff,
+  Check,
 } from "lucide-react";
 
 interface QueryAttachment {
@@ -77,6 +81,8 @@ interface QueryResponse {
   attachments?: QueryAttachment[];
 }
 
+type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error';
+
 export default function QueryResponsePage() {
   const { token } = useParams<{ token: string }>();
   const { toast } = useToast();
@@ -85,6 +91,9 @@ export default function QueryResponsePage() {
   const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState<Record<string, boolean>>({});
+  const [saveStatus, setSaveStatus] = useState<Record<string, SaveStatus>>({});
+  const saveTimeouts = useRef<Record<string, NodeJS.Timeout>>({});
+  const DEBOUNCE_MS = 1500; // Auto-save after 1.5 seconds of no typing
 
   const { data, isLoading, error, isError } = useQuery<TokenData>({
     queryKey: ['/api/query-response', token],
@@ -117,9 +126,63 @@ export default function QueryResponsePage() {
     },
   });
 
+  // Auto-save mutation for individual queries
+  const autoSaveMutation = useMutation({
+    mutationFn: async ({ queryId, data }: { queryId: string; data: Partial<QueryResponse> }) => {
+      const response = await fetch(`/api/query-response/${token}/queries/${queryId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clientResponse: data.clientResponse,
+          hasVat: data.hasVat,
+          attachments: data.attachments,
+        }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to save response');
+      }
+      return { queryId, ...(await response.json()) };
+    },
+    onMutate: ({ queryId }) => {
+      setSaveStatus(prev => ({ ...prev, [queryId]: 'saving' }));
+    },
+    onSuccess: ({ queryId }) => {
+      setSaveStatus(prev => ({ ...prev, [queryId]: 'saved' }));
+    },
+    onError: (error: Error, { queryId }) => {
+      setSaveStatus(prev => ({ ...prev, [queryId]: 'error' }));
+      console.error('Auto-save failed:', error.message);
+    },
+  });
+
+  // Debounced auto-save function
+  const debouncedSave = useCallback((queryId: string, data: Partial<QueryResponse>) => {
+    // Clear any existing timeout for this query
+    if (saveTimeouts.current[queryId]) {
+      clearTimeout(saveTimeouts.current[queryId]);
+    }
+
+    // Mark as unsaved immediately
+    setSaveStatus(prev => ({ ...prev, [queryId]: 'unsaved' }));
+
+    // Set new timeout
+    saveTimeouts.current[queryId] = setTimeout(() => {
+      autoSaveMutation.mutate({ queryId, data });
+    }, DEBOUNCE_MS);
+  }, [autoSaveMutation, DEBOUNCE_MS]);
+
+  // Clean up timeouts on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(saveTimeouts.current).forEach(clearTimeout);
+    };
+  }, []);
+
   useEffect(() => {
     if (data?.queries) {
       const initialResponses: Record<string, QueryResponse> = {};
+      const initialSaveStatus: Record<string, SaveStatus> = {};
       data.queries.forEach(q => {
         initialResponses[q.id] = {
           queryId: q.id,
@@ -127,39 +190,59 @@ export default function QueryResponsePage() {
           hasVat: q.hasVat,
           attachments: q.clientAttachments || [],
         };
+        // If there's already a response saved, mark it as saved
+        if (q.clientResponse || q.clientAttachments?.length) {
+          initialSaveStatus[q.id] = 'saved';
+        }
       });
       setResponses(initialResponses);
+      setSaveStatus(initialSaveStatus);
     }
   }, [data]);
 
   const updateResponse = (queryId: string, field: 'clientResponse' | 'hasVat', value: string | boolean | null) => {
-    setResponses(prev => ({
-      ...prev,
-      [queryId]: {
-        ...prev[queryId],
-        [field]: value,
-      },
-    }));
+    setResponses(prev => {
+      const updated = {
+        ...prev,
+        [queryId]: {
+          ...prev[queryId],
+          [field]: value,
+        },
+      };
+      // Trigger auto-save with the updated data
+      debouncedSave(queryId, updated[queryId]);
+      return updated;
+    });
   };
 
   const addAttachment = (queryId: string, attachment: QueryAttachment) => {
-    setResponses(prev => ({
-      ...prev,
-      [queryId]: {
-        ...prev[queryId],
-        attachments: [...(prev[queryId]?.attachments || []), attachment],
-      },
-    }));
+    setResponses(prev => {
+      const updated = {
+        ...prev,
+        [queryId]: {
+          ...prev[queryId],
+          attachments: [...(prev[queryId]?.attachments || []), attachment],
+        },
+      };
+      // Save immediately for attachments (already uploaded, no debounce needed)
+      autoSaveMutation.mutate({ queryId, data: updated[queryId] });
+      return updated;
+    });
   };
 
   const removeAttachment = (queryId: string, objectPath: string) => {
-    setResponses(prev => ({
-      ...prev,
-      [queryId]: {
-        ...prev[queryId],
-        attachments: prev[queryId]?.attachments?.filter(a => a.objectPath !== objectPath) || [],
-      },
-    }));
+    setResponses(prev => {
+      const updated = {
+        ...prev,
+        [queryId]: {
+          ...prev[queryId],
+          attachments: prev[queryId]?.attachments?.filter(a => a.objectPath !== objectPath) || [],
+        },
+      };
+      // Save immediately when removing attachment
+      autoSaveMutation.mutate({ queryId, data: updated[queryId] });
+      return updated;
+    });
   };
 
   const handleFileUpload = async (queryId: string, file: File) => {
@@ -266,6 +349,49 @@ export default function QueryResponsePage() {
     }
     return null;
   };
+
+  // Save status indicator component
+  const SaveStatusIndicator = ({ queryId }: { queryId: string }) => {
+    const status = saveStatus[queryId];
+    
+    if (!status) return null;
+    
+    switch (status) {
+      case 'saving':
+        return (
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground animate-pulse">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            <span>Saving...</span>
+          </div>
+        );
+      case 'saved':
+        return (
+          <div className="flex items-center gap-1.5 text-xs text-green-600">
+            <Cloud className="w-3 h-3" />
+            <span>Saved</span>
+          </div>
+        );
+      case 'unsaved':
+        return (
+          <div className="flex items-center gap-1.5 text-xs text-amber-600">
+            <CloudOff className="w-3 h-3" />
+            <span>Unsaved</span>
+          </div>
+        );
+      case 'error':
+        return (
+          <div className="flex items-center gap-1.5 text-xs text-red-600">
+            <AlertCircle className="w-3 h-3" />
+            <span>Save failed</span>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
+  // Count of saved responses for progress display
+  const savedCount = Object.values(saveStatus).filter(s => s === 'saved').length;
 
   if (isLoading) {
     return (
@@ -488,10 +614,13 @@ export default function QueryResponsePage() {
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium flex items-center gap-2 mb-2">
-                    <MessageSquare className="w-4 h-4" />
-                    Your Response
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4" />
+                      Your Response
+                    </label>
+                    <SaveStatusIndicator queryId={currentQuery.id} />
+                  </div>
                   <Textarea
                     value={responses[currentQuery.id]?.clientResponse || ''}
                     onChange={(e) => updateResponse(currentQuery.id, 'clientResponse', e.target.value)}
@@ -520,9 +649,9 @@ export default function QueryResponsePage() {
                     <span className="text-xs text-muted-foreground font-normal">(optional)</span>
                   </label>
                   
-                  {responses[currentQuery.id]?.attachments?.length > 0 && (
+                  {(responses[currentQuery.id]?.attachments?.length ?? 0) > 0 && (
                     <div className="space-y-2 mb-3">
-                      {responses[currentQuery.id].attachments!.map((attachment) => (
+                      {responses[currentQuery.id]?.attachments?.map((attachment) => (
                         <div 
                           key={attachment.objectPath}
                           className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border"
@@ -660,6 +789,7 @@ export default function QueryResponsePage() {
                 onFileUpload={handleFileUpload}
                 onRemoveAttachment={removeAttachment}
                 isUploading={uploadingFiles[query.id] || false}
+                saveStatus={saveStatus[query.id]}
                 formatDate={formatDate}
                 formatAmount={formatAmount}
                 formatFileSize={formatFileSize}
@@ -708,6 +838,7 @@ interface QueryListItemProps {
   onFileUpload: (queryId: string, file: File) => void;
   onRemoveAttachment: (queryId: string, objectPath: string) => void;
   isUploading: boolean;
+  saveStatus?: SaveStatus;
   formatDate: (date: string | null) => string | null;
   formatAmount: (moneyIn: string | null, moneyOut: string | null) => { amount: string; type: 'in' | 'out' } | null;
   formatFileSize: (bytes: number) => string;
@@ -722,6 +853,7 @@ function QueryListItem({
   onFileUpload,
   onRemoveAttachment,
   isUploading,
+  saveStatus,
   formatDate, 
   formatAmount,
   formatFileSize,
@@ -759,10 +891,10 @@ function QueryListItem({
                   {amountInfo.amount}
                 </span>
               )}
-              {response?.attachments?.length > 0 && (
+              {(response?.attachments?.length ?? 0) > 0 && (
                 <span className="flex items-center gap-1">
                   <Paperclip className="w-3 h-3" />
-                  {response.attachments.length}
+                  {response?.attachments?.length}
                 </span>
               )}
             </div>
@@ -781,7 +913,37 @@ function QueryListItem({
           </div>
           
           <div>
-            <label className="text-sm font-medium mb-1 block">Your Response</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-sm font-medium">Your Response</label>
+              {saveStatus && (
+                <div className="flex items-center gap-1.5 text-xs">
+                  {saveStatus === 'saving' && (
+                    <span className="flex items-center gap-1 text-muted-foreground animate-pulse">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Saving...
+                    </span>
+                  )}
+                  {saveStatus === 'saved' && (
+                    <span className="flex items-center gap-1 text-green-600">
+                      <Cloud className="w-3 h-3" />
+                      Saved
+                    </span>
+                  )}
+                  {saveStatus === 'unsaved' && (
+                    <span className="flex items-center gap-1 text-amber-600">
+                      <CloudOff className="w-3 h-3" />
+                      Unsaved
+                    </span>
+                  )}
+                  {saveStatus === 'error' && (
+                    <span className="flex items-center gap-1 text-red-600">
+                      <AlertCircle className="w-3 h-3" />
+                      Save failed
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
             <Textarea
               value={response?.clientResponse || ''}
               onChange={(e) => onUpdateResponse(query.id, 'clientResponse', e.target.value)}
@@ -806,9 +968,9 @@ function QueryListItem({
               Attachments
             </label>
             
-            {response?.attachments?.length > 0 && (
+            {(response?.attachments?.length ?? 0) > 0 && (
               <div className="space-y-1 mb-2">
-                {response.attachments.map((attachment) => (
+                {response?.attachments?.map((attachment) => (
                   <div 
                     key={attachment.objectPath}
                     className="flex items-center gap-2 p-2 bg-slate-50 rounded border text-sm"
