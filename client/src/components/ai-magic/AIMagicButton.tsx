@@ -3,15 +3,31 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { AIMagicChatPanel } from './AIMagicChatPanel';
+import { useAuth } from '@/hooks/useAuth';
+import { useQuery } from '@tanstack/react-query';
+
+interface FeatureFlags {
+  ringCentralLive: boolean;
+  appIsLive: boolean;
+  aiButtonEnabled: boolean;
+}
 
 export function AIMagicButton() {
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [triggerVoice, setTriggerVoice] = useState(false);
   const voiceTriggerRef = useRef<(() => void) | null>(null);
 
+  const { data: featureFlags } = useQuery<FeatureFlags>({
+    queryKey: ['/api/feature-flags'],
+    staleTime: 1000 * 60 * 5,
+  });
+
   const togglePanel = useCallback(() => {
     setIsOpen(prev => !prev);
   }, []);
+
+  const shouldShowButton = featureFlags?.aiButtonEnabled || user?.superAdmin;
 
   // Handler to trigger voice recording from the chat panel
   const handleVoiceTrigger = useCallback((toggleFn: () => void) => {
@@ -43,6 +59,10 @@ export function AIMagicButton() {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, togglePanel]);
+
+  if (!shouldShowButton) {
+    return null;
+  }
 
   return (
     <>

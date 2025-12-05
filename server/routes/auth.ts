@@ -105,6 +105,7 @@ export async function registerAuthAndMiscRoutes(
       res.json({
         ringCentralLive: settings?.ringCentralLive ?? false,
         appIsLive: settings?.appIsLive ?? false,
+        aiButtonEnabled: settings?.aiButtonEnabled ?? false,
       });
     } catch (error) {
       console.error("Error fetching feature flags:", error);
