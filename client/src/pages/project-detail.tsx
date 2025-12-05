@@ -1152,42 +1152,43 @@ export default function ProjectDetail() {
 
       {/* Completion Selection Dialog */}
       <AlertDialog open={showCompleteDialog} onOpenChange={setShowCompleteDialog}>
-        <AlertDialogContent data-testid="dialog-complete-confirmation">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Complete Project</AlertDialogTitle>
-            <AlertDialogDescription>
-              How would you like to complete this project? The project will be archived and will no longer appear in active project lists.
+        <AlertDialogContent data-testid="dialog-complete-confirmation" className="sm:max-w-md">
+          <AlertDialogHeader className="text-center sm:text-center">
+            <AlertDialogTitle className="text-xl">Complete Project</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm text-muted-foreground">
+              The project will be archived and removed from active lists.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="flex gap-3 py-4">
+          <div className="flex flex-col gap-3 py-4">
             <Button
               variant="default"
-              className="flex-1 bg-green-600 hover:bg-green-700"
+              className="w-full bg-green-600 hover:bg-green-700 h-11"
               onClick={() => handleConfirmComplete('completed_successfully')}
               disabled={completeMutation.isPending}
               data-testid="button-complete-success"
             >
-              <CheckCircle2 className="w-4 h-4 mr-2" />
-              Mark as Successfully Completed
+              <CheckCircle2 className="w-5 h-5 mr-2" />
+              Completed Successfully
             </Button>
             <Button
-              variant="destructive"
-              className="flex-1"
+              variant="outline"
+              className="w-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300 h-11"
               onClick={() => handleConfirmComplete('completed_unsuccessfully')}
               disabled={completeMutation.isPending}
               data-testid="button-complete-fail"
             >
-              <XCircle className="w-4 h-4 mr-2" />
-              Mark as Unsuccessfully Completed
+              <XCircle className="w-5 h-5 mr-2" />
+              Completed Unsuccessfully
             </Button>
           </div>
-          <AlertDialogFooter>
+          <AlertDialogFooter className="sm:justify-center">
             <AlertDialogCancel 
               onClick={() => {
                 setShowCompleteDialog(false);
                 setCompletionType(null);
               }}
               data-testid="button-cancel-complete"
+              className="w-full sm:w-auto"
             >
               Cancel
             </AlertDialogCancel>
