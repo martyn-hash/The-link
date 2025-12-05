@@ -88,12 +88,22 @@ const ITEMS_PER_PAGE = 10;
 
 const COLUMN_WIDTHS = {
   checkbox: "w-[40px]",
-  title: "w-[180px] min-w-[140px]",
-  description: "w-[200px] min-w-[150px]",
-  status: "w-[140px]",
-  linkedEntities: "w-[180px] min-w-[140px]",
-  assignee: "w-[140px] min-w-[120px]",
-  dueDate: "w-[110px]",
+  title: "w-[18%] min-w-[140px]",
+  description: "w-[20%] min-w-[150px]",
+  status: "w-[14%] min-w-[130px]",
+  linkedEntities: "w-[16%] min-w-[140px]",
+  assignee: "w-[14%] min-w-[120px]",
+  dueDate: "w-[12%] min-w-[100px]",
+  actions: "w-[90px]",
+};
+
+const COLUMN_WIDTHS_NO_ASSIGNEE = {
+  checkbox: "w-[40px]",
+  title: "w-[20%] min-w-[140px]",
+  description: "w-[24%] min-w-[150px]",
+  status: "w-[16%] min-w-[130px]",
+  linkedEntities: "w-[20%] min-w-[140px]",
+  dueDate: "w-[14%] min-w-[100px]",
   actions: "w-[90px]",
 };
 
@@ -184,36 +194,39 @@ interface TaskRowProps {
   onViewClick: () => void;
   isMobile?: boolean;
   showLinkedEntities?: boolean;
+  showAssignee?: boolean;
 }
 
-function TaskRow({ task, selected, onSelect, onViewClick, isMobile, showLinkedEntities = true }: TaskRowProps) {
+function TaskRow({ task, selected, onSelect, onViewClick, isMobile, showLinkedEntities = true, showAssignee = true }: TaskRowProps) {
   const truncateDescription = (text: string | null, maxLength: number = 50) => {
     if (!text) return '-';
     return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
   };
 
+  const colWidths = showAssignee ? COLUMN_WIDTHS : COLUMN_WIDTHS_NO_ASSIGNEE;
+
   return (
     <TableRow data-testid={`row-task-${task.id}`}>
-      <TableCell className={COLUMN_WIDTHS.checkbox}>
+      <TableCell className={colWidths.checkbox}>
         <Checkbox
           checked={selected}
           onCheckedChange={onSelect}
           data-testid={`checkbox-task-${task.id}`}
         />
       </TableCell>
-      <TableCell className={`font-medium ${COLUMN_WIDTHS.title}`}>
+      <TableCell className={`font-medium ${colWidths.title}`}>
         <span className="truncate block" data-testid={`text-title-${task.id}`}>
           {task.title}
         </span>
       </TableCell>
       {!isMobile && (
-        <TableCell className={`text-sm text-muted-foreground ${COLUMN_WIDTHS.description}`}>
+        <TableCell className={`text-sm text-muted-foreground ${colWidths.description}`}>
           <span className="line-clamp-1" data-testid={`text-description-${task.id}`}>
             {truncateDescription(task.description)}
           </span>
         </TableCell>
       )}
-      <TableCell className={COLUMN_WIDTHS.status}>
+      <TableCell className={colWidths.status}>
         <div className="flex items-center gap-1">
           <Badge className={`text-xs ${getPriorityColor(task.priority)}`}>
             {task.priority}
@@ -224,25 +237,25 @@ function TaskRow({ task, selected, onSelect, onViewClick, isMobile, showLinkedEn
         </div>
       </TableCell>
       {!isMobile && showLinkedEntities && (
-        <TableCell className={COLUMN_WIDTHS.linkedEntities}>
+        <TableCell className={colWidths.linkedEntities}>
           <LinkedEntitiesCell connections={task.connections} />
         </TableCell>
       )}
-      {!isMobile && (
-        <TableCell className={`text-sm ${COLUMN_WIDTHS.assignee}`}>
+      {!isMobile && showAssignee && (
+        <TableCell className={`text-sm ${colWidths.assignee}`}>
           <span data-testid={`text-assignee-${task.id}`}>
             {task.assignee ? `${task.assignee.firstName} ${task.assignee.lastName}` : '-'}
           </span>
         </TableCell>
       )}
       {!isMobile && (
-        <TableCell className={`text-sm ${COLUMN_WIDTHS.dueDate}`}>
+        <TableCell className={`text-sm ${colWidths.dueDate}`}>
           <span data-testid={`text-duedate-${task.id}`}>
             {formatDate(task.dueDate)}
           </span>
         </TableCell>
       )}
-      <TableCell className={`text-right ${COLUMN_WIDTHS.actions}`}>
+      <TableCell className={`text-right ${colWidths.actions}`}>
         <Button
           variant="default"
           size="sm"
@@ -264,24 +277,27 @@ interface ReminderRowProps {
   onViewClick: () => void;
   isMobile?: boolean;
   showLinkedEntities?: boolean;
+  showAssignee?: boolean;
 }
 
-function ReminderRow({ reminder, selected, onSelect, onViewClick, isMobile, showLinkedEntities = true }: ReminderRowProps) {
+function ReminderRow({ reminder, selected, onSelect, onViewClick, isMobile, showLinkedEntities = true, showAssignee = true }: ReminderRowProps) {
   const truncateDescription = (text: string | null, maxLength: number = 50) => {
     if (!text) return '-';
     return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
   };
 
+  const colWidths = showAssignee ? COLUMN_WIDTHS : COLUMN_WIDTHS_NO_ASSIGNEE;
+
   return (
     <TableRow data-testid={`row-reminder-${reminder.id}`}>
-      <TableCell className={COLUMN_WIDTHS.checkbox}>
+      <TableCell className={colWidths.checkbox}>
         <Checkbox
           checked={selected}
           onCheckedChange={onSelect}
           data-testid={`checkbox-reminder-${reminder.id}`}
         />
       </TableCell>
-      <TableCell className={`font-medium ${COLUMN_WIDTHS.title}`}>
+      <TableCell className={`font-medium ${colWidths.title}`}>
         <div className="flex items-center gap-2">
           <Bell className="h-4 w-4 text-amber-500 flex-shrink-0" />
           <span className="truncate" data-testid={`text-title-${reminder.id}`}>
@@ -290,37 +306,37 @@ function ReminderRow({ reminder, selected, onSelect, onViewClick, isMobile, show
         </div>
       </TableCell>
       {!isMobile && (
-        <TableCell className={`text-sm text-muted-foreground ${COLUMN_WIDTHS.description}`}>
+        <TableCell className={`text-sm text-muted-foreground ${colWidths.description}`}>
           <span className="line-clamp-1" data-testid={`text-description-${reminder.id}`}>
             {truncateDescription(reminder.description)}
           </span>
         </TableCell>
       )}
-      <TableCell className={COLUMN_WIDTHS.status}>
+      <TableCell className={colWidths.status}>
         <Badge className={`text-xs ${getStatusColor(reminder.status)}`}>
           {reminder.status === "in_progress" ? "In Progress" : reminder.status}
         </Badge>
       </TableCell>
       {!isMobile && showLinkedEntities && (
-        <TableCell className={COLUMN_WIDTHS.linkedEntities}>
+        <TableCell className={colWidths.linkedEntities}>
           <LinkedEntitiesCell connections={reminder.connections} />
         </TableCell>
       )}
-      {!isMobile && (
-        <TableCell className={`text-sm ${COLUMN_WIDTHS.assignee}`}>
+      {!isMobile && showAssignee && (
+        <TableCell className={`text-sm ${colWidths.assignee}`}>
           <span data-testid={`text-assignee-${reminder.id}`}>
             {reminder.assignee ? `${reminder.assignee.firstName} ${reminder.assignee.lastName}` : '-'}
           </span>
         </TableCell>
       )}
       {!isMobile && (
-        <TableCell className={`text-sm ${COLUMN_WIDTHS.dueDate}`}>
+        <TableCell className={`text-sm ${colWidths.dueDate}`}>
           <span data-testid={`text-duedate-${reminder.id}`}>
             {formatDate(reminder.dueDate)}
           </span>
         </TableCell>
       )}
-      <TableCell className={`text-right ${COLUMN_WIDTHS.actions}`}>
+      <TableCell className={`text-right ${colWidths.actions}`}>
         <Button
           variant="default"
           size="sm"
@@ -355,6 +371,7 @@ interface TasksSectionProps {
   filters: ColumnFilterState;
   onFilterChange: (field: keyof ColumnFilterState, value: string) => void;
   showFilters?: boolean;
+  showAssignee?: boolean;
 }
 
 function TasksSection({
@@ -377,9 +394,11 @@ function TasksSection({
   filters,
   onFilterChange,
   showFilters = true,
+  showAssignee = true,
 }: TasksSectionProps) {
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
-  const hasActiveFilters = filters.title || filters.description || filters.assignee || filters.dueDate;
+  const hasActiveFilters = filters.title || filters.description || (showAssignee && filters.assignee) || filters.dueDate;
+  const colWidths = showAssignee ? COLUMN_WIDTHS : COLUMN_WIDTHS_NO_ASSIGNEE;
 
   return (
     <div>
@@ -466,20 +485,20 @@ function TasksSection({
                   <TableHeader>
                     {/* Column Headers Row */}
                     <TableRow>
-                      <TableHead className={COLUMN_WIDTHS.checkbox}></TableHead>
-                      <TableHead className={COLUMN_WIDTHS.title}>{isReminders ? 'Reminder' : 'Task'}</TableHead>
-                      {!isMobile && <TableHead className={COLUMN_WIDTHS.description}>Description</TableHead>}
-                      <TableHead className={COLUMN_WIDTHS.status}>Status</TableHead>
-                      {!isMobile && <TableHead className={COLUMN_WIDTHS.linkedEntities}>Linked Entities</TableHead>}
-                      {!isMobile && <TableHead className={COLUMN_WIDTHS.assignee}>Assigned To</TableHead>}
-                      {!isMobile && <TableHead className={COLUMN_WIDTHS.dueDate}>Due Date</TableHead>}
-                      <TableHead className={`text-right ${COLUMN_WIDTHS.actions}`}>Actions</TableHead>
+                      <TableHead className={colWidths.checkbox}></TableHead>
+                      <TableHead className={colWidths.title}>{isReminders ? 'Reminder' : 'Task'}</TableHead>
+                      {!isMobile && <TableHead className={colWidths.description}>Description</TableHead>}
+                      <TableHead className={colWidths.status}>Status</TableHead>
+                      {!isMobile && <TableHead className={colWidths.linkedEntities}>Linked Entities</TableHead>}
+                      {!isMobile && showAssignee && <TableHead className={colWidths.assignee}>Assigned To</TableHead>}
+                      {!isMobile && <TableHead className={colWidths.dueDate}>Due Date</TableHead>}
+                      <TableHead className={`text-right ${colWidths.actions}`}>Actions</TableHead>
                     </TableRow>
                     {/* Filter Row */}
                     {showFilters && !isMobile && (
                       <TableRow className="bg-muted/30">
-                        <TableHead className={COLUMN_WIDTHS.checkbox}></TableHead>
-                        <TableHead className={COLUMN_WIDTHS.title}>
+                        <TableHead className={colWidths.checkbox}></TableHead>
+                        <TableHead className={colWidths.title}>
                           <Input
                             placeholder="Filter..."
                             value={filters.title}
@@ -488,7 +507,7 @@ function TasksSection({
                             data-testid={`filter-title-${isReminders ? 'reminders' : 'tasks'}`}
                           />
                         </TableHead>
-                        <TableHead className={COLUMN_WIDTHS.description}>
+                        <TableHead className={colWidths.description}>
                           <Input
                             placeholder="Filter..."
                             value={filters.description}
@@ -497,18 +516,20 @@ function TasksSection({
                             data-testid={`filter-description-${isReminders ? 'reminders' : 'tasks'}`}
                           />
                         </TableHead>
-                        <TableHead className={COLUMN_WIDTHS.status}></TableHead>
-                        <TableHead className={COLUMN_WIDTHS.linkedEntities}></TableHead>
-                        <TableHead className={COLUMN_WIDTHS.assignee}>
-                          <Input
-                            placeholder="Filter..."
-                            value={filters.assignee}
-                            onChange={(e) => onFilterChange('assignee', e.target.value)}
-                            className="h-7 text-xs"
-                            data-testid={`filter-assignee-${isReminders ? 'reminders' : 'tasks'}`}
-                          />
-                        </TableHead>
-                        <TableHead className={COLUMN_WIDTHS.dueDate}>
+                        <TableHead className={colWidths.status}></TableHead>
+                        <TableHead className={colWidths.linkedEntities}></TableHead>
+                        {showAssignee && (
+                          <TableHead className={colWidths.assignee}>
+                            <Input
+                              placeholder="Filter..."
+                              value={filters.assignee}
+                              onChange={(e) => onFilterChange('assignee', e.target.value)}
+                              className="h-7 text-xs"
+                              data-testid={`filter-assignee-${isReminders ? 'reminders' : 'tasks'}`}
+                            />
+                          </TableHead>
+                        )}
+                        <TableHead className={colWidths.dueDate}>
                           <Input
                             type="date"
                             value={filters.dueDate}
@@ -517,7 +538,7 @@ function TasksSection({
                             data-testid={`filter-duedate-${isReminders ? 'reminders' : 'tasks'}`}
                           />
                         </TableHead>
-                        <TableHead className={COLUMN_WIDTHS.actions}></TableHead>
+                        <TableHead className={colWidths.actions}></TableHead>
                       </TableRow>
                     )}
                   </TableHeader>
@@ -532,6 +553,7 @@ function TasksSection({
                           onViewClick={() => onViewItem(item)}
                           isMobile={isMobile}
                           showLinkedEntities={!isMobile}
+                          showAssignee={showAssignee}
                         />
                       ) : (
                         <TaskRow
@@ -542,6 +564,7 @@ function TasksSection({
                           onViewClick={() => onViewItem(item)}
                           isMobile={isMobile}
                           showLinkedEntities={!isMobile}
+                          showAssignee={showAssignee}
                         />
                       )
                     ))}
@@ -928,7 +951,11 @@ export function TasksWorkspace({
           onToggleCollapse={() => setTasksCollapsed(!tasksCollapsed)}
           filters={tasksFilters}
           onFilterChange={handleTasksFilterChange}
+          showAssignee={ownershipFilter !== "assigned"}
         />
+
+        {/* Visual separator between Tasks and Reminders */}
+        <div className="border-t-2 border-dashed border-border/50 my-2" />
 
         <TasksSection
           title="Reminders"
@@ -947,6 +974,7 @@ export function TasksWorkspace({
           isMobile={isMobile}
           filters={remindersFilters}
           onFilterChange={handleRemindersFilterChange}
+          showAssignee={ownershipFilter !== "assigned"}
         />
       </div>
 

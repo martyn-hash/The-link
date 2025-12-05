@@ -350,6 +350,34 @@ export default function Projects() {
     select: (data: any[]) => data.map((pt: any) => ({ id: pt.id, name: pt.name })).sort((a, b) => a.name.localeCompare(b.name))
   });
 
+  // Fetch open tasks/reminders count for badge display
+  // Uses the same endpoint and query key pattern as TasksWorkspace for proper cache invalidation
+  interface InternalTaskWithStatus {
+    id: string;
+    status: string;
+    isQuickReminder?: boolean | null;
+  }
+  const { data: openTasksData = [] } = useQuery<InternalTaskWithStatus[]>({
+    // Query key matches TasksWorkspace pattern for proper cache invalidation
+    queryKey: ['/api/internal-tasks/assigned', user?.id, 'open'],
+    queryFn: async () => {
+      const url = `/api/internal-tasks/assigned/${user?.id}?status=open`;
+      const response = await fetch(url, { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to fetch assigned tasks');
+      return response.json();
+    },
+    enabled: isAuthenticated && !!user,
+    retry: false,
+    staleTime: 30 * 1000, // 30 seconds - refresh frequently for badges
+  });
+
+  // Count includes both tasks and reminders (both are returned by the endpoint)
+  // Also include in_progress items in the open count
+  const openTasksAndRemindersCount = useMemo(() => 
+    openTasksData.filter(item => item.status === 'open' || item.status === 'in_progress').length,
+    [openTasksData]
+  );
+
   // Pull-to-refresh handler - invalidates all project-related queries
   const handleRefresh = async () => {
     if (!isAuthenticated || !user) return;
@@ -359,6 +387,7 @@ export default function Projects() {
     await queryClient.invalidateQueries({ queryKey: ["/api/services/with-active-clients"] });
     await queryClient.invalidateQueries({ queryKey: ["/api/project-views"] });
     await queryClient.invalidateQueries({ queryKey: ["/api/dashboards"] });
+    await queryClient.invalidateQueries({ queryKey: ['/api/internal-tasks/assigned'] });
   };
 
   // Apply default view on initial load based on user preferences
@@ -1197,11 +1226,20 @@ export default function Projects() {
                 variant={workspaceMode === "tasks" ? "default" : "ghost"}
                 size="sm"
                 onClick={() => setWorkspaceMode("tasks")}
-                className="gap-2"
+                className="gap-2 relative"
                 data-testid="button-workspace-tasks"
               >
                 <ClipboardList className="h-4 w-4" />
                 Tasks
+                {openTasksAndRemindersCount > 0 && (
+                  <Badge 
+                    variant="destructive" 
+                    className="ml-1 h-5 min-w-[20px] px-1.5 text-xs flex items-center justify-center"
+                    data-testid="badge-open-tasks-count"
+                  >
+                    {openTasksAndRemindersCount > 99 ? '99+' : openTasksAndRemindersCount}
+                  </Badge>
+                )}
               </Button>
             </div>
             
