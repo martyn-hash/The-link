@@ -233,6 +233,7 @@ export const companySettings = pgTable("company_settings", {
   nlacPassword: varchar("nlac_password"),
   ringCentralLive: boolean("ring_central_live").default(false).notNull(),
   appIsLive: boolean("app_is_live").default(false).notNull(),
+  aiButtonEnabled: boolean("ai_button_enabled").default(false).notNull(),
   // AI Assistant system prompts
   aiSystemPromptNotes: text("ai_system_prompt_notes"),
   aiSystemPromptEmails: text("ai_system_prompt_emails"),
