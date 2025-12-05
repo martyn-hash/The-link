@@ -591,26 +591,27 @@ export function registerQueryRoutes(
         return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
       };
 
-      // Build HTML table for queries
+      // Build HTML table for queries with explicit borders for email client compatibility
+      const borderStyle = '1px solid #e2e8f0';
       const queriesTableHtml = `
-<table style="width: 100%; border-collapse: collapse; margin: 16px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+<table style="width: 100%; border-collapse: collapse; margin: 16px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; border: ${borderStyle};">
   <thead>
-    <tr style="background-color: #f8fafc; border-bottom: 2px solid #e2e8f0;">
-      <th style="padding: 12px; text-align: left; font-weight: 600; color: #334155;">Date</th>
-      <th style="padding: 12px; text-align: left; font-weight: 600; color: #334155;">Description</th>
-      <th style="padding: 12px; text-align: right; font-weight: 600; color: #334155;">Amount</th>
-      <th style="padding: 12px; text-align: left; font-weight: 600; color: #334155;">Query</th>
+    <tr style="background-color: #f8fafc;">
+      <th style="padding: 12px; text-align: left; font-weight: 600; color: #334155; border: ${borderStyle};">Date</th>
+      <th style="padding: 12px; text-align: left; font-weight: 600; color: #334155; border: ${borderStyle};">Description</th>
+      <th style="padding: 12px; text-align: right; font-weight: 600; color: #16a34a; border: ${borderStyle};">Money In</th>
+      <th style="padding: 12px; text-align: right; font-weight: 600; color: #dc2626; border: ${borderStyle};">Money Out</th>
+      <th style="padding: 12px; text-align: left; font-weight: 600; color: #334155; border: ${borderStyle};">Query</th>
     </tr>
   </thead>
   <tbody>
     ${queries.map((q, i) => `
-    <tr style="border-bottom: 1px solid #e2e8f0; ${i % 2 === 1 ? 'background-color: #f8fafc;' : ''}">
-      <td style="padding: 12px; color: #475569;">${formatDate(q.date)}</td>
-      <td style="padding: 12px; color: #475569;">${q.description || ''}</td>
-      <td style="padding: 12px; text-align: right; color: ${q.moneyIn ? '#16a34a' : '#dc2626'};">
-        ${q.moneyIn ? formatCurrency(q.moneyIn) : q.moneyOut ? formatCurrency(q.moneyOut) : ''}
-      </td>
-      <td style="padding: 12px; color: #1e293b; font-weight: 500;">${q.ourQuery || ''}</td>
+    <tr style="${i % 2 === 1 ? 'background-color: #f8fafc;' : 'background-color: #ffffff;'}">
+      <td style="padding: 12px; color: #475569; border: ${borderStyle};">${formatDate(q.date)}</td>
+      <td style="padding: 12px; color: #475569; border: ${borderStyle};">${q.description || ''}</td>
+      <td style="padding: 12px; text-align: right; color: #16a34a; border: ${borderStyle};">${q.moneyIn ? formatCurrency(q.moneyIn) : '-'}</td>
+      <td style="padding: 12px; text-align: right; color: #dc2626; border: ${borderStyle};">${q.moneyOut ? formatCurrency(q.moneyOut) : '-'}</td>
+      <td style="padding: 12px; color: #1e293b; font-weight: 500; border: ${borderStyle};">${q.ourQuery || ''}</td>
     </tr>
     `).join('')}
   </tbody>
@@ -725,6 +726,139 @@ ${linkSection}
     } catch (error) {
       console.error("Error marking queries as sent:", error);
       res.status(500).json({ message: "Failed to mark queries as sent" });
+    }
+  });
+
+  // GET /api/projects/:projectId/queries/tokens - Get active tokens for a project
+  app.get("/api/projects/:projectId/queries/tokens", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramProjectIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid path parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      const { projectId } = req.params;
+      const tokens = await storage.getActiveQueryResponseTokensByProjectId(projectId);
+
+      res.json(tokens);
+    } catch (error) {
+      console.error("Error getting project query tokens:", error);
+      res.status(500).json({ message: "Failed to get query tokens" });
+    }
+  });
+
+  // POST /api/queries/tokens/:tokenId/extend - Extend token expiry
+  app.post("/api/queries/tokens/:tokenId/extend", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { tokenId } = req.params;
+      const { additionalDays } = req.body;
+
+      if (!tokenId) {
+        return res.status(400).json({ message: "Token ID is required" });
+      }
+
+      if (typeof additionalDays !== 'number' || additionalDays < 1 || additionalDays > 30) {
+        return res.status(400).json({ message: "additionalDays must be between 1 and 30" });
+      }
+
+      const token = await storage.extendQueryResponseTokenExpiry(tokenId, additionalDays);
+      
+      if (!token) {
+        return res.status(404).json({ message: "Token not found" });
+      }
+
+      res.json({
+        success: true,
+        message: `Token expiry extended by ${additionalDays} days`,
+        token,
+      });
+    } catch (error) {
+      console.error("Error extending token expiry:", error);
+      res.status(500).json({ message: "Failed to extend token expiry" });
+    }
+  });
+
+  // POST /api/queries/tokens/:tokenId/send-reminder - Send a reminder email for pending queries
+  app.post("/api/queries/tokens/:tokenId/send-reminder", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { tokenId } = req.params;
+      const userId = req.effectiveUser?.id || req.user?.id;
+
+      if (!tokenId) {
+        return res.status(400).json({ message: "Token ID is required" });
+      }
+
+      // Get the token
+      const token = await storage.getQueryResponseTokenById(tokenId);
+      if (!token) {
+        return res.status(404).json({ message: "Token not found" });
+      }
+
+      // Check if token is expired
+      if (new Date(token.expiresAt) < new Date()) {
+        return res.status(400).json({ message: "Cannot send reminder for expired link. Please extend the link first." });
+      }
+
+      // Check if already completed
+      if (token.completedAt) {
+        return res.status(400).json({ message: "This response link has already been completed." });
+      }
+
+      // Get project and client details
+      const project = await storage.getProject(token.projectId);
+      const client = project ? await storage.getClientById(project.clientId) : null;
+      const sender = await storage.getUser(userId);
+
+      // Get the queries for this token
+      const queries = await storage.getQueriesForToken(token.token);
+
+      // Build the response URL
+      const responseUrl = `/queries/respond/${token.token}`;
+      const fullResponseUrl = `${process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0] || 'https://yourapp.replit.app'}${responseUrl}`;
+
+      // Format date helper
+      const formatDate = (date: Date | string | null) => {
+        if (!date) return '';
+        const d = typeof date === 'string' ? new Date(date) : date;
+        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      };
+
+      // Build reminder email subject and content
+      const emailSubject = `Reminder: Bookkeeping Queries - ${project?.description || 'Your Account'}`;
+      const emailContent = `
+<p>Hello${token.recipientName ? ` ${token.recipientName}` : ''},</p>
+
+<p>This is a friendly reminder that we are still waiting for your response to ${queries.length} bookkeeping ${queries.length === 1 ? 'query' : 'queries'} for ${client?.name || 'your account'}.</p>
+
+<p style="margin: 24px 0;">
+  <a href="${fullResponseUrl}" style="display: inline-block; background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+    Click here to respond to these queries
+  </a>
+</p>
+
+<p style="color: #64748b; font-size: 14px;">This link will expire on ${formatDate(token.expiresAt)}.</p>
+
+<p>If you have any questions, please don't hesitate to get in touch.</p>
+
+<p>Best regards,<br>${sender?.firstName || 'The Team'}</p>
+`;
+
+      res.json({
+        success: true,
+        emailSubject,
+        emailContent,
+        recipientEmail: token.recipientEmail,
+        recipientName: token.recipientName,
+        tokenId: token.id,
+        projectId: token.projectId,
+        clientId: project?.clientId,
+      });
+    } catch (error) {
+      console.error("Error preparing reminder:", error);
+      res.status(500).json({ message: "Failed to prepare reminder" });
     }
   });
 

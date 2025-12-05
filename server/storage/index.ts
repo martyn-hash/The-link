@@ -3510,6 +3510,14 @@ export class DatabaseStorage implements IStorage {
     return this.queryTokenStorage.cleanupExpiredTokens();
   }
 
+  async extendQueryResponseTokenExpiry(tokenId: string, additionalDays: number) {
+    return this.queryTokenStorage.extendTokenExpiry(tokenId, additionalDays);
+  }
+
+  async getActiveQueryResponseTokensByProjectId(projectId: string) {
+    return this.queryTokenStorage.getActiveTokensByProjectId(projectId);
+  }
+
 }
 
 // Export storage instance for backward compatibility

@@ -58,6 +58,12 @@ import {
   ArrowUpRight,
   Upload,
   Mail,
+  Link2,
+  Clock,
+  ChevronDown,
+  ChevronRight,
+  ExternalLink,
+  RefreshCw,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -167,6 +173,13 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   const [sendOptionsQueryIds, setSendOptionsQueryIds] = useState<string[]>([]);
   const [includeOnlineLink, setIncludeOnlineLink] = useState(true);
   const [linkExpiryDays, setLinkExpiryDays] = useState(3);
+  
+  // Token management state
+  const [showActiveTokens, setShowActiveTokens] = useState(false);
+  const [extendTokenId, setExtendTokenId] = useState<string | null>(null);
+  const [extendDays, setExtendDays] = useState(3);
+  const [reminderTokenId, setReminderTokenId] = useState<string | null>(null);
+  const [isPreparingReminder, setIsPreparingReminder] = useState(false);
 
   // Add Query form state
   const [newQueryText, setNewQueryText] = useState("");
@@ -201,6 +214,36 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     resolved: number;
   }>({
     queryKey: ['/api/projects', projectId, 'queries', 'stats'],
+  });
+
+  // Query for active tokens (only fetch when expanded)
+  const { data: activeTokens } = useQuery<{
+    id: string;
+    token: string;
+    expiresAt: string;
+    accessedAt: string | null;
+    recipientEmail: string;
+    recipientName: string | null;
+    queryCount: number;
+    createdAt: string;
+    createdBy?: { firstName: string | null; lastName: string | null };
+  }[]>({
+    queryKey: ['/api/projects', projectId, 'queries', 'tokens'],
+    enabled: showActiveTokens,
+  });
+
+  const extendTokenMutation = useMutation({
+    mutationFn: async ({ tokenId, additionalDays }: { tokenId: string; additionalDays: number }) => {
+      return apiRequest('POST', `/api/queries/tokens/${tokenId}/extend`, { additionalDays });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries', 'tokens'] });
+      setExtendTokenId(null);
+      toast({ title: "Link extended", description: `Link validity extended by ${extendDays} days.` });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to extend link.", variant: "destructive" });
+    },
   });
 
   const createMutation = useMutation({
@@ -499,6 +542,57 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     setIsEmailDialogOpen(false);
     setEmailInitialValues({});
     // Don't clear pending query IDs until next prepare
+    setReminderTokenId(null);
+  };
+
+  // Handle sending reminder for a token
+  const handleSendReminder = async (tokenId: string) => {
+    if (!clientId) {
+      toast({ title: "Error", description: "Client ID is required to send reminder.", variant: "destructive" });
+      return;
+    }
+    
+    setIsPreparingReminder(true);
+    setReminderTokenId(tokenId);
+    
+    try {
+      const response = await apiRequest('POST', `/api/queries/tokens/${tokenId}/send-reminder`, {});
+      
+      // Set initial values for email dialog
+      setEmailInitialValues({
+        subject: response.emailSubject,
+        content: response.emailContent,
+      });
+      
+      // Clear the pending query IDs (this is a reminder, not a new send)
+      setPendingEmailQueryIds([]);
+      setPendingEmailTokenId(null);
+      
+      // Open the email dialog
+      setIsEmailDialogOpen(true);
+    } catch (error: any) {
+      console.error('Error preparing reminder:', error);
+      const errorMessage = error?.message || "Failed to prepare reminder.";
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
+    } finally {
+      setIsPreparingReminder(false);
+    }
+  };
+
+  // Handle reminder email success
+  const handleReminderSuccess = async () => {
+    toast({ 
+      title: "Reminder sent", 
+      description: "A reminder email has been sent to the client." 
+    });
+    
+    // Refresh tokens list to update UI
+    queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries', 'tokens'] });
+    
+    // Clear state
+    setReminderTokenId(null);
+    setEmailInitialValues({});
+    setIsEmailDialogOpen(false);
   };
 
   const filteredQueries = queries?.filter(q => {
@@ -952,7 +1046,153 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
             </div>
           </>
         )}
+
+        {/* Active Response Links Section */}
+        {(queries?.length || 0) > 0 && (
+          <div className="mt-6 pt-6 border-t">
+            <button
+              onClick={() => setShowActiveTokens(!showActiveTokens)}
+              className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+              data-testid="button-toggle-active-links"
+            >
+              {showActiveTokens ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              <Link2 className="w-4 h-4" />
+              Active Response Links
+              {activeTokens && activeTokens.length > 0 && (
+                <Badge variant="secondary" className="ml-1">{activeTokens.length}</Badge>
+              )}
+            </button>
+            
+            {showActiveTokens && (
+              <div className="mt-4 space-y-3">
+                {!activeTokens || activeTokens.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No active response links for this project.</p>
+                ) : (
+                  activeTokens.map((token) => {
+                    const isExpired = new Date(token.expiresAt) < new Date();
+                    const expiresIn = Math.ceil((new Date(token.expiresAt).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                    
+                    return (
+                      <div 
+                        key={token.id} 
+                        className={cn(
+                          "border rounded-lg p-4",
+                          isExpired && "bg-destructive/5 border-destructive/20"
+                        )}
+                        data-testid={`token-card-${token.id}`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-sm font-medium">
+                                {token.recipientName || token.recipientEmail}
+                              </span>
+                              <Badge variant={isExpired ? "destructive" : expiresIn <= 2 ? "outline" : "secondary"}>
+                                <Clock className="w-3 h-3 mr-1" />
+                                {isExpired 
+                                  ? 'Expired' 
+                                  : expiresIn === 0 
+                                    ? 'Expires today'
+                                    : expiresIn === 1 
+                                      ? 'Expires tomorrow' 
+                                      : `Expires in ${expiresIn} days`}
+                              </Badge>
+                              {token.accessedAt && (
+                                <Badge variant="outline" className="text-green-600">
+                                  <ExternalLink className="w-3 h-3 mr-1" />
+                                  Opened
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-4 mt-1 text-xs text-muted-foreground">
+                              <span>{token.queryCount} {token.queryCount === 1 ? 'query' : 'queries'}</span>
+                              <span>Sent {format(new Date(token.createdAt), 'dd MMM yyyy')}</span>
+                              {token.createdBy && (
+                                <span>by {token.createdBy.firstName} {token.createdBy.lastName}</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {!isExpired && !token.accessedAt && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleSendReminder(token.id)}
+                                disabled={isPreparingReminder && reminderTokenId === token.id}
+                                data-testid={`button-reminder-${token.id}`}
+                              >
+                                <Mail className="w-3 h-3 mr-1" />
+                                {isPreparingReminder && reminderTokenId === token.id ? "..." : "Nudge"}
+                              </Button>
+                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setExtendTokenId(token.id);
+                                setExtendDays(3);
+                              }}
+                              data-testid={`button-extend-${token.id}`}
+                            >
+                              <RefreshCw className="w-3 h-3 mr-1" />
+                              Extend
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
+
+      {/* Extend Token Dialog */}
+      <Dialog open={!!extendTokenId} onOpenChange={(open) => !open && setExtendTokenId(null)}>
+        <DialogContent className="sm:max-w-md" data-testid="dialog-extend-token">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RefreshCw className="w-5 h-5" />
+              Extend Link Validity
+            </DialogTitle>
+            <DialogDescription>
+              Extend the expiry date of this response link.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <label className="text-sm font-medium">Extend by</label>
+            <Select 
+              value={String(extendDays)} 
+              onValueChange={(val) => setExtendDays(Number(val))}
+            >
+              <SelectTrigger className="w-full mt-1" data-testid="select-extend-days">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">1 day</SelectItem>
+                <SelectItem value="3">3 days</SelectItem>
+                <SelectItem value="7">7 days</SelectItem>
+                <SelectItem value="14">14 days</SelectItem>
+                <SelectItem value="30">30 days</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExtendTokenId(null)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => extendTokenId && extendTokenMutation.mutate({ tokenId: extendTokenId, additionalDays: extendDays })}
+              disabled={extendTokenMutation.isPending}
+              data-testid="button-confirm-extend"
+            >
+              {extendTokenMutation.isPending ? "Extending..." : "Extend Link"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
@@ -1203,7 +1443,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
           user={user || null}
           isOpen={isEmailDialogOpen}
           onClose={handleEmailClose}
-          onSuccess={handleEmailSuccess}
+          onSuccess={reminderTokenId ? handleReminderSuccess : handleEmailSuccess}
           clientCompany={clientName}
           initialValues={emailInitialValues}
         />

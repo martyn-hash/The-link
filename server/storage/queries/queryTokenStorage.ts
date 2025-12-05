@@ -102,6 +102,56 @@ export class QueryTokenStorage extends BaseStorage {
     return result;
   }
 
+  async extendTokenExpiry(tokenId: string, additionalDays: number): Promise<QueryResponseToken | undefined> {
+    const token = await this.getTokenById(tokenId);
+    if (!token) return undefined;
+
+    // Extend from current expiry or from now if already expired
+    const baseDate = token.expiresAt > new Date() ? token.expiresAt : new Date();
+    const newExpiresAt = new Date(baseDate);
+    newExpiresAt.setDate(newExpiresAt.getDate() + additionalDays);
+
+    const [result] = await db
+      .update(queryResponseTokens)
+      .set({ expiresAt: newExpiresAt })
+      .where(eq(queryResponseTokens.id, tokenId))
+      .returning();
+    return result;
+  }
+
+  async getActiveTokensByProjectId(projectId: string): Promise<QueryResponseTokenWithRelations[]> {
+    const results = await db
+      .select({
+        token: queryResponseTokens,
+        createdBy: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          email: users.email,
+        },
+        project: {
+          id: projects.id,
+          description: projects.description,
+        },
+      })
+      .from(queryResponseTokens)
+      .leftJoin(users, eq(queryResponseTokens.createdById, users.id))
+      .leftJoin(projects, eq(queryResponseTokens.projectId, projects.id))
+      .where(
+        and(
+          eq(queryResponseTokens.projectId, projectId),
+          sql`${queryResponseTokens.completedAt} IS NULL`
+        )
+      )
+      .orderBy(sql`${queryResponseTokens.createdAt} DESC`);
+
+    return results.map(r => ({
+      ...r.token,
+      createdBy: r.createdBy as any,
+      project: r.project as any,
+    }));
+  }
+
   async validateToken(token: string): Promise<{ valid: boolean; reason?: string; tokenData?: QueryResponseTokenWithRelations }> {
     const tokenData = await this.getTokenByValue(token);
 
