@@ -99,6 +99,26 @@ A unified query management system integrated into the project workflow that:
 - Cron job checks for due reminders (same as existing notification cron)
 - Links to existing VoodooSMS and SendGrid services
 
+#### `query_response_attachments`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | varchar (UUID) | Primary key |
+| `queryId` | varchar | FK to bookkeeping_queries |
+| `fileName` | varchar | Original file name |
+| `fileType` | varchar | MIME type |
+| `fileSize` | integer | Size in bytes |
+| `objectPath` | varchar | Object storage path |
+| `uploadedByClient` | boolean | True if client uploaded, false if staff |
+| `createdAt` | timestamp | Upload timestamp |
+
+**Indexes:**
+- `queryId` (for fetching attachments per query)
+
+**Storage Path Convention:**
+- Client uploads: `queries/{projectId}/{queryId}/client/{filename}`
+- Staff uploads: `queries/{projectId}/{queryId}/staff/{filename}`
+
 ---
 
 ## Status Flow
@@ -145,16 +165,24 @@ A unified query management system integrated into the project workflow that:
   - `DELETE /api/queries/:id` - Delete query
   - `POST /api/projects/:projectId/queries/bulk` - Bulk create from upload
 
-**Frontend - Queries Tab:**
-- [ ] Add "Queries" tab to project detail page
+**Frontend - Queries Tab (Two Locations):**
+
+1. **Project Detail Page** - Add "Queries" tab alongside Overview, History, Messages, etc.
+2. **Messages Modal** - Add "Queries" as third tab in the modal accessed via the speech icon (💬) on Kanban cards
+   - Current tabs: "Internal Messages" | "Client Comms"
+   - New structure: "Internal Messages" | "Client Comms" | "Queries"
+   - This provides quick access to queries without leaving the Kanban board
+
+**Tab Features:**
 - [ ] Query list table with sorting/filtering
 - [ ] Query creation form (single entry)
 - [ ] Inline editing for answers and Has VAT toggle
 - [ ] Status badge display with color coding
 - [ ] Quick actions: Answer, Resolve, Delete
+- [ ] Query count badge on tab header (e.g., "Queries (5)")
 
 **UI Components:**
-- [ ] `QueriesTab.tsx` - Main tab component
+- [ ] `QueriesTab.tsx` - Main tab component (reusable in both locations)
 - [ ] `QueryRow.tsx` - Individual query display/edit
 - [ ] `AddQueryForm.tsx` - Form for adding single query
 - [ ] `QueryStatusBadge.tsx` - Status indicator
@@ -163,10 +191,44 @@ A unified query management system integrated into the project workflow that:
 
 ### Phase 2: Stage Integration & Bulk Operations (Week 2-3)
 
-**Stage Change Integration:**
-- [ ] Add "Add Queries" section to stage change form
-- [ ] Quick-add query modal from stage change
-- [ ] Show query count badge on project cards
+**Stage Change Integration - Multi-Column Expansion:**
+
+The "Add Queries" section in the stage change form should be a **slick, seamless experience** that follows the same expansion pattern as Stage Approvals:
+
+- When user clicks "Add Queries", the form **expands horizontally** to a multi-column layout
+- Left column: Standard stage change fields (stage, reason, notes, attachments)
+- Right column: Query entry interface (table view for quick entry)
+- **Mutually exclusive**: Only one expansion can be active at a time (Stage Approval OR Add Queries, not both)
+- Smooth animation transition when expanding/collapsing
+
+**Query Entry in Stage Change:**
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│ Change Status                                                                   │
+├─────────────────────────────────┬───────────────────────────────────────────────┤
+│ Stage: [With Client Manager ▼]  │  📋 Add Queries                        [✕]   │
+│                                 │  ───────────────────────────────────────────  │
+│ Reason: [Queries Raised ▼]      │  Date       Description      Amount    Query  │
+│                                 │  ┌─────────┬─────────────┬──────────┬───────┐│
+│ Notes:                          │  │ 15 Nov  │ AMAZON      │ £9.99    │ What  ││
+│ ┌───────────────────────────┐   │  │         │             │ out      │ is... ││
+│ │                           │   │  ├─────────┼─────────────┼──────────┼───────┤│
+│ │                           │   │  │ 18 Nov  │ TFL TRAVEL  │ £42.00   │       ││
+│ │                           │   │  │         │             │ out      │       ││
+│ └───────────────────────────┘   │  └─────────┴─────────────┴──────────┴───────┘│
+│                                 │  [+ Add Row]                                  │
+│ [Attach Files]                  │  ───────────────────────────────────────────  │
+│                                 │  📤 Or upload CSV/Excel                       │
+│ [Update Status]                 │                                               │
+└─────────────────────────────────┴───────────────────────────────────────────────┘
+```
+
+**Features:**
+- [ ] "Add Queries" button on stage change form (appears for all stages)
+- [ ] Multi-column expansion animation (mimic Stage Approval style)
+- [ ] Inline query table with quick-add rows
+- [ ] Drag file onto zone to trigger CSV/Excel upload
+- [ ] Show query count badge on project cards in Kanban
 
 **Bulk Import:**
 - [ ] Excel/CSV upload component
@@ -268,6 +330,7 @@ Best regards,
   - Our Query
   - Response input (textarea)
   - Has VAT toggle
+  - **File attachment button** (upload receipts, invoices, etc.)
 - [ ] "Submit All Responses" button
 - [ ] Thank you confirmation on submit
 
@@ -277,11 +340,39 @@ Best regards,
 - [ ] Clear question display
 - [ ] Easy text input
 - [ ] VAT toggle
+- [ ] **Attach file button** (camera icon for photos, file picker for documents)
 - [ ] Swipe right = answer & next
 - [ ] Progress indicator (3 of 7)
 - [ ] Submit when all answered
 
-**Page Structure:**
+**File Attachments for Client Responses:**
+
+Clients should be able to attach supporting documents (receipts, invoices, bank statements) to their query responses:
+
+- [ ] Upload button per query (📎 or 📷 icon)
+- [ ] Accepted formats: Images (jpg, png, heic), PDFs, common document formats
+- [ ] Max file size: 10MB per file
+- [ ] Multiple files per query allowed
+- [ ] Preview thumbnails for uploaded files
+- [ ] Store in Object Storage under `queries/{projectId}/{queryId}/`
+- [ ] Mobile camera integration (take photo directly)
+
+**Database Addition for Attachments:**
+```sql
+-- Add to bookkeeping_queries table or create separate table
+CREATE TABLE query_response_attachments (
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  query_id VARCHAR NOT NULL REFERENCES bookkeeping_queries(id) ON DELETE CASCADE,
+  file_name VARCHAR NOT NULL,
+  file_type VARCHAR NOT NULL,
+  file_size INTEGER NOT NULL,
+  object_path VARCHAR NOT NULL,  -- Object storage path
+  uploaded_by_client BOOLEAN DEFAULT TRUE,  -- True if client uploaded, false if staff
+  created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+**Page Structure (Updated with Attachments):**
 ```
 ┌─────────────────────────────────────────┐
 │  [Firm Logo]                            │
@@ -306,6 +397,12 @@ Best regards,
 │  └─────────────────────────────────┘   │
 │                                         │
 │  ☐ Includes VAT                        │
+│                                         │
+│  📎 Attach Receipt/Invoice              │
+│  ┌───────────────────────────────────┐ │
+│  │ [📄 receipt.pdf] [✕]              │ │
+│  │ [📷 photo_001.jpg] [✕]            │ │
+│  └───────────────────────────────────┘ │
 │                                         │
 │  [← Previous]    [Next →]              │
 │                                         │
@@ -457,35 +554,47 @@ for (const reminder of dueReminders) {
 server/
 ├── storage/
 │   └── queries/
-│       ├── queryStorage.ts           # Core query CRUD
+│       ├── queryStorage.ts            # Core query CRUD
 │       ├── queryTokenStorage.ts       # Token management
+│       ├── queryAttachmentStorage.ts  # File attachment storage
 │       └── queryReminderStorage.ts    # Chase reminder storage
 ├── routes/
-│   └── queries.ts                     # API routes
+│   └── queries.ts                     # API routes (includes public token endpoints)
 ├── query-reminder-service.ts          # Chase reminder logic
 └── utils/
     └── queryColumnMapper.ts           # CSV/Excel column mapping
 
 client/src/
 ├── pages/
-│   ├── query-response.tsx             # Client response page
+│   ├── query-response.tsx             # Client response page (standalone, no auth)
 │   └── query-response-mobile.tsx      # Mobile swipeable view
 ├── components/
 │   └── queries/
-│       ├── QueriesTab.tsx             # Main project tab
-│       ├── QueryRow.tsx               # Single query display
+│       ├── QueriesTab.tsx             # Main tab component (reusable)
+│       ├── QueryRow.tsx               # Single query display/edit
 │       ├── AddQueryForm.tsx           # Manual entry form
-│       ├── QueryBulkUpload.tsx        # CSV/Excel import
-│       ├── QueryStatusBadge.tsx       # Status indicator
-│       ├── SendToClientModal.tsx      # Email composer
-│       └── QueryChaseScheduler.tsx    # Reminder scheduling UI
+│       ├── QueryBulkUpload.tsx        # CSV/Excel import with column mapping
+│       ├── QueryStatusBadge.tsx       # Status indicator with colors
+│       ├── SendToClientModal.tsx      # Email composer with chase scheduling
+│       ├── QueryChaseScheduler.tsx    # Reminder scheduling UI
+│       ├── QueryAttachmentUpload.tsx  # File upload component (client response)
+│       └── StageChangeQueriesPanel.tsx # Multi-column expansion for stage change form
 
 shared/schema/
 └── queries/
-    ├── tables.ts                      # Drizzle table definitions
+    ├── tables.ts                      # Drizzle table definitions (4 tables)
     ├── schemas.ts                     # Zod validation schemas
     ├── types.ts                       # TypeScript types
     └── relations.ts                   # Table relations
+
+# Files to Modify (Existing)
+client/src/components/
+├── messages-modal.tsx                 # Add "Queries" as third tab
+├── status-change-form.tsx             # Add multi-column query expansion
+└── project-card.tsx                   # Add query count badge
+
+client/src/pages/
+└── project-detail.tsx                 # Add "Queries" tab
 ```
 
 ---
@@ -625,6 +734,10 @@ shared/schema/
 | Dec 5, 2025 | Add Has VAT column | Business requirement - typically unknown at creation |
 | Dec 5, 2025 | Integrate with existing notification system | Leverage proven SMS/email infrastructure |
 | Dec 5, 2025 | Chase reminders as Phase 5 | Core functionality first, then enhancements |
+| Dec 5, 2025 | Add Queries tab to Messages Modal | Quick access from Kanban without leaving board; speech icon already used |
+| Dec 5, 2025 | Multi-column expansion for stage change queries | Matches Stage Approval UX pattern; slick seamless experience |
+| Dec 5, 2025 | Mutually exclusive expansion (Approval OR Queries) | Prevents UI clutter; only one at a time needed |
+| Dec 5, 2025 | Client can attach files to query responses | Receipts/invoices are often needed to answer queries |
 
 ---
 
