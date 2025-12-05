@@ -56,6 +56,7 @@ import {
   CalendarIcon,
   ArrowDownLeft,
   ArrowUpRight,
+  Upload,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -63,6 +64,7 @@ import { format } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import type { BookkeepingQueryWithRelations } from "@shared/schema";
+import { QueryBulkImport, type ParsedQuery } from "./QueryBulkImport";
 
 type QueryStatus = "open" | "answered_by_staff" | "sent_to_client" | "answered_by_client" | "resolved";
 
@@ -279,6 +281,44 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
     },
   });
 
+  // Bulk import handler
+  const handleBulkImport = async (parsedQueries: ParsedQuery[]) => {
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const query of parsedQueries) {
+      try {
+        await apiRequest('POST', `/api/projects/${projectId}/queries`, {
+          ourQuery: query.ourQuery || "Please clarify this transaction",
+          description: query.description || undefined,
+          date: query.date ? query.date.toISOString() : undefined,
+          moneyIn: query.moneyIn || undefined,
+          moneyOut: query.moneyOut || undefined,
+        });
+        successCount++;
+      } catch (error) {
+        failCount++;
+        console.error("Failed to create query:", error);
+      }
+    }
+    
+    queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/queries/counts'] });
+    
+    if (failCount === 0) {
+      toast({ 
+        title: "Import complete", 
+        description: `Successfully imported ${successCount} queries.` 
+      });
+    } else {
+      toast({ 
+        title: "Import partially complete", 
+        description: `Imported ${successCount} queries, ${failCount} failed.`,
+        variant: "destructive" 
+      });
+    }
+  };
+
   const resetAddForm = () => {
     setNewQueryText("");
     setNewQueryDescription("");
@@ -318,10 +358,10 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
     updateMutation.mutate({
       id: editingQuery.id,
       ourQuery: editQueryText.trim(),
-      description: editQueryDescription.trim() || null,
-      date: editQueryDate ? editQueryDate.toISOString() : null,
-      moneyIn: editQueryMoneyIn || null,
-      moneyOut: editQueryMoneyOut || null,
+      description: editQueryDescription.trim() || undefined,
+      date: editQueryDate ? editQueryDate.toISOString() : undefined,
+      moneyIn: editQueryMoneyIn || undefined,
+      moneyOut: editQueryMoneyOut || undefined,
       hasVat: editQueryHasVat,
       status: editQueryStatus,
       clientResponse: editQueryResponse.trim() || undefined,
@@ -382,16 +422,26 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
               </span>
             )}
           </CardTitle>
-          <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
-            setIsAddDialogOpen(open);
-            if (!open) resetAddForm();
-          }}>
-            <DialogTrigger asChild>
-              <Button size="sm" data-testid="button-add-query">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Query
-              </Button>
-            </DialogTrigger>
+          <div className="flex items-center gap-2">
+            <QueryBulkImport 
+              onImport={handleBulkImport}
+              trigger={
+                <Button size="sm" variant="outline" data-testid="button-import-queries">
+                  <Upload className="w-4 h-4 mr-2" />
+                  Import
+                </Button>
+              }
+            />
+            <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+              setIsAddDialogOpen(open);
+              if (!open) resetAddForm();
+            }}>
+              <DialogTrigger asChild>
+                <Button size="sm" data-testid="button-add-query">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Query
+                </Button>
+              </DialogTrigger>
             <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>Add Bookkeeping Query</DialogTitle>
@@ -512,7 +562,8 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
                 </Button>
               </DialogFooter>
             </DialogContent>
-          </Dialog>
+            </Dialog>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
