@@ -4,9 +4,10 @@ import {
   DialogContent,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MessageSquare, Mail } from "lucide-react";
+import { MessageSquare, Mail, HelpCircle } from "lucide-react";
 import ProjectMessaging from "@/components/ProjectMessaging";
 import ClientCommsPanel from "@/components/ClientCommsPanel";
+import { QueriesTab } from "@/components/queries/QueriesTab";
 
 interface MessagesModalProps {
   projectId: string;
@@ -31,10 +32,14 @@ export function MessagesModal({
       >
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
           <div className="border-b px-6 pt-6 pb-0">
-            <TabsList className="grid w-full max-w-md grid-cols-2">
+            <TabsList className="grid w-full max-w-xl grid-cols-3">
               <TabsTrigger value="internal" className="gap-2" data-testid="tab-internal-messages">
                 <MessageSquare className="w-4 h-4" />
                 Internal Messages
+              </TabsTrigger>
+              <TabsTrigger value="queries" className="gap-2" data-testid="tab-queries">
+                <HelpCircle className="w-4 h-4" />
+                Queries
               </TabsTrigger>
               <TabsTrigger value="client" className="gap-2" data-testid="tab-client-comms">
                 <Mail className="w-4 h-4" />
@@ -46,6 +51,12 @@ export function MessagesModal({
           <TabsContent value="internal" className="flex-1 overflow-hidden m-0 p-6">
             {open && activeTab === "internal" && (
               <ProjectMessaging projectId={projectId} project={project} />
+            )}
+          </TabsContent>
+
+          <TabsContent value="queries" className="flex-1 overflow-hidden m-0 p-6">
+            {open && activeTab === "queries" && (
+              <QueriesTab projectId={projectId} />
             )}
           </TabsContent>
           

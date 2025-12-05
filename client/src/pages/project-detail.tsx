@@ -36,6 +36,7 @@ import ProjectChronology from "@/components/project-chronology";
 import ProjectMessaging from "@/components/ProjectMessaging";
 import { ProjectProgressNotes } from "@/components/project-progress-notes";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
+import { QueriesTab } from "@/components/queries/QueriesTab";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SwipeableTabsWrapper } from "@/components/swipeable-tabs";
 import type { ProjectWithRelations, User } from "@shared/schema";
@@ -731,9 +732,10 @@ export default function ProjectDetail() {
       <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full" data-client-tabs="project">
           {/* Desktop Tabs - Centered */}
           <div className="hidden md:block mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8">
-            <TabsList className="grid w-full max-w-4xl grid-cols-4">
+            <TabsList className="grid w-full max-w-5xl grid-cols-5">
               <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
               <TabsTrigger value="messages" data-testid="tab-messages">Messages</TabsTrigger>
+              <TabsTrigger value="queries" data-testid="tab-queries">Queries</TabsTrigger>
               <TabsTrigger value="tasks" data-testid="tab-tasks">Internal Tasks</TabsTrigger>
               <TabsTrigger value="progress-notes" data-testid="tab-progress-notes">Progress Notes</TabsTrigger>
             </TabsList>
@@ -757,6 +759,14 @@ export default function ProjectDetail() {
                 style={{ width: '80vw' }}
               >
                 Messages
+              </TabsTrigger>
+              <TabsTrigger 
+                value="queries" 
+                data-testid="tab-queries" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+              >
+                Queries
               </TabsTrigger>
               <TabsTrigger 
                 value="tasks" 
@@ -783,6 +793,7 @@ export default function ProjectDetail() {
               <h2 className="text-lg font-semibold text-foreground" data-testid="mobile-section-title">
                 {currentTab === "overview" && "Overview"}
                 {currentTab === "messages" && "Messages"}
+                {currentTab === "queries" && "Queries"}
                 {currentTab === "tasks" && "Internal Tasks"}
                 {currentTab === "progress-notes" && "Progress Notes"}
               </h2>
@@ -791,7 +802,7 @@ export default function ProjectDetail() {
 
           {isMobile ? (
             <SwipeableTabsWrapper
-              tabs={["overview", "messages", "tasks", "progress-notes"]}
+              tabs={["overview", "messages", "queries", "tasks", "progress-notes"]}
               currentTab={currentTab}
               onTabChange={setCurrentTab}
               enabled={true}
@@ -818,6 +829,10 @@ export default function ProjectDetail() {
 
           <TabsContent value="messages" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
             <ProjectMessaging projectId={project.id} project={project} />
+          </TabsContent>
+
+          <TabsContent value="queries" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
+            <QueriesTab projectId={project.id} />
           </TabsContent>
 
           <TabsContent value="tasks" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
