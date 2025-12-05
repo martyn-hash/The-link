@@ -90,6 +90,7 @@ import {
 } from './settings/index.js';
 import { WebhookStorage } from './webhooks/index.js';
 import { QboStorage, QcStorage } from './qbo/index.js';
+import { QueryStorage } from './queries/index.js';
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -159,6 +160,7 @@ export class DatabaseStorage implements IStorage {
   private webhookStorage: WebhookStorage;
   private qboStorage: QboStorage;
   private qcStorage: QcStorage;
+  private queryStorage: QueryStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -259,6 +261,9 @@ export class DatabaseStorage implements IStorage {
     // Initialize QBO domain storage
     this.qboStorage = new QboStorage();
     this.qcStorage = new QcStorage();
+    
+    // Initialize queries domain storage
+    this.queryStorage = new QueryStorage();
     
     // Register cross-domain helpers
     this.registerClientHelpers();
@@ -3400,6 +3405,62 @@ export class DatabaseStorage implements IStorage {
 
   async getLatestQcRunSummary(clientId: string) {
     return this.qcStorage.getLatestQcRunSummary(clientId);
+  }
+
+  // ============================================================================
+  // QUERIES DOMAIN - Delegated to QueryStorage
+  // ============================================================================
+
+  async createQuery(query: any) {
+    return this.queryStorage.createQuery(query);
+  }
+
+  async createQueries(queries: any[]) {
+    return this.queryStorage.createQueries(queries);
+  }
+
+  async getQueryById(id: string) {
+    return this.queryStorage.getQueryById(id);
+  }
+
+  async getQueriesByProjectId(projectId: string) {
+    return this.queryStorage.getQueriesByProjectId(projectId);
+  }
+
+  async getQueryCountByProjectId(projectId: string) {
+    return this.queryStorage.getQueryCountByProjectId(projectId);
+  }
+
+  async getOpenQueryCountByProjectId(projectId: string) {
+    return this.queryStorage.getOpenQueryCountByProjectId(projectId);
+  }
+
+  async updateQuery(id: string, query: any) {
+    return this.queryStorage.updateQuery(id, query);
+  }
+
+  async deleteQuery(id: string) {
+    return this.queryStorage.deleteQuery(id);
+  }
+
+  async deleteQueriesByProjectId(projectId: string) {
+    return this.queryStorage.deleteQueriesByProjectId(projectId);
+  }
+
+  async bulkUpdateQueryStatus(ids: string[], status: any, updatedById: string) {
+    return this.queryStorage.bulkUpdateQueryStatus(ids, status, updatedById);
+  }
+
+  async markQueriesAsSentToClient(ids: string[]) {
+    return this.queryStorage.markQueriesAsSentToClient(ids);
+  }
+
+  async getQueriesByStatus(projectId: string, status: any) {
+    return this.queryStorage.getQueriesByStatus(projectId, status);
+  }
+
+  async getQueryStatsByProjectId(projectId: string) {
+    return this.queryStorage.getQueryStatsByProjectId(projectId);
   }
 
 }

@@ -211,6 +211,10 @@ import {
   type UpdateCompanySettings,
   type StageChangeNotificationPreview,
   userOauthAccounts,
+  type BookkeepingQuery,
+  type InsertBookkeepingQuery,
+  type UpdateBookkeepingQuery,
+  type BookkeepingQueryWithRelations,
 } from "@shared/schema";
 
 type UserOauthAccount = typeof userOauthAccounts.$inferSelect;
@@ -922,4 +926,25 @@ export interface IStorage {
   getWebhookLogsByWebhookId(webhookConfigId: string, limit?: number): Promise<WebhookLogWithDetails[]>;
   getRecentWebhookLogs(limit?: number): Promise<WebhookLogWithDetails[]>;
   hasSuccessfulWebhookForClient(clientId: string, webhookConfigId: string): Promise<boolean>;
+
+  createQuery(query: InsertBookkeepingQuery): Promise<BookkeepingQuery>;
+  createQueries(queries: InsertBookkeepingQuery[]): Promise<BookkeepingQuery[]>;
+  getQueryById(id: string): Promise<BookkeepingQueryWithRelations | undefined>;
+  getQueriesByProjectId(projectId: string): Promise<BookkeepingQueryWithRelations[]>;
+  getQueryCountByProjectId(projectId: string): Promise<number>;
+  getOpenQueryCountByProjectId(projectId: string): Promise<number>;
+  updateQuery(id: string, query: UpdateBookkeepingQuery): Promise<BookkeepingQuery>;
+  deleteQuery(id: string): Promise<void>;
+  deleteQueriesByProjectId(projectId: string): Promise<number>;
+  bulkUpdateQueryStatus(ids: string[], status: BookkeepingQuery['status'], updatedById: string): Promise<number>;
+  markQueriesAsSentToClient(ids: string[]): Promise<number>;
+  getQueriesByStatus(projectId: string, status: BookkeepingQuery['status']): Promise<BookkeepingQuery[]>;
+  getQueryStatsByProjectId(projectId: string): Promise<{
+    total: number;
+    open: number;
+    answeredByStaff: number;
+    sentToClient: number;
+    answeredByClient: number;
+    resolved: number;
+  }>;
 }
