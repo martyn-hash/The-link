@@ -93,6 +93,15 @@ export class QueryTokenStorage extends BaseStorage {
       .where(eq(queryResponseTokens.id, tokenId));
   }
 
+  async updateToken(tokenId: string, updates: { recipientEmail?: string; recipientName?: string | null }): Promise<QueryResponseToken | undefined> {
+    const [result] = await db
+      .update(queryResponseTokens)
+      .set(updates)
+      .where(eq(queryResponseTokens.id, tokenId))
+      .returning();
+    return result;
+  }
+
   async validateToken(token: string): Promise<{ valid: boolean; reason?: string; tokenData?: QueryResponseTokenWithRelations }> {
     const tokenData = await this.getTokenByValue(token);
 

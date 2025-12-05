@@ -57,21 +57,39 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Upload,
+  Mail,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import type { BookkeepingQueryWithRelations } from "@shared/schema";
+import type { BookkeepingQueryWithRelations, User } from "@shared/schema";
 import { QueryBulkImport, type ParsedQuery } from "./QueryBulkImport";
-import { SendToClientDialog } from "./SendToClientDialog";
+import { EmailDialog } from "@/pages/client-detail/components/communications/dialogs/EmailDialog";
 
 type QueryStatus = "open" | "answered_by_staff" | "sent_to_client" | "answered_by_client" | "resolved";
+
+interface PersonOption {
+  person: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    fullName?: string;
+    primaryPhone?: string;
+    primaryEmail?: string;
+    telephone?: string;
+    email?: string;
+  };
+  role?: string | null;
+}
 
 interface QueriesTabProps {
   projectId: string;
   clientId?: string;
+  clientPeople?: PersonOption[];
+  user?: User | null;
+  clientName?: string;
 }
 
 const statusColors: Record<QueryStatus, string> = {
@@ -128,7 +146,7 @@ function AmountDisplay({ moneyIn, moneyOut }: { moneyIn?: string | null; moneyOu
   return <span className="text-muted-foreground">-</span>;
 }
 
-export function QueriesTab({ projectId, clientId }: QueriesTabProps) {
+export function QueriesTab({ projectId, clientId, clientPeople, user, clientName }: QueriesTabProps) {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [selectedQueries, setSelectedQueries] = useState<string[]>([]);
@@ -136,8 +154,13 @@ export function QueriesTab({ projectId, clientId }: QueriesTabProps) {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingQuery, setEditingQuery] = useState<BookkeepingQueryWithRelations | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
-  const [sendQueryIds, setSendQueryIds] = useState<string[]>([]);
+  
+  // Email dialog state
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [emailInitialValues, setEmailInitialValues] = useState<{ subject?: string; content?: string }>({});
+  const [pendingEmailQueryIds, setPendingEmailQueryIds] = useState<string[]>([]);
+  const [pendingEmailTokenId, setPendingEmailTokenId] = useState<string | null>(null);
+  const [isPreparingEmail, setIsPreparingEmail] = useState(false);
 
   // Add Query form state
   const [newQueryText, setNewQueryText] = useState("");
@@ -146,6 +169,7 @@ export function QueriesTab({ projectId, clientId }: QueriesTabProps) {
   const [newQueryMoneyIn, setNewQueryMoneyIn] = useState("");
   const [newQueryMoneyOut, setNewQueryMoneyOut] = useState("");
   const [newQueryHasVat, setNewQueryHasVat] = useState(false);
+  const [newQueryComment, setNewQueryComment] = useState("");
 
   // Edit Query form state
   const [editQueryText, setEditQueryText] = useState("");
@@ -156,6 +180,7 @@ export function QueriesTab({ projectId, clientId }: QueriesTabProps) {
   const [editQueryHasVat, setEditQueryHasVat] = useState(false);
   const [editQueryStatus, setEditQueryStatus] = useState<QueryStatus>("open");
   const [editQueryResponse, setEditQueryResponse] = useState("");
+  const [editQueryComment, setEditQueryComment] = useState("");
 
   const { data: queries, isLoading } = useQuery<BookkeepingQueryWithRelations[]>({
     queryKey: ['/api/projects', projectId, 'queries'],
@@ -180,6 +205,7 @@ export function QueriesTab({ projectId, clientId }: QueriesTabProps) {
       moneyIn?: string;
       moneyOut?: string;
       hasVat?: boolean;
+      comment?: string;
     }) => {
       return apiRequest('POST', `/api/projects/${projectId}/queries`, data);
     },
@@ -206,6 +232,7 @@ export function QueriesTab({ projectId, clientId }: QueriesTabProps) {
       hasVat?: boolean | null;
       status?: QueryStatus; 
       clientResponse?: string;
+      comment?: string;
     }) => {
       const { id, ...updateData } = data;
       return apiRequest('PATCH', `/api/queries/${id}`, updateData);
@@ -312,6 +339,7 @@ export function QueriesTab({ projectId, clientId }: QueriesTabProps) {
     setNewQueryMoneyIn("");
     setNewQueryMoneyOut("");
     setNewQueryHasVat(false);
+    setNewQueryComment("");
   };
 
   const handleAddQuery = () => {
@@ -323,6 +351,7 @@ export function QueriesTab({ projectId, clientId }: QueriesTabProps) {
       moneyIn: newQueryMoneyIn || undefined,
       moneyOut: newQueryMoneyOut || undefined,
       hasVat: newQueryHasVat || undefined,
+      comment: newQueryComment.trim() || undefined,
     });
   };
 
@@ -336,6 +365,7 @@ export function QueriesTab({ projectId, clientId }: QueriesTabProps) {
     setEditQueryHasVat(query.hasVat || false);
     setEditQueryStatus(query.status as QueryStatus);
     setEditQueryResponse(query.clientResponse || "");
+    setEditQueryComment((query as any).comment || "");
     setIsEditDialogOpen(true);
   };
 
@@ -351,6 +381,7 @@ export function QueriesTab({ projectId, clientId }: QueriesTabProps) {
       hasVat: editQueryHasVat,
       status: editQueryStatus,
       clientResponse: editQueryResponse.trim() || undefined,
+      comment: editQueryComment.trim() || undefined,
     });
   };
 
@@ -370,14 +401,76 @@ export function QueriesTab({ projectId, clientId }: QueriesTabProps) {
     }
   };
 
-  const handleOpenSendDialog = (queryIds: string[]) => {
-    setSendQueryIds(queryIds);
-    setIsSendDialogOpen(true);
+  // Prepare email content and open email dialog
+  const handlePrepareEmail = async (queryIds: string[]) => {
+    if (!clientId) {
+      toast({ title: "Error", description: "Client ID is required to send queries.", variant: "destructive" });
+      return;
+    }
+    
+    setIsPreparingEmail(true);
+    try {
+      const response = await apiRequest('POST', `/api/projects/${projectId}/queries/prepare-email`, {
+        queryIds,
+        expiryDays: 14,
+      });
+      
+      // Store the token ID and query IDs for after email is sent
+      setPendingEmailTokenId(response.tokenId);
+      setPendingEmailQueryIds(queryIds);
+      
+      // Set initial values for email dialog
+      setEmailInitialValues({
+        subject: response.emailSubject,
+        content: response.emailContent,
+      });
+      
+      // Open the email dialog
+      setIsEmailDialogOpen(true);
+    } catch (error) {
+      console.error('Error preparing email:', error);
+      toast({ title: "Error", description: "Failed to prepare email content.", variant: "destructive" });
+    } finally {
+      setIsPreparingEmail(false);
+    }
   };
 
-  const handleSendDialogSuccess = () => {
+  // Called when email is successfully sent
+  const handleEmailSuccess = async () => {
+    if (pendingEmailQueryIds.length > 0) {
+      try {
+        // Mark queries as sent and log to chronology
+        await apiRequest('POST', `/api/projects/${projectId}/queries/mark-sent`, {
+          queryIds: pendingEmailQueryIds,
+          tokenId: pendingEmailTokenId,
+        });
+        
+        // Refresh queries list
+        queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/queries/counts'] });
+        
+        toast({ 
+          title: "Queries sent", 
+          description: `${pendingEmailQueryIds.length} queries have been sent to the client.` 
+        });
+      } catch (error) {
+        console.error('Error marking queries as sent:', error);
+        // Email was sent, but marking failed - don't show error to user
+      }
+    }
+    
+    // Clear state
     setSelectedQueries([]);
-    setSendQueryIds([]);
+    setPendingEmailQueryIds([]);
+    setPendingEmailTokenId(null);
+    setEmailInitialValues({});
+    setIsEmailDialogOpen(false);
+  };
+
+  const handleEmailClose = () => {
+    setIsEmailDialogOpen(false);
+    setEmailInitialValues({});
+    // Don't clear pending query IDs until next prepare
   };
 
   const filteredQueries = queries?.filter(q => {
@@ -544,6 +637,19 @@ export function QueriesTab({ projectId, clientId }: QueriesTabProps) {
                     data-testid="input-query-text"
                   />
                 </div>
+
+                {/* Internal Comment */}
+                <div>
+                  <label className="text-sm font-medium">Internal Comment (staff only)</label>
+                  <Textarea
+                    value={newQueryComment}
+                    onChange={(e) => setNewQueryComment(e.target.value)}
+                    placeholder="Optional notes for staff reference..."
+                    className="mt-1"
+                    rows={2}
+                    data-testid="input-query-comment"
+                  />
+                </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
@@ -584,7 +690,7 @@ export function QueriesTab({ projectId, clientId }: QueriesTabProps) {
               <Button 
                 variant="outline" 
                 size="sm"
-                onClick={() => handleOpenSendDialog(selectedQueries)}
+                onClick={() => handlePrepareEmail(selectedQueries)}
                 disabled={!clientId}
                 data-testid="button-send-selected"
               >
@@ -694,7 +800,7 @@ export function QueriesTab({ projectId, clientId }: QueriesTabProps) {
                               Edit
                             </DropdownMenuItem>
                             <DropdownMenuItem 
-                              onClick={() => handleOpenSendDialog([query.id])}
+                              onClick={() => handlePrepareEmail([query.id])}
                               disabled={query.status === 'sent_to_client' || query.status === 'resolved' || !clientId}
                             >
                               <Send className="w-4 h-4 mr-2" />
@@ -790,10 +896,10 @@ export function QueriesTab({ projectId, clientId }: QueriesTabProps) {
                           Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem 
-                          onClick={() => handleOpenSendDialog([query.id])}
+                          onClick={() => handlePrepareEmail([query.id])}
                           disabled={query.status === 'sent_to_client' || query.status === 'resolved' || !clientId}
                         >
-                          <Send className="w-4 h-4 mr-2" />
+                          <Mail className="w-4 h-4 mr-2" />
                           Send to Client
                         </DropdownMenuItem>
                         <DropdownMenuItem 
@@ -957,6 +1063,19 @@ export function QueriesTab({ projectId, clientId }: QueriesTabProps) {
                 data-testid="input-edit-query-response"
               />
             </div>
+
+            {/* Internal Comment */}
+            <div>
+              <label className="text-sm font-medium">Internal Comment (staff only)</label>
+              <Textarea
+                value={editQueryComment}
+                onChange={(e) => setEditQueryComment(e.target.value)}
+                placeholder="Optional notes for staff reference..."
+                className="mt-1"
+                rows={2}
+                data-testid="input-edit-query-comment"
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
@@ -973,19 +1092,18 @@ export function QueriesTab({ projectId, clientId }: QueriesTabProps) {
         </DialogContent>
       </Dialog>
 
-      {/* Send to Client Dialog */}
+      {/* Email Dialog for sending queries to client */}
       {clientId && (
-        <SendToClientDialog
-          projectId={projectId}
+        <EmailDialog
           clientId={clientId}
-          queries={queries || []}
-          selectedQueryIds={sendQueryIds}
-          isOpen={isSendDialogOpen}
-          onClose={() => {
-            setIsSendDialogOpen(false);
-            setSendQueryIds([]);
-          }}
-          onSuccess={handleSendDialogSuccess}
+          projectId={projectId}
+          clientPeople={clientPeople || []}
+          user={user || null}
+          isOpen={isEmailDialogOpen}
+          onClose={handleEmailClose}
+          onSuccess={handleEmailSuccess}
+          clientCompany={clientName}
+          initialValues={emailInitialValues}
         />
       )}
     </Card>

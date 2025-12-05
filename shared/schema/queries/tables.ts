@@ -13,6 +13,7 @@ export const bookkeepingQueries = pgTable("bookkeeping_queries", {
   moneyOut: decimal("money_out", { precision: 12, scale: 2 }),
   hasVat: boolean("has_vat"),
   ourQuery: text("our_query"),
+  comment: text("comment"),
   clientResponse: text("client_response"),
   status: queryStatusEnum("status").notNull().default("open"),
   createdById: varchar("created_by_id").notNull().references(() => users.id),

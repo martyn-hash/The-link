@@ -5,6 +5,8 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MessageSquare, Mail, HelpCircle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/useAuth";
 import ProjectMessaging from "@/components/ProjectMessaging";
 import ClientCommsPanel from "@/components/ClientCommsPanel";
 import { QueriesTab } from "@/components/queries/QueriesTab";
@@ -23,6 +25,13 @@ export function MessagesModal({
   onOpenChange,
 }: MessagesModalProps) {
   const [activeTab, setActiveTab] = useState<string>("internal");
+  const { user } = useAuth();
+  
+  // Fetch client people for email composition in QueriesTab
+  const { data: clientPeople } = useQuery<any[]>({
+    queryKey: [`/api/clients/${project?.clientId}/people`],
+    enabled: !!project?.clientId && open,
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -56,7 +65,13 @@ export function MessagesModal({
 
           <TabsContent value="queries" className="flex-1 overflow-hidden m-0 p-6">
             {open && activeTab === "queries" && (
-              <QueriesTab projectId={projectId} clientId={project?.clientId} />
+              <QueriesTab 
+                projectId={projectId} 
+                clientId={project?.clientId}
+                clientPeople={clientPeople}
+                user={user}
+                clientName={project?.client?.name}
+              />
             )}
           </TabsContent>
           

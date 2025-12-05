@@ -3494,6 +3494,10 @@ export class DatabaseStorage implements IStorage {
     return this.queryTokenStorage.markTokenCompleted(tokenId);
   }
 
+  async updateQueryResponseToken(tokenId: string, updates: { recipientEmail?: string; recipientName?: string | null }) {
+    return this.queryTokenStorage.updateToken(tokenId, updates);
+  }
+
   async validateQueryResponseToken(token: string) {
     return this.queryTokenStorage.validateToken(token);
   }

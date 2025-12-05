@@ -832,7 +832,13 @@ export default function ProjectDetail() {
           </TabsContent>
 
           <TabsContent value="queries" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
-            <QueriesTab projectId={project.id} clientId={project.clientId} />
+            <QueriesTab 
+              projectId={project.id} 
+              clientId={project.clientId}
+              clientPeople={clientPeople}
+              user={user}
+              clientName={project.client?.name}
+            />
           </TabsContent>
 
           <TabsContent value="tasks" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
@@ -1049,7 +1055,13 @@ export default function ProjectDetail() {
               </TabsContent>
 
               <TabsContent value="queries" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
-                <QueriesTab projectId={project.id} clientId={project.clientId} />
+                <QueriesTab 
+                  projectId={project.id} 
+                  clientId={project.clientId}
+                  clientPeople={clientPeople}
+                  user={user}
+                  clientName={project.client?.name}
+                />
               </TabsContent>
 
               <TabsContent value="tasks" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">

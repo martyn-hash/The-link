@@ -498,6 +498,213 @@ export function registerQueryRoutes(
     }
   });
 
+  // POST /api/projects/:projectId/queries/prepare-email - Generate token and return email content (for use with Email Dialog)
+  app.post("/api/projects/:projectId/queries/prepare-email", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramProjectIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid path parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      const userId = req.effectiveUser?.id || req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const { queryIds, expiryDays = 14 } = req.body;
+      
+      if (!queryIds || !Array.isArray(queryIds) || queryIds.length === 0) {
+        return res.status(400).json({ message: "queryIds is required and must be a non-empty array" });
+      }
+
+      const { projectId } = req.params;
+
+      // Verify all queries exist and belong to this project
+      const queries = [];
+      for (const queryId of queryIds) {
+        const query = await storage.getQueryById(queryId);
+        if (!query) {
+          return res.status(404).json({ message: `Query ${queryId} not found` });
+        }
+        if (query.projectId !== projectId) {
+          return res.status(400).json({ message: `Query ${queryId} does not belong to this project` });
+        }
+        queries.push(query);
+      }
+
+      // Get project and client details
+      const project = await storage.getProject(projectId);
+      const client = project ? await storage.getClientById(project.clientId) : null;
+      const sender = await storage.getUser(userId);
+
+      // Calculate expiry date
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + expiryDays);
+
+      // Create token (we'll use a placeholder email for now, updated when actually sent)
+      const token = await storage.createQueryResponseToken({
+        projectId,
+        expiresAt,
+        createdById: userId,
+        recipientEmail: 'pending@placeholder.com', // Will be updated when email is sent
+        recipientName: null,
+        queryCount: queryIds.length,
+        queryIds,
+      });
+
+      // Build the response URL
+      const responseUrl = `/queries/respond/${token.token}`;
+      const fullResponseUrl = `${process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0] || 'https://yourapp.replit.app'}${responseUrl}`;
+
+      // Format currency helper
+      const formatCurrency = (amount: string | null) => {
+        if (!amount) return '';
+        const num = parseFloat(amount);
+        if (isNaN(num)) return '';
+        return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(num);
+      };
+
+      // Format date helper
+      const formatDate = (date: Date | string | null) => {
+        if (!date) return '';
+        const d = typeof date === 'string' ? new Date(date) : date;
+        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      };
+
+      // Build HTML table for queries
+      const queriesTableHtml = `
+<table style="width: 100%; border-collapse: collapse; margin: 16px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+  <thead>
+    <tr style="background-color: #f8fafc; border-bottom: 2px solid #e2e8f0;">
+      <th style="padding: 12px; text-align: left; font-weight: 600; color: #334155;">Date</th>
+      <th style="padding: 12px; text-align: left; font-weight: 600; color: #334155;">Description</th>
+      <th style="padding: 12px; text-align: right; font-weight: 600; color: #334155;">Amount</th>
+      <th style="padding: 12px; text-align: left; font-weight: 600; color: #334155;">Query</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${queries.map((q, i) => `
+    <tr style="border-bottom: 1px solid #e2e8f0; ${i % 2 === 1 ? 'background-color: #f8fafc;' : ''}">
+      <td style="padding: 12px; color: #475569;">${formatDate(q.date)}</td>
+      <td style="padding: 12px; color: #475569;">${q.description || ''}</td>
+      <td style="padding: 12px; text-align: right; color: ${q.moneyIn ? '#16a34a' : '#dc2626'};">
+        ${q.moneyIn ? formatCurrency(q.moneyIn) : q.moneyOut ? formatCurrency(q.moneyOut) : ''}
+      </td>
+      <td style="padding: 12px; color: #1e293b; font-weight: 500;">${q.ourQuery || ''}</td>
+    </tr>
+    `).join('')}
+  </tbody>
+</table>`;
+
+      // Build the full email content
+      const emailSubject = `Bookkeeping Queries - ${project?.description || 'Your Account'}`;
+      const emailContent = `
+<p>Hello,</p>
+
+<p>We have some questions about the following transactions that we need your help to clarify:</p>
+
+${queriesTableHtml}
+
+<p style="margin: 24px 0;">
+  <a href="${fullResponseUrl}" style="display: inline-block; background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+    Click here to respond to these queries
+  </a>
+</p>
+
+<p style="color: #64748b; font-size: 14px;">This link will expire on ${formatDate(expiresAt)}.</p>
+
+<p>If you have any questions, please don't hesitate to get in touch.</p>
+
+<p>Best regards,<br>${sender?.firstName || 'The Team'}</p>
+`;
+
+      res.json({
+        tokenId: token.id,
+        token: token.token,
+        expiresAt: token.expiresAt,
+        queryCount: queryIds.length,
+        responseUrl,
+        fullResponseUrl,
+        emailSubject,
+        emailContent,
+        project: project ? { id: project.id, description: project.description, clientId: project.clientId } : null,
+        client: client ? { id: client.id, name: client.name } : null,
+      });
+    } catch (error) {
+      console.error("Error preparing query email:", error);
+      res.status(500).json({ message: "Failed to prepare query email" });
+    }
+  });
+
+  // POST /api/projects/:projectId/queries/mark-sent - Mark queries as sent and log to chronology
+  app.post("/api/projects/:projectId/queries/mark-sent", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramProjectIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid path parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      const userId = req.effectiveUser?.id || req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const { queryIds, tokenId, recipientEmail, recipientName } = req.body;
+      
+      if (!queryIds || !Array.isArray(queryIds) || queryIds.length === 0) {
+        return res.status(400).json({ message: "queryIds is required and must be a non-empty array" });
+      }
+
+      const { projectId } = req.params;
+
+      // Mark queries as sent to client
+      await storage.markQueriesAsSentToClient(queryIds);
+
+      // Update token with actual recipient if provided
+      if (tokenId && recipientEmail) {
+        await storage.updateQueryResponseToken(tokenId, {
+          recipientEmail,
+          recipientName: recipientName || null,
+        });
+      }
+
+      // Get project details for chronology
+      const project = await storage.getProject(projectId);
+      const sender = await storage.getUser(userId);
+
+      // Log to project chronology
+      if (project) {
+        const senderName = sender ? `${sender.firstName || ''} ${sender.lastName || ''}`.trim() : 'Staff';
+        const chronologyNote = `Bookkeeping queries sent to client: ${queryIds.length} queries sent to ${recipientEmail || 'client'}`;
+        
+        await storage.createChronologyEntry({
+          projectId,
+          fromStatus: null,
+          toStatus: 'no_change',
+          assigneeId: project.currentAssigneeId,
+          changedById: userId,
+          notes: chronologyNote,
+          timestamp: new Date(),
+        });
+      }
+
+      res.json({
+        success: true,
+        message: `${queryIds.length} queries marked as sent`,
+        queriesUpdated: queryIds.length,
+      });
+    } catch (error) {
+      console.error("Error marking queries as sent:", error);
+      res.status(500).json({ message: "Failed to mark queries as sent" });
+    }
+  });
+
   // GET /api/query-response/:token - Validate token and get queries (public endpoint)
   app.get("/api/query-response/:token", async (req: any, res: any) => {
     try {
