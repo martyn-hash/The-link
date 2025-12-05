@@ -8,6 +8,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -51,6 +52,14 @@ import {
   Loader2,
   Check,
   X,
+  Minimize2,
+  Maximize2,
+  Search,
+  Link2,
+  Calendar,
+  Building2,
+  FolderKanban,
+  User as UserIcon,
 } from "lucide-react";
 import type { InternalTask, TaskType, User, Client, Project, Person } from "@shared/schema";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
@@ -77,6 +86,17 @@ interface InternalTaskWithRelations extends InternalTask {
 
 const ITEMS_PER_PAGE = 10;
 
+const COLUMN_WIDTHS = {
+  checkbox: "w-[40px]",
+  title: "w-[180px] min-w-[140px]",
+  description: "w-[200px] min-w-[150px]",
+  status: "w-[140px]",
+  linkedEntities: "w-[180px] min-w-[140px]",
+  assignee: "w-[140px] min-w-[120px]",
+  dueDate: "w-[110px]",
+  actions: "w-[90px]",
+};
+
 function getPriorityColor(priority: string) {
   switch (priority) {
     case "urgent": return "bg-red-500 text-white";
@@ -102,15 +122,71 @@ function formatDate(date: Date | string | null) {
   return format(dateObj, 'd MMM yyyy');
 }
 
+function LinkedEntitiesCell({ connections }: { connections?: TaskConnection[] }) {
+  if (!connections || connections.length === 0) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  
+  return (
+    <div className="flex flex-wrap gap-1">
+      {connections.slice(0, 2).map((conn) => {
+        let icon = null;
+        let displayName = '';
+        let bgColor = 'bg-muted';
+        
+        if (conn.client) {
+          icon = <Building2 className="h-3 w-3" />;
+          displayName = conn.client.name;
+          bgColor = 'bg-blue-100 dark:bg-blue-900/30';
+        } else if (conn.project) {
+          icon = <FolderKanban className="h-3 w-3" />;
+          displayName = conn.project.description || 'Project';
+          bgColor = 'bg-green-100 dark:bg-green-900/30';
+        } else if (conn.person) {
+          icon = <UserIcon className="h-3 w-3" />;
+          displayName = `${conn.person.firstName} ${conn.person.lastName}`;
+          bgColor = 'bg-purple-100 dark:bg-purple-900/30';
+        }
+        
+        if (!displayName) return null;
+        
+        return (
+          <Badge
+            key={conn.id}
+            variant="secondary"
+            className={`text-xs px-1.5 py-0.5 ${bgColor} flex items-center gap-1 max-w-[80px]`}
+          >
+            {icon}
+            <span className="truncate">{displayName}</span>
+          </Badge>
+        );
+      })}
+      {connections.length > 2 && (
+        <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+          +{connections.length - 2}
+        </Badge>
+      )}
+    </div>
+  );
+}
+
+interface ColumnFilterState {
+  title: string;
+  description: string;
+  assignee: string;
+  dueDate: string;
+}
+
 interface TaskRowProps {
   task: InternalTaskWithRelations;
   selected: boolean;
   onSelect: (checked: boolean) => void;
   onViewClick: () => void;
   isMobile?: boolean;
+  showLinkedEntities?: boolean;
 }
 
-function TaskRow({ task, selected, onSelect, onViewClick, isMobile }: TaskRowProps) {
+function TaskRow({ task, selected, onSelect, onViewClick, isMobile, showLinkedEntities = true }: TaskRowProps) {
   const truncateDescription = (text: string | null, maxLength: number = 50) => {
     if (!text) return '-';
     return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
@@ -118,26 +194,26 @@ function TaskRow({ task, selected, onSelect, onViewClick, isMobile }: TaskRowPro
 
   return (
     <TableRow data-testid={`row-task-${task.id}`}>
-      <TableCell className="w-10">
+      <TableCell className={COLUMN_WIDTHS.checkbox}>
         <Checkbox
           checked={selected}
           onCheckedChange={onSelect}
           data-testid={`checkbox-task-${task.id}`}
         />
       </TableCell>
-      <TableCell className="font-medium min-w-[150px]">
-        <span className="truncate" data-testid={`text-title-${task.id}`}>
+      <TableCell className={`font-medium ${COLUMN_WIDTHS.title}`}>
+        <span className="truncate block" data-testid={`text-title-${task.id}`}>
           {task.title}
         </span>
       </TableCell>
       {!isMobile && (
-        <TableCell className="text-sm text-muted-foreground max-w-[200px]">
+        <TableCell className={`text-sm text-muted-foreground ${COLUMN_WIDTHS.description}`}>
           <span className="line-clamp-1" data-testid={`text-description-${task.id}`}>
             {truncateDescription(task.description)}
           </span>
         </TableCell>
       )}
-      <TableCell>
+      <TableCell className={COLUMN_WIDTHS.status}>
         <div className="flex items-center gap-1">
           <Badge className={`text-xs ${getPriorityColor(task.priority)}`}>
             {task.priority}
@@ -147,21 +223,26 @@ function TaskRow({ task, selected, onSelect, onViewClick, isMobile }: TaskRowPro
           </Badge>
         </div>
       </TableCell>
+      {!isMobile && showLinkedEntities && (
+        <TableCell className={COLUMN_WIDTHS.linkedEntities}>
+          <LinkedEntitiesCell connections={task.connections} />
+        </TableCell>
+      )}
       {!isMobile && (
-        <TableCell className="text-sm">
+        <TableCell className={`text-sm ${COLUMN_WIDTHS.assignee}`}>
           <span data-testid={`text-assignee-${task.id}`}>
             {task.assignee ? `${task.assignee.firstName} ${task.assignee.lastName}` : '-'}
           </span>
         </TableCell>
       )}
       {!isMobile && (
-        <TableCell className="text-sm">
+        <TableCell className={`text-sm ${COLUMN_WIDTHS.dueDate}`}>
           <span data-testid={`text-duedate-${task.id}`}>
             {formatDate(task.dueDate)}
           </span>
         </TableCell>
       )}
-      <TableCell className="text-right">
+      <TableCell className={`text-right ${COLUMN_WIDTHS.actions}`}>
         <Button
           variant="default"
           size="sm"
@@ -182,9 +263,10 @@ interface ReminderRowProps {
   onSelect: (checked: boolean) => void;
   onViewClick: () => void;
   isMobile?: boolean;
+  showLinkedEntities?: boolean;
 }
 
-function ReminderRow({ reminder, selected, onSelect, onViewClick, isMobile }: ReminderRowProps) {
+function ReminderRow({ reminder, selected, onSelect, onViewClick, isMobile, showLinkedEntities = true }: ReminderRowProps) {
   const truncateDescription = (text: string | null, maxLength: number = 50) => {
     if (!text) return '-';
     return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
@@ -192,14 +274,14 @@ function ReminderRow({ reminder, selected, onSelect, onViewClick, isMobile }: Re
 
   return (
     <TableRow data-testid={`row-reminder-${reminder.id}`}>
-      <TableCell className="w-10">
+      <TableCell className={COLUMN_WIDTHS.checkbox}>
         <Checkbox
           checked={selected}
           onCheckedChange={onSelect}
           data-testid={`checkbox-reminder-${reminder.id}`}
         />
       </TableCell>
-      <TableCell className="font-medium min-w-[150px]">
+      <TableCell className={`font-medium ${COLUMN_WIDTHS.title}`}>
         <div className="flex items-center gap-2">
           <Bell className="h-4 w-4 text-amber-500 flex-shrink-0" />
           <span className="truncate" data-testid={`text-title-${reminder.id}`}>
@@ -208,32 +290,37 @@ function ReminderRow({ reminder, selected, onSelect, onViewClick, isMobile }: Re
         </div>
       </TableCell>
       {!isMobile && (
-        <TableCell className="text-sm text-muted-foreground max-w-[200px]">
+        <TableCell className={`text-sm text-muted-foreground ${COLUMN_WIDTHS.description}`}>
           <span className="line-clamp-1" data-testid={`text-description-${reminder.id}`}>
             {truncateDescription(reminder.description)}
           </span>
         </TableCell>
       )}
-      <TableCell>
+      <TableCell className={COLUMN_WIDTHS.status}>
         <Badge className={`text-xs ${getStatusColor(reminder.status)}`}>
           {reminder.status === "in_progress" ? "In Progress" : reminder.status}
         </Badge>
       </TableCell>
+      {!isMobile && showLinkedEntities && (
+        <TableCell className={COLUMN_WIDTHS.linkedEntities}>
+          <LinkedEntitiesCell connections={reminder.connections} />
+        </TableCell>
+      )}
       {!isMobile && (
-        <TableCell className="text-sm">
+        <TableCell className={`text-sm ${COLUMN_WIDTHS.assignee}`}>
           <span data-testid={`text-assignee-${reminder.id}`}>
             {reminder.assignee ? `${reminder.assignee.firstName} ${reminder.assignee.lastName}` : '-'}
           </span>
         </TableCell>
       )}
       {!isMobile && (
-        <TableCell className="text-sm">
+        <TableCell className={`text-sm ${COLUMN_WIDTHS.dueDate}`}>
           <span data-testid={`text-duedate-${reminder.id}`}>
             {formatDate(reminder.dueDate)}
           </span>
         </TableCell>
       )}
-      <TableCell className="text-right">
+      <TableCell className={`text-right ${COLUMN_WIDTHS.actions}`}>
         <Button
           variant="default"
           size="sm"
@@ -263,6 +350,11 @@ interface TasksSectionProps {
   isLoading?: boolean;
   isReminders?: boolean;
   isMobile?: boolean;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
+  filters: ColumnFilterState;
+  onFilterChange: (field: keyof ColumnFilterState, value: string) => void;
+  showFilters?: boolean;
 }
 
 function TasksSection({
@@ -280,8 +372,14 @@ function TasksSection({
   isLoading,
   isReminders = false,
   isMobile = false,
+  isCollapsed = false,
+  onToggleCollapse,
+  filters,
+  onFilterChange,
+  showFilters = true,
 }: TasksSectionProps) {
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+  const hasActiveFilters = filters.title || filters.description || filters.assignee || filters.dueDate;
 
   return (
     <div>
@@ -293,114 +391,205 @@ function TasksSection({
           <Badge variant="secondary" className="ml-1">
             {totalCount}
           </Badge>
+          {hasActiveFilters && (
+            <Badge variant="outline" className="ml-1 text-xs bg-blue-50 dark:bg-blue-900/20">
+              <Filter className="h-3 w-3 mr-1" />
+              Filtered
+            </Badge>
+          )}
         </h4>
-        {totalCount > ITEMS_PER_PAGE && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onToggleExpand}
-            className="text-xs"
-            data-testid={`button-expand-${isReminders ? 'reminders' : 'tasks'}`}
-          >
-            {isExpanded ? (
-              <>
-                <ChevronUp className="h-4 w-4 mr-1" />
-                Back to Summary
-              </>
-            ) : (
-              <>
-                Show All
-                <ChevronDown className="h-4 w-4 ml-1" />
-              </>
-            )}
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Collapse button - only for Tasks section */}
+          {!isReminders && onToggleCollapse && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onToggleCollapse}
+              className="text-xs h-7 px-2"
+              data-testid="button-collapse-tasks"
+            >
+              {isCollapsed ? (
+                <>
+                  <Maximize2 className="h-3.5 w-3.5 mr-1" />
+                  Expand
+                </>
+              ) : (
+                <>
+                  <Minimize2 className="h-3.5 w-3.5 mr-1" />
+                  Collapse
+                </>
+              )}
+            </Button>
+          )}
+          {totalCount > ITEMS_PER_PAGE && !isCollapsed && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onToggleExpand}
+              className="text-xs"
+              data-testid={`button-expand-${isReminders ? 'reminders' : 'tasks'}`}
+            >
+              {isExpanded ? (
+                <>
+                  <ChevronUp className="h-4 w-4 mr-1" />
+                  Back to Summary
+                </>
+              ) : (
+                <>
+                  Show All
+                  <ChevronDown className="h-4 w-4 ml-1" />
+                </>
+              )}
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Table Container */}
-      <div className="border rounded-lg">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-8">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-          </div>
-        ) : items.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground text-sm">
-            No {isReminders ? 'reminders' : 'tasks'} found
-          </div>
-        ) : (
-          <>
-            <div className={isExpanded ? "max-h-[60vh] overflow-y-auto" : ""}>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-10"></TableHead>
-                    <TableHead className="min-w-[150px]">{isReminders ? 'Reminder' : 'Task'}</TableHead>
-                    {!isMobile && <TableHead className="max-w-[200px]">Description</TableHead>}
-                    <TableHead>Status</TableHead>
-                    {!isMobile && <TableHead>Assigned To</TableHead>}
-                    {!isMobile && <TableHead>Due Date</TableHead>}
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {items.map((item) => (
-                    isReminders ? (
-                      <ReminderRow
-                        key={item.id}
-                        reminder={item}
-                        selected={selectedIds.includes(item.id)}
-                        onSelect={(checked) => onSelectItem(item.id, checked)}
-                        onViewClick={() => onViewItem(item)}
-                        isMobile={isMobile}
-                      />
-                    ) : (
-                      <TaskRow
-                        key={item.id}
-                        task={item}
-                        selected={selectedIds.includes(item.id)}
-                        onSelect={(checked) => onSelectItem(item.id, checked)}
-                        onViewClick={() => onViewItem(item)}
-                        isMobile={isMobile}
-                      />
-                    )
-                  ))}
-                </TableBody>
-              </Table>
+      {/* Table Container - hidden when collapsed */}
+      {!isCollapsed && (
+        <div className="border rounded-lg">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
-            
-            {/* Pagination */}
-            {!isExpanded && totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t">
-                <span className="text-xs text-muted-foreground">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onPageChange(Math.max(1, currentPage - 1))}
-                    disabled={currentPage === 1}
-                    className="h-7 px-2"
-                    data-testid={`button-prev-${isReminders ? 'reminders' : 'tasks'}`}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
-                    disabled={currentPage === totalPages}
-                    className="h-7 px-2"
-                    data-testid={`button-next-${isReminders ? 'reminders' : 'tasks'}`}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
+          ) : items.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              No {isReminders ? 'reminders' : 'tasks'} found
+              {hasActiveFilters && (
+                <span className="block mt-1 text-xs">Try adjusting your column filters</span>
+              )}
+            </div>
+          ) : (
+            <>
+              <div className={isExpanded ? "max-h-[60vh] overflow-y-auto" : ""}>
+                <Table>
+                  <TableHeader>
+                    {/* Column Headers Row */}
+                    <TableRow>
+                      <TableHead className={COLUMN_WIDTHS.checkbox}></TableHead>
+                      <TableHead className={COLUMN_WIDTHS.title}>{isReminders ? 'Reminder' : 'Task'}</TableHead>
+                      {!isMobile && <TableHead className={COLUMN_WIDTHS.description}>Description</TableHead>}
+                      <TableHead className={COLUMN_WIDTHS.status}>Status</TableHead>
+                      {!isMobile && <TableHead className={COLUMN_WIDTHS.linkedEntities}>Linked Entities</TableHead>}
+                      {!isMobile && <TableHead className={COLUMN_WIDTHS.assignee}>Assigned To</TableHead>}
+                      {!isMobile && <TableHead className={COLUMN_WIDTHS.dueDate}>Due Date</TableHead>}
+                      <TableHead className={`text-right ${COLUMN_WIDTHS.actions}`}>Actions</TableHead>
+                    </TableRow>
+                    {/* Filter Row */}
+                    {showFilters && !isMobile && (
+                      <TableRow className="bg-muted/30">
+                        <TableHead className={COLUMN_WIDTHS.checkbox}></TableHead>
+                        <TableHead className={COLUMN_WIDTHS.title}>
+                          <Input
+                            placeholder="Filter..."
+                            value={filters.title}
+                            onChange={(e) => onFilterChange('title', e.target.value)}
+                            className="h-7 text-xs"
+                            data-testid={`filter-title-${isReminders ? 'reminders' : 'tasks'}`}
+                          />
+                        </TableHead>
+                        <TableHead className={COLUMN_WIDTHS.description}>
+                          <Input
+                            placeholder="Filter..."
+                            value={filters.description}
+                            onChange={(e) => onFilterChange('description', e.target.value)}
+                            className="h-7 text-xs"
+                            data-testid={`filter-description-${isReminders ? 'reminders' : 'tasks'}`}
+                          />
+                        </TableHead>
+                        <TableHead className={COLUMN_WIDTHS.status}></TableHead>
+                        <TableHead className={COLUMN_WIDTHS.linkedEntities}></TableHead>
+                        <TableHead className={COLUMN_WIDTHS.assignee}>
+                          <Input
+                            placeholder="Filter..."
+                            value={filters.assignee}
+                            onChange={(e) => onFilterChange('assignee', e.target.value)}
+                            className="h-7 text-xs"
+                            data-testid={`filter-assignee-${isReminders ? 'reminders' : 'tasks'}`}
+                          />
+                        </TableHead>
+                        <TableHead className={COLUMN_WIDTHS.dueDate}>
+                          <Input
+                            type="date"
+                            value={filters.dueDate}
+                            onChange={(e) => onFilterChange('dueDate', e.target.value)}
+                            className="h-7 text-xs"
+                            data-testid={`filter-duedate-${isReminders ? 'reminders' : 'tasks'}`}
+                          />
+                        </TableHead>
+                        <TableHead className={COLUMN_WIDTHS.actions}></TableHead>
+                      </TableRow>
+                    )}
+                  </TableHeader>
+                  <TableBody>
+                    {items.map((item) => (
+                      isReminders ? (
+                        <ReminderRow
+                          key={item.id}
+                          reminder={item}
+                          selected={selectedIds.includes(item.id)}
+                          onSelect={(checked) => onSelectItem(item.id, checked)}
+                          onViewClick={() => onViewItem(item)}
+                          isMobile={isMobile}
+                          showLinkedEntities={!isMobile}
+                        />
+                      ) : (
+                        <TaskRow
+                          key={item.id}
+                          task={item}
+                          selected={selectedIds.includes(item.id)}
+                          onSelect={(checked) => onSelectItem(item.id, checked)}
+                          onViewClick={() => onViewItem(item)}
+                          isMobile={isMobile}
+                          showLinkedEntities={!isMobile}
+                        />
+                      )
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
-            )}
-          </>
-        )}
-      </div>
+              
+              {/* Pagination */}
+              {!isExpanded && totalPages > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t">
+                  <span className="text-xs text-muted-foreground">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+                      disabled={currentPage === 1}
+                      className="h-7 px-2"
+                      data-testid={`button-prev-${isReminders ? 'reminders' : 'tasks'}`}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+                      disabled={currentPage === totalPages}
+                      className="h-7 px-2"
+                      data-testid={`button-next-${isReminders ? 'reminders' : 'tasks'}`}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+      
+      {/* Collapsed state message */}
+      {isCollapsed && (
+        <div className="border rounded-lg py-3 px-4 text-center text-muted-foreground text-sm bg-muted/30">
+          {totalCount} task{totalCount !== 1 ? 's' : ''} hidden
+        </div>
+      )}
     </div>
   );
 }
@@ -447,6 +636,32 @@ export function TasksWorkspace({
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   const [selectedAssignee, setSelectedAssignee] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
+  
+  const [tasksCollapsed, setTasksCollapsed] = useState(false);
+  
+  const [tasksFilters, setTasksFilters] = useState<ColumnFilterState>({
+    title: '',
+    description: '',
+    assignee: '',
+    dueDate: '',
+  });
+  
+  const [remindersFilters, setRemindersFilters] = useState<ColumnFilterState>({
+    title: '',
+    description: '',
+    assignee: '',
+    dueDate: '',
+  });
+  
+  const handleTasksFilterChange = useCallback((field: keyof ColumnFilterState, value: string) => {
+    setTasksFilters(prev => ({ ...prev, [field]: value }));
+    setTasksPage(1);
+  }, []);
+  
+  const handleRemindersFilterChange = useCallback((field: keyof ColumnFilterState, value: string) => {
+    setRemindersFilters(prev => ({ ...prev, [field]: value }));
+    setRemindersPage(1);
+  }, []);
 
   const { data: staff = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -503,13 +718,48 @@ export function TasksWorkspace({
     : ownershipFilter === "created" ? createdData 
     : allData;
 
+  const applyColumnFilters = useCallback((items: InternalTaskWithRelations[], filters: ColumnFilterState) => {
+    return items.filter(item => {
+      if (filters.title && !item.title.toLowerCase().includes(filters.title.toLowerCase())) {
+        return false;
+      }
+      if (filters.description) {
+        if (!item.description || !item.description.toLowerCase().includes(filters.description.toLowerCase())) {
+          return false;
+        }
+      }
+      if (filters.assignee) {
+        if (!item.assignee) {
+          return false;
+        }
+        const assigneeName = `${item.assignee.firstName} ${item.assignee.lastName}`.toLowerCase();
+        if (!assigneeName.includes(filters.assignee.toLowerCase())) {
+          return false;
+        }
+      }
+      if (filters.dueDate) {
+        if (!item.dueDate) {
+          return false;
+        }
+        const filterDate = new Date(filters.dueDate).toDateString();
+        const itemDate = new Date(item.dueDate).toDateString();
+        if (filterDate !== itemDate) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, []);
+
   const allTasks = useMemo(() => {
-    return (rawData || []).filter(t => !t.isQuickReminder);
-  }, [rawData]);
+    const tasks = (rawData || []).filter(t => !t.isQuickReminder);
+    return applyColumnFilters(tasks, tasksFilters);
+  }, [rawData, tasksFilters, applyColumnFilters]);
 
   const allReminders = useMemo(() => {
-    return (rawData || []).filter(t => t.isQuickReminder === true);
-  }, [rawData]);
+    const reminders = (rawData || []).filter(t => t.isQuickReminder === true);
+    return applyColumnFilters(reminders, remindersFilters);
+  }, [rawData, remindersFilters, applyColumnFilters]);
 
   const paginatedTasks = useMemo(() => {
     if (tasksExpanded) return allTasks;
@@ -674,6 +924,10 @@ export function TasksWorkspace({
           isLoading={isLoading && !tasksExpanded}
           isReminders={false}
           isMobile={isMobile}
+          isCollapsed={tasksCollapsed}
+          onToggleCollapse={() => setTasksCollapsed(!tasksCollapsed)}
+          filters={tasksFilters}
+          onFilterChange={handleTasksFilterChange}
         />
 
         <TasksSection
@@ -691,6 +945,8 @@ export function TasksWorkspace({
           isLoading={isLoading && !remindersExpanded}
           isReminders={true}
           isMobile={isMobile}
+          filters={remindersFilters}
+          onFilterChange={handleRemindersFilterChange}
         />
       </div>
 
