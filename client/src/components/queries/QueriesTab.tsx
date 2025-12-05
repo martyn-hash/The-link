@@ -536,6 +536,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     setPendingEmailTokenId(null);
     setEmailInitialValues({});
     setIsEmailDialogOpen(false);
+    setReminderTokenId(null);
   };
 
   const handleEmailClose = () => {
@@ -574,6 +575,8 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
       console.error('Error preparing reminder:', error);
       const errorMessage = error?.message || "Failed to prepare reminder.";
       toast({ title: "Error", description: errorMessage, variant: "destructive" });
+      // Clear reminder state on error so subsequent regular sends work correctly
+      setReminderTokenId(null);
     } finally {
       setIsPreparingReminder(false);
     }
