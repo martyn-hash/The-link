@@ -506,6 +506,29 @@ async function ensureCanMakeProjectsInactiveColumn(): Promise<void> {
 }
 
 /**
+ * Add ai_button_enabled column to company_settings table if it doesn't exist
+ */
+async function ensureAiButtonEnabledColumn(): Promise<void> {
+  const exists = await columnExists('company_settings', 'ai_button_enabled');
+  
+  if (!exists) {
+    console.log('[Schema Migration] Adding ai_button_enabled column to company_settings table...');
+    try {
+      await db.execute(sql`
+        ALTER TABLE company_settings 
+        ADD COLUMN ai_button_enabled BOOLEAN NOT NULL DEFAULT false;
+      `);
+      console.log('[Schema Migration] ✓ Successfully added ai_button_enabled column');
+    } catch (error) {
+      console.error('[Schema Migration] ✗ Failed to add ai_button_enabled column:', error);
+      throw error;
+    }
+  } else {
+    console.log('[Schema Migration] ✓ ai_button_enabled column already exists in company_settings');
+  }
+}
+
+/**
  * Add inactive project columns to projects table
  * Uses the same inactive_reason enum created for client services
  */
@@ -588,6 +611,7 @@ export async function runSchemaMigrations(): Promise<void> {
     await ensureInactiveServiceColumns();
     await ensureCanMakeProjectsInactiveColumn();
     await ensureInactiveProjectColumns();
+    await ensureAiButtonEnabledColumn();
     
     console.log('[Schema Migration] All schema migrations completed successfully');
   } catch (error) {
