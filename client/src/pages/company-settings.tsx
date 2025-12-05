@@ -42,6 +42,7 @@ export default function CompanySettingsPage() {
   // Feature flags
   const [ringCentralLive, setRingCentralLive] = useState(false);
   const [appIsLive, setAppIsLive] = useState(false);
+  const [aiButtonEnabled, setAiButtonEnabled] = useState(false);
   
   // AI System Prompts
   const [aiSystemPromptNotes, setAiSystemPromptNotes] = useState("");
@@ -84,6 +85,7 @@ export default function CompanySettingsPage() {
       setRedirectUrls((settings.postSignatureRedirectUrls as RedirectUrl[]) || []);
       setRingCentralLive(settings.ringCentralLive || false);
       setAppIsLive(settings.appIsLive || false);
+      setAiButtonEnabled(settings.aiButtonEnabled || false);
       setAiSystemPromptNotes(settings.aiSystemPromptNotes || "");
       setAiSystemPromptEmails(settings.aiSystemPromptEmails || "");
       setAiSystemPromptStageNotifications(settings.aiSystemPromptStageNotifications || "");
@@ -249,6 +251,7 @@ export default function CompanySettingsPage() {
       postSignatureRedirectUrls: redirectUrls,
       ringCentralLive,
       appIsLive,
+      aiButtonEnabled,
       aiSystemPromptNotes: aiSystemPromptNotes || null,
       aiSystemPromptEmails: aiSystemPromptEmails || null,
       aiSystemPromptStageNotifications: aiSystemPromptStageNotifications || null,
@@ -507,6 +510,25 @@ export default function CompanySettingsPage() {
                   data-testid="switch-app-is-live"
                   checked={appIsLive}
                   onCheckedChange={setAppIsLive}
+                  disabled={settingsLoading || updateSettingsMutation.isPending}
+                />
+              </div>
+
+              <div className="flex items-center justify-between space-x-4">
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="ai-button-enabled" className="flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4" />
+                    AI Magic Button
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    When enabled, the floating AI Magic Assistant button will be visible to all staff. When disabled, only Super Admins can see and test the AI button.
+                  </p>
+                </div>
+                <Switch
+                  id="ai-button-enabled"
+                  data-testid="switch-ai-button-enabled"
+                  checked={aiButtonEnabled}
+                  onCheckedChange={setAiButtonEnabled}
                   disabled={settingsLoading || updateSettingsMutation.isPending}
                 />
               </div>
