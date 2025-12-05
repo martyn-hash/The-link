@@ -1,0 +1,38 @@
+I'd like you to help me plan and implement adding some features for supporting the process of bookkeeping queries being handled between different staff members. 
+
+The use case is this - A bookkeeper may start work on the bookkeeping and arrive at transactions they are not sure how to process. So they currently email the client manager with an excel file with the queries, using the columns below. 
+The client manager answers the ones they can by filling in the 'client response / comments' field, sends back an excel file to the bookkeeper and then sends the remaining queries to the client. 
+When the client answers them, the client manager gets these and sends them to the bookkeeper.
+
+This feels quite inefficient, and I think there is a good scope to improve this as a process. 
+
+I imagine we could create a process that we say a service or project supports 'queries'. 
+
+With this mode active, when the user is on a stage change, we could support the ability to 'add queries'. The bookkeeper can either type in 1 row at a time adding queries with the columns below, or we could support them uploading an xlsx or csv with these columns that become the list of queries. 
+
+Ideally it's a direct match, but if not, we support column mapping. 
+
+The stage moves back to the client manager, the client manager can answer and mark rows as resolved, which would notify the user that created the queries, and most likely the live list of queries is still accessible in the project somewhere (maybe we add a tab into the modal pop up from the Kanban card). 
+
+The queries that the client manager cannot answer, they have the option to 'Send to Client'. This process would open the email modal (same one as we use already in projects) with the outstanding queries in, perhaps with some blurb about needing queries answered. 
+
+If we're looking for bonus points, then perhaps we build a simple interface for the client that they could click through in the email from, and if it's mobile, they see one transaction to answer and enter to the next one, and on desktop they are just shown on the page, but with nice clear spacing. 
+
+When sending queries to clients, perhaps a Boolean option of 'offer online completion'
+
+If queries are answered via the webpage, then client manager & other project role assignees can be notified. 
+
+Do we need to worry about security with this? We could maybe say it's a secure link that only works for the button in their email? 
+
+Can this idea work seamlessly? The trick is to eliminate he need for spreadsheets back and forth, and that the live list of queries is quickly as easily available in the project somewhere. 
+
+Help me improve this idea. 
+
+
+
+Date
+Description
+Money In
+Money Out
+Our Query/Comments
+Client Response/Comments
