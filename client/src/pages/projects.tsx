@@ -16,7 +16,14 @@ import DashboardBuilder from "@/components/dashboard-builder";
 import FilterPanel from "@/components/filter-panel";
 import ViewMegaMenu from "@/components/ViewMegaMenu";
 import LayoutsMenu from "@/components/LayoutsMenu";
-import { TasksWorkspace } from "@/components/tasks/TasksWorkspace";
+import { TasksWorkspace, type OwnershipFilter } from "@/components/tasks/TasksWorkspace";
+import { CreateTaskDialog } from "@/components/create-task-dialog";
+import { CreateReminderDialog } from "@/components/create-reminder-dialog";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import PullToRefresh from "react-simple-pull-to-refresh";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -96,6 +103,22 @@ export default function Projects() {
   const [location, setLocation] = useLocation();
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("projects");
+  
+  // Tasks workspace filters
+  const [tasksOwnershipFilter, setTasksOwnershipFilter] = useState<OwnershipFilter>("assigned");
+  const [tasksStatusFilter, setTasksStatusFilter] = useState("open");
+  const [tasksPriorityFilter, setTasksPriorityFilter] = useState("all");
+  const [tasksFilterOpen, setTasksFilterOpen] = useState(false);
+  
+  const tasksActiveFilterCount = (tasksOwnershipFilter !== "assigned" ? 1 : 0) + 
+    (tasksStatusFilter !== "open" ? 1 : 0) + 
+    (tasksPriorityFilter !== "all" ? 1 : 0);
+    
+  const clearTasksFilters = () => {
+    setTasksOwnershipFilter("assigned");
+    setTasksStatusFilter("open");
+    setTasksPriorityFilter("all");
+  };
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [serviceFilter, setServiceFilter] = useState("all");
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState("all");
@@ -1182,26 +1205,27 @@ export default function Projects() {
               </Button>
             </div>
             
-            {/* Desktop View - Toolbar (Projects mode only) */}
-            {workspaceMode === "projects" && (
-              <div className="hidden md:flex items-center space-x-3 flex-shrink-0">
-                {/* Layouts Menu - for switching between list/kanban/dashboard/calendar */}
-                <LayoutsMenu
-                  currentViewMode={viewMode}
-                  onViewModeChange={handleManualViewModeChange}
-                />
+            {/* Desktop View - Toolbar */}
+            <div className="hidden md:flex items-center space-x-3 flex-shrink-0">
+              {workspaceMode === "projects" ? (
+                <>
+                  {/* Layouts Menu - for switching between list/kanban/dashboard/calendar */}
+                  <LayoutsMenu
+                    currentViewMode={viewMode}
+                    onViewModeChange={handleManualViewModeChange}
+                  />
 
-                {/* Views Mega Menu - for loading/saving views */}
-                <ViewMegaMenu
-                  currentViewMode={viewMode}
-                  currentSavedViewId={currentSavedViewId}
-                  onLoadListView={handleLoadSavedView}
-                  onLoadKanbanView={handleLoadSavedView}
-                  onLoadCalendarView={handleLoadSavedView}
-                  onLoadDashboard={handleLoadDashboard}
-                  onSaveNewView={() => setSaveViewDialogOpen(true)}
-                  onUpdateCurrentView={handleUpdateCurrentView}
-                />
+                  {/* Views Mega Menu - for loading/saving views */}
+                  <ViewMegaMenu
+                    currentViewMode={viewMode}
+                    currentSavedViewId={currentSavedViewId}
+                    onLoadListView={handleLoadSavedView}
+                    onLoadKanbanView={handleLoadSavedView}
+                    onLoadCalendarView={handleLoadSavedView}
+                    onLoadDashboard={handleLoadDashboard}
+                    onSaveNewView={() => setSaveViewDialogOpen(true)}
+                    onUpdateCurrentView={handleUpdateCurrentView}
+                  />
 
               {/* Dashboard-specific buttons */}
               {viewMode === "dashboard" && (
@@ -1263,115 +1287,296 @@ export default function Projects() {
                 </>
               )}
               
-              {/* Filters Button - visible in list, kanban, or calendar view */}
-              {(viewMode === "list" || viewMode === "kanban" || viewMode === "calendar") && (
-                <Button
-                  variant="outline"
-                  onClick={() => setFilterPanelOpen(true)}
-                  className="relative h-11 md:h-8 px-2 md:px-4"
-                  data-testid="button-open-filters"
-                >
-                  <Filter className="w-4 h-4" />
-                  <span className="hidden md:inline ml-2">Filters</span>
-                  {activeFilterCount() > 0 && (
-                    <Badge 
-                      variant="secondary" 
-                      className="ml-1 md:ml-2 rounded-full px-1.5 md:px-2 text-xs"
-                      data-testid="badge-active-filters-count"
+                  {/* Filters Button - visible in list, kanban, or calendar view */}
+                  {(viewMode === "list" || viewMode === "kanban" || viewMode === "calendar") && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setFilterPanelOpen(true)}
+                      className="relative h-11 md:h-8 px-2 md:px-4"
+                      data-testid="button-open-filters"
                     >
-                      {activeFilterCount()}
-                    </Badge>
+                      <Filter className="w-4 h-4" />
+                      <span className="hidden md:inline ml-2">Filters</span>
+                      {activeFilterCount() > 0 && (
+                        <Badge 
+                          variant="secondary" 
+                          className="ml-1 md:ml-2 rounded-full px-1.5 md:px-2 text-xs"
+                          data-testid="badge-active-filters-count"
+                        >
+                          {activeFilterCount()}
+                        </Badge>
+                      )}
+                    </Button>
                   )}
-                </Button>
-              )}
-              
-              {/* Compact View Toggle - only visible in kanban view */}
-              {viewMode === "kanban" && (
-                <Button
-                  variant={kanbanCompactMode ? "default" : "outline"}
-                  size="sm"
-                  onClick={toggleKanbanCompactMode}
-                  className="h-11 md:h-8 px-2 md:px-4 gap-2"
-                  data-testid="button-toggle-compact-mode"
-                >
-                  {kanbanCompactMode ? (
-                    <>
-                      <Maximize2 className="h-4 w-4" />
-                      <span className="hidden md:inline">Expand All</span>
-                    </>
-                  ) : (
-                    <>
-                      <Minimize2 className="h-4 w-4" />
-                      <span className="hidden md:inline">Compact View</span>
-                    </>
+                  
+                  {/* Compact View Toggle - only visible in kanban view */}
+                  {viewMode === "kanban" && (
+                    <Button
+                      variant={kanbanCompactMode ? "default" : "outline"}
+                      size="sm"
+                      onClick={toggleKanbanCompactMode}
+                      className="h-11 md:h-8 px-2 md:px-4 gap-2"
+                      data-testid="button-toggle-compact-mode"
+                    >
+                      {kanbanCompactMode ? (
+                        <>
+                          <Maximize2 className="h-4 w-4" />
+                          <span className="hidden md:inline">Expand All</span>
+                        </>
+                      ) : (
+                        <>
+                          <Minimize2 className="h-4 w-4" />
+                          <span className="hidden md:inline">Compact View</span>
+                        </>
+                      )}
+                    </Button>
                   )}
-                </Button>
+                </>
+              ) : (
+                /* Tasks mode toolbar */
+                <>
+                  <CreateTaskDialog 
+                    trigger={
+                      <Button size="sm" data-testid="button-create-task">
+                        <ClipboardList className="h-4 w-4 mr-2" />
+                        Create Task
+                      </Button>
+                    }
+                  />
+                  <CreateReminderDialog 
+                    trigger={
+                      <Button variant="outline" size="sm" data-testid="button-create-reminder">
+                        <CalendarIcon className="h-4 w-4 mr-2" />
+                        Set Reminder
+                      </Button>
+                    }
+                  />
+                  <Popover open={tasksFilterOpen} onOpenChange={setTasksFilterOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="relative" data-testid="button-tasks-filters">
+                        <Filter className="h-4 w-4 mr-2" />
+                        Filters
+                        {tasksActiveFilterCount > 0 && (
+                          <Badge variant="secondary" className="ml-2 h-5 w-5 p-0 flex items-center justify-center text-xs">
+                            {tasksActiveFilterCount}
+                          </Badge>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-72" align="end">
+                      <div className="space-y-4">
+                        <div>
+                          <Label className="text-sm font-medium">Show</Label>
+                          <Select value={tasksOwnershipFilter} onValueChange={(v) => setTasksOwnershipFilter(v as OwnershipFilter)}>
+                            <SelectTrigger className="mt-1" data-testid="select-ownership-filter">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="assigned">Assigned to Me</SelectItem>
+                              <SelectItem value="created">Created by Me</SelectItem>
+                              <SelectItem value="all">All Team Items</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium">Status</Label>
+                          <Select value={tasksStatusFilter} onValueChange={setTasksStatusFilter}>
+                            <SelectTrigger className="mt-1" data-testid="select-status-filter">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All Statuses</SelectItem>
+                              <SelectItem value="open">Open</SelectItem>
+                              <SelectItem value="in_progress">In Progress</SelectItem>
+                              <SelectItem value="closed">Closed</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium">Priority</Label>
+                          <Select value={tasksPriorityFilter} onValueChange={setTasksPriorityFilter}>
+                            <SelectTrigger className="mt-1" data-testid="select-priority-filter">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All Priorities</SelectItem>
+                              <SelectItem value="low">Low</SelectItem>
+                              <SelectItem value="medium">Medium</SelectItem>
+                              <SelectItem value="high">High</SelectItem>
+                              <SelectItem value="urgent">Urgent</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {tasksActiveFilterCount > 0 && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={clearTasksFilters}
+                            className="w-full"
+                            data-testid="button-clear-filters"
+                          >
+                            <X className="h-4 w-4 mr-2" />
+                            Clear All Filters
+                          </Button>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </>
               )}
-              </div>
-            )}
+            </div>
 
-            {/* Mobile View - Compact controls only (Projects mode) */}
-            {workspaceMode === "projects" && (
-              <div className="flex md:hidden items-center gap-2 flex-shrink-0">
-                {/* Layouts Menu */}
-                <LayoutsMenu
-                  currentViewMode={viewMode}
-                  onViewModeChange={handleManualViewModeChange}
-                  isMobileIconOnly={true}
-                />
+            {/* Mobile View - Compact controls */}
+            <div className="flex md:hidden items-center gap-2 flex-shrink-0">
+              {workspaceMode === "projects" ? (
+                <>
+                  {/* Layouts Menu */}
+                  <LayoutsMenu
+                    currentViewMode={viewMode}
+                    onViewModeChange={handleManualViewModeChange}
+                    isMobileIconOnly={true}
+                  />
 
-                {/* Views Menu */}
-                <ViewMegaMenu
-                  currentViewMode={viewMode}
-                  currentSavedViewId={currentSavedViewId}
-                  onLoadListView={handleLoadSavedView}
-                  onLoadKanbanView={handleLoadSavedView}
-                  onLoadCalendarView={handleLoadSavedView}
-                  onLoadDashboard={handleLoadDashboard}
-                  onSaveNewView={() => setSaveViewDialogOpen(true)}
-                  onUpdateCurrentView={handleUpdateCurrentView}
-                  isMobileIconOnly={true}
-                />
-                
-                {/* Filters Button - visible in list, kanban, or calendar view */}
-                {(viewMode === "list" || viewMode === "kanban" || viewMode === "calendar") && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setFilterPanelOpen(true)}
-                    className="relative h-11 px-3"
-                    data-testid="button-open-filters-mobile"
-                  >
-                    <Filter className="w-4 h-4" />
-                    {activeFilterCount() > 0 && (
-                      <Badge 
-                        variant="secondary" 
-                        className="ml-1.5 rounded-full px-1.5 text-xs"
-                        data-testid="badge-active-filters-count-mobile"
-                      >
-                        {activeFilterCount()}
-                      </Badge>
-                    )}
-                  </Button>
-                )}
-                
-                {/* Compact View Toggle - only visible in kanban view (mobile) */}
-                {viewMode === "kanban" && (
-                  <Button
-                    variant={kanbanCompactMode ? "default" : "outline"}
-                    size="sm"
-                    onClick={toggleKanbanCompactMode}
-                    className="h-11 px-3"
-                    data-testid="button-toggle-compact-mode-mobile"
-                  >
-                    {kanbanCompactMode ? (
-                      <Maximize2 className="h-4 w-4" />
-                    ) : (
-                      <Minimize2 className="h-4 w-4" />
-                    )}
-                  </Button>
-                )}
-              </div>
-            )}
+                  {/* Views Menu */}
+                  <ViewMegaMenu
+                    currentViewMode={viewMode}
+                    currentSavedViewId={currentSavedViewId}
+                    onLoadListView={handleLoadSavedView}
+                    onLoadKanbanView={handleLoadSavedView}
+                    onLoadCalendarView={handleLoadSavedView}
+                    onLoadDashboard={handleLoadDashboard}
+                    onSaveNewView={() => setSaveViewDialogOpen(true)}
+                    onUpdateCurrentView={handleUpdateCurrentView}
+                    isMobileIconOnly={true}
+                  />
+                  
+                  {/* Filters Button - visible in list, kanban, or calendar view */}
+                  {(viewMode === "list" || viewMode === "kanban" || viewMode === "calendar") && (
+                    <Button
+                      variant="outline"
+                      onClick={() => setFilterPanelOpen(true)}
+                      className="relative h-11 px-3"
+                      data-testid="button-open-filters-mobile"
+                    >
+                      <Filter className="w-4 h-4" />
+                      {activeFilterCount() > 0 && (
+                        <Badge 
+                          variant="secondary" 
+                          className="ml-1.5 rounded-full px-1.5 text-xs"
+                          data-testid="badge-active-filters-count-mobile"
+                        >
+                          {activeFilterCount()}
+                        </Badge>
+                      )}
+                    </Button>
+                  )}
+                  
+                  {/* Compact View Toggle - only visible in kanban view (mobile) */}
+                  {viewMode === "kanban" && (
+                    <Button
+                      variant={kanbanCompactMode ? "default" : "outline"}
+                      size="sm"
+                      onClick={toggleKanbanCompactMode}
+                      className="h-11 px-3"
+                      data-testid="button-toggle-compact-mode-mobile"
+                    >
+                      {kanbanCompactMode ? (
+                        <Maximize2 className="h-4 w-4" />
+                      ) : (
+                        <Minimize2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  )}
+                </>
+              ) : (
+                /* Tasks mode mobile toolbar */
+                <>
+                  <CreateTaskDialog 
+                    trigger={
+                      <Button size="sm" className="h-11 px-3" data-testid="button-create-task-mobile">
+                        <ClipboardList className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
+                  <CreateReminderDialog 
+                    trigger={
+                      <Button variant="outline" size="sm" className="h-11 px-3" data-testid="button-create-reminder-mobile">
+                        <CalendarIcon className="h-4 w-4" />
+                      </Button>
+                    }
+                  />
+                  <Popover open={tasksFilterOpen} onOpenChange={setTasksFilterOpen}>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className="relative h-11 px-3" data-testid="button-tasks-filters-mobile">
+                        <Filter className="h-4 w-4" />
+                        {tasksActiveFilterCount > 0 && (
+                          <Badge variant="secondary" className="ml-1.5 h-5 w-5 p-0 flex items-center justify-center text-xs">
+                            {tasksActiveFilterCount}
+                          </Badge>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-72" align="end">
+                      <div className="space-y-4">
+                        <div>
+                          <Label className="text-sm font-medium">Show</Label>
+                          <Select value={tasksOwnershipFilter} onValueChange={(v) => setTasksOwnershipFilter(v as OwnershipFilter)}>
+                            <SelectTrigger className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="assigned">Assigned to Me</SelectItem>
+                              <SelectItem value="created">Created by Me</SelectItem>
+                              <SelectItem value="all">All Team Items</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium">Status</Label>
+                          <Select value={tasksStatusFilter} onValueChange={setTasksStatusFilter}>
+                            <SelectTrigger className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All Statuses</SelectItem>
+                              <SelectItem value="open">Open</SelectItem>
+                              <SelectItem value="in_progress">In Progress</SelectItem>
+                              <SelectItem value="closed">Closed</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium">Priority</Label>
+                          <Select value={tasksPriorityFilter} onValueChange={setTasksPriorityFilter}>
+                            <SelectTrigger className="mt-1">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">All Priorities</SelectItem>
+                              <SelectItem value="low">Low</SelectItem>
+                              <SelectItem value="medium">Medium</SelectItem>
+                              <SelectItem value="high">High</SelectItem>
+                              <SelectItem value="urgent">Urgent</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {tasksActiveFilterCount > 0 && (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={clearTasksFilters}
+                            className="w-full"
+                          >
+                            <X className="h-4 w-4 mr-2" />
+                            Clear All Filters
+                          </Button>
+                        )}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </>
+              )}
+            </div>
           </div>
         </header>
         
@@ -1379,7 +1584,14 @@ export default function Projects() {
         <main className="flex-1 overflow-auto w-full px-4 md:px-6 lg:px-8 py-6 md:py-8" style={{ paddingBottom: isMobile ? '4rem' : '0' }}>
           {/* Tasks Workspace Mode */}
           {workspaceMode === "tasks" ? (
-            <TasksWorkspace />
+            <TasksWorkspace 
+              ownershipFilter={tasksOwnershipFilter}
+              statusFilter={tasksStatusFilter}
+              priorityFilter={tasksPriorityFilter}
+              onOwnershipFilterChange={setTasksOwnershipFilter}
+              onStatusFilterChange={setTasksStatusFilter}
+              onPriorityFilterChange={setTasksPriorityFilter}
+            />
           ) : isMobile ? (
             <PullToRefresh
               onRefresh={handleRefresh}

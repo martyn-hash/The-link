@@ -68,8 +68,6 @@ interface InternalTaskWithRelations extends InternalTask {
   connections?: TaskConnection[];
 }
 
-type OwnershipFilter = "assigned" | "created" | "all";
-
 const ITEMS_PER_PAGE = 10;
 
 function getPriorityColor(priority: string) {
@@ -343,18 +341,30 @@ function TasksSection({
   );
 }
 
+export type OwnershipFilter = "assigned" | "created" | "all";
+
 interface TasksWorkspaceProps {
   className?: string;
+  ownershipFilter: OwnershipFilter;
+  statusFilter: string;
+  priorityFilter: string;
+  onOwnershipFilterChange: (value: OwnershipFilter) => void;
+  onStatusFilterChange: (value: string) => void;
+  onPriorityFilterChange: (value: string) => void;
 }
 
-export function TasksWorkspace({ className }: TasksWorkspaceProps) {
+export function TasksWorkspace({ 
+  className,
+  ownershipFilter,
+  statusFilter,
+  priorityFilter,
+  onOwnershipFilterChange,
+  onStatusFilterChange,
+  onPriorityFilterChange,
+}: TasksWorkspaceProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
-
-  const [ownershipFilter, setOwnershipFilter] = useState<OwnershipFilter>("assigned");
-  const [statusFilter, setStatusFilter] = useState<string>("open");
-  const [priorityFilter, setPriorityFilter] = useState<string>("all");
   
   const [tasksExpanded, setTasksExpanded] = useState(false);
   const [remindersExpanded, setRemindersExpanded] = useState(false);
@@ -373,7 +383,6 @@ export function TasksWorkspace({ className }: TasksWorkspaceProps) {
   const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
   const [selectedAssignee, setSelectedAssignee] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
-  const [filterOpen, setFilterOpen] = useState(false);
 
   const { data: staff = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -451,7 +460,7 @@ export function TasksWorkspace({ className }: TasksWorkspaceProps) {
   }, [allReminders, remindersPage, remindersExpanded]);
 
   const handleOwnershipChange = (value: OwnershipFilter) => {
-    setOwnershipFilter(value);
+    onOwnershipFilterChange(value);
     setTasksPage(1);
     setRemindersPage(1);
     setSelectedTasks([]);
@@ -543,115 +552,9 @@ export function TasksWorkspace({ className }: TasksWorkspaceProps) {
   });
 
   const totalSelected = selectedTasks.length + selectedReminders.length;
-  const activeFilterCount = (ownershipFilter !== "assigned" ? 1 : 0) + 
-    (statusFilter !== "open" ? 1 : 0) + 
-    (priorityFilter !== "all" ? 1 : 0);
-
-  const clearFilters = () => {
-    setOwnershipFilter("assigned");
-    setStatusFilter("open");
-    setPriorityFilter("all");
-  };
 
   return (
     <div className={className}>
-      {/* Toolbar */}
-      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <CreateTaskDialog 
-            trigger={
-              <Button size="sm" data-testid="button-create-task">
-                <ClipboardList className="h-4 w-4 mr-2" />
-                Create Task
-              </Button>
-            }
-          />
-          <CreateReminderDialog 
-            trigger={
-              <Button variant="outline" size="sm" data-testid="button-create-reminder">
-                <Bell className="h-4 w-4 mr-2" />
-                Set Reminder
-              </Button>
-            }
-          />
-        </div>
-
-        <Popover open={filterOpen} onOpenChange={setFilterOpen}>
-          <PopoverTrigger asChild>
-            <Button variant="outline" size="sm" className="relative" data-testid="button-tasks-filters">
-              <Filter className="h-4 w-4 mr-2" />
-              Filters
-              {activeFilterCount > 0 && (
-                <Badge variant="secondary" className="ml-2 h-5 w-5 p-0 flex items-center justify-center text-xs">
-                  {activeFilterCount}
-                </Badge>
-              )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-72" align="end">
-            <div className="space-y-4">
-              <div>
-                <Label className="text-sm font-medium">Show</Label>
-                <Select value={ownershipFilter} onValueChange={(v) => handleOwnershipChange(v as OwnershipFilter)}>
-                  <SelectTrigger className="mt-1" data-testid="select-ownership-filter">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="assigned">Assigned to Me</SelectItem>
-                    <SelectItem value="created">Created by Me</SelectItem>
-                    <SelectItem value="all">All Team Items</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label className="text-sm font-medium">Status</Label>
-                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                  <SelectTrigger className="mt-1" data-testid="select-status-filter">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="open">Open</SelectItem>
-                    <SelectItem value="in_progress">In Progress</SelectItem>
-                    <SelectItem value="closed">Closed</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label className="text-sm font-medium">Priority</Label>
-                <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                  <SelectTrigger className="mt-1" data-testid="select-priority-filter">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Priorities</SelectItem>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {activeFilterCount > 0 && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={clearFilters}
-                  className="w-full"
-                  data-testid="button-clear-filters"
-                >
-                  <X className="h-4 w-4 mr-2" />
-                  Clear All Filters
-                </Button>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
-      </div>
-
       {/* Bulk Actions Bar */}
       {totalSelected > 0 && (
         <div className="mb-4 p-3 bg-muted rounded-lg flex items-center justify-between" data-testid="bulk-actions-bar">
