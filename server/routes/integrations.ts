@@ -1056,12 +1056,51 @@ export function registerIntegrationRoutes(
         }
       }
 
-      // Import the Outlook client functions
-      const { sendEmail } = await import('../utils/outlookClient');
+      // Check if tenant-wide Graph is configured
+      if (!isApplicationGraphConfigured()) {
+        return res.status(503).json({
+          message: "Email service not configured. Please contact administrator."
+        });
+      }
 
-      console.log('[EMAIL SEND] Attempting to send email via Outlook connector...');
-      // Send email via Microsoft Graph API with attachments
-      const emailResult = await sendEmail(to, subject, content, isHtml || false, attachments || []);
+      // Get the user to verify they have email access and get their email address
+      const user = await storage.getUser(effectiveUserId);
+      if (!user) {
+        return res.status(400).json({ message: "User not found." });
+      }
+
+      // Check if user has email access enabled by admin
+      if (!user.accessEmail) {
+        return res.status(403).json({
+          message: "Email access is not enabled for your account. Please contact your administrator."
+        });
+      }
+
+      // User must have an email address to send from
+      if (!user.email) {
+        return res.status(400).json({
+          message: "No email address configured for your account."
+        });
+      }
+
+      console.log('[EMAIL SEND] Attempting to send email via tenant-wide Graph API as:', user.email);
+      
+      // Convert attachments format for tenant-wide API (filename -> name, content -> contentBytes)
+      const formattedAttachments = attachments?.map(att => ({
+        name: att.filename,
+        contentType: att.contentType,
+        contentBytes: att.content // Already base64 encoded
+      }));
+
+      // Send email via Microsoft Graph API using tenant-wide permissions (sends AS the user, not the connector)
+      const emailResult = await sendEmailAsUserTenantWide(
+        user.email,
+        to,
+        subject,
+        content,
+        isHtml || false,
+        { attachments: formattedAttachments }
+      );
       console.log('[EMAIL SEND] Email sent successfully via Outlook:', { to, subject, result: emailResult });
 
       // Log the email as a communication record (only if linked to a client)
@@ -1147,11 +1186,23 @@ export function registerIntegrationRoutes(
 
       console.log('[TEST EMAIL] Starting test email send to:', testEmail);
 
-      // Import the Outlook client functions
-      const { sendEmail } = await import('../utils/outlookClient');
+      // Check if tenant-wide Graph is configured
+      if (!isApplicationGraphConfigured()) {
+        return res.status(503).json({
+          message: "Email service not configured. Please contact administrator."
+        });
+      }
 
-      console.log('[TEST EMAIL] Attempting to send via Outlook connector...');
-      const emailResult = await sendEmail(testEmail, testSubject, testContent, true);
+      // Get the admin user's email to send from their account
+      const user = await storage.getUser(req.user!.id);
+      if (!user?.email) {
+        return res.status(400).json({
+          message: "No email address configured for your account."
+        });
+      }
+
+      console.log('[TEST EMAIL] Attempting to send via tenant-wide Graph API as:', user.email);
+      const emailResult = await sendEmailAsUserTenantWide(user.email, testEmail, testSubject, testContent, true);
       console.log('[TEST EMAIL] Email sent successfully:', emailResult);
 
       res.json({
