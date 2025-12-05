@@ -629,30 +629,29 @@ export function registerQueryRoutes(
         return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
       };
 
-      // Build HTML table for queries with explicit borders for email client compatibility
-      const borderStyle = '1px solid #e2e8f0';
+      // Build HTML table for queries with HTML border attributes for maximum email client compatibility (especially Outlook)
+      const borderColor = '#d0d7de';
+      const cellStyle = `border:1px solid ${borderColor}; padding:8px; font-size:13px;`;
+      const headerStyle = `border:1px solid ${borderColor}; padding:8px; font-weight:bold; font-size:13px; background-color:#f6f8fa;`;
+      
       const queriesTableHtml = `
-<table style="width: 100%; border-collapse: collapse; margin: 16px 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; border: ${borderStyle};">
-  <thead>
-    <tr style="background-color: #f8fafc;">
-      <th style="padding: 12px; text-align: left; font-weight: 600; color: #334155; border: ${borderStyle};">Date</th>
-      <th style="padding: 12px; text-align: left; font-weight: 600; color: #334155; border: ${borderStyle};">Description</th>
-      <th style="padding: 12px; text-align: right; font-weight: 600; color: #16a34a; border: ${borderStyle};">Money In</th>
-      <th style="padding: 12px; text-align: right; font-weight: 600; color: #dc2626; border: ${borderStyle};">Money Out</th>
-      <th style="padding: 12px; text-align: left; font-weight: 600; color: #334155; border: ${borderStyle};">Query</th>
-    </tr>
-  </thead>
-  <tbody>
-    ${queries.map((q, i) => `
-    <tr style="${i % 2 === 1 ? 'background-color: #f8fafc;' : 'background-color: #ffffff;'}">
-      <td style="padding: 12px; color: #475569; border: ${borderStyle};">${formatDate(q.date)}</td>
-      <td style="padding: 12px; color: #475569; border: ${borderStyle};">${q.description || ''}</td>
-      <td style="padding: 12px; text-align: right; color: #16a34a; border: ${borderStyle};">${q.moneyIn ? formatCurrency(q.moneyIn) : '-'}</td>
-      <td style="padding: 12px; text-align: right; color: #dc2626; border: ${borderStyle};">${q.moneyOut ? formatCurrency(q.moneyOut) : '-'}</td>
-      <td style="padding: 12px; color: #1e293b; font-weight: 500; border: ${borderStyle};">${q.ourQuery || ''}</td>
-    </tr>
-    `).join('')}
-  </tbody>
+<table border="1" cellpadding="0" cellspacing="0" bordercolor="${borderColor}" style="border-collapse:collapse; mso-table-lspace:0pt; mso-table-rspace:0pt; width:100%; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin:16px 0;">
+  <tr>
+    <th align="left" style="${headerStyle} color:#334155;">Date</th>
+    <th align="left" style="${headerStyle} color:#334155;">Description</th>
+    <th align="right" style="${headerStyle} color:#16a34a;">Money In</th>
+    <th align="right" style="${headerStyle} color:#dc2626;">Money Out</th>
+    <th align="left" style="${headerStyle} color:#334155;">Our Query</th>
+  </tr>
+  ${queries.map((q, i) => `
+  <tr${i % 2 === 1 ? ' style="background-color:#f8fafc;"' : ''}>
+    <td align="left" style="${cellStyle} color:#475569;">${formatDate(q.date)}</td>
+    <td align="left" style="${cellStyle} color:#475569;">${q.description || ''}</td>
+    <td align="right" style="${cellStyle} color:#16a34a;">${q.moneyIn ? formatCurrency(q.moneyIn) : '-'}</td>
+    <td align="right" style="${cellStyle} color:#dc2626;">${q.moneyOut ? formatCurrency(q.moneyOut) : '-'}</td>
+    <td align="left" style="${cellStyle} color:#1e293b; font-weight:500;">${q.ourQuery || ''}</td>
+  </tr>
+  `).join('')}
 </table>`;
 
       // Build the full email content - conditionally include link based on includeOnlineLink
