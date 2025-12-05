@@ -614,10 +614,12 @@ export class ProjectStorage extends BaseStorage {
 
   /**
    * Batch lookup for priority service indicators
-   * Returns a map of projectId -> array of service names that should show as priority indicators
+   * Returns a map of projectId -> array of indicator objects with name, count, and optional dueDate
+   * - count: number of active projects the client has for this indicator service
+   * - dueDate: included only when count = 1, shows the due date of that single project
    */
-  private async getPriorityServiceIndicatorsBatch(projectList: any[]): Promise<Map<string, string[]>> {
-    const priorityMap = new Map<string, string[]>();
+  private async getPriorityServiceIndicatorsBatch(projectList: any[]): Promise<Map<string, { name: string; count: number; dueDate?: Date | string | null }[]>> {
+    const priorityMap = new Map<string, { name: string; count: number; dueDate?: Date | string | null }[]>();
     
     if (projectList.length === 0) {
       return priorityMap;
@@ -652,13 +654,15 @@ export class ProjectStorage extends BaseStorage {
       const clientIds = [...new Set(projectList.map(p => p.clientId))];
       const indicatorServiceIds = indicatorServices.map(s => s.id);
 
-      // Step 4: Fetch all ACTIVE PROJECTS for relevant clients and indicator services
+      // Step 4: Fetch aggregated data for active projects using COUNT and GROUP BY
+      // This is efficient - single query with SQL aggregation instead of N+1 queries
       // An active project is one where completionStatus is NULL and inactive is false
-      // We join projects with projectTypes to get the serviceId
-      const activeProjectsForIndicatorServices = await db
+      const aggregatedProjectData = await db
         .select({
           clientId: projects.clientId,
           serviceId: projectTypes.serviceId,
+          projectCount: sql<number>`count(*)::int`.as('project_count'),
+          minDueDate: sql<Date | null>`min(${projects.dueDate})`.as('min_due_date'),
         })
         .from(projects)
         .innerJoin(projectTypes, eq(projects.projectTypeId, projectTypes.id))
@@ -669,13 +673,17 @@ export class ProjectStorage extends BaseStorage {
             isNull(projects.completionStatus),
             eq(projects.inactive, false)
           )
-        );
+        )
+        .groupBy(projects.clientId, projectTypes.serviceId);
 
-      // Step 5: Build a set of (clientId, serviceId) pairs where an active project exists
-      const clientHasActiveProjectForService = new Set<string>();
-      for (const proj of activeProjectsForIndicatorServices) {
-        if (proj.serviceId) {
-          clientHasActiveProjectForService.add(`${proj.clientId}:${proj.serviceId}`);
+      // Step 5: Build a map of (clientId:serviceId) -> { count, dueDate }
+      const clientServiceData = new Map<string, { count: number; dueDate: Date | null }>();
+      for (const row of aggregatedProjectData) {
+        if (row.serviceId) {
+          clientServiceData.set(`${row.clientId}:${row.serviceId}`, {
+            count: row.projectCount,
+            dueDate: row.minDueDate,
+          });
         }
       }
 
@@ -687,11 +695,15 @@ export class ProjectStorage extends BaseStorage {
         const indicatorsForThisService = targetToIndicators.get(projectServiceId);
         if (!indicatorsForThisService) continue;
 
-        const indicators: string[] = [];
+        const indicators: { name: string; count: number; dueDate?: Date | string | null }[] = [];
         for (const indicator of indicatorsForThisService) {
-          // Check if the client has an ACTIVE PROJECT for this indicator service
-          if (clientHasActiveProjectForService.has(`${proj.clientId}:${indicator.id}`)) {
-            indicators.push(indicator.name);
+          const data = clientServiceData.get(`${proj.clientId}:${indicator.id}`);
+          if (data && data.count > 0) {
+            indicators.push({
+              name: indicator.name,
+              count: data.count,
+              dueDate: data.count === 1 ? data.dueDate : undefined,
+            });
           }
         }
 
