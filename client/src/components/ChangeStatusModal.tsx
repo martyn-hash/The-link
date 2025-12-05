@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -27,6 +27,8 @@ import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { 
   AlertCircle, 
   Loader2, 
@@ -41,8 +43,13 @@ import {
   Bell,
   Users,
   Mic,
-  MessageSquare
+  MessageSquare,
+  HelpCircle,
+  Plus,
+  CalendarIcon,
+  Trash2
 } from "lucide-react";
+import { format } from "date-fns";
 import { StageNotificationAudioRecorder } from "./StageNotificationAudioRecorder";
 import type {
   ProjectWithRelations,
@@ -698,6 +705,15 @@ export default function ChangeStatusModal({
   const [notesHtml, setNotesHtml] = useState("");
   const [customFieldResponses, setCustomFieldResponses] = useState<Record<string, any>>({});
   const [showApprovalForm, setShowApprovalForm] = useState(false);
+  const [showQueriesForm, setShowQueriesForm] = useState(false);
+  const [pendingQueries, setPendingQueries] = useState<Array<{
+    id: string;
+    date: Date | null;
+    description: string;
+    moneyIn: string;
+    moneyOut: string;
+    ourQuery: string;
+  }>>([]);
   const [notificationPreview, setNotificationPreview] = useState<StageChangeNotificationPreview | null>(null);
   const [clientNotificationPreview, setClientNotificationPreview] = useState<ClientValueNotificationPreview | null>(null);
   const [notificationType, setNotificationType] = useState<'staff' | 'client' | null>(null);
@@ -876,6 +892,8 @@ export default function ChangeStatusModal({
       setNotesHtml("");
       setCustomFieldResponses({});
       setShowApprovalForm(false);
+      setShowQueriesForm(false);
+      setPendingQueries([]);
       approvalForm.reset();
       setSelectedFiles([]);
       setUploadedAttachments([]);
@@ -967,20 +985,52 @@ export default function ChangeStatusModal({
       // Return context with previous data for rollback
       return { previousProjects };
     },
-    onSuccess: (data: any) => {
+    onSuccess: async (data: any) => {
       // Handle response format: { project, clientNotificationPreview, notificationType }
       const updatedProject = data.project || data;
       const clientPreview = data.clientNotificationPreview;
       const type = data.notificationType;
 
-      // ALWAYS show success immediately - stage change is committed
-      toast({
-        title: "Success",
-        description: "Stage updated successfully",
-      });
+      // If there are pending queries, create them
+      if (pendingQueries.length > 0) {
+        try {
+          // Create each query
+          for (const query of pendingQueries) {
+            if (query.description || query.ourQuery) {
+              await apiRequest("POST", `/api/projects/${project.id}/queries`, {
+                projectId: project.id,
+                date: query.date?.toISOString() || null,
+                description: query.description || null,
+                moneyIn: query.moneyIn ? query.moneyIn : null,
+                moneyOut: query.moneyOut ? query.moneyOut : null,
+                ourQuery: query.ourQuery || "",
+                status: "open",
+              });
+            }
+          }
+          toast({
+            title: "Success",
+            description: `Stage updated and ${pendingQueries.length} ${pendingQueries.length === 1 ? 'query' : 'queries'} created`,
+          });
+        } catch (error) {
+          console.error("Failed to create queries:", error);
+          toast({
+            title: "Stage Updated",
+            description: "Stage was updated but some queries failed to create",
+            variant: "destructive",
+          });
+        }
+      } else {
+        // ALWAYS show success immediately - stage change is committed
+        toast({
+          title: "Success",
+          description: "Stage updated successfully",
+        });
+      }
       
       // Refresh data immediately so user sees the change
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id, "queries"] });
       onStatusUpdated?.();
       
       // Reset form state - stage change is complete
@@ -989,6 +1039,8 @@ export default function ChangeStatusModal({
       setNotesHtml("");
       setCustomFieldResponses({});
       setShowApprovalForm(false);
+      setShowQueriesForm(false);
+      setPendingQueries([]);
       setSelectedFiles([]);
       setUploadedAttachments([]);
 
@@ -1387,9 +1439,40 @@ export default function ChangeStatusModal({
   // Determine modal size based on current view
   const getModalClassName = () => {
     if (showNotificationModal) return "max-w-4xl";
-    if (showApprovalForm) return "max-w-6xl";
+    if (showApprovalForm || showQueriesForm) return "max-w-6xl";
     return "max-w-2xl";
   };
+
+  // Toggle queries form (mutually exclusive with approval form)
+  const handleToggleQueriesForm = useCallback(() => {
+    setShowQueriesForm(prev => !prev);
+    // Queries form is user-triggered, approval form is automatic based on stage
+    // They can coexist visually but we only show one right column at a time
+  }, []);
+
+  // Add a new empty query row
+  const handleAddQueryRow = useCallback(() => {
+    setPendingQueries(prev => [...prev, {
+      id: crypto.randomUUID(),
+      date: null,
+      description: "",
+      moneyIn: "",
+      moneyOut: "",
+      ourQuery: "",
+    }]);
+  }, []);
+
+  // Update a query field
+  const handleUpdateQuery = useCallback((id: string, field: string, value: any) => {
+    setPendingQueries(prev => prev.map(q => 
+      q.id === id ? { ...q, [field]: value } : q
+    ));
+  }, []);
+
+  // Remove a query row
+  const handleRemoveQuery = useCallback((id: string) => {
+    setPendingQueries(prev => prev.filter(q => q.id !== id));
+  }, []);
 
   return (
     <Dialog open={isOpen} onOpenChange={handleFullClose}>
@@ -1467,7 +1550,7 @@ export default function ChangeStatusModal({
               </DialogDescription>
             </DialogHeader>
 
-        <div className={`max-h-[70vh] overflow-y-auto ${showApprovalForm ? "grid grid-cols-2 gap-6" : ""}`}>
+        <div className={`max-h-[70vh] overflow-y-auto ${(showApprovalForm || showQueriesForm) ? "grid grid-cols-2 gap-6" : ""}`}>
           {/* Left column: Status change form */}
           <div className="space-y-4">
             <h3 className="font-semibold text-sm">Status Change Details</h3>
@@ -1715,6 +1798,29 @@ export default function ChangeStatusModal({
                 ))}
               </div>
             )}
+
+            {/* Add Queries Button - only show when approval form is NOT shown */}
+            {!showApprovalForm && (
+              <div className="pt-2">
+                <Separator className="mb-4" />
+                <Button
+                  type="button"
+                  variant={showQueriesForm ? "secondary" : "outline"}
+                  size="sm"
+                  onClick={handleToggleQueriesForm}
+                  className="w-full"
+                  data-testid="button-toggle-queries"
+                >
+                  <HelpCircle className="w-4 h-4 mr-2" />
+                  {showQueriesForm ? "Hide Queries" : "Add Queries"}
+                  {pendingQueries.length > 0 && (
+                    <Badge variant="secondary" className="ml-2">
+                      {pendingQueries.length}
+                    </Badge>
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Right column: Stage approval form (conditional) */}
@@ -1873,6 +1979,146 @@ export default function ChangeStatusModal({
                   ))}
                 </form>
               </Form>
+            </div>
+          )}
+
+          {/* Right column: Add Queries form (conditional, mutually exclusive with approval) */}
+          {showQueriesForm && !showApprovalForm && (
+            <div className="space-y-4 border-l pl-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                  <h3 className="font-semibold text-sm">Add Queries</h3>
+                  {pendingQueries.length > 0 && (
+                    <Badge variant="secondary">{pendingQueries.length}</Badge>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => setShowQueriesForm(false)}
+                  className="h-6 w-6"
+                  data-testid="button-close-queries"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Add transaction queries to be resolved. These will be saved with this stage change.
+              </p>
+
+              {/* Query Entry Table */}
+              <div className="space-y-2">
+                {pendingQueries.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground bg-muted/30 rounded-lg">
+                    <HelpCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No queries added yet</p>
+                    <p className="text-xs">Click the button below to add a query</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto">
+                    {pendingQueries.map((query, index) => (
+                      <div 
+                        key={query.id} 
+                        className="p-3 bg-muted/30 rounded-lg space-y-3 relative"
+                        data-testid={`query-row-${index}`}
+                      >
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          className="absolute top-2 right-2 h-6 w-6"
+                          onClick={() => handleRemoveQuery(query.id)}
+                          data-testid={`button-remove-query-${index}`}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          {/* Date Picker */}
+                          <div className="space-y-1">
+                            <Label className="text-xs">Date</Label>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="w-full justify-start text-left font-normal h-8 text-xs"
+                                  data-testid={`button-date-${index}`}
+                                >
+                                  <CalendarIcon className="mr-1 h-3 w-3" />
+                                  {query.date ? format(query.date, "dd MMM yy") : "Select"}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={query.date || undefined}
+                                  onSelect={(date) => handleUpdateQuery(query.id, "date", date)}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </div>
+
+                          {/* Amount (Money Out by default) */}
+                          <div className="space-y-1">
+                            <Label className="text-xs">Amount (£)</Label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              placeholder="0.00"
+                              value={query.moneyOut}
+                              onChange={(e) => handleUpdateQuery(query.id, "moneyOut", e.target.value)}
+                              className="h-8 text-xs"
+                              data-testid={`input-amount-${index}`}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Description */}
+                        <div className="space-y-1">
+                          <Label className="text-xs">Description</Label>
+                          <Input
+                            placeholder="Transaction description..."
+                            value={query.description}
+                            onChange={(e) => handleUpdateQuery(query.id, "description", e.target.value)}
+                            className="h-8 text-xs"
+                            data-testid={`input-description-${index}`}
+                          />
+                        </div>
+
+                        {/* Query */}
+                        <div className="space-y-1">
+                          <Label className="text-xs">Query</Label>
+                          <Textarea
+                            placeholder="What do you need to ask about this transaction?"
+                            value={query.ourQuery}
+                            onChange={(e) => handleUpdateQuery(query.id, "ourQuery", e.target.value)}
+                            className="text-xs min-h-[60px]"
+                            rows={2}
+                            data-testid={`input-query-${index}`}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleAddQueryRow}
+                  className="w-full"
+                  data-testid="button-add-query-row"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Query Row
+                </Button>
+              </div>
             </div>
           )}
         </div>
