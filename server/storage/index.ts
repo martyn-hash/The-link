@@ -90,7 +90,7 @@ import {
 } from './settings/index.js';
 import { WebhookStorage } from './webhooks/index.js';
 import { QboStorage, QcStorage } from './qbo/index.js';
-import { QueryStorage } from './queries/index.js';
+import { QueryStorage, QueryTokenStorage } from './queries/index.js';
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -161,6 +161,7 @@ export class DatabaseStorage implements IStorage {
   private qboStorage: QboStorage;
   private qcStorage: QcStorage;
   private queryStorage: QueryStorage;
+  private queryTokenStorage: QueryTokenStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -264,6 +265,7 @@ export class DatabaseStorage implements IStorage {
     
     // Initialize queries domain storage
     this.queryStorage = new QueryStorage();
+    this.queryTokenStorage = new QueryTokenStorage();
     
     // Register cross-domain helpers
     this.registerClientHelpers();
@@ -3465,6 +3467,43 @@ export class DatabaseStorage implements IStorage {
 
   async getQueryStatsByProjectId(projectId: string) {
     return this.queryStorage.getQueryStatsByProjectId(projectId);
+  }
+
+  // QUERY TOKEN DOMAIN - Delegated to QueryTokenStorage
+  async createQueryResponseToken(data: any) {
+    return this.queryTokenStorage.createToken(data);
+  }
+
+  async getQueryResponseTokenByValue(token: string) {
+    return this.queryTokenStorage.getTokenByValue(token);
+  }
+
+  async getQueryResponseTokenById(id: string) {
+    return this.queryTokenStorage.getTokenById(id);
+  }
+
+  async getQueryResponseTokensByProjectId(projectId: string) {
+    return this.queryTokenStorage.getTokensByProjectId(projectId);
+  }
+
+  async markQueryTokenAccessed(tokenId: string) {
+    return this.queryTokenStorage.markTokenAccessed(tokenId);
+  }
+
+  async markQueryTokenCompleted(tokenId: string) {
+    return this.queryTokenStorage.markTokenCompleted(tokenId);
+  }
+
+  async validateQueryResponseToken(token: string) {
+    return this.queryTokenStorage.validateToken(token);
+  }
+
+  async getQueriesForToken(token: string) {
+    return this.queryTokenStorage.getQueriesForToken(token);
+  }
+
+  async cleanupExpiredQueryTokens() {
+    return this.queryTokenStorage.cleanupExpiredTokens();
   }
 
 }
