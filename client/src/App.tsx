@@ -83,6 +83,7 @@ const InternalTaskDetail = lazy(() => import("@/pages/internal-task-detail"));
 const SignPage = lazy(() => import("@/pages/sign"));
 const SignatureRequestsPage = lazy(() => import("@/pages/signature-requests"));
 const SignatureRequestBuilder = lazy(() => import("@/pages/signature-request-builder"));
+const QueryResponsePage = lazy(() => import("@/pages/query-response"));
 
 function PageLoader() {
   return (
@@ -156,6 +157,7 @@ function Router() {
         <Route path="/magic-link-verify" component={MagicLinkVerify} />
         <Route path="/login">{() => <Landing />}</Route>
         <Route path="/sign" component={SignPage} />
+        <Route path="/queries/respond/:token" component={QueryResponsePage} />
         
         {/* Home route - conditional based on auth */}
         <Route path="/" component={isAuthenticated ? Projects : Landing} />
