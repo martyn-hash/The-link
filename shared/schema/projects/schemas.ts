@@ -161,7 +161,6 @@ export const insertSchedulingExceptionSchema = createInsertSchema(schedulingExce
 });
 
 export const completeProjectSchema = z.object({
-  projectId: z.string(),
   chronologyNotes: z.string().optional(),
   completionStatus: z.enum(["completed_successfully", "completed_unsuccessfully"]),
 });
