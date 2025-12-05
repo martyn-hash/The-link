@@ -7,6 +7,13 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Dialog,
   DialogContent,
@@ -46,11 +53,15 @@ import {
   Trash2,
   Edit,
   MessageSquare,
+  CalendarIcon,
+  ArrowDownLeft,
+  ArrowUpRight,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 import type { BookkeepingQueryWithRelations } from "@shared/schema";
 
 type QueryStatus = "open" | "answered_by_staff" | "sent_to_client" | "answered_by_client" | "resolved";
@@ -83,6 +94,36 @@ function QueryStatusBadge({ status }: { status: QueryStatus }) {
   );
 }
 
+function formatCurrency(amount: string | null | undefined): string {
+  if (!amount) return "";
+  const num = parseFloat(amount);
+  if (isNaN(num)) return "";
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+  }).format(num);
+}
+
+function AmountDisplay({ moneyIn, moneyOut }: { moneyIn?: string | null; moneyOut?: string | null }) {
+  if (moneyIn && parseFloat(moneyIn) > 0) {
+    return (
+      <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
+        <ArrowDownLeft className="w-3 h-3" />
+        {formatCurrency(moneyIn)}
+      </span>
+    );
+  }
+  if (moneyOut && parseFloat(moneyOut) > 0) {
+    return (
+      <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
+        <ArrowUpRight className="w-3 h-3" />
+        {formatCurrency(moneyOut)}
+      </span>
+    );
+  }
+  return <span className="text-muted-foreground">-</span>;
+}
+
 export function QueriesTab({ projectId }: QueriesTabProps) {
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -90,13 +131,25 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingQuery, setEditingQuery] = useState<BookkeepingQueryWithRelations | null>(null);
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+
+  // Add Query form state
   const [newQueryText, setNewQueryText] = useState("");
   const [newQueryDescription, setNewQueryDescription] = useState("");
+  const [newQueryDate, setNewQueryDate] = useState<Date | undefined>(undefined);
+  const [newQueryMoneyIn, setNewQueryMoneyIn] = useState("");
+  const [newQueryMoneyOut, setNewQueryMoneyOut] = useState("");
+  const [newQueryHasVat, setNewQueryHasVat] = useState(false);
+
+  // Edit Query form state
   const [editQueryText, setEditQueryText] = useState("");
   const [editQueryDescription, setEditQueryDescription] = useState("");
+  const [editQueryDate, setEditQueryDate] = useState<Date | undefined>(undefined);
+  const [editQueryMoneyIn, setEditQueryMoneyIn] = useState("");
+  const [editQueryMoneyOut, setEditQueryMoneyOut] = useState("");
+  const [editQueryHasVat, setEditQueryHasVat] = useState(false);
   const [editQueryStatus, setEditQueryStatus] = useState<QueryStatus>("open");
   const [editQueryResponse, setEditQueryResponse] = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
 
   const { data: queries, isLoading } = useQuery<BookkeepingQueryWithRelations[]>({
     queryKey: ['/api/projects', projectId, 'queries'],
@@ -114,13 +167,19 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { ourQuery: string; description?: string }) => {
+    mutationFn: async (data: { 
+      ourQuery: string; 
+      description?: string;
+      date?: string;
+      moneyIn?: string;
+      moneyOut?: string;
+      hasVat?: boolean;
+    }) => {
       return apiRequest('POST', `/api/projects/${projectId}/queries`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
-      setNewQueryText("");
-      setNewQueryDescription("");
+      resetAddForm();
       setIsAddDialogOpen(false);
       toast({ title: "Query created", description: "Your query has been added." });
     },
@@ -130,7 +189,17 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async (data: { id: string; ourQuery?: string; description?: string; status?: QueryStatus; clientResponse?: string }) => {
+    mutationFn: async (data: { 
+      id: string; 
+      ourQuery?: string; 
+      description?: string;
+      date?: string | null;
+      moneyIn?: string | null;
+      moneyOut?: string | null;
+      hasVat?: boolean | null;
+      status?: QueryStatus; 
+      clientResponse?: string;
+    }) => {
       const { id, ...updateData } = data;
       return apiRequest('PATCH', `/api/queries/${id}`, updateData);
     },
@@ -192,11 +261,37 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
     },
   });
 
+  // Inline VAT toggle mutation
+  const toggleVatMutation = useMutation({
+    mutationFn: async ({ id, hasVat }: { id: string; hasVat: boolean }) => {
+      return apiRequest('PATCH', `/api/queries/${id}`, { hasVat });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to update VAT status.", variant: "destructive" });
+    },
+  });
+
+  const resetAddForm = () => {
+    setNewQueryText("");
+    setNewQueryDescription("");
+    setNewQueryDate(undefined);
+    setNewQueryMoneyIn("");
+    setNewQueryMoneyOut("");
+    setNewQueryHasVat(false);
+  };
+
   const handleAddQuery = () => {
     if (!newQueryText.trim()) return;
     createMutation.mutate({ 
       ourQuery: newQueryText.trim(),
       description: newQueryDescription.trim() || undefined,
+      date: newQueryDate ? newQueryDate.toISOString() : undefined,
+      moneyIn: newQueryMoneyIn || undefined,
+      moneyOut: newQueryMoneyOut || undefined,
+      hasVat: newQueryHasVat || undefined,
     });
   };
 
@@ -204,6 +299,10 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
     setEditingQuery(query);
     setEditQueryText(query.ourQuery || "");
     setEditQueryDescription(query.description || "");
+    setEditQueryDate(query.date ? new Date(query.date) : undefined);
+    setEditQueryMoneyIn(query.moneyIn || "");
+    setEditQueryMoneyOut(query.moneyOut || "");
+    setEditQueryHasVat(query.hasVat || false);
     setEditQueryStatus(query.status as QueryStatus);
     setEditQueryResponse(query.clientResponse || "");
     setIsEditDialogOpen(true);
@@ -214,7 +313,11 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
     updateMutation.mutate({
       id: editingQuery.id,
       ourQuery: editQueryText.trim(),
-      description: editQueryDescription.trim() || undefined,
+      description: editQueryDescription.trim() || null,
+      date: editQueryDate ? editQueryDate.toISOString() : null,
+      moneyIn: editQueryMoneyIn || null,
+      moneyOut: editQueryMoneyOut || null,
+      hasVat: editQueryHasVat,
       status: editQueryStatus,
       clientResponse: editQueryResponse.trim() || undefined,
     });
@@ -274,39 +377,120 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
               </span>
             )}
           </CardTitle>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+            setIsAddDialogOpen(open);
+            if (!open) resetAddForm();
+          }}>
             <DialogTrigger asChild>
               <Button size="sm" data-testid="button-add-query">
                 <Plus className="w-4 h-4 mr-2" />
                 Add Query
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>Add Bookkeeping Query</DialogTitle>
                 <DialogDescription>
-                  Add a new question or query for the bookkeeping team.
+                  Add a transaction query for the client or client manager to answer.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
+                {/* Transaction Date */}
                 <div>
-                  <label className="text-sm font-medium">Query</label>
-                  <Textarea
-                    value={newQueryText}
-                    onChange={(e) => setNewQueryText(e.target.value)}
-                    placeholder="Enter your query or question..."
-                    className="mt-1"
-                    data-testid="input-query-text"
-                  />
+                  <label className="text-sm font-medium">Transaction Date</label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal mt-1",
+                          !newQueryDate && "text-muted-foreground"
+                        )}
+                        data-testid="button-add-date"
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {newQueryDate ? format(newQueryDate, "PPP") : "Select date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={newQueryDate}
+                        onSelect={setNewQueryDate}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
+
+                {/* Description (transaction narrative) */}
                 <div>
-                  <label className="text-sm font-medium">Description (optional)</label>
+                  <label className="text-sm font-medium">Description</label>
                   <Input
                     value={newQueryDescription}
                     onChange={(e) => setNewQueryDescription(e.target.value)}
-                    placeholder="Brief description of the transaction..."
+                    placeholder="e.g., AMAZON PRIME *MS1234"
                     className="mt-1"
                     data-testid="input-query-description"
+                  />
+                </div>
+
+                {/* Amount fields */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Money In (£)</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={newQueryMoneyIn}
+                      onChange={(e) => {
+                        setNewQueryMoneyIn(e.target.value);
+                        if (e.target.value) setNewQueryMoneyOut("");
+                      }}
+                      placeholder="0.00"
+                      className="mt-1"
+                      data-testid="input-query-money-in"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Money Out (£)</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={newQueryMoneyOut}
+                      onChange={(e) => {
+                        setNewQueryMoneyOut(e.target.value);
+                        if (e.target.value) setNewQueryMoneyIn("");
+                      }}
+                      placeholder="0.00"
+                      className="mt-1"
+                      data-testid="input-query-money-out"
+                    />
+                  </div>
+                </div>
+
+                {/* Has VAT toggle */}
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">Includes VAT</label>
+                  <Switch
+                    checked={newQueryHasVat}
+                    onCheckedChange={setNewQueryHasVat}
+                    data-testid="switch-add-has-vat"
+                  />
+                </div>
+
+                {/* Query / Question */}
+                <div>
+                  <label className="text-sm font-medium">Your Query</label>
+                  <Textarea
+                    value={newQueryText}
+                    onChange={(e) => setNewQueryText(e.target.value)}
+                    placeholder="What is this transaction for? Is it a business expense?"
+                    className="mt-1"
+                    rows={3}
+                    data-testid="input-query-text"
                   />
                 </div>
               </div>
@@ -383,7 +567,7 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
         ) : (
           <>
             {/* Desktop Table */}
-            <div className="hidden md:block border rounded-lg">
+            <div className="hidden md:block border rounded-lg overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -394,11 +578,13 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
                         data-testid="checkbox-select-all"
                       />
                     </TableHead>
-                    <TableHead>Query</TableHead>
+                    <TableHead className="w-24">Date</TableHead>
                     <TableHead>Description</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="w-28">Amount</TableHead>
+                    <TableHead className="w-16 text-center">VAT</TableHead>
+                    <TableHead>Query</TableHead>
+                    <TableHead className="w-32">Status</TableHead>
+                    <TableHead className="text-right w-20">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -411,28 +597,37 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
                           data-testid={`checkbox-query-${query.id}`}
                         />
                       </TableCell>
+                      <TableCell className="text-sm">
+                        {query.date ? format(new Date(query.date), 'dd MMM') : '-'}
+                      </TableCell>
                       <TableCell className="max-w-xs">
-                        <p className="truncate font-medium" data-testid={`text-query-${query.id}`}>
+                        <p className="truncate text-sm" data-testid={`text-description-${query.id}`}>
+                          {query.description || '-'}
+                        </p>
+                      </TableCell>
+                      <TableCell>
+                        <AmountDisplay moneyIn={query.moneyIn} moneyOut={query.moneyOut} />
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <Switch
+                          checked={query.hasVat || false}
+                          onCheckedChange={(checked) => toggleVatMutation.mutate({ id: query.id, hasVat: checked })}
+                          disabled={toggleVatMutation.isPending}
+                          data-testid={`switch-vat-${query.id}`}
+                        />
+                      </TableCell>
+                      <TableCell className="max-w-xs">
+                        <p className="truncate font-medium text-sm" data-testid={`text-query-${query.id}`}>
                           {query.ourQuery}
                         </p>
                         {query.clientResponse && (
-                          <p className="text-sm text-muted-foreground truncate mt-1">
+                          <p className="text-xs text-muted-foreground truncate mt-1">
                             Response: {query.clientResponse}
                           </p>
                         )}
                       </TableCell>
                       <TableCell>
-                        {query.description && (
-                          <span className="text-sm text-muted-foreground" data-testid={`text-description-${query.id}`}>
-                            {query.description}
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell>
                         <QueryStatusBadge status={query.status as QueryStatus} />
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {query.createdAt && format(new Date(query.createdAt), 'MMM d, yyyy')}
                       </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
@@ -491,6 +686,22 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
                         onCheckedChange={(checked) => handleSelectQuery(query.id, checked === true)}
                       />
                       <div className="min-w-0 flex-1">
+                        {/* Date and Amount row */}
+                        <div className="flex items-center gap-3 text-sm text-muted-foreground mb-1">
+                          {query.date && (
+                            <span>{format(new Date(query.date), 'dd MMM yyyy')}</span>
+                          )}
+                          <AmountDisplay moneyIn={query.moneyIn} moneyOut={query.moneyOut} />
+                        </div>
+                        
+                        {/* Description */}
+                        {query.description && (
+                          <p className="text-sm mb-1" data-testid={`text-description-mobile-${query.id}`}>
+                            {query.description}
+                          </p>
+                        )}
+                        
+                        {/* Query */}
                         <p className="font-medium" data-testid={`text-query-mobile-${query.id}`}>
                           {query.ourQuery}
                         </p>
@@ -499,15 +710,20 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
                             Response: {query.clientResponse}
                           </p>
                         )}
-                        <div className="flex flex-wrap gap-2 mt-2">
+                        
+                        {/* Status and VAT row */}
+                        <div className="flex flex-wrap items-center gap-3 mt-2">
                           <QueryStatusBadge status={query.status as QueryStatus} />
-                          {query.description && (
-                            <span className="text-xs text-muted-foreground">{query.description}</span>
-                          )}
+                          <div className="flex items-center gap-1.5 text-xs">
+                            <span className="text-muted-foreground">VAT:</span>
+                            <Switch
+                              checked={query.hasVat || false}
+                              onCheckedChange={(checked) => toggleVatMutation.mutate({ id: query.id, hasVat: checked })}
+                              disabled={toggleVatMutation.isPending}
+                              className="scale-75"
+                            />
+                          </div>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          {query.createdAt && format(new Date(query.createdAt), 'MMM d, yyyy')}
-                        </p>
                       </div>
                     </div>
                     <DropdownMenu>
@@ -554,33 +770,113 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
 
       {/* Edit Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Edit Query</DialogTitle>
             <DialogDescription>
               Update the query details and status.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+            {/* Transaction Date */}
             <div>
-              <label className="text-sm font-medium">Query</label>
-              <Textarea
-                value={editQueryText}
-                onChange={(e) => setEditQueryText(e.target.value)}
-                className="mt-1"
-                data-testid="input-edit-query-text"
-              />
+              <label className="text-sm font-medium">Transaction Date</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal mt-1",
+                      !editQueryDate && "text-muted-foreground"
+                    )}
+                    data-testid="button-edit-date"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {editQueryDate ? format(editQueryDate, "PPP") : "Select date"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={editQueryDate}
+                    onSelect={setEditQueryDate}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
+
+            {/* Description */}
             <div>
-              <label className="text-sm font-medium">Description (optional)</label>
+              <label className="text-sm font-medium">Description</label>
               <Input
                 value={editQueryDescription}
                 onChange={(e) => setEditQueryDescription(e.target.value)}
-                placeholder="Brief description of the transaction..."
+                placeholder="Transaction description..."
                 className="mt-1"
                 data-testid="input-edit-query-description"
               />
             </div>
+
+            {/* Amount fields */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">Money In (£)</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editQueryMoneyIn}
+                  onChange={(e) => {
+                    setEditQueryMoneyIn(e.target.value);
+                    if (e.target.value) setEditQueryMoneyOut("");
+                  }}
+                  placeholder="0.00"
+                  className="mt-1"
+                  data-testid="input-edit-money-in"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Money Out (£)</label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={editQueryMoneyOut}
+                  onChange={(e) => {
+                    setEditQueryMoneyOut(e.target.value);
+                    if (e.target.value) setEditQueryMoneyIn("");
+                  }}
+                  placeholder="0.00"
+                  className="mt-1"
+                  data-testid="input-edit-money-out"
+                />
+              </div>
+            </div>
+
+            {/* Has VAT toggle */}
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">Includes VAT</label>
+              <Switch
+                checked={editQueryHasVat}
+                onCheckedChange={setEditQueryHasVat}
+                data-testid="switch-edit-has-vat"
+              />
+            </div>
+
+            {/* Query */}
+            <div>
+              <label className="text-sm font-medium">Your Query</label>
+              <Textarea
+                value={editQueryText}
+                onChange={(e) => setEditQueryText(e.target.value)}
+                className="mt-1"
+                rows={3}
+                data-testid="input-edit-query-text"
+              />
+            </div>
+
+            {/* Status */}
             <div>
               <label className="text-sm font-medium">Status</label>
               <Select value={editQueryStatus} onValueChange={(val) => setEditQueryStatus(val as QueryStatus)}>
@@ -596,13 +892,16 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Client Response */}
             <div>
-              <label className="text-sm font-medium">Client Response (optional)</label>
+              <label className="text-sm font-medium">Client Response</label>
               <Textarea
                 value={editQueryResponse}
                 onChange={(e) => setEditQueryResponse(e.target.value)}
                 placeholder="Enter the client's response..."
                 className="mt-1"
+                rows={3}
                 data-testid="input-edit-query-response"
               />
             </div>
