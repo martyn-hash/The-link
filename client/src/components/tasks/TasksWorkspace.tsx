@@ -7,8 +7,15 @@ import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Select,
   SelectContent,
@@ -100,55 +107,67 @@ interface TaskRowProps {
   selected: boolean;
   onSelect: (checked: boolean) => void;
   onViewClick: () => void;
+  isMobile?: boolean;
 }
 
-function TaskRow({ task, selected, onSelect, onViewClick }: TaskRowProps) {
+function TaskRow({ task, selected, onSelect, onViewClick, isMobile }: TaskRowProps) {
   return (
-    <div 
-      className="flex items-center gap-3 p-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors"
-      data-testid={`row-task-${task.id}`}
-    >
-      <Checkbox
-        checked={selected}
-        onCheckedChange={onSelect}
-        data-testid={`checkbox-task-${task.id}`}
-      />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium truncate" data-testid={`text-title-${task.id}`}>
+    <TableRow data-testid={`row-task-${task.id}`}>
+      <TableCell className="w-10">
+        <Checkbox
+          checked={selected}
+          onCheckedChange={onSelect}
+          data-testid={`checkbox-task-${task.id}`}
+        />
+      </TableCell>
+      <TableCell className="font-medium">
+        <div className="flex items-center gap-2">
+          <span className="truncate" data-testid={`text-title-${task.id}`}>
             {task.title}
           </span>
-          <Badge variant="outline" className={`text-xs ${getPriorityColor(task.priority)}`}>
-            {task.priority}
-          </Badge>
-          <Badge variant="outline" className={`text-xs ${getStatusColor(task.status)}`}>
-            {task.status === "in_progress" ? "In Progress" : task.status}
-          </Badge>
         </div>
         {task.description && (
           <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
             {task.description}
           </p>
         )}
-        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-          {task.assignee && (
-            <span>{task.assignee.firstName} {task.assignee.lastName}</span>
-          )}
-          {task.dueDate && (
-            <span>Due: {formatDate(task.dueDate)}</span>
-          )}
+      </TableCell>
+      <TableCell>
+        <div className="flex items-center gap-1">
+          <Badge className={`text-xs ${getPriorityColor(task.priority)}`}>
+            {task.priority}
+          </Badge>
+          <Badge className={`text-xs ${getStatusColor(task.status)}`}>
+            {task.status === "in_progress" ? "In Progress" : task.status}
+          </Badge>
         </div>
-      </div>
-      <Button
-        variant="default"
-        size="sm"
-        onClick={onViewClick}
-        data-testid={`button-view-${task.id}`}
-      >
-        <Eye className="h-4 w-4 mr-1" />
-        View
-      </Button>
-    </div>
+      </TableCell>
+      {!isMobile && (
+        <TableCell className="text-sm">
+          <span data-testid={`text-assignee-${task.id}`}>
+            {task.assignee ? `${task.assignee.firstName} ${task.assignee.lastName}` : '-'}
+          </span>
+        </TableCell>
+      )}
+      {!isMobile && (
+        <TableCell className="text-sm">
+          <span data-testid={`text-duedate-${task.id}`}>
+            {formatDate(task.dueDate)}
+          </span>
+        </TableCell>
+      )}
+      <TableCell className="text-right">
+        <Button
+          variant="default"
+          size="sm"
+          onClick={onViewClick}
+          data-testid={`button-view-task-${task.id}`}
+        >
+          <Eye className="h-4 w-4 mr-2" />
+          View
+        </Button>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -157,53 +176,63 @@ interface ReminderRowProps {
   selected: boolean;
   onSelect: (checked: boolean) => void;
   onViewClick: () => void;
+  isMobile?: boolean;
 }
 
-function ReminderRow({ reminder, selected, onSelect, onViewClick }: ReminderRowProps) {
+function ReminderRow({ reminder, selected, onSelect, onViewClick, isMobile }: ReminderRowProps) {
   return (
-    <div 
-      className="flex items-center gap-3 p-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors"
-      data-testid={`row-reminder-${reminder.id}`}
-    >
-      <Checkbox
-        checked={selected}
-        onCheckedChange={onSelect}
-        data-testid={`checkbox-reminder-${reminder.id}`}
-      />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <Bell className="h-4 w-4 text-amber-500" />
-          <span className="font-medium truncate" data-testid={`text-title-${reminder.id}`}>
+    <TableRow data-testid={`row-reminder-${reminder.id}`}>
+      <TableCell className="w-10">
+        <Checkbox
+          checked={selected}
+          onCheckedChange={onSelect}
+          data-testid={`checkbox-reminder-${reminder.id}`}
+        />
+      </TableCell>
+      <TableCell className="font-medium">
+        <div className="flex items-center gap-2">
+          <Bell className="h-4 w-4 text-amber-500 flex-shrink-0" />
+          <span className="truncate" data-testid={`text-title-${reminder.id}`}>
             {reminder.title}
           </span>
-          <Badge variant="outline" className={`text-xs ${getStatusColor(reminder.status)}`}>
-            {reminder.status === "in_progress" ? "In Progress" : reminder.status}
-          </Badge>
         </div>
         {reminder.description && (
           <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
             {reminder.description}
           </p>
         )}
-        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-          {reminder.assignee && (
-            <span>{reminder.assignee.firstName} {reminder.assignee.lastName}</span>
-          )}
-          {reminder.dueDate && (
-            <span>Due: {formatDate(reminder.dueDate)}</span>
-          )}
-        </div>
-      </div>
-      <Button
-        variant="default"
-        size="sm"
-        onClick={onViewClick}
-        data-testid={`button-view-${reminder.id}`}
-      >
-        <Eye className="h-4 w-4 mr-1" />
-        View
-      </Button>
-    </div>
+      </TableCell>
+      <TableCell>
+        <Badge className={`text-xs ${getStatusColor(reminder.status)}`}>
+          {reminder.status === "in_progress" ? "In Progress" : reminder.status}
+        </Badge>
+      </TableCell>
+      {!isMobile && (
+        <TableCell className="text-sm">
+          <span data-testid={`text-assignee-${reminder.id}`}>
+            {reminder.assignee ? `${reminder.assignee.firstName} ${reminder.assignee.lastName}` : '-'}
+          </span>
+        </TableCell>
+      )}
+      {!isMobile && (
+        <TableCell className="text-sm">
+          <span data-testid={`text-duedate-${reminder.id}`}>
+            {formatDate(reminder.dueDate)}
+          </span>
+        </TableCell>
+      )}
+      <TableCell className="text-right">
+        <Button
+          variant="default"
+          size="sm"
+          onClick={onViewClick}
+          data-testid={`button-view-reminder-${reminder.id}`}
+        >
+          <Eye className="h-4 w-4 mr-2" />
+          View
+        </Button>
+      </TableCell>
+    </TableRow>
   );
 }
 
@@ -221,6 +250,7 @@ interface TasksSectionProps {
   onViewItem: (item: InternalTaskWithRelations) => void;
   isLoading?: boolean;
   isReminders?: boolean;
+  isMobile?: boolean;
 }
 
 function TasksSection({
@@ -237,44 +267,46 @@ function TasksSection({
   onViewItem,
   isLoading,
   isReminders = false,
+  isMobile = false,
 }: TasksSectionProps) {
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
 
   return (
-    <Card>
-      <CardHeader className="py-3 px-4">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-base flex items-center gap-2">
-            {icon}
-            {title}
-            <Badge variant="secondary" className="ml-1">
-              {totalCount}
-            </Badge>
-          </CardTitle>
-          {totalCount > ITEMS_PER_PAGE && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onToggleExpand}
-              className="text-xs"
-              data-testid={`button-expand-${isReminders ? 'reminders' : 'tasks'}`}
-            >
-              {isExpanded ? (
-                <>
-                  <ChevronUp className="h-4 w-4 mr-1" />
-                  Back to Summary
-                </>
-              ) : (
-                <>
-                  Show All
-                  <ChevronDown className="h-4 w-4 ml-1" />
-                </>
-              )}
-            </Button>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent className="p-0">
+    <div>
+      {/* Section Header */}
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="font-medium text-sm text-muted-foreground flex items-center gap-2">
+          {icon}
+          {title}
+          <Badge variant="secondary" className="ml-1">
+            {totalCount}
+          </Badge>
+        </h4>
+        {totalCount > ITEMS_PER_PAGE && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onToggleExpand}
+            className="text-xs"
+            data-testid={`button-expand-${isReminders ? 'reminders' : 'tasks'}`}
+          >
+            {isExpanded ? (
+              <>
+                <ChevronUp className="h-4 w-4 mr-1" />
+                Back to Summary
+              </>
+            ) : (
+              <>
+                Show All
+                <ChevronDown className="h-4 w-4 ml-1" />
+              </>
+            )}
+          </Button>
+        )}
+      </div>
+
+      {/* Table Container */}
+      <div className="border rounded-lg">
         {isLoading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -286,27 +318,44 @@ function TasksSection({
         ) : (
           <>
             <div className={isExpanded ? "max-h-[60vh] overflow-y-auto" : ""}>
-              {items.map((item) => (
-                isReminders ? (
-                  <ReminderRow
-                    key={item.id}
-                    reminder={item}
-                    selected={selectedIds.includes(item.id)}
-                    onSelect={(checked) => onSelectItem(item.id, checked)}
-                    onViewClick={() => onViewItem(item)}
-                  />
-                ) : (
-                  <TaskRow
-                    key={item.id}
-                    task={item}
-                    selected={selectedIds.includes(item.id)}
-                    onSelect={(checked) => onSelectItem(item.id, checked)}
-                    onViewClick={() => onViewItem(item)}
-                  />
-                )
-              ))}
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10"></TableHead>
+                    <TableHead>{isReminders ? 'Reminder' : 'Task'}</TableHead>
+                    <TableHead>{isReminders ? 'Status' : 'Priority / Status'}</TableHead>
+                    {!isMobile && <TableHead>Assigned To</TableHead>}
+                    {!isMobile && <TableHead>Due Date</TableHead>}
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {items.map((item) => (
+                    isReminders ? (
+                      <ReminderRow
+                        key={item.id}
+                        reminder={item}
+                        selected={selectedIds.includes(item.id)}
+                        onSelect={(checked) => onSelectItem(item.id, checked)}
+                        onViewClick={() => onViewItem(item)}
+                        isMobile={isMobile}
+                      />
+                    ) : (
+                      <TaskRow
+                        key={item.id}
+                        task={item}
+                        selected={selectedIds.includes(item.id)}
+                        onSelect={(checked) => onSelectItem(item.id, checked)}
+                        onViewClick={() => onViewItem(item)}
+                        isMobile={isMobile}
+                      />
+                    )
+                  ))}
+                </TableBody>
+              </Table>
             </div>
             
+            {/* Pagination */}
             {!isExpanded && totalPages > 1 && (
               <div className="flex items-center justify-between px-4 py-3 border-t">
                 <span className="text-xs text-muted-foreground">
@@ -319,6 +368,7 @@ function TasksSection({
                     onClick={() => onPageChange(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
                     className="h-7 px-2"
+                    data-testid={`button-prev-${isReminders ? 'reminders' : 'tasks'}`}
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
@@ -328,6 +378,7 @@ function TasksSection({
                     onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
                     disabled={currentPage === totalPages}
                     className="h-7 px-2"
+                    data-testid={`button-next-${isReminders ? 'reminders' : 'tasks'}`}
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
@@ -336,8 +387,8 @@ function TasksSection({
             )}
           </>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
@@ -594,7 +645,7 @@ export function TasksWorkspace({
       )}
 
       {/* Tasks Section */}
-      <div className="space-y-4">
+      <div className="space-y-6">
         <TasksSection
           title="Tasks"
           icon={<ClipboardList className="h-4 w-4" />}
@@ -609,6 +660,7 @@ export function TasksWorkspace({
           onViewItem={handleViewTask}
           isLoading={isLoading && !tasksExpanded}
           isReminders={false}
+          isMobile={isMobile}
         />
 
         <TasksSection
@@ -625,6 +677,7 @@ export function TasksWorkspace({
           onViewItem={handleViewTask}
           isLoading={isLoading && !remindersExpanded}
           isReminders={true}
+          isMobile={isMobile}
         />
       </div>
 
