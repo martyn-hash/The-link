@@ -65,11 +65,13 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import type { BookkeepingQueryWithRelations } from "@shared/schema";
 import { QueryBulkImport, type ParsedQuery } from "./QueryBulkImport";
+import { SendToClientDialog } from "./SendToClientDialog";
 
 type QueryStatus = "open" | "answered_by_staff" | "sent_to_client" | "answered_by_client" | "resolved";
 
 interface QueriesTabProps {
   projectId: string;
+  clientId?: string;
 }
 
 const statusColors: Record<QueryStatus, string> = {
@@ -126,7 +128,7 @@ function AmountDisplay({ moneyIn, moneyOut }: { moneyIn?: string | null; moneyOu
   return <span className="text-muted-foreground">-</span>;
 }
 
-export function QueriesTab({ projectId }: QueriesTabProps) {
+export function QueriesTab({ projectId, clientId }: QueriesTabProps) {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [selectedQueries, setSelectedQueries] = useState<string[]>([]);
@@ -134,6 +136,8 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingQuery, setEditingQuery] = useState<BookkeepingQueryWithRelations | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
+  const [sendQueryIds, setSendQueryIds] = useState<string[]>([]);
 
   // Add Query form state
   const [newQueryText, setNewQueryText] = useState("");
@@ -247,24 +251,6 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to update queries.", variant: "destructive" });
-    },
-  });
-
-  const sendToClientMutation = useMutation({
-    mutationFn: async (ids: string[]) => {
-      return apiRequest('POST', '/api/queries/send-to-client', { ids });
-    },
-    onSuccess: (_, ids) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/queries/counts'] });
-      setSelectedQueries([]);
-      toast({ 
-        title: "Queries sent", 
-        description: `${ids.length} queries marked as sent to client.` 
-      });
-    },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to send queries to client.", variant: "destructive" });
     },
   });
 
@@ -382,6 +368,16 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
     } else {
       setSelectedQueries(selectedQueries.filter(qId => qId !== id));
     }
+  };
+
+  const handleOpenSendDialog = (queryIds: string[]) => {
+    setSendQueryIds(queryIds);
+    setIsSendDialogOpen(true);
+  };
+
+  const handleSendDialogSuccess = () => {
+    setSelectedQueries([]);
+    setSendQueryIds([]);
   };
 
   const filteredQueries = queries?.filter(q => {
@@ -588,8 +584,8 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
               <Button 
                 variant="outline" 
                 size="sm"
-                onClick={() => sendToClientMutation.mutate(selectedQueries)}
-                disabled={sendToClientMutation.isPending}
+                onClick={() => handleOpenSendDialog(selectedQueries)}
+                disabled={!clientId}
                 data-testid="button-send-selected"
               >
                 <Send className="w-4 h-4 mr-2" />
@@ -698,8 +694,8 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
                               Edit
                             </DropdownMenuItem>
                             <DropdownMenuItem 
-                              onClick={() => sendToClientMutation.mutate([query.id])}
-                              disabled={query.status === 'sent_to_client' || query.status === 'resolved'}
+                              onClick={() => handleOpenSendDialog([query.id])}
+                              disabled={query.status === 'sent_to_client' || query.status === 'resolved' || !clientId}
                             >
                               <Send className="w-4 h-4 mr-2" />
                               Send to Client
@@ -794,8 +790,8 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
                           Edit
                         </DropdownMenuItem>
                         <DropdownMenuItem 
-                          onClick={() => sendToClientMutation.mutate([query.id])}
-                          disabled={query.status === 'sent_to_client' || query.status === 'resolved'}
+                          onClick={() => handleOpenSendDialog([query.id])}
+                          disabled={query.status === 'sent_to_client' || query.status === 'resolved' || !clientId}
                         >
                           <Send className="w-4 h-4 mr-2" />
                           Send to Client
@@ -976,6 +972,22 @@ export function QueriesTab({ projectId }: QueriesTabProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Send to Client Dialog */}
+      {clientId && (
+        <SendToClientDialog
+          projectId={projectId}
+          clientId={clientId}
+          queries={queries || []}
+          selectedQueryIds={sendQueryIds}
+          isOpen={isSendDialogOpen}
+          onClose={() => {
+            setIsSendDialogOpen(false);
+            setSendQueryIds([]);
+          }}
+          onSuccess={handleSendDialogSuccess}
+        />
+      )}
     </Card>
   );
 }

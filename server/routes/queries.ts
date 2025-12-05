@@ -10,6 +10,7 @@ import {
   updateBookkeepingQuerySchema,
   sendToClientSchema,
 } from "@shared/schema";
+import { sendBookkeepingQueryEmail } from "../emailService";
 
 const paramProjectIdSchema = z.object({
   projectId: z.string().uuid("Invalid project ID format")
@@ -448,15 +449,47 @@ export function registerQueryRoutes(
       // Mark queries as sent to client
       await storage.markQueriesAsSentToClient(queryIds);
 
-      // Get project details for the response
+      // Get project and client details for the email
       const project = await storage.getProject(projectId);
-
+      const client = project ? await storage.getClientById(project.clientId) : null;
+      const sender = await storage.getUser(userId);
+      
+      // Get the queries for the email
+      const queriesForEmail = await Promise.all(
+        queryIds.map(id => storage.getQueryById(id))
+      );
+      const validQueries = queriesForEmail.filter(q => q !== null) as any[];
+      
+      // Send the email notification
+      const responseUrl = `/queries/respond/${token.token}`;
+      const emailSent = await sendBookkeepingQueryEmail(
+        recipientEmail,
+        recipientName || recipientEmail.split('@')[0],
+        client?.name || 'Your Client',
+        project?.description || 'Bookkeeping',
+        responseUrl,
+        validQueries.map(q => ({
+          date: q.date,
+          description: q.description,
+          moneyIn: q.moneyIn,
+          moneyOut: q.moneyOut,
+          hasVat: q.hasVat,
+          ourQuery: q.ourQuery,
+        })),
+        expiresAt,
+        sender?.firstName || undefined
+      );
+      
+      // Return response with email status
+      // Note: Even if email fails, the token is still valid and can be shared manually
       res.json({
         token: token.token,
         tokenId: token.id,
         expiresAt: token.expiresAt,
         queryCount: queryIds.length,
-        responseUrl: `/queries/respond/${token.token}`,
+        responseUrl,
+        emailSent,
+        emailWarning: !emailSent ? 'Email could not be sent. You can share the link manually.' : undefined,
         project: project ? { id: project.id, description: project.description } : null,
       });
     } catch (error) {

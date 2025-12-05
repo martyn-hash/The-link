@@ -56,7 +56,7 @@ export function MessagesModal({
 
           <TabsContent value="queries" className="flex-1 overflow-hidden m-0 p-6">
             {open && activeTab === "queries" && (
-              <QueriesTab projectId={projectId} />
+              <QueriesTab projectId={projectId} clientId={project?.clientId} />
             )}
           </TabsContent>
           

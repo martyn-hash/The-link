@@ -1131,3 +1131,166 @@ Your workflow management partner
     html,
   });
 }
+
+interface QueryForEmail {
+  date?: string | Date | null;
+  description?: string | null;
+  moneyIn?: string | null;
+  moneyOut?: string | null;
+  hasVat?: boolean | null;
+  ourQuery: string;
+}
+
+export async function sendBookkeepingQueryEmail(
+  recipientEmail: string,
+  recipientName: string,
+  clientName: string,
+  projectDescription: string,
+  responseUrl: string,
+  queries: QueryForEmail[],
+  expiresAt: Date,
+  senderName?: string
+): Promise<boolean> {
+  const productionUrl = 'https://flow.growth.accountants';
+  const logoUrl = `${productionUrl}/attached_assets/full_logo_transparent_600_1761924125378.png`;
+  const fullResponseUrl = `${productionUrl}${responseUrl}`;
+  
+  const expiryText = expiresAt.toLocaleDateString('en-GB', { 
+    weekday: 'long', 
+    day: 'numeric', 
+    month: 'long', 
+    year: 'numeric' 
+  });
+  
+  const subject = `Bookkeeping Queries - ${clientName} - Action Required`;
+  
+  const formatCurrency = (amount: string | null | undefined): string => {
+    if (!amount) return '';
+    const num = parseFloat(amount);
+    if (isNaN(num)) return '';
+    return new Intl.NumberFormat('en-GB', {
+      style: 'currency',
+      currency: 'GBP',
+    }).format(num);
+  };
+  
+  const formatDate = (date: string | Date | null | undefined): string => {
+    if (!date) return '-';
+    const d = typeof date === 'string' ? new Date(date) : date;
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+  };
+  
+  const queryRows = queries.map((q, i) => `
+    <tr style="border-bottom: 1px solid #e5e7eb;">
+      <td style="padding: 12px 8px; color: #374151; font-size: 14px;">${formatDate(q.date)}</td>
+      <td style="padding: 12px 8px; color: #374151; font-size: 14px;">${q.description || '-'}</td>
+      <td style="padding: 12px 8px; color: #374151; font-size: 14px; white-space: nowrap;">
+        ${q.moneyIn ? `<span style="color: #16a34a;">+${formatCurrency(q.moneyIn)}</span>` : ''}
+        ${q.moneyOut ? `<span style="color: #dc2626;">-${formatCurrency(q.moneyOut)}</span>` : ''}
+        ${!q.moneyIn && !q.moneyOut ? '-' : ''}
+      </td>
+      <td style="padding: 12px 8px; color: #374151; font-size: 14px;">${q.ourQuery}</td>
+    </tr>
+  `).join('');
+  
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; margin: 0; padding: 0; background-color: #f8fafc;">
+      <div style="max-width: 700px; margin: 0 auto; background-color: #ffffff;">
+        <div style="background-color: #ffffff; padding: 30px 20px; text-align: center; border-bottom: 1px solid #e5e7eb;">
+          <img src="${logoUrl}" alt="Growth Accountants" style="max-width: 120px; height: auto; margin-bottom: 10px;" />
+          <h1 style="color: #1e293b; margin: 0; font-size: 20px;">The Link</h1>
+        </div>
+        <div style="padding: 40px 30px;">
+          <h2 style="color: #1e293b; margin-top: 0;">📋 Bookkeeping Queries</h2>
+          <p style="color: #475569; font-size: 16px;">Hello ${recipientName},</p>
+          <p style="color: #475569; font-size: 16px;">
+            We have some questions about transactions in your accounts for <strong>${clientName}</strong>.
+            Please review and respond to help us complete your bookkeeping.
+          </p>
+          
+          <div style="background-color: #f0f9ff; padding: 20px; border-radius: 12px; margin: 25px 0; border: 2px solid #e0f2fe;">
+            <h3 style="margin-top: 0; color: #0A7BBF; font-size: 16px; margin-bottom: 15px;">Project: ${projectDescription}</h3>
+            <p style="margin: 0; color: #374151;"><strong>${queries.length}</strong> ${queries.length === 1 ? 'query' : 'queries'} requiring your response</p>
+          </div>
+          
+          ${queries.length <= 5 ? `
+          <div style="margin: 25px 0; overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; min-width: 500px;">
+              <thead>
+                <tr style="background-color: #f8fafc;">
+                  <th style="padding: 12px 8px; text-align: left; color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase;">Date</th>
+                  <th style="padding: 12px 8px; text-align: left; color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase;">Description</th>
+                  <th style="padding: 12px 8px; text-align: left; color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase;">Amount</th>
+                  <th style="padding: 12px 8px; text-align: left; color: #64748b; font-size: 12px; font-weight: 600; text-transform: uppercase;">Query</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${queryRows}
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+          
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${fullResponseUrl}" 
+               style="display: inline-block; background: linear-gradient(135deg, #0A7BBF 0%, #0869A3 100%); color: white; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(10, 123, 191, 0.3);">
+              ✏️ Respond to Queries
+            </a>
+          </div>
+          
+          <div style="background-color: #fef3c7; padding: 20px; border-radius: 8px; margin: 25px 0; border-left: 4px solid #f59e0b;">
+            <p style="margin: 0; color: #92400e; font-size: 15px; line-height: 1.4;">
+              <strong>⏰ Please respond by:</strong> ${expiryText}<br>
+              <span style="font-size: 14px;">The link will expire after this date.</span>
+            </p>
+          </div>
+          
+          <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+            If you have any questions, please contact ${senderName || 'your accountant'} directly.
+          </p>
+        </div>
+        <div style="background-color: #f1f5f9; padding: 30px; text-align: center; color: #64748b; font-size: 14px;">
+          <p style="margin: 0 0 10px 0;">
+            <strong style="color: #0A7BBF;">The Link</strong> by Growth Accountants
+          </p>
+          <p style="margin: 0; font-size: 13px;">
+            Your workflow management partner
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  const text = `
+Hello ${recipientName},
+
+We have some questions about transactions in your accounts for ${clientName}.
+Please review and respond to help us complete your bookkeeping.
+
+Project: ${projectDescription}
+${queries.length} ${queries.length === 1 ? 'query' : 'queries'} requiring your response
+
+Click here to respond: ${fullResponseUrl}
+
+Please respond by: ${expiryText}
+
+If you have any questions, please contact ${senderName || 'your accountant'} directly.
+
+---
+The Link by Growth Accountants
+Your workflow management partner
+  `;
+
+  return await sendEmail({
+    to: recipientEmail,
+    subject,
+    text,
+    html,
+  });
+}
