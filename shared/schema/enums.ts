@@ -90,11 +90,3 @@ export const serviceClientTypeEnum = pgEnum("service_client_type", [
   "individual", 
   "both"
 ]);
-
-export const bookkeepingQueryStatusEnum = pgEnum("bookkeeping_query_status", [
-  "open",
-  "answered_by_staff",
-  "sent_to_client",
-  "answered_by_client",
-  "resolved"
-]);
