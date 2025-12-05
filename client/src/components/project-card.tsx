@@ -499,16 +499,41 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
           className="absolute top-1.5 left-1.5 z-10 flex flex-wrap gap-px max-w-[65%]"
           data-testid={`priority-indicators-${project.id}`}
         >
-          {project.priorityServiceIndicators.map((serviceName, index) => (
-            <span
-              key={`${project.id}-indicator-${index}`}
-              className="inline-flex items-center px-1 py-px rounded text-[8px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
-              title={`Client has ${serviceName} service`}
-              data-testid={`priority-badge-${project.id}-${index}`}
-            >
-              {serviceName}
-            </span>
-          ))}
+          {project.priorityServiceIndicators.map((indicator, index) => {
+            const indicatorObj = typeof indicator === 'string' 
+              ? { name: indicator, count: 1, dueDate: null } 
+              : indicator;
+            
+            const formatDueDate = (date: Date | string | null | undefined): string => {
+              if (!date) return '';
+              const d = typeof date === 'string' ? new Date(date) : date;
+              const day = d.getDate().toString().padStart(2, '0');
+              const month = (d.getMonth() + 1).toString().padStart(2, '0');
+              return `${day}/${month}`;
+            };
+            
+            const suffix = indicatorObj.count > 1 
+              ? ' - Multiple' 
+              : indicatorObj.dueDate 
+                ? ` - ${formatDueDate(indicatorObj.dueDate)}` 
+                : '';
+            
+            const displayText = `${indicatorObj.name}${suffix}`;
+            const tooltipText = indicatorObj.count > 1 
+              ? `Client has ${indicatorObj.count} active ${indicatorObj.name} projects`
+              : `Client has ${indicatorObj.name} service`;
+            
+            return (
+              <span
+                key={`${project.id}-indicator-${index}`}
+                className="inline-flex items-center px-1 py-px rounded text-[8px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+                title={tooltipText}
+                data-testid={`priority-badge-${project.id}-${index}`}
+              >
+                {displayText}
+              </span>
+            );
+          })}
         </div>
       )}
 
