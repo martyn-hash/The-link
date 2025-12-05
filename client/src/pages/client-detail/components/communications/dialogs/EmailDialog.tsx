@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Mail, Paperclip, Sparkles, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -95,6 +95,21 @@ export function EmailDialog({
   const [aiPrompt, setAiPrompt] = useState("");
   const [isRefining, setIsRefining] = useState(false);
   const [showPromptModal, setShowPromptModal] = useState(false);
+
+  // Sync state from initialValues when props change (needed for async-prepared content like queries)
+  useEffect(() => {
+    if (isOpen && initialValues) {
+      if (initialValues.subject) {
+        setEmailSubject(initialValues.subject);
+      }
+      if (initialValues.content) {
+        setEmailContent(initialValues.content);
+      }
+      if (initialValues.recipientIds && initialValues.recipientIds.length > 0) {
+        setSelectedRecipients(new Set(initialValues.recipientIds));
+      }
+    }
+  }, [isOpen, initialValues?.subject, initialValues?.content, initialValues?.recipientIds]);
   
   // Filter to only show people with email addresses (check primaryEmail first, fallback to email)
   const peopleWithEmail: RecipientInfo[] = (clientPeople || [])
