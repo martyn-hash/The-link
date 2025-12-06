@@ -510,12 +510,14 @@ export function EmailDialog({
               <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col">
                 <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent mb-4">
                   <TabsTrigger 
+                    type="button"
                     value="compose" 
                     className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2"
                   >
                     Compose
                   </TabsTrigger>
                   <TabsTrigger 
+                    type="button"
                     value="scheduling" 
                     disabled={!hasSelectedRecipients}
                     className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
