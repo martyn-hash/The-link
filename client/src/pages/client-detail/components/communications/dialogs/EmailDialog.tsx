@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Mail, Paperclip, Sparkles, Mic, Eye, Edit3, Lock } from "lucide-react";
+import { Mail, Paperclip, Sparkles, Mic, Eye, Edit3, Lock, Clock } from "lucide-react";
+import { ReminderScheduleEditor } from "@/components/reminders/ReminderScheduleEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -77,7 +78,9 @@ export function EmailDialog({
   onClose,
   onSuccess,
   clientCompany,
-  initialValues
+  initialValues,
+  queryEmailOptions,
+  onRemindersConfigured
 }: EmailDialogProps) {
   const { toast } = useToast();
   const [emailSubject, setEmailSubject] = useState<string>(initialValues?.subject || '');
@@ -95,6 +98,10 @@ export function EmailDialog({
   // Check if we're in protected HTML mode
   const hasProtectedHtml = Boolean(initialValues?.protectedHtml);
   const protectedHtml = initialValues?.protectedHtml || '';
+  
+  // Query email mode with reminders
+  const isQueryEmailMode = Boolean(queryEmailOptions);
+  const [reminderSchedule, setReminderSchedule] = useState<import('../types').ReminderScheduleItem[]>([]);
   
   // Multiple recipient selection - initialize with AI-suggested recipients if provided
   const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(
@@ -448,22 +455,29 @@ export function EmailDialog({
           setIsAttachmentsOpen(false);
           setAiPrompt('');
           setShowPromptModal(false);
+          setReminderSchedule([]);
         }
       }}>
-        <DialogContent className="max-w-5xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogContent className={`w-full max-h-[90vh] overflow-hidden flex flex-col ${isQueryEmailMode ? 'max-w-7xl' : 'max-w-5xl'}`}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Mail className="h-5 w-5" />
-              Send Email
+              {isQueryEmailMode ? 'Send Query Email with Reminders' : 'Send Email'}
             </DialogTitle>
             <DialogDescription>
-              Select one or more recipients and compose your email. Fields marked with * are required.
+              {isQueryEmailMode 
+                ? 'Send queries to client with automated follow-up reminders. Fields marked with * are required.'
+                : 'Select one or more recipients and compose your email. Fields marked with * are required.'}
             </DialogDescription>
           </DialogHeader>
           
           <form onSubmit={handleSubmit} className="flex-1 overflow-hidden flex flex-col">
-            {/* Two-Column Layout */}
-            <div className="grid grid-cols-1 md:grid-cols-[280px_1fr] gap-4 flex-1 overflow-y-auto max-h-[60vh]">
+            {/* Dynamic Column Layout: 2 cols for standard, 3 cols for query emails */}
+            <div className={`grid gap-4 flex-1 overflow-y-auto max-h-[60vh] ${
+              isQueryEmailMode 
+                ? 'grid-cols-1 lg:grid-cols-[240px_1fr_280px]' 
+                : 'grid-cols-1 md:grid-cols-[280px_1fr]'
+            }`}>
               {/* Left Column: Recipients & AI */}
               <div className="space-y-4">
                 {/* Recipients Section */}
@@ -722,6 +736,37 @@ export function EmailDialog({
                   </div>
                 )}
               </div>
+
+              {/* Right Column: Reminders (only in query email mode) */}
+              {isQueryEmailMode && queryEmailOptions && (
+                <div className="space-y-4">
+                  <ReminderScheduleEditor
+                    expiryDays={queryEmailOptions.expiryDays}
+                    recipientPhone={queryEmailOptions.recipientPhone}
+                    recipientEmail={selectedRecipients.size > 0 
+                      ? peopleWithEmail.find(p => selectedRecipients.has(p.personId))?.email 
+                      : undefined}
+                    schedule={reminderSchedule}
+                    onScheduleChange={(newSchedule) => {
+                      setReminderSchedule(newSchedule);
+                      onRemindersConfigured?.(newSchedule);
+                    }}
+                    disabled={sendEmailMutation.isPending}
+                  />
+
+                  {/* Info panel about reminders */}
+                  <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      <span className="text-sm font-medium text-blue-900 dark:text-blue-100">Automated Follow-up</span>
+                    </div>
+                    <p className="text-xs text-blue-800 dark:text-blue-200">
+                      {reminderSchedule.filter(r => r.enabled).length} reminder{reminderSchedule.filter(r => r.enabled).length !== 1 ? 's' : ''} will be sent if queries remain unanswered.
+                      Reminders stop automatically when all queries are answered.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Footer */}

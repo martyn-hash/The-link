@@ -114,6 +114,21 @@ export interface SMSDialogProps extends DialogBaseProps {
   };
 }
 
+export interface ReminderScheduleItem {
+  id: string;
+  scheduledAt: string;
+  channel: 'email' | 'sms' | 'voice';
+  enabled: boolean;
+}
+
+export interface QueryEmailOptions {
+  tokenId: string;
+  queryIds: string[];
+  queryCount: number;
+  expiryDays: number;
+  recipientPhone?: string;
+}
+
 export interface EmailDialogProps extends DialogBaseProps {
   clientPeople: PersonOption[];
   user: User | null;
@@ -128,6 +143,10 @@ export interface EmailDialogProps extends DialogBaseProps {
     protectedHtml?: string;
     emailSignoff?: string;
   };
+  /** Query email mode - enables the 3-column layout with reminders */
+  queryEmailOptions?: QueryEmailOptions;
+  /** Callback when reminders are configured */
+  onRemindersConfigured?: (reminders: ReminderScheduleItem[]) => void;
 }
 
 export interface AddCommunicationDialogProps extends DialogBaseProps {
