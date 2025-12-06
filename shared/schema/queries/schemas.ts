@@ -1,6 +1,6 @@
 import { createInsertSchema } from 'drizzle-zod';
 import { z } from 'zod';
-import { bookkeepingQueries, queryResponseTokens } from './tables';
+import { bookkeepingQueries, queryResponseTokens, scheduledQueryReminders } from './tables';
 
 const baseInsertSchema = createInsertSchema(bookkeepingQueries).omit({
   id: true,
@@ -61,4 +61,52 @@ export const sendToClientSchema = z.object({
   sendEmail: z.boolean().default(true),
   emailSubject: z.string().optional(),
   emailMessage: z.string().optional(),
+});
+
+// Scheduled Query Reminder schemas
+const baseReminderInsertSchema = createInsertSchema(scheduledQueryReminders).omit({
+  id: true,
+  createdAt: true,
+  sentAt: true,
+  cancelledAt: true,
+  cancelledById: true,
+  errorMessage: true,
+  dialoraCallId: true,
+});
+
+export const insertScheduledQueryReminderSchema = baseReminderInsertSchema.extend({
+  scheduledAt: z.union([z.string(), z.date()]).transform((val) => {
+    if (val instanceof Date) return val;
+    return new Date(val);
+  }),
+  channel: z.enum(['email', 'sms', 'voice']),
+  status: z.enum(['pending', 'sent', 'failed', 'cancelled', 'skipped']).optional().default('pending'),
+});
+
+export const updateScheduledQueryReminderSchema = z.object({
+  scheduledAt: z.union([z.string(), z.date()]).optional().transform((val) => {
+    if (!val) return undefined;
+    if (val instanceof Date) return val;
+    return new Date(val);
+  }),
+  channel: z.enum(['email', 'sms', 'voice']).optional(),
+  status: z.enum(['pending', 'sent', 'failed', 'cancelled', 'skipped']).optional(),
+  message: z.string().optional(),
+});
+
+// Schema for generating reminder schedule from the UI
+export const reminderScheduleItemSchema = z.object({
+  scheduledAt: z.string(),
+  channel: z.enum(['email', 'sms', 'voice']),
+  enabled: z.boolean().default(true),
+});
+
+export const createRemindersSchema = z.object({
+  tokenId: z.string(),
+  projectId: z.string(),
+  recipientPhone: z.string().optional(),
+  recipientEmail: z.string().email(),
+  recipientName: z.string().optional(),
+  queriesTotal: z.number(),
+  schedule: z.array(reminderScheduleItemSchema),
 });

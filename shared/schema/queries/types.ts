@@ -1,11 +1,15 @@
 import { z } from 'zod';
-import { bookkeepingQueries, queryResponseTokens } from './tables';
+import { bookkeepingQueries, queryResponseTokens, scheduledQueryReminders } from './tables';
 import {
   insertBookkeepingQuerySchema,
   updateBookkeepingQuerySchema,
   bulkCreateQueriesSchema,
   insertQueryResponseTokenSchema,
   sendToClientSchema,
+  insertScheduledQueryReminderSchema,
+  updateScheduledQueryReminderSchema,
+  createRemindersSchema,
+  reminderScheduleItemSchema,
 } from './schemas';
 import type { User } from '../users/types';
 import type { Project } from '../projects/types';
@@ -31,3 +35,22 @@ export type QueryResponseTokenWithRelations = QueryResponseToken & {
   project?: Project;
   queries?: BookkeepingQuery[];
 };
+
+// Scheduled Query Reminder types
+export type ScheduledQueryReminder = typeof scheduledQueryReminders.$inferSelect;
+export type InsertScheduledQueryReminder = z.infer<typeof insertScheduledQueryReminderSchema>;
+export type UpdateScheduledQueryReminder = z.infer<typeof updateScheduledQueryReminderSchema>;
+export type CreateRemindersInput = z.infer<typeof createRemindersSchema>;
+export type ReminderScheduleItem = z.infer<typeof reminderScheduleItemSchema>;
+
+export type ScheduledQueryReminderWithRelations = ScheduledQueryReminder & {
+  token?: QueryResponseToken;
+  project?: Project;
+  cancelledBy?: User;
+};
+
+// Reminder channel type
+export type ReminderChannel = 'email' | 'sms' | 'voice';
+
+// Reminder status type
+export type ReminderStatus = 'pending' | 'sent' | 'failed' | 'cancelled' | 'skipped';

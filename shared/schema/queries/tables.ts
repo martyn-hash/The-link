@@ -1,8 +1,14 @@
-import { pgTable, varchar, text, timestamp, boolean, index, decimal, integer, jsonb } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, text, timestamp, boolean, index, decimal, integer, jsonb, pgEnum } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { users } from '../users/tables';
 import { projects } from '../projects/tables';
 import { queryStatusEnum } from '../enums';
+
+// Reminder channel enum (email, sms, voice)
+export const reminderChannelEnum = pgEnum('reminder_channel', ['email', 'sms', 'voice']);
+
+// Reminder status enum
+export const reminderStatusEnum = pgEnum('reminder_status', ['pending', 'sent', 'failed', 'cancelled', 'skipped']);
 
 export interface QueryAttachment {
   objectPath: string;
@@ -56,4 +62,31 @@ export const queryResponseTokens = pgTable("query_response_tokens", {
   index("idx_query_response_tokens_token").on(table.token),
   index("idx_query_response_tokens_project_id").on(table.projectId),
   index("idx_query_response_tokens_expires_at").on(table.expiresAt),
+]);
+
+// Scheduled reminders for query follow-up (email, SMS, voice)
+export const scheduledQueryReminders = pgTable("scheduled_query_reminders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tokenId: varchar("token_id").notNull().references(() => queryResponseTokens.id, { onDelete: "cascade" }),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  scheduledAt: timestamp("scheduled_at").notNull(),
+  channel: reminderChannelEnum("channel").notNull(),
+  status: reminderStatusEnum("status").notNull().default("pending"),
+  recipientPhone: varchar("recipient_phone", { length: 50 }),
+  recipientEmail: varchar("recipient_email", { length: 255 }),
+  recipientName: varchar("recipient_name", { length: 255 }),
+  message: text("message"),
+  queriesRemaining: integer("queries_remaining"),
+  queriesTotal: integer("queries_total"),
+  sentAt: timestamp("sent_at"),
+  errorMessage: text("error_message"),
+  dialoraCallId: varchar("dialora_call_id", { length: 255 }),
+  cancelledById: varchar("cancelled_by_id").references(() => users.id),
+  cancelledAt: timestamp("cancelled_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_scheduled_query_reminders_token_id").on(table.tokenId),
+  index("idx_scheduled_query_reminders_project_id").on(table.projectId),
+  index("idx_scheduled_query_reminders_scheduled_at").on(table.scheduledAt),
+  index("idx_scheduled_query_reminders_status").on(table.status),
 ]);

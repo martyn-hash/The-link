@@ -1,5 +1,5 @@
 import { relations } from 'drizzle-orm';
-import { bookkeepingQueries, queryResponseTokens } from './tables';
+import { bookkeepingQueries, queryResponseTokens, scheduledQueryReminders } from './tables';
 import { users } from '../users/tables';
 import { projects } from '../projects/tables';
 
@@ -25,7 +25,7 @@ export const bookkeepingQueriesRelations = relations(bookkeepingQueries, ({ one 
   }),
 }));
 
-export const queryResponseTokensRelations = relations(queryResponseTokens, ({ one }) => ({
+export const queryResponseTokensRelations = relations(queryResponseTokens, ({ one, many }) => ({
   project: one(projects, {
     fields: [queryResponseTokens.projectId],
     references: [projects.id],
@@ -34,5 +34,22 @@ export const queryResponseTokensRelations = relations(queryResponseTokens, ({ on
     fields: [queryResponseTokens.createdById],
     references: [users.id],
     relationName: "tokenCreatedBy",
+  }),
+  reminders: many(scheduledQueryReminders),
+}));
+
+export const scheduledQueryRemindersRelations = relations(scheduledQueryReminders, ({ one }) => ({
+  token: one(queryResponseTokens, {
+    fields: [scheduledQueryReminders.tokenId],
+    references: [queryResponseTokens.id],
+  }),
+  project: one(projects, {
+    fields: [scheduledQueryReminders.projectId],
+    references: [projects.id],
+  }),
+  cancelledBy: one(users, {
+    fields: [scheduledQueryReminders.cancelledById],
+    references: [users.id],
+    relationName: "reminderCancelledBy",
   }),
 }));
