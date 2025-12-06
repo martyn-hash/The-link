@@ -1667,6 +1667,26 @@ ${tableHtml}
     }
   });
 
+  // Get unanswered queries for a reminder (for preview)
+  app.get("/api/query-reminders/:id/unanswered-queries", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ message: "Invalid reminder ID", errors: paramValidation.errors });
+      }
+
+      const { id } = req.params;
+      
+      const { getUnansweredQueriesForReminder } = await import('../services/queryReminderService');
+      const queries = await getUnansweredQueriesForReminder(id);
+      
+      res.json(queries);
+    } catch (error) {
+      console.error("Error fetching unanswered queries for reminder:", error);
+      res.status(500).json({ message: "Failed to fetch unanswered queries" });
+    }
+  });
+
   // Update a reminder (reschedule date/time/channel/message/intro/signoff)
   const updateReminderSchema = z.object({
     scheduledAt: z.string().optional(),

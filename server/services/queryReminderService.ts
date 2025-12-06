@@ -46,7 +46,7 @@ interface QueryStatus {
   allAnswered: boolean;
 }
 
-interface QueryForEmail {
+export interface QueryForEmail {
   date: Date | string | null;
   description: string | null;
   moneyIn: string | null;
@@ -150,7 +150,7 @@ export async function getQueryStatusForToken(tokenId: string): Promise<QueryStat
 /**
  * Get unanswered queries for a token (for including in reminder emails)
  */
-async function getUnansweredQueriesForToken(tokenId: string): Promise<QueryForEmail[]> {
+export async function getUnansweredQueriesForToken(tokenId: string): Promise<QueryForEmail[]> {
   try {
     const token = await db
       .select()
@@ -190,6 +190,29 @@ async function getUnansweredQueriesForToken(tokenId: string): Promise<QueryForEm
       }));
   } catch (error) {
     console.error('[QueryReminder] Error fetching unanswered queries:', error);
+    return [];
+  }
+}
+
+/**
+ * Get unanswered queries for a reminder by reminder ID (for preview)
+ * Looks up the reminder to get its tokenId, then fetches unanswered queries
+ */
+export async function getUnansweredQueriesForReminder(reminderId: string): Promise<QueryForEmail[]> {
+  try {
+    const reminder = await db
+      .select({ tokenId: scheduledQueryReminders.tokenId })
+      .from(scheduledQueryReminders)
+      .where(eq(scheduledQueryReminders.id, reminderId))
+      .limit(1);
+
+    if (reminder.length === 0) {
+      return [];
+    }
+
+    return getUnansweredQueriesForToken(reminder[0].tokenId);
+  } catch (error) {
+    console.error('[QueryReminder] Error fetching unanswered queries for reminder:', error);
     return [];
   }
 }
@@ -269,18 +292,16 @@ function generateReminderEmailBody(
   customIntro?: string | null,
   customSignoff?: string | null
 ): string {
-  const defaultGreeting = recipientName ? `Dear ${recipientName}` : 'Hello';
-  const statusText = pendingQueries === totalQueries
-    ? `We have ${pendingQueries} bookkeeping ${pendingQueries === 1 ? 'query' : 'queries'} that ${pendingQueries === 1 ? 'requires' : 'require'} your attention.`
-    : `Thank you for your responses so far. We still have ${pendingQueries} of ${totalQueries} queries remaining that need your input.`;
-
+  const firstName = recipientName?.split(' ')[0] || '';
+  const greeting = firstName ? `Hi ${firstName}` : 'Hello';
+  
   const introHtml = customIntro 
     ? customIntro 
-    : `<p>${defaultGreeting},</p>`;
+    : `<p>${greeting},</p><p>I'm following up about the outstanding bookkeeping queries that still need your response.</p>`;
   
   const signoffHtml = customSignoff 
     ? customSignoff 
-    : `<p style="color: #666; font-size: 14px;">If you have any questions, please don't hesitate to get in touch with us.</p><p>Best regards,<br/>The Link</p>`;
+    : `<p>If you have any questions, please don't hesitate to get in touch with us.</p><p>Kind regards,<br/>The Team</p>`;
 
   const borderColor = '#d0d7de';
   const cellStyle = `border:1px solid ${borderColor}; padding:8px; font-size:13px;`;
@@ -311,13 +332,7 @@ function generateReminderEmailBody(
     <div style="font-family: 'DM Sans', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
       ${introHtml}
       
-      <p>This is a friendly reminder regarding the bookkeeping queries for <strong>${clientName}</strong>.</p>
-      
-      <p>${statusText}</p>
-      
       ${queriesTableHtml}
-      
-      <p>Please click the button below to view and respond to the outstanding queries:</p>
       
       <div style="text-align: center; margin: 30px 0;">
         <a href="${responseLink}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">

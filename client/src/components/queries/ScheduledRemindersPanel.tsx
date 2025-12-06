@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import DOMPurify from 'isomorphic-dompurify';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,27 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TiptapEditor } from '@/components/TiptapEditor';
+
+interface QueryForEmail {
+  date: Date | string | null;
+  description: string | null;
+  moneyIn: string | null;
+  moneyOut: string | null;
+  ourQuery: string | null;
+}
+
+function formatCurrencyForPreview(amount: string | null): string {
+  if (!amount) return '-';
+  const num = parseFloat(amount);
+  if (isNaN(num)) return '-';
+  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(num);
+}
+
+function formatDateForPreview(date: Date | string | null): string {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
 import {
   Table,
   TableBody,
@@ -106,6 +127,21 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
     queryKey: ['/api/projects', projectId, 'query-reminders'],
   });
 
+  const { data: unansweredQueries, isLoading: isLoadingQueries } = useQuery<QueryForEmail[]>({
+    queryKey: ['/api/query-reminders', editingReminder?.id, 'unanswered-queries'],
+    enabled: !!editingReminder && editChannel === 'email',
+  });
+
+  const getDefaultIntroText = useCallback((recipientName: string | null) => {
+    const firstName = recipientName?.split(' ')[0] || '';
+    const greeting = firstName ? `Hi ${firstName}` : 'Hello';
+    return `<p>${greeting},</p><p>I'm following up about the outstanding bookkeeping queries that still need your response.</p>`;
+  }, []);
+
+  const getDefaultSignoffText = useCallback(() => {
+    return `<p>If you have any questions, please don't hesitate to get in touch with us.</p><p>Kind regards,<br/>The Team</p>`;
+  }, []);
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await refetch();
@@ -196,8 +232,10 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
     setEditTime(format(scheduledDate, 'HH:mm'));
     setEditChannel(reminder.channel);
     setEditMessage((reminder as any).message || '');
-    setEditIntro((reminder as any).messageIntro || '');
-    setEditSignoff((reminder as any).messageSignoff || '');
+    const existingIntro = (reminder as any).messageIntro || '';
+    const existingSignoff = (reminder as any).messageSignoff || '';
+    setEditIntro(existingIntro || getDefaultIntroText(reminder.recipientName));
+    setEditSignoff(existingSignoff || getDefaultSignoffText());
     setEditViewMode('edit');
     setEditingReminder(reminder);
   };
@@ -602,7 +640,7 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
 
                 {editViewMode === 'preview' ? (
                   /* Full Preview Mode - matches server-side generateReminderEmailBody */
-                  <ScrollArea className="h-[300px] border rounded-md">
+                  <ScrollArea className="h-[350px] border rounded-md">
                     <div 
                       className="prose prose-sm max-w-none dark:prose-invert"
                       style={{ fontFamily: "'DM Sans', Arial, sans-serif", maxWidth: '600px', margin: '0 auto', padding: '20px' }}
@@ -610,20 +648,39 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
                     >
                       {/* Intro section - custom or default (sanitized for security) */}
                       <div dangerouslySetInnerHTML={{ 
-                        __html: DOMPurify.sanitize(editIntro || `<p>Dear ${editingReminder?.recipientName || 'Client'},</p>`) 
+                        __html: DOMPurify.sanitize(editIntro || getDefaultIntroText(editingReminder?.recipientName || null)) 
                       }} />
                       
-                      {/* Protected reminder content - matches server template */}
-                      <p>This is a friendly reminder regarding the bookkeeping queries for <strong>your account</strong>.</p>
-                      
-                      <p>
-                        {editingReminder?.queriesRemaining === editingReminder?.queriesTotal
-                          ? `We have ${editingReminder?.queriesRemaining || 'outstanding'} bookkeeping ${(editingReminder?.queriesRemaining || 0) === 1 ? 'query' : 'queries'} that ${(editingReminder?.queriesRemaining || 0) === 1 ? 'requires' : 'require'} your attention.`
-                          : `Thank you for your responses so far. We still have ${editingReminder?.queriesRemaining || 0} of ${editingReminder?.queriesTotal || 0} queries remaining that need your input.`
-                        }
-                      </p>
-                      
-                      <p>Please click the button below to view and respond to the outstanding queries:</p>
+                      {/* Outstanding queries table */}
+                      {isLoadingQueries ? (
+                        <div className="py-4 text-center text-muted-foreground">Loading queries...</div>
+                      ) : unansweredQueries && unansweredQueries.length > 0 ? (
+                        <>
+                          <p style={{ marginTop: '24px' }}><strong>Outstanding queries:</strong></p>
+                          <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '13px', margin: '16px 0', border: '1px solid #d0d7de' }}>
+                            <thead>
+                              <tr>
+                                <th style={{ border: '1px solid #d0d7de', padding: '8px', fontWeight: 'bold', backgroundColor: '#f6f8fa', textAlign: 'left', color: '#334155' }}>Date</th>
+                                <th style={{ border: '1px solid #d0d7de', padding: '8px', fontWeight: 'bold', backgroundColor: '#f6f8fa', textAlign: 'left', color: '#334155' }}>Description</th>
+                                <th style={{ border: '1px solid #d0d7de', padding: '8px', fontWeight: 'bold', backgroundColor: '#f6f8fa', textAlign: 'right', color: '#16a34a' }}>Money In</th>
+                                <th style={{ border: '1px solid #d0d7de', padding: '8px', fontWeight: 'bold', backgroundColor: '#f6f8fa', textAlign: 'right', color: '#dc2626' }}>Money Out</th>
+                                <th style={{ border: '1px solid #d0d7de', padding: '8px', fontWeight: 'bold', backgroundColor: '#f6f8fa', textAlign: 'left', color: '#334155' }}>Our Query</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {unansweredQueries.map((q, i) => (
+                                <tr key={i} style={i % 2 === 1 ? { backgroundColor: '#f8fafc' } : undefined}>
+                                  <td style={{ border: '1px solid #d0d7de', padding: '8px', color: '#475569' }}>{formatDateForPreview(q.date)}</td>
+                                  <td style={{ border: '1px solid #d0d7de', padding: '8px', color: '#475569' }}>{q.description || ''}</td>
+                                  <td style={{ border: '1px solid #d0d7de', padding: '8px', textAlign: 'right', color: '#16a34a' }}>{formatCurrencyForPreview(q.moneyIn)}</td>
+                                  <td style={{ border: '1px solid #d0d7de', padding: '8px', textAlign: 'right', color: '#dc2626' }}>{formatCurrencyForPreview(q.moneyOut)}</td>
+                                  <td style={{ border: '1px solid #d0d7de', padding: '8px', color: '#1e293b', fontWeight: 500 }}>{q.ourQuery || ''}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </>
+                      ) : null}
                       
                       <div style={{ textAlign: 'center', margin: '30px 0' }}>
                         <span style={{ 
@@ -641,7 +698,7 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
                       
                       {/* Sign-off section - custom or default (sanitized for security) */}
                       <div dangerouslySetInnerHTML={{ 
-                        __html: DOMPurify.sanitize(editSignoff || `<p style="color: #666; font-size: 14px;">If you have any questions, please don't hesitate to get in touch with us.</p><p>Best regards,<br/>The Link</p>`) 
+                        __html: DOMPurify.sanitize(editSignoff || getDefaultSignoffText()) 
                       }} />
                     </div>
                   </ScrollArea>
@@ -661,23 +718,51 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
                       </div>
                     </div>
 
-                    {/* Protected Section (Read-only preview) */}
+                    {/* Protected Section (Read-only preview) - Queries table and button */}
                     <div className="space-y-1">
                       <div className="flex items-center gap-1">
                         <Lock className="h-3 w-3 text-muted-foreground" />
-                        <Label className="text-xs text-muted-foreground">Reminder Content (Auto-generated)</Label>
+                        <Label className="text-xs text-muted-foreground">Queries Table (Auto-generated)</Label>
                       </div>
-                      <div className="border rounded-md bg-muted/30 overflow-hidden">
+                      <ScrollArea className="h-[180px] border rounded-md bg-muted/30">
                         <div 
                           className="p-3 prose prose-sm max-w-none dark:prose-invert text-muted-foreground"
                           data-testid="protected-reminder-content"
                         >
-                          <p style={{ fontSize: '13px', marginBottom: '8px' }}>
-                            This is a friendly reminder regarding the bookkeeping queries for your account.
-                            {editingReminder?.queriesRemaining && (
-                              <span> You have <strong>{editingReminder.queriesRemaining}</strong> of <strong>{editingReminder.queriesTotal}</strong> queries remaining.</span>
-                            )}
-                          </p>
+                          {isLoadingQueries ? (
+                            <div className="py-4 text-center">Loading queries...</div>
+                          ) : unansweredQueries && unansweredQueries.length > 0 ? (
+                            <>
+                              <p style={{ fontSize: '12px', marginBottom: '8px', fontWeight: 500 }}>Outstanding queries:</p>
+                              <table style={{ borderCollapse: 'collapse', width: '100%', fontSize: '11px', border: '1px solid #d0d7de' }}>
+                                <thead>
+                                  <tr>
+                                    <th style={{ border: '1px solid #d0d7de', padding: '4px 6px', fontWeight: 'bold', backgroundColor: '#f6f8fa', textAlign: 'left' }}>Date</th>
+                                    <th style={{ border: '1px solid #d0d7de', padding: '4px 6px', fontWeight: 'bold', backgroundColor: '#f6f8fa', textAlign: 'left' }}>Description</th>
+                                    <th style={{ border: '1px solid #d0d7de', padding: '4px 6px', fontWeight: 'bold', backgroundColor: '#f6f8fa', textAlign: 'right' }}>In</th>
+                                    <th style={{ border: '1px solid #d0d7de', padding: '4px 6px', fontWeight: 'bold', backgroundColor: '#f6f8fa', textAlign: 'right' }}>Out</th>
+                                    <th style={{ border: '1px solid #d0d7de', padding: '4px 6px', fontWeight: 'bold', backgroundColor: '#f6f8fa', textAlign: 'left' }}>Query</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {unansweredQueries.slice(0, 5).map((q, i) => (
+                                    <tr key={i} style={i % 2 === 1 ? { backgroundColor: '#f8fafc' } : undefined}>
+                                      <td style={{ border: '1px solid #d0d7de', padding: '4px 6px' }}>{formatDateForPreview(q.date)}</td>
+                                      <td style={{ border: '1px solid #d0d7de', padding: '4px 6px', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.description || ''}</td>
+                                      <td style={{ border: '1px solid #d0d7de', padding: '4px 6px', textAlign: 'right', color: '#16a34a' }}>{formatCurrencyForPreview(q.moneyIn)}</td>
+                                      <td style={{ border: '1px solid #d0d7de', padding: '4px 6px', textAlign: 'right', color: '#dc2626' }}>{formatCurrencyForPreview(q.moneyOut)}</td>
+                                      <td style={{ border: '1px solid #d0d7de', padding: '4px 6px', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.ourQuery || ''}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              {unansweredQueries.length > 5 && (
+                                <p style={{ fontSize: '11px', marginTop: '4px', fontStyle: 'italic' }}>...and {unansweredQueries.length - 5} more queries</p>
+                              )}
+                            </>
+                          ) : (
+                            <p style={{ fontSize: '12px', fontStyle: 'italic' }}>No outstanding queries found</p>
+                          )}
                           <div style={{ textAlign: 'center', marginTop: '12px' }}>
                             <span style={{ 
                               display: 'inline-block', 
@@ -692,7 +777,7 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
                             </span>
                           </div>
                         </div>
-                      </div>
+                      </ScrollArea>
                     </div>
 
                     {/* Sign-off Section (Editable) */}
