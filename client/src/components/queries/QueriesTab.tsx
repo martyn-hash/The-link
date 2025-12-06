@@ -64,6 +64,12 @@ import {
   ChevronRight,
   ExternalLink,
   RefreshCw,
+  Paperclip,
+  FileText,
+  Image,
+  Download,
+  Eye,
+  Users,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -206,6 +212,9 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   const [editQueryStatus, setEditQueryStatus] = useState<QueryStatus>("open");
   const [editQueryResponse, setEditQueryResponse] = useState("");
   const [editQueryComment, setEditQueryComment] = useState("");
+  
+  // View All Responses modal state
+  const [isViewAllOpen, setIsViewAllOpen] = useState(false);
 
   const { data: queries, isLoading } = useQuery<BookkeepingQueryWithRelations[]>({
     queryKey: ['/api/projects', projectId, 'queries'],
@@ -647,6 +656,58 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
             )}
           </CardTitle>
           <div className="flex items-center gap-2">
+            {/* View All Responses button - show when there are any client responses (text or attachments) */}
+            {queries && queries.some(q => q.clientResponse || (q.clientAttachments && (q.clientAttachments as any[]).length > 0) || q.status === 'answered_by_client') && (
+              <>
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => setIsViewAllOpen(true)}
+                  data-testid="button-view-all-responses"
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  View All
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline"
+                  onClick={() => {
+                    const answeredQueries = queries.filter(q => q.status === 'answered_by_client');
+                    if (answeredQueries.length === 0) {
+                      toast({ 
+                        title: "No queries to notify about",
+                        description: "There are no queries waiting for staff review."
+                      });
+                      return;
+                    }
+                    const queryCount = answeredQueries.length;
+                    const subject = `${queryCount} Bookkeeping ${queryCount === 1 ? 'Query' : 'Queries'} Answered${clientName ? ` - ${clientName}` : ''}`;
+                    const content = `
+                      <p>The client has responded to ${queryCount} bookkeeping ${queryCount === 1 ? 'query' : 'queries'}:</p>
+                      <ul style="margin: 12px 0;">
+                        ${answeredQueries.map(q => `
+                          <li style="margin-bottom: 8px;">
+                            <strong>${q.transactionDescription || 'No description'}</strong>
+                            ${q.transactionDate ? ` (${format(new Date(q.transactionDate), "dd MMM yyyy")})` : ''}
+                            <br/>
+                            <em>Query:</em> ${q.queryText}
+                            <br/>
+                            <em>Response:</em> ${q.clientResponse}
+                          </li>
+                        `).join('')}
+                      </ul>
+                      <p>Please review and process these responses.</p>
+                    `.trim();
+                    setEmailInitialValues({ subject, content });
+                    setIsEmailDialogOpen(true);
+                  }}
+                  data-testid="button-notify-assignees"
+                >
+                  <Users className="w-4 h-4 mr-2" />
+                  Notify
+                </Button>
+              </>
+            )}
             <QueryBulkImport 
               onImport={handleBulkImport}
               trigger={
@@ -931,8 +992,8 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => handleEditQuery(query)}>
-                              <Edit className="w-4 h-4 mr-2" />
-                              Edit
+                              <MessageSquare className="w-4 h-4 mr-2" />
+                              Respond
                             </DropdownMenuItem>
                             <DropdownMenuItem 
                               onClick={() => handlePrepareEmail([query.id])}
@@ -1027,8 +1088,8 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => handleEditQuery(query)}>
-                          <Edit className="w-4 h-4 mr-2" />
-                          Edit
+                          <MessageSquare className="w-4 h-4 mr-2" />
+                          Respond
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           onClick={() => handlePrepareEmail([query.id])}
@@ -1207,158 +1268,255 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
         </DialogContent>
       </Dialog>
 
-      {/* Edit Dialog */}
+      {/* Response Dialog - 2 Column Layout */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
           <DialogHeader>
-            <DialogTitle>Edit Query</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="w-5 h-5" />
+              Query Response
+            </DialogTitle>
             <DialogDescription>
-              Update the query details and status.
+              View and manage the query details, client response, and status.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-            {/* Transaction Date */}
-            <div>
-              <label className="text-sm font-medium">Transaction Date</label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal mt-1",
-                      !editQueryDate && "text-muted-foreground"
-                    )}
-                    data-testid="button-edit-date"
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {editQueryDate ? format(editQueryDate, "PPP") : "Select date"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={editQueryDate}
-                    onSelect={setEditQueryDate}
-                    initialFocus
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[65vh] overflow-y-auto pr-2">
+            {/* Left Column - Transaction Details & Query */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Transaction Details</h3>
+              
+              {/* Transaction Info Summary */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Date</span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={cn(
+                          "h-auto py-1 px-2 font-medium",
+                          !editQueryDate && "text-muted-foreground"
+                        )}
+                        data-testid="button-edit-date"
+                      >
+                        <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
+                        {editQueryDate ? format(editQueryDate, "dd MMM yyyy") : "Set date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="end">
+                      <Calendar
+                        mode="single"
+                        selected={editQueryDate}
+                        onSelect={setEditQueryDate}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Description</span>
+                  <span className="text-sm font-medium truncate max-w-[200px]">{editQueryDescription || '-'}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Amount</span>
+                  <AmountDisplay moneyIn={editQueryMoneyIn} moneyOut={editQueryMoneyOut} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">VAT</span>
+                  <Switch
+                    checked={editQueryHasVat}
+                    onCheckedChange={setEditQueryHasVat}
+                    data-testid="switch-edit-has-vat"
                   />
-                </PopoverContent>
-              </Popover>
-            </div>
+                </div>
+              </div>
 
-            {/* Description */}
-            <div>
-              <label className="text-sm font-medium">Description</label>
-              <Input
-                value={editQueryDescription}
-                onChange={(e) => setEditQueryDescription(e.target.value)}
-                placeholder="Transaction description..."
-                className="mt-1"
-                data-testid="input-edit-query-description"
-              />
-            </div>
+              {/* Editable fields in collapsible */}
+              <div className="space-y-3 pt-2">
+                <div>
+                  <label className="text-sm font-medium">Description</label>
+                  <Input
+                    value={editQueryDescription}
+                    onChange={(e) => setEditQueryDescription(e.target.value)}
+                    placeholder="Transaction description..."
+                    className="mt-1"
+                    data-testid="input-edit-query-description"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-sm font-medium">Money In (£)</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editQueryMoneyIn}
+                      onChange={(e) => {
+                        setEditQueryMoneyIn(e.target.value);
+                        if (e.target.value) setEditQueryMoneyOut("");
+                      }}
+                      placeholder="0.00"
+                      className="mt-1"
+                      data-testid="input-edit-money-in"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Money Out (£)</label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={editQueryMoneyOut}
+                      onChange={(e) => {
+                        setEditQueryMoneyOut(e.target.value);
+                        if (e.target.value) setEditQueryMoneyIn("");
+                      }}
+                      placeholder="0.00"
+                      className="mt-1"
+                      data-testid="input-edit-money-out"
+                    />
+                  </div>
+                </div>
+              </div>
 
-            {/* Amount fields */}
-            <div className="grid grid-cols-2 gap-4">
+              {/* Staff Query */}
               <div>
-                <label className="text-sm font-medium">Money In (£)</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={editQueryMoneyIn}
-                  onChange={(e) => {
-                    setEditQueryMoneyIn(e.target.value);
-                    if (e.target.value) setEditQueryMoneyOut("");
-                  }}
-                  placeholder="0.00"
+                <label className="text-sm font-medium flex items-center gap-1.5">
+                  <HelpCircle className="w-3.5 h-3.5" />
+                  Staff Query
+                </label>
+                <Textarea
+                  value={editQueryText}
+                  onChange={(e) => setEditQueryText(e.target.value)}
                   className="mt-1"
-                  data-testid="input-edit-money-in"
+                  rows={3}
+                  data-testid="input-edit-query-text"
                 />
               </div>
+
+              {/* Status */}
               <div>
-                <label className="text-sm font-medium">Money Out (£)</label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={editQueryMoneyOut}
-                  onChange={(e) => {
-                    setEditQueryMoneyOut(e.target.value);
-                    if (e.target.value) setEditQueryMoneyIn("");
-                  }}
-                  placeholder="0.00"
-                  className="mt-1"
-                  data-testid="input-edit-money-out"
+                <label className="text-sm font-medium">Status</label>
+                <Select value={editQueryStatus} onValueChange={(val) => setEditQueryStatus(val as QueryStatus)}>
+                  <SelectTrigger className="mt-1" data-testid="select-edit-status">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="open">Open</SelectItem>
+                    <SelectItem value="answered_by_staff">Staff Answered</SelectItem>
+                    <SelectItem value="sent_to_client">Sent to Client</SelectItem>
+                    <SelectItem value="answered_by_client">Client Answered</SelectItem>
+                    <SelectItem value="resolved">Resolved</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Internal Comment */}
+              <div>
+                <label className="text-sm font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  Internal Notes (staff only)
+                </label>
+                <Textarea
+                  value={editQueryComment}
+                  onChange={(e) => setEditQueryComment(e.target.value)}
+                  placeholder="Private notes for staff reference..."
+                  className="mt-1 border-amber-200 dark:border-amber-800"
+                  rows={3}
+                  data-testid="input-edit-query-comment"
                 />
               </div>
             </div>
 
-            {/* Has VAT toggle */}
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium">Includes VAT</label>
-              <Switch
-                checked={editQueryHasVat}
-                onCheckedChange={setEditQueryHasVat}
-                data-testid="switch-edit-has-vat"
-              />
-            </div>
+            {/* Right Column - Client Response & Attachments */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Client Response</h3>
+              
+              {/* Client Response */}
+              <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                <label className="text-sm font-medium text-green-700 dark:text-green-300 flex items-center gap-1.5 mb-2">
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  Client's Answer
+                </label>
+                <Textarea
+                  value={editQueryResponse}
+                  onChange={(e) => setEditQueryResponse(e.target.value)}
+                  placeholder="Client's response will appear here..."
+                  className="bg-white dark:bg-slate-900 border-green-200 dark:border-green-800"
+                  rows={6}
+                  data-testid="input-edit-query-response"
+                />
+              </div>
 
-            {/* Query */}
-            <div>
-              <label className="text-sm font-medium">Your Query</label>
-              <Textarea
-                value={editQueryText}
-                onChange={(e) => setEditQueryText(e.target.value)}
-                className="mt-1"
-                rows={3}
-                data-testid="input-edit-query-text"
-              />
-            </div>
-
-            {/* Status */}
-            <div>
-              <label className="text-sm font-medium">Status</label>
-              <Select value={editQueryStatus} onValueChange={(val) => setEditQueryStatus(val as QueryStatus)}>
-                <SelectTrigger className="mt-1" data-testid="select-edit-status">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="open">Open</SelectItem>
-                  <SelectItem value="answered_by_staff">Staff Answered</SelectItem>
-                  <SelectItem value="sent_to_client">Sent to Client</SelectItem>
-                  <SelectItem value="answered_by_client">Client Answered</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Client Response */}
-            <div>
-              <label className="text-sm font-medium">Client Response</label>
-              <Textarea
-                value={editQueryResponse}
-                onChange={(e) => setEditQueryResponse(e.target.value)}
-                placeholder="Enter the client's response..."
-                className="mt-1"
-                rows={3}
-                data-testid="input-edit-query-response"
-              />
-            </div>
-
-            {/* Internal Comment */}
-            <div>
-              <label className="text-sm font-medium">Internal Comment (staff only)</label>
-              <Textarea
-                value={editQueryComment}
-                onChange={(e) => setEditQueryComment(e.target.value)}
-                placeholder="Optional notes for staff reference..."
-                className="mt-1"
-                rows={2}
-                data-testid="input-edit-query-comment"
-              />
+              {/* Client Attachments */}
+              <div>
+                <label className="text-sm font-medium flex items-center gap-1.5 mb-2">
+                  <Paperclip className="w-3.5 h-3.5" />
+                  Client Attachments
+                  {editingQuery?.clientAttachments && (editingQuery.clientAttachments as any[]).length > 0 && (
+                    <Badge variant="secondary" className="ml-1">
+                      {(editingQuery.clientAttachments as any[]).length}
+                    </Badge>
+                  )}
+                </label>
+                {editingQuery?.clientAttachments && (editingQuery.clientAttachments as any[]).length > 0 ? (
+                  <div className="space-y-2">
+                    {(editingQuery.clientAttachments as any[]).map((attachment: any) => (
+                      <div 
+                        key={attachment.objectPath}
+                        className="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                      >
+                        {attachment.fileType?.startsWith('image/') ? (
+                          <Image className="w-5 h-5 text-blue-500" />
+                        ) : (
+                          <FileText className="w-5 h-5 text-orange-500" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{attachment.fileName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {attachment.fileSize < 1024 
+                              ? `${attachment.fileSize} B` 
+                              : attachment.fileSize < 1024 * 1024 
+                                ? `${(attachment.fileSize / 1024).toFixed(1)} KB`
+                                : `${(attachment.fileSize / (1024 * 1024)).toFixed(1)} MB`
+                            }
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              const response = await fetch(`/api/object-storage/download-url?objectPath=${encodeURIComponent(attachment.objectPath)}`);
+                              if (response.ok) {
+                                const { url } = await response.json();
+                                window.open(url, '_blank');
+                              }
+                            } catch (error) {
+                              toast({ title: "Download failed", description: "Could not download the file.", variant: "destructive" });
+                            }
+                          }}
+                          data-testid={`button-download-${attachment.objectPath}`}
+                        >
+                          <Download className="w-4 h-4 mr-1" />
+                          Download
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-6 border-2 border-dashed rounded-lg text-center text-muted-foreground">
+                    <Paperclip className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No attachments from client</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-          <DialogFooter>
+
+          <DialogFooter className="mt-4 pt-4 border-t">
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               Cancel
             </Button>
@@ -1461,6 +1619,153 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
           initialValues={emailInitialValues}
         />
       )}
+
+      {/* View All Responses Modal */}
+      <Dialog open={isViewAllOpen} onOpenChange={setIsViewAllOpen}>
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="w-5 h-5" />
+              All Query Responses
+            </DialogTitle>
+            <DialogDescription>
+              Overview of all queries with client responses for this project.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="overflow-y-auto max-h-[70vh] space-y-4 pr-2">
+            {queries?.filter(q => q.clientResponse || (q.clientAttachments && (q.clientAttachments as any[]).length > 0) || q.status === 'answered_by_client').length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>No client responses yet</p>
+              </div>
+            ) : (
+              queries?.filter(q => q.clientResponse || (q.clientAttachments && (q.clientAttachments as any[]).length > 0) || q.status === 'answered_by_client').map((query, index) => (
+                <div 
+                  key={query.id} 
+                  className="p-4 border rounded-lg bg-white dark:bg-slate-900 space-y-3"
+                >
+                  {/* Query Header */}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-sm font-semibold text-muted-foreground">Query {index + 1}</span>
+                        <QueryStatusBadge status={query.status as QueryStatus} />
+                      </div>
+                      {/* Transaction details */}
+                      <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mb-2">
+                        {query.transactionDate && (
+                          <span className="flex items-center gap-1">
+                            <CalendarIcon className="w-3.5 h-3.5" />
+                            {format(new Date(query.transactionDate), "dd MMM yyyy")}
+                          </span>
+                        )}
+                        {query.transactionDescription && (
+                          <span className="font-medium text-foreground">{query.transactionDescription}</span>
+                        )}
+                        <AmountDisplay moneyIn={query.moneyIn} moneyOut={query.moneyOut} />
+                        {query.hasVat && (
+                          <Badge variant="outline" className="text-xs">VAT</Badge>
+                        )}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        handleEditQuery(query);
+                        setIsViewAllOpen(false);
+                      }}
+                      data-testid={`button-respond-${query.id}`}
+                    >
+                      <MessageSquare className="w-4 h-4 mr-1" />
+                      Respond
+                    </Button>
+                  </div>
+                  
+                  {/* Staff Query */}
+                  <div className="p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                    <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1 block">
+                      Staff Query
+                    </span>
+                    <p className="text-sm">{query.queryText}</p>
+                  </div>
+                  
+                  {/* Client Response */}
+                  <div className="p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                    <span className="text-xs font-medium text-green-700 dark:text-green-300 uppercase tracking-wide mb-1 block">
+                      Client Response
+                    </span>
+                    {query.clientResponse ? (
+                      <p className="text-sm text-green-900 dark:text-green-100">{query.clientResponse}</p>
+                    ) : (
+                      <p className="text-sm text-green-700 dark:text-green-400 italic">
+                        {(query.clientAttachments as any[])?.length > 0 
+                          ? "Response provided via attachments below" 
+                          : "No text response provided"}
+                      </p>
+                    )}
+                    
+                    {/* Client Attachments */}
+                    {query.clientAttachments && (query.clientAttachments as any[]).length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-green-200 dark:border-green-800">
+                        <span className="text-xs text-muted-foreground flex items-center gap-1 mb-1">
+                          <Paperclip className="w-3 h-3" />
+                          {(query.clientAttachments as any[]).length} attachment(s)
+                        </span>
+                        <div className="flex flex-wrap gap-2">
+                          {(query.clientAttachments as any[]).map((attachment: any) => (
+                            <Button
+                              key={attachment.objectPath}
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={async () => {
+                                try {
+                                  const response = await fetch(`/api/object-storage/download-url?objectPath=${encodeURIComponent(attachment.objectPath)}`);
+                                  if (response.ok) {
+                                    const { url } = await response.json();
+                                    window.open(url, '_blank');
+                                  }
+                                } catch (error) {
+                                  toast({ title: "Download failed", variant: "destructive" });
+                                }
+                              }}
+                            >
+                              {attachment.fileType?.startsWith('image/') ? (
+                                <Image className="w-3 h-3 mr-1" />
+                              ) : (
+                                <FileText className="w-3 h-3 mr-1" />
+                              )}
+                              {attachment.fileName}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Internal Comment (if any) */}
+                  {query.internalComment && (
+                    <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                      <span className="text-xs font-medium text-amber-700 dark:text-amber-300 uppercase tracking-wide mb-1 block">
+                        Internal Notes
+                      </span>
+                      <p className="text-sm text-amber-900 dark:text-amber-100">{query.internalComment}</p>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+          
+          <DialogFooter className="mt-4 pt-4 border-t">
+            <Button variant="outline" onClick={() => setIsViewAllOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

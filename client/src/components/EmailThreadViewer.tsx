@@ -155,10 +155,10 @@ export function EmailThreadViewer({ threadId, open, onOpenChange }: EmailThreadV
   const sanitizeAndTruncate = (html: string | null, maxLength: number, isExpanded: boolean): string => {
     if (!html) return '';
     
-    // Sanitize HTML first
+    // Sanitize HTML first - include table tags for proper table rendering
     const sanitized = DOMPurify.sanitize(html, {
-      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'a', 'ul', 'ol', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
-      ALLOWED_ATTR: ['href', 'target', 'rel']
+      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'a', 'ul', 'ol', 'li', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'div', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'caption'],
+      ALLOWED_ATTR: ['href', 'target', 'rel', 'style', 'class', 'colspan', 'rowspan', 'border', 'cellpadding', 'cellspacing', 'align', 'valign', 'width']
     });
     
     // If expanded or content is short, return sanitized HTML
@@ -380,7 +380,7 @@ export function EmailThreadViewer({ threadId, open, onOpenChange }: EmailThreadV
                             </div>
                           </div>
 
-                          <div className="prose prose-sm max-w-none mt-3">
+                          <div className="prose prose-sm max-w-none mt-3 [&_table]:border-collapse [&_table]:w-full [&_td]:border [&_td]:border-gray-300 [&_td]:p-2 [&_th]:border [&_th]:border-gray-300 [&_th]:p-2 [&_th]:bg-gray-100 [&_th]:dark:bg-gray-800 [&_th]:dark:border-gray-600 [&_td]:dark:border-gray-600">
                             <div 
                               className="whitespace-pre-wrap text-sm"
                               data-testid={`text-body-${message.internetMessageId}`}

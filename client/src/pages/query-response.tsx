@@ -118,10 +118,22 @@ export default function QueryResponsePage() {
       setIsSubmitted(true);
     },
     onError: (error: Error) => {
+      // Show a friendly error message
+      const friendlyTitle = "We couldn't submit your responses";
+      let friendlyDescription = error.message;
+      
+      // Make common error messages more user-friendly
+      if (error.message.includes('Invalid response data') || error.message.includes('validation')) {
+        friendlyDescription = "Please check all your answers and try again. If the problem continues, refresh the page.";
+      } else if (error.message.includes('expired')) {
+        friendlyDescription = "This link has expired. Please contact your accountant for a new link.";
+      } else if (error.message.includes('already submitted')) {
+        friendlyDescription = "Your responses have already been submitted. No further action is needed.";
+      }
+      
       toast({
-        title: "Submission failed",
-        description: error.message,
-        variant: "destructive",
+        title: friendlyTitle,
+        description: friendlyDescription,
       });
     },
   });
@@ -360,26 +372,23 @@ export default function QueryResponsePage() {
       if (unansweredQueries.length === 1) {
         const q = unansweredQueries[0];
         toast({
-          title: "One more answer needed",
+          title: "Almost there! One more answer needed",
           description: `Please answer Query ${q.index} (${q.description}) before submitting.`,
-          variant: "destructive",
         });
         // Navigate to the unanswered query
         setCurrentIndex(q.index - 1);
       } else if (unansweredQueries.length <= 3) {
         const queryNumbers = unansweredQueries.map(q => q.index).join(', ');
         toast({
-          title: `${unansweredQueries.length} answers still needed`,
+          title: `${unansweredQueries.length} more answers needed`,
           description: `Please answer Queries ${queryNumbers} before submitting.`,
-          variant: "destructive",
         });
         // Navigate to the first unanswered query
         setCurrentIndex(unansweredQueries[0].index - 1);
       } else {
         toast({
-          title: `${unansweredQueries.length} answers still needed`,
-          description: `Please answer all queries before submitting. Starting with Query ${unansweredQueries[0].index}.`,
-          variant: "destructive",
+          title: `${unansweredQueries.length} more answers needed`,
+          description: `Please answer all queries before submitting. Let's start with Query ${unansweredQueries[0].index}.`,
         });
         setCurrentIndex(unansweredQueries[0].index - 1);
       }

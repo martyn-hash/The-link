@@ -1205,8 +1205,23 @@ ${emailSignoff}`;
 
       const validationResult = clientResponseSchema.safeParse(req.body);
       if (!validationResult.success) {
+        console.error("Client response validation failed:", JSON.stringify(validationResult.error.issues, null, 2));
+        console.error("Request body was:", JSON.stringify(req.body, null, 2));
+        
+        // Provide a friendly error message
+        const issues = validationResult.error.issues;
+        let friendlyMessage = "We couldn't process your responses. ";
+        
+        if (issues.some(i => i.path.includes('queryId'))) {
+          friendlyMessage += "Some responses couldn't be matched to their questions. Please refresh and try again.";
+        } else if (issues.some(i => i.path.includes('responses'))) {
+          friendlyMessage += "Please make sure all your answers are filled in correctly.";
+        } else {
+          friendlyMessage += "Please check your answers and try again.";
+        }
+        
         return res.status(400).json({
-          message: "Invalid response data",
+          message: friendlyMessage,
           errors: validationResult.error.issues
         });
       }
