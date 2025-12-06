@@ -13,7 +13,8 @@
 import cron from 'node-cron';
 import { getDueReminders, processReminder, checkAndCancelRemindersIfComplete } from './services/queryReminderService';
 import { db } from './db';
-import { projectChronology } from '@shared/schema';
+import { projectChronology, scheduledQueryReminders } from '@shared/schema';
+import { eq } from 'drizzle-orm';
 
 let isRunning = false;
 
@@ -24,6 +25,64 @@ function isWithinOperatingHours(): boolean {
   const ukTime = new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' });
   const hour = parseInt(ukTime.split(',')[1].trim().split(':')[0], 10);
   return hour >= 7 && hour < 22;
+}
+
+/**
+ * Check if current day is a weekend (Saturday or Sunday) in UK time
+ */
+function isWeekendInUK(): boolean {
+  const ukDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
+  const dayOfWeek = ukDate.getDay();
+  return dayOfWeek === 0 || dayOfWeek === 6; // Sunday = 0, Saturday = 6
+}
+
+/**
+ * Get the next weekday morning (9am UK time) for rescheduling weekend voice reminders
+ */
+function getNextWeekdayMorning(): Date {
+  const ukNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
+  const dayOfWeek = ukNow.getDay();
+  
+  let daysToAdd = 1;
+  if (dayOfWeek === 6) daysToAdd = 2; // Saturday -> Monday
+  if (dayOfWeek === 0) daysToAdd = 1; // Sunday -> Monday
+  
+  const nextWeekday = new Date(ukNow);
+  nextWeekday.setDate(nextWeekday.getDate() + daysToAdd);
+  nextWeekday.setHours(9, 0, 0, 0); // 9am
+  
+  return nextWeekday;
+}
+
+/**
+ * Reschedule weekend voice reminders to next weekday morning and filter them out
+ * Belt-and-braces protection that both reschedules AND filters
+ */
+async function rescheduleAndFilterWeekendVoiceReminders(reminders: any[]): Promise<any[]> {
+  if (!isWeekendInUK()) {
+    return reminders;
+  }
+  
+  const voiceReminders = reminders.filter(r => r.channel === 'voice');
+  const nonVoiceReminders = reminders.filter(r => r.channel !== 'voice');
+  
+  if (voiceReminders.length > 0) {
+    const nextWeekdayTime = getNextWeekdayMorning();
+    
+    for (const reminder of voiceReminders) {
+      try {
+        await db
+          .update(scheduledQueryReminders)
+          .set({ scheduledAt: nextWeekdayTime })
+          .where(eq(scheduledQueryReminders.id, reminder.id));
+        console.log(`[QueryReminderCron] Rescheduled voice reminder ${reminder.id} to ${nextWeekdayTime.toISOString()} - weekend restriction`);
+      } catch (error) {
+        console.error(`[QueryReminderCron] Failed to reschedule voice reminder ${reminder.id}:`, error);
+      }
+    }
+  }
+  
+  return nonVoiceReminders;
 }
 
 /**
@@ -43,13 +102,20 @@ async function processQueryReminders(): Promise<void> {
   isRunning = true;
 
   try {
-    const dueReminders = await getDueReminders();
+    const allDueReminders = await getDueReminders();
     
-    if (dueReminders.length === 0) {
+    if (allDueReminders.length === 0) {
       return;
     }
 
-    console.log(`[QueryReminderCron] Processing ${dueReminders.length} due reminder(s)`);
+    const dueReminders = await rescheduleAndFilterWeekendVoiceReminders(allDueReminders);
+    
+    if (dueReminders.length === 0) {
+      console.log(`[QueryReminderCron] ${allDueReminders.length} reminder(s) due but all rescheduled (weekend voice restriction)`);
+      return;
+    }
+
+    console.log(`[QueryReminderCron] Processing ${dueReminders.length} due reminder(s)${allDueReminders.length > dueReminders.length ? ` (${allDueReminders.length - dueReminders.length} voice rescheduled for weekend)` : ''}`);
 
     for (const reminder of dueReminders) {
       try {

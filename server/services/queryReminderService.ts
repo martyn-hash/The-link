@@ -42,6 +42,42 @@ interface QueryStatus {
 }
 
 /**
+ * Check if current time is a weekend (Saturday or Sunday) in UK time
+ */
+function isWeekendInUK(): boolean {
+  const ukDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
+  const dayOfWeek = ukDate.getDay();
+  return dayOfWeek === 0 || dayOfWeek === 6; // Sunday = 0, Saturday = 6
+}
+
+/**
+ * Check if current time is evening (after 5pm) in UK time
+ */
+function isEveningInUK(): boolean {
+  const ukTime = new Date().toLocaleString('en-GB', { timeZone: 'Europe/London' });
+  const hour = parseInt(ukTime.split(',')[1].trim().split(':')[0], 10);
+  return hour >= 17; // 5pm or later
+}
+
+/**
+ * Get the next weekday morning (9am UK time) for rescheduling weekend voice reminders
+ */
+function getNextWeekdayMorning(): Date {
+  const ukNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/London' }));
+  const dayOfWeek = ukNow.getDay();
+  
+  let daysToAdd = 1;
+  if (dayOfWeek === 6) daysToAdd = 2; // Saturday -> Monday
+  if (dayOfWeek === 0) daysToAdd = 1; // Sunday -> Monday
+  
+  const nextWeekday = new Date(ukNow);
+  nextWeekday.setDate(nextWeekday.getDate() + daysToAdd);
+  nextWeekday.setHours(9, 0, 0, 0); // 9am
+  
+  return nextWeekday;
+}
+
+/**
  * Format phone number to E.164 international format for VoodooSMS
  */
 function formatPhoneForVoodooSMS(phone: string): string {
@@ -345,6 +381,14 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
     case 'voice':
       if (!reminder.recipientPhone) {
         result = { success: false, error: 'No phone number for voice call' };
+      } else if (isWeekendInUK()) {
+        const nextWeekdayTime = getNextWeekdayMorning();
+        await db
+          .update(scheduledQueryReminders)
+          .set({ scheduledAt: nextWeekdayTime })
+          .where(eq(scheduledQueryReminders.id, reminder.id));
+        console.log(`[QueryReminder] Rescheduling voice call ${reminder.id} to ${nextWeekdayTime.toISOString()} - weekend restriction`);
+        return { success: false, error: 'Rescheduled to next weekday morning (weekend restriction)' };
       } else {
         result = await sendVoiceReminder(
           reminder.recipientPhone,
