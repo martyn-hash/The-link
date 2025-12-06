@@ -126,6 +126,7 @@ export interface QueryEmailOptions {
   queryIds: string[];
   queryCount: number;
   expiryDays: number;
+  expiryDate?: string;
   recipientPhone?: string;
 }
 

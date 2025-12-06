@@ -1,5 +1,18 @@
-import { pgTable, varchar, text, timestamp, boolean, integer, PgColumn } from 'drizzle-orm/pg-core';
+import { pgTable, varchar, text, timestamp, boolean, integer, PgColumn, jsonb } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+
+export interface DialoraOutboundWebhook {
+  id: string;
+  name: string;
+  url: string;
+  messageTemplate: string;
+  active: boolean;
+}
+
+export interface DialoraSettings {
+  inboundWebhookUrl?: string;
+  outboundWebhooks?: DialoraOutboundWebhook[];
+}
 
 export const projectTypes = pgTable("project_types", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -10,5 +23,6 @@ export const projectTypes = pgTable("project_types", {
   notificationsActive: boolean("notifications_active").default(true),
   singleProjectPerClient: boolean("single_project_per_client").default(false),
   order: integer("order").notNull(),
+  dialoraSettings: jsonb("dialora_settings").$type<DialoraSettings>(),
   createdAt: timestamp("created_at").defaultNow(),
 });

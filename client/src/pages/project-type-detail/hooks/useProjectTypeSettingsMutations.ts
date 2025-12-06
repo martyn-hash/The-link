@@ -2,12 +2,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
+import type { DialoraSettings } from "@shared/schema";
 
 interface ProjectTypeSettingsCallbacks {
   onServiceLinkageUpdated?: () => void;
   onNotificationsActiveUpdated?: () => void;
   onActiveStatusUpdated?: () => void;
   onSingleProjectUpdated?: () => void;
+  onDialoraSettingsUpdated?: () => void;
 }
 
 export function useProjectTypeSettingsMutations(
@@ -104,10 +106,31 @@ export function useProjectTypeSettingsMutations(
     },
   });
 
+  const updateDialoraSettingsMutation = useMutation({
+    mutationFn: async (dialoraSettings: DialoraSettings) => {
+      if (!projectTypeId) throw new Error("No project type ID");
+      return await apiRequest("PATCH", `/api/config/project-types/${projectTypeId}`, {
+        dialoraSettings
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Voice AI settings updated successfully",
+      });
+      invalidateProjectType();
+      callbacks.onDialoraSettingsUpdated?.();
+    },
+    onError: (error: any) => {
+      showFriendlyError({ error });
+    },
+  });
+
   return {
     updateProjectTypeServiceLinkageMutation,
     toggleNotificationsActiveMutation,
     updateProjectTypeActiveMutation,
     updateProjectTypeSingleProjectMutation,
+    updateDialoraSettingsMutation,
   };
 }

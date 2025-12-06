@@ -18,14 +18,19 @@ import {
   bookkeepingQueries,
   queryResponseTokens,
   clients,
+  projects,
+  projectTypes,
   type ScheduledQueryReminder,
-  type InsertScheduledQueryReminder
+  type InsertScheduledQueryReminder,
+  type DialoraSettings,
+  type DialoraOutboundWebhook
 } from "@shared/schema";
 import { eq, and, lte, inArray, or } from "drizzle-orm";
 import { getUncachableSendGridClient } from "../lib/sendgrid";
 import { 
   triggerDialoraCall, 
-  generateVoiceCallMessage 
+  generateVoiceCallMessage,
+  DialoraWebhookConfig
 } from "./dialoraService";
 
 interface ReminderSendResult {
@@ -267,6 +272,61 @@ async function sendSMSReminder(
 }
 
 /**
+ * Get Dialora webhook configuration for a project type
+ * Cycles through active webhooks based on reminder count for the token
+ */
+async function getDialoraWebhookConfig(
+  projectId: string,
+  tokenId: string
+): Promise<DialoraWebhookConfig | null> {
+  try {
+    const project = await db
+      .select({ projectTypeId: projects.projectTypeId })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1);
+
+    if (!project[0]?.projectTypeId) return null;
+
+    const projectType = await db
+      .select({ dialoraSettings: projectTypes.dialoraSettings })
+      .from(projectTypes)
+      .where(eq(projectTypes.id, project[0].projectTypeId))
+      .limit(1);
+
+    const settings = projectType[0]?.dialoraSettings as DialoraSettings | null;
+    if (!settings?.outboundWebhooks?.length) return null;
+
+    const activeWebhooks = settings.outboundWebhooks.filter(w => w.active);
+    if (activeWebhooks.length === 0) return null;
+
+    const sentReminders = await db
+      .select({ id: scheduledQueryReminders.id })
+      .from(scheduledQueryReminders)
+      .where(
+        and(
+          eq(scheduledQueryReminders.tokenId, tokenId),
+          eq(scheduledQueryReminders.channel, 'voice'),
+          eq(scheduledQueryReminders.status, 'sent')
+        )
+      );
+
+    const webhookIndex = sentReminders.length % activeWebhooks.length;
+    const selectedWebhook = activeWebhooks[webhookIndex];
+
+    console.log(`[QueryReminder] Using webhook ${webhookIndex + 1}/${activeWebhooks.length}: ${selectedWebhook.name}`);
+
+    return {
+      url: selectedWebhook.url,
+      messageTemplate: selectedWebhook.messageTemplate
+    };
+  } catch (error) {
+    console.error('[QueryReminder] Failed to get dialora config:', error);
+    return null;
+  }
+}
+
+/**
  * Send a voice reminder via Dialora
  */
 async function sendVoiceReminder(
@@ -275,19 +335,24 @@ async function sendVoiceReminder(
   recipientEmail: string,
   clientName: string,
   pendingQueries: number,
-  totalQueries: number
+  totalQueries: number,
+  webhookConfig?: DialoraWebhookConfig | null
 ): Promise<ReminderSendResult> {
   try {
-    const message = generateVoiceCallMessage(recipientName, pendingQueries, totalQueries);
+    const message = webhookConfig?.messageTemplate || 
+      generateVoiceCallMessage(recipientName, pendingQueries, totalQueries);
     
-    const result = await triggerDialoraCall({
-      name: recipientName || 'Client',
-      phone: recipientPhone,
-      email: recipientEmail || '',
-      company: clientName,
-      message,
-      querycount: pendingQueries
-    });
+    const result = await triggerDialoraCall(
+      {
+        name: recipientName || 'Client',
+        phone: recipientPhone,
+        email: recipientEmail || '',
+        company: clientName,
+        message,
+        querycount: pendingQueries
+      },
+      webhookConfig || undefined
+    );
 
     return {
       success: result.success,
@@ -390,13 +455,17 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
         console.log(`[QueryReminder] Rescheduling voice call ${reminder.id} to ${nextWeekdayTime.toISOString()} - weekend restriction`);
         return { success: false, error: 'Rescheduled to next weekday morning (weekend restriction)' };
       } else {
+        const webhookConfig = token[0].projectId 
+          ? await getDialoraWebhookConfig(token[0].projectId, reminder.tokenId)
+          : null;
         result = await sendVoiceReminder(
           reminder.recipientPhone,
           reminder.recipientName || '',
           reminder.recipientEmail || '',
           clientName,
           queryStatus.pendingQueries,
-          queryStatus.totalQueries
+          queryStatus.totalQueries,
+          webhookConfig
         );
       }
       break;

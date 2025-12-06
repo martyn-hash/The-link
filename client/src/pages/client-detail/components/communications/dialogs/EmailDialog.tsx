@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Mail, Paperclip, Sparkles, Mic, Eye, Edit3, Lock, Clock } from "lucide-react";
+import { Mail, Paperclip, Sparkles, Mic, Eye, Edit3, Lock, Clock, Phone, MessageSquare } from "lucide-react";
 import { ReminderScheduleEditor } from "@/components/reminders/ReminderScheduleEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,7 @@ interface RecipientInfo {
   personId: string;
   fullName: string;
   email: string;
+  phone?: string | null;
   role?: string | null;
 }
 
@@ -103,6 +104,10 @@ export function EmailDialog({
   const isQueryEmailMode = Boolean(queryEmailOptions);
   const [reminderSchedule, setReminderSchedule] = useState<import('../types').ReminderScheduleItem[]>([]);
   
+  // Tab state for query email mode (Compose vs Scheduling)
+  const [activeTab, setActiveTab] = useState<'compose' | 'scheduling'>('compose');
+  const [hasVisitedSchedulingTab, setHasVisitedSchedulingTab] = useState(false);
+  
   // Multiple recipient selection - initialize with AI-suggested recipients if provided
   const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(
     new Set(initialValues?.recipientIds || [])
@@ -152,8 +157,34 @@ export function EmailDialog({
       personId: cp.person.id,
       fullName: cp.person.fullName || `${cp.person.firstName || ''} ${cp.person.lastName || ''}`.trim(),
       email: cp.person.primaryEmail || cp.person.email,
+      phone: cp.person.telephone || cp.person.mobile || null,
       role: cp.role || null,
     }));
+  
+  // Calculate channel availability based on selected recipients
+  const getChannelAvailability = useCallback(() => {
+    const selectedPeople = peopleWithEmail.filter(p => selectedRecipients.has(p.personId));
+    const totalSelected = selectedPeople.length;
+    const withPhone = selectedPeople.filter(p => p.phone && p.phone.trim() !== '').length;
+    const withEmail = totalSelected; // All selected have email (filtered above)
+    
+    return {
+      totalSelected,
+      email: { count: withEmail, available: withEmail > 0 },
+      sms: { count: withPhone, available: withPhone > 0 },
+      voice: { count: withPhone, available: withPhone > 0 },
+    };
+  }, [peopleWithEmail, selectedRecipients]);
+  
+  const channelAvailability = getChannelAvailability();
+  
+  // Handle tab change and track scheduling tab visit
+  const handleTabChange = useCallback((value: string) => {
+    setActiveTab(value as 'compose' | 'scheduling');
+    if (value === 'scheduling') {
+      setHasVisitedSchedulingTab(true);
+    }
+  }, []);
 
   // Helper function to extract first name from various formats
   const extractFirstName = (fullName: string): string => {
@@ -456,6 +487,8 @@ export function EmailDialog({
           setAiPrompt('');
           setShowPromptModal(false);
           setReminderSchedule([]);
+          setActiveTab('compose');
+          setHasVisitedSchedulingTab(false);
         }
       }}>
         <DialogContent className={`w-full max-h-[90vh] overflow-hidden flex flex-col ${isQueryEmailMode ? 'max-w-7xl' : 'max-w-5xl'}`}>
@@ -528,6 +561,23 @@ export function EmailDialog({
                                 <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
                                   {formatRole(recipient.role)}
                                 </Badge>
+                              )}
+                              {/* Channel icons */}
+                              {isQueryEmailMode && (
+                                <div className="flex items-center gap-0.5 ml-auto shrink-0">
+                                  <Mail className="h-3 w-3 text-blue-500" title="Email available" />
+                                  {recipient.phone ? (
+                                    <>
+                                      <MessageSquare className="h-3 w-3 text-purple-500" title="SMS available" />
+                                      <Phone className="h-3 w-3 text-green-500" title="Voice available" />
+                                    </>
+                                  ) : (
+                                    <>
+                                      <MessageSquare className="h-3 w-3 text-muted-foreground/30" title="No phone - SMS unavailable" />
+                                      <Phone className="h-3 w-3 text-muted-foreground/30" title="No phone - Voice unavailable" />
+                                    </>
+                                  )}
+                                </div>
                               )}
                             </label>
                           </div>
@@ -746,6 +796,8 @@ export function EmailDialog({
                     recipientEmail={selectedRecipients.size > 0 
                       ? peopleWithEmail.find(p => selectedRecipients.has(p.personId))?.email 
                       : undefined}
+                    channelAvailability={channelAvailability}
+                    expiryDate={queryEmailOptions.expiryDate}
                     schedule={reminderSchedule}
                     onScheduleChange={(newSchedule) => {
                       setReminderSchedule(newSchedule);
@@ -778,6 +830,7 @@ export function EmailDialog({
                 type="submit" 
                 disabled={sendEmailMutation.isPending || !hasSelectedRecipients} 
                 data-testid="button-send-email-dialog"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
               >
                 {sendEmailMutation.isPending 
                   ? 'Sending...' 

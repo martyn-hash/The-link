@@ -720,10 +720,10 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                       <ul style="margin: 12px 0;">
                         ${answeredQueries.map(q => `
                           <li style="margin-bottom: 8px;">
-                            <strong>${q.transactionDescription || 'No description'}</strong>
-                            ${q.transactionDate ? ` (${format(new Date(q.transactionDate), "dd MMM yyyy")})` : ''}
+                            <strong>${q.description || 'No description'}</strong>
+                            ${q.date ? ` (${format(new Date(q.date), "dd MMM yyyy")})` : ''}
                             <br/>
-                            <em>Query:</em> ${q.queryText}
+                            <em>Query:</em> ${q.ourQuery}
                             <br/>
                             <em>Response:</em> ${q.clientResponse}
                           </li>
@@ -1655,6 +1655,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
             queryIds: pendingEmailQueryIds,
             queryCount: pendingEmailQueryIds.length,
             expiryDays: pendingEmailExpiryDays,
+            expiryDate: new Date(Date.now() + pendingEmailExpiryDays * 24 * 60 * 60 * 1000).toISOString(),
           } : undefined}
           onRemindersConfigured={setConfiguredReminders}
         />
@@ -1694,14 +1695,14 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                       </div>
                       {/* Transaction details */}
                       <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mb-2">
-                        {query.transactionDate && (
+                        {query.date && (
                           <span className="flex items-center gap-1">
                             <CalendarIcon className="w-3.5 h-3.5" />
-                            {format(new Date(query.transactionDate), "dd MMM yyyy")}
+                            {format(new Date(query.date), "dd MMM yyyy")}
                           </span>
                         )}
-                        {query.transactionDescription && (
-                          <span className="font-medium text-foreground">{query.transactionDescription}</span>
+                        {query.description && (
+                          <span className="font-medium text-foreground">{query.description}</span>
                         )}
                         <AmountDisplay moneyIn={query.moneyIn} moneyOut={query.moneyOut} />
                         {query.hasVat && (
@@ -1728,7 +1729,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                     <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1 block">
                       Staff Query
                     </span>
-                    <p className="text-sm">{query.queryText}</p>
+                    <p className="text-sm">{query.ourQuery}</p>
                   </div>
                   
                   {/* Client Response */}
@@ -1786,12 +1787,12 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                   </div>
 
                   {/* Internal Comment (if any) */}
-                  {query.internalComment && (
+                  {query.comment && (
                     <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
                       <span className="text-xs font-medium text-amber-700 dark:text-amber-300 uppercase tracking-wide mb-1 block">
                         Internal Notes
                       </span>
-                      <p className="text-sm text-amber-900 dark:text-amber-100">{query.internalComment}</p>
+                      <p className="text-sm text-amber-900 dark:text-amber-100">{query.comment}</p>
                     </div>
                   )}
                 </div>

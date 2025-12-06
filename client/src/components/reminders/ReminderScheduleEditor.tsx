@@ -12,10 +12,19 @@ import { generateReminderSchedule, formatReminderDate, formatReminderTimeOnly } 
 import type { ReminderScheduleItem } from '@/pages/client-detail/components/communications/types';
 import { cn } from '@/lib/utils';
 
+interface ChannelAvailability {
+  totalSelected: number;
+  email: { count: number; available: boolean };
+  sms: { count: number; available: boolean };
+  voice: { count: number; available: boolean };
+}
+
 interface ReminderScheduleEditorProps {
   expiryDays: number;
   recipientPhone?: string;
   recipientEmail?: string;
+  channelAvailability?: ChannelAvailability;
+  expiryDate?: string;
   schedule: ReminderScheduleItem[];
   onScheduleChange: (schedule: ReminderScheduleItem[]) => void;
   disabled?: boolean;
@@ -55,6 +64,8 @@ export function ReminderScheduleEditor({
   expiryDays,
   recipientPhone,
   recipientEmail,
+  channelAvailability,
+  expiryDate,
   schedule,
   onScheduleChange,
   disabled = false,
@@ -68,8 +79,15 @@ export function ReminderScheduleEditor({
     }
   }, [expiryDays, schedule.length, onScheduleChange]);
 
-  const hasPhone = Boolean(recipientPhone);
-  const hasEmail = Boolean(recipientEmail);
+  // Use channel availability if provided AND has selected recipients, otherwise fall back to legacy props
+  // This ensures that when channelAvailability is passed but no recipients are selected yet,
+  // we still use the legacy fallback (which may have recipientEmail/recipientPhone from query options)
+  const useChannelAvailability = channelAvailability && channelAvailability.totalSelected > 0;
+  const hasPhone = useChannelAvailability ? channelAvailability.sms.available : Boolean(recipientPhone);
+  const hasEmail = useChannelAvailability ? channelAvailability.email.available : Boolean(recipientEmail);
+  const totalRecipients = useChannelAvailability ? channelAvailability.totalSelected : (recipientEmail ? 1 : 0);
+  const phoneCount = useChannelAvailability ? channelAvailability.sms.count : (hasPhone ? 1 : 0);
+  const emailCount = useChannelAvailability ? channelAvailability.email.count : (hasEmail ? 1 : 0);
 
   const enabledCount = schedule.filter((r) => r.enabled).length;
 
@@ -195,9 +213,46 @@ export function ReminderScheduleEditor({
 
         <CollapsibleContent>
           <div className="mt-3 space-y-2">
+            {/* Expiry date display (prominent) */}
+            {expiryDate && (
+              <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-md p-2.5">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                  <span className="text-sm font-semibold text-orange-800 dark:text-orange-200">
+                    Link expires: {format(new Date(expiryDate), 'EEEE, d MMMM yyyy')}
+                  </span>
+                </div>
+              </div>
+            )}
+            
+            {/* Channel availability summary */}
+            {totalRecipients > 0 && (
+              <div className="flex items-center gap-3 text-xs bg-muted/50 rounded-md p-2">
+                <span className="text-muted-foreground">Channels:</span>
+                <div className="flex items-center gap-1">
+                  <Mail className="h-3 w-3 text-blue-600" />
+                  <span className={cn(emailCount === totalRecipients ? "text-green-600" : "text-amber-600")}>
+                    {emailCount}/{totalRecipients}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <MessageSquare className="h-3 w-3 text-purple-600" />
+                  <span className={cn(phoneCount === totalRecipients ? "text-green-600" : phoneCount > 0 ? "text-amber-600" : "text-muted-foreground")}>
+                    {phoneCount}/{totalRecipients}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Phone className="h-3 w-3 text-green-600" />
+                  <span className={cn(phoneCount === totalRecipients ? "text-green-600" : phoneCount > 0 ? "text-amber-600" : "text-muted-foreground")}>
+                    {phoneCount}/{totalRecipients}
+                  </span>
+                </div>
+              </div>
+            )}
+            
             {!hasPhone && (
               <p className="text-xs text-amber-600 dark:text-amber-400">
-                No phone number available - SMS and Voice disabled
+                No phone numbers available - SMS and Voice disabled
               </p>
             )}
 

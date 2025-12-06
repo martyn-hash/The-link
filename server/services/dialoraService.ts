@@ -21,7 +21,12 @@ export interface DialoraCallResult {
   error?: string;
 }
 
-const DIALORA_WEBHOOK_URL = 'https://api.dialora.ai/webhooks/agents/webh_ue3l5mxy04ixiwctstmnc5v9/trigger';
+const DEFAULT_DIALORA_WEBHOOK_URL = 'https://api.dialora.ai/webhooks/agents/webh_ue3l5mxy04ixiwctstmnc5v9/trigger';
+
+export interface DialoraWebhookConfig {
+  url: string;
+  messageTemplate?: string;
+}
 
 /**
  * Format phone number to E.164 international format for Dialora API
@@ -63,8 +68,13 @@ export function validatePhoneForVoiceCall(phone: string | null): { isValid: bool
 
 /**
  * Trigger an outbound voice call via Dialora webhook
+ * @param payload - Call payload with recipient and message details
+ * @param webhookConfig - Optional webhook configuration (uses default if not provided)
  */
-export async function triggerDialoraCall(payload: DialoraCallPayload): Promise<DialoraCallResult> {
+export async function triggerDialoraCall(
+  payload: DialoraCallPayload,
+  webhookConfig?: DialoraWebhookConfig
+): Promise<DialoraCallResult> {
   try {
     const formattedPhone = formatPhoneForDialora(payload.phone);
     
@@ -81,9 +91,10 @@ export async function triggerDialoraCall(payload: DialoraCallPayload): Promise<D
       phone: formattedPhone
     };
 
-    console.log(`[Dialora] Triggering outbound call to ${formattedPhone} for ${payload.company}`);
+    const webhookUrl = webhookConfig?.url || DEFAULT_DIALORA_WEBHOOK_URL;
+    console.log(`[Dialora] Triggering outbound call to ${formattedPhone} for ${payload.company} via ${webhookUrl}`);
 
-    const response = await fetch(DIALORA_WEBHOOK_URL, {
+    const response = await fetch(webhookUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

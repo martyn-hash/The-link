@@ -180,7 +180,8 @@ export default function ProjectTypeDetail() {
     updateProjectTypeServiceLinkageMutation, 
     toggleNotificationsActiveMutation, 
     updateProjectTypeActiveMutation, 
-    updateProjectTypeSingleProjectMutation 
+    updateProjectTypeSingleProjectMutation,
+    updateDialoraSettingsMutation,
   } = useProjectTypeSettingsMutations(
     projectTypeId,
     {
@@ -514,6 +515,7 @@ export default function ProjectTypeDetail() {
               selectedServiceId={selectedServiceId}
               setSelectedServiceId={setSelectedServiceId}
               updateProjectTypeServiceLinkageMutation={updateProjectTypeServiceLinkageMutation}
+              updateDialoraSettingsMutation={updateDialoraSettingsMutation}
             />
           </Tabs>
         </div>

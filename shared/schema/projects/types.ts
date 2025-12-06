@@ -15,6 +15,8 @@ import {
   schedulingRunLogs,
   schedulingExceptions,
 } from './tables';
+
+export type { DialoraSettings, DialoraOutboundWebhook } from './base';
 import {
   insertProjectSchema,
   updateProjectSchema,
