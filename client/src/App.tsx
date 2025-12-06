@@ -262,6 +262,7 @@ function AppContent() {
   const { isAuthenticated: isPortalAuthenticated } = usePortalAuth();
   const [location] = useLocation();
   const isPortalRoute = location.startsWith('/portal');
+  const isClientQueryPage = location.startsWith('/queries/respond');
 
   return (
     <>
@@ -270,7 +271,7 @@ function AppContent() {
       <PWAUpdatePrompt />
       {isAuthenticated && <PushNotificationPrompt />}
       {isAuthenticated && <FirstLoginPasswordDialog />}
-      {isAuthenticated && !isPortalRoute && <AIMagicButton />}
+      {isAuthenticated && !isPortalRoute && !isClientQueryPage && <AIMagicButton />}
       {isPortalAuthenticated && <PortalPushNotificationPrompt />}
     </>
   );
