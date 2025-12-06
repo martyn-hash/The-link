@@ -46,6 +46,14 @@ interface QueryStatus {
   allAnswered: boolean;
 }
 
+interface QueryForEmail {
+  date: Date | string | null;
+  description: string | null;
+  moneyIn: string | null;
+  moneyOut: string | null;
+  ourQuery: string | null;
+}
+
 /**
  * Check if current time is a weekend (Saturday or Sunday) in UK time
  */
@@ -140,6 +148,53 @@ export async function getQueryStatusForToken(tokenId: string): Promise<QueryStat
 }
 
 /**
+ * Get unanswered queries for a token (for including in reminder emails)
+ */
+async function getUnansweredQueriesForToken(tokenId: string): Promise<QueryForEmail[]> {
+  try {
+    const token = await db
+      .select()
+      .from(queryResponseTokens)
+      .where(eq(queryResponseTokens.id, tokenId))
+      .limit(1);
+
+    if (token.length === 0) {
+      return [];
+    }
+
+    const queryIds = token[0].queryIds || [];
+    if (queryIds.length === 0) {
+      return [];
+    }
+
+    const queries = await db
+      .select({
+        status: bookkeepingQueries.status,
+        date: bookkeepingQueries.date,
+        description: bookkeepingQueries.description,
+        moneyIn: bookkeepingQueries.moneyIn,
+        moneyOut: bookkeepingQueries.moneyOut,
+        ourQuery: bookkeepingQueries.ourQuery,
+      })
+      .from(bookkeepingQueries)
+      .where(inArray(bookkeepingQueries.id, queryIds));
+
+    return queries
+      .filter(q => q.status !== 'answered_by_client' && q.status !== 'resolved')
+      .map(q => ({
+        date: q.date,
+        description: q.description,
+        moneyIn: q.moneyIn,
+        moneyOut: q.moneyOut,
+        ourQuery: q.ourQuery,
+      }));
+  } catch (error) {
+    console.error('[QueryReminder] Error fetching unanswered queries:', error);
+    return [];
+  }
+}
+
+/**
  * Send an email reminder
  */
 async function sendEmailReminder(
@@ -149,6 +204,7 @@ async function sendEmailReminder(
   pendingQueries: number,
   totalQueries: number,
   responseLink: string,
+  unansweredQueries: QueryForEmail[],
   customIntro?: string | null,
   customSignoff?: string | null
 ): Promise<ReminderSendResult> {
@@ -162,7 +218,7 @@ async function sendEmailReminder(
       ? `Reminder: ${pendingQueries} Bookkeeping ${pendingQueries === 1 ? 'Query' : 'Queries'} Awaiting Your Response`
       : `Reminder: ${pendingQueries} of ${totalQueries} Queries Still Need Your Response`;
 
-    const body = generateReminderEmailBody(recipientName, clientName, pendingQueries, totalQueries, responseLink, customIntro, customSignoff);
+    const body = generateReminderEmailBody(recipientName, clientName, pendingQueries, totalQueries, responseLink, unansweredQueries, customIntro, customSignoff);
 
     await client.send({
       to: recipientEmail,
@@ -182,6 +238,25 @@ async function sendEmailReminder(
 }
 
 /**
+ * Format currency for email display
+ */
+function formatCurrencyForEmail(amount: string | null): string {
+  if (!amount) return '-';
+  const num = parseFloat(amount);
+  if (isNaN(num)) return '-';
+  return new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(num);
+}
+
+/**
+ * Format date for email display
+ */
+function formatDateForEmail(date: Date | string | null): string {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+/**
  * Generate the HTML body for reminder emails
  */
 function generateReminderEmailBody(
@@ -190,6 +265,7 @@ function generateReminderEmailBody(
   pendingQueries: number,
   totalQueries: number,
   responseLink: string,
+  unansweredQueries: QueryForEmail[],
   customIntro?: string | null,
   customSignoff?: string | null
 ): string {
@@ -206,6 +282,31 @@ function generateReminderEmailBody(
     ? customSignoff 
     : `<p style="color: #666; font-size: 14px;">If you have any questions, please don't hesitate to get in touch with us.</p><p>Best regards,<br/>The Link</p>`;
 
+  const borderColor = '#d0d7de';
+  const cellStyle = `border:1px solid ${borderColor}; padding:8px; font-size:13px;`;
+  const headerStyle = `border:1px solid ${borderColor}; padding:8px; font-weight:bold; font-size:13px; background-color:#f6f8fa;`;
+  
+  const queriesTableHtml = unansweredQueries.length > 0 ? `
+<p style="margin-top: 24px;"><strong>Outstanding queries:</strong></p>
+<table border="1" cellpadding="0" cellspacing="0" bordercolor="${borderColor}" style="border-collapse:collapse; mso-table-lspace:0pt; mso-table-rspace:0pt; width:100%; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin:16px 0; border:1px solid ${borderColor};">
+  <tr>
+    <th align="left" style="${headerStyle} color:#334155;">Date</th>
+    <th align="left" style="${headerStyle} color:#334155;">Description</th>
+    <th align="right" style="${headerStyle} color:#16a34a;">Money In</th>
+    <th align="right" style="${headerStyle} color:#dc2626;">Money Out</th>
+    <th align="left" style="${headerStyle} color:#334155;">Our Query</th>
+  </tr>
+  ${unansweredQueries.map((q, i) => `
+  <tr${i % 2 === 1 ? ' style="background-color:#f8fafc;"' : ''}>
+    <td align="left" style="${cellStyle} color:#475569;">${formatDateForEmail(q.date)}</td>
+    <td align="left" style="${cellStyle} color:#475569;">${q.description || ''}</td>
+    <td align="right" style="${cellStyle} color:#16a34a;">${formatCurrencyForEmail(q.moneyIn)}</td>
+    <td align="right" style="${cellStyle} color:#dc2626;">${formatCurrencyForEmail(q.moneyOut)}</td>
+    <td align="left" style="${cellStyle} color:#1e293b; font-weight:500;">${q.ourQuery || ''}</td>
+  </tr>
+  `).join('')}
+</table>` : '';
+
   return `
     <div style="font-family: 'DM Sans', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
       ${introHtml}
@@ -213,6 +314,8 @@ function generateReminderEmailBody(
       <p>This is a friendly reminder regarding the bookkeeping queries for <strong>${clientName}</strong>.</p>
       
       <p>${statusText}</p>
+      
+      ${queriesTableHtml}
       
       <p>Please click the button below to view and respond to the outstanding queries:</p>
       
@@ -427,6 +530,7 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
       if (!reminder.recipientEmail) {
         result = { success: false, error: 'No email address for recipient' };
       } else {
+        const unansweredQueries = await getUnansweredQueriesForToken(reminder.tokenId);
         result = await sendEmailReminder(
           reminder.recipientEmail,
           reminder.recipientName || '',
@@ -434,6 +538,7 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
           queryStatus.pendingQueries,
           queryStatus.totalQueries,
           responseLink,
+          unansweredQueries,
           reminder.messageIntro,
           reminder.messageSignoff
         );

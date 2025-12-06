@@ -11,6 +11,14 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { TiptapEditor } from '@/components/TiptapEditor';
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -354,160 +362,138 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
         )}
       </div>
 
-      {/* Reminders list */}
-      <div className="space-y-2">
-        {reminders
-          .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
-          .map((reminder) => {
-            const ChannelIcon = channelIcons[reminder.channel] || Mail;
-            const statusInfo = statusBadgeVariants[reminder.status] || statusBadgeVariants.pending;
-            const scheduledDate = new Date(reminder.scheduledAt);
-            const isOverdue = reminder.status === 'pending' && isPast(scheduledDate);
+      {/* Reminders table */}
+      <div className="border rounded-lg">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Channel</TableHead>
+              <TableHead>Scheduled</TableHead>
+              <TableHead>Recipient</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {reminders
+              .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
+              .map((reminder) => {
+                const ChannelIcon = channelIcons[reminder.channel] || Mail;
+                const statusInfo = statusBadgeVariants[reminder.status] || statusBadgeVariants.pending;
+                const scheduledDate = new Date(reminder.scheduledAt);
+                const isOverdue = reminder.status === 'pending' && isPast(scheduledDate);
 
-            return (
-              <div
-                key={reminder.id}
-                className={`flex items-center justify-between p-3 rounded-lg border ${
-                  reminder.status === 'pending' 
-                    ? isOverdue 
-                      ? 'bg-yellow-50 dark:bg-yellow-950/20 border-yellow-200 dark:border-yellow-900'
-                      : 'bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-900'
-                    : reminder.status === 'sent'
-                    ? 'bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-900'
-                    : 'bg-muted/30 border-muted'
-                }`}
-                data-testid={`reminder-item-${reminder.id}`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-full ${
-                    reminder.status === 'pending'
-                      ? isOverdue
-                        ? 'bg-yellow-100 dark:bg-yellow-900/40'
-                        : 'bg-blue-100 dark:bg-blue-900/40'
-                      : reminder.status === 'sent'
-                      ? 'bg-green-100 dark:bg-green-900/40'
-                      : 'bg-muted'
-                  }`}>
-                    <ChannelIcon className={`h-4 w-4 ${
-                      reminder.status === 'pending'
-                        ? isOverdue
-                          ? 'text-yellow-600 dark:text-yellow-400'
-                          : 'text-blue-600 dark:text-blue-400'
-                        : reminder.status === 'sent'
-                        ? 'text-green-600 dark:text-green-400'
-                        : 'text-muted-foreground'
-                    }`} />
-                  </div>
-                  
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">
-                        {channelLabels[reminder.channel]}
-                      </span>
-                      <Badge variant={statusInfo.variant} className="text-xs">
-                        {reminder.status === 'pending' && isOverdue ? 'Due' : statusInfo.label}
-                      </Badge>
-                    </div>
+                return (
+                  <TableRow key={reminder.id} data-testid={`row-reminder-${reminder.id}`}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <ChannelIcon className="h-4 w-4 text-muted-foreground" />
+                        <span data-testid={`text-channel-${reminder.id}`}>
+                          {channelLabels[reminder.channel]}
+                        </span>
+                      </div>
+                    </TableCell>
                     
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
-                      <Clock className="h-3 w-3" />
-                      {reminder.status === 'pending' ? (
-                        <>
-                          <span>Scheduled for </span>
-                          <span className="font-medium">
-                            {format(scheduledDate, 'EEE d MMM, HH:mm')}
-                          </span>
-                          <span>({formatDistanceToNow(scheduledDate, { addSuffix: true })})</span>
-                        </>
-                      ) : reminder.status === 'sent' && reminder.sentAt ? (
-                        <>
-                          <span>Sent </span>
-                          <span className="font-medium">
-                            {format(new Date(reminder.sentAt), 'EEE d MMM, HH:mm')}
-                          </span>
-                        </>
-                      ) : reminder.status === 'cancelled' && reminder.cancelledAt ? (
-                        <>
-                          <span>Cancelled </span>
-                          <span>{format(new Date(reminder.cancelledAt), 'EEE d MMM, HH:mm')}</span>
-                        </>
-                      ) : (
-                        <span>{format(scheduledDate, 'EEE d MMM, HH:mm')}</span>
-                      )}
-                    </div>
-
-                    {reminder.recipientName && (
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        To: {reminder.recipientName}
+                    <TableCell>
+                      <div className="text-sm" data-testid={`text-scheduled-${reminder.id}`}>
+                        {reminder.status === 'pending' ? (
+                          <div className="flex flex-col">
+                            <span className="font-medium">{format(scheduledDate, 'EEE d MMM, HH:mm')}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(scheduledDate, { addSuffix: true })}
+                            </span>
+                          </div>
+                        ) : reminder.status === 'sent' && reminder.sentAt ? (
+                          <span>{format(new Date(reminder.sentAt), 'EEE d MMM, HH:mm')}</span>
+                        ) : reminder.status === 'cancelled' && reminder.cancelledAt ? (
+                          <span className="text-muted-foreground">{format(new Date(reminder.cancelledAt), 'EEE d MMM, HH:mm')}</span>
+                        ) : (
+                          <span>{format(scheduledDate, 'EEE d MMM, HH:mm')}</span>
+                        )}
                       </div>
-                    )}
-
-                    {reminder.errorMessage && reminder.status === 'failed' && (
-                      <div className="flex items-center gap-1 text-xs text-destructive mt-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {reminder.errorMessage}
+                    </TableCell>
+                    
+                    <TableCell>
+                      <span className="text-sm" data-testid={`text-recipient-${reminder.id}`}>
+                        {reminder.recipientName || '-'}
+                      </span>
+                    </TableCell>
+                    
+                    <TableCell>
+                      <div className="flex flex-col gap-1">
+                        <Badge variant={statusInfo.variant} className="text-xs w-fit">
+                          {reminder.status === 'pending' && isOverdue ? 'Due' : statusInfo.label}
+                        </Badge>
+                        {reminder.errorMessage && reminder.status === 'failed' && (
+                          <div className="flex items-center gap-1 text-xs text-destructive">
+                            <AlertCircle className="h-3 w-3" />
+                            <span className="line-clamp-1">{reminder.errorMessage}</span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-1">
-                  {reminder.status === 'pending' && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-muted-foreground hover:text-foreground"
-                        onClick={() => handleEditClick(reminder)}
-                        data-testid={`button-edit-reminder-${reminder.id}`}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-muted-foreground hover:text-destructive"
-                            disabled={cancelReminderMutation.isPending}
-                            data-testid={`button-cancel-reminder-${reminder.id}`}
-                          >
-                            <Ban className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Cancel Reminder?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This will cancel the {channelLabels[reminder.channel].toLowerCase()} reminder 
-                              scheduled for {format(scheduledDate, 'EEEE d MMMM at HH:mm')}.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Keep Reminder</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => cancelReminderMutation.mutate(reminder.id)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    </TableCell>
+                    
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {reminder.status === 'pending' && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                              onClick={() => handleEditClick(reminder)}
+                              data-testid={`button-edit-reminder-${reminder.id}`}
                             >
-                              Cancel Reminder
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </>
-                  )}
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                                  disabled={cancelReminderMutation.isPending}
+                                  data-testid={`button-cancel-reminder-${reminder.id}`}
+                                >
+                                  <Ban className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Cancel Reminder?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This will cancel the {channelLabels[reminder.channel].toLowerCase()} reminder 
+                                    scheduled for {format(scheduledDate, 'EEEE d MMMM at HH:mm')}.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Keep Reminder</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={() => cancelReminderMutation.mutate(reminder.id)}
+                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                  >
+                                    Cancel Reminder
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </>
+                        )}
 
-                  {reminder.status === 'sent' && (
-                    <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
-                  )}
+                        {reminder.status === 'sent' && (
+                          <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                        )}
 
-                  {reminder.status === 'cancelled' && (
-                    <XCircle className="h-5 w-5 text-muted-foreground" />
-                  )}
-                </div>
-              </div>
-            );
-          })}
+                        {reminder.status === 'cancelled' && (
+                          <XCircle className="h-5 w-5 text-muted-foreground" />
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+          </TableBody>
+        </Table>
       </div>
 
       {pendingReminders.length > 0 && (
@@ -725,19 +711,49 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
                 )}
               </div>
             ) : (
-              /* SMS/Voice channel: Simple textarea */
-              <div>
-                <Label className="text-sm font-medium">Message Content</Label>
-                <Textarea
-                  value={editMessage}
-                  onChange={(e) => setEditMessage(e.target.value)}
-                  placeholder="Enter the reminder message that will be sent to the client..."
-                  className="mt-1 min-h-[100px]"
-                  data-testid="input-edit-reminder-message"
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  This message will be used for {editChannel === 'sms' ? 'the SMS text' : 'the voice call script'}.
-                </p>
+              /* SMS/Voice channel: Preview and optional custom message */
+              <div className="space-y-3">
+                {/* SMS Message Preview */}
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">Message Preview</Label>
+                  <div className="border rounded-md bg-muted/30 p-3" data-testid="sms-message-preview">
+                    <p className="text-sm">
+                      {(() => {
+                        const firstName = editingReminder?.recipientName?.split(' ')[0] || '';
+                        const namePrefix = firstName ? ` ${firstName}` : '';
+                        const pendingCount = editingReminder?.queriesRemaining || 1;
+                        
+                        if (editMessage && editMessage.trim()) {
+                          return editMessage;
+                        }
+                        
+                        return pendingCount === 1
+                          ? `Hi${namePrefix}, you have 1 bookkeeping query awaiting your response. Please click here to respond: [link]`
+                          : `Hi${namePrefix}, you have ${pendingCount} bookkeeping queries awaiting your response. Please click here to respond: [link]`;
+                      })()}
+                    </p>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {editChannel === 'sms' 
+                      ? 'This is the SMS message that will be sent. The link will be automatically included.'
+                      : 'This is the voice call script that will be read to the client.'}
+                  </p>
+                </div>
+
+                {/* Custom Message Override */}
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium">Custom Message (Optional)</Label>
+                  <Textarea
+                    value={editMessage}
+                    onChange={(e) => setEditMessage(e.target.value)}
+                    placeholder="Leave empty to use the default message above, or enter a custom message..."
+                    className="mt-1 min-h-[80px]"
+                    data-testid="input-edit-reminder-message"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    If left empty, the default message shown above will be used.
+                  </p>
+                </div>
               </div>
             )}
           </div>
