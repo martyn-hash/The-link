@@ -76,6 +76,8 @@ export const scheduledQueryReminders = pgTable("scheduled_query_reminders", {
   recipientEmail: varchar("recipient_email", { length: 255 }),
   recipientName: varchar("recipient_name", { length: 255 }),
   message: text("message"),
+  messageIntro: text("message_intro"),
+  messageSignoff: text("message_signoff"),
   queriesRemaining: integer("queries_remaining"),
   queriesTotal: integer("queries_total"),
   sentAt: timestamp("sent_at"),
