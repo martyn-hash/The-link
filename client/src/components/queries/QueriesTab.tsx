@@ -79,6 +79,7 @@ import { cn } from "@/lib/utils";
 import type { BookkeepingQueryWithRelations, User } from "@shared/schema";
 import { QueryBulkImport, type ParsedQuery } from "./QueryBulkImport";
 import { EmailDialog } from "@/pages/client-detail/components/communications/dialogs/EmailDialog";
+import { ScheduledRemindersPanel } from "./ScheduledRemindersPanel";
 
 type QueryStatus = "open" | "answered_by_staff" | "sent_to_client" | "answered_by_client" | "resolved";
 
@@ -643,12 +644,16 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <CardTitle className="flex items-center gap-2">
-            <HelpCircle className="w-5 h-5" />
-            Bookkeeping Queries
+    <>
+      {/* Scheduled Reminders Panel - show above queries when reminders exist */}
+      <ScheduledRemindersPanel projectId={projectId} />
+      
+      <Card>
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <CardTitle className="flex items-center gap-2">
+              <HelpCircle className="w-5 h-5" />
+              Bookkeeping Queries
             {stats && (
               <span className="text-sm font-normal text-muted-foreground ml-2" data-testid="text-query-count">
                 ({stats.open} open / {stats.total} total)
@@ -1767,5 +1772,6 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
         </DialogContent>
       </Dialog>
     </Card>
+    </>
   );
 }
