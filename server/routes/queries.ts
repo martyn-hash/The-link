@@ -39,12 +39,21 @@ const attachmentSchema = z.object({
   uploadedAt: z.string(),
 });
 
+// More lenient schema for saving - allows missing fields that might come from older data
+const lenientAttachmentSchema = z.object({
+  objectPath: z.string(),
+  fileName: z.string(),
+  fileType: z.string().optional().default('application/octet-stream'),
+  fileSize: z.number().optional().default(0),
+  uploadedAt: z.string().optional().default(() => new Date().toISOString()),
+});
+
 const clientResponseSchema = z.object({
   responses: z.array(z.object({
     queryId: z.string().uuid(),
     clientResponse: z.string().optional(),
     hasVat: z.boolean().optional(),
-    attachments: z.array(attachmentSchema).optional(),
+    attachments: z.array(lenientAttachmentSchema).optional(),
   }))
 });
 
@@ -58,7 +67,7 @@ const uploadUrlRequestSchema = z.object({
 const saveIndividualResponseSchema = z.object({
   clientResponse: z.string().optional(),
   hasVat: z.boolean().nullable().optional(),
-  attachments: z.array(attachmentSchema).optional(),
+  attachments: z.array(lenientAttachmentSchema).optional(),
 });
 
 const paramTokenQueryIdSchema = z.object({
@@ -1110,6 +1119,11 @@ ${emailSignoff}`;
 
       const bodyValidation = saveIndividualResponseSchema.safeParse(req.body);
       if (!bodyValidation.success) {
+        // Log detailed validation errors for debugging
+        console.error("[Query Response] Validation failed for query", queryId);
+        console.error("[Query Response] Request body:", JSON.stringify(req.body, null, 2));
+        console.error("[Query Response] Validation errors:", JSON.stringify(bodyValidation.error.issues, null, 2));
+        
         return res.status(400).json({
           message: "We couldn't save your response. Please check your answer and try again.",
           errors: bodyValidation.error.issues

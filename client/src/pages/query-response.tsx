@@ -192,6 +192,20 @@ export default function QueryResponsePage() {
     };
   }, []);
 
+  // Sanitize attachments to ensure they have all required fields
+  const sanitizeAttachments = (attachments: QueryAttachment[] | null | undefined): QueryAttachment[] => {
+    if (!attachments || !Array.isArray(attachments)) return [];
+    return attachments
+      .filter(a => a && typeof a === 'object' && a.objectPath && a.fileName)
+      .map(a => ({
+        objectPath: a.objectPath,
+        fileName: a.fileName,
+        fileType: a.fileType || 'application/octet-stream',
+        fileSize: typeof a.fileSize === 'number' ? a.fileSize : 0,
+        uploadedAt: a.uploadedAt || new Date().toISOString(),
+      }));
+  };
+
   useEffect(() => {
     if (data?.queries) {
       const initialResponses: Record<string, QueryResponse> = {};
@@ -201,7 +215,7 @@ export default function QueryResponsePage() {
           queryId: q.id,
           clientResponse: q.clientResponse || '',
           hasVat: q.hasVat,
-          attachments: q.clientAttachments || [],
+          attachments: sanitizeAttachments(q.clientAttachments),
         };
         // If there's already a response saved, mark it as saved
         if (q.clientResponse || q.clientAttachments?.length) {
