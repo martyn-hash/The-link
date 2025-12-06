@@ -1125,6 +1125,9 @@ ${emailSignoff}`;
 
       const { clientResponse, hasVat, attachments } = bodyValidation.data;
 
+      // Get current query to check existing state
+      const currentQuery = tokenQueries.find(q => q.id === queryId);
+
       // Build update data - only include fields that were actually sent
       const updateData: any = {};
       
@@ -1138,6 +1141,29 @@ ${emailSignoff}`;
       
       if (attachments !== undefined) {
         updateData.clientAttachments = attachments as QueryAttachment[];
+      }
+
+      // Smart status update logic:
+      // - If client provides a response (non-empty text or attachments), mark as answered_by_client
+      // - If client clears their response (and has no attachments), revert to sent_to_client
+      // Only update status if currently in sent_to_client or answered_by_client state
+      if (currentQuery && ['sent_to_client', 'answered_by_client'].includes(currentQuery.status)) {
+        const hasResponse = (clientResponse !== undefined ? clientResponse.trim() : (currentQuery.clientResponse || '').trim());
+        const hasAttachments = attachments !== undefined 
+          ? (attachments.length > 0)
+          : ((currentQuery.clientAttachments as QueryAttachment[] | null)?.length ?? 0) > 0;
+        
+        if (hasResponse || hasAttachments) {
+          // Client has provided content - mark as answered
+          if (currentQuery.status !== 'answered_by_client') {
+            updateData.status = 'answered_by_client';
+          }
+        } else {
+          // Client has cleared their response - revert to sent
+          if (currentQuery.status !== 'sent_to_client') {
+            updateData.status = 'sent_to_client';
+          }
+        }
       }
 
       // Only update if there's something to update
