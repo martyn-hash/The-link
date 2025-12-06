@@ -179,10 +179,16 @@ export function EmailDialog({
   const channelAvailability = getChannelAvailability();
   
   // Handle tab change and track scheduling tab visit
+  // Use setTimeout to delay the hasVisitedSchedulingTab state change
+  // This prevents the button swap from happening during the same click event cycle,
+  // which was causing auto-form-submission when the type="button" Review Scheduling
+  // button was replaced by the type="submit" Send button
   const handleTabChange = useCallback((value: string) => {
     setActiveTab(value as 'compose' | 'scheduling');
     if (value === 'scheduling') {
-      setHasVisitedSchedulingTab(true);
+      setTimeout(() => {
+        setHasVisitedSchedulingTab(true);
+      }, 0);
     }
   }, []);
 
