@@ -11,6 +11,7 @@ import { seedTaskTypes } from "./seedData";
 import { startNotificationCron } from "./notification-cron";
 import { startSignatureReminderCron } from "./signature-reminder-cron";
 import { startReminderNotificationCron } from "./reminder-notification-cron";
+import { startQueryReminderCron } from "./query-reminder-cron";
 import { runSchemaMigrations } from "./utils/schemaMigrations";
 import fs from "fs";
 import path from "path";
@@ -237,6 +238,10 @@ app.use((req, res, next) => {
     // Setup quick reminder notification cron job
     // Runs every 15 minutes between 07:00-22:00 UK time to send push and email for due reminders
     startReminderNotificationCron();
+    
+    // Setup query reminder cron job
+    // Runs every 5 minutes between 07:00-22:00 UK time to send automated reminders for bookkeeping queries
+    startQueryReminderCron();
     
     // Setup dashboard cache updates
     // Overnight update: Runs at 03:00 UK time (3:00 AM GMT/BST) - Europe/London timezone
