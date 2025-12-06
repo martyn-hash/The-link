@@ -129,6 +129,93 @@ export function registerQueryRoutes(
     }
   });
 
+  // POST /api/projects/:projectId/queries/notify-assignees - Notify project assignees about query status
+  const notifyAssigneesSchema = z.object({
+    userIds: z.array(z.string().uuid()),
+    message: z.string().min(1),
+  });
+
+  app.post("/api/projects/:projectId/queries/notify-assignees", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramProjectIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid path parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      const { projectId } = req.params;
+      const data = notifyAssigneesSchema.parse(req.body);
+
+      // Get project with client info
+      const project = await storage.getProjectById(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Get the query stats for the notification content
+      const stats = await storage.getQueryStatsByProjectId(projectId);
+
+      // Get users to notify
+      const usersToNotify = await Promise.all(
+        data.userIds.map(async (userId) => {
+          return storage.getUser(userId);
+        })
+      );
+
+      const validUsers = usersToNotify.filter(Boolean);
+      if (validUsers.length === 0) {
+        return res.status(400).json({ message: "No valid users to notify" });
+      }
+
+      const { sendEmail } = await import('../emailService');
+
+      let sentCount = 0;
+      const clientName = project.client?.name || 'Unknown Client';
+      const projectTypeName = project.projectType?.name || 'Project';
+      const baseUrl = process.env.PUBLIC_URL ?? (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : '');
+
+      for (const user of validUsers) {
+        if (!user) continue;
+
+        // Send email notification
+        if (user.email) {
+          try {
+            const emailContent = `
+              <h2>Bookkeeping Query Status Update</h2>
+              <p><strong>Client:</strong> ${clientName}</p>
+              <p><strong>Project:</strong> ${projectTypeName}</p>
+              <h3>Current Status</h3>
+              <ul>
+                <li>Open queries: ${stats.open}</li>
+                <li>Sent to client: ${stats.sentToClient}</li>
+                <li>Awaiting staff review: ${stats.answeredByClient}</li>
+                <li>Resolved: ${stats.resolved}</li>
+              </ul>
+              <p>${data.message}</p>
+              <p><a href="${baseUrl}/projects/${projectId}?tab=queries">View Queries</a></p>
+            `;
+
+            await sendEmail({
+              to: user.email,
+              subject: `Query Status Update: ${clientName} - ${projectTypeName}`,
+              html: emailContent,
+            });
+            sentCount++;
+          } catch (emailError) {
+            console.error(`Failed to send email to user ${user.id}:`, emailError);
+          }
+        }
+      }
+
+      res.json({ success: true, notifiedCount: sentCount });
+    } catch (error) {
+      console.error("Error notifying assignees:", error);
+      res.status(500).json({ message: "Failed to notify assignees" });
+    }
+  });
+
   // GET /api/projects/:projectId/queries/count - Get query count for a project
   app.get("/api/projects/:projectId/queries/count", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
@@ -1452,6 +1539,43 @@ ${tableHtml}
     } catch (error) {
       console.error("Error cancelling reminder:", error);
       res.status(500).json({ message: "Failed to cancel reminder" });
+    }
+  });
+
+  // Update a reminder (reschedule date/time/channel)
+  const updateReminderSchema = z.object({
+    scheduledAt: z.string().optional(),
+    channel: z.enum(['email', 'sms', 'voice']).optional(),
+  });
+
+  app.patch("/api/query-reminders/:id", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ message: "Invalid reminder ID", errors: paramValidation.errors });
+      }
+
+      const { id } = req.params;
+      const data = updateReminderSchema.parse(req.body);
+      
+      if (!data.scheduledAt && !data.channel) {
+        return res.status(400).json({ message: "No update fields provided" });
+      }
+
+      const { updateReminder } = await import('../services/queryReminderService');
+      const updated = await updateReminder(id, {
+        scheduledAt: data.scheduledAt ? new Date(data.scheduledAt) : undefined,
+        channel: data.channel,
+      });
+      
+      if (!updated) {
+        return res.status(404).json({ message: "Reminder not found or cannot be updated" });
+      }
+      
+      res.json({ success: true, reminder: updated });
+    } catch (error) {
+      console.error("Error updating reminder:", error);
+      res.status(500).json({ message: "Failed to update reminder" });
     }
   });
 

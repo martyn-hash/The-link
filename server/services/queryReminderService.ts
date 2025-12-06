@@ -623,3 +623,33 @@ export async function cancelReminder(
 
   return result.length > 0;
 }
+
+/**
+ * Update a pending reminder (reschedule date/time or change channel)
+ */
+export async function updateReminder(
+  reminderId: string,
+  updates: { scheduledAt?: Date; channel?: 'email' | 'sms' | 'voice' }
+): Promise<typeof scheduledQueryReminders.$inferSelect | null> {
+  const updateData: Partial<typeof scheduledQueryReminders.$inferInsert> = {};
+  
+  if (updates.scheduledAt) {
+    updateData.scheduledAt = updates.scheduledAt;
+  }
+  if (updates.channel) {
+    updateData.channel = updates.channel;
+  }
+
+  const result = await db
+    .update(scheduledQueryReminders)
+    .set(updateData)
+    .where(
+      and(
+        eq(scheduledQueryReminders.id, reminderId),
+        eq(scheduledQueryReminders.status, 'pending')
+      )
+    )
+    .returning();
+
+  return result[0] || null;
+}

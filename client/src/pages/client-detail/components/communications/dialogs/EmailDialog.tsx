@@ -517,11 +517,13 @@ export function EmailDialog({
                   </TabsTrigger>
                   <TabsTrigger 
                     value="scheduling" 
-                    className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2"
+                    disabled={!hasSelectedRecipients}
+                    className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={!hasSelectedRecipients ? "Select at least one recipient first" : undefined}
                   >
                     <Clock className="h-4 w-4 mr-1.5" />
                     Scheduling
-                    {!hasVisitedSchedulingTab && (
+                    {hasSelectedRecipients && !hasVisitedSchedulingTab && (
                       <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
                         Review
                       </Badge>
@@ -1050,7 +1052,7 @@ export function EmailDialog({
               <Button type="button" variant="outline" onClick={handleClose}>
                 Cancel
               </Button>
-              {isQueryEmailMode && !hasVisitedSchedulingTab ? (
+              {isQueryEmailMode && hasSelectedRecipients && !hasVisitedSchedulingTab ? (
                 <Button 
                   type="button" 
                   onClick={() => setActiveTab('scheduling')}
@@ -1063,7 +1065,7 @@ export function EmailDialog({
               ) : (
                 <Button 
                   type="submit" 
-                  disabled={sendEmailMutation.isPending || !hasSelectedRecipients} 
+                  disabled={sendEmailMutation.isPending || !hasSelectedRecipients || (isQueryEmailMode && !hasVisitedSchedulingTab)} 
                   data-testid="button-send-email-dialog"
                   className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
                 >

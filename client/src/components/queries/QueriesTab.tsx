@@ -221,6 +221,10 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   
   // View All Responses modal state
   const [isViewAllOpen, setIsViewAllOpen] = useState(false);
+  
+  // Notify Assignees dialog state
+  const [isNotifyDialogOpen, setIsNotifyDialogOpen] = useState(false);
+  const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
 
   const { data: queries, isLoading } = useQuery<BookkeepingQueryWithRelations[]>({
     queryKey: ['/api/projects', projectId, 'queries'],
@@ -243,6 +247,19 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   });
   
   const pendingReminderCount = scheduledReminders?.filter(r => r.status === 'pending').length || 0;
+
+  // Query for project assignees (for notify functionality)
+  const { data: projectAssignees } = useQuery<{
+    id: string;
+    projectId: string;
+    userId: string;
+    roleId: string | null;
+    user: { id: string; firstName: string | null; lastName: string | null; email: string };
+    role: { id: string; name: string } | null;
+  }[]>({
+    queryKey: ['/api/projects', projectId, 'assignees'],
+    enabled: isNotifyDialogOpen,
+  });
 
   // Query for active tokens (only fetch when expanded)
   const { data: activeTokens } = useQuery<{
@@ -271,6 +288,23 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to extend link.", variant: "destructive" });
+    },
+  });
+
+  const notifyAssigneesMutation = useMutation({
+    mutationFn: async ({ userIds, message }: { userIds: string[]; message: string }) => {
+      return apiRequest('POST', `/api/projects/${projectId}/queries/notify-assignees`, { userIds, message });
+    },
+    onSuccess: () => {
+      setIsNotifyDialogOpen(false);
+      setSelectedAssignees([]);
+      toast({ 
+        title: "Notifications sent", 
+        description: "Project assignees have been notified about the query status." 
+      });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to send notifications.", variant: "destructive" });
     },
   });
 
@@ -722,56 +756,26 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                   <div className="flex items-center gap-2">
             {/* View All Responses button - show when there are any client responses (text or attachments) */}
             {queries && queries.some(q => q.clientResponse || (q.clientAttachments && (q.clientAttachments as any[]).length > 0) || q.status === 'answered_by_client') && (
-              <>
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  onClick={() => setIsViewAllOpen(true)}
-                  data-testid="button-view-all-responses"
-                >
-                  <Eye className="w-4 h-4 mr-2" />
-                  View All
-                </Button>
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  onClick={() => {
-                    const answeredQueries = queries.filter(q => q.status === 'answered_by_client');
-                    if (answeredQueries.length === 0) {
-                      toast({ 
-                        title: "No queries to notify about",
-                        description: "There are no queries waiting for staff review."
-                      });
-                      return;
-                    }
-                    const queryCount = answeredQueries.length;
-                    const subject = `${queryCount} Bookkeeping ${queryCount === 1 ? 'Query' : 'Queries'} Answered${clientName ? ` - ${clientName}` : ''}`;
-                    const content = `
-                      <p>The client has responded to ${queryCount} bookkeeping ${queryCount === 1 ? 'query' : 'queries'}:</p>
-                      <ul style="margin: 12px 0;">
-                        ${answeredQueries.map(q => `
-                          <li style="margin-bottom: 8px;">
-                            <strong>${q.description || 'No description'}</strong>
-                            ${q.date ? ` (${format(new Date(q.date), "dd MMM yyyy")})` : ''}
-                            <br/>
-                            <em>Query:</em> ${q.ourQuery}
-                            <br/>
-                            <em>Response:</em> ${q.clientResponse}
-                          </li>
-                        `).join('')}
-                      </ul>
-                      <p>Please review and process these responses.</p>
-                    `.trim();
-                    setEmailInitialValues({ subject, content });
-                    setIsEmailDialogOpen(true);
-                  }}
-                  data-testid="button-notify-assignees"
-                >
-                  <Users className="w-4 h-4 mr-2" />
-                  Notify
-                </Button>
-              </>
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => setIsViewAllOpen(true)}
+                data-testid="button-view-all-responses"
+              >
+                <Eye className="w-4 h-4 mr-2" />
+                View All
+              </Button>
             )}
+            {/* Notify Assignees button - always visible */}
+            <Button 
+              size="sm" 
+              variant="outline"
+              onClick={() => setIsNotifyDialogOpen(true)}
+              data-testid="button-notify-assignees"
+            >
+              <Users className="w-4 h-4 mr-2" />
+              Notify
+            </Button>
             <QueryBulkImport 
               onImport={handleBulkImport}
               trigger={
@@ -1849,6 +1853,109 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
           <DialogFooter className="mt-4 pt-4 border-t">
             <Button variant="outline" onClick={() => setIsViewAllOpen(false)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Notify Assignees Dialog */}
+      <Dialog open={isNotifyDialogOpen} onOpenChange={(open) => {
+        setIsNotifyDialogOpen(open);
+        if (!open) setSelectedAssignees([]);
+      }}>
+        <DialogContent className="sm:max-w-lg" data-testid="dialog-notify-assignees">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="w-5 h-5" />
+              Notify Project Assignees
+            </DialogTitle>
+            <DialogDescription>
+              Send a push notification and email to project assignees about the current query status.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4 space-y-4">
+            {/* Query Summary */}
+            <div className="p-3 bg-muted rounded-lg">
+              <h4 className="text-sm font-medium mb-2">Query Status Summary</h4>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Open:</span>
+                  <span className="font-medium">{stats?.open || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Sent to Client:</span>
+                  <span className="font-medium">{stats?.sentToClient || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Awaiting Review:</span>
+                  <span className="font-medium">{stats?.answeredByClient || 0}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Resolved:</span>
+                  <span className="font-medium">{stats?.resolved || 0}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Assignee Selection */}
+            <div>
+              <label className="text-sm font-medium mb-2 block">Select Assignees to Notify</label>
+              {projectAssignees && projectAssignees.length > 0 ? (
+                <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-2">
+                  {projectAssignees.map((assignee) => (
+                    <div 
+                      key={assignee.userId}
+                      className="flex items-center gap-3 p-2 rounded hover:bg-muted cursor-pointer"
+                      onClick={() => {
+                        setSelectedAssignees(prev => 
+                          prev.includes(assignee.userId)
+                            ? prev.filter(id => id !== assignee.userId)
+                            : [...prev, assignee.userId]
+                        );
+                      }}
+                    >
+                      <Checkbox 
+                        checked={selectedAssignees.includes(assignee.userId)}
+                        data-testid={`checkbox-assignee-${assignee.userId}`}
+                      />
+                      <div className="flex-1">
+                        <div className="text-sm font-medium">
+                          {assignee.user.firstName} {assignee.user.lastName}
+                        </div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-2">
+                          <span>{assignee.user.email}</span>
+                          {assignee.role && (
+                            <Badge variant="outline" className="text-xs">
+                              {assignee.role.name}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-4 text-muted-foreground text-sm border rounded-lg">
+                  No project assignees found
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsNotifyDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={() => {
+                const message = `Query status update${clientName ? ` for ${clientName}` : ''}: ${stats?.open || 0} open, ${stats?.answeredByClient || 0} awaiting review, ${stats?.resolved || 0} resolved.`;
+                notifyAssigneesMutation.mutate({ userIds: selectedAssignees, message });
+              }}
+              disabled={selectedAssignees.length === 0 || notifyAssigneesMutation.isPending}
+              data-testid="button-send-notifications"
+            >
+              {notifyAssigneesMutation.isPending ? "Sending..." : `Notify ${selectedAssignees.length > 0 ? `(${selectedAssignees.length})` : ''}`}
             </Button>
           </DialogFooter>
         </DialogContent>
