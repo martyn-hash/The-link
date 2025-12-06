@@ -148,7 +148,9 @@ async function sendEmailReminder(
   clientName: string,
   pendingQueries: number,
   totalQueries: number,
-  responseLink: string
+  responseLink: string,
+  customIntro?: string | null,
+  customSignoff?: string | null
 ): Promise<ReminderSendResult> {
   try {
     const { client, fromEmail } = await getUncachableSendGridClient();
@@ -160,7 +162,7 @@ async function sendEmailReminder(
       ? `Reminder: ${pendingQueries} Bookkeeping ${pendingQueries === 1 ? 'Query' : 'Queries'} Awaiting Your Response`
       : `Reminder: ${pendingQueries} of ${totalQueries} Queries Still Need Your Response`;
 
-    const body = generateReminderEmailBody(recipientName, clientName, pendingQueries, totalQueries, responseLink);
+    const body = generateReminderEmailBody(recipientName, clientName, pendingQueries, totalQueries, responseLink, customIntro, customSignoff);
 
     await client.send({
       to: recipientEmail,
@@ -187,16 +189,26 @@ function generateReminderEmailBody(
   clientName: string,
   pendingQueries: number,
   totalQueries: number,
-  responseLink: string
+  responseLink: string,
+  customIntro?: string | null,
+  customSignoff?: string | null
 ): string {
-  const greeting = recipientName ? `Dear ${recipientName}` : 'Hello';
+  const defaultGreeting = recipientName ? `Dear ${recipientName}` : 'Hello';
   const statusText = pendingQueries === totalQueries
     ? `We have ${pendingQueries} bookkeeping ${pendingQueries === 1 ? 'query' : 'queries'} that ${pendingQueries === 1 ? 'requires' : 'require'} your attention.`
     : `Thank you for your responses so far. We still have ${pendingQueries} of ${totalQueries} queries remaining that need your input.`;
 
+  const introHtml = customIntro 
+    ? customIntro 
+    : `<p>${defaultGreeting},</p>`;
+  
+  const signoffHtml = customSignoff 
+    ? customSignoff 
+    : `<p style="color: #666; font-size: 14px;">If you have any questions, please don't hesitate to get in touch with us.</p><p>Best regards,<br/>The Link</p>`;
+
   return `
     <div style="font-family: 'DM Sans', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-      <p>${greeting},</p>
+      ${introHtml}
       
       <p>This is a friendly reminder regarding the bookkeeping queries for <strong>${clientName}</strong>.</p>
       
@@ -210,11 +222,7 @@ function generateReminderEmailBody(
         </a>
       </div>
       
-      <p style="color: #666; font-size: 14px;">
-        If you have any questions, please don't hesitate to get in touch with us.
-      </p>
-      
-      <p>Best regards,<br/>The Link</p>
+      ${signoffHtml}
     </div>
   `;
 }
@@ -425,7 +433,9 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
           clientName,
           queryStatus.pendingQueries,
           queryStatus.totalQueries,
-          responseLink
+          responseLink,
+          reminder.messageIntro,
+          reminder.messageSignoff
         );
       }
       break;

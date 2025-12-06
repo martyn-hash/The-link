@@ -1,11 +1,15 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import DOMPurify from 'isomorphic-dompurify';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { TiptapEditor } from '@/components/TiptapEditor';
 import {
   Select,
   SelectContent,
@@ -45,6 +49,9 @@ import {
   Pencil,
   Calendar as CalendarIcon,
   RefreshCw,
+  Lock,
+  Eye,
+  FileEdit,
 } from 'lucide-react';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -82,6 +89,9 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
   const [editTime, setEditTime] = useState('');
   const [editChannel, setEditChannel] = useState('');
   const [editMessage, setEditMessage] = useState('');
+  const [editIntro, setEditIntro] = useState('');
+  const [editSignoff, setEditSignoff] = useState('');
+  const [editViewMode, setEditViewMode] = useState<'edit' | 'preview'>('edit');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const { data: reminders, isLoading, refetch } = useQuery<ScheduledQueryReminder[]>({
@@ -139,11 +149,20 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
   });
 
   const updateReminderMutation = useMutation({
-    mutationFn: async ({ reminderId, scheduledAt, channel, message }: { reminderId: string; scheduledAt?: string; channel?: string; message?: string }) => {
-      const updateData: { scheduledAt?: string; channel?: string; message?: string } = {};
+    mutationFn: async ({ reminderId, scheduledAt, channel, message, messageIntro, messageSignoff }: { 
+      reminderId: string; 
+      scheduledAt?: string; 
+      channel?: string; 
+      message?: string;
+      messageIntro?: string;
+      messageSignoff?: string;
+    }) => {
+      const updateData: { scheduledAt?: string; channel?: string; message?: string; messageIntro?: string; messageSignoff?: string } = {};
       if (scheduledAt !== undefined) updateData.scheduledAt = scheduledAt;
       if (channel !== undefined) updateData.channel = channel;
       if (message !== undefined) updateData.message = message;
+      if (messageIntro !== undefined) updateData.messageIntro = messageIntro;
+      if (messageSignoff !== undefined) updateData.messageSignoff = messageSignoff;
       return apiRequest('PATCH', `/api/query-reminders/${reminderId}`, updateData);
     },
     onSuccess: () => {
@@ -169,6 +188,9 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
     setEditTime(format(scheduledDate, 'HH:mm'));
     setEditChannel(reminder.channel);
     setEditMessage((reminder as any).message || '');
+    setEditIntro((reminder as any).messageIntro || '');
+    setEditSignoff((reminder as any).messageSignoff || '');
+    setEditViewMode('edit');
     setEditingReminder(reminder);
   };
 
@@ -176,7 +198,14 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
     if (!editingReminder) return;
     
     // Build update payload with only changed fields
-    const updatePayload: { reminderId: string; scheduledAt?: string; channel?: string; message?: string } = {
+    const updatePayload: { 
+      reminderId: string; 
+      scheduledAt?: string; 
+      channel?: string; 
+      message?: string;
+      messageIntro?: string;
+      messageSignoff?: string;
+    } = {
       reminderId: editingReminder.id,
     };
     
@@ -196,15 +225,29 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
       updatePayload.channel = editChannel;
     }
     
-    // Only include message if changed
+    // Only include message if changed (for SMS/Voice)
     const originalMessage = (editingReminder as any).message || '';
     const messageChanged = editMessage !== originalMessage;
     if (messageChanged) {
       updatePayload.message = editMessage;
     }
     
+    // Only include intro if changed (for Email)
+    const originalIntro = (editingReminder as any).messageIntro || '';
+    const introChanged = editIntro !== originalIntro;
+    if (introChanged) {
+      updatePayload.messageIntro = editIntro;
+    }
+    
+    // Only include signoff if changed (for Email)
+    const originalSignoff = (editingReminder as any).messageSignoff || '';
+    const signoffChanged = editSignoff !== originalSignoff;
+    if (signoffChanged) {
+      updatePayload.messageSignoff = editSignoff;
+    }
+    
     // Only update if something actually changed
-    if (!updatePayload.scheduledAt && !updatePayload.channel && !messageChanged) {
+    if (!updatePayload.scheduledAt && !updatePayload.channel && !messageChanged && !introChanged && !signoffChanged) {
       setEditingReminder(null);
       return;
     }
@@ -475,7 +518,7 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
 
       {/* Edit Reminder Dialog */}
       <Dialog open={!!editingReminder} onOpenChange={(open) => !open && setEditingReminder(null)}>
-        <DialogContent className="sm:max-w-md" data-testid="dialog-edit-reminder">
+        <DialogContent className={editChannel === 'email' ? "sm:max-w-2xl max-h-[90vh] overflow-hidden" : "sm:max-w-md"} data-testid="dialog-edit-reminder">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="w-5 h-5" />
@@ -486,7 +529,7 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
             </DialogDescription>
           </DialogHeader>
           
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-4 overflow-y-auto max-h-[60vh]">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <Label className="text-sm font-medium">Date</Label>
@@ -539,19 +582,164 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
               </Select>
             </div>
 
-            <div>
-              <Label className="text-sm font-medium">Message Content</Label>
-              <Textarea
-                value={editMessage}
-                onChange={(e) => setEditMessage(e.target.value)}
-                placeholder="Enter the reminder message that will be sent to the client..."
-                className="mt-1 min-h-[100px]"
-                data-testid="input-edit-reminder-message"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                This message will be used for {editChannel === 'email' ? 'the email body' : editChannel === 'sms' ? 'the SMS text' : 'the voice call script'}.
-              </p>
-            </div>
+            {/* Email channel: Three-section layout with Edit/Preview toggle */}
+            {editChannel === 'email' ? (
+              <div className="space-y-3">
+                {/* Toggle between Edit and Preview */}
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Message <span className="text-destructive">*</span></Label>
+                  <div className="flex gap-1">
+                    <Button
+                      type="button"
+                      variant={editViewMode === 'edit' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setEditViewMode('edit')}
+                      className="gap-1 h-7 text-xs"
+                      data-testid="button-edit-mode"
+                    >
+                      <FileEdit className="h-3 w-3" />
+                      Edit
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={editViewMode === 'preview' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setEditViewMode('preview')}
+                      className="gap-1 h-7 text-xs"
+                      data-testid="button-preview-mode"
+                    >
+                      <Eye className="h-3 w-3" />
+                      Preview
+                    </Button>
+                  </div>
+                </div>
+
+                {editViewMode === 'preview' ? (
+                  /* Full Preview Mode - matches server-side generateReminderEmailBody */
+                  <ScrollArea className="h-[300px] border rounded-md">
+                    <div 
+                      className="prose prose-sm max-w-none dark:prose-invert"
+                      style={{ fontFamily: "'DM Sans', Arial, sans-serif", maxWidth: '600px', margin: '0 auto', padding: '20px' }}
+                      data-testid="email-preview-content"
+                    >
+                      {/* Intro section - custom or default (sanitized for security) */}
+                      <div dangerouslySetInnerHTML={{ 
+                        __html: DOMPurify.sanitize(editIntro || `<p>Dear ${editingReminder?.recipientName || 'Client'},</p>`) 
+                      }} />
+                      
+                      {/* Protected reminder content - matches server template */}
+                      <p>This is a friendly reminder regarding the bookkeeping queries for <strong>your account</strong>.</p>
+                      
+                      <p>
+                        {editingReminder?.queriesRemaining === editingReminder?.queriesTotal
+                          ? `We have ${editingReminder?.queriesRemaining || 'outstanding'} bookkeeping ${(editingReminder?.queriesRemaining || 0) === 1 ? 'query' : 'queries'} that ${(editingReminder?.queriesRemaining || 0) === 1 ? 'requires' : 'require'} your attention.`
+                          : `Thank you for your responses so far. We still have ${editingReminder?.queriesRemaining || 0} of ${editingReminder?.queriesTotal || 0} queries remaining that need your input.`
+                        }
+                      </p>
+                      
+                      <p>Please click the button below to view and respond to the outstanding queries:</p>
+                      
+                      <div style={{ textAlign: 'center', margin: '30px 0' }}>
+                        <span style={{ 
+                          display: 'inline-block',
+                          backgroundColor: '#2563eb', 
+                          color: 'white', 
+                          padding: '12px 24px', 
+                          borderRadius: '6px', 
+                          fontWeight: 500,
+                          textDecoration: 'none'
+                        }}>
+                          View Queries
+                        </span>
+                      </div>
+                      
+                      {/* Sign-off section - custom or default (sanitized for security) */}
+                      <div dangerouslySetInnerHTML={{ 
+                        __html: DOMPurify.sanitize(editSignoff || `<p style="color: #666; font-size: 14px;">If you have any questions, please don't hesitate to get in touch with us.</p><p>Best regards,<br/>The Link</p>`) 
+                      }} />
+                    </div>
+                  </ScrollArea>
+                ) : (
+                  /* Edit Mode - Three sections */
+                  <div className="space-y-3">
+                    {/* Intro Section (Editable) */}
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Introduction</Label>
+                      <div data-testid="input-edit-reminder-intro" className="border rounded-md">
+                        <TiptapEditor
+                          content={editIntro}
+                          onChange={setEditIntro}
+                          placeholder="Hello, ..."
+                          editorHeight="80px"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Protected Section (Read-only preview) */}
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-1">
+                        <Lock className="h-3 w-3 text-muted-foreground" />
+                        <Label className="text-xs text-muted-foreground">Reminder Content (Auto-generated)</Label>
+                      </div>
+                      <div className="border rounded-md bg-muted/30 overflow-hidden">
+                        <div 
+                          className="p-3 prose prose-sm max-w-none dark:prose-invert text-muted-foreground"
+                          data-testid="protected-reminder-content"
+                        >
+                          <p style={{ fontSize: '13px', marginBottom: '8px' }}>
+                            This is a friendly reminder regarding the bookkeeping queries for your account.
+                            {editingReminder?.queriesRemaining && (
+                              <span> You have <strong>{editingReminder.queriesRemaining}</strong> of <strong>{editingReminder.queriesTotal}</strong> queries remaining.</span>
+                            )}
+                          </p>
+                          <div style={{ textAlign: 'center', marginTop: '12px' }}>
+                            <span style={{ 
+                              display: 'inline-block', 
+                              background: '#2563eb', 
+                              color: 'white', 
+                              padding: '8px 16px', 
+                              borderRadius: '6px', 
+                              fontSize: '13px',
+                              fontWeight: 500 
+                            }}>
+                              View Queries
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Sign-off Section (Editable) */}
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Sign-off</Label>
+                      <div data-testid="input-edit-reminder-signoff" className="border rounded-md">
+                        <TiptapEditor
+                          content={editSignoff}
+                          onChange={setEditSignoff}
+                          placeholder="Best regards, ..."
+                          editorHeight="80px"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* SMS/Voice channel: Simple textarea */
+              <div>
+                <Label className="text-sm font-medium">Message Content</Label>
+                <Textarea
+                  value={editMessage}
+                  onChange={(e) => setEditMessage(e.target.value)}
+                  placeholder="Enter the reminder message that will be sent to the client..."
+                  className="mt-1 min-h-[100px]"
+                  data-testid="input-edit-reminder-message"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  This message will be used for {editChannel === 'sms' ? 'the SMS text' : 'the voice call script'}.
+                </p>
+              </div>
+            )}
           </div>
           
           <DialogFooter>
