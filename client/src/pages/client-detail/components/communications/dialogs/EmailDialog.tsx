@@ -1055,7 +1055,7 @@ export function EmailDialog({
               {isQueryEmailMode && hasSelectedRecipients && !hasVisitedSchedulingTab ? (
                 <Button 
                   type="button" 
-                  onClick={() => setActiveTab('scheduling')}
+                  onClick={() => handleTabChange('scheduling')}
                   data-testid="button-review-scheduling"
                   className="bg-amber-600 hover:bg-amber-700 text-white font-medium gap-2"
                 >

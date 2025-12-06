@@ -1542,10 +1542,11 @@ ${tableHtml}
     }
   });
 
-  // Update a reminder (reschedule date/time/channel)
+  // Update a reminder (reschedule date/time/channel/message)
   const updateReminderSchema = z.object({
     scheduledAt: z.string().optional(),
     channel: z.enum(['email', 'sms', 'voice']).optional(),
+    message: z.string().optional(),
   });
 
   app.patch("/api/query-reminders/:id", isAuthenticated, async (req: any, res: any) => {
@@ -1558,7 +1559,7 @@ ${tableHtml}
       const { id } = req.params;
       const data = updateReminderSchema.parse(req.body);
       
-      if (!data.scheduledAt && !data.channel) {
+      if (!data.scheduledAt && !data.channel && !data.message) {
         return res.status(400).json({ message: "No update fields provided" });
       }
 
@@ -1566,6 +1567,7 @@ ${tableHtml}
       const updated = await updateReminder(id, {
         scheduledAt: data.scheduledAt ? new Date(data.scheduledAt) : undefined,
         channel: data.channel,
+        message: data.message,
       });
       
       if (!updated) {

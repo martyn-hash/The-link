@@ -2191,6 +2191,88 @@ export function registerProjectRoutes(
     }
   });
 
+  // Get all project assignees (current assignee, client manager, bookkeeper)
+  app.get("/api/projects/:projectId/assignees", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { projectId } = req.params;
+      const effectiveUser = req.effectiveUser;
+      
+      if (!effectiveUser) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const effectiveUserId = effectiveUser.id;
+
+      if (!projectId || typeof projectId !== 'string') {
+        return res.status(400).json({ message: "Valid project ID is required" });
+      }
+
+      // Get the project with related user data
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Authorization check - user must be admin or assigned to the project
+      const canView =
+        effectiveUser.isAdmin ||
+        project.currentAssigneeId === effectiveUserId ||
+        project.clientManagerId === effectiveUserId ||
+        project.bookkeeperId === effectiveUserId;
+
+      if (!canView) {
+        return res.status(403).json({ message: "Not authorized to view this project's assignees" });
+      }
+
+      // Collect unique assignees from different roles
+      const assigneeMap = new Map<string, { id: string; projectId: string; userId: string; roleId: string | null; user: any; role: { id: string; name: string } | null }>();
+
+      // Add current assignee if exists
+      if (project.currentAssigneeId && project.currentAssignee) {
+        const { passwordHash, ...sanitizedUser } = project.currentAssignee;
+        assigneeMap.set(project.currentAssigneeId, {
+          id: `${projectId}-current-${project.currentAssigneeId}`,
+          projectId,
+          userId: project.currentAssigneeId,
+          roleId: null,
+          user: sanitizedUser,
+          role: { id: 'current_assignee', name: 'Current Assignee' },
+        });
+      }
+
+      // Add client manager if exists and different
+      if (project.clientManagerId && project.clientManager && !assigneeMap.has(project.clientManagerId)) {
+        const { passwordHash, ...sanitizedUser } = project.clientManager;
+        assigneeMap.set(project.clientManagerId, {
+          id: `${projectId}-manager-${project.clientManagerId}`,
+          projectId,
+          userId: project.clientManagerId,
+          roleId: null,
+          user: sanitizedUser,
+          role: { id: 'client_manager', name: 'Client Manager' },
+        });
+      }
+
+      // Add bookkeeper if exists and different
+      if (project.bookkeeperId && project.bookkeeper && !assigneeMap.has(project.bookkeeperId)) {
+        const { passwordHash, ...sanitizedUser } = project.bookkeeper;
+        assigneeMap.set(project.bookkeeperId, {
+          id: `${projectId}-bookkeeper-${project.bookkeeperId}`,
+          projectId,
+          userId: project.bookkeeperId,
+          roleId: null,
+          user: sanitizedUser,
+          role: { id: 'bookkeeper', name: 'Bookkeeper' },
+        });
+      }
+
+      res.json(Array.from(assigneeMap.values()));
+    } catch (error) {
+      console.error("Error fetching project assignees:", error);
+      res.status(500).json({ message: "Failed to fetch project assignees" });
+    }
+  });
+
   app.get("/api/projects/:projectId/role-assignee", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const { projectId } = req.params;

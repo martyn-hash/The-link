@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -42,6 +44,7 @@ import {
   Ban,
   Pencil,
   Calendar as CalendarIcon,
+  RefreshCw,
 } from 'lucide-react';
 import { format, formatDistanceToNow, isPast } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
@@ -78,10 +81,22 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
   const [editDate, setEditDate] = useState('');
   const [editTime, setEditTime] = useState('');
   const [editChannel, setEditChannel] = useState('');
+  const [editMessage, setEditMessage] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const { data: reminders, isLoading } = useQuery<ScheduledQueryReminder[]>({
+  const { data: reminders, isLoading, refetch } = useQuery<ScheduledQueryReminder[]>({
     queryKey: ['/api/projects', projectId, 'query-reminders'],
   });
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refetch();
+    setIsRefreshing(false);
+    toast({
+      title: 'Refreshed',
+      description: 'Reminder list has been updated.',
+    });
+  };
 
   const cancelReminderMutation = useMutation({
     mutationFn: async (reminderId: string) => {
@@ -124,8 +139,12 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
   });
 
   const updateReminderMutation = useMutation({
-    mutationFn: async ({ reminderId, scheduledAt, channel }: { reminderId: string; scheduledAt: string; channel: string }) => {
-      return apiRequest('PATCH', `/api/query-reminders/${reminderId}`, { scheduledAt, channel });
+    mutationFn: async ({ reminderId, scheduledAt, channel, message }: { reminderId: string; scheduledAt?: string; channel?: string; message?: string }) => {
+      const updateData: { scheduledAt?: string; channel?: string; message?: string } = {};
+      if (scheduledAt !== undefined) updateData.scheduledAt = scheduledAt;
+      if (channel !== undefined) updateData.channel = channel;
+      if (message !== undefined) updateData.message = message;
+      return apiRequest('PATCH', `/api/query-reminders/${reminderId}`, updateData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'query-reminders'] });
@@ -149,18 +168,48 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
     setEditDate(format(scheduledDate, 'yyyy-MM-dd'));
     setEditTime(format(scheduledDate, 'HH:mm'));
     setEditChannel(reminder.channel);
+    setEditMessage((reminder as any).message || '');
     setEditingReminder(reminder);
   };
 
   const handleSaveEdit = () => {
     if (!editingReminder) return;
     
-    const scheduledAt = new Date(`${editDate}T${editTime}:00`).toISOString();
-    updateReminderMutation.mutate({
+    // Build update payload with only changed fields
+    const updatePayload: { reminderId: string; scheduledAt?: string; channel?: string; message?: string } = {
       reminderId: editingReminder.id,
-      scheduledAt,
-      channel: editChannel,
-    });
+    };
+    
+    // Only include scheduledAt if date/time changed
+    const originalDate = new Date(editingReminder.scheduledAt);
+    const originalDateStr = format(originalDate, 'yyyy-MM-dd');
+    const originalTimeStr = format(originalDate, 'HH:mm');
+    
+    if (editDate !== originalDateStr || editTime !== originalTimeStr) {
+      if (editDate && editTime) {
+        updatePayload.scheduledAt = new Date(`${editDate}T${editTime}:00`).toISOString();
+      }
+    }
+    
+    // Only include channel if changed
+    if (editChannel !== editingReminder.channel) {
+      updatePayload.channel = editChannel;
+    }
+    
+    // Only include message if changed
+    const originalMessage = (editingReminder as any).message || '';
+    const messageChanged = editMessage !== originalMessage;
+    if (messageChanged) {
+      updatePayload.message = editMessage;
+    }
+    
+    // Only update if something actually changed
+    if (!updatePayload.scheduledAt && !updatePayload.channel && !messageChanged) {
+      setEditingReminder(null);
+      return;
+    }
+    
+    updateReminderMutation.mutate(updatePayload);
   };
 
   if (isLoading) {
@@ -177,9 +226,19 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
       <div className="text-center py-8" data-testid="scheduled-reminders-empty">
         <Bell className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
         <p className="text-muted-foreground mb-2">No scheduled reminders</p>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground mb-4">
           Reminders will appear here when you send queries to clients with automated follow-ups enabled.
         </p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          data-testid="button-refresh-reminders"
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+          {isRefreshing ? 'Refreshing...' : 'Refresh'}
+        </Button>
       </div>
     );
   }
@@ -204,6 +263,17 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
               {sentReminders.length} sent
             </Badge>
           )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            title="Refresh reminders"
+            data-testid="button-refresh-reminders"
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+          </Button>
         </div>
         
         {!hasMultipleTokens && pendingReminders.length > 0 && (
@@ -412,14 +482,14 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
               Edit Reminder
             </DialogTitle>
             <DialogDescription>
-              Change the date, time, or channel for this reminder.
+              Modify the reminder schedule, channel, or message content.
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm font-medium">Date</label>
+                <Label className="text-sm font-medium">Date</Label>
                 <Input
                   type="date"
                   value={editDate}
@@ -429,7 +499,7 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
                 />
               </div>
               <div>
-                <label className="text-sm font-medium">Time</label>
+                <Label className="text-sm font-medium">Time</Label>
                 <Input
                   type="time"
                   value={editTime}
@@ -441,7 +511,7 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
             </div>
             
             <div>
-              <label className="text-sm font-medium">Channel</label>
+              <Label className="text-sm font-medium">Channel</Label>
               <Select value={editChannel} onValueChange={setEditChannel}>
                 <SelectTrigger className="w-full mt-1" data-testid="select-edit-reminder-channel">
                   <SelectValue />
@@ -467,6 +537,20 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
                   </SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div>
+              <Label className="text-sm font-medium">Message Content</Label>
+              <Textarea
+                value={editMessage}
+                onChange={(e) => setEditMessage(e.target.value)}
+                placeholder="Enter the reminder message that will be sent to the client..."
+                className="mt-1 min-h-[100px]"
+                data-testid="input-edit-reminder-message"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                This message will be used for {editChannel === 'email' ? 'the email body' : editChannel === 'sms' ? 'the SMS text' : 'the voice call script'}.
+              </p>
             </div>
           </div>
           
