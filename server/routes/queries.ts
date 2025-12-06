@@ -52,7 +52,7 @@ const clientResponseSchema = z.object({
   responses: z.array(z.object({
     queryId: z.string().uuid(),
     clientResponse: z.string().optional(),
-    hasVat: z.boolean().optional(),
+    hasVat: z.boolean().nullable().optional(),
     attachments: z.array(lenientAttachmentSchema).optional(),
   }))
 });
