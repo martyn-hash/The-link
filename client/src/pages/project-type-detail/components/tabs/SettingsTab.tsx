@@ -33,6 +33,8 @@ interface SettingsTabProps {
     mutate: (settings: DialoraSettings) => void;
     isPending: boolean;
   };
+  isEditingDialora: boolean;
+  setIsEditingDialora: (value: boolean) => void;
 }
 
 export function SettingsTab({
@@ -44,8 +46,9 @@ export function SettingsTab({
   setSelectedServiceId,
   updateProjectTypeServiceLinkageMutation,
   updateDialoraSettingsMutation,
+  isEditingDialora,
+  setIsEditingDialora,
 }: SettingsTabProps) {
-  const [isEditingDialora, setIsEditingDialora] = useState(false);
   const [dialoraSettings, setDialoraSettings] = useState<DialoraSettings>(() => 
     projectType?.dialoraSettings || { outboundWebhooks: [], inboundWebhookUrl: '' }
   );
@@ -83,7 +86,6 @@ export function SettingsTab({
   const handleSaveDialoraSettings = () => {
     if (updateDialoraSettingsMutation) {
       updateDialoraSettingsMutation.mutate(dialoraSettings);
-      setIsEditingDialora(false);
     }
   };
 
@@ -402,11 +404,20 @@ export function SettingsTab({
             </div>
           ) : (
             <div className="space-y-4">
+              {projectType?.dialoraSettings?.inboundWebhookUrl && (
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Inbound Webhook URL</Label>
+                  <div className="text-sm font-mono bg-muted px-2 py-1 rounded truncate">
+                    {projectType.dialoraSettings.inboundWebhookUrl}
+                  </div>
+                </div>
+              )}
+              
               {projectType?.dialoraSettings?.outboundWebhooks && projectType.dialoraSettings.outboundWebhooks.length > 0 ? (
                 <div className="space-y-3">
                   <div className="flex items-center gap-2">
                     <Badge variant="default">{projectType.dialoraSettings.outboundWebhooks.length}</Badge>
-                    <span className="text-sm">webhook(s) configured</span>
+                    <span className="text-sm">outbound webhook(s) configured</span>
                   </div>
                   <div className="space-y-2">
                     {projectType.dialoraSettings.outboundWebhooks.map((webhook, index) => (
@@ -424,7 +435,7 @@ export function SettingsTab({
                 </div>
               ) : (
                 <div className="p-4 bg-muted rounded-lg text-sm text-muted-foreground">
-                  No voice AI webhooks configured. Voice reminders will use default system settings.
+                  No outbound voice AI webhooks configured. Voice reminders will use default system settings.
                 </div>
               )}
 

@@ -59,6 +59,7 @@ export default function ProjectTypeDetail() {
   // State for settings (service linkage)
   const [isEditingServiceLinkage, setIsEditingServiceLinkage] = useState(false);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  const [isEditingDialora, setIsEditingDialora] = useState(false);
   
   // State for notifications
   const [isAddingProjectNotification, setIsAddingProjectNotification] = useState(false);
@@ -186,6 +187,7 @@ export default function ProjectTypeDetail() {
     projectTypeId,
     {
       onServiceLinkageUpdated: () => { setIsEditingServiceLinkage(false); setSelectedServiceId(null); },
+      onDialoraSettingsUpdated: () => { setIsEditingDialora(false); },
     }
   );
 
@@ -516,6 +518,8 @@ export default function ProjectTypeDetail() {
               setSelectedServiceId={setSelectedServiceId}
               updateProjectTypeServiceLinkageMutation={updateProjectTypeServiceLinkageMutation}
               updateDialoraSettingsMutation={updateDialoraSettingsMutation}
+              isEditingDialora={isEditingDialora}
+              setIsEditingDialora={setIsEditingDialora}
             />
           </Tabs>
         </div>
