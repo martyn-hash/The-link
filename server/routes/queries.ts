@@ -13,6 +13,13 @@ import {
 } from "@shared/schema";
 import { sendBookkeepingQueryEmail } from "../emailService";
 import { ObjectStorageService, ObjectNotFoundError } from "../objectStorage";
+import { 
+  checkQueryTokenRateLimit, 
+  recordFailedTokenAttempt, 
+  recordSuccessfulTokenAccess,
+  isTokenLockedOut,
+  sanitizeAttachment 
+} from "../lib/queryTokenRateLimiter";
 
 const paramProjectIdSchema = z.object({
   projectId: z.string().uuid("Invalid project ID format")
@@ -1062,9 +1069,31 @@ ${emailSignoff}`;
       }
 
       const { token } = req.params;
+      const clientIP = req.ip || req.connection?.remoteAddress || 'unknown';
+
+      // Rate limiting check
+      const rateLimit = checkQueryTokenRateLimit(clientIP, 'access');
+      if (!rateLimit.allowed) {
+        return res.status(429).json({
+          message: "Too many requests. Please wait a moment and try again.",
+          retryAfter: rateLimit.retryAfter
+        });
+      }
+
+      // Check if token is locked out due to too many failed attempts
+      const lockout = isTokenLockedOut(token);
+      if (lockout.locked) {
+        return res.status(429).json({
+          message: "This link has been temporarily locked due to too many failed access attempts. Please try again later.",
+          retryAfter: lockout.retryAfter
+        });
+      }
+
       const validation = await storage.validateQueryResponseToken(token);
 
       if (!validation.valid) {
+        // Record failed attempt for lockout tracking
+        recordFailedTokenAttempt(token);
         return res.status(400).json({ 
           message: validation.reason,
           expired: validation.reason === 'Token has expired',
@@ -1072,6 +1101,9 @@ ${emailSignoff}`;
         });
       }
 
+      // Record successful access
+      recordSuccessfulTokenAccess(token);
+      
       const tokenData = validation.tokenData!;
       
       // Mark token as accessed on first view
@@ -1130,15 +1162,38 @@ ${emailSignoff}`;
       }
 
       const { token } = req.params;
+      const clientIP = req.ip || req.connection?.remoteAddress || 'unknown';
+
+      // Rate limiting check
+      const rateLimit = checkQueryTokenRateLimit(clientIP, 'upload');
+      if (!rateLimit.allowed) {
+        return res.status(429).json({
+          message: "Too many upload requests. Please wait a moment and try again.",
+          retryAfter: rateLimit.retryAfter
+        });
+      }
+
+      // Check if token is locked out
+      const lockout = isTokenLockedOut(token);
+      if (lockout.locked) {
+        return res.status(429).json({
+          message: "This link has been temporarily locked. Please try again later.",
+          retryAfter: lockout.retryAfter
+        });
+      }
+
       const validation = await storage.validateQueryResponseToken(token);
 
       if (!validation.valid) {
+        recordFailedTokenAttempt(token);
         return res.status(400).json({ 
           message: validation.reason,
           expired: validation.reason === 'Token has expired',
           completed: validation.reason === 'Responses already submitted'
         });
       }
+      
+      recordSuccessfulTokenAccess(token);
 
       const bodyValidation = uploadUrlRequestSchema.safeParse(req.body);
       if (!bodyValidation.success) {
@@ -1194,15 +1249,38 @@ ${emailSignoff}`;
       }
 
       const { token, queryId } = req.params;
+      const clientIP = req.ip || req.connection?.remoteAddress || 'unknown';
+
+      // Rate limiting check (higher limit for auto-save)
+      const rateLimit = checkQueryTokenRateLimit(clientIP, 'save');
+      if (!rateLimit.allowed) {
+        return res.status(429).json({
+          message: "You're saving too quickly. Your last save was successful - please wait a moment.",
+          retryAfter: rateLimit.retryAfter
+        });
+      }
+
+      // Check if token is locked out
+      const lockout = isTokenLockedOut(token);
+      if (lockout.locked) {
+        return res.status(429).json({
+          message: "This link has been temporarily locked. Please try again later.",
+          retryAfter: lockout.retryAfter
+        });
+      }
+
       const validation = await storage.validateQueryResponseToken(token);
 
       if (!validation.valid) {
+        recordFailedTokenAttempt(token);
         return res.status(400).json({ 
           message: validation.reason,
           expired: validation.reason === 'Token has expired',
           completed: validation.reason === 'Responses already submitted'
         });
       }
+
+      recordSuccessfulTokenAccess(token);
 
       const bodyValidation = saveIndividualResponseSchema.safeParse(req.body);
       if (!bodyValidation.success) {
@@ -1241,7 +1319,19 @@ ${emailSignoff}`;
       }
       
       if (attachments !== undefined) {
-        updateData.clientAttachments = attachments as QueryAttachment[];
+        // Validate and sanitize all attachments for security
+        const sanitizedAttachments: QueryAttachment[] = [];
+        for (const attachment of attachments) {
+          const result = sanitizeAttachment(attachment as QueryAttachment);
+          if (!result.valid) {
+            console.error(`[Query Response] Invalid attachment for query ${queryId}:`, result.error, attachment);
+            return res.status(400).json({
+              message: `Invalid file: ${result.error}`,
+            });
+          }
+          sanitizedAttachments.push(result.sanitized!);
+        }
+        updateData.clientAttachments = sanitizedAttachments;
       }
 
       // Smart status update logic:
@@ -1294,15 +1384,38 @@ ${emailSignoff}`;
       }
 
       const { token } = req.params;
+      const clientIP = req.ip || req.connection?.remoteAddress || 'unknown';
+
+      // Rate limiting check
+      const rateLimit = checkQueryTokenRateLimit(clientIP, 'submit');
+      if (!rateLimit.allowed) {
+        return res.status(429).json({
+          message: "Too many submission attempts. Please wait a moment and try again.",
+          retryAfter: rateLimit.retryAfter
+        });
+      }
+
+      // Check if token is locked out
+      const lockout = isTokenLockedOut(token);
+      if (lockout.locked) {
+        return res.status(429).json({
+          message: "This link has been temporarily locked. Please try again later.",
+          retryAfter: lockout.retryAfter
+        });
+      }
+
       const validation = await storage.validateQueryResponseToken(token);
 
       if (!validation.valid) {
+        recordFailedTokenAttempt(token);
         return res.status(400).json({ 
           message: validation.reason,
           expired: validation.reason === 'Token has expired',
           completed: validation.reason === 'Responses already submitted'
         });
       }
+
+      recordSuccessfulTokenAccess(token);
 
       const validationResult = clientResponseSchema.safeParse(req.body);
       if (!validationResult.success) {
@@ -1357,7 +1470,19 @@ ${emailSignoff}`;
           }
           
           if (response.attachments?.length) {
-            updateData.clientAttachments = response.attachments as QueryAttachment[];
+            // Validate and sanitize attachments for security
+            const sanitizedAttachments: QueryAttachment[] = [];
+            for (const attachment of response.attachments) {
+              const result = sanitizeAttachment(attachment as QueryAttachment);
+              if (!result.valid) {
+                console.error(`[Query Submit] Invalid attachment for query ${response.queryId}:`, result.error, attachment);
+                return res.status(400).json({
+                  message: `Invalid file: ${result.error}`,
+                });
+              }
+              sanitizedAttachments.push(result.sanitized!);
+            }
+            updateData.clientAttachments = sanitizedAttachments;
           }
           
           await storage.updateQuery(response.queryId, updateData);
