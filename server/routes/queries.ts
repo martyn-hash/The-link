@@ -960,7 +960,7 @@ ${emailSignoff}`;
       const paramValidation = validateParams(paramTokenSchema, req.params);
       if (!paramValidation.success) {
         return res.status(400).json({
-          message: "Invalid token format",
+          message: "This link doesn't seem to be working. Please check you have the complete link from your email.",
           errors: paramValidation.errors
         });
       }
@@ -1018,7 +1018,7 @@ ${emailSignoff}`;
       });
     } catch (error) {
       console.error("Error validating query response token:", error);
-      res.status(500).json({ message: "Failed to validate token" });
+      res.status(500).json({ message: "Something went wrong loading the page. Please refresh and try again." });
     }
   });
 
@@ -1028,7 +1028,7 @@ ${emailSignoff}`;
       const paramValidation = validateParams(paramTokenSchema, req.params);
       if (!paramValidation.success) {
         return res.status(400).json({
-          message: "Invalid token format",
+          message: "This link doesn't seem to be working. Please check you have the complete link from your email.",
           errors: paramValidation.errors
         });
       }
@@ -1047,7 +1047,7 @@ ${emailSignoff}`;
       const bodyValidation = uploadUrlRequestSchema.safeParse(req.body);
       if (!bodyValidation.success) {
         return res.status(400).json({
-          message: "Invalid request data",
+          message: "We couldn't prepare your file for upload. Please try again.",
           errors: bodyValidation.error.issues
         });
       }
@@ -1082,7 +1082,7 @@ ${emailSignoff}`;
       });
     } catch (error) {
       console.error("Error generating upload URL:", error);
-      res.status(500).json({ message: "Failed to generate upload URL" });
+      res.status(500).json({ message: "We couldn't prepare your file for upload. Please try again in a moment." });
     }
   });
 
@@ -1092,7 +1092,7 @@ ${emailSignoff}`;
       const paramValidation = validateParams(paramTokenQueryIdSchema, req.params);
       if (!paramValidation.success) {
         return res.status(400).json({
-          message: "Invalid parameters",
+          message: "We couldn't find this question. Please refresh the page and try again.",
           errors: paramValidation.errors
         });
       }
@@ -1111,7 +1111,7 @@ ${emailSignoff}`;
       const bodyValidation = saveIndividualResponseSchema.safeParse(req.body);
       if (!bodyValidation.success) {
         return res.status(400).json({
-          message: "Invalid response data",
+          message: "We couldn't save your response. Please check your answer and try again.",
           errors: bodyValidation.error.issues
         });
       }
@@ -1177,7 +1177,7 @@ ${emailSignoff}`;
       });
     } catch (error) {
       console.error("Error saving individual query response:", error);
-      res.status(500).json({ message: "Failed to save response" });
+      res.status(500).json({ message: "We couldn't save your response just now. Don't worry - try again in a moment." });
     }
   });
 
@@ -1187,7 +1187,7 @@ ${emailSignoff}`;
       const paramValidation = validateParams(paramTokenSchema, req.params);
       if (!paramValidation.success) {
         return res.status(400).json({
-          message: "Invalid token format",
+          message: "This link doesn't seem to be working. Please check you have the complete link from your email.",
           errors: paramValidation.errors
         });
       }
@@ -1273,7 +1273,7 @@ ${emailSignoff}`;
       });
     } catch (error) {
       console.error("Error submitting client responses:", error);
-      res.status(500).json({ message: "Failed to submit responses" });
+      res.status(500).json({ message: "Something went wrong sending your responses. Please try again." });
     }
   });
 

@@ -118,12 +118,13 @@ export default function QueryResponsePage() {
       setIsSubmitted(true);
     },
     onError: (error: Error) => {
-      // Show a friendly error message
-      const friendlyTitle = "We couldn't submit your responses";
+      // Show a friendly error message - never show technical jargon to clients
       let friendlyDescription = error.message;
       
-      // Make common error messages more user-friendly
-      if (error.message.includes('Invalid response data') || error.message.includes('validation')) {
+      // Map any remaining technical messages to friendly language
+      if (error.message.toLowerCase().includes('invalid') || 
+          error.message.toLowerCase().includes('validation') ||
+          error.message.toLowerCase().includes('failed')) {
         friendlyDescription = "Please check all your answers and try again. If the problem continues, refresh the page.";
       } else if (error.message.includes('expired')) {
         friendlyDescription = "This link has expired. Please contact your accountant for a new link.";
@@ -132,7 +133,7 @@ export default function QueryResponsePage() {
       }
       
       toast({
-        title: friendlyTitle,
+        title: "Just a moment...",
         description: friendlyDescription,
       });
     },
