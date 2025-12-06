@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Mail, Paperclip, Sparkles, Mic, Eye, Edit3, Lock, Clock, Phone, MessageSquare } from "lucide-react";
+import { Mail, Paperclip, Sparkles, Mic, Eye, Edit3, Lock, Clock, Phone, MessageSquare, Users } from "lucide-react";
 import { ReminderScheduleEditor } from "@/components/reminders/ReminderScheduleEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -813,52 +813,32 @@ export function EmailDialog({
                 {/* Scheduling Tab Content */}
                 <TabsContent value="scheduling" className="flex-1 mt-0">
                   <div className="space-y-4 overflow-y-auto max-h-[55vh]">
-                    {/* Link Expiry Banner */}
+                    {/* Compact header with expiry badge and recipient summary */}
                     {queryEmailOptions && (
-                      <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
-                        <div className="flex items-center gap-3">
-                          <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                          <div>
-                            <h4 className="text-sm font-medium text-amber-900 dark:text-amber-100">
-                              Response Link Expires: {queryEmailOptions.expiryDate ? new Date(queryEmailOptions.expiryDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : `${queryEmailOptions.expiryDays} days after sending`}
-                            </h4>
-                            <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
-                              Reminders will be scheduled before this date to ensure timely responses
-                            </p>
-                          </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-sm font-medium">Automated Reminders</h4>
+                          <Badge variant="outline" className="text-xs bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300">
+                            <Clock className="h-3 w-3 mr-1" />
+                            Expires: {queryEmailOptions.expiryDate 
+                              ? new Date(queryEmailOptions.expiryDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) 
+                              : `in ${queryEmailOptions.expiryDays} days`}
+                          </Badge>
+                        </div>
+                        {/* Recipient preview */}
+                        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                          <Users className="h-3 w-3" />
+                          <span>
+                            Sending to: {selectedRecipients.size > 0 
+                              ? Array.from(selectedRecipients).slice(0, 3).map(id => {
+                                  const person = peopleWithEmail.find(p => p.personId === id);
+                                  return person?.fullName?.split(' ')[0] || person?.email?.split('@')[0] || 'Unknown';
+                                }).join(', ') + (selectedRecipients.size > 3 ? ` +${selectedRecipients.size - 3} more` : '')
+                              : 'No recipients selected'}
+                          </span>
                         </div>
                       </div>
                     )}
-
-                    {/* Channel Availability Summary */}
-                    <div className="bg-muted/30 rounded-lg p-4">
-                      <h4 className="text-sm font-medium mb-3">Channel Availability</h4>
-                      <div className="grid grid-cols-3 gap-4">
-                        <div className="flex items-center gap-2">
-                          <span title="Email"><Mail className="h-4 w-4 text-blue-500" /></span>
-                          <span className="text-sm">
-                            Email: <span className="font-medium">{channelAvailability.withEmail}/{channelAvailability.total}</span>
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span title="SMS"><MessageSquare className="h-4 w-4 text-purple-500" /></span>
-                          <span className="text-sm">
-                            SMS: <span className={`font-medium ${channelAvailability.withPhone === 0 ? 'text-muted-foreground' : ''}`}>{channelAvailability.withPhone}/{channelAvailability.total}</span>
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span title="Voice"><Phone className="h-4 w-4 text-green-500" /></span>
-                          <span className="text-sm">
-                            Voice: <span className={`font-medium ${channelAvailability.withPhone === 0 ? 'text-muted-foreground' : ''}`}>{channelAvailability.withPhone}/{channelAvailability.total}</span>
-                          </span>
-                        </div>
-                      </div>
-                      {channelAvailability.withPhone === 0 && channelAvailability.total > 0 && (
-                        <p className="text-xs text-muted-foreground mt-2">
-                          No phone numbers available for selected recipients. SMS and Voice reminders will be skipped.
-                        </p>
-                      )}
-                    </div>
 
                     {/* Reminder Schedule */}
                     {queryEmailOptions && (
@@ -977,7 +957,7 @@ export function EmailDialog({
                           context={getAiContext()}
                           onResult={(result) => {
                             if (result.subject) setEmailSubject(result.subject);
-                            if (result.body) setEmailContent(result.body);
+                            if (result.content) setEmailContent(result.content);
                           }}
                         />
                       </div>

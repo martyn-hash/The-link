@@ -3,12 +3,11 @@ import { Mail, MessageSquare, Phone, X, Clock, Calendar, ChevronDown, ChevronUp,
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { format, isWeekend, addDays, setHours, setMinutes } from 'date-fns';
-import { generateReminderSchedule, formatReminderDate, formatReminderTimeOnly } from '@/lib/reminderScheduleGenerator';
+import { isWeekend, addDays, setHours, setMinutes } from 'date-fns';
+import { generateReminderSchedule, formatReminderDate } from '@/lib/reminderScheduleGenerator';
 import type { ReminderScheduleItem } from '@/pages/client-detail/components/communications/types';
 import { cn } from '@/lib/utils';
 
@@ -162,11 +161,6 @@ export function ReminderScheduleEditor({
     return false;
   };
 
-  const getChannelIcon = (channel: 'email' | 'sms' | 'voice') => {
-    const option = CHANNEL_OPTIONS.find((o) => o.value === channel);
-    return option?.icon || Mail;
-  };
-
   return (
     <div className="bg-muted/30 rounded-lg p-3 space-y-3">
       <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
@@ -213,43 +207,6 @@ export function ReminderScheduleEditor({
 
         <CollapsibleContent>
           <div className="mt-3 space-y-2">
-            {/* Expiry date display (prominent) */}
-            {expiryDate && (
-              <div className="bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800 rounded-md p-2.5">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                  <span className="text-sm font-semibold text-orange-800 dark:text-orange-200">
-                    Link expires: {format(new Date(expiryDate), 'EEEE, d MMMM yyyy')}
-                  </span>
-                </div>
-              </div>
-            )}
-            
-            {/* Channel availability summary */}
-            {totalRecipients > 0 && (
-              <div className="flex items-center gap-3 text-xs bg-muted/50 rounded-md p-2">
-                <span className="text-muted-foreground">Channels:</span>
-                <div className="flex items-center gap-1">
-                  <Mail className="h-3 w-3 text-blue-600" />
-                  <span className={cn(emailCount === totalRecipients ? "text-green-600" : "text-amber-600")}>
-                    {emailCount}/{totalRecipients}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <MessageSquare className="h-3 w-3 text-purple-600" />
-                  <span className={cn(phoneCount === totalRecipients ? "text-green-600" : phoneCount > 0 ? "text-amber-600" : "text-muted-foreground")}>
-                    {phoneCount}/{totalRecipients}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Phone className="h-3 w-3 text-green-600" />
-                  <span className={cn(phoneCount === totalRecipients ? "text-green-600" : phoneCount > 0 ? "text-amber-600" : "text-muted-foreground")}>
-                    {phoneCount}/{totalRecipients}
-                  </span>
-                </div>
-              </div>
-            )}
-            
             {!hasPhone && (
               <p className="text-xs text-amber-600 dark:text-amber-400">
                 No phone numbers available - SMS and Voice disabled
@@ -261,7 +218,6 @@ export function ReminderScheduleEditor({
                 {schedule.map((reminder, index) => {
                   const date = new Date(reminder.scheduledAt);
                   const isWeekendDay = isWeekend(date);
-                  const ChannelIcon = getChannelIcon(reminder.channel);
 
                   return (
                     <div
@@ -320,14 +276,13 @@ export function ReminderScheduleEditor({
                           disabled={disabled || !reminder.enabled}
                         >
                           <SelectTrigger className="h-7 text-xs px-2">
-                            <div className="flex items-center gap-1.5">
-                              <ChannelIcon className="h-3 w-3" />
-                              <SelectValue />
-                            </div>
+                            <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
                             {CHANNEL_OPTIONS.map((opt) => {
                               const isDisabled = isChannelDisabled(opt.value, isWeekendDay);
+                              const channelCount = opt.value === 'email' ? emailCount : phoneCount;
+                              const showPartialCoverage = totalRecipients > 0 && channelCount < totalRecipients && channelCount > 0;
                               return (
                                 <SelectItem
                                   key={opt.value}
@@ -338,6 +293,9 @@ export function ReminderScheduleEditor({
                                   <div className="flex items-center gap-1.5">
                                     <opt.icon className="h-3 w-3" />
                                     {opt.label}
+                                    {showPartialCoverage && (
+                                      <span className="text-amber-600">({channelCount}/{totalRecipients})</span>
+                                    )}
                                     {opt.value === 'voice' && isWeekendDay && (
                                       <span className="text-muted-foreground">(No weekends)</span>
                                     )}
