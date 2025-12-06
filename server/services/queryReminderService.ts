@@ -629,7 +629,13 @@ export async function cancelReminder(
  */
 export async function updateReminder(
   reminderId: string,
-  updates: { scheduledAt?: Date; channel?: 'email' | 'sms' | 'voice'; message?: string }
+  updates: { 
+    scheduledAt?: Date; 
+    channel?: 'email' | 'sms' | 'voice'; 
+    message?: string;
+    messageIntro?: string;
+    messageSignoff?: string;
+  }
 ): Promise<typeof scheduledQueryReminders.$inferSelect | null> {
   const updateData: Partial<typeof scheduledQueryReminders.$inferInsert> = {};
   
@@ -641,6 +647,12 @@ export async function updateReminder(
   }
   if (updates.message !== undefined) {
     updateData.message = updates.message;
+  }
+  if (updates.messageIntro !== undefined) {
+    updateData.messageIntro = updates.messageIntro;
+  }
+  if (updates.messageSignoff !== undefined) {
+    updateData.messageSignoff = updates.messageSignoff;
   }
 
   const result = await db
