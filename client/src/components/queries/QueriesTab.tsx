@@ -734,9 +734,9 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                   <TabsTrigger value="queries" className="gap-1.5" data-testid="tab-queries">
                     <HelpCircle className="w-4 h-4" />
                     Queries
-                    {stats && (
+                    {stats && (stats.open + stats.sentToClient) > 0 && (
                       <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
-                        {stats.open}
+                        {stats.open + stats.sentToClient}
                       </Badge>
                     )}
                   </TabsTrigger>

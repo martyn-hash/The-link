@@ -20,6 +20,7 @@ import {
   clients,
   projects,
   projectTypes,
+  users,
   type ScheduledQueryReminder,
   type InsertScheduledQueryReminder,
   type DialoraSettings,
@@ -718,15 +719,29 @@ export async function scheduleReminders(
   return scheduled;
 }
 
+export interface ReminderWithCreator extends ScheduledQueryReminder {
+  tokenCreatorFirstName: string | null;
+}
+
 /**
- * Get all reminders for a project
+ * Get all reminders for a project with token creator information
  */
-export async function getRemindersForProject(projectId: string): Promise<ScheduledQueryReminder[]> {
-  return db
-    .select()
+export async function getRemindersForProject(projectId: string): Promise<ReminderWithCreator[]> {
+  const results = await db
+    .select({
+      reminder: scheduledQueryReminders,
+      creatorFirstName: users.firstName,
+    })
     .from(scheduledQueryReminders)
+    .leftJoin(queryResponseTokens, eq(scheduledQueryReminders.tokenId, queryResponseTokens.id))
+    .leftJoin(users, eq(queryResponseTokens.createdById, users.id))
     .where(eq(scheduledQueryReminders.projectId, projectId))
     .orderBy(scheduledQueryReminders.scheduledAt);
+    
+  return results.map(r => ({
+    ...r.reminder,
+    tokenCreatorFirstName: r.creatorFirstName,
+  }));
 }
 
 /**

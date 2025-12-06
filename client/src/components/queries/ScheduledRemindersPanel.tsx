@@ -87,6 +87,10 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import type { ScheduledQueryReminder } from '@shared/schema';
 
+interface ReminderWithCreator extends ScheduledQueryReminder {
+  tokenCreatorFirstName: string | null;
+}
+
 interface ScheduledRemindersPanelProps {
   projectId: string;
 }
@@ -113,7 +117,7 @@ const statusBadgeVariants: Record<string, { variant: 'default' | 'outline' | 'se
 
 export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelProps) {
   const { toast } = useToast();
-  const [editingReminder, setEditingReminder] = useState<ScheduledQueryReminder | null>(null);
+  const [editingReminder, setEditingReminder] = useState<ReminderWithCreator | null>(null);
   const [editDate, setEditDate] = useState('');
   const [editTime, setEditTime] = useState('');
   const [editChannel, setEditChannel] = useState('');
@@ -123,7 +127,7 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
   const [editViewMode, setEditViewMode] = useState<'edit' | 'preview'>('edit');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const { data: reminders, isLoading, refetch } = useQuery<ScheduledQueryReminder[]>({
+  const { data: reminders, isLoading, refetch } = useQuery<ReminderWithCreator[]>({
     queryKey: ['/api/projects', projectId, 'query-reminders'],
   });
 
@@ -133,13 +137,14 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
   });
 
   const getDefaultIntroText = useCallback((recipientName: string | null) => {
-    const firstName = recipientName?.split(' ')[0] || '';
+    const firstName = recipientName && recipientName !== 'Client' ? recipientName.split(' ')[0] : '';
     const greeting = firstName ? `Hi ${firstName}` : 'Hello';
     return `<p>${greeting},</p><p>I'm following up about the outstanding bookkeeping queries that still need your response.</p>`;
   }, []);
 
-  const getDefaultSignoffText = useCallback(() => {
-    return `<p>If you have any questions, please don't hesitate to get in touch with us.</p><p>Kind regards,<br/>The Team</p>`;
+  const getDefaultSignoffText = useCallback((senderFirstName: string | null) => {
+    const signatureName = senderFirstName || 'The Team';
+    return `<p>If you have any questions, please don't hesitate to get in touch with us.</p><p>Kind regards,<br/>${signatureName}</p>`;
   }, []);
 
   const handleRefresh = async () => {
@@ -226,7 +231,7 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
     },
   });
 
-  const handleEditClick = (reminder: ScheduledQueryReminder) => {
+  const handleEditClick = (reminder: ReminderWithCreator) => {
     const scheduledDate = new Date(reminder.scheduledAt);
     setEditDate(format(scheduledDate, 'yyyy-MM-dd'));
     setEditTime(format(scheduledDate, 'HH:mm'));
@@ -235,7 +240,7 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
     const existingIntro = (reminder as any).messageIntro || '';
     const existingSignoff = (reminder as any).messageSignoff || '';
     setEditIntro(existingIntro || getDefaultIntroText(reminder.recipientName));
-    setEditSignoff(existingSignoff || getDefaultSignoffText());
+    setEditSignoff(existingSignoff || getDefaultSignoffText(reminder.tokenCreatorFirstName));
     setEditViewMode('edit');
     setEditingReminder(reminder);
   };
