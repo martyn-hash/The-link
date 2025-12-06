@@ -157,7 +157,7 @@ export function EmailDialog({
       personId: cp.person.id,
       fullName: cp.person.fullName || `${cp.person.firstName || ''} ${cp.person.lastName || ''}`.trim(),
       email: cp.person.primaryEmail || cp.person.email,
-      phone: cp.person.telephone || cp.person.mobile || null,
+      phone: cp.person.primaryPhone || cp.person.telephone || cp.person.mobile || null,
       role: cp.role || null,
     }));
   
@@ -505,12 +505,33 @@ export function EmailDialog({
           </DialogHeader>
           
           <form onSubmit={handleSubmit} className="flex-1 overflow-hidden flex flex-col">
-            {/* Dynamic Column Layout: 2 cols for standard, 3 cols for query emails */}
-            <div className={`grid gap-4 flex-1 overflow-y-auto max-h-[60vh] ${
-              isQueryEmailMode 
-                ? 'grid-cols-1 lg:grid-cols-[240px_1fr_280px]' 
-                : 'grid-cols-1 md:grid-cols-[280px_1fr]'
-            }`}>
+            {/* Tabbed layout for query emails, standard layout otherwise */}
+            {isQueryEmailMode ? (
+              <Tabs value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col">
+                <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent mb-4">
+                  <TabsTrigger 
+                    value="compose" 
+                    className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2"
+                  >
+                    Compose
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    value="scheduling" 
+                    className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2"
+                  >
+                    <Clock className="h-4 w-4 mr-1.5" />
+                    Scheduling
+                    {!hasVisitedSchedulingTab && (
+                      <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                        Review
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                </TabsList>
+                
+                {/* Compose Tab Content */}
+                <TabsContent value="compose" className="flex-1 mt-0">
+                  <div className="grid gap-4 overflow-y-auto max-h-[55vh] grid-cols-1 md:grid-cols-[280px_1fr]">
               {/* Left Column: Recipients & AI */}
               <div className="space-y-4">
                 {/* Recipients Section */}
@@ -565,16 +586,16 @@ export function EmailDialog({
                               {/* Channel icons */}
                               {isQueryEmailMode && (
                                 <div className="flex items-center gap-0.5 ml-auto shrink-0">
-                                  <Mail className="h-3 w-3 text-blue-500" title="Email available" />
+                                  <span title="Email available"><Mail className="h-3 w-3 text-blue-500" /></span>
                                   {recipient.phone ? (
                                     <>
-                                      <MessageSquare className="h-3 w-3 text-purple-500" title="SMS available" />
-                                      <Phone className="h-3 w-3 text-green-500" title="Voice available" />
+                                      <span title="SMS available"><MessageSquare className="h-3 w-3 text-purple-500" /></span>
+                                      <span title="Voice available"><Phone className="h-3 w-3 text-green-500" /></span>
                                     </>
                                   ) : (
                                     <>
-                                      <MessageSquare className="h-3 w-3 text-muted-foreground/30" title="No phone - SMS unavailable" />
-                                      <Phone className="h-3 w-3 text-muted-foreground/30" title="No phone - Voice unavailable" />
+                                      <span title="No phone - SMS unavailable"><MessageSquare className="h-3 w-3 text-muted-foreground/30" /></span>
+                                      <span title="No phone - Voice unavailable"><Phone className="h-3 w-3 text-muted-foreground/30" /></span>
                                     </>
                                   )}
                                 </div>
@@ -786,59 +807,294 @@ export function EmailDialog({
                   </div>
                 )}
               </div>
+                  </div>
+                </TabsContent>
+                
+                {/* Scheduling Tab Content */}
+                <TabsContent value="scheduling" className="flex-1 mt-0">
+                  <div className="space-y-4 overflow-y-auto max-h-[55vh]">
+                    {/* Link Expiry Banner */}
+                    {queryEmailOptions && (
+                      <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+                        <div className="flex items-center gap-3">
+                          <Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                          <div>
+                            <h4 className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                              Response Link Expires: {queryEmailOptions.expiryDate ? new Date(queryEmailOptions.expiryDate).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : `${queryEmailOptions.expiryDays} days after sending`}
+                            </h4>
+                            <p className="text-xs text-amber-700 dark:text-amber-300 mt-0.5">
+                              Reminders will be scheduled before this date to ensure timely responses
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
-              {/* Right Column: Reminders (only in query email mode) */}
-              {isQueryEmailMode && queryEmailOptions && (
-                <div className="space-y-4">
-                  <ReminderScheduleEditor
-                    expiryDays={queryEmailOptions.expiryDays}
-                    recipientPhone={queryEmailOptions.recipientPhone}
-                    recipientEmail={selectedRecipients.size > 0 
-                      ? peopleWithEmail.find(p => selectedRecipients.has(p.personId))?.email 
-                      : undefined}
-                    channelAvailability={channelAvailability}
-                    expiryDate={queryEmailOptions.expiryDate}
-                    schedule={reminderSchedule}
-                    onScheduleChange={(newSchedule) => {
-                      setReminderSchedule(newSchedule);
-                      onRemindersConfigured?.(newSchedule);
-                    }}
-                    disabled={sendEmailMutation.isPending}
-                  />
-
-                  {/* Info panel about reminders */}
-                  <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                      <span className="text-sm font-medium text-blue-900 dark:text-blue-100">Automated Follow-up</span>
+                    {/* Channel Availability Summary */}
+                    <div className="bg-muted/30 rounded-lg p-4">
+                      <h4 className="text-sm font-medium mb-3">Channel Availability</h4>
+                      <div className="grid grid-cols-3 gap-4">
+                        <div className="flex items-center gap-2">
+                          <span title="Email"><Mail className="h-4 w-4 text-blue-500" /></span>
+                          <span className="text-sm">
+                            Email: <span className="font-medium">{channelAvailability.withEmail}/{channelAvailability.total}</span>
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span title="SMS"><MessageSquare className="h-4 w-4 text-purple-500" /></span>
+                          <span className="text-sm">
+                            SMS: <span className={`font-medium ${channelAvailability.withPhone === 0 ? 'text-muted-foreground' : ''}`}>{channelAvailability.withPhone}/{channelAvailability.total}</span>
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span title="Voice"><Phone className="h-4 w-4 text-green-500" /></span>
+                          <span className="text-sm">
+                            Voice: <span className={`font-medium ${channelAvailability.withPhone === 0 ? 'text-muted-foreground' : ''}`}>{channelAvailability.withPhone}/{channelAvailability.total}</span>
+                          </span>
+                        </div>
+                      </div>
+                      {channelAvailability.withPhone === 0 && channelAvailability.total > 0 && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          No phone numbers available for selected recipients. SMS and Voice reminders will be skipped.
+                        </p>
+                      )}
                     </div>
-                    <p className="text-xs text-blue-800 dark:text-blue-200">
-                      {reminderSchedule.filter(r => r.enabled).length} reminder{reminderSchedule.filter(r => r.enabled).length !== 1 ? 's' : ''} will be sent if queries remain unanswered.
-                      Reminders stop automatically when all queries are answered.
-                    </p>
+
+                    {/* Reminder Schedule */}
+                    {queryEmailOptions && (
+                      <ReminderScheduleEditor
+                        expiryDays={queryEmailOptions.expiryDays}
+                        recipientPhone={queryEmailOptions.recipientPhone}
+                        recipientEmail={selectedRecipients.size > 0 
+                          ? peopleWithEmail.find(p => selectedRecipients.has(p.personId))?.email 
+                          : undefined}
+                        channelAvailability={channelAvailability}
+                        expiryDate={queryEmailOptions.expiryDate}
+                        schedule={reminderSchedule}
+                        onScheduleChange={(newSchedule) => {
+                          setReminderSchedule(newSchedule);
+                          onRemindersConfigured?.(newSchedule);
+                        }}
+                        disabled={sendEmailMutation.isPending}
+                      />
+                    )}
+
+                    {/* Info panel about reminders */}
+                    <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                        <span className="text-sm font-medium text-blue-900 dark:text-blue-100">Automated Follow-up</span>
+                      </div>
+                      <p className="text-xs text-blue-800 dark:text-blue-200">
+                        {reminderSchedule.filter(r => r.enabled).length} reminder{reminderSchedule.filter(r => r.enabled).length !== 1 ? 's' : ''} will be sent if queries remain unanswered.
+                        Reminders stop automatically when all queries are answered.
+                      </p>
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            ) : (
+              /* Standard email mode - original 2-column layout */
+              <div className="grid gap-4 flex-1 overflow-y-auto max-h-[60vh] grid-cols-1 md:grid-cols-[280px_1fr]">
+                {/* Left Column: Recipients & AI (duplicated for non-query mode) */}
+                <div className="space-y-4">
+                  {/* Recipients Section */}
+                  <div className="bg-muted/30 rounded-lg p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Mail className="h-4 w-4 text-muted-foreground" />
+                        <Label className="text-sm font-medium">Recipients <span className="text-destructive">*</span></Label>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label className="text-xs text-muted-foreground">Select contacts</Label>
+                        {peopleWithEmail.length > 0 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 text-xs px-1"
+                            onClick={toggleAllRecipients}
+                            data-testid="button-toggle-all-recipients-standard"
+                          >
+                            {selectedRecipients.size === peopleWithEmail.length ? 'None' : 'All'}
+                          </Button>
+                        )}
+                      </div>
+                      
+                      {peopleWithEmail.length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic">No contacts with email addresses</p>
+                      ) : (
+                        <div className="space-y-1 max-h-40 overflow-y-auto">
+                          {peopleWithEmail.map((recipient) => (
+                            <div key={recipient.personId} className="flex items-center gap-2">
+                              <Checkbox
+                                id={`recipient-standard-${recipient.personId}`}
+                                checked={selectedRecipients.has(recipient.personId)}
+                                onCheckedChange={() => toggleRecipient(recipient.personId)}
+                                data-testid={`checkbox-recipient-standard-${recipient.personId}`}
+                                className="h-3.5 w-3.5"
+                              />
+                              <label
+                                htmlFor={`recipient-standard-${recipient.personId}`}
+                                className="text-xs cursor-pointer flex-1 flex items-center gap-1 truncate"
+                              >
+                                <span className="font-medium truncate">{formatPersonName(recipient.fullName)}</span>
+                                {recipient.role && (
+                                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                                    {formatRole(recipient.role)}
+                                  </Badge>
+                                )}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {selectedRecipients.size > 0 && (
+                        <div className="text-xs text-muted-foreground">
+                          {selectedRecipients.size} selected
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* AI Assistance Section */}
+                  <div className="bg-gradient-to-br from-blue-50/50 to-indigo-50/50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-lg p-3 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      <Label className="text-sm font-medium">AI Assist</Label>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1 block">Record</Label>
+                        <AudioRecorder
+                          mode="email"
+                          disabled={sendEmailMutation.isPending}
+                          context={getAiContext()}
+                          onResult={(result) => {
+                            if (result.subject) setEmailSubject(result.subject);
+                            if (result.body) setEmailContent(result.body);
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1 block">Prompt</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-full h-9 text-xs gap-1.5"
+                          onClick={() => setShowPromptModal(true)}
+                          disabled={sendEmailMutation.isPending}
+                          data-testid="button-ai-prompt-standard"
+                        >
+                          <Edit3 className="h-3.5 w-3.5" />
+                          <span>Refine</span>
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Attachments Section */}
+                  <Collapsible open={isAttachmentsOpen} onOpenChange={setIsAttachmentsOpen}>
+                    <CollapsibleTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="w-full justify-between h-8 px-3 bg-muted/30 hover:bg-muted/50"
+                        data-testid="button-toggle-attachments-standard"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Paperclip className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">Attachments</span>
+                          {attachments.length > 0 && (
+                            <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                              {attachments.length}
+                            </Badge>
+                          )}
+                        </div>
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="mt-3 space-y-3">
+                      <FileUploadZone
+                        onFilesSelected={handleFilesSelected}
+                        maxFiles={5}
+                        maxSize={10 * 1024 * 1024}
+                        acceptedTypes={['image/*', '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv']}
+                        compact
+                      />
+                      {pendingFiles.length > 0 && (
+                        <AttachmentList
+                          attachments={pendingFiles}
+                          onRemove={handleRemoveAttachment}
+                        />
+                      )}
+                    </CollapsibleContent>
+                  </Collapsible>
+                </div>
+
+                {/* Right Column: Subject & Message */}
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="email-subject" className="text-sm">Subject <span className="text-destructive">*</span></Label>
+                    <Input
+                      id="email-subject"
+                      value={emailSubject}
+                      onChange={(e) => setEmailSubject(e.target.value)}
+                      placeholder="Enter email subject..."
+                      data-testid="input-email-subject-standard"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="email-content" className="text-sm">Message <span className="text-destructive">*</span></Label>
+                    <div data-testid="input-email-content-editor-standard" className="border rounded-md">
+                      <TiptapEditor
+                        content={emailContent}
+                        onChange={setEmailContent}
+                        placeholder="Enter your email message..."
+                        editorHeight="250px"
+                      />
+                    </div>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Footer */}
             <DialogFooter className="mt-4 pt-4 border-t gap-2 sm:gap-2">
               <Button type="button" variant="outline" onClick={handleClose}>
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
-                disabled={sendEmailMutation.isPending || !hasSelectedRecipients} 
-                data-testid="button-send-email-dialog"
-                className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
-              >
-                {sendEmailMutation.isPending 
-                  ? 'Sending...' 
-                  : hasSelectedRecipients 
-                    ? `Send to ${selectedRecipients.size} recipient${selectedRecipients.size > 1 ? 's' : ''}`
-                    : 'Select Recipients'
-                }
-              </Button>
+              {isQueryEmailMode && !hasVisitedSchedulingTab ? (
+                <Button 
+                  type="button" 
+                  onClick={() => setActiveTab('scheduling')}
+                  data-testid="button-review-scheduling"
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-medium gap-2"
+                >
+                  <Clock className="h-4 w-4" />
+                  Review Scheduling
+                </Button>
+              ) : (
+                <Button 
+                  type="submit" 
+                  disabled={sendEmailMutation.isPending || !hasSelectedRecipients} 
+                  data-testid="button-send-email-dialog"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
+                >
+                  {sendEmailMutation.isPending 
+                    ? 'Sending...' 
+                    : hasSelectedRecipients 
+                      ? `Send to ${selectedRecipients.size} recipient${selectedRecipients.size > 1 ? 's' : ''}`
+                      : 'Select Recipients'
+                  }
+                </Button>
+              )}
             </DialogFooter>
           </form>
         </DialogContent>
