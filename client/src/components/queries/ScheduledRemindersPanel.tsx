@@ -745,7 +745,7 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {unansweredQueries.slice(0, 5).map((q, i) => (
+                                  {unansweredQueries.map((q, i) => (
                                     <tr key={i} style={i % 2 === 1 ? { backgroundColor: '#f8fafc' } : undefined}>
                                       <td style={{ border: '1px solid #d0d7de', padding: '4px 6px' }}>{formatDateForPreview(q.date)}</td>
                                       <td style={{ border: '1px solid #d0d7de', padding: '4px 6px', maxWidth: '100px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.description || ''}</td>
@@ -756,9 +756,6 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
                                   ))}
                                 </tbody>
                               </table>
-                              {unansweredQueries.length > 5 && (
-                                <p style={{ fontSize: '11px', marginTop: '4px', fontStyle: 'italic' }}>...and {unansweredQueries.length - 5} more queries</p>
-                              )}
                             </>
                           ) : (
                             <p style={{ fontSize: '12px', fontStyle: 'italic' }}>No outstanding queries found</p>
