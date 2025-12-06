@@ -1528,6 +1528,131 @@ ${tableHtml}
     }
   });
 
+  // ==================== PROJECT-SCOPED REMINDER ROUTES ====================
+
+  // GET /api/projects/:projectId/queries/reminders - Get all reminders for a project
+  app.get("/api/projects/:projectId/queries/reminders", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramProjectIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ message: "Invalid project ID", errors: paramValidation.errors });
+      }
+
+      const { projectId } = req.params;
+      const reminders = await storage.getScheduledQueryRemindersByProjectId(projectId);
+      res.json(reminders);
+    } catch (error) {
+      console.error("Error fetching project reminders:", error);
+      res.status(500).json({ message: "Failed to fetch reminders" });
+    }
+  });
+
+  // POST /api/projects/:projectId/queries/reminders - Create reminders for a token
+  const projectRemindersSchema = z.object({
+    tokenId: z.string().uuid(),
+    reminders: z.array(z.object({
+      scheduledAt: z.string(),
+      channel: z.enum(['email', 'sms', 'voice']),
+    })),
+  });
+
+  app.post("/api/projects/:projectId/queries/reminders", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramProjectIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ message: "Invalid project ID", errors: paramValidation.errors });
+      }
+
+      const { projectId } = req.params;
+      const data = projectRemindersSchema.parse(req.body);
+      
+      // Get the token to verify it belongs to this project and get recipient info
+      const token = await storage.getQueryResponseTokenById(data.tokenId);
+      if (!token) {
+        return res.status(404).json({ message: "Token not found" });
+      }
+      if (token.projectId !== projectId) {
+        return res.status(403).json({ message: "Token does not belong to this project" });
+      }
+
+      // Get the first recipient from the token to use as recipient info
+      const recipientEmail = token.recipientEmail || null;
+      const recipientName = token.recipientName || 'Client';
+      
+      // Get recipient phone from people associated with this client (if available)
+      let recipientPhone: string | null = null;
+      const project = await storage.getProjectById(projectId);
+      if (project?.clientId) {
+        const people = await storage.getPeopleByClientId(project.clientId);
+        const primaryContact = people.find(p => p.isPrimaryContact) || people[0];
+        if (primaryContact?.telephone) {
+          recipientPhone = primaryContact.telephone;
+        }
+      }
+
+      const { scheduleReminders } = await import('../services/queryReminderService');
+      const scheduled = await scheduleReminders(
+        data.tokenId,
+        projectId,
+        recipientName,
+        recipientEmail,
+        recipientPhone,
+        data.reminders.map(r => ({
+          scheduledAt: new Date(r.scheduledAt),
+          channel: r.channel,
+          message: undefined,
+        })),
+        token.queryCount || 1
+      );
+      
+      res.json({ success: true, reminders: scheduled });
+    } catch (error: any) {
+      console.error("Error creating project reminders:", error);
+      if (error?.name === 'ZodError') {
+        return res.status(400).json({ message: "Validation failed", errors: error.issues });
+      }
+      res.status(500).json({ message: "Failed to create reminders" });
+    }
+  });
+
+  // DELETE /api/projects/:projectId/queries/reminders/:reminderId - Cancel a specific reminder
+  const paramReminderIdSchema = z.object({
+    projectId: z.string().uuid(),
+    reminderId: z.string().uuid(),
+  });
+
+  app.delete("/api/projects/:projectId/queries/reminders/:reminderId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramReminderIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ message: "Invalid parameters", errors: paramValidation.errors });
+      }
+
+      const { projectId, reminderId } = req.params;
+      
+      // Verify the reminder belongs to this project
+      const reminder = await storage.getScheduledQueryReminderById(reminderId);
+      if (!reminder) {
+        return res.status(404).json({ message: "Reminder not found" });
+      }
+      if (reminder.projectId !== projectId) {
+        return res.status(403).json({ message: "Reminder does not belong to this project" });
+      }
+
+      const { cancelReminder } = await import('../services/queryReminderService');
+      const cancelled = await cancelReminder(reminderId, req.user?.id);
+      
+      if (!cancelled) {
+        return res.status(400).json({ message: "Reminder could not be cancelled (may already be processed)" });
+      }
+      
+      res.json({ success: true, message: "Reminder cancelled" });
+    } catch (error) {
+      console.error("Error cancelling project reminder:", error);
+      res.status(500).json({ message: "Failed to cancel reminder" });
+    }
+  });
+
   // ==================== DIALORA WEBHOOK ====================
   
   // Inbound webhook for Dialora call status updates

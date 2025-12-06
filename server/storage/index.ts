@@ -90,7 +90,7 @@ import {
 } from './settings/index.js';
 import { WebhookStorage } from './webhooks/index.js';
 import { QboStorage, QcStorage } from './qbo/index.js';
-import { QueryStorage, QueryTokenStorage } from './queries/index.js';
+import { QueryStorage, QueryTokenStorage, ScheduledReminderStorage } from './queries/index.js';
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -162,6 +162,7 @@ export class DatabaseStorage implements IStorage {
   private qcStorage: QcStorage;
   private queryStorage: QueryStorage;
   private queryTokenStorage: QueryTokenStorage;
+  private scheduledReminderStorage: ScheduledReminderStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -266,6 +267,7 @@ export class DatabaseStorage implements IStorage {
     // Initialize queries domain storage
     this.queryStorage = new QueryStorage();
     this.queryTokenStorage = new QueryTokenStorage();
+    this.scheduledReminderStorage = new ScheduledReminderStorage();
     
     // Register cross-domain helpers
     this.registerClientHelpers();
@@ -3516,6 +3518,59 @@ export class DatabaseStorage implements IStorage {
 
   async getActiveQueryResponseTokensByProjectId(projectId: string) {
     return this.queryTokenStorage.getActiveTokensByProjectId(projectId);
+  }
+
+  // SCHEDULED QUERY REMINDERS DOMAIN - Delegated to ScheduledReminderStorage
+  async createScheduledQueryReminder(data: any) {
+    return this.scheduledReminderStorage.create(data);
+  }
+
+  async createScheduledQueryReminders(data: any[]) {
+    return this.scheduledReminderStorage.createMany(data);
+  }
+
+  async getScheduledQueryReminderById(id: string) {
+    return this.scheduledReminderStorage.getById(id);
+  }
+
+  async getScheduledQueryRemindersByTokenId(tokenId: string) {
+    return this.scheduledReminderStorage.getByTokenId(tokenId);
+  }
+
+  async getScheduledQueryRemindersByProjectId(projectId: string) {
+    return this.scheduledReminderStorage.getByProjectId(projectId);
+  }
+
+  async getDueQueryReminders() {
+    return this.scheduledReminderStorage.getDueReminders();
+  }
+
+  async updateScheduledQueryReminderStatus(id: string, status: any, extras?: any) {
+    return this.scheduledReminderStorage.updateStatus(id, status, extras);
+  }
+
+  async cancelScheduledQueryReminder(id: string, cancelledById: string) {
+    return this.scheduledReminderStorage.cancel(id, cancelledById);
+  }
+
+  async cancelAllQueryRemindersForToken(tokenId: string, cancelledById: string) {
+    return this.scheduledReminderStorage.cancelAllForToken(tokenId, cancelledById);
+  }
+
+  async skipRemainingQueryRemindersForToken(tokenId: string, reason?: string) {
+    return this.scheduledReminderStorage.skipRemainingForToken(tokenId, reason);
+  }
+
+  async getPendingQueryReminderCountForToken(tokenId: string) {
+    return this.scheduledReminderStorage.getPendingCountForToken(tokenId);
+  }
+
+  async deleteScheduledQueryReminder(id: string) {
+    return this.scheduledReminderStorage.delete(id);
+  }
+
+  async deleteAllQueryRemindersForToken(tokenId: string) {
+    return this.scheduledReminderStorage.deleteAllForToken(tokenId);
   }
 
 }

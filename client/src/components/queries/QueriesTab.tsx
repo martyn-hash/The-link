@@ -179,6 +179,8 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   }>({});
   const [pendingEmailQueryIds, setPendingEmailQueryIds] = useState<string[]>([]);
   const [pendingEmailTokenId, setPendingEmailTokenId] = useState<string | null>(null);
+  const [pendingEmailExpiryDays, setPendingEmailExpiryDays] = useState<number | null>(null);
+  const [configuredReminders, setConfiguredReminders] = useState<Array<{ id: string; scheduledAt: string; channel: 'email' | 'sms' | 'voice'; enabled: boolean }>>([]);
   const [isPreparingEmail, setIsPreparingEmail] = useState(false);
   
   // Send Options dialog state
@@ -496,9 +498,11 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
       
       const response = await apiRequest('POST', `/api/projects/${projectId}/queries/prepare-email`, requestBody);
       
-      // Store the token ID and query IDs for after email is sent
+      // Store the token ID, query IDs, and expiry days for after email is sent
       setPendingEmailTokenId(includeOnlineLink ? response.tokenId : null);
       setPendingEmailQueryIds(sendOptionsQueryIds);
+      setPendingEmailExpiryDays(includeOnlineLink ? linkExpiryDays : null);
+      setConfiguredReminders([]);
       
       // Set initial values for email dialog with structured content for protected HTML
       setEmailInitialValues({
@@ -536,13 +540,35 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
           tokenId: pendingEmailTokenId,
         });
         
-        // Refresh queries list
+        // Save configured reminders if we have a token and enabled reminders
+        if (pendingEmailTokenId && configuredReminders.length > 0) {
+          const enabledReminders = configuredReminders.filter(r => r.enabled);
+          if (enabledReminders.length > 0) {
+            try {
+              await apiRequest('POST', `/api/projects/${projectId}/queries/reminders`, {
+                tokenId: pendingEmailTokenId,
+                reminders: enabledReminders.map(r => ({
+                  scheduledAt: r.scheduledAt,
+                  channel: r.channel,
+                })),
+              });
+              console.log(`Saved ${enabledReminders.length} scheduled reminders for token ${pendingEmailTokenId}`);
+            } catch (reminderError) {
+              console.error('Error saving reminders:', reminderError);
+              // Don't fail the overall operation if reminder saving fails
+            }
+          }
+        }
+        
+        // Refresh queries list and reminders
         queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries', 'reminders'] });
         queryClient.invalidateQueries({ queryKey: ['/api/queries/counts'] });
         
+        const reminderCount = configuredReminders.filter(r => r.enabled).length;
         toast({ 
           title: "Queries sent", 
-          description: `${pendingEmailQueryIds.length} queries have been sent to the client.` 
+          description: `${pendingEmailQueryIds.length} queries sent to client${reminderCount > 0 ? ` with ${reminderCount} scheduled reminder${reminderCount !== 1 ? 's' : ''}` : ''}.` 
         });
       } catch (error) {
         console.error('Error marking queries as sent:', error);
@@ -554,6 +580,8 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     setSelectedQueries([]);
     setPendingEmailQueryIds([]);
     setPendingEmailTokenId(null);
+    setPendingEmailExpiryDays(null);
+    setConfiguredReminders([]);
     setEmailInitialValues({});
     setIsEmailDialogOpen(false);
     setReminderTokenId(null);
@@ -1622,6 +1650,13 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
           onSuccess={reminderTokenId ? handleReminderSuccess : handleEmailSuccess}
           clientCompany={clientName}
           initialValues={emailInitialValues}
+          queryEmailOptions={pendingEmailTokenId && pendingEmailExpiryDays ? {
+            tokenId: pendingEmailTokenId,
+            queryIds: pendingEmailQueryIds,
+            queryCount: pendingEmailQueryIds.length,
+            expiryDays: pendingEmailExpiryDays,
+          } : undefined}
+          onRemindersConfigured={setConfiguredReminders}
         />
       )}
 
