@@ -1583,10 +1583,10 @@ ${tableHtml}
       let recipientPhone: string | null = null;
       const project = await storage.getProjectById(projectId);
       if (project?.clientId) {
-        const people = await storage.getPeopleByClientId(project.clientId);
-        const primaryContact = people.find(p => p.isPrimaryContact) || people[0];
-        if (primaryContact?.telephone) {
-          recipientPhone = primaryContact.telephone;
+        const clientPeople = await storage.getClientPeopleByClientId(project.clientId);
+        const primaryContact = clientPeople.find((cp: any) => cp.isPrimaryContact) || clientPeople[0];
+        if (primaryContact?.person?.telephone) {
+          recipientPhone = primaryContact.person.telephone;
         }
       }
 

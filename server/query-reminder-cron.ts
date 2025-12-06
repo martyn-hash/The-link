@@ -160,12 +160,12 @@ async function processQueryReminders(): Promise<void> {
 
 /**
  * Start the query reminder cron job
- * Runs every 5 minutes
+ * Runs every hour on the hour
  */
 export function startQueryReminderCron(): void {
-  cron.schedule('*/5 * * * *', async () => {
+  cron.schedule('0 * * * *', async () => {
     await processQueryReminders();
   });
 
-  console.log('[QueryReminderCron] Started - running every 5 minutes during 07:00-22:00 UK time');
+  console.log('[QueryReminderCron] Started - running hourly during 07:00-22:00 UK time');
 }
