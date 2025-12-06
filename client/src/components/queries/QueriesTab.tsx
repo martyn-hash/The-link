@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Calendar } from "@/components/ui/calendar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Popover,
   PopoverContent,
@@ -70,6 +71,7 @@ import {
   Download,
   Eye,
   Users,
+  Bell,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -167,6 +169,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingQuery, setEditingQuery] = useState<BookkeepingQueryWithRelations | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [activeSubTab, setActiveSubTab] = useState<"queries" | "reminders">("queries");
   
   // Email dialog state
   const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
@@ -233,6 +236,13 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   }>({
     queryKey: ['/api/projects', projectId, 'queries', 'stats'],
   });
+
+  // Query for scheduled reminders to show count in tab
+  const { data: scheduledReminders } = useQuery<{ id: string; status: string }[]>({
+    queryKey: ['/api/projects', projectId, 'query-reminders'],
+  });
+  
+  const pendingReminderCount = scheduledReminders?.filter(r => r.status === 'pending').length || 0;
 
   // Query for active tokens (only fetch when expanded)
   const { data: activeTokens } = useQuery<{
@@ -673,22 +683,43 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
 
   return (
     <>
-      {/* Scheduled Reminders Panel - show above queries when reminders exist */}
-      <ScheduledRemindersPanel projectId={projectId} />
-      
-      <Card>
-        <CardHeader>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <CardTitle className="flex items-center gap-2">
-              <HelpCircle className="w-5 h-5" />
-              Bookkeeping Queries
-            {stats && (
-              <span className="text-sm font-normal text-muted-foreground ml-2" data-testid="text-query-count">
-                ({stats.open} open / {stats.total} total)
-              </span>
-            )}
-          </CardTitle>
-          <div className="flex items-center gap-2">
+      <Tabs value={activeSubTab} onValueChange={(v) => setActiveSubTab(v as "queries" | "reminders")} className="w-full">
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <CardTitle className="flex items-center gap-2">
+                  <HelpCircle className="w-5 h-5" />
+                  Bookkeeping Queries
+                </CardTitle>
+              </div>
+              
+              {/* Sub-tab navigation */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <TabsList className="w-full sm:w-auto">
+                  <TabsTrigger value="queries" className="gap-1.5" data-testid="tab-queries">
+                    <HelpCircle className="w-4 h-4" />
+                    Queries
+                    {stats && (
+                      <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                        {stats.open}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger value="reminders" className="gap-1.5" data-testid="tab-scheduled-reminders">
+                    <Bell className="w-4 h-4" />
+                    Scheduled Reminders
+                    {pendingReminderCount > 0 && (
+                      <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-xs">
+                        {pendingReminderCount}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                </TabsList>
+                
+                {/* Actions - only show when on queries tab */}
+                {activeSubTab === "queries" && (
+                  <div className="flex items-center gap-2">
             {/* View All Responses button - show when there are any client responses (text or attachments) */}
             {queries && queries.some(q => q.clientResponse || (q.clientAttachments && (q.clientAttachments as any[]).length > 0) || q.status === 'answered_by_client') && (
               <>
@@ -894,10 +925,15 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
               </DialogFooter>
             </DialogContent>
             </Dialog>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardHeader>
+            
+          {/* Queries Tab Content */}
+          <TabsContent value="queries" className="mt-0">
+            <CardContent className="pt-0">
         {/* Filters and Bulk Actions */}
         <div className="flex flex-col sm:flex-row gap-4 mb-4">
           <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -1254,7 +1290,19 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
             )}
           </div>
         )}
-      </CardContent>
+                </CardContent>
+              </TabsContent>
+              
+              {/* Scheduled Reminders Tab Content */}
+              <TabsContent value="reminders" className="mt-4">
+                <CardContent className="px-0 pt-0">
+                  <ScheduledRemindersPanel projectId={projectId} />
+                </CardContent>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </CardHeader>
+      </Card>
 
       {/* Extend Token Dialog */}
       <Dialog open={!!extendTokenId} onOpenChange={(open) => !open && setExtendTokenId(null)}>
@@ -1807,7 +1855,6 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </Card>
     </>
   );
 }
