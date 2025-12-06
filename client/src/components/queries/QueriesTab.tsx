@@ -1293,16 +1293,14 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                 </CardContent>
               </TabsContent>
               
-              {/* Scheduled Reminders Tab Content */}
-              <TabsContent value="reminders" className="mt-4">
-                <CardContent className="px-0 pt-0">
-                  <ScheduledRemindersPanel projectId={projectId} />
-                </CardContent>
-              </TabsContent>
-            </Tabs>
-          </div>
-        </CardHeader>
-      </Card>
+          {/* Scheduled Reminders Tab Content */}
+          <TabsContent value="reminders" className="mt-0">
+            <CardContent className="pt-0">
+              <ScheduledRemindersPanel projectId={projectId} />
+            </CardContent>
+          </TabsContent>
+        </Card>
+      </Tabs>
 
       {/* Extend Token Dialog */}
       <Dialog open={!!extendTokenId} onOpenChange={(open) => !open && setExtendTokenId(null)}>
