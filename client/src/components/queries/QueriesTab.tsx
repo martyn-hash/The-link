@@ -45,6 +45,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { 
   Plus, 
   HelpCircle, 
@@ -72,6 +78,7 @@ import {
   Eye,
   Users,
   Bell,
+  AlertTriangle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -955,17 +962,30 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
           </Select>
 
           {selectedQueries.length > 0 && (
-            <div className="flex gap-2">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => handlePrepareEmail(selectedQueries)}
-                disabled={!clientId}
-                data-testid="button-send-selected"
-              >
-                <Send className="w-4 h-4 mr-2" />
-                Send to Client ({selectedQueries.length})
-              </Button>
+            <div className="flex gap-2 items-center">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handlePrepareEmail(selectedQueries)}
+                        disabled={!clientId || pendingReminderCount > 0}
+                        data-testid="button-send-selected"
+                      >
+                        <Send className="w-4 h-4 mr-2" />
+                        Send to Client ({selectedQueries.length})
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {pendingReminderCount > 0 && (
+                    <TooltipContent side="bottom" className="max-w-xs">
+                      <p>You have {pendingReminderCount} scheduled reminder{pendingReminderCount !== 1 ? 's' : ''} pending. Cancel reminders first to send a fresh email.</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
               <Button 
                 variant="outline" 
                 size="sm"
@@ -979,6 +999,21 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
             </div>
           )}
         </div>
+
+        {/* Pending Reminders Warning */}
+        {pendingReminderCount > 0 && (
+          <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 rounded-lg p-3 mb-4 flex items-start gap-3" data-testid="alert-reminders-pending">
+            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                {pendingReminderCount} scheduled reminder{pendingReminderCount !== 1 ? 's' : ''} pending
+              </p>
+              <p className="text-sm text-amber-700 dark:text-amber-300 mt-0.5">
+                Cancel existing reminders in the Scheduled Reminders tab before sending a fresh query email.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Queries Table */}
         {filteredQueries.length === 0 ? (
@@ -1070,10 +1105,10 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                             </DropdownMenuItem>
                             <DropdownMenuItem 
                               onClick={() => handlePrepareEmail([query.id])}
-                              disabled={query.status === 'sent_to_client' || query.status === 'resolved' || !clientId}
+                              disabled={query.status === 'sent_to_client' || query.status === 'resolved' || !clientId || pendingReminderCount > 0}
                             >
                               <Send className="w-4 h-4 mr-2" />
-                              Send to Client
+                              {pendingReminderCount > 0 ? 'Reminders pending' : 'Send to Client'}
                             </DropdownMenuItem>
                             <DropdownMenuItem 
                               onClick={() => bulkStatusMutation.mutate({ ids: [query.id], status: 'resolved' })}
@@ -1166,10 +1201,10 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           onClick={() => handlePrepareEmail([query.id])}
-                          disabled={query.status === 'sent_to_client' || query.status === 'resolved' || !clientId}
+                          disabled={query.status === 'sent_to_client' || query.status === 'resolved' || !clientId || pendingReminderCount > 0}
                         >
                           <Mail className="w-4 h-4 mr-2" />
-                          Send to Client
+                          {pendingReminderCount > 0 ? 'Reminders pending' : 'Send to Client'}
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           onClick={() => bulkStatusMutation.mutate({ ids: [query.id], status: 'resolved' })}

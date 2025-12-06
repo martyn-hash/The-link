@@ -784,12 +784,12 @@ export function registerQueryRoutes(
       // Link section (part of protected HTML)
       const linkSection = includeOnlineLink && fullResponseUrl ? `
 <p style="margin: 24px 0;">
-  <a href="${fullResponseUrl}" style="display: inline-block; background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+  <a href="${fullResponseUrl}" style="display: inline-block; background-color: #0f7b94; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
     Click here to respond to these queries
   </a>
 </p>
 
-<p style="color: #64748b; font-size: 14px;">This link will expire on ${formatDate(expiresAt)}.</p>
+<p style="color: #64748b; font-size: 14px;"><strong>This link will expire on ${formatDate(expiresAt)}.</strong></p>
 ` : '';
 
       // Editable intro section
@@ -1029,12 +1029,12 @@ ${emailSignoff}`;
 <p>This is a friendly reminder that we are still waiting for your response to ${queries.length} bookkeeping ${queries.length === 1 ? 'query' : 'queries'} for ${client?.name || 'your account'}.</p>
 
 <p style="margin: 24px 0;">
-  <a href="${fullResponseUrl}" style="display: inline-block; background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+  <a href="${fullResponseUrl}" style="display: inline-block; background-color: #0f7b94; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
     Click here to respond to these queries
   </a>
 </p>
 
-<p style="color: #64748b; font-size: 14px;">This link will expire on ${formatDate(token.expiresAt)}.</p>
+<p style="color: #64748b; font-size: 14px;"><strong>This link will expire on ${formatDate(token.expiresAt)}.</strong></p>
 
 <p>If you have any questions, please don't hesitate to get in touch.</p>
 
@@ -1584,7 +1584,7 @@ ${emailSignoff}`;
 ${tableHtml}
 
 <p style="margin: 24px 0;">
-  <a href="https://example.com/test-link" style="display: inline-block; background-color: #4f46e5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
+  <a href="https://example.com/test-link" style="display: inline-block; background-color: #0f7b94; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 600;">
     Click here to respond to these queries
   </a>
 </p>
