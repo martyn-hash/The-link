@@ -189,42 +189,53 @@ export default function ProjectInfo({ project, user, currentStage, currentAssign
         </div>
       )}
 
-      {/* Two Column Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Left Column: Due Date and Role Assignments */}
+      {/* Three Column Layout */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Column 1: Dates - Target Date, Due Date, Time Until Due */}
         <div>
-          {/* Dates Section */}
-          {(project.dueDate || project.targetDeliveryDate) && (
-            <div className="mb-6 space-y-2">
-              {project.targetDeliveryDate && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground font-medium">Target Delivery:</span>
-                  <span className="font-semibold text-foreground" data-testid="text-project-target-delivery">
-                    {new Date(project.targetDeliveryDate).toLocaleDateString('en-GB', { 
-                      day: '2-digit', 
-                      month: 'short', 
-                      year: 'numeric'
-                    })}
-                  </span>
-                </div>
-              )}
-              {project.dueDate && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground font-medium">Due Date:</span>
-                  <span className="font-semibold text-foreground" data-testid="text-project-due-date">
-                    {new Date(project.dueDate).toLocaleDateString('en-GB', { 
-                      day: '2-digit', 
-                      month: 'short', 
-                      year: 'numeric'
-                    })}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
-          
-          <h4 className="font-semibold text-foreground mb-4">Role Assignments</h4>
+          <h4 className="font-semibold text-foreground mb-4">Dates</h4>
           <div className="space-y-3">
+            {project.targetDeliveryDate && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Target Delivery:</span>
+                <span className="font-medium" data-testid="text-project-target-delivery">
+                  {new Date(project.targetDeliveryDate).toLocaleDateString('en-GB', { 
+                    day: '2-digit', 
+                    month: 'short', 
+                    year: 'numeric'
+                  })}
+                </span>
+              </div>
+            )}
+            {project.dueDate && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Due Date:</span>
+                <span className="font-medium" data-testid="text-project-due-date">
+                  {new Date(project.dueDate).toLocaleDateString('en-GB', { 
+                    day: '2-digit', 
+                    month: 'short', 
+                    year: 'numeric'
+                  })}
+                </span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Time Until Due:</span>
+              <span 
+                className={`font-medium ${timeRemaining === 'Overdue' ? 'text-red-600 dark:text-red-400' : ''}`}
+                data-testid="text-time-until-due"
+              >
+                {timeRemaining}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Column 2: Role Assignments, Current Assignee, Current Stage */}
+        <div>
+          <h4 className="font-semibold text-foreground mb-4">Assignments & Status</h4>
+          <div className="space-y-3">
+            {/* Role Assignments */}
             {isLoadingServiceRoles ? (
               <div className="flex justify-between">
                 <span className="font-medium">Loading roles...</span>
@@ -244,18 +255,9 @@ export default function ProjectInfo({ project, user, currentStage, currentAssign
                   )}
                 </div>
               ))
-            ) : (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">No roles assigned</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right Column: Stage Information */}
-        <div>
-          <h4 className="font-semibold text-foreground mb-4">Stage Information</h4>
-          <div className="space-y-3">
+            ) : null}
+            
+            {/* Current Assignee */}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Current Assignee:</span>
               <span className="font-medium" data-testid="text-current-assignee">
@@ -264,22 +266,23 @@ export default function ProjectInfo({ project, user, currentStage, currentAssign
                   : 'Not assigned'}
               </span>
             </div>
+            
+            {/* Current Stage */}
             <div className="flex justify-between">
               <span className="text-muted-foreground">Current Stage:</span>
               <span className="font-medium" data-testid="text-current-stage">
                 {formatStageName(project.currentStatus)}
               </span>
             </div>
+          </div>
+        </div>
+
+        {/* Column 3: Time in Current Stage, Stage Max Time, Stage Deadline */}
+        <div>
+          <h4 className="font-semibold text-foreground mb-4">Stage Timing</h4>
+          <div className="space-y-3">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Stage Max Time:</span>
-              <span className="font-medium" data-testid="text-stage-max-time">
-                {currentStage?.maxInstanceTime && currentStage.maxInstanceTime > 0
-                  ? formatBusinessHours(currentStage.maxInstanceTime)
-                  : 'No limit'}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Time in Current Stage:</span>
+              <span className="text-muted-foreground">Time in Stage:</span>
               <span 
                 className={`font-medium ${projectStatus.status === 'Late / Overdue' ? 'text-red-600 dark:text-red-400' : projectStatus.status === 'Behind Schedule' ? 'text-amber-600 dark:text-amber-400' : 'text-green-600 dark:text-green-400'}`}
                 data-testid="text-time-in-stage"
@@ -288,12 +291,11 @@ export default function ProjectInfo({ project, user, currentStage, currentAssign
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Time Until Due:</span>
-              <span 
-                className={`font-medium ${timeRemaining === 'Overdue' ? 'text-red-600 dark:text-red-400' : ''}`}
-                data-testid="text-time-until-due"
-              >
-                {timeRemaining}
+              <span className="text-muted-foreground">Stage Max Time:</span>
+              <span className="font-medium" data-testid="text-stage-max-time">
+                {currentStage?.maxInstanceTime && currentStage.maxInstanceTime > 0
+                  ? formatBusinessHours(currentStage.maxInstanceTime)
+                  : 'No limit'}
               </span>
             </div>
             {stageDeadline && (

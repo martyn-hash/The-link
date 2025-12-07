@@ -537,19 +537,6 @@ export default function ProjectDetail() {
       <TopNavigation user={user} />
       
       <div className="page-container py-4 md:py-5">
-        {/* Compact header with back navigation */}
-        <div className="mb-4">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={handleBack}
-            data-testid="button-back"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Projects
-          </Button>
-        </div>
-        
         {/* Inactive Status Display */}
         {project.inactive && project.inactiveReason && (
           <div className="mb-6 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-4" data-testid="section-inactive-status">
@@ -691,29 +678,36 @@ export default function ProjectDetail() {
             >
               <TabsContent value="overview" className="mt-4">
               <div className="mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8 space-y-4">
-                {/* Project header with client name and project type */}
+                {/* Project header with client name, project type, and action buttons */}
                 <div className="bg-card border border-border rounded-lg p-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mb-3">
-                    <RouterLink to={`/clients/${project.clientId}`}>
-                      <h1 className="text-lg md:text-xl font-semibold tracking-tight text-foreground hover:text-primary cursor-pointer transition-colors" data-testid="text-client-name">
-                        {project.client?.name || 'Unknown Client'}
-                      </h1>
-                    </RouterLink>
-                    {project.projectType?.name && (
-                      <span className="text-base md:text-lg font-medium text-meta" data-testid="text-project-type">
-                        {project.projectType.name}
-                      </span>
-                    )}
-                  </div>
-                  <ProjectInfo 
-                    project={project} 
-                    user={user} 
-                    currentStage={currentStage}
-                    currentAssignee={currentAssignee}
-                  />
-                  
-                  {/* Action Buttons */}
-                  <div className="mt-4 pt-4 border-t border-border">
+                  {/* Header: Client/Project info with action buttons */}
+                  <div className="flex flex-col gap-3 mb-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex flex-col gap-1">
+                        <RouterLink to={`/clients/${project.clientId}`}>
+                          <h1 className="text-lg font-semibold tracking-tight text-foreground hover:text-primary cursor-pointer transition-colors" data-testid="text-client-name">
+                            {project.client?.name || 'Unknown Client'}
+                          </h1>
+                        </RouterLink>
+                        {project.projectType?.name && (
+                          <span className="text-sm font-medium text-meta" data-testid="text-project-type">
+                            {project.projectType.name}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {/* Back to Projects link - under client name */}
+                    <button 
+                      onClick={handleBack}
+                      className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1"
+                      data-testid="button-back-mobile"
+                    >
+                      <ArrowLeft className="w-3 h-3" />
+                      Back to Projects
+                    </button>
+                    
+                    {/* Action Buttons row */}
                     <div className="flex flex-wrap gap-2">
                       <Button
                         variant="outline"
@@ -734,7 +728,7 @@ export default function ProjectDetail() {
                           className="text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
                         >
                           <CheckCircle2 className="w-4 h-4 mr-2" />
-                          Complete Project
+                          Complete
                         </Button>
                       )}
                       
@@ -748,7 +742,7 @@ export default function ProjectDetail() {
                           className="text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
                         >
                           <PauseCircle className="w-4 h-4 mr-2" />
-                          Move to Bench
+                          Bench
                         </Button>
                       )}
                       
@@ -762,7 +756,7 @@ export default function ProjectDetail() {
                           className="text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
                         >
                           <PlayCircle className="w-4 h-4 mr-2" />
-                          Take Off Bench
+                          Unbench
                         </Button>
                       )}
                       
@@ -775,11 +769,18 @@ export default function ProjectDetail() {
                           className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
                         >
                           <Ban className="w-4 h-4 mr-2" />
-                          Make Inactive
+                          Inactive
                         </Button>
                       )}
                     </div>
                   </div>
+                  
+                  <ProjectInfo 
+                    project={project} 
+                    user={user} 
+                    currentStage={currentStage}
+                    currentAssignee={currentAssignee}
+                  />
                 </div>
 
                 {/* Chronology */}
@@ -807,30 +808,25 @@ export default function ProjectDetail() {
             <>
               <TabsContent value="overview" className="mt-4">
                 <div className="mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8 space-y-4">
-                  {/* Project header with client name and project type */}
+                  {/* Project header with client name, project type, and action buttons */}
                   <div className="bg-card border border-border rounded-lg p-5">
-                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mb-4">
-                      <RouterLink to={`/clients/${project.clientId}`}>
-                        <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-foreground hover:text-primary cursor-pointer transition-colors" data-testid="text-client-name">
-                          {project.client?.name || 'Unknown Client'}
-                        </h1>
-                      </RouterLink>
-                      {project.projectType?.name && (
-                        <span className="text-base md:text-lg font-medium text-meta" data-testid="text-project-type">
-                          {project.projectType.name}
-                        </span>
-                      )}
-                    </div>
-                    <ProjectInfo 
-                      project={project} 
-                      user={user} 
-                      currentStage={currentStage}
-                      currentAssignee={currentAssignee}
-                    />
-                    
-                    {/* Action Buttons */}
-                    <div className="mt-4 pt-4 border-t border-border">
-                      <div className="flex flex-wrap gap-2">
+                    {/* Header row: Client/Project info on left, Action buttons on right */}
+                    <div className="flex items-start justify-between gap-4 mb-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                        <RouterLink to={`/clients/${project.clientId}`}>
+                          <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-foreground hover:text-primary cursor-pointer transition-colors" data-testid="text-client-name">
+                            {project.client?.name || 'Unknown Client'}
+                          </h1>
+                        </RouterLink>
+                        {project.projectType?.name && (
+                          <span className="text-base md:text-lg font-medium text-meta" data-testid="text-project-type">
+                            {project.projectType.name}
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Action Buttons - Top Right */}
+                      <div className="flex flex-wrap gap-2 flex-shrink-0">
                         <Button
                           variant="outline"
                           size="sm"
@@ -896,6 +892,23 @@ export default function ProjectDetail() {
                         )}
                       </div>
                     </div>
+                    
+                    {/* Back to Projects link - under client name */}
+                    <button 
+                      onClick={handleBack}
+                      className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-1 mb-4"
+                      data-testid="button-back"
+                    >
+                      <ArrowLeft className="w-3 h-3" />
+                      Back to Projects
+                    </button>
+                    
+                    <ProjectInfo 
+                      project={project} 
+                      user={user} 
+                      currentStage={currentStage}
+                      currentAssignee={currentAssignee}
+                    />
                   </div>
                   <div className="bg-card border border-border rounded-lg p-5">
                     <ProjectChronology project={project} />
