@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useStageChangeConfig } from "@/hooks/change-status/useStageChangeConfig";
 import { useStatusChangeMutations } from "@/hooks/change-status/useStatusChangeMutations";
 import { useApprovalFormSchema } from "@/hooks/change-status/useApprovalFormSchema";
 import { useCustomFields } from "@/hooks/change-status/useCustomFields";
 import { useFileUpload } from "@/hooks/change-status/useFileUpload";
+import { useQueriesManagement } from "@/hooks/change-status/useQueriesManagement";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
@@ -55,7 +56,7 @@ import {
   Trash2,
   Upload
 } from "lucide-react";
-import { QueryBulkImport, ParsedQuery } from "@/components/queries/QueryBulkImport";
+import { QueryBulkImport } from "@/components/queries/QueryBulkImport";
 import { format } from "date-fns";
 import { StageNotificationAudioRecorder } from "./StageNotificationAudioRecorder";
 import type {
@@ -207,15 +208,6 @@ export default function ChangeStatusModal({
   const [changeReason, setChangeReason] = useState("");
   const [notesHtml, setNotesHtml] = useState("");
   const [showApprovalForm, setShowApprovalForm] = useState(false);
-  const [showQueriesForm, setShowQueriesForm] = useState(false);
-  const [pendingQueries, setPendingQueries] = useState<Array<{
-    id: string;
-    date: Date | null;
-    description: string;
-    moneyIn: string;
-    moneyOut: string;
-    ourQuery: string;
-  }>>([]);
   const [notificationPreview, setNotificationPreview] = useState<StageChangeNotificationPreview | null>(null);
   const [clientNotificationPreview, setClientNotificationPreview] = useState<ClientValueNotificationPreview | null>(null);
   const [notificationType, setNotificationType] = useState<'staff' | 'client' | null>(null);
@@ -233,6 +225,18 @@ export default function ChangeStatusModal({
     handleRemoveFile,
     resetFileUpload,
   } = useFileUpload({ projectId: project.id });
+
+  // Query management from custom hook
+  const {
+    showQueriesForm,
+    pendingQueries,
+    handleToggleQueriesForm,
+    handleAddQueryRow,
+    handleUpdateQuery,
+    handleRemoveQuery,
+    handleBulkImportQueries,
+    resetQueries,
+  } = useQueriesManagement();
 
   // Set initial new status when modal opens (for drag-and-drop)
   useEffect(() => {
@@ -338,12 +342,11 @@ export default function ChangeStatusModal({
       setNotesHtml("");
       resetCustomFields();
       setShowApprovalForm(false);
-      setShowQueriesForm(false);
-      setPendingQueries([]);
+      resetQueries();
       approvalForm.reset();
       resetFileUpload();
     }
-  }, [isOpen, approvalForm, resetCustomFields, resetFileUpload]);
+  }, [isOpen, approvalForm, resetCustomFields, resetFileUpload, resetQueries]);
 
   // Reset change reason and custom field responses when stage changes
   useEffect(() => {
@@ -396,8 +399,7 @@ export default function ChangeStatusModal({
       setNotesHtml("");
       resetCustomFields();
       setShowApprovalForm(false);
-      setShowQueriesForm(false);
-      setPendingQueries([]);
+      resetQueries();
       resetFileUpload();
     },
     notificationPreview,
@@ -523,50 +525,6 @@ export default function ChangeStatusModal({
     if (showApprovalForm || showQueriesForm) return "max-w-6xl";
     return "max-w-2xl";
   };
-
-  // Toggle queries form (mutually exclusive with approval form)
-  const handleToggleQueriesForm = useCallback(() => {
-    setShowQueriesForm(prev => !prev);
-    // Queries form is user-triggered, approval form is automatic based on stage
-    // They can coexist visually but we only show one right column at a time
-  }, []);
-
-  // Add a new empty query row
-  const handleAddQueryRow = useCallback(() => {
-    setPendingQueries(prev => [...prev, {
-      id: crypto.randomUUID(),
-      date: null,
-      description: "",
-      moneyIn: "",
-      moneyOut: "",
-      ourQuery: "",
-    }]);
-  }, []);
-
-  // Update a query field
-  const handleUpdateQuery = useCallback((id: string, field: string, value: any) => {
-    setPendingQueries(prev => prev.map(q => 
-      q.id === id ? { ...q, [field]: value } : q
-    ));
-  }, []);
-
-  // Remove a query row
-  const handleRemoveQuery = useCallback((id: string) => {
-    setPendingQueries(prev => prev.filter(q => q.id !== id));
-  }, []);
-
-  // Handle bulk import of queries
-  const handleBulkImportQueries = useCallback((importedQueries: ParsedQuery[]) => {
-    const newQueries = importedQueries.map(q => ({
-      id: crypto.randomUUID(),
-      date: q.date,
-      description: q.description,
-      moneyIn: q.moneyIn,
-      moneyOut: q.moneyOut,
-      ourQuery: q.ourQuery,
-    }));
-    setPendingQueries(prev => [...prev, ...newQueries]);
-  }, []);
 
   return (
     <Dialog open={isOpen} onOpenChange={handleFullClose}>
