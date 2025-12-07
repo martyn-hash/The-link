@@ -96,6 +96,7 @@ import { applyServicesFacade } from './facade/services.facade.js';
 import { applyTagsCommsFacade } from './facade/tags-comms.facade.js';
 import { applyIntegrationsFacade } from './facade/integrations.facade.js';
 import { applyDocumentsFacade } from './facade/documents.facade.js';
+import { applyMessagesFacade } from './facade/messages.facade.js';
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -136,14 +137,14 @@ class StorageBase {
   protected portalDocumentStorage: PortalDocumentStorage;
   protected signatureStorage: SignatureStorage;
   protected portalStorage: PortalStorage;
-  private messageThreadStorage: MessageThreadStorage;
-  private messageStorage: MessageStorage;
-  private projectMessageThreadStorage: ProjectMessageThreadStorage;
-  private projectMessageStorage: ProjectMessageStorage;
-  private projectMessageParticipantStorage: ProjectMessageParticipantStorage;
-  private staffMessageThreadStorage: StaffMessageThreadStorage;
-  private staffMessageStorage: StaffMessageStorage;
-  private staffMessageParticipantStorage: StaffMessageParticipantStorage;
+  protected messageThreadStorage: MessageThreadStorage;
+  protected messageStorage: MessageStorage;
+  protected projectMessageThreadStorage: ProjectMessageThreadStorage;
+  protected projectMessageStorage: ProjectMessageStorage;
+  protected projectMessageParticipantStorage: ProjectMessageParticipantStorage;
+  protected staffMessageThreadStorage: StaffMessageThreadStorage;
+  protected staffMessageStorage: StaffMessageStorage;
+  protected staffMessageParticipantStorage: StaffMessageParticipantStorage;
   private chChangeRequestStorage: ChChangeRequestStorage;
   private requestTemplateStorage: RequestTemplateStorage;
   private customRequestStorage: CustomRequestStorage;
@@ -419,7 +420,7 @@ class StorageBase {
 }
 
 // Apply facade mixins to StorageBase
-// User (33), People (20), Clients (27), Projects (68), Services (53), Tags/Comms (44), Integrations (54), and Documents (50) domain methods are now provided by mixins
+// User (33), People (20), Clients (27), Projects (68), Services (53), Tags/Comms (44), Integrations (54), Documents (50), and Messages (55) domain methods are now provided by mixins
 const DatabaseStorageWithUsers = applyUsersFacade(StorageBase);
 const DatabaseStorageWithPeople = applyPeopleFacade(DatabaseStorageWithUsers);
 const DatabaseStorageWithClients = applyClientsFacade(DatabaseStorageWithPeople);
@@ -428,282 +429,12 @@ const DatabaseStorageWithServices = applyServicesFacade(DatabaseStorageWithProje
 const DatabaseStorageWithTagsComms = applyTagsCommsFacade(DatabaseStorageWithServices);
 const DatabaseStorageWithIntegrations = applyIntegrationsFacade(DatabaseStorageWithTagsComms);
 const DatabaseStorageWithDocuments = applyDocumentsFacade(DatabaseStorageWithIntegrations);
+const DatabaseStorageWithMessages = applyMessagesFacade(DatabaseStorageWithDocuments);
 
 // DatabaseStorage extends the composed class and implements IStorage
-export class DatabaseStorage extends DatabaseStorageWithDocuments implements IStorage {
+export class DatabaseStorage extends DatabaseStorageWithMessages implements IStorage {
   constructor() {
     super();
-  }
-
-  // ============================================================================
-  // MESSAGES DOMAIN - Delegated to Message Storage Modules (Stage 10)
-  // ============================================================================
-
-  // Client Message Thread Operations - MessageThreadStorage (9 methods)
-  async createMessageThread(thread: any) {
-    return this.messageThreadStorage.createMessageThread(thread);
-  }
-
-  async getMessageThreadById(id: string) {
-    return this.messageThreadStorage.getMessageThreadById(id);
-  }
-
-  async getMessageThreadsByClientId(clientId: string, filters?: { status?: string }) {
-    return this.messageThreadStorage.getMessageThreadsByClientId(clientId, filters);
-  }
-
-  async getMessageThreadsWithUnreadCount(clientId: string, status?: string) {
-    return this.messageThreadStorage.getMessageThreadsWithUnreadCount(clientId, status);
-  }
-
-  async getAllMessageThreads(filters?: { status?: string; clientId?: string }) {
-    return this.messageThreadStorage.getAllMessageThreads(filters);
-  }
-
-  async getLastMessageForThread(threadId: string) {
-    return this.messageThreadStorage.getLastMessageForThread(threadId);
-  }
-
-  async hasUnreadMessagesForStaff(threadId: string) {
-    return this.messageThreadStorage.hasUnreadMessagesForStaff(threadId);
-  }
-
-  async updateMessageThread(id: string, thread: any) {
-    return this.messageThreadStorage.updateMessageThread(id, thread);
-  }
-
-  async deleteMessageThread(id: string) {
-    return this.messageThreadStorage.deleteMessageThread(id);
-  }
-
-  // Client Message Operations - MessageStorage (9 methods)
-  async createMessage(message: any) {
-    return this.messageStorage.createMessage(message);
-  }
-
-  async getMessageById(id: string) {
-    return this.messageStorage.getMessageById(id);
-  }
-
-  async getMessagesByThreadId(threadId: string) {
-    return this.messageStorage.getMessagesByThreadId(threadId);
-  }
-
-  async updateMessage(id: string, message: any) {
-    return this.messageStorage.updateMessage(id, message);
-  }
-
-  async deleteMessage(id: string) {
-    return this.messageStorage.deleteMessage(id);
-  }
-
-  async markMessagesAsReadByStaff(threadId: string) {
-    return this.messageStorage.markMessagesAsReadByStaff(threadId);
-  }
-
-  async markMessagesAsReadByClient(threadId: string) {
-    return this.messageStorage.markMessagesAsReadByClient(threadId);
-  }
-
-  async getUnreadMessageCountForClient(clientId: string) {
-    return this.messageStorage.getUnreadMessageCountForClient(clientId);
-  }
-
-  async getUnreadMessageCountForStaff(userId: string, isAdmin?: boolean) {
-    return this.messageStorage.getUnreadMessageCountForStaff(userId, isAdmin);
-  }
-
-  // Project Message Thread Operations - ProjectMessageThreadStorage (8 methods)
-  async createProjectMessageThread(thread: any) {
-    return this.projectMessageThreadStorage.createProjectMessageThread(thread);
-  }
-
-  async getProjectMessageThreadById(id: string) {
-    return this.projectMessageThreadStorage.getProjectMessageThreadById(id);
-  }
-
-  async getProjectMessageThreadsByProjectId(projectId: string) {
-    return this.projectMessageThreadStorage.getProjectMessageThreadsByProjectId(projectId);
-  }
-
-  async getProjectMessageThreadsForUser(userId: string, filters?: { includeArchived?: boolean }) {
-    return this.projectMessageThreadStorage.getProjectMessageThreadsForUser(userId, filters);
-  }
-
-  async getUnreadProjectThreadCountForUser(userId: string): Promise<number> {
-    return this.projectMessageThreadStorage.getUnreadProjectThreadCountForUser(userId);
-  }
-
-  async updateProjectMessageThread(id: string, thread: any) {
-    return this.projectMessageThreadStorage.updateProjectMessageThread(id, thread);
-  }
-
-  async deleteProjectMessageThread(id: string) {
-    return this.projectMessageThreadStorage.deleteProjectMessageThread(id);
-  }
-
-  async archiveProjectMessageThread(id: string, archivedBy: string) {
-    return this.projectMessageThreadStorage.archiveProjectMessageThread(id, archivedBy);
-  }
-
-  async unarchiveProjectMessageThread(id: string) {
-    return this.projectMessageThreadStorage.unarchiveProjectMessageThread(id);
-  }
-
-  // Project Message Operations - ProjectMessageStorage (5 methods)
-  async createProjectMessage(message: any) {
-    return this.projectMessageStorage.createProjectMessage(message);
-  }
-
-  async getProjectMessageById(id: string) {
-    return this.projectMessageStorage.getProjectMessageById(id);
-  }
-
-  async getProjectMessagesByThreadId(threadId: string) {
-    return this.projectMessageStorage.getProjectMessagesByThreadId(threadId);
-  }
-
-  async updateProjectMessage(id: string, message: any) {
-    return this.projectMessageStorage.updateProjectMessage(id, message);
-  }
-
-  async deleteProjectMessage(id: string) {
-    return this.projectMessageStorage.deleteProjectMessage(id);
-  }
-
-  // Project Message Participant Operations - ProjectMessageParticipantStorage (9 methods)
-  async createProjectMessageParticipant(participant: any) {
-    return this.projectMessageParticipantStorage.createProjectMessageParticipant(participant);
-  }
-
-  async getProjectMessageParticipantsByThreadId(threadId: string) {
-    return this.projectMessageParticipantStorage.getProjectMessageParticipantsByThreadId(threadId);
-  }
-
-  async getProjectMessageParticipantsByUserId(userId: string) {
-    return this.projectMessageParticipantStorage.getProjectMessageParticipantsByUserId(userId);
-  }
-
-  async updateProjectMessageParticipant(id: string, participant: any) {
-    return this.projectMessageParticipantStorage.updateProjectMessageParticipant(id, participant);
-  }
-
-  async deleteProjectMessageParticipant(id: string) {
-    return this.projectMessageParticipantStorage.deleteProjectMessageParticipant(id);
-  }
-
-  async markProjectMessagesAsRead(threadId: string, userId: string, lastReadMessageId: string) {
-    return this.projectMessageParticipantStorage.markProjectMessagesAsRead(threadId, userId, lastReadMessageId);
-  }
-
-  async updateParticipantReminderSent(threadId: string, userId: string) {
-    return this.projectMessageParticipantStorage.updateParticipantReminderSent(threadId, userId);
-  }
-
-  async getUnreadProjectMessagesForUser(userId: string) {
-    return this.projectMessageParticipantStorage.getUnreadProjectMessagesForUser(userId);
-  }
-
-  // IStorage interface alias - returns count
-  async getUnreadProjectMessageCountForUser(userId: string) {
-    const unreadMessages = await this.projectMessageParticipantStorage.getUnreadProjectMessagesForUser(userId);
-    return unreadMessages.reduce((total, m) => total + m.count, 0);
-  }
-
-  async getProjectMessageUnreadSummaries(olderThanMinutes: number) {
-    return this.projectMessageParticipantStorage.getProjectMessageUnreadSummaries(olderThanMinutes);
-  }
-
-  async getProjectMessageParticipantsNeedingReminders(hoursThreshold: number) {
-    return this.projectMessageParticipantStorage.getProjectMessageParticipantsNeedingReminders(hoursThreshold);
-  }
-
-  // Staff Message Thread Operations - StaffMessageThreadStorage (7 methods)
-  async createStaffMessageThread(thread: any) {
-    return this.staffMessageThreadStorage.createStaffMessageThread(thread);
-  }
-
-  async getStaffMessageThreadById(id: string) {
-    return this.staffMessageThreadStorage.getStaffMessageThreadById(id);
-  }
-
-  async getStaffMessageThreadsForUser(userId: string, filters?: { includeArchived?: boolean }) {
-    return this.staffMessageThreadStorage.getStaffMessageThreadsForUser(userId, filters);
-  }
-
-  async updateStaffMessageThread(id: string, thread: any) {
-    return this.staffMessageThreadStorage.updateStaffMessageThread(id, thread);
-  }
-
-  async deleteStaffMessageThread(id: string) {
-    return this.staffMessageThreadStorage.deleteStaffMessageThread(id);
-  }
-
-  async archiveStaffMessageThread(id: string, archivedBy: string) {
-    return this.staffMessageThreadStorage.archiveStaffMessageThread(id, archivedBy);
-  }
-
-  async unarchiveStaffMessageThread(id: string) {
-    return this.staffMessageThreadStorage.unarchiveStaffMessageThread(id);
-  }
-
-  async getUnreadStaffThreadCountForUser(userId: string): Promise<number> {
-    return this.staffMessageThreadStorage.getUnreadStaffThreadCountForUser(userId);
-  }
-
-  // IStorage interface alias
-  async getUnreadStaffMessageCountForUser(userId: string): Promise<number> {
-    return this.staffMessageThreadStorage.getUnreadStaffThreadCountForUser(userId);
-  }
-
-  // Staff Message Operations - StaffMessageStorage (5 methods)
-  async createStaffMessage(message: any) {
-    return this.staffMessageStorage.createStaffMessage(message);
-  }
-
-  async getStaffMessageById(id: string) {
-    return this.staffMessageStorage.getStaffMessageById(id);
-  }
-
-  async getStaffMessagesByThreadId(threadId: string) {
-    return this.staffMessageStorage.getStaffMessagesByThreadId(threadId);
-  }
-
-  async updateStaffMessage(id: string, message: any) {
-    return this.staffMessageStorage.updateStaffMessage(id, message);
-  }
-
-  async deleteStaffMessage(id: string) {
-    return this.staffMessageStorage.deleteStaffMessage(id);
-  }
-
-  // Staff Message Participant Operations - StaffMessageParticipantStorage (7 methods)
-  async createStaffMessageParticipant(participant: any) {
-    return this.staffMessageParticipantStorage.createStaffMessageParticipant(participant);
-  }
-
-  async getStaffMessageParticipantsByThreadId(threadId: string) {
-    return this.staffMessageParticipantStorage.getStaffMessageParticipantsByThreadId(threadId);
-  }
-
-  async getStaffMessageParticipantsByUserId(userId: string) {
-    return this.staffMessageParticipantStorage.getStaffMessageParticipantsByUserId(userId);
-  }
-
-  async updateStaffMessageParticipant(id: string, participant: any) {
-    return this.staffMessageParticipantStorage.updateStaffMessageParticipant(id, participant);
-  }
-
-  async deleteStaffMessageParticipant(id: string) {
-    return this.staffMessageParticipantStorage.deleteStaffMessageParticipant(id);
-  }
-
-  async markStaffMessagesAsRead(threadId: string, userId: string, lastReadMessageId: string) {
-    return this.staffMessageParticipantStorage.markStaffMessagesAsRead(threadId, userId, lastReadMessageId);
-  }
-
-  async getUnreadStaffMessagesForUser(userId: string) {
-    return this.staffMessageParticipantStorage.getUnreadStaffMessagesForUser(userId);
   }
 
   // REQUESTS DOMAIN - Delegated to Request Storage Modules (Stage 11)
