@@ -114,3 +114,28 @@ The Projects page (`client/src/pages/projects.tsx`) has been refactored into mod
 
 **Types** (`client/src/types/projects-page.ts`):
 - Shared types for Widget, Dashboard, CalendarSettings, etc.
+
+### ChangeStatusModal Architecture (Refactored)
+The ChangeStatusModal (`client/src/components/ChangeStatusModal.tsx`) has been refactored into modular hooks and components for better maintainability. The main file is now 526 lines (reduced from 1,224 lines).
+
+**Hooks** (`client/src/hooks/change-status/`):
+- `useStageChangeConfig.ts` - Config fetching for stages, reasons, approvals, and derived data
+- `useStatusChangeMutations.ts` - All 4 mutation operations (updateStatus, submitApprovalResponses, sendStaffNotification, sendClientNotification)
+- `useApprovalFormSchema.ts` - Dynamic Zod schema generation for stage approval forms
+- `useCustomFields.ts` - Custom field state management and validation
+- `useFileUpload.ts` - File upload handling with Object Storage integration
+- `useQueriesManagement.ts` - Query entry state management (add/update/remove/bulk import)
+
+**Components** (`client/src/components/change-status/`):
+- `StatusChangeFormContent.tsx` - Main form content (stage selector, reason, custom fields, notes, attachments)
+- `StageApprovalForm.tsx` - Dynamic approval form with boolean, number, text, and multi-select fields
+- `CustomFieldsSection.tsx` - Custom field inputs based on reason configuration
+- `AttachmentsSection.tsx` - File upload UI with drag-and-drop support
+- `QueriesForm.tsx` - Query entry form with bulk CSV import
+- `StaffNotificationContent.tsx` - Staff notification preview and send UI with audio recording
+
+**Types** (`client/src/types/changeStatus.ts`):
+- Shared types for StatusChangeFormValues, ApprovalFormData, QueryEntry, etc.
+
+**Utilities** (`client/src/lib/changeStatusUtils.ts`):
+- Helper functions: formatStageName, formatChangeReason, formatRoleName, getSenderName, extractFirstName, formatRecipientFirstNames

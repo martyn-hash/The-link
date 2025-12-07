@@ -1,26 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useStageChangeConfig } from "@/hooks/change-status/useStageChangeConfig";
 import { useStatusChangeMutations } from "@/hooks/change-status/useStatusChangeMutations";
 import { useApprovalFormSchema } from "@/hooks/change-status/useApprovalFormSchema";
 import { useCustomFields } from "@/hooks/change-status/useCustomFields";
 import { useFileUpload } from "@/hooks/change-status/useFileUpload";
 import { useQueriesManagement } from "@/hooks/change-status/useQueriesManagement";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
+import { formatStageName, formatChangeReason, getSenderName } from "@/lib/changeStatusUtils";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { TiptapEditor } from "@/components/TiptapEditor";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -29,55 +16,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
-import { 
-  AlertCircle, 
-  Loader2, 
-  CheckCircle, 
-  ChevronDown, 
-  ChevronUp, 
-  Equal,
-  X,
-  FileText,
-  Paperclip,
-  Mail,
-  Bell,
-  Users,
-  Mic,
-  MessageSquare,
-  HelpCircle
-} from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { QueriesForm } from "@/components/change-status/QueriesForm";
+import { StageApprovalForm } from "@/components/change-status/StageApprovalForm";
+import { StatusChangeFormContent } from "@/components/change-status/StatusChangeFormContent";
 import { StageNotificationAudioRecorder } from "./StageNotificationAudioRecorder";
 import type {
   ProjectWithRelations,
   User,
-  KanbanStage,
-  ChangeReason,
-  ReasonCustomField,
-  StageApproval,
-  StageApprovalField,
   InsertStageApprovalResponse,
   StageChangeNotificationPreview,
   ClientValueNotificationPreview,
 } from "@shared/schema";
 import { ClientValueNotificationContent } from "./ClientValueNotificationContent";
 import { StaffNotificationContent } from "./change-status/StaffNotificationContent";
-import { z } from "zod";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
 
 interface ChangeStatusModalProps {
   isOpen: boolean;
@@ -85,109 +39,8 @@ interface ChangeStatusModalProps {
   project: ProjectWithRelations;
   user: User;
   onStatusUpdated?: () => void;
-  initialNewStatus?: string; // Pre-select a status (for drag-and-drop from kanban)
+  initialNewStatus?: string;
 }
-
-// Helper function to format stage names for display
-const formatStageName = (stageName: string): string => {
-  return stageName
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-};
-
-// Helper function to format role names for display
-const formatRoleName = (roleName: string | null): string => {
-  if (!roleName) return "System";
-  return roleName
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-};
-
-// Helper function to format change reason for display
-const formatChangeReason = (reason: string): string => {
-  return reason
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
-};
-
-// Helper function to format comparison types for display
-const formatComparisonType = (
-  comparisonType: "equal_to" | "less_than" | "greater_than"
-): string => {
-  switch (comparisonType) {
-    case "equal_to":
-      return "equal to";
-    case "less_than":
-      return "less than";
-    case "greater_than":
-      return "greater than";
-    default:
-      return comparisonType;
-  }
-};
-
-// Helper function to get comparison icon
-const getComparisonIcon = (
-  comparisonType: "equal_to" | "less_than" | "greater_than"
-) => {
-  switch (comparisonType) {
-    case "equal_to":
-      return <Equal className="h-4 w-4" />;
-    case "less_than":
-      return <ChevronDown className="h-4 w-4" />;
-    case "greater_than":
-      return <ChevronUp className="h-4 w-4" />;
-    default:
-      return null;
-  }
-};
-
-// Helper function to extract first name from various formats
-const extractFirstName = (fullName: string): string => {
-  if (!fullName) return "";
-  
-  // Handle "LASTNAME, Firstname" format (common in UK/formal systems)
-  if (fullName.includes(",")) {
-    const parts = fullName.split(",");
-    if (parts.length >= 2) {
-      const afterComma = parts[1].trim();
-      return afterComma.split(/\s+/)[0] || "";
-    }
-  }
-  
-  // Handle "Firstname Lastname" format
-  return fullName.split(/\s+/)[0] || "";
-};
-
-// Helper function to get sender name with robust fallbacks
-const getSenderName = (user: User | null | undefined): string | undefined => {
-  if (!user) return undefined;
-  
-  // Try firstName first
-  if (user.firstName && user.firstName.trim()) {
-    return user.firstName.trim();
-  }
-  
-  // Try lastName if firstName empty
-  if (user.lastName && user.lastName.trim()) {
-    return extractFirstName(user.lastName);
-  }
-  
-  // Fallback to email username (before the @)
-  if (user.email) {
-    const emailUsername = user.email.split('@')[0];
-    // Capitalize first letter and handle common patterns like john.doe
-    const namePart = emailUsername.split(/[._-]/)[0];
-    if (namePart) {
-      return namePart.charAt(0).toUpperCase() + namePart.slice(1).toLowerCase();
-    }
-  }
-  
-  return undefined;
-};
 
 export default function ChangeStatusModal({
   isOpen,
@@ -205,9 +58,6 @@ export default function ChangeStatusModal({
   const [clientNotificationPreview, setClientNotificationPreview] = useState<ClientValueNotificationPreview | null>(null);
   const [notificationType, setNotificationType] = useState<'staff' | 'client' | null>(null);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
-
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
 
   // File upload management from custom hook
   const {
@@ -597,434 +447,38 @@ export default function ChangeStatusModal({
 
         <div className={`max-h-[70vh] overflow-y-auto ${(showApprovalForm || showQueriesForm) ? "grid grid-cols-2 gap-6" : ""}`}>
           {/* Left column: Status change form */}
-          <div className="space-y-4">
-            <h3 className="font-semibold text-sm">Status Change Details</h3>
-
-            {/* Stage Selector */}
-            <div className="space-y-2">
-              <Label htmlFor="status-select">Move to Stage *</Label>
-              {stagesLoading ? (
-                <div className="h-10 bg-muted animate-pulse rounded" />
-              ) : (
-                <Select value={newStatus} onValueChange={setNewStatus}>
-                  <SelectTrigger id="status-select" data-testid="select-stage">
-                    <SelectValue placeholder="Select new stage..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableStatuses.map((status) => (
-                      <SelectItem key={status.value} value={status.value}>
-                        {status.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
-
-            {/* Change Reason */}
-            {newStatus && (
-              <div className="space-y-2">
-                <Label htmlFor="reason-select">Change Reason *</Label>
-                {reasonsLoading ? (
-                  <div className="h-10 bg-muted animate-pulse rounded" />
-                ) : filteredReasons.length === 0 ? (
-                  <div className="text-sm text-muted-foreground bg-muted p-3 rounded flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4" />
-                    No change reasons configured for this stage
-                  </div>
-                ) : (
-                  <Select value={changeReason} onValueChange={setChangeReason}>
-                    <SelectTrigger id="reason-select" data-testid="select-reason">
-                      <SelectValue placeholder="Please select a stage first" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {filteredReasons.map((reason) => (
-                        <SelectItem key={reason.id} value={reason.reason}>
-                          {formatChangeReason(reason.reason)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </div>
-            )}
-
-            {/* Custom Fields for Change Reason */}
-            {changeReason && customFields.length > 0 && (
-              <div className="space-y-4">
-                <Separator />
-                <div className="space-y-4">
-                  {customFields.map((field) => (
-                    <div key={field.id} className="space-y-2">
-                      <div>
-                        <Label htmlFor={`custom-field-${field.id}`}>
-                          {field.fieldName}
-                          {field.isRequired && (
-                            <span className="text-destructive ml-1">*</span>
-                          )}
-                        </Label>
-                        {field.description && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {field.description}
-                          </p>
-                        )}
-                      </div>
-
-                      {field.fieldType === "boolean" && (
-                        <div className="flex items-center space-x-3">
-                          <Checkbox
-                            id={`custom-field-${field.id}`}
-                            checked={customFieldResponses[field.id] || false}
-                            onCheckedChange={(checked) =>
-                              handleCustomFieldChange(field.id, checked)
-                            }
-                            data-testid={`checkbox-custom-field-${field.id}`}
-                          />
-                          <Label htmlFor={`custom-field-${field.id}`} className="font-normal">
-                            {customFieldResponses[field.id] ? "Yes" : "No"}
-                          </Label>
-                        </div>
-                      )}
-
-                      {field.fieldType === "number" && (
-                        <Input
-                          id={`custom-field-${field.id}`}
-                          type="number"
-                          value={customFieldResponses[field.id] || ""}
-                          onChange={(e) =>
-                            handleCustomFieldChange(field.id, e.target.value)
-                          }
-                          placeholder={`Enter ${field.fieldName.toLowerCase()}`}
-                          data-testid={`input-custom-field-${field.id}`}
-                        />
-                      )}
-
-                      {field.fieldType === "short_text" && (
-                        <Input
-                          id={`custom-field-${field.id}`}
-                          type="text"
-                          value={customFieldResponses[field.id] || ""}
-                          onChange={(e) =>
-                            handleCustomFieldChange(field.id, e.target.value)
-                          }
-                          placeholder={`Enter ${field.fieldName.toLowerCase()}`}
-                          data-testid={`input-custom-field-${field.id}`}
-                        />
-                      )}
-
-                      {field.fieldType === "long_text" && (
-                        <Textarea
-                          id={`custom-field-${field.id}`}
-                          value={customFieldResponses[field.id] || ""}
-                          onChange={(e) =>
-                            handleCustomFieldChange(field.id, e.target.value)
-                          }
-                          placeholder={`Enter ${field.fieldName.toLowerCase()}`}
-                          rows={3}
-                          data-testid={`textarea-custom-field-${field.id}`}
-                        />
-                      )}
-
-                      {field.fieldType === "multi_select" &&
-                        field.options &&
-                        field.options.length > 0 && (
-                          <div className="space-y-2">
-                            {field.options.map((option: string) => (
-                              <div
-                                key={option}
-                                className="flex items-center space-x-2"
-                              >
-                                <Checkbox
-                                  id={`${field.id}-${option}`}
-                                  checked={
-                                    customFieldResponses[field.id]?.includes(
-                                      option
-                                    ) || false
-                                  }
-                                  onCheckedChange={(checked) =>
-                                    handleMultiSelectChange(
-                                      field.id,
-                                      option,
-                                      checked as boolean
-                                    )
-                                  }
-                                  data-testid={`checkbox-${field.id}-${option}`}
-                                />
-                                <label
-                                  htmlFor={`${field.id}-${option}`}
-                                  className="text-sm font-normal leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                                >
-                                  {option}
-                                </label>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Notes */}
-            <div className="space-y-2">
-              <Label>Notes</Label>
-              <TiptapEditor
-                content={notesHtml}
-                onChange={setNotesHtml}
-                placeholder="Add notes explaining the status change..."
-              />
-            </div>
-
-            {/* File Attachments - Compact Button */}
-            <div className="flex items-center gap-3">
-              <input
-                type="file"
-                multiple
-                accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
-                onChange={(e) => {
-                  const files = Array.from(e.target.files || []);
-                  if (files.length > 0) {
-                    handleFilesSelected(files);
-                  }
-                  e.target.value = '';
-                }}
-                style={{ display: 'none' }}
-                id="stage-change-file-upload"
-                data-testid="input-stage-change-file"
-              />
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={isUploadingFiles}
-                onClick={() => document.getElementById('stage-change-file-upload')?.click()}
-                data-testid="button-attach-file"
-              >
-                <Paperclip className="w-4 h-4 mr-2" />
-                Attach
-              </Button>
-              {selectedFiles.length > 0 && (
-                <span className="text-sm text-muted-foreground">
-                  {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''} selected
-                </span>
-              )}
-              {isUploadingFiles && (
-                <span className="text-sm text-muted-foreground flex items-center gap-1">
-                  <Loader2 className="w-3 h-3 animate-spin" />
-                  Uploading...
-                </span>
-              )}
-            </div>
-            {selectedFiles.length > 0 && (
-              <div className="space-y-1 mt-2">
-                {selectedFiles.map((file, index) => (
-                  <div
-                    key={`${file.name}-${index}`}
-                    className="flex items-center gap-2 px-3 py-2 bg-muted rounded-md text-sm"
-                    data-testid={`selected-file-${index}`}
-                  >
-                    <FileText className="w-4 h-4 text-muted-foreground" />
-                    <span className="flex-1 truncate max-w-[200px]">{file.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {(file.size / 1024).toFixed(1)} KB
-                    </span>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="ghost"
-                      className="h-5 w-5 p-0"
-                      onClick={() => handleRemoveFile(index)}
-                      data-testid={`btn-remove-file-${index}`}
-                    >
-                      <X className="w-3 h-3" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Add Queries Button - only show when approval form is NOT shown */}
-            {!showApprovalForm && (
-              <div className="pt-2">
-                <Separator className="mb-4" />
-                <Button
-                  type="button"
-                  variant={showQueriesForm ? "secondary" : "outline"}
-                  size="sm"
-                  onClick={handleToggleQueriesForm}
-                  className="w-full"
-                  data-testid="button-toggle-queries"
-                >
-                  <HelpCircle className="w-4 h-4 mr-2" />
-                  {showQueriesForm ? "Hide Queries" : "Add Queries"}
-                  {pendingQueries.length > 0 && (
-                    <Badge variant="secondary" className="ml-2">
-                      {pendingQueries.length}
-                    </Badge>
-                  )}
-                </Button>
-              </div>
-            )}
-          </div>
+          <StatusChangeFormContent
+            newStatus={newStatus}
+            changeReason={changeReason}
+            notesHtml={notesHtml}
+            onStatusChange={setNewStatus}
+            onReasonChange={setChangeReason}
+            onNotesChange={setNotesHtml}
+            availableStatuses={availableStatuses}
+            filteredReasons={filteredReasons}
+            stagesLoading={stagesLoading}
+            reasonsLoading={reasonsLoading}
+            customFields={customFields}
+            customFieldResponses={customFieldResponses}
+            onCustomFieldChange={handleCustomFieldChange}
+            onMultiSelectChange={handleMultiSelectChange}
+            selectedFiles={selectedFiles}
+            isUploadingFiles={isUploadingFiles}
+            onFilesSelected={handleFilesSelected}
+            onRemoveFile={handleRemoveFile}
+            showApprovalForm={showApprovalForm}
+            showQueriesForm={showQueriesForm}
+            pendingQueriesCount={pendingQueries.length}
+            onToggleQueriesForm={handleToggleQueriesForm}
+            formatChangeReason={formatChangeReason}
+          />
 
           {/* Right column: Stage approval form (conditional) */}
           {showApprovalForm && (
-            <div className="space-y-4 border-l pl-6">
-              <div className="flex items-center gap-2">
-                <h3 className="font-semibold text-sm">Stage Approval Required</h3>
-                <Badge variant="secondary">Required</Badge>
-              </div>
-
-              <Form {...approvalForm}>
-                <form className="space-y-6">
-                  {targetStageApprovalFields.map((field, index) => (
-                    <div key={field.id}>
-                      {index > 0 && <Separator className="my-4" />}
-
-                      <FormField
-                        control={approvalForm.control}
-                        name={field.id}
-                        render={({ field: formField }) => (
-                          <FormItem>
-                            <div className="space-y-3">
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1">
-                                  <FormLabel className="text-base font-medium">
-                                    {field.fieldName}
-                                    {field.isRequired && (
-                                      <span className="text-destructive ml-1">*</span>
-                                    )}
-                                  </FormLabel>
-                                  {field.description && (
-                                    <p className="text-sm text-muted-foreground mt-1">
-                                      {field.description}
-                                    </p>
-                                  )}
-                                </div>
-                                <Badge variant="outline" className="text-xs">
-                                  {field.fieldType}
-                                </Badge>
-                              </div>
-
-                              {/* Boolean Field */}
-                              {field.fieldType === "boolean" && (
-                                <div className="space-y-3">
-                                  <FormDescription className="flex items-center gap-2">
-                                    {field.expectedValueBoolean ? (
-                                      <CheckCircle className="h-4 w-4 text-green-500" />
-                                    ) : (
-                                      <AlertCircle className="h-4 w-4 text-red-500" />
-                                    )}
-                                    This field must be set to:{" "}
-                                    <strong>
-                                      {field.expectedValueBoolean ? "Yes" : "No"}
-                                    </strong>
-                                  </FormDescription>
-                                  <FormControl>
-                                    <div className="flex items-center space-x-3">
-                                      <Switch
-                                        checked={formField.value || false}
-                                        onCheckedChange={formField.onChange}
-                                        data-testid={`switch-approval-${field.id}`}
-                                      />
-                                      <Label className="font-normal">
-                                        {formField.value ? "Yes" : "No"}
-                                      </Label>
-                                    </div>
-                                  </FormControl>
-                                  <FormMessage />
-                                </div>
-                              )}
-
-                              {/* Number Field */}
-                              {field.fieldType === "number" && (
-                                <div className="space-y-3">
-                                  {field.comparisonType &&
-                                    field.expectedValueNumber !== null && (
-                                      <FormDescription className="flex items-center gap-2">
-                                        {getComparisonIcon(field.comparisonType)}
-                                        Value must be{" "}
-                                        {formatComparisonType(field.comparisonType)}{" "}
-                                        <strong>{field.expectedValueNumber}</strong>
-                                      </FormDescription>
-                                    )}
-                                  <FormControl>
-                                    <Input
-                                      type="number"
-                                      {...formField}
-                                      onChange={(e) =>
-                                        formField.onChange(Number(e.target.value))
-                                      }
-                                      data-testid={`input-approval-${field.id}`}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </div>
-                              )}
-
-                              {/* Long Text Field */}
-                              {field.fieldType === "long_text" && (
-                                <div className="space-y-3">
-                                  <FormControl>
-                                    <Textarea
-                                      {...formField}
-                                      rows={4}
-                                      data-testid={`textarea-approval-${field.id}`}
-                                    />
-                                  </FormControl>
-                                  <FormMessage />
-                                </div>
-                              )}
-
-                              {/* Multi-Select Field */}
-                              {field.fieldType === "multi_select" &&
-                                field.options &&
-                                field.options.length > 0 && (
-                                  <div className="space-y-3">
-                                    <FormControl>
-                                      <div className="space-y-2">
-                                        {field.options.map((option: string) => (
-                                          <div
-                                            key={option}
-                                            className="flex items-center space-x-2"
-                                          >
-                                            <Checkbox
-                                              checked={
-                                                (formField.value as string[] | undefined)?.includes(option) ||
-                                                false
-                                              }
-                                              onCheckedChange={(checked) => {
-                                                const currentValue =
-                                                  (formField.value as string[]) || [];
-                                                const updatedValue = checked
-                                                  ? [...currentValue, option]
-                                                  : currentValue.filter(
-                                                      (v: string) => v !== option
-                                                    );
-                                                formField.onChange(updatedValue);
-                                              }}
-                                              data-testid={`checkbox-approval-${field.id}-${option}`}
-                                            />
-                                            <label className="text-sm font-normal">
-                                              {option}
-                                            </label>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </FormControl>
-                                    <FormMessage />
-                                  </div>
-                                )}
-                            </div>
-                          </FormItem>
-                        )}
-                      />
-                    </div>
-                  ))}
-                </form>
-              </Form>
-            </div>
+            <StageApprovalForm
+              approvalForm={approvalForm}
+              targetStageApprovalFields={targetStageApprovalFields}
+            />
           )}
 
           {/* Right column: Add Queries form (conditional, mutually exclusive with approval) */}
