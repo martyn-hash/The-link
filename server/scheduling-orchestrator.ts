@@ -354,6 +354,13 @@ export async function ensureRunForDate(
  */
 async function sendSchedulingEmails(schedulingResult: SchedulingRunResult, triggerSource: TriggerSource): Promise<void> {
   try {
+    // Check if scheduling emails are enabled in company settings
+    const companySettings = await storage.getCompanySettings();
+    if (!companySettings?.schedulingEmailsEnabled) {
+      console.log('[Orchestrator] Scheduling emails are disabled in company settings - skipping email notifications');
+      return;
+    }
+    
     console.log(`[Orchestrator] Sending notification emails (trigger: ${triggerSource})...`);
     const usersWithNotifications = await storage.getUsersWithSchedulingNotifications();
     

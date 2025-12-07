@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Save, Bell, Link2, Plus, Trash2, ExternalLink, Upload, Image as ImageIcon, AlertTriangle, Lock, Eye, EyeOff, Phone, MessageSquare } from "lucide-react";
+import { Settings, Save, Bell, Link2, Plus, Trash2, ExternalLink, Upload, Image as ImageIcon, AlertTriangle, Lock, Eye, EyeOff, Phone, MessageSquare, Mail } from "lucide-react";
 import type { CompanySettings, UpdateCompanySettings } from "@shared/schema";
 
 interface RedirectUrl {
@@ -43,6 +43,7 @@ export default function CompanySettingsPage() {
   const [ringCentralLive, setRingCentralLive] = useState(false);
   const [appIsLive, setAppIsLive] = useState(false);
   const [aiButtonEnabled, setAiButtonEnabled] = useState(false);
+  const [schedulingEmailsEnabled, setSchedulingEmailsEnabled] = useState(true);
   
   // AI System Prompts
   const [aiSystemPromptNotes, setAiSystemPromptNotes] = useState("");
@@ -86,6 +87,7 @@ export default function CompanySettingsPage() {
       setRingCentralLive(settings.ringCentralLive || false);
       setAppIsLive(settings.appIsLive || false);
       setAiButtonEnabled(settings.aiButtonEnabled || false);
+      setSchedulingEmailsEnabled(settings.schedulingEmailsEnabled !== false);
       setAiSystemPromptNotes(settings.aiSystemPromptNotes || "");
       setAiSystemPromptEmails(settings.aiSystemPromptEmails || "");
       setAiSystemPromptStageNotifications(settings.aiSystemPromptStageNotifications || "");
@@ -252,6 +254,7 @@ export default function CompanySettingsPage() {
       ringCentralLive,
       appIsLive,
       aiButtonEnabled,
+      schedulingEmailsEnabled,
       aiSystemPromptNotes: aiSystemPromptNotes || null,
       aiSystemPromptEmails: aiSystemPromptEmails || null,
       aiSystemPromptStageNotifications: aiSystemPromptStageNotifications || null,
@@ -529,6 +532,25 @@ export default function CompanySettingsPage() {
                   data-testid="switch-ai-button-enabled"
                   checked={aiButtonEnabled}
                   onCheckedChange={setAiButtonEnabled}
+                  disabled={settingsLoading || updateSettingsMutation.isPending}
+                />
+              </div>
+
+              <div className="flex items-center justify-between space-x-4">
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="scheduling-emails-enabled" className="flex items-center gap-2">
+                    <Mail className="w-4 h-4" />
+                    Nightly Scheduling Emails
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    When enabled, the system will send scheduling summary emails after the nightly project scheduling run. Disable this in development environments to avoid unnecessary emails.
+                  </p>
+                </div>
+                <Switch
+                  id="scheduling-emails-enabled"
+                  data-testid="switch-scheduling-emails-enabled"
+                  checked={schedulingEmailsEnabled}
+                  onCheckedChange={setSchedulingEmailsEnabled}
                   disabled={settingsLoading || updateSettingsMutation.isPending}
                 />
               </div>

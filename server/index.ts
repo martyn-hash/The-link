@@ -12,7 +12,6 @@ import { startNotificationCron } from "./notification-cron";
 import { startSignatureReminderCron } from "./signature-reminder-cron";
 import { startReminderNotificationCron } from "./reminder-notification-cron";
 import { startQueryReminderCron } from "./query-reminder-cron";
-import { runSchemaMigrations } from "./utils/schemaMigrations";
 import fs from "fs";
 import path from "path";
 import cookieParser from "cookie-parser";
@@ -54,9 +53,6 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Run schema migrations FIRST before any routes to ensure database schema is up to date
-  await runSchemaMigrations();
-  
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
