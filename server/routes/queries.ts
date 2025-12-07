@@ -872,26 +872,6 @@ ${emailSignoff}`;
         });
       }
 
-      // Get project details for chronology
-      const project = await storage.getProject(projectId);
-      const sender = await storage.getUser(userId);
-
-      // Log to project chronology
-      if (project) {
-        const senderName = sender ? `${sender.firstName || ''} ${sender.lastName || ''}`.trim() : 'Staff';
-        const chronologyNote = `Bookkeeping queries sent to client: ${queryIds.length} queries sent to ${recipientEmail || 'client'}`;
-        
-        await storage.createChronologyEntry({
-          projectId,
-          fromStatus: null,
-          toStatus: 'no_change',
-          assigneeId: project.currentAssigneeId,
-          changedById: userId,
-          notes: chronologyNote,
-          timestamp: new Date(),
-        });
-      }
-
       res.json({
         success: true,
         message: `${queryIds.length} queries marked as sent`,
