@@ -1,0 +1,69 @@
+Create a new Markdown file at:
+refactor-plans/stage-change-pressure-analysis.md
+
+Goal:
+Analyse the entire stage-change flow in the system and produce a clear, structured report showing where operational pressure occurs, why it happens, and which parts are at highest risk for slowdown.
+
+⸻
+
+Agent Instructions
+	1.	Locate the Stage-Change Logic
+	•	Search the codebase for functions, services, or storage methods involved when a project changes stage.
+	•	This normally includes:
+	•	Project update logic
+	•	Stage transition helpers
+	•	Task regeneration logic
+	•	Query generation logic
+	•	Notifications & email sending
+	•	Custom field processing
+	•	External API interactions (if any)
+	2.	For each component, document:
+	•	File + method name
+	•	What the method does during stage change
+	•	Whether it is synchronous or triggers heavy synchronous work
+	•	What external calls it makes (database, email, SMS, etc.)
+	•	How many DB reads/writes it performs
+	•	Whether it loops over tasks/messages/queries
+	•	Whether it calls other modules recursively
+	3.	Identify pressure points
+For each part, classify it as:
+	•	High pressure – heavy DB loops, lots of writes, expensive operations, network/API calls
+	•	Medium pressure – some loops or moderate queries
+	•	Low pressure – lightweight transformations
+	4.	Output Format (in the .md file)
+1. Overview of Stage-Change Workflow
+
+A short summary of the entire flow, step by step.
+
+
+2. Pressure Map Table
+
+Component	File/Method	Pressure Level	Why	Notes
+
+
+3. High-Pressure Components (Deep Dive)
+
+For each one:
+	•	Description
+	•	Why it’s heavy
+	•	Any obvious red flags (loops, cross-domain calls, repeated lookups)
+4. Opportunities to Reduce Load
+
+List specific optimisations, e.g.:
+	•	Batch DB operations
+	•	Replace synchronous steps with queued jobs
+	•	Cache preloaded data
+	•	Move notifications to background workers
+	•	Reduce cross-domain calls
+5. Recommended Async Candidates
+
+List the parts that can be moved off the synchronous stage-change request.
+
+	5.	Do not refactor anything yet.
+This task is diagnostic only — just produce the Markdown analysis.
+
+⸻
+
+End result:
+
+A clear, actionable .md report that maps every heavy step in the stage-change process so you can later plan optimisation, async work, or queue-based refactoring.
