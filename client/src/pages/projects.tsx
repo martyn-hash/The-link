@@ -49,7 +49,10 @@ export default function Projects() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <TopNavigation user={state.user} />
+      <TopNavigation 
+        user={state.user} 
+        onMobileSearchClick={() => state.setMobileSearchOpen(true)} 
+      />
 
       <main className="flex-1 pb-20">
         <ProjectsHeader
