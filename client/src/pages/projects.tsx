@@ -49,10 +49,7 @@ export default function Projects() {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <TopNavigation
-        showSearch={true}
-        onSearchOpen={() => state.setMobileSearchOpen(true)}
-      />
+      <TopNavigation user={state.user} />
 
       <main className="flex-1 pb-20">
         <ProjectsHeader
@@ -145,11 +142,14 @@ export default function Projects() {
         />
       </main>
 
-      <BottomNav />
+      <BottomNav 
+        user={state.user} 
+        onSearchClick={() => state.setMobileSearchOpen(true)} 
+      />
 
       <SuperSearch
-        open={state.mobileSearchOpen}
-        onClose={() => state.setMobileSearchOpen(false)}
+        isOpen={state.mobileSearchOpen}
+        onOpenChange={(open) => state.setMobileSearchOpen(open)}
       />
 
       <FilterPanel
@@ -237,14 +237,15 @@ export default function Projects() {
         setNewWidgetTitle={state.setNewWidgetTitle}
         newWidgetGroupBy={state.newWidgetGroupBy}
         setNewWidgetGroupBy={state.setNewWidgetGroupBy}
-        onAdd={state.handleAddWidgetToNewDashboard}
+        onAddWidget={state.handleAddWidgetToNewDashboard}
       />
 
       <SaveViewDialog
         open={state.saveViewDialogOpen}
         onOpenChange={state.setSaveViewDialogOpen}
-        viewName={state.newViewName}
-        setViewName={state.setNewViewName}
+        newViewName={state.newViewName}
+        setNewViewName={state.setNewViewName}
+        viewMode={state.viewMode}
         onSave={state.handleSaveView}
         isSaving={state.saveViewMutation.isPending}
       />
@@ -252,17 +253,15 @@ export default function Projects() {
       <DeleteViewDialog
         open={state.deleteViewDialogOpen}
         onOpenChange={state.setDeleteViewDialogOpen}
-        viewName={state.viewToDelete?.name || ""}
-        onConfirm={state.handleConfirmDeleteView}
-        isDeleting={state.deleteViewMutation.isPending}
+        viewToDelete={state.viewToDelete}
+        onConfirmDelete={state.handleConfirmDeleteView}
       />
 
       <DeleteDashboardDialog
         open={state.deleteDashboardDialogOpen}
         onOpenChange={state.setDeleteDashboardDialogOpen}
-        dashboardName={state.dashboardToDelete?.name || ""}
-        onConfirm={state.handleConfirmDeleteDashboard}
-        isDeleting={state.deleteDashboardMutation.isPending}
+        dashboardToDelete={state.dashboardToDelete}
+        onConfirmDelete={state.handleConfirmDeleteDashboard}
       />
     </div>
   );
