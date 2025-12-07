@@ -33,7 +33,8 @@ import {
   Briefcase,
   UserCircle,
   Archive,
-  Folder
+  Folder,
+  AlertTriangle
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -55,8 +56,8 @@ interface FilterPanelProps {
   setShowArchived: (value: boolean) => void;
   showCompletedRegardless: boolean;
   setShowCompletedRegardless: (value: boolean) => void;
-  behindScheduleOnly: boolean;
-  setBehindScheduleOnly: (value: boolean) => void;
+  scheduleStatusFilter: "all" | "behind" | "overdue" | "both";
+  setScheduleStatusFilter: (value: "all" | "behind" | "overdue" | "both") => void;
   dynamicDateFilter: "all" | "overdue" | "today" | "next7days" | "next14days" | "next30days" | "custom";
   setDynamicDateFilter: (value: "all" | "overdue" | "today" | "next7days" | "next14days" | "next30days" | "custom") => void;
   customDateRange: { from: Date | undefined; to: Date | undefined };
@@ -99,8 +100,8 @@ export default function FilterPanel({
   setShowArchived,
   showCompletedRegardless,
   setShowCompletedRegardless,
-  behindScheduleOnly,
-  setBehindScheduleOnly,
+  scheduleStatusFilter,
+  setScheduleStatusFilter,
   dynamicDateFilter,
   setDynamicDateFilter,
   customDateRange,
@@ -134,7 +135,7 @@ export default function FilterPanel({
     setUserFilter("all");
     setShowArchived(false);
     setShowCompletedRegardless(true);
-    setBehindScheduleOnly(false);
+    setScheduleStatusFilter("all");
     setDynamicDateFilter("all");
     setCustomDateRange({ from: undefined, to: undefined });
     setServiceDueDateFilter("all");
@@ -172,7 +173,7 @@ export default function FilterPanel({
     if (userFilter !== "all" && isManagerOrAdmin) count++;
     if (showArchived) count++;
     if (!showCompletedRegardless) count++;
-    if (behindScheduleOnly) count++;
+    if (scheduleStatusFilter !== "all") count++;
     // Count only the active date filter (mutual exclusivity)
     if (dynamicDateFilter !== "all" || serviceDueDateFilter !== "all") count++;
     return count;
@@ -530,18 +531,26 @@ export default function FilterPanel({
 
             <Separator />
 
-            {/* Behind Schedule Toggle */}
-            <div className="flex items-center justify-between">
-              <Label htmlFor="behind-schedule-filter" className="flex items-center gap-2 cursor-pointer">
-                <CalendarIcon className="w-4 h-4" />
-                Behind Schedule Only
+            {/* Project Status Filter */}
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                Project Status Filter
               </Label>
-              <Switch
-                id="behind-schedule-filter"
-                checked={behindScheduleOnly}
-                onCheckedChange={setBehindScheduleOnly}
-                data-testid="switch-behind-schedule-filter"
-              />
+              <Select value={scheduleStatusFilter} onValueChange={setScheduleStatusFilter}>
+                <SelectTrigger data-testid="select-schedule-status-filter">
+                  <SelectValue placeholder="All Active" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Active</SelectItem>
+                  <SelectItem value="behind">Behind Schedule</SelectItem>
+                  <SelectItem value="overdue">Overdue</SelectItem>
+                  <SelectItem value="both">Behind Schedule & Overdue</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Behind Schedule = in stage too long. Overdue = past due date.
+              </p>
             </div>
 
             <Separator />

@@ -123,7 +123,7 @@ export default function Projects() {
   const [serviceFilter, setServiceFilter] = useState("all");
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState("all");
   const [serviceOwnerFilter, setServiceOwnerFilter] = useState("all");
-  const [behindScheduleOnly, setBehindScheduleOnly] = useState(false);
+  const [scheduleStatusFilter, setScheduleStatusFilter] = useState<"all" | "behind" | "overdue" | "both">("all");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(ITEMS_PER_PAGE);
 
@@ -256,28 +256,28 @@ export default function Projects() {
       setDynamicDateFilter(dateFilter as any);
     }
     
-    const behindSchedule = searchParams.get('behindSchedule');
-    if (behindSchedule === 'true') {
-      setBehindScheduleOnly(true);
+    const scheduleStatus = searchParams.get('scheduleStatus');
+    if (scheduleStatus && ['behind', 'overdue', 'both'].includes(scheduleStatus)) {
+      setScheduleStatusFilter(scheduleStatus as "behind" | "overdue" | "both");
     }
   }, [location]); // Only run when location changes
 
-  // Sync behindSchedule filter state to URL
+  // Sync scheduleStatus filter state to URL
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
-    const currentBehindSchedule = searchParams.get('behindSchedule');
+    const currentScheduleStatus = searchParams.get('scheduleStatus');
     
-    if (behindScheduleOnly && currentBehindSchedule !== 'true') {
-      searchParams.set('behindSchedule', 'true');
+    if (scheduleStatusFilter !== "all" && currentScheduleStatus !== scheduleStatusFilter) {
+      searchParams.set('scheduleStatus', scheduleStatusFilter);
       window.history.replaceState({}, '', `${window.location.pathname}?${searchParams.toString()}`);
-    } else if (!behindScheduleOnly && currentBehindSchedule === 'true') {
-      searchParams.delete('behindSchedule');
+    } else if (scheduleStatusFilter === "all" && currentScheduleStatus) {
+      searchParams.delete('scheduleStatus');
       const newUrl = searchParams.toString() 
         ? `${window.location.pathname}?${searchParams.toString()}`
         : window.location.pathname;
       window.history.replaceState({}, '', newUrl);
     }
-  }, [behindScheduleOnly]);
+  }, [scheduleStatusFilter]);
 
   // Main projects query with staleTime to prevent refetch on navigation
   // Data is considered fresh for 2 minutes - returning to page uses cache
@@ -349,6 +349,27 @@ export default function Projects() {
     staleTime: 5 * 60 * 1000, // 5 minutes
     select: (data: any[]) => data.map((pt: any) => ({ id: pt.id, name: pt.name })).sort((a, b) => a.name.localeCompare(b.name))
   });
+
+  // Fetch all kanban stages for schedule status filtering
+  // This provides the maxInstanceTime for each stage to determine "behind schedule" status
+  // Always fetch when authenticated - data is cached and needed for saved view loading with legacy behindScheduleOnly
+  const { data: allStages = [], isLoading: stagesLoading, isError: stagesError } = useQuery<Array<{ id: string; name: string; projectTypeId: string; maxInstanceTime: number | null }>>({
+    queryKey: ["/api/config/stages"],
+    enabled: isAuthenticated && !!user,
+    retry: 2,
+    staleTime: 5 * 60 * 1000, // 5 minutes - stage config rarely changes
+  });
+
+  // Build a map of projectTypeId:stageName -> maxInstanceTime for efficient lookup during filtering
+  const allStagesMap = useMemo(() => {
+    const map = new Map<string, number>();
+    allStages.forEach(stage => {
+      if (stage.maxInstanceTime && stage.maxInstanceTime > 0) {
+        map.set(`${stage.projectTypeId}:${stage.name}`, stage.maxInstanceTime);
+      }
+    });
+    return map;
+  }, [allStages]);
 
   // Fetch open tasks/reminders count for badge display
   // Uses the same endpoint and query key pattern as TasksWorkspace for proper cache invalidation
@@ -487,9 +508,31 @@ export default function Projects() {
   }, [allServices, dashboardServiceFilter]);
 
   // Handler to load a saved view
-  const handleLoadSavedView = (view: ProjectView) => {
+  const handleLoadSavedView = async (view: ProjectView) => {
     try {
       const filters = typeof view.filters === 'string' ? JSON.parse(view.filters) : view.filters;
+      
+      // Determine if this view needs schedule status filtering with stage data
+      let targetScheduleFilter = filters.scheduleStatusFilter || (filters.behindScheduleOnly ? "behind" : "all");
+      const needsStageData = targetScheduleFilter === "behind" || targetScheduleFilter === "both";
+      
+      // If view requires stage data for filtering, ensure it's loaded first
+      if (needsStageData) {
+        try {
+          await queryClient.ensureQueryData({
+            queryKey: ["/api/config/stages"],
+            staleTime: 5 * 60 * 1000,
+          });
+        } catch (error) {
+          console.warn("Failed to prefetch stages for schedule filter, falling back to 'all'");
+          targetScheduleFilter = "all";
+          toast({
+            title: "Filter Unavailable",
+            description: "Could not load stage data for behind schedule filtering. Showing all projects instead.",
+            variant: "destructive",
+          });
+        }
+      }
       
       // Track the loaded saved view ID
       setCurrentSavedViewId(view.id);
@@ -499,7 +542,7 @@ export default function Projects() {
       setServiceOwnerFilter(filters.serviceOwnerFilter || "all");
       setUserFilter(filters.userFilter || "all");
       setShowArchived(filters.showArchived || false);
-      setBehindScheduleOnly(filters.behindScheduleOnly || false);
+      setScheduleStatusFilter(targetScheduleFilter);
       setShowCompletedRegardless(filters.showCompletedRegardless ?? true);
       setDynamicDateFilter(filters.dynamicDateFilter || "all");
       setCustomDateRange({
@@ -634,7 +677,7 @@ export default function Projects() {
     setShowArchived(true); // Show archived/completed projects when viewing "all" projects
     setDynamicDateFilter("all");
     setCustomDateRange({ from: undefined, to: undefined });
-    setBehindScheduleOnly(false);
+    setScheduleStatusFilter("all");
     setServiceDueDateFilter("all");
     
     // Clear saved view tracking since we're viewing all projects now
@@ -715,7 +758,7 @@ export default function Projects() {
       serviceOwnerFilter,
       userFilter,
       showArchived,
-      behindScheduleOnly,
+      scheduleStatusFilter,
       showCompletedRegardless,
       dynamicDateFilter,
       customDateRange,
@@ -754,7 +797,7 @@ export default function Projects() {
       serviceOwnerFilter,
       userFilter,
       showArchived,
-      behindScheduleOnly,
+      scheduleStatusFilter,
       showCompletedRegardless,
       dynamicDateFilter,
       customDateRange,
@@ -1057,7 +1100,7 @@ export default function Projects() {
     return count;
   };
 
-  const filteredProjects = (projects || []).filter((project: ProjectWithRelations) => {
+  const filteredProjects = useMemo(() => (projects || []).filter((project: ProjectWithRelations) => {
     // Service filter using projectType and service data (compare by ID)
     let serviceMatch = true;
     if (serviceFilter !== "all") {
@@ -1127,35 +1170,72 @@ export default function Projects() {
       }
     }
 
-    // Behind schedule filter - check if project exceeds stage max time
-    let behindScheduleMatch = true;
-    if (behindScheduleOnly) {
-      behindScheduleMatch = false; // Default to false, only match if truly behind
-      
-      const projectTypeWithStages = project.projectType as (typeof project.projectType & { kanbanStages?: any[] });
-      if (!project.completionStatus && projectTypeWithStages?.kanbanStages) {
-        const currentStageConfig = projectTypeWithStages.kanbanStages.find(
-          (s: any) => s.name === project.currentStatus
-        );
+    // Schedule status filter - check behind schedule and/or overdue status
+    let scheduleStatusMatch = true;
+    if (scheduleStatusFilter !== "all") {
+      // Skip completed projects from schedule filtering
+      if (project.completionStatus) {
+        scheduleStatusMatch = false;
+      } else {
+        const now = new Date();
         
-        if (currentStageConfig?.maxInstanceTime && currentStageConfig.maxInstanceTime > 0) {
-          // Get time in current stage from chronology
-          const chronology = project.chronology || [];
-          const sortedChronology = [...chronology].sort((a, b) => 
-            new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
-          );
-          
-          const lastEntry = sortedChronology.find((entry: any) => entry.toStatus === project.currentStatus);
-          const startTime = lastEntry?.timestamp || project.createdAt;
-          
-          if (startTime) {
-            // Simple hour calculation (not business hours, but close enough for filtering)
-            const now = new Date();
-            const start = new Date(startTime);
-            const hoursDiff = (now.getTime() - start.getTime()) / (1000 * 60 * 60);
-            
-            behindScheduleMatch = hoursDiff > currentStageConfig.maxInstanceTime;
+        // Check if project is overdue (past due date)
+        const isOverdue = project.dueDate ? new Date(project.dueDate) < now : false;
+        
+        // Check if project is behind schedule (in stage too long)
+        // Only check if we have stage data loaded and valid chronology data
+        let isBehindSchedule = false;
+        
+        // Check if stages data is available
+        const stagesLoaded = allStagesMap.size > 0;
+        
+        // Handle stages loading/error states for behind schedule filtering
+        const needsStageData = scheduleStatusFilter === "behind" || scheduleStatusFilter === "both";
+        if (needsStageData && !stagesLoaded) {
+          if (stagesLoading) {
+            // Still loading stage data - exclude all projects temporarily
+            return false;
           }
+          if (stagesError) {
+            // Error loading stages - for "behind" filter, exclude all; for "both", only check overdue
+            if (scheduleStatusFilter === "behind") {
+              return false;
+            }
+            // For "both", continue to check only overdue status (isBehindSchedule stays false)
+          }
+        }
+        
+        if (stagesLoaded) {
+          const stageMaxTime = allStagesMap.get(`${project.projectTypeId}:${project.currentStatus}`);
+          if (stageMaxTime && stageMaxTime > 0) {
+            // Get time in current stage from chronology - must have explicit transition record
+            const chronology = project.chronology || [];
+            const sortedChronology = [...chronology].sort((a, b) => 
+              new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime()
+            );
+            
+            const lastEntry = sortedChronology.find((entry: any) => entry.toStatus === project.currentStatus);
+            
+            // Only calculate if we have a valid chronology entry with the transition timestamp
+            if (lastEntry?.timestamp) {
+              const start = new Date(lastEntry.timestamp);
+              const hoursDiff = (now.getTime() - start.getTime()) / (1000 * 60 * 60);
+              isBehindSchedule = hoursDiff > stageMaxTime;
+            }
+          }
+        }
+        
+        // Apply filter based on selected option
+        switch (scheduleStatusFilter) {
+          case "behind":
+            scheduleStatusMatch = isBehindSchedule;
+            break;
+          case "overdue":
+            scheduleStatusMatch = isOverdue;
+            break;
+          case "both":
+            scheduleStatusMatch = isBehindSchedule || isOverdue;
+            break;
         }
       }
     }
@@ -1175,8 +1255,8 @@ export default function Projects() {
       return showArchived;
     }
 
-    return serviceMatch && taskAssigneeMatch && serviceOwnerMatch && userMatch && dateMatch && behindScheduleMatch;
-  });
+    return serviceMatch && taskAssigneeMatch && serviceOwnerMatch && userMatch && dateMatch && scheduleStatusMatch;
+  }), [projects, serviceFilter, taskAssigneeFilter, serviceOwnerFilter, userFilter, isManagerOrAdmin, dynamicDateFilter, customDateRange, scheduleStatusFilter, allStagesMap, stagesLoading, stagesError, showArchived, viewMode]);
 
   // Pagination for list view
   const totalPages = Math.ceil(filteredProjects.length / itemsPerPage);
@@ -1912,8 +1992,8 @@ export default function Projects() {
         setShowArchived={setShowArchived}
         showCompletedRegardless={showCompletedRegardless}
         setShowCompletedRegardless={setShowCompletedRegardless}
-        behindScheduleOnly={behindScheduleOnly}
-        setBehindScheduleOnly={setBehindScheduleOnly}
+        scheduleStatusFilter={scheduleStatusFilter}
+        setScheduleStatusFilter={setScheduleStatusFilter}
         dynamicDateFilter={dynamicDateFilter}
         setDynamicDateFilter={setDynamicDateFilter}
         customDateRange={customDateRange}
