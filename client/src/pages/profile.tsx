@@ -562,7 +562,7 @@ export default function Profile() {
             </Card>
 
             {/* Password Change - Only show if user has password-based authentication */}
-            {user.hasPassword && (
+            {'hasPassword' in user && user.hasPassword && (
               <Card>
                 <CardHeader>
                   <CardTitle>Change Password</CardTitle>

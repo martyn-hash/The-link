@@ -138,7 +138,7 @@ export default function PersonDetail() {
       fullName: "",
       title: "",
       dateOfBirth: "",
-      nationality: "",
+      nationality: undefined as UpdatePersonData['nationality'],
       occupation: "",
       telephone: "",
       email: "",
@@ -172,7 +172,7 @@ export default function PersonDetail() {
         fullName: person.fullName || "",
         title: person.title || "",
         dateOfBirth: person.dateOfBirth || "",
-        nationality: person.nationality || "",
+        nationality: (person.nationality ?? undefined) as UpdatePersonData['nationality'],
         occupation: person.occupation || "",
         telephone: person.telephone || "",
         email: person.email || "",
@@ -790,7 +790,7 @@ export default function PersonDetail() {
                       <FormItem>
                         <FormLabel>Nationality</FormLabel>
                         <FormControl>
-                          <Input {...field} data-testid="input-nationality" />
+                          <Input {...field} value={field.value ?? ""} data-testid="input-nationality" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

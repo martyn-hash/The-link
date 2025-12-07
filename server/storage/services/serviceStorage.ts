@@ -20,7 +20,7 @@ import type { ScheduledServiceView } from '../base/types.js';
 export class ServiceStorage extends BaseStorage {
   // ==================== Service Query Operations ====================
 
-  async getAllServices(): Promise<(Service & { projectType: ProjectType; roles: WorkRole[] })[]> {
+  async getAllServices(): Promise<(Service & { projectType: ProjectType | null; roles: WorkRole[] })[]> {
     // Get services with their optional project types
     const servicesData = await db
       .select({

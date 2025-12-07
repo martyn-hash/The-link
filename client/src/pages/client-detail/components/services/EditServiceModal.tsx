@@ -190,7 +190,7 @@ export function EditServiceModal({
                   </div>
                   <FormControl>
                     <Switch
-                      checked={field.value}
+                      checked={field.value ?? false}
                       onCheckedChange={field.onChange}
                       data-testid="switch-service-active"
                     />
@@ -208,7 +208,7 @@ export function EditServiceModal({
                   <FormLabel>Frequency</FormLabel>
                   <Select 
                     onValueChange={field.onChange} 
-                    defaultValue={isCompaniesHouseService ? "annually" : field.value}
+                    defaultValue={isCompaniesHouseService ? "annually" : (field.value ?? undefined)}
                     disabled={isCompaniesHouseService}
                   >
                     <FormControl>

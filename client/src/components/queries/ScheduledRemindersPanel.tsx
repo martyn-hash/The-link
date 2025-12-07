@@ -703,7 +703,7 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
                       
                       {/* Sign-off section - custom or default (sanitized for security) */}
                       <div dangerouslySetInnerHTML={{ 
-                        __html: DOMPurify.sanitize(editSignoff || getDefaultSignoffText()) 
+                        __html: DOMPurify.sanitize(editSignoff || getDefaultSignoffText(editingReminder?.tokenCreatorFirstName ?? null)) 
                       }} />
                     </div>
                   </ScrollArea>

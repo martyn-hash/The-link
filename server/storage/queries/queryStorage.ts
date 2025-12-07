@@ -15,13 +15,13 @@ import { BaseStorage } from '../base/BaseStorage.js';
 
 export class QueryStorage extends BaseStorage {
   async createQuery(data: InsertBookkeepingQuery): Promise<BookkeepingQuery> {
-    const [query] = await db.insert(bookkeepingQueries).values(data).returning();
+    const [query] = await db.insert(bookkeepingQueries).values(data as any).returning();
     return query;
   }
 
   async createQueries(dataArray: InsertBookkeepingQuery[]): Promise<BookkeepingQuery[]> {
     if (dataArray.length === 0) return [];
-    const queries = await db.insert(bookkeepingQueries).values(dataArray).returning();
+    const queries = await db.insert(bookkeepingQueries).values(dataArray as any).returning();
     return queries;
   }
 

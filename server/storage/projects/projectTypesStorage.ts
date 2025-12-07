@@ -47,7 +47,7 @@ export class ProjectTypesStorage extends BaseStorage {
    * Create a new project type
    */
   async createProjectType(projectType: InsertProjectType): Promise<ProjectType> {
-    const result = await db.insert(projectTypes).values(projectType).returning();
+    const result = await db.insert(projectTypes).values(projectType as any).returning();
     const [newProjectType] = result as any[];
     return newProjectType;
   }
@@ -58,7 +58,7 @@ export class ProjectTypesStorage extends BaseStorage {
   async updateProjectType(id: string, projectType: Partial<InsertProjectType>): Promise<ProjectType> {
     const [updatedDescription] = await db
       .update(projectTypes)
-      .set(projectType)
+      .set(projectType as any)
       .where(eq(projectTypes.id, id))
       .returning();
       

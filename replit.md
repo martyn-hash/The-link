@@ -13,6 +13,24 @@ Preferred communication style: Simple, everyday language.
 - Email: admin@example.com
 - Password: admin123
 
+## TypeScript Refactoring Status
+**Current Error Count:** 9 (down from 1,829 - 99.5% reduction)
+
+**Remaining Errors (non-blocking):**
+- 3 client-side: Form field type inference issues in AddServiceModal.tsx, EditServiceModal.tsx, profile.tsx (unknown → ReactNode)
+- 6 server-side: Service type shape mismatches in project-scheduler.ts and schedule-calculator.ts
+
+**Completed Refactoring:**
+- Storage facade TypeScript mixin composition with AllStorageDeps intersection type
+- StorageBase properties changed from protected to public readonly for proper facade mixin typing
+- All 52 storage instances properly typed across 14 facade mixins
+- Form component typing fixes for nationality enum fields (using targeted field-level casts)
+- Type guard pattern for optional user properties (e.g., `'hasPassword' in user`)
+
+**Known Type Patterns:**
+- Nationality fields use `(value ?? undefined) as UpdatePersonData['nationality']` for enum compatibility
+- Service entity has different type shapes in scheduler vs. storage - requires schema-level unification for full fix
+
 ## System Architecture
 
 ### UI/UX

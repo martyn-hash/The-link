@@ -510,7 +510,7 @@ function BasicInfoTab({ clientPerson, isEditing, editForm, startEditing, cancelE
               <FormField control={editForm.control} name="nationality" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Nationality</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} defaultValue={field.value ?? undefined}>
                     <FormControl>
                       <SelectTrigger data-testid={`select-nationality-${clientPerson.id}`}>
                         <SelectValue placeholder="Select nationality" />

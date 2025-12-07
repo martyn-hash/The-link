@@ -103,6 +103,7 @@ const COLUMN_WIDTHS_NO_ASSIGNEE = {
   description: "w-[24%] min-w-[150px]",
   status: "w-[16%] min-w-[130px]",
   linkedEntities: "w-[20%] min-w-[140px]",
+  assignee: "", // Not used when showAssignee=false, but needed for consistent type
   dueDate: "w-[14%] min-w-[100px]",
   actions: "w-[90px]",
 };
