@@ -10,6 +10,17 @@
 
 ---
 
+## Browser Testing Login Details
+
+For all verification steps, use these credentials:
+
+- **URL:** Root page (`/`)
+- **Tab:** "Passwords" tab
+- **Email:** `jamsplan1@gmail.com`
+- **Password:** `admin123`
+
+---
+
 ## Problem Statement
 
 Despite its name, `auth.ts` has become a "kitchen sink" file containing 18+ unrelated domains. Only ~10% of the code is actually authentication-related. The file violates single responsibility principle and makes maintenance, debugging, and agent navigation extremely difficult.
