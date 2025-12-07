@@ -128,6 +128,8 @@ export interface QueryEmailOptions {
   expiryDays: number;
   expiryDate?: string;
   recipientPhone?: string;
+  /** Whether Voice AI is available for this project (based on project type settings + active webhooks) */
+  voiceAiAvailable?: boolean;
 }
 
 export interface EmailDialogProps extends DialogBaseProps {

@@ -688,6 +688,18 @@ export function registerQueryRoutes(
       const project = await storage.getProject(projectId);
       const client = project ? await storage.getClientById(project.clientId) : null;
       const sender = await storage.getUser(userId);
+      
+      // Get project type to check if Voice AI is available
+      let voiceAiAvailable = false;
+      if (project?.projectTypeId) {
+        const projectType = await storage.projectTypesStorage.getProjectTypeById(project.projectTypeId);
+        if (projectType?.useVoiceAiForQueries) {
+          // Check if there are active webhooks configured
+          const dialoraSettings = projectType.dialoraSettings as { outboundWebhooks?: Array<{ active: boolean }> } | null;
+          const hasActiveWebhooks = dialoraSettings?.outboundWebhooks?.some(w => w.active) ?? false;
+          voiceAiAvailable = hasActiveWebhooks;
+        }
+      }
 
       // Only create token and URLs if online link is requested
       let token = null;
@@ -828,6 +840,8 @@ ${emailSignoff}`;
         protectedHtml,
         emailSignoff,
         includeOnlineLink,
+        // Voice AI availability based on project type settings
+        voiceAiAvailable,
         project: project ? { id: project.id, description: project.description, clientId: project.clientId } : null,
         client: client ? { id: client.id, name: client.name } : null,
       });

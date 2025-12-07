@@ -860,6 +860,7 @@ export function EmailDialog({
                           onRemindersConfigured?.(newSchedule);
                         }}
                         disabled={sendEmailMutation.isPending}
+                        voiceAiAvailable={queryEmailOptions.voiceAiAvailable}
                       />
                     )}
 

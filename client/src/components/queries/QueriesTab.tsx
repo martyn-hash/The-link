@@ -190,6 +190,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   const [pendingEmailQueryIds, setPendingEmailQueryIds] = useState<string[]>([]);
   const [pendingEmailTokenId, setPendingEmailTokenId] = useState<string | null>(null);
   const [pendingEmailExpiryDays, setPendingEmailExpiryDays] = useState<number | null>(null);
+  const [pendingEmailVoiceAiAvailable, setPendingEmailVoiceAiAvailable] = useState<boolean>(false);
   const [configuredReminders, setConfiguredReminders] = useState<Array<{ id: string; scheduledAt: string; channel: 'email' | 'sms' | 'voice'; enabled: boolean }>>([]);
   const [isPreparingEmail, setIsPreparingEmail] = useState(false);
   
@@ -549,10 +550,11 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
       
       const response = await apiRequest('POST', `/api/projects/${projectId}/queries/prepare-email`, requestBody);
       
-      // Store the token ID, query IDs, and expiry days for after email is sent
+      // Store the token ID, query IDs, expiry days, and voice AI availability for after email is sent
       setPendingEmailTokenId(includeOnlineLink ? response.tokenId : null);
       setPendingEmailQueryIds(sendOptionsQueryIds);
       setPendingEmailExpiryDays(includeOnlineLink ? linkExpiryDays : null);
+      setPendingEmailVoiceAiAvailable(response.voiceAiAvailable ?? false);
       setConfiguredReminders([]);
       
       // Set initial values for email dialog with structured content for protected HTML
@@ -1741,6 +1743,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
             queryCount: pendingEmailQueryIds.length,
             expiryDays: pendingEmailExpiryDays,
             expiryDate: new Date(Date.now() + pendingEmailExpiryDays * 24 * 60 * 60 * 1000).toISOString(),
+            voiceAiAvailable: pendingEmailVoiceAiAvailable,
           } : undefined}
           onRemindersConfigured={setConfiguredReminders}
         />

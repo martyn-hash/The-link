@@ -27,6 +27,8 @@ interface ReminderScheduleEditorProps {
   schedule: ReminderScheduleItem[];
   onScheduleChange: (schedule: ReminderScheduleItem[]) => void;
   disabled?: boolean;
+  /** Whether Voice AI is available (based on project type settings + active webhooks) */
+  voiceAiAvailable?: boolean;
 }
 
 const CHANNEL_OPTIONS = [
@@ -68,15 +70,34 @@ export function ReminderScheduleEditor({
   schedule,
   onScheduleChange,
   disabled = false,
+  voiceAiAvailable = false,
 }: ReminderScheduleEditorProps) {
   const [isExpanded, setIsExpanded] = useState(true);
 
   useEffect(() => {
     if (schedule.length === 0 && expiryDays > 0) {
       const generated = generateReminderSchedule(expiryDays);
-      onScheduleChange(generated);
+      // If Voice AI is not available, convert any voice reminders to email
+      if (!voiceAiAvailable) {
+        const filteredSchedule = generated.map(reminder => 
+          reminder.channel === 'voice' ? { ...reminder, channel: 'email' as const } : reminder
+        );
+        onScheduleChange(filteredSchedule);
+      } else {
+        onScheduleChange(generated);
+      }
     }
-  }, [expiryDays, schedule.length, onScheduleChange]);
+  }, [expiryDays, schedule.length, onScheduleChange, voiceAiAvailable]);
+  
+  // Also convert any existing voice reminders to email if Voice AI becomes unavailable
+  useEffect(() => {
+    if (!voiceAiAvailable && schedule.some(r => r.channel === 'voice')) {
+      const updatedSchedule = schedule.map(reminder =>
+        reminder.channel === 'voice' ? { ...reminder, channel: 'email' as const } : reminder
+      );
+      onScheduleChange(updatedSchedule);
+    }
+  }, [voiceAiAvailable, schedule, onScheduleChange]);
 
   // Use channel availability if provided AND has selected recipients, otherwise fall back to legacy props
   // This ensures that when channelAvailability is passed but no recipients are selected yet,
@@ -155,11 +176,25 @@ export function ReminderScheduleEditor({
   };
 
   const isChannelDisabled = (channel: 'email' | 'sms' | 'voice', isWeekendDay: boolean): boolean => {
-    if (channel === 'voice' && isWeekendDay) return true;
+    if (channel === 'voice') {
+      // Voice is disabled if: Voice AI not enabled for project type, OR it's a weekend
+      if (!voiceAiAvailable || isWeekendDay) return true;
+    }
     if (channel === 'sms' && !hasPhone) return true;
     if (channel === 'email' && !hasEmail) return true;
     return false;
   };
+  
+  // Filter channel options to only show available channels
+  const availableChannelOptions = CHANNEL_OPTIONS.filter(option => {
+    // Always show email
+    if (option.value === 'email') return true;
+    // Only show SMS if phone is available
+    if (option.value === 'sms') return hasPhone;
+    // Only show Voice if Voice AI is enabled for the project type
+    if (option.value === 'voice') return voiceAiAvailable;
+    return true;
+  });
 
   return (
     <div className="bg-muted/30 rounded-lg p-3 space-y-3">
@@ -279,7 +314,7 @@ export function ReminderScheduleEditor({
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {CHANNEL_OPTIONS.map((opt) => {
+                            {availableChannelOptions.map((opt) => {
                               const isDisabled = isChannelDisabled(opt.value, isWeekendDay);
                               const channelCount = opt.value === 'email' ? emailCount : phoneCount;
                               const showPartialCoverage = totalRecipients > 0 && channelCount < totalRecipients && channelCount > 0;
