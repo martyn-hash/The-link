@@ -158,6 +158,110 @@ export class ProjectStagesStorage extends BaseStorage {
     const [stage] = await db.select().from(kanbanStages).where(eq(kanbanStages.id, id));
     return stage;
   }
+
+  /**
+   * Get consolidated validation data for a stage change in a single query.
+   * Combines stage lookup, reason lookup, mapping validation, and required fields.
+   * 
+   * @param stageId - The target stage ID
+   * @param reasonId - The change reason ID
+   * @param projectTypeId - The project type ID for validation
+   * @returns Consolidated validation data including stage, reason, mapping validity, and required fields
+   */
+  async getStageChangeValidationData(
+    stageId: string,
+    reasonId: string,
+    projectTypeId: string
+  ): Promise<{
+    stage: KanbanStage | null;
+    reason: ChangeReason | null;
+    mappingExists: boolean;
+    requiredFields: ReasonCustomField[];
+    isValid: boolean;
+    validationError?: string;
+  }> {
+    const result = await db
+      .select({
+        stage: kanbanStages,
+        reason: changeReasons,
+        mappingId: stageReasonMaps.id,
+      })
+      .from(kanbanStages)
+      .leftJoin(
+        changeReasons,
+        and(
+          eq(changeReasons.id, reasonId),
+          eq(changeReasons.projectTypeId, projectTypeId)
+        )
+      )
+      .leftJoin(
+        stageReasonMaps,
+        and(
+          eq(stageReasonMaps.stageId, kanbanStages.id),
+          eq(stageReasonMaps.reasonId, reasonId)
+        )
+      )
+      .where(
+        and(
+          eq(kanbanStages.id, stageId),
+          eq(kanbanStages.projectTypeId, projectTypeId)
+        )
+      )
+      .limit(1);
+
+    const row = result[0];
+    
+    if (!row || !row.stage) {
+      return {
+        stage: null,
+        reason: null,
+        mappingExists: false,
+        requiredFields: [],
+        isValid: false,
+        validationError: "Stage not found or does not belong to this project type",
+      };
+    }
+
+    if (!row.reason) {
+      return {
+        stage: row.stage,
+        reason: null,
+        mappingExists: false,
+        requiredFields: [],
+        isValid: false,
+        validationError: "Change reason not found or does not belong to this project type",
+      };
+    }
+
+    if (!row.mappingId) {
+      return {
+        stage: row.stage,
+        reason: row.reason,
+        mappingExists: false,
+        requiredFields: [],
+        isValid: false,
+        validationError: "This change reason is not valid for the selected stage",
+      };
+    }
+
+    const requiredFields = await db
+      .select()
+      .from(reasonCustomFields)
+      .where(
+        and(
+          eq(reasonCustomFields.reasonId, reasonId),
+          eq(reasonCustomFields.isRequired, true)
+        )
+      );
+
+    return {
+      stage: row.stage,
+      reason: row.reason,
+      mappingExists: true,
+      requiredFields,
+      isValid: true,
+    };
+  }
   
   /**
    * Validate if a stage can be deleted

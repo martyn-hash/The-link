@@ -113,27 +113,19 @@ export function registerProjectStatusRoutes(
       let changeReason: any;
 
       if (updateData.stageId && updateData.reasonId) {
-        const [stage, reason, mappingValidation, fieldValidation] = await Promise.all([
-          storage.getStageById(updateData.stageId),
-          storage.getChangeReasonById(updateData.reasonId),
-          storage.validateStageReasonMapping(updateData.stageId, updateData.reasonId),
+        const [validationData, fieldValidation] = await Promise.all([
+          storage.getStageChangeValidationData(updateData.stageId, updateData.reasonId, project.projectTypeId),
           storage.validateRequiredFields(updateData.reasonId, updateData.fieldResponses),
         ]);
 
-        if (!stage || stage.projectTypeId !== project.projectTypeId) {
-          return res.status(400).json({ message: "Invalid project status for this project type" });
+        if (!validationData.isValid) {
+          return res.status(400).json({ message: validationData.validationError || "Validation failed" });
         }
-        if (stage.name !== updateData.newStatus) {
+        if (validationData.stage!.name !== updateData.newStatus) {
           return res.status(400).json({ message: "Stage configuration has changed. Please refresh and try again." });
         }
-        if (!reason || reason.projectTypeId !== project.projectTypeId) {
-          return res.status(400).json({ message: "Invalid change reason" });
-        }
-        if (reason.reason !== updateData.changeReason) {
+        if (validationData.reason!.reason !== updateData.changeReason) {
           return res.status(400).json({ message: "Change reason configuration has changed. Please refresh and try again." });
-        }
-        if (!mappingValidation.isValid) {
-          return res.status(400).json({ message: mappingValidation.reason || "Invalid change reason for this stage" });
         }
         if (!fieldValidation.isValid) {
           return res.status(400).json({
@@ -142,8 +134,8 @@ export function registerProjectStatusRoutes(
           });
         }
 
-        targetStage = stage;
-        changeReason = reason;
+        targetStage = validationData.stage;
+        changeReason = validationData.reason;
       } else {
         const stageValidation = await storage.validateProjectStatus(updateData.newStatus);
         if (!stageValidation.isValid) {

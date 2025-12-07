@@ -53,6 +53,130 @@ export class StageChangeNotificationStorage {
     this.resolveRoleAssigneeForClient = helpers.resolveRoleAssigneeForClient;
   }
 
+  /**
+   * Consolidated method to fetch all data needed for client notification preview in 2 queries.
+   * Replaces 5-6 separate queries with optimized batch fetches.
+   */
+  async getClientNotificationPreviewData(
+    projectId: string,
+    newStageName: string,
+    sendingUserId: string
+  ): Promise<{
+    project: any;
+    projectType: { notificationsActive: boolean } | null;
+    client: any;
+    clientContacts: Array<{
+      personId: string;
+      fullName: string;
+      email: string | null;
+      telephone: string | null;
+      officerRole: string | null;
+      isPrimaryContact: boolean;
+      receiveNotifications: boolean;
+    }>;
+    stage: any;
+    sendingUser: User | null;
+    chronologyEntries: any[];
+    stageTemplate: any;
+  } | null> {
+    const projectWithRelations = await db.query.projects.findFirst({
+      where: eq(projects.id, projectId),
+      with: {
+        client: true,
+        projectType: {
+          columns: {
+            notificationsActive: true,
+          },
+        },
+        chronology: {
+          orderBy: (chronology: any, { desc }: { desc: any }) => [desc(chronology.timestamp)],
+          with: {
+            fieldResponses: {
+              with: {
+                customField: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!projectWithRelations || !projectWithRelations.client) {
+      return null;
+    }
+
+    const projectTypeId = projectWithRelations.projectTypeId;
+
+    const [clientContactsResult, stageResult, sendingUser, stageTemplateResult] = await Promise.all([
+      db
+        .select({
+          personId: people.id,
+          fullName: people.fullName,
+          email: people.email,
+          primaryEmail: people.primaryEmail,
+          telephone: people.telephone,
+          primaryPhone: people.primaryPhone,
+          receiveNotifications: people.receiveNotifications,
+          officerRole: clientPeople.officerRole,
+          isPrimaryContact: clientPeople.isPrimaryContact,
+        })
+        .from(clientPeople)
+        .innerJoin(people, eq(clientPeople.personId, people.id))
+        .where(eq(clientPeople.clientId, projectWithRelations.clientId)),
+      
+      db
+        .select()
+        .from(kanbanStages)
+        .where(
+          and(
+            eq(kanbanStages.name, newStageName),
+            eq(kanbanStages.projectTypeId, projectTypeId)
+          )
+        )
+        .limit(1),
+      
+      this.getUser(sendingUserId),
+      
+      db
+        .select()
+        .from(projectTypeNotifications)
+        .innerJoin(kanbanStages, and(
+          eq(projectTypeNotifications.stageId, kanbanStages.id),
+          eq(kanbanStages.name, newStageName),
+          eq(kanbanStages.projectTypeId, projectTypeId)
+        ))
+        .where(
+          and(
+            eq(projectTypeNotifications.projectTypeId, projectTypeId),
+            eq(projectTypeNotifications.stageTrigger, 'entry'),
+            eq(projectTypeNotifications.isActive, true)
+          )
+        )
+        .limit(1),
+    ]);
+
+    const clientContacts = clientContactsResult.map(contact => ({
+      personId: contact.personId,
+      fullName: contact.fullName,
+      email: contact.email || contact.primaryEmail || null,
+      telephone: contact.telephone || contact.primaryPhone || null,
+      officerRole: contact.officerRole || null,
+      isPrimaryContact: contact.isPrimaryContact || false,
+      receiveNotifications: contact.receiveNotifications !== false,
+    }));
+
+    return {
+      project: projectWithRelations,
+      projectType: projectWithRelations.projectType || null,
+      client: projectWithRelations.client,
+      clientContacts,
+      stage: stageResult[0] || null,
+      sendingUser: sendingUser || null,
+      chronologyEntries: projectWithRelations.chronology || [],
+      stageTemplate: stageTemplateResult[0]?.project_type_notifications || null,
+    };
+  }
+
   async prepareStageChangeNotification(
     projectId: string, 
     newStageName: string, 

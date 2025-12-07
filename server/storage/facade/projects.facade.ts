@@ -218,6 +218,10 @@ export function applyProjectsFacade<TBase extends Constructor<ProjectsFacadeDeps
       return this.projectStagesStorage.getStageById(id);
     }
 
+    async getStageChangeValidationData(stageId: string, reasonId: string, projectTypeId: string) {
+      return this.projectStagesStorage.getStageChangeValidationData(stageId, reasonId, projectTypeId);
+    }
+
     async validateStageCanBeDeleted(id: string) {
       return this.projectStagesStorage.validateStageCanBeDeleted(id);
     }

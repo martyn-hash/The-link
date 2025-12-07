@@ -600,39 +600,48 @@ export async function handleProjectStageChangeForNotifications(
     
     const now = new Date();
     
-    // Process each notification
+    const toSuppress: string[] = [];
+    const toReactivate: string[] = [];
+    
     for (const notification of pendingNotifications) {
       const eligibleStages = notification.eligibleStageIdsSnapshot as string[] | null;
       const isEligible = isStageEligible(newStageId, eligibleStages);
       
       if (notification.status === "scheduled" && !isEligible) {
-        // Suppress: was scheduled but now in ineligible stage
-        await db
-          .update(scheduledNotifications)
-          .set({
-            status: "suppressed",
-            suppressedAt: now,
-            updatedAt: now,
-          })
-          .where(eq(scheduledNotifications.id, notification.id));
-        
-        suppressed++;
-        console.log(`[NotificationScheduler] Suppressed notification ${notification.id} - stage ${newStageId} not in eligible stages`);
-        
+        toSuppress.push(notification.id);
       } else if (notification.status === "suppressed" && isEligible) {
-        // Reactivate: was suppressed but now back in eligible stage
-        await db
-          .update(scheduledNotifications)
-          .set({
-            status: "scheduled",
-            reactivatedAt: now,
-            updatedAt: now,
-          })
-          .where(eq(scheduledNotifications.id, notification.id));
-        
-        reactivated++;
-        console.log(`[NotificationScheduler] Reactivated notification ${notification.id} - stage ${newStageId} is now eligible`);
+        toReactivate.push(notification.id);
       }
+    }
+    
+    if (toSuppress.length > 0) {
+      const suppressResult = await db
+        .update(scheduledNotifications)
+        .set({
+          status: "suppressed",
+          suppressedAt: now,
+          updatedAt: now,
+        })
+        .where(inArray(scheduledNotifications.id, toSuppress))
+        .returning({ id: scheduledNotifications.id });
+      
+      suppressed = suppressResult.length;
+      console.log(`[NotificationScheduler] Batch suppressed ${suppressed} notification(s) - stage ${newStageId} not in eligible stages`);
+    }
+    
+    if (toReactivate.length > 0) {
+      const reactivateResult = await db
+        .update(scheduledNotifications)
+        .set({
+          status: "scheduled",
+          reactivatedAt: now,
+          updatedAt: now,
+        })
+        .where(inArray(scheduledNotifications.id, toReactivate))
+        .returning({ id: scheduledNotifications.id });
+      
+      reactivated = reactivateResult.length;
+      console.log(`[NotificationScheduler] Batch reactivated ${reactivated} notification(s) - stage ${newStageId} is now eligible`);
     }
     
     console.log(`[NotificationScheduler] Stage change complete: ${suppressed} suppressed, ${reactivated} reactivated`);

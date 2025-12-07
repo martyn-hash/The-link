@@ -339,6 +339,15 @@ export interface IStorage {
   updateKanbanStage(id: string, stage: Partial<InsertKanbanStage>): Promise<KanbanStage>;
   deleteKanbanStage(id: string): Promise<void>;
   reorderKanbanStages(stages: { id: string; order: number }[]): Promise<void>;
+  getStageById(id: string): Promise<KanbanStage | undefined>;
+  getStageChangeValidationData(stageId: string, reasonId: string, projectTypeId: string): Promise<{
+    stage: KanbanStage | null;
+    reason: ChangeReason | null;
+    mappingExists: boolean;
+    requiredFields: ReasonCustomField[];
+    isValid: boolean;
+    validationError?: string;
+  }>;
   
   getAllChangeReasons(): Promise<ChangeReason[]>;
   getChangeReasonById(id: string): Promise<ChangeReason | undefined>;
