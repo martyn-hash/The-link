@@ -25,6 +25,11 @@ export function useProjectTypeSettingsMutations(
     queryClient.invalidateQueries({ queryKey: ["/api/config/project-types", projectTypeId] });
   };
 
+  const refetchProjectType = async () => {
+    await queryClient.refetchQueries({ queryKey: ["/api/config/project-types"] });
+    await queryClient.refetchQueries({ queryKey: ["/api/config/project-types", projectTypeId] });
+  };
+
   const updateProjectTypeServiceLinkageMutation = useMutation({
     mutationFn: async (serviceId: string | null) => {
       if (!projectTypeId) throw new Error("No project type selected");
@@ -114,12 +119,12 @@ export function useProjectTypeSettingsMutations(
         dialoraSettings
       });
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast({
         title: "Success",
         description: "Voice AI settings updated successfully",
       });
-      invalidateProjectType();
+      await refetchProjectType();
       callbacks.onDialoraSettingsUpdated?.();
     },
     onError: (error: any) => {
