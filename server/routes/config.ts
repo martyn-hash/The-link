@@ -371,6 +371,7 @@ export function registerConfigRoutes(
     try {
       const approvalData = insertStageApprovalSchema.parse(req.body);
       const approval = await storage.createStageApproval(approvalData);
+      invalidateStageConfigCache(approvalData.projectTypeId);
       res.json(approval);
     } catch (error) {
       console.error("Error creating stage approval:", error);
@@ -417,6 +418,9 @@ export function registerConfigRoutes(
     try {
       const approvalData = updateStageApprovalSchema.parse(req.body);
       const approval = await storage.updateStageApproval(req.params.id, approvalData);
+      if (approval) {
+        invalidateStageConfigCache(approval.projectTypeId);
+      }
       res.json(approval);
     } catch (error) {
       console.error("Error updating stage approval:", error);
@@ -458,7 +462,11 @@ export function registerConfigRoutes(
 
   app.delete("/api/config/stage-approvals/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
+      const existingApproval = await storage.getStageApprovalById(req.params.id);
       await storage.deleteStageApproval(req.params.id);
+      if (existingApproval) {
+        invalidateStageConfigCache(existingApproval.projectTypeId);
+      }
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting stage approval:", error);
@@ -497,6 +505,7 @@ export function registerConfigRoutes(
     try {
       const fieldData = insertStageApprovalFieldSchema.parse(req.body);
       const field = await storage.createStageApprovalField(fieldData);
+      invalidateStageConfigCache();
       res.json(field);
     } catch (error) {
       console.error("Error creating stage approval field:", error);
@@ -517,6 +526,7 @@ export function registerConfigRoutes(
     try {
       const fieldData = updateStageApprovalFieldSchema.parse(req.body);
       const field = await storage.updateStageApprovalField(req.params.id, fieldData);
+      invalidateStageConfigCache();
       res.json(field);
     } catch (error) {
       console.error("Error updating stage approval field:", error);
@@ -541,6 +551,7 @@ export function registerConfigRoutes(
   app.delete("/api/config/stage-approval-fields/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       await storage.deleteStageApprovalField(req.params.id);
+      invalidateStageConfigCache();
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting stage approval field:", error);

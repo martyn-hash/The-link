@@ -393,4 +393,38 @@ export function registerProjectStatusRoutes(
       }
     }
   });
+
+  app.get("/api/admin/cache-stats", isAuthenticated, requireAdmin, async (req: any, res: any) => {
+    try {
+      const stats = stageConfigCache.getStats();
+      const hitRate = stageConfigCache.getHitRate();
+      
+      res.json({
+        stageConfigCache: {
+          ...stats,
+          hitRatePercent: (hitRate * 100).toFixed(1) + '%',
+        },
+      });
+    } catch (error) {
+      console.error("Error fetching cache stats:", error);
+      res.status(500).json({ message: "Failed to fetch cache stats" });
+    }
+  });
+
+  app.post("/api/admin/cache-invalidate", isAuthenticated, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { projectTypeId } = req.body;
+      
+      if (projectTypeId) {
+        stageConfigCache.invalidate(`projectType:${projectTypeId}`);
+        res.json({ message: `Cache invalidated for projectType: ${projectTypeId}` });
+      } else {
+        stageConfigCache.invalidateAll();
+        res.json({ message: "All caches invalidated" });
+      }
+    } catch (error) {
+      console.error("Error invalidating cache:", error);
+      res.status(500).json({ message: "Failed to invalidate cache" });
+    }
+  });
 }
