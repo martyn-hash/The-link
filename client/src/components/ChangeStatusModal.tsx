@@ -3,6 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useStageChangeConfig } from "@/hooks/change-status/useStageChangeConfig";
 import { useStatusChangeMutations } from "@/hooks/change-status/useStatusChangeMutations";
 import { useApprovalFormSchema } from "@/hooks/change-status/useApprovalFormSchema";
+import { useCustomFields } from "@/hooks/change-status/useCustomFields";
+import { useFileUpload } from "@/hooks/change-status/useFileUpload";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
@@ -204,7 +206,6 @@ export default function ChangeStatusModal({
   const [newStatus, setNewStatus] = useState("");
   const [changeReason, setChangeReason] = useState("");
   const [notesHtml, setNotesHtml] = useState("");
-  const [customFieldResponses, setCustomFieldResponses] = useState<Record<string, any>>({});
   const [showApprovalForm, setShowApprovalForm] = useState(false);
   const [showQueriesForm, setShowQueriesForm] = useState(false);
   const [pendingQueries, setPendingQueries] = useState<Array<{
@@ -219,17 +220,19 @@ export default function ChangeStatusModal({
   const [clientNotificationPreview, setClientNotificationPreview] = useState<ClientValueNotificationPreview | null>(null);
   const [notificationType, setNotificationType] = useState<'staff' | 'client' | null>(null);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [uploadedAttachments, setUploadedAttachments] = useState<Array<{
-    fileName: string;
-    fileSize: number;
-    fileType: string;
-    objectPath: string;
-  }>>([]);
-  const [isUploadingFiles, setIsUploadingFiles] = useState(false);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // File upload management from custom hook
+  const {
+    selectedFiles,
+    uploadedAttachments,
+    isUploadingFiles,
+    handleFilesSelected,
+    handleRemoveFile,
+    resetFileUpload,
+  } = useFileUpload({ projectId: project.id });
 
   // Set initial new status when modal opens (for drag-and-drop)
   useEffect(() => {
@@ -259,6 +262,16 @@ export default function ChangeStatusModal({
   const filteredReasons = useMemo(() => getFilteredReasons(selectedStage), [selectedStage, getFilteredReasons]);
   const selectedReasonObj = getSelectedReason(filteredReasons, changeReason);
   const customFields = getCustomFields(selectedReasonObj);
+
+  // Custom field state management from custom hook
+  const {
+    customFieldResponses,
+    validateCustomFields,
+    handleCustomFieldChange,
+    handleMultiSelectChange,
+    formatFieldResponses,
+    resetCustomFields,
+  } = useCustomFields({ customFields });
 
   // Loading states for backward compatibility
   const stagesLoading = configLoading;
@@ -323,31 +336,29 @@ export default function ChangeStatusModal({
       setNewStatus("");
       setChangeReason("");
       setNotesHtml("");
-      setCustomFieldResponses({});
+      resetCustomFields();
       setShowApprovalForm(false);
       setShowQueriesForm(false);
       setPendingQueries([]);
       approvalForm.reset();
-      setSelectedFiles([]);
-      setUploadedAttachments([]);
-      setIsUploadingFiles(false);
+      resetFileUpload();
     }
-  }, [isOpen, approvalForm]);
+  }, [isOpen, approvalForm, resetCustomFields, resetFileUpload]);
 
   // Reset change reason and custom field responses when stage changes
   useEffect(() => {
     if (newStatus && selectedStage) {
       setChangeReason("");
-      setCustomFieldResponses({});
+      resetCustomFields();
     }
-  }, [newStatus, selectedStage]);
+  }, [newStatus, selectedStage, resetCustomFields]);
 
   // Reset custom field responses when reason changes
   useEffect(() => {
     if (changeReason && selectedReasonObj) {
-      setCustomFieldResponses({});
+      resetCustomFields();
     }
-  }, [changeReason, selectedReasonObj]);
+  }, [changeReason, selectedReasonObj, resetCustomFields]);
 
   // Status change mutations from custom hook
   const mutations = useStatusChangeMutations({
@@ -383,12 +394,11 @@ export default function ChangeStatusModal({
       setNewStatus("");
       setChangeReason("");
       setNotesHtml("");
-      setCustomFieldResponses({});
+      resetCustomFields();
       setShowApprovalForm(false);
       setShowQueriesForm(false);
       setPendingQueries([]);
-      setSelectedFiles([]);
-      setUploadedAttachments([]);
+      resetFileUpload();
     },
     notificationPreview,
     clientNotificationPreview,
@@ -408,106 +418,6 @@ export default function ChangeStatusModal({
     }));
 
     return statusOptions.filter((option) => option.value !== currentStatus);
-  };
-
-  // Helper function to validate required custom fields
-  const validateCustomFields = (): { isValid: boolean; errors: string[] } => {
-    const errors: string[] = [];
-    const requiredFields = customFields.filter((field) => field.isRequired);
-
-    for (const field of requiredFields) {
-      const response = customFieldResponses[field.id];
-      if (field.fieldType === "multi_select") {
-        if (!response || !Array.isArray(response) || response.length === 0) {
-          errors.push(
-            `${field.fieldName} is required - please select at least one option`
-          );
-        }
-      } else if (
-        !response ||
-        response === "" ||
-        response === null ||
-        response === undefined
-      ) {
-        errors.push(`${field.fieldName} is required`);
-      } else if (field.fieldType === "number" && isNaN(Number(response))) {
-        errors.push(`${field.fieldName} must be a valid number`);
-      }
-    }
-
-    return {
-      isValid: errors.length === 0,
-      errors,
-    };
-  };
-
-  // Helper function to handle custom field value changes
-  const handleCustomFieldChange = (fieldId: string, value: any) => {
-    setCustomFieldResponses((prev) => ({
-      ...prev,
-      [fieldId]: value,
-    }));
-  };
-
-  // Helper function to handle multi-select changes
-  const handleMultiSelectChange = (
-    fieldId: string,
-    option: string,
-    checked: boolean
-  ) => {
-    setCustomFieldResponses((prev) => {
-      const currentValues = prev[fieldId] || [];
-      const updatedValues = checked
-        ? [...currentValues, option]
-        : currentValues.filter((item: string) => item !== option);
-      return {
-        ...prev,
-        [fieldId]: updatedValues,
-      };
-    });
-  };
-
-  // Convert custom field responses to API format
-  const formatFieldResponses = () => {
-    return customFields
-      .map((field) => {
-        const value = customFieldResponses[field.id];
-        const baseResponse = {
-          customFieldId: field.id,
-          fieldType: field.fieldType as
-            | "number"
-            | "short_text"
-            | "long_text"
-            | "multi_select",
-        };
-
-        if (field.fieldType === "number") {
-          return { ...baseResponse, valueNumber: value ? Number(value) : undefined };
-        } else if (field.fieldType === "short_text") {
-          return { ...baseResponse, valueShortText: value || undefined };
-        } else if (field.fieldType === "long_text") {
-          return { ...baseResponse, valueLongText: value || undefined };
-        } else if (field.fieldType === "multi_select") {
-          return {
-            ...baseResponse,
-            valueMultiSelect:
-              Array.isArray(value) && value.length > 0 ? value : undefined,
-          };
-        }
-
-        return baseResponse;
-      })
-      .filter((response) => {
-        // Type guard to check if response has any value field populated
-        if ("valueNumber" in response && response.valueNumber !== undefined) return true;
-        if ("valueShortText" in response && response.valueShortText !== undefined)
-          return true;
-        if ("valueLongText" in response && response.valueLongText !== undefined)
-          return true;
-        if ("valueMultiSelect" in response && response.valueMultiSelect !== undefined)
-          return true;
-        return false;
-      });
   };
 
   const handleSubmit = async () => {
@@ -592,89 +502,6 @@ export default function ChangeStatusModal({
         fieldResponses: formatFieldResponses(),
       });
     }
-  };
-
-  // File upload helper function
-  const uploadFilesToObjectStorage = async (files: File[]): Promise<Array<{
-    fileName: string;
-    fileSize: number;
-    fileType: string;
-    objectPath: string;
-  }>> => {
-    const uploadedFiles: Array<{
-      fileName: string;
-      fileSize: number;
-      fileType: string;
-      objectPath: string;
-    }> = [];
-
-    for (const file of files) {
-      // Get signed URL for uploading
-      const urlResponse = await apiRequest(
-        "POST",
-        `/api/projects/${project.id}/stage-change-attachments/upload-url`,
-        {
-          fileName: file.name,
-          fileType: file.type || 'application/octet-stream',
-          fileSize: file.size,
-        }
-      );
-
-      const { url: uploadUrl, objectPath } = urlResponse;
-
-      // Upload to object storage
-      const uploadResponse = await fetch(uploadUrl, {
-        method: "PUT",
-        headers: {
-          "Content-Type": file.type || 'application/octet-stream',
-        },
-        body: file,
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error(`Failed to upload file: ${file.name}`);
-      }
-
-      uploadedFiles.push({
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type || 'application/octet-stream',
-        objectPath,
-      });
-    }
-
-    return uploadedFiles;
-  };
-
-  // Handle file selection and upload
-  const handleFilesSelected = async (files: File[]) => {
-    if (files.length === 0) return;
-
-    setSelectedFiles((prev) => [...prev, ...files]);
-    setIsUploadingFiles(true);
-
-    try {
-      const uploaded = await uploadFilesToObjectStorage(files);
-      setUploadedAttachments((prev) => [...prev, ...uploaded]);
-      toast({
-        title: "Files Uploaded",
-        description: `${files.length} file(s) uploaded successfully`,
-      });
-    } catch (error: any) {
-      // Remove the files from selected since upload failed
-      setSelectedFiles((prev) =>
-        prev.filter((f) => !files.some((newFile) => newFile.name === f.name))
-      );
-      showFriendlyError({ error });
-    } finally {
-      setIsUploadingFiles(false);
-    }
-  };
-
-  // Handle file removal
-  const handleRemoveFile = (index: number) => {
-    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
-    setUploadedAttachments((prev) => prev.filter((_, i) => i !== index));
   };
 
   const availableStatuses = getAvailableStatuses();
