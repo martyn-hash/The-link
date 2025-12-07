@@ -1,4 +1,18 @@
 import type { Express } from "express";
+import { registerProjectViewsRoutes } from "./views";
+import { registerProjectPreferencesRoutes } from "./preferences";
+import { registerProjectCoreRoutes } from "./core";
+import { registerProjectStatusRoutes } from "./status";
+import { registerProjectBulkRoutes } from "./bulk";
+import { registerProjectAttachmentsRoutes } from "./attachments";
+import { registerProjectNotificationsRoutes } from "./notifications";
+import { registerProjectBenchRoutes } from "./bench";
+import { registerProjectCsvUploadRoutes } from "./csv-upload";
+import { registerProjectApprovalsRoutes } from "./approvals";
+import { registerProjectAssigneesRoutes } from "./assignees";
+import { registerProjectSchedulingRoutes } from "./scheduling";
+import { registerProjectBatchUpdatesRoutes } from "./batch-updates";
+import { registerProjectDashboardRoutes } from "./dashboard";
 
 /**
  * Project Routes Module
@@ -20,8 +34,6 @@ import type { Express } from "express";
  * - dashboard.ts: Dashboard metrics and cache
  */
 
-// Route registration imports will be added as modules are extracted
-
 export function registerProjectRoutes(
   app: Express,
   isAuthenticated: any,
@@ -30,6 +42,18 @@ export function registerProjectRoutes(
   requireManager: any,
   upload: any
 ): void {
-  // Route registrations will be added as modules are extracted
-  // For now, this is a placeholder that will be populated incrementally
+  registerProjectViewsRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
+  registerProjectPreferencesRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
+  registerProjectCoreRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
+  registerProjectStatusRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
+  registerProjectBulkRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
+  registerProjectAttachmentsRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
+  registerProjectNotificationsRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
+  registerProjectBenchRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
+  registerProjectCsvUploadRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager, upload);
+  registerProjectApprovalsRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
+  registerProjectAssigneesRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
+  registerProjectSchedulingRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
+  registerProjectBatchUpdatesRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
+  registerProjectDashboardRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
 }
