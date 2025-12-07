@@ -8,8 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowLeft, AlertCircle, CheckCircle2, XCircle, Info, Ban, PauseCircle, PlayCircle, ChevronDown } from "lucide-react";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { ArrowLeft, AlertCircle, CheckCircle2, XCircle, Info, Ban, PauseCircle, PlayCircle } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -538,91 +537,17 @@ export default function ProjectDetail() {
       <TopNavigation user={user} />
       
       <div className="page-container py-4 md:py-5">
-        {/* Compact header with back navigation and actions */}
+        {/* Compact header with back navigation */}
         <div className="mb-4">
-          <div className="flex items-center justify-between">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={handleBack}
-              data-testid="button-back"
-            >
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Projects
-            </Button>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  data-testid="button-actions-menu"
-                  className="gap-2"
-                >
-                  Actions
-                  <ChevronDown className="w-4 h-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem 
-                  onClick={() => setShowChangeStatusModal(true)}
-                  data-testid="menu-change-status"
-                >
-                  Change Status
-                </DropdownMenuItem>
-                
-                {canComplete && (
-                  <DropdownMenuItem 
-                    onClick={() => setShowCompleteDialog(true)}
-                    disabled={completeMutation.isPending}
-                    data-testid="menu-complete"
-                    className="text-green-600 focus:text-green-600"
-                  >
-                    <CheckCircle2 className="w-4 h-4 mr-2" />
-                    Complete Project
-                  </DropdownMenuItem>
-                )}
-                
-                {user?.canBenchProjects && !project.isBenched && !project.completionStatus && !project.inactive && (
-                  <DropdownMenuItem 
-                    onClick={() => setShowBenchDialog(true)}
-                    disabled={benchMutation.isPending}
-                    data-testid="menu-move-to-bench"
-                    className="text-amber-600 focus:text-amber-600"
-                  >
-                    <PauseCircle className="w-4 h-4 mr-2" />
-                    Move to Bench
-                  </DropdownMenuItem>
-                )}
-                
-                {user?.canBenchProjects && project.isBenched && (
-                  <DropdownMenuItem 
-                    onClick={() => setShowUnbenchConfirm(true)}
-                    disabled={unbenchMutation.isPending}
-                    data-testid="menu-take-off-bench"
-                    className="text-amber-600 focus:text-amber-600"
-                  >
-                    <PlayCircle className="w-4 h-4 mr-2" />
-                    Take Off Bench
-                  </DropdownMenuItem>
-                )}
-                
-                {user?.canMakeProjectsInactive && !project.inactive && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem 
-                      onClick={() => setShowInactiveDialog(true)}
-                      data-testid="menu-make-inactive"
-                      className="text-red-600 focus:text-red-600"
-                    >
-                      <Ban className="w-4 h-4 mr-2" />
-                      Make Inactive
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={handleBack}
+            data-testid="button-back"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Projects
+          </Button>
         </div>
         
         {/* Inactive Status Display */}
@@ -786,6 +711,75 @@ export default function ProjectDetail() {
                     currentStage={currentStage}
                     currentAssignee={currentAssignee}
                   />
+                  
+                  {/* Action Buttons */}
+                  <div className="mt-4 pt-4 border-t border-border">
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowChangeStatusModal(true)}
+                        data-testid="button-change-status"
+                      >
+                        Change Status
+                      </Button>
+                      
+                      {canComplete && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowCompleteDialog(true)}
+                          disabled={completeMutation.isPending}
+                          data-testid="button-complete"
+                          className="text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
+                        >
+                          <CheckCircle2 className="w-4 h-4 mr-2" />
+                          Complete Project
+                        </Button>
+                      )}
+                      
+                      {user?.canBenchProjects && !project.isBenched && !project.completionStatus && !project.inactive && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowBenchDialog(true)}
+                          disabled={benchMutation.isPending}
+                          data-testid="button-move-to-bench"
+                          className="text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+                        >
+                          <PauseCircle className="w-4 h-4 mr-2" />
+                          Move to Bench
+                        </Button>
+                      )}
+                      
+                      {user?.canBenchProjects && project.isBenched && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowUnbenchConfirm(true)}
+                          disabled={unbenchMutation.isPending}
+                          data-testid="button-take-off-bench"
+                          className="text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+                        >
+                          <PlayCircle className="w-4 h-4 mr-2" />
+                          Take Off Bench
+                        </Button>
+                      )}
+                      
+                      {user?.canMakeProjectsInactive && !project.inactive && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowInactiveDialog(true)}
+                          data-testid="button-make-inactive"
+                          className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                        >
+                          <Ban className="w-4 h-4 mr-2" />
+                          Make Inactive
+                        </Button>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Chronology */}
@@ -833,6 +827,75 @@ export default function ProjectDetail() {
                       currentStage={currentStage}
                       currentAssignee={currentAssignee}
                     />
+                    
+                    {/* Action Buttons */}
+                    <div className="mt-4 pt-4 border-t border-border">
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowChangeStatusModal(true)}
+                          data-testid="button-change-status"
+                        >
+                          Change Status
+                        </Button>
+                        
+                        {canComplete && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowCompleteDialog(true)}
+                            disabled={completeMutation.isPending}
+                            data-testid="button-complete"
+                            className="text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
+                          >
+                            <CheckCircle2 className="w-4 h-4 mr-2" />
+                            Complete Project
+                          </Button>
+                        )}
+                        
+                        {user?.canBenchProjects && !project.isBenched && !project.completionStatus && !project.inactive && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowBenchDialog(true)}
+                            disabled={benchMutation.isPending}
+                            data-testid="button-move-to-bench"
+                            className="text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+                          >
+                            <PauseCircle className="w-4 h-4 mr-2" />
+                            Move to Bench
+                          </Button>
+                        )}
+                        
+                        {user?.canBenchProjects && project.isBenched && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowUnbenchConfirm(true)}
+                            disabled={unbenchMutation.isPending}
+                            data-testid="button-take-off-bench"
+                            className="text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+                          >
+                            <PlayCircle className="w-4 h-4 mr-2" />
+                            Take Off Bench
+                          </Button>
+                        )}
+                        
+                        {user?.canMakeProjectsInactive && !project.inactive && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setShowInactiveDialog(true)}
+                            data-testid="button-make-inactive"
+                            className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+                          >
+                            <Ban className="w-4 h-4 mr-2" />
+                            Make Inactive
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                   <div className="bg-card border border-border rounded-lg p-5">
                     <ProjectChronology project={project} />
