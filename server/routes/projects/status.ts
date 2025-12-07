@@ -3,6 +3,73 @@ import { storage } from "../../storage/index";
 import { updateProjectStatusSchema } from "@shared/schema";
 import { sendStageChangeNotificationEmail } from "../../emailService";
 import { handleProjectStageChangeForNotifications } from "../../notification-scheduler";
+import { stageConfigCache } from "../../utils/ttlCache";
+
+interface StageConfigCacheEntry {
+  stages: any[];
+  reasons: any[];
+  stageApprovals: any[];
+  stageApprovalFields: any[];
+  stageReasonMap: Map<string, Set<string>>;
+  reasonCustomFieldsMap: Map<string, any[]>;
+}
+
+async function getStageConfigForProjectType(projectTypeId: string): Promise<StageConfigCacheEntry> {
+  const cacheKey = `projectType:${projectTypeId}`;
+  const cached = stageConfigCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const [stages, allReasons, stageApprovals, allApprovalFields, allStageReasonMaps, allCustomFields] = await Promise.all([
+    storage.getKanbanStagesByProjectTypeId(projectTypeId),
+    storage.getChangeReasonsByProjectTypeId(projectTypeId),
+    storage.getStageApprovalsByProjectTypeId(projectTypeId),
+    storage.getAllStageApprovalFields(),
+    storage.getAllStageReasonMaps(),
+    storage.getAllReasonCustomFields(),
+  ]);
+
+  const stageIds = new Set(stages.map(s => s.id));
+  const reasonIds = new Set(allReasons.map(r => r.id));
+
+  const stageReasonMap = new Map<string, Set<string>>();
+  for (const stage of stages) {
+    stageReasonMap.set(stage.id, new Set());
+  }
+  for (const mapping of allStageReasonMaps) {
+    if (stageIds.has(mapping.stageId) && reasonIds.has(mapping.reasonId)) {
+      stageReasonMap.get(mapping.stageId)?.add(mapping.reasonId);
+    }
+  }
+
+  const reasonCustomFieldsMap = new Map<string, any[]>();
+  for (const field of allCustomFields) {
+    if (reasonIds.has(field.reasonId)) {
+      if (!reasonCustomFieldsMap.has(field.reasonId)) {
+        reasonCustomFieldsMap.set(field.reasonId, []);
+      }
+      reasonCustomFieldsMap.get(field.reasonId)!.push(field);
+    }
+  }
+
+  const approvalIds = new Set(stageApprovals.map(a => a.id));
+  const relevantApprovalFields = allApprovalFields.filter(
+    field => approvalIds.has(field.stageApprovalId)
+  );
+
+  const config: StageConfigCacheEntry = {
+    stages,
+    reasons: allReasons,
+    stageApprovals,
+    stageApprovalFields: relevantApprovalFields,
+    stageReasonMap,
+    reasonCustomFieldsMap,
+  };
+
+  stageConfigCache.set(cacheKey, config);
+  return config;
+}
 
 export function registerProjectStatusRoutes(
   app: Express,
@@ -23,60 +90,25 @@ export function registerProjectStatusRoutes(
       
       const projectTypeId = project.projectTypeId;
       
-      const [stages, allReasons, stageApprovals, allApprovalFields, allStageReasonMaps, allCustomFields] = await Promise.all([
-        storage.getKanbanStagesByProjectTypeId(projectTypeId),
-        storage.getChangeReasonsByProjectTypeId(projectTypeId),
-        storage.getStageApprovalsByProjectTypeId(projectTypeId),
-        storage.getAllStageApprovalFields(),
-        storage.getAllStageReasonMaps(),
-        storage.getAllReasonCustomFields(),
-      ]);
+      const config = await getStageConfigForProjectType(projectTypeId);
       
-      const stageIds = new Set(stages.map(s => s.id));
-      const reasonIds = new Set(allReasons.map(r => r.id));
-      
-      const stageReasonMap = new Map<string, Set<string>>();
-      for (const stage of stages) {
-        stageReasonMap.set(stage.id, new Set());
-      }
-      for (const mapping of allStageReasonMaps) {
-        if (stageIds.has(mapping.stageId) && reasonIds.has(mapping.reasonId)) {
-          stageReasonMap.get(mapping.stageId)?.add(mapping.reasonId);
-        }
-      }
-      
-      const reasonCustomFieldsMap = new Map<string, any[]>();
-      for (const field of allCustomFields) {
-        if (reasonIds.has(field.reasonId)) {
-          if (!reasonCustomFieldsMap.has(field.reasonId)) {
-            reasonCustomFieldsMap.set(field.reasonId, []);
-          }
-          reasonCustomFieldsMap.get(field.reasonId)!.push(field);
-        }
-      }
-      
-      const enhancedStages = stages.map(stage => ({
+      const enhancedStages = config.stages.map(stage => ({
         ...stage,
-        validReasonIds: Array.from(stageReasonMap.get(stage.id) || []),
+        validReasonIds: Array.from(config.stageReasonMap.get(stage.id) || []),
       }));
       
-      const enhancedReasons = allReasons.map(reason => ({
+      const enhancedReasons = config.reasons.map(reason => ({
         ...reason,
-        customFields: reasonCustomFieldsMap.get(reason.id) || [],
+        customFields: config.reasonCustomFieldsMap.get(reason.id) || [],
       }));
-      
-      const approvalIds = new Set(stageApprovals.map(a => a.id));
-      const relevantApprovalFields = allApprovalFields.filter(
-        field => approvalIds.has(field.stageApprovalId)
-      );
       
       res.json({
         projectTypeId,
         currentStatus: project.currentStatus,
         stages: enhancedStages,
         reasons: enhancedReasons,
-        stageApprovals,
-        stageApprovalFields: relevantApprovalFields,
+        stageApprovals: config.stageApprovals,
+        stageApprovalFields: config.stageApprovalFields,
       });
     } catch (error) {
       console.error("Error fetching stage change config:", error instanceof Error ? error.message : error);

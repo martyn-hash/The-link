@@ -17,6 +17,15 @@ import {
   updateStageApprovalFieldSchema,
   insertStageApprovalResponseSchema,
 } from "@shared/schema";
+import { stageConfigCache } from "../utils/ttlCache";
+
+function invalidateStageConfigCache(projectTypeId?: string) {
+  if (projectTypeId) {
+    stageConfigCache.invalidate(`projectType:${projectTypeId}`);
+  } else {
+    stageConfigCache.invalidateAll();
+  }
+}
 
 // Parameter validation schemas
 const paramProjectTypeIdSchema = z.object({
@@ -106,6 +115,7 @@ export function registerConfigRoutes(
       }
 
       const stage = await storage.createKanbanStage(stageData);
+      invalidateStageConfigCache(stageData.projectTypeId);
       res.json(stage);
     } catch (error) {
       console.error("Error creating stage:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
@@ -188,6 +198,7 @@ export function registerConfigRoutes(
       }
 
       const stage = await storage.updateKanbanStage(req.params.id, updateData);
+      invalidateStageConfigCache(existingStage.projectTypeId);
       res.json(stage);
     } catch (error) {
       console.error("Error updating stage:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
@@ -210,7 +221,11 @@ export function registerConfigRoutes(
 
   app.delete("/api/config/stages/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
+      const existingStage = await storage.getStageById(req.params.id);
       await storage.deleteKanbanStage(req.params.id);
+      if (existingStage) {
+        invalidateStageConfigCache(existingStage.projectTypeId);
+      }
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting stage:", error);
@@ -257,6 +272,7 @@ export function registerConfigRoutes(
     try {
       const reasonData = insertChangeReasonSchema.parse(req.body);
       const reason = await storage.createChangeReason(reasonData);
+      invalidateStageConfigCache(reasonData.projectTypeId);
       res.json(reason);
     } catch (error) {
       console.error("Error creating change reason:", error);
@@ -292,6 +308,9 @@ export function registerConfigRoutes(
     try {
       const reasonData = updateChangeReasonSchema.parse(req.body);
       const reason = await storage.updateChangeReason(req.params.id, reasonData);
+      if (reason) {
+        invalidateStageConfigCache(reason.projectTypeId);
+      }
       res.json(reason);
     } catch (error) {
       console.error("Error updating change reason:", error);
@@ -325,7 +344,11 @@ export function registerConfigRoutes(
 
   app.delete("/api/config/reasons/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
+      const existingReason = await storage.getChangeReasonById(req.params.id);
       await storage.deleteChangeReason(req.params.id);
+      if (existingReason) {
+        invalidateStageConfigCache(existingReason.projectTypeId);
+      }
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting change reason:", error);
@@ -857,6 +880,7 @@ export function registerConfigRoutes(
       }
 
       const mapping = await storage.createStageReasonMap(mappingData);
+      invalidateStageConfigCache();
       res.json(mapping);
     } catch (error) {
       console.error("Error creating stage-reason mapping:", error);
@@ -883,6 +907,7 @@ export function registerConfigRoutes(
   app.delete("/api/config/stage-reason-maps/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       await storage.deleteStageReasonMap(req.params.id);
+      invalidateStageConfigCache();
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting stage-reason mapping:", error);
@@ -918,6 +943,7 @@ export function registerConfigRoutes(
     try {
       const fieldData = insertReasonCustomFieldSchema.parse(req.body);
       const customField = await storage.createReasonCustomField(fieldData);
+      invalidateStageConfigCache();
       res.json(customField);
     } catch (error) {
       console.error("Error creating custom field:", error);
@@ -933,6 +959,7 @@ export function registerConfigRoutes(
     try {
       const fieldData = updateReasonCustomFieldSchema.parse(req.body);
       const customField = await storage.updateReasonCustomField(req.params.id, fieldData);
+      invalidateStageConfigCache();
       res.json(customField);
     } catch (error) {
       console.error("Error updating custom field:", error);
@@ -949,6 +976,7 @@ export function registerConfigRoutes(
   app.delete("/api/config/custom-fields/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       await storage.deleteReasonCustomField(req.params.id);
+      invalidateStageConfigCache();
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting custom field:", error);
