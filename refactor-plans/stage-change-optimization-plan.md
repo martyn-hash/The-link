@@ -870,6 +870,41 @@ await db
 
 ---
 
+## Testing Strategy
+
+### Testing Environment
+
+| Property | Value |
+|----------|-------|
+| **URL** | Root page (`/`) |
+| **Credentials** | Obtain from secure password manager or environment variables |
+| **Test Account Role** | Admin (full access to all project types and stages) |
+
+### Pre-Testing Checklist
+
+Before each wave:
+- [ ] Backup database (checkpoint created)
+- [ ] Document current response times (baseline)
+- [ ] Count current DB queries for sample stage changes
+- [ ] Verify all existing tests pass
+- [ ] Identify 3-5 test projects across different project types
+
+### Testing Scenarios
+
+All waves must be tested against these core scenarios:
+
+| Scenario | Description | Complexity |
+|----------|-------------|------------|
+| **Simple Stage Change** | Stage change with no custom fields, no approvals | Low |
+| **Stage with Custom Fields** | Stage change with 3-5 custom field responses | Medium |
+| **Stage with Approvals** | Stage change requiring approval fields | Medium |
+| **Stage with Assignee Change** | Stage change that triggers handoff thread | Medium |
+| **Final Stage** | Stage change to completed/archived stage | High |
+| **Stage with Client Notification** | Stage that sends client notification preview | High |
+| **Full Complexity** | All of the above combined | Critical |
+
+---
+
 ## Implementation Roadmap
 
 ### Wave 1: Quick Wins (Week 1)
@@ -882,6 +917,63 @@ await db
 | Remove dynamic imports | `stageChangeNotificationStorage.ts` | Low | Low |
 | Pass data through to background ops | `status.ts` | Medium | High |
 
+#### Wave 1: Testing Protocol
+
+**Manual Testing Checklist:**
+- [ ] **Simple Stage Change**: Change project from Stage A → Stage B with no fields
+  - Verify: Stage updates correctly, chronology entry created
+  - Verify: Response time < 500ms
+- [ ] **Stage with 5 Custom Fields**: Change stage requiring 5 field responses
+  - Verify: All field responses saved correctly
+  - Verify: No duplicate entries in `stage_custom_field_responses`
+  - Verify: Response time improvement vs. baseline (target: 30% faster)
+- [ ] **Stage with 3 Approval Fields**: Change stage requiring approvals
+  - Verify: All approval responses saved correctly
+  - Verify: Approval validations still work (required fields enforced)
+- [ ] **Assignee Handoff**: Change stage that changes project assignee
+  - Verify: Handoff message thread created
+  - Verify: All participants added correctly
+  - Verify: Initial message content is correct
+- [ ] **Background Email**: Change stage that triggers email notification
+  - Verify: Email sent successfully (check SendGrid logs)
+  - Verify: Email contains correct project/stage data
+  - Verify: No duplicate emails sent
+
+**Database Verification Queries:**
+```sql
+-- Verify field responses saved correctly
+SELECT * FROM stage_custom_field_responses 
+WHERE project_id = '[TEST_PROJECT_ID]' 
+ORDER BY responded_at DESC LIMIT 10;
+
+-- Verify chronology entry
+SELECT * FROM project_chronology 
+WHERE project_id = '[TEST_PROJECT_ID]' 
+ORDER BY created_at DESC LIMIT 5;
+
+-- Verify no orphaned records
+SELECT COUNT(*) FROM stage_custom_field_responses 
+WHERE field_id NOT IN (SELECT id FROM stage_custom_fields);
+```
+
+**Success Criteria:**
+| Metric | Baseline | Target | Pass/Fail |
+|--------|----------|--------|-----------|
+| DB queries (5 field stage change) | ~16 | ≤8 | |
+| Response time (simple change) | ~800ms | <500ms | |
+| Response time (5 fields) | ~1200ms | <700ms | |
+| All field responses saved | N/A | 100% | |
+| Email delivery success | N/A | 100% | |
+| Zero regression in existing functionality | N/A | Required | |
+
+**Rollback Criteria:**
+- Any data loss or corruption → Immediate rollback
+- Response time degradation > 20% → Rollback and investigate
+- Email delivery failure rate > 5% → Rollback and investigate
+- Any validation bypass (fields not enforced) → Immediate rollback
+
+---
+
 ### Wave 2: Query Consolidation (Week 2)
 **Estimated Impact:** 20-30% additional reduction
 
@@ -891,6 +983,56 @@ await db
 | Create `getClientNotificationPreviewData()` | `stageChangeNotificationStorage.ts` | Medium | High |
 | Batch user preference fetching | `status.ts`, `userStorage.ts` | Low | Medium |
 | Batch notification status updates | `notification-scheduler.ts` | Low | Medium |
+
+#### Wave 2: Testing Protocol
+
+**Manual Testing Checklist:**
+- [ ] **Validation Accuracy**: Test with invalid stage/reason combinations
+  - Verify: Invalid combinations rejected with clear error message
+  - Verify: Valid combinations pass validation
+- [ ] **Client Notification Preview**: Change to stage with client notification
+  - Verify: Preview data complete (client name, contacts, variables)
+  - Verify: All template variables replaced correctly
+  - Verify: Approval responses included in preview
+- [ ] **Multiple Recipients**: Stage change notifying multiple users
+  - Verify: All users receive notifications based on preferences
+  - Verify: Users with notifications disabled don't receive
+- [ ] **Notification Scheduler**: Change stage affecting stage-aware notifications
+  - Verify: Eligible notifications reactivated
+  - Verify: Ineligible notifications suppressed
+  - Verify: Batch update working (check DB for single UPDATE statement)
+
+**Database Verification Queries:**
+```sql
+-- Verify consolidated query returns correct data
+-- (Run before and after, compare results)
+SELECT ks.*, cr.*, kscrm.* 
+FROM kanban_stages ks
+JOIN change_reasons cr ON cr."projectTypeId" = ks."projectTypeId"
+LEFT JOIN kanban_stage_change_reason_mappings kscrm 
+  ON kscrm."stageId" = ks.id AND kscrm."changeReasonId" = cr.id
+WHERE ks.id = '[STAGE_ID]';
+
+-- Verify notification status updates are batched
+-- Enable query logging, look for single UPDATE with IN clause
+```
+
+**Success Criteria:**
+| Metric | Baseline (Post-Wave 1) | Target | Pass/Fail |
+|--------|------------------------|--------|-----------|
+| Validation DB queries | 4-6 | 2 | |
+| Client notification preview queries | 8-12 | 2-3 | |
+| Notification scheduler updates | N (1 per notification) | 2 (max) | |
+| Response time (with client notification) | ~1000ms | <600ms | |
+| Validation accuracy | 100% | 100% | |
+| Client notification data completeness | 100% | 100% | |
+
+**Rollback Criteria:**
+- Validation allowing invalid stage/reason combinations → Immediate rollback
+- Client notification missing data → Rollback
+- Notification scheduler not updating correctly → Rollback
+
+---
 
 ### Wave 3: Asyncification (Week 3)
 **Estimated Impact:** Response time improvement
@@ -902,6 +1044,51 @@ await db
 | Queue email notifications properly | `status.ts`, new `emailQueue.ts` | Medium | High |
 | Move notification scheduler to async | `status.ts` | Low | Medium |
 
+#### Wave 3: Testing Protocol
+
+**Manual Testing Checklist:**
+- [ ] **Async Thread Creation**: Change stage with assignee handoff
+  - Verify: HTTP response returns immediately (<300ms)
+  - Verify: Thread created within 5 seconds
+  - Verify: Thread visible in messages tab
+- [ ] **Final Stage Cleanup**: Move project to completed stage
+  - Verify: HTTP response returns immediately
+  - Verify: Scheduled notifications cancelled within 10 seconds
+  - Verify: Message threads archived within 10 seconds
+- [ ] **Email Queue**: Stage change triggering email
+  - Verify: HTTP response doesn't wait for email
+  - Verify: Email delivered within 30 seconds
+  - Verify: Failed emails retry automatically
+- [ ] **Error Handling**: Simulate async operation failure
+  - Verify: Main stage change not affected by async failures
+  - Verify: Errors logged for debugging
+  - Verify: Manual retry possible
+
+**Async Verification:**
+```typescript
+// Add timing logs to verify async behavior
+console.log(`[${Date.now()}] HTTP response sent`);
+// ... in async handler
+console.log(`[${Date.now()}] Async operation started`);
+console.log(`[${Date.now()}] Async operation completed`);
+```
+
+**Success Criteria:**
+| Metric | Baseline (Post-Wave 2) | Target | Pass/Fail |
+|--------|------------------------|--------|-----------|
+| Response time (all scenarios) | ~600ms | <300ms | |
+| Handoff thread creation delay | In-request | <5 seconds | |
+| Email delivery delay | In-request | <30 seconds | |
+| Async error rate | N/A | <1% | |
+| Core operation success rate | 100% | 100% (unaffected by async failures) | |
+
+**Rollback Criteria:**
+- Async operations never completing → Rollback
+- Core operations failing due to async changes → Immediate rollback
+- Response time not improving → Investigate before rollback
+
+---
+
 ### Wave 4: Caching Layer (Week 4)
 **Estimated Impact:** Consistent sub-300ms response times
 
@@ -911,6 +1098,46 @@ await db
 | Outlook availability caching | `stageChangeNotificationStorage.ts` | Low | Low |
 | Pre-compute due date formatting | `projectStorage.ts` | Medium | Low |
 
+#### Wave 4: Testing Protocol
+
+**Manual Testing Checklist:**
+- [ ] **Cache Hit**: Perform same stage change twice within 5 minutes
+  - Verify: Second request faster than first
+  - Verify: Data still correct (cache not stale)
+- [ ] **Cache Invalidation**: Update stage configuration, then perform stage change
+  - Verify: New configuration reflected immediately
+  - Verify: Old cached data not used
+- [ ] **Cache Miss**: Wait 6 minutes, perform stage change
+  - Verify: Fresh data fetched from database
+  - Verify: Cache repopulated
+- [ ] **Outlook Cache**: Check client notification preview
+  - Verify: Outlook availability not re-checked on every request
+  - Verify: Availability status accurate
+
+**Cache Verification:**
+```typescript
+// Add cache hit/miss logging
+console.log(`Cache ${cached ? 'HIT' : 'MISS'} for stage ${stageId}`);
+
+// Monitor cache size
+console.log(`Stage config cache size: ${stageConfigCache.size}`);
+```
+
+**Success Criteria:**
+| Metric | Baseline (Post-Wave 3) | Target | Pass/Fail |
+|--------|------------------------|--------|-----------|
+| Response time (p50) | ~300ms | <200ms | |
+| Response time (p95) | ~500ms | <300ms | |
+| Cache hit rate (after warmup) | N/A | >80% | |
+| Stale data incidents | N/A | 0 | |
+
+**Rollback Criteria:**
+- Stale data served from cache → Immediate rollback
+- Cache not invalidating on config changes → Rollback
+- Memory usage growing unbounded → Rollback
+
+---
+
 ### Wave 5: Queries Feature Integration (Week 5-6)
 **Estimated Impact:** Minimal additional load with new feature
 
@@ -919,6 +1146,83 @@ await db
 | Implement batch query creation | New `queryStorage.ts` | Medium | N/A |
 | Implement batch reminder scheduling | New `queryReminderStorage.ts` | Medium | N/A |
 | Integrate with stage change flow | `status.ts`, `projectStatusStorage.ts` | Medium | N/A |
+
+#### Wave 5: Testing Protocol
+
+**Manual Testing Checklist:**
+- [ ] **Add Queries During Stage Change**: Expand "Add Queries", add 5 queries
+  - Verify: All queries saved correctly
+  - Verify: Stage change completes normally
+  - Verify: Response time increase minimal (<100ms)
+- [ ] **Bulk Query Import**: Upload CSV with 50 queries
+  - Verify: All queries imported in single batch
+  - Verify: Response time acceptable (<2 seconds)
+- [ ] **Query with Stage Change**: Add queries AND change stage
+  - Verify: Both operations complete in single transaction
+  - Verify: Rollback works if either fails
+- [ ] **Chase Reminder Scheduling**: Send queries to client
+  - Verify: Reminders scheduled correctly
+  - Verify: Async scheduling doesn't block response
+
+**Database Verification Queries:**
+```sql
+-- Verify batch insert worked (not individual inserts)
+-- Enable query logging, look for single INSERT with multiple VALUES
+
+-- Verify query count
+SELECT COUNT(*) FROM bookkeeping_queries 
+WHERE project_id = '[TEST_PROJECT_ID]';
+
+-- Verify reminders scheduled
+SELECT * FROM query_chase_reminders 
+WHERE token_id IN (
+  SELECT id FROM query_response_tokens 
+  WHERE project_id = '[TEST_PROJECT_ID]'
+);
+```
+
+**Success Criteria:**
+| Metric | Baseline (Post-Wave 4) | Target | Pass/Fail |
+|--------|------------------------|--------|-----------|
+| Response time (stage change + 5 queries) | N/A | <400ms | |
+| Response time (bulk import 50 queries) | N/A | <2000ms | |
+| Additional DB queries per stage change | N/A | ≤3 | |
+| Query data integrity | N/A | 100% | |
+| Reminder scheduling success | N/A | 100% | |
+
+**Rollback Criteria:**
+- Stage change failing when queries added → Rollback queries integration
+- Performance degradation > 50% → Rollback and investigate
+- Data integrity issues → Immediate rollback
+
+---
+
+## Post-Wave Verification
+
+After completing all waves, run the full test suite:
+
+### End-to-End Regression Test
+
+1. **Create new project** through full lifecycle
+2. **Change through all stages** with various configurations
+3. **Verify all side effects**:
+   - Chronology entries accurate
+   - Notifications sent correctly
+   - Handoff threads created
+   - Time-in-stage calculations correct
+   - Client notifications preview complete
+4. **Load test** with 10 concurrent stage changes
+5. **Verify monitoring** dashboards show expected metrics
+
+### Performance Baseline Comparison
+
+| Metric | Pre-Optimization | Post-Optimization | Improvement |
+|--------|------------------|-------------------|-------------|
+| DB Operations (simple) | | | |
+| DB Operations (complex) | | | |
+| Response time (p50) | | | |
+| Response time (p95) | | | |
+| Background job success rate | | | |
 
 ---
 
