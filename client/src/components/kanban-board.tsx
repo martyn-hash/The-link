@@ -164,6 +164,9 @@ export default function KanbanBoard({
   const [targetStatus, setTargetStatus] = useState<string | null>(null);
   const [overedColumn, setOveredColumn] = useState<string | null>(null);
   
+  // State for immediate visual card movement (optimistic UI)
+  const [pendingMove, setPendingMove] = useState<{ projectId: string; toStatus: string } | null>(null);
+  
   // State for StageChangeModal (mobile fallback) and MessagesModal
   const [showStageChangeModal, setShowStageChangeModal] = useState(false);
   const [showMessagesModal, setShowMessagesModal] = useState(false);
@@ -343,11 +346,15 @@ export default function KanbanBoard({
   } : stageConfig;
 
   // Group projects by status, mapping benched and completion statuses to synthetic columns
+  // Also account for pending moves to show cards in target column immediately
   const projectsByStatus = projects.reduce((acc, project) => {
     let status: string;
     
+    // Check if this project has a pending move (optimistic UI)
+    if (pendingMove && pendingMove.projectId === project.id) {
+      status = pendingMove.toStatus;
     // Map benched projects to the bench column
-    if (project.isBenched) {
+    } else if (project.isBenched) {
       status = 'On The Bench';
     // Map completion statuses to synthetic column names
     } else if (project.completionStatus === 'completed_successfully') {
@@ -489,6 +496,8 @@ export default function KanbanBoard({
       } else {
         // Single project move
         if (draggedProject && draggedProject.currentStatus !== targetStatusName) {
+          // Set pending move for immediate visual feedback
+          setPendingMove({ projectId: draggedProject.id, toStatus: targetStatusName });
           setSelectedProject(draggedProject);
           setTargetStatus(targetStatusName);
           setShowChangeStatusModal(true);
@@ -502,6 +511,8 @@ export default function KanbanBoard({
 
   // Callback when status is successfully updated
   const handleStatusUpdated = () => {
+    // Clear pending move - the cache is now updated with the real data
+    setPendingMove(null);
     // Modal handles its own closing (including showing client notification if needed)
     // Only reset the selected project/target state when modal closes via handleModalClose
     // Don't close the modal here - let ChangeStatusModal control that based on whether
@@ -513,6 +524,8 @@ export default function KanbanBoard({
     setShowChangeStatusModal(false);
     setSelectedProject(null);
     setTargetStatus(null);
+    // Clear pending move - card snaps back to original position
+    setPendingMove(null);
   };
   
   // Callback when bulk modal is closed
@@ -979,6 +992,7 @@ export default function KanbanBoard({
                                   isSelected={selectedProjectIds.has(project.id)}
                                   onSelectToggle={handleSelectToggle}
                                   openQueryCount={queryCounts[project.id] || 0}
+                                  isPendingMove={pendingMove?.projectId === project.id}
                                 />
                               </StageChangePopover>
                             );

@@ -266,111 +266,129 @@ export class ProjectStatusStorage {
       await this.projectHelpers.sendStageChangeNotifications(update.projectId, update.newStatus, oldStatus);
     }
 
-    if (chronologyEntryId) {
-      try {
-        if (!this.projectHelpers.createProjectMessageThread || !this.projectHelpers.createProjectMessageParticipant || !this.projectHelpers.createProjectMessage) {
-          console.warn('Message thread helpers not registered, skipping thread creation');
-        } else {
-          const timestamp = new Date().toLocaleString('en-GB', { 
-            day: '2-digit', 
-            month: 'short', 
-            hour: '2-digit', 
-            minute: '2-digit' 
-          });
-          const shortId = chronologyEntryId.substring(0, 8);
-          const threadTopic = `${oldStatus} to ${update.newStatus} - ${timestamp} (${shortId})`;
-          
-          const newThread = await this.projectHelpers.createProjectMessageThread({
-            projectId: update.projectId,
-            topic: threadTopic,
-            createdByUserId: userId,
-          });
-          
-          const addedParticipants = new Set<string>();
-          
-          if (previousAssigneeId) {
-            await this.projectHelpers.createProjectMessageParticipant({
-              threadId: newThread.id,
-              userId: previousAssigneeId,
-            });
-            addedParticipants.add(previousAssigneeId);
-          }
-          
-          if (newAssigneeId && !addedParticipants.has(newAssigneeId)) {
-            await this.projectHelpers.createProjectMessageParticipant({
-              threadId: newThread.id,
-              userId: newAssigneeId,
-            });
-            addedParticipants.add(newAssigneeId);
-          }
-          
-          if (!addedParticipants.has(userId)) {
-            await this.projectHelpers.createProjectMessageParticipant({
-              threadId: newThread.id,
-              userId: userId,
-            });
-            addedParticipants.add(userId);
-          }
-          
-          const hasCustomContent = (update.notesHtml && update.notesHtml.trim()) || (update.attachments && update.attachments.length > 0);
-          
-          const messageAttachments = update.attachments?.map(att => ({
-            ...att,
-            url: `/api/projects/${update.projectId}/stage-change-attachments${att.objectPath}`,
-          }));
-          
-          let messageContent: string;
-          if (update.notesHtml && update.notesHtml.trim()) {
-            messageContent = update.notesHtml.trim();
-          } else if (update.attachments && update.attachments.length > 0) {
-            messageContent = `<p>Stage changed from <strong>${oldStatus}</strong> to <strong>${update.newStatus}</strong></p><p>Reason: ${update.changeReason}</p><p><em>Attachments included below.</em></p>`;
+    const asyncContext = {
+      chronologyEntryId,
+      projectId: update.projectId,
+      oldStatus,
+      newStatus: update.newStatus,
+      changeReason: update.changeReason,
+      notesHtml: update.notesHtml,
+      attachments: update.attachments,
+      previousAssigneeId,
+      newAssigneeId,
+      userId,
+      isFinalStage: stage.canBeFinalStage && oldStatus !== update.newStatus,
+    };
+    
+    const helpers = this.projectHelpers;
+    
+    setImmediate(async () => {
+      if (asyncContext.chronologyEntryId) {
+        try {
+          if (!helpers.createProjectMessageThread || !helpers.createProjectMessageParticipant || !helpers.createProjectMessage) {
+            console.warn('[Async Storage] Message thread helpers not registered, skipping thread creation');
           } else {
-            messageContent = `<p>Stage changed from <strong>${oldStatus}</strong> to <strong>${update.newStatus}</strong></p><p>Reason: ${update.changeReason}</p>`;
+            const timestamp = new Date().toLocaleString('en-GB', { 
+              day: '2-digit', 
+              month: 'short', 
+              hour: '2-digit', 
+              minute: '2-digit' 
+            });
+            const shortId = asyncContext.chronologyEntryId.substring(0, 8);
+            const threadTopic = `${asyncContext.oldStatus} to ${asyncContext.newStatus} - ${timestamp} (${shortId})`;
+            
+            const newThread = await helpers.createProjectMessageThread({
+              projectId: asyncContext.projectId,
+              topic: threadTopic,
+              createdByUserId: asyncContext.userId,
+            });
+            
+            const addedParticipants = new Set<string>();
+            
+            if (asyncContext.previousAssigneeId) {
+              await helpers.createProjectMessageParticipant({
+                threadId: newThread.id,
+                userId: asyncContext.previousAssigneeId,
+              });
+              addedParticipants.add(asyncContext.previousAssigneeId);
+            }
+            
+            if (asyncContext.newAssigneeId && !addedParticipants.has(asyncContext.newAssigneeId)) {
+              await helpers.createProjectMessageParticipant({
+                threadId: newThread.id,
+                userId: asyncContext.newAssigneeId,
+              });
+              addedParticipants.add(asyncContext.newAssigneeId);
+            }
+            
+            if (!addedParticipants.has(asyncContext.userId)) {
+              await helpers.createProjectMessageParticipant({
+                threadId: newThread.id,
+                userId: asyncContext.userId,
+              });
+              addedParticipants.add(asyncContext.userId);
+            }
+            
+            const hasCustomContent = (asyncContext.notesHtml && asyncContext.notesHtml.trim()) || (asyncContext.attachments && asyncContext.attachments.length > 0);
+            
+            const messageAttachments = asyncContext.attachments?.map(att => ({
+              ...att,
+              url: `/api/projects/${asyncContext.projectId}/stage-change-attachments${att.objectPath}`,
+            }));
+            
+            let messageContent: string;
+            if (asyncContext.notesHtml && asyncContext.notesHtml.trim()) {
+              messageContent = asyncContext.notesHtml.trim();
+            } else if (asyncContext.attachments && asyncContext.attachments.length > 0) {
+              messageContent = `<p>Stage changed from <strong>${asyncContext.oldStatus}</strong> to <strong>${asyncContext.newStatus}</strong></p><p>Reason: ${asyncContext.changeReason}</p><p><em>Attachments included below.</em></p>`;
+            } else {
+              messageContent = `<p>Stage changed from <strong>${asyncContext.oldStatus}</strong> to <strong>${asyncContext.newStatus}</strong></p><p>Reason: ${asyncContext.changeReason}</p>`;
+            }
+            
+            await helpers.createProjectMessage({
+              threadId: newThread.id,
+              content: messageContent,
+              userId: asyncContext.userId,
+              attachments: hasCustomContent ? messageAttachments : undefined,
+            });
+            
+            const isHandoff = asyncContext.previousAssigneeId && asyncContext.newAssigneeId && asyncContext.previousAssigneeId !== asyncContext.newAssigneeId;
+            console.log(`[Async Storage] Created message thread "${threadTopic}" for project ${asyncContext.projectId}${isHandoff ? ` (handoff from ${asyncContext.previousAssigneeId} to ${asyncContext.newAssigneeId})` : ' (same assignee)'}`);
           }
-          
-          await this.projectHelpers.createProjectMessage({
-            threadId: newThread.id,
-            content: messageContent,
-            userId: userId,
-            attachments: hasCustomContent ? messageAttachments : undefined,
-          });
-          
-          const isHandoff = previousAssigneeId && newAssigneeId && previousAssigneeId !== newAssigneeId;
-          console.log(`[Storage] Created message thread "${threadTopic}" for project ${update.projectId}${isHandoff ? ` (handoff from ${previousAssigneeId} to ${newAssigneeId})` : ' (same assignee)'}`);
+        } catch (error) {
+          console.error(`[Async Storage] Failed to create message thread for project ${asyncContext.projectId}:`, error);
         }
-      } catch (error) {
-        console.error(`[Storage] Failed to create message thread for project ${update.projectId}:`, error);
-      }
-    }
-
-    if (stage.canBeFinalStage && oldStatus !== update.newStatus) {
-      console.log(`[Storage] Project ${update.projectId} moved to final stage '${update.newStatus}', cancelling all remaining notifications`);
-      
-      try {
-        if (this.projectHelpers.cancelScheduledNotificationsForProject) {
-          await this.projectHelpers.cancelScheduledNotificationsForProject(update.projectId, `Project moved to final stage: ${update.newStatus}`);
-        }
-      } catch (error) {
-        console.error(`[Storage] Failed to cancel notifications for project ${update.projectId}:`, error);
       }
 
-      try {
-        let totalArchived = 0;
-        if (this.projectHelpers.autoArchiveMessageThreadsByProjectId) {
-          const clientThreadsArchived = await this.projectHelpers.autoArchiveMessageThreadsByProjectId(update.projectId, userId);
-          totalArchived += clientThreadsArchived;
+      if (asyncContext.isFinalStage) {
+        console.log(`[Async Storage] Project ${asyncContext.projectId} moved to final stage '${asyncContext.newStatus}', cancelling all remaining notifications`);
+        
+        try {
+          if (helpers.cancelScheduledNotificationsForProject) {
+            await helpers.cancelScheduledNotificationsForProject(asyncContext.projectId, `Project moved to final stage: ${asyncContext.newStatus}`);
+          }
+        } catch (error) {
+          console.error(`[Async Storage] Failed to cancel notifications for project ${asyncContext.projectId}:`, error);
         }
-        if (this.projectHelpers.autoArchiveProjectMessageThreadsByProjectId) {
-          const projectThreadsArchived = await this.projectHelpers.autoArchiveProjectMessageThreadsByProjectId(update.projectId, userId);
-          totalArchived += projectThreadsArchived;
+
+        try {
+          let totalArchived = 0;
+          if (helpers.autoArchiveMessageThreadsByProjectId) {
+            const clientThreadsArchived = await helpers.autoArchiveMessageThreadsByProjectId(asyncContext.projectId, asyncContext.userId);
+            totalArchived += clientThreadsArchived;
+          }
+          if (helpers.autoArchiveProjectMessageThreadsByProjectId) {
+            const projectThreadsArchived = await helpers.autoArchiveProjectMessageThreadsByProjectId(asyncContext.projectId, asyncContext.userId);
+            totalArchived += projectThreadsArchived;
+          }
+          if (totalArchived > 0) {
+            console.log(`[Async Storage] Auto-archived ${totalArchived} message thread(s) for completed project ${asyncContext.projectId}`);
+          }
+        } catch (error) {
+          console.error(`[Async Storage] Failed to auto-archive message threads for project ${asyncContext.projectId}:`, error);
         }
-        if (totalArchived > 0) {
-          console.log(`[Storage] Auto-archived ${totalArchived} message thread(s) for completed project ${update.projectId}`);
-        }
-      } catch (error) {
-        console.error(`[Storage] Failed to auto-archive message threads for project ${update.projectId}:`, error);
       }
-    }
+    });
 
     return updatedProject;
   }

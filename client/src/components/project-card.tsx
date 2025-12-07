@@ -29,6 +29,7 @@ interface ProjectCardProps extends React.HTMLAttributes<HTMLDivElement> {
   isSelected?: boolean;
   onSelectToggle?: (projectId: string) => void;
   openQueryCount?: number; // Number of open bookkeeping queries
+  isPendingMove?: boolean; // True when card is being moved (modal open, awaiting confirmation)
 }
 
 const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({ 
@@ -41,6 +42,7 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
   isSelected = false,
   onSelectToggle,
   openQueryCount = 0,
+  isPendingMove = false,
   ...props
 }, forwardedRef) => {
   // Get authentication state
@@ -446,6 +448,7 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
         isSortableDragging ? "opacity-50" : ""
       } ${isDragging ? "rotate-5 shadow-lg" : ""} ${projectStatus.bgColor} relative ${
         isSelected ? "ring-2 ring-primary ring-offset-2" : ""
+      } ${isPendingMove ? "ring-2 ring-blue-400 ring-offset-1 animate-pulse" : ""
       }`}
       onClick={handleCardClick}
       data-testid={`project-card-${project.id}`}
