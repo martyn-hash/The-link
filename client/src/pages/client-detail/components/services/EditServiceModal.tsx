@@ -65,7 +65,7 @@ export function EditServiceModal({
   );
 
   // Check if this is a Companies House service
-  const isCompaniesHouseService = service.service.isCompaniesHouseConnected;
+  const isCompaniesHouseService = service.service.isCompaniesHouseConnected ?? false;
 
   // Detect if this is a people service by checking if it has a personId property
   const isPeopleService = 'personId' in service;

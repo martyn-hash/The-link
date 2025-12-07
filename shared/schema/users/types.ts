@@ -40,6 +40,11 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type UpsertUser = z.infer<typeof upsertUserSchema>;
 export type UpdateUser = z.infer<typeof updateUserSchema>;
 
+// Extended user type for authenticated users (includes computed properties from API)
+export type AuthenticatedUser = User & {
+  hasPassword?: boolean;  // Computed from passwordHash existence
+};
+
 export type UserSession = typeof userSessions.$inferSelect;
 export type InsertUserSession = z.infer<typeof insertUserSessionSchema>;
 

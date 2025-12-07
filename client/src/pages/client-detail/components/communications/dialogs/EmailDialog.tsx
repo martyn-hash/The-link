@@ -239,13 +239,7 @@ export function EmailDialog({
       return user.firstName.trim();
     }
     
-    // Try to extract from fullName if available
-    if ((user as any).fullName) {
-      const extracted = extractFirstName((user as any).fullName);
-      if (extracted) return extracted;
-    }
-    
-    // Try to construct from firstName/lastName
+    // Fallback: try to extract from lastName if firstName unavailable
     if (user.lastName) {
       return extractFirstName(user.lastName);
     }

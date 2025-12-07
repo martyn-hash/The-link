@@ -396,9 +396,9 @@ export default function Profile() {
       
       // Initialize email signature and calendly link from user data
       setEmailSignature(user.emailSignature || "");
-      setCalendlyLink((user as any).calendlyLink || "");
+      setCalendlyLink(user.calendlyLink || "");
     }
-  }, [user?.firstName, user?.lastName, user?.id, user?.emailSignature, (user as any)?.calendlyLink]);
+  }, [user?.firstName, user?.lastName, user?.id, user?.emailSignature, user?.calendlyLink]);
 
   if (isAuthLoading) {
     return (
@@ -562,7 +562,7 @@ export default function Profile() {
             </Card>
 
             {/* Password Change - Only show if user has password-based authentication */}
-            {'hasPassword' in user && user.hasPassword && (
+            {user.hasPassword && (
               <Card>
                 <CardHeader>
                   <CardTitle>Change Password</CardTitle>
@@ -796,22 +796,22 @@ export default function Profile() {
                 {/* Email Access Status - Managed by Admin */}
                 <div className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center space-x-4">
-                    <div className={`w-12 h-12 ${(user as any).accessEmail ? 'bg-green-100 dark:bg-green-900' : 'bg-gray-100 dark:bg-gray-800'} rounded-lg flex items-center justify-center`}>
-                      <Mail className={`w-6 h-6 ${(user as any).accessEmail ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`} />
+                    <div className={`w-12 h-12 ${user.accessEmail ? 'bg-green-100 dark:bg-green-900' : 'bg-gray-100 dark:bg-gray-800'} rounded-lg flex items-center justify-center`}>
+                      <Mail className={`w-6 h-6 ${user.accessEmail ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`} />
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold" data-testid="text-email-access-title">
                         Email Access
                       </h3>
                       <p className="text-sm text-muted-foreground">
-                        {(user as any).accessEmail 
+                        {user.accessEmail 
                           ? 'Your Outlook email is synced with the CRM' 
                           : 'Email sync is managed by your administrator'}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center">
-                    {(user as any).accessEmail ? (
+                    {user.accessEmail ? (
                       <div className="flex items-center space-x-1">
                         <CheckCircle className="w-5 h-5 text-green-500" />
                         <span className="text-sm text-green-600 dark:text-green-400" data-testid="status-email-enabled">
@@ -832,22 +832,22 @@ export default function Profile() {
                 {/* Calendar Access Status - Managed by Admin */}
                 <div className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex items-center space-x-4">
-                    <div className={`w-12 h-12 ${(user as any).accessCalendar ? 'bg-green-100 dark:bg-green-900' : 'bg-gray-100 dark:bg-gray-800'} rounded-lg flex items-center justify-center`}>
-                      <Calendar className={`w-6 h-6 ${(user as any).accessCalendar ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`} />
+                    <div className={`w-12 h-12 ${user.accessCalendar ? 'bg-green-100 dark:bg-green-900' : 'bg-gray-100 dark:bg-gray-800'} rounded-lg flex items-center justify-center`}>
+                      <Calendar className={`w-6 h-6 ${user.accessCalendar ? 'text-green-600 dark:text-green-400' : 'text-gray-500'}`} />
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold" data-testid="text-calendar-access-title">
                         Calendar Access
                       </h3>
                       <p className="text-sm text-muted-foreground">
-                        {(user as any).accessCalendar 
+                        {user.accessCalendar 
                           ? 'Your Outlook calendar is synced with the CRM' 
                           : 'Calendar sync is managed by your administrator'}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center">
-                    {(user as any).accessCalendar ? (
+                    {user.accessCalendar ? (
                       <div className="flex items-center space-x-1">
                         <CheckCircle className="w-5 h-5 text-green-500" />
                         <span className="text-sm text-green-600 dark:text-green-400" data-testid="status-calendar-enabled">

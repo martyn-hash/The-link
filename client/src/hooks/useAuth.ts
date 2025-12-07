@@ -1,9 +1,9 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
-import type { User } from "@shared/schema";
+import type { AuthenticatedUser } from "@shared/schema";
 import { apiRequest, queryClient, getQueryFn } from "@/lib/queryClient";
 
 // Extended user type to include impersonation metadata
-type UserWithImpersonation = User & {
+type UserWithImpersonation = AuthenticatedUser & {
   _impersonationState?: {
     isImpersonating: boolean;
     originalUserId?: string;

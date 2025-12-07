@@ -6,12 +6,14 @@ import { users } from "../users/tables";
 import { clients, people } from "../clients/tables";
 import { projectTypes } from "../projects/base";
 
+import type { UdfDefinition } from "./schemas";
+
 export const services = pgTable("services", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull().unique(),
   description: text("description"),
   projectTypeId: varchar("project_type_id").references(() => projectTypes.id),
-  udfDefinitions: jsonb("udf_definitions").default(sql`'[]'::jsonb`),
+  udfDefinitions: jsonb("udf_definitions").$type<UdfDefinition[]>().default(sql`'[]'::jsonb`),
   isCompaniesHouseConnected: boolean("is_companies_house_connected").default(false),
   chStartDateField: varchar("ch_start_date_field"),
   chDueDateField: varchar("ch_due_date_field"),
