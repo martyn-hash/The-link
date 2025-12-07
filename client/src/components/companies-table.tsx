@@ -335,25 +335,45 @@ export default function CompaniesTable({
     },
   });
 
-  // Apply saved preferences on load
+  // Apply saved preferences on load - with proper validation
   useEffect(() => {
     if (savedPreferences && ALL_COLUMNS.length > 0) {
-      // Apply column order - just use saved order directly
-      if (savedPreferences.columnOrder) {
-        setColumnOrder(savedPreferences.columnOrder);
+      const currentColumnIds = new Set(ALL_COLUMNS.map(c => c.id));
+      
+      // Apply column order - filter out any saved columns that no longer exist,
+      // and add any new columns that weren't in the saved order
+      if (savedPreferences.columnOrder && savedPreferences.columnOrder.length > 0) {
+        const validSavedOrder = savedPreferences.columnOrder.filter(id => currentColumnIds.has(id));
+        const newColumns = ALL_COLUMNS.map(c => c.id).filter(id => !savedPreferences.columnOrder.includes(id));
+        const mergedOrder = [...validSavedOrder, ...newColumns];
+        setColumnOrder(mergedOrder);
+      } else {
+        setColumnOrder(ALL_COLUMNS.map(c => c.id));
       }
       
-      // Apply visible columns - use saved preferences directly without merging defaults
-      // This ensures user's explicit hide/show choices are respected
-      if (savedPreferences.visibleColumns) {
-        setVisibleColumns(savedPreferences.visibleColumns);
+      // Apply visible columns - validate against current columns
+      // Only apply saved preferences if they result in at least some visible base columns
+      if (savedPreferences.visibleColumns && savedPreferences.visibleColumns.length > 0) {
+        const validVisibleColumns = savedPreferences.visibleColumns.filter(id => currentColumnIds.has(id));
+        
+        // Ensure at least one essential column (name, checkbox, actions) is visible
+        // If saved preferences would hide all columns, fallback to defaults
+        const essentialColumns = ['name', 'checkbox', 'actions'];
+        const hasEssentialColumn = validVisibleColumns.some(id => essentialColumns.includes(id));
+        
+        if (validVisibleColumns.length > 0 && hasEssentialColumn) {
+          setVisibleColumns(validVisibleColumns);
+        } else {
+          // Fallback to defaults if saved preferences are invalid/empty
+          setVisibleColumns(ALL_COLUMNS.filter(col => col.defaultVisible).map(col => col.id));
+        }
       }
       
       if (savedPreferences.columnWidths) {
         setColumnWidths(savedPreferences.columnWidths as Record<string, number>);
       }
     }
-  }, [savedPreferences]);
+  }, [savedPreferences, ALL_COLUMNS]);
 
   // Drag and drop sensors
   const sensors = useSensors(
