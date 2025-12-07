@@ -408,8 +408,8 @@ async function sendSMSReminder(
 
 /**
  * Get Dialora webhook configuration for a project
- * Checks if voice AI is enabled for the project, then cycles through 
- * active webhooks from the project type based on reminder count
+ * Checks if voice AI is enabled at the PROJECT TYPE level (admin decision), 
+ * then cycles through active webhooks based on reminder count
  */
 async function getDialoraWebhookConfig(
   projectId: string,
@@ -418,29 +418,32 @@ async function getDialoraWebhookConfig(
   try {
     const project = await db
       .select({ 
-        projectTypeId: projects.projectTypeId,
-        useVoiceAiForQueries: projects.useVoiceAiForQueries
+        projectTypeId: projects.projectTypeId
       })
       .from(projects)
       .where(eq(projects.id, projectId))
       .limit(1);
 
     if (!project[0]?.projectTypeId) return null;
-    
-    if (!project[0].useVoiceAiForQueries) {
-      console.log(`[QueryReminder] Voice AI not enabled for project ${projectId}`);
-      return null;
-    }
 
     const projectType = await db
-      .select({ dialoraSettings: projectTypes.dialoraSettings })
+      .select({ 
+        dialoraSettings: projectTypes.dialoraSettings,
+        useVoiceAiForQueries: projectTypes.useVoiceAiForQueries,
+        name: projectTypes.name
+      })
       .from(projectTypes)
       .where(eq(projectTypes.id, project[0].projectTypeId))
       .limit(1);
 
+    if (!projectType[0]?.useVoiceAiForQueries) {
+      console.log(`[QueryReminder] Voice AI not enabled for project type "${projectType[0]?.name || 'Unknown'}" (project ${projectId})`);
+      return null;
+    }
+
     const settings = projectType[0]?.dialoraSettings as DialoraSettings | null;
     if (!settings?.outboundWebhooks?.length) {
-      console.log(`[QueryReminder] No webhooks configured for project type, voice AI disabled for project ${projectId}`);
+      console.log(`[QueryReminder] No webhooks configured for project type "${projectType[0]?.name}", voice AI disabled`);
       return null;
     }
 
