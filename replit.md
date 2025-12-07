@@ -21,6 +21,54 @@ The application features a modern SaaS aesthetic inspired by Linear, Stripe, and
 ### Technical Implementation
 The frontend is built with React, TypeScript, Wouter for routing, TanStack Query for server state, and shadcn/ui with Tailwind CSS for styling. The backend is an Express.js server in TypeScript, providing a modular RESTful API with middleware for authentication, authorization, and validation. It handles service mapping, project creation, sophisticated scheduling with UTC normalization, and comprehensive audit trails. A nightly scheduler automates project generation. The backend storage layer uses 52 domain-focused modules with a facade pattern for backward compatibility.
 
+### Backend Route Architecture
+Routes are organized into modular files in `server/routes/` for maintainability. Key route modules include:
+
+**Core & Authentication:**
+- `system.ts` - Health check, feature flags
+- `auth/index.ts`, `auth/core.ts`, `auth/bootstrap.ts` - Staff authentication, impersonation, bootstrap admin
+- `users.ts` - User CRUD, profiles, notifications, session management
+- `portal.ts` - Client portal authentication and access
+- `portal-users.ts` - Portal user management, magic links, QR codes
+
+**Data Management:**
+- `clients.ts` - Client management, Companies House integration, tags
+- `people.ts` - People management, relationships, contact details
+- `projects.ts` - Project CRUD, scheduling, Kanban views, CSV upload
+- `services.ts` - Service management, work roles, assignments
+- `tasks.ts` - Task templates and instances
+- `internalTasks.ts` - Staff tasks and quick reminders
+- `queries.ts` - Bookkeeping queries management
+
+**Documents & Storage:**
+- `documents.ts` - Document CRUD, folder management
+- `objects.ts` - Object storage upload/download with signed URLs
+- `signatures.ts` - Electronic signature workflows
+
+**Communication:**
+- `messages.ts` - Internal messaging, project communications
+- `emails.ts` - Email composition and sending
+- `notifications.ts` - Push notifications, scheduled reminders
+- `integrations.ts` - OAuth (Outlook, RingCentral), external services
+
+**Configuration & Admin:**
+- `config.ts` - System settings, stages, approvals, project types
+- `dashboards.ts` - Dashboard CRUD
+- `analytics.ts` - Dashboard data, analytics endpoints
+- `views.ts` - Custom company views
+- `preferences.ts` - User column and project preferences
+- `superAdmin.ts` - Super admin operations
+- `admin/misc.ts` - Admin utilities (test data cleanup, scheduling exceptions)
+
+**Utilities:**
+- `search.ts` - Global super search
+- `activity.ts` - Activity tracking
+- `address.ts` - UK address lookup (getaddress.io)
+- `import.ts` - Data import validation/execution
+- `ai.ts` - AI transcription and text processing
+- `calendar.ts` - Calendar integration
+- `friendlyErrors.ts` - User-friendly error handling
+
 ### System Design
 PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) handles object storage with secure signed URLs. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control, while the client portal uses passwordless email verification with magic link tokens. The system is multi-tenant and designed for modularity, with extensive database indexing for performance optimization.
 
