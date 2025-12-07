@@ -79,8 +79,6 @@ import {
   Users,
   Bell,
   AlertTriangle,
-  PhoneCall,
-  Settings,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -256,40 +254,6 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   });
   
   const pendingReminderCount = scheduledReminders?.filter(r => r.status === 'pending').length || 0;
-
-  // Query for voice AI status
-  const { data: voiceAiStatus, isLoading: voiceAiLoading } = useQuery<{
-    useVoiceAiForQueries: boolean;
-    hasWebhooksConfigured: boolean;
-    isVoiceAvailable: boolean;
-  }>({
-    queryKey: ['/api/projects', projectId, 'voice-ai-status'],
-  });
-
-  // Mutation to toggle voice AI
-  const toggleVoiceAiMutation = useMutation({
-    mutationFn: async (useVoiceAiForQueries: boolean) => {
-      return apiRequest('PATCH', `/api/projects/${projectId}/voice-ai-settings`, { useVoiceAiForQueries });
-    },
-    onSuccess: (data: any) => {
-      // Directly update the cache with the response data for immediate UI sync
-      queryClient.setQueryData(['/api/projects', projectId, 'voice-ai-status'], {
-        useVoiceAiForQueries: data.useVoiceAiForQueries,
-        hasWebhooksConfigured: data.hasWebhooksConfigured,
-        isVoiceAvailable: data.isVoiceAvailable,
-      });
-      toast({ 
-        title: data.useVoiceAiForQueries ? "Voice AI enabled" : "Voice AI disabled",
-        description: data.useVoiceAiForQueries 
-          ? "Voice call reminders are now available for this project." 
-          : "Only email and SMS reminders will be used."
-      });
-    },
-    onError: (error: any) => {
-      const message = error?.message || "Failed to update voice AI settings.";
-      toast({ title: "Error", description: message, variant: "destructive" });
-    },
-  });
 
   // Query for project assignees (for notify functionality)
   const { data: projectAssignees } = useQuery<{
@@ -1371,64 +1335,6 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
           {/* Scheduled Reminders Tab Content */}
           <TabsContent value="reminders" className="mt-0">
             <CardContent className="pt-0">
-              {/* Voice AI Settings Card */}
-              <div className="mb-6 p-4 bg-muted/50 border rounded-lg" data-testid="card-voice-ai-settings">
-                {voiceAiLoading ? (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Skeleton className="w-9 h-9 rounded-lg" />
-                      <div className="space-y-2">
-                        <Skeleton className="h-4 w-32" />
-                        <Skeleton className="h-3 w-48" />
-                      </div>
-                    </div>
-                    <Skeleton className="h-5 w-10 rounded-full" />
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-primary/10 rounded-lg">
-                        <PhoneCall className="w-5 h-5 text-primary" />
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-medium">Voice AI Reminders</h4>
-                        <p className="text-xs text-muted-foreground">
-                          {voiceAiStatus?.hasWebhooksConfigured 
-                            ? "Enable automated voice call reminders for this project"
-                            : "Configure webhooks in project type settings to enable voice reminders"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      {voiceAiStatus?.useVoiceAiForQueries && voiceAiStatus?.hasWebhooksConfigured && (
-                        <Badge variant="default" className="bg-green-600">
-                          Active
-                        </Badge>
-                      )}
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div>
-                              <Switch
-                                checked={voiceAiStatus?.useVoiceAiForQueries ?? false}
-                                onCheckedChange={(checked) => toggleVoiceAiMutation.mutate(checked)}
-                                disabled={toggleVoiceAiMutation.isPending || !voiceAiStatus?.hasWebhooksConfigured}
-                                data-testid="switch-voice-ai"
-                              />
-                            </div>
-                          </TooltipTrigger>
-                          {!voiceAiStatus?.hasWebhooksConfigured && (
-                            <TooltipContent>
-                              <p>No webhooks configured for this project type</p>
-                            </TooltipContent>
-                          )}
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                  </div>
-                )}
-              </div>
-              
               <ScheduledRemindersPanel projectId={projectId} />
             </CardContent>
           </TabsContent>
