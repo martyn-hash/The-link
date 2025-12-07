@@ -10,6 +10,12 @@ interface ErrorMapping {
 
 const errorMappings: ErrorMapping[] = [
   {
+    pattern: /invalid email or password|invalid credentials|wrong password|incorrect password|email.*password.*incorrect|password.*incorrect/i,
+    title: "Login Failed",
+    description: "The email or password you entered doesn't match our records. Please double-check your details and try again.",
+    category: 'permission'
+  },
+  {
     pattern: /unique.*primary_phone|primary_phone.*unique|duplicate.*phone|phone.*already|mobile.*unique|unique.*mobile/i,
     title: "Duplicate Phone Number",
     description: "This mobile number is already registered to someone else. Each person needs their own unique phone number - no sharing allowed!",
