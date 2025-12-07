@@ -229,6 +229,7 @@ async function sendEmailReminder(
   totalQueries: number,
   responseLink: string,
   unansweredQueries: QueryForEmail[],
+  expiresAt: Date | null,
   customIntro?: string | null,
   customSignoff?: string | null
 ): Promise<ReminderSendResult> {
@@ -242,7 +243,7 @@ async function sendEmailReminder(
       ? `Reminder: ${pendingQueries} Bookkeeping ${pendingQueries === 1 ? 'Query' : 'Queries'} Awaiting Your Response`
       : `Reminder: ${pendingQueries} of ${totalQueries} Queries Still Need Your Response`;
 
-    const body = generateReminderEmailBody(recipientName, clientName, pendingQueries, totalQueries, responseLink, unansweredQueries, customIntro, customSignoff);
+    const body = generateReminderEmailBody(recipientName, clientName, pendingQueries, totalQueries, responseLink, unansweredQueries, expiresAt, customIntro, customSignoff);
 
     await client.send({
       to: recipientEmail,
@@ -290,6 +291,7 @@ function generateReminderEmailBody(
   totalQueries: number,
   responseLink: string,
   unansweredQueries: QueryForEmail[],
+  expiresAt: Date | null,
   customIntro?: string | null,
   customSignoff?: string | null
 ): string {
@@ -329,6 +331,10 @@ function generateReminderEmailBody(
   `).join('')}
 </table>` : '';
 
+  const expiryText = expiresAt 
+    ? `<p style="color: #64748b; font-size: 14px; text-align: center;"><strong>This link will expire on ${formatDateForEmail(expiresAt)}.</strong></p>` 
+    : '';
+
   return `
     <div style="font-family: 'DM Sans', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
       ${introHtml}
@@ -336,10 +342,12 @@ function generateReminderEmailBody(
       ${queriesTableHtml}
       
       <div style="text-align: center; margin: 30px 0;">
-        <a href="${responseLink}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">
+        <a href="${responseLink}" style="background-color: #0f7b94; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">
           View Queries
         </a>
       </div>
+      
+      ${expiryText}
       
       ${signoffHtml}
     </div>
@@ -555,6 +563,7 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
           queryStatus.totalQueries,
           responseLink,
           unansweredQueries,
+          token[0].expiresAt,
           reminder.messageIntro,
           reminder.messageSignoff
         );
