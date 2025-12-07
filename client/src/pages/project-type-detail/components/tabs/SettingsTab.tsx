@@ -33,6 +33,10 @@ interface SettingsTabProps {
     mutate: (settings: DialoraSettings) => void;
     isPending: boolean;
   };
+  toggleVoiceAiMutation?: {
+    mutate: (useVoiceAi: boolean) => void;
+    isPending: boolean;
+  };
   isEditingDialora: boolean;
   setIsEditingDialora: (value: boolean) => void;
 }
@@ -46,6 +50,7 @@ export function SettingsTab({
   setSelectedServiceId,
   updateProjectTypeServiceLinkageMutation,
   updateDialoraSettingsMutation,
+  toggleVoiceAiMutation,
   isEditingDialora,
   setIsEditingDialora,
 }: SettingsTabProps) {
@@ -265,6 +270,29 @@ export function SettingsTab({
           <p className="text-sm text-muted-foreground">
             Configure automated voice call reminders for bookkeeping queries. Multiple webhooks can be defined to cycle through different messages.
           </p>
+
+          {/* Voice AI Master Toggle */}
+          <div className="p-4 bg-muted/50 border rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">Enable Voice AI Reminders</Label>
+                <p className="text-xs text-muted-foreground">
+                  When enabled, voice call reminders will be automatically scheduled for bookkeeping queries
+                </p>
+              </div>
+              <Switch
+                checked={projectType?.useVoiceAiForQueries ?? false}
+                onCheckedChange={(checked) => toggleVoiceAiMutation?.mutate(checked)}
+                disabled={toggleVoiceAiMutation?.isPending || !projectType?.dialoraSettings?.outboundWebhooks?.some(w => w.active)}
+                data-testid="switch-voice-ai-enabled"
+              />
+            </div>
+            {!projectType?.dialoraSettings?.outboundWebhooks?.some(w => w.active) && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                Configure at least one active webhook below to enable voice reminders
+              </p>
+            )}
+          </div>
 
           {isEditingDialora ? (
             <div className="space-y-6">

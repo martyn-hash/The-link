@@ -183,6 +183,7 @@ export default function ProjectTypeDetail() {
     updateProjectTypeActiveMutation, 
     updateProjectTypeSingleProjectMutation,
     updateDialoraSettingsMutation,
+    toggleVoiceAiMutation,
   } = useProjectTypeSettingsMutations(
     projectTypeId,
     {
@@ -518,6 +519,7 @@ export default function ProjectTypeDetail() {
               setSelectedServiceId={setSelectedServiceId}
               updateProjectTypeServiceLinkageMutation={updateProjectTypeServiceLinkageMutation}
               updateDialoraSettingsMutation={updateDialoraSettingsMutation}
+              toggleVoiceAiMutation={toggleVoiceAiMutation}
               isEditingDialora={isEditingDialora}
               setIsEditingDialora={setIsEditingDialora}
             />

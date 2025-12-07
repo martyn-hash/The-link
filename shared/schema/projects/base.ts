@@ -24,5 +24,6 @@ export const projectTypes = pgTable("project_types", {
   singleProjectPerClient: boolean("single_project_per_client").default(false),
   order: integer("order").notNull(),
   dialoraSettings: jsonb("dialora_settings").$type<DialoraSettings>(),
+  useVoiceAiForQueries: boolean("use_voice_ai_for_queries").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });

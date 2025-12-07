@@ -10,6 +10,7 @@ interface ProjectTypeSettingsCallbacks {
   onActiveStatusUpdated?: () => void;
   onSingleProjectUpdated?: () => void;
   onDialoraSettingsUpdated?: () => void;
+  onVoiceAiToggled?: () => void;
 }
 
 export function useProjectTypeSettingsMutations(
@@ -126,11 +127,34 @@ export function useProjectTypeSettingsMutations(
     },
   });
 
+  const toggleVoiceAiMutation = useMutation({
+    mutationFn: async (useVoiceAiForQueries: boolean) => {
+      if (!projectTypeId) throw new Error("No project type ID");
+      return await apiRequest("PATCH", `/api/config/project-types/${projectTypeId}`, {
+        useVoiceAiForQueries
+      });
+    },
+    onSuccess: (_, useVoiceAi) => {
+      toast({
+        title: useVoiceAi ? "Voice AI Enabled" : "Voice AI Disabled",
+        description: useVoiceAi 
+          ? "Voice call reminders will be included in query reminder schedules" 
+          : "Voice call reminders have been disabled for this project type",
+      });
+      invalidateProjectType();
+      callbacks.onVoiceAiToggled?.();
+    },
+    onError: (error: any) => {
+      showFriendlyError({ error });
+    },
+  });
+
   return {
     updateProjectTypeServiceLinkageMutation,
     toggleNotificationsActiveMutation,
     updateProjectTypeActiveMutation,
     updateProjectTypeSingleProjectMutation,
     updateDialoraSettingsMutation,
+    toggleVoiceAiMutation,
   };
 }
