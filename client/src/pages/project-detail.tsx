@@ -38,7 +38,8 @@ import { QueriesTab } from "@/components/queries/QueriesTab";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SwipeableTabsWrapper } from "@/components/swipeable-tabs";
 import type { ProjectWithRelations, User } from "@shared/schema";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { calculateCurrentInstanceTime } from "@shared/businessTime";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useActivityTracker } from "@/lib/activityTracker";
 import { format } from "date-fns";
@@ -188,6 +189,64 @@ export default function ProjectDetail() {
   // Note: project.currentStatus stores the stage name, not the stage ID
   const currentStage = stages?.find((stage: any) => stage.name === project?.currentStatus);
   const currentStageAllowsCompletion = currentStage?.canBeFinalStage === true;
+
+  // Calculate current business hours in stage for status badge
+  const currentBusinessHours = useMemo(() => {
+    if (!project) return 0;
+    
+    const createdAt = project.createdAt 
+      ? (typeof project.createdAt === 'string' ? project.createdAt : new Date(project.createdAt).toISOString())
+      : undefined;
+    
+    const transformedChronology = (project.chronology || [])
+      .filter((entry): entry is typeof entry & { timestamp: NonNullable<typeof entry.timestamp> } => {
+        return entry.timestamp !== null && entry.timestamp !== undefined;
+      })
+      .map((entry) => ({
+        toStatus: entry.toStatus,
+        timestamp: entry.timestamp instanceof Date 
+          ? entry.timestamp.toISOString() 
+          : typeof entry.timestamp === 'string'
+          ? entry.timestamp
+          : new Date(entry.timestamp).toISOString()
+      }));
+    
+    try {
+      return calculateCurrentInstanceTime(
+        transformedChronology,
+        project.currentStatus,
+        createdAt
+      );
+    } catch (error) {
+      console.error("Error calculating current instance time:", error);
+      return 0;
+    }
+  }, [project?.chronology, project?.currentStatus, project?.createdAt]);
+
+  // Calculate project status (On Track, Behind Schedule, Late / Overdue) for header badge
+  const projectStatus = useMemo(() => {
+    if (!project) return { status: 'On Track', color: 'bg-green-600 text-white' };
+    
+    const now = new Date();
+    
+    // Priority 1: Check if project is past its overall due date
+    if (project.dueDate) {
+      const dueDate = new Date(project.dueDate);
+      if (now > dueDate) {
+        return { status: 'Late / Overdue', color: 'bg-red-600 text-white' };
+      }
+    }
+    
+    // Priority 2: Check if project has been in current stage longer than allowed
+    if (currentStage?.maxInstanceTime && currentStage.maxInstanceTime > 0) {
+      if (currentBusinessHours > currentStage.maxInstanceTime) {
+        return { status: 'Behind Schedule', color: 'bg-amber-500 text-white' };
+      }
+    }
+    
+    // Priority 3: On Track
+    return { status: 'On Track', color: 'bg-green-600 text-white' };
+  }, [currentBusinessHours, currentStage?.maxInstanceTime, project?.dueDate]);
 
   // Mutation to complete project
   const completeMutation = useMutation({
@@ -680,7 +739,7 @@ export default function ProjectDetail() {
               <div className="mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8 space-y-4">
                 {/* Project header with client name, project type, and action buttons */}
                 <div className="bg-card border border-border rounded-lg p-4">
-                  {/* Header: Client/Project info with action buttons */}
+                  {/* Header: Client/Project info with status badge and action buttons */}
                   <div className="flex flex-col gap-3 mb-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex flex-col gap-1">
@@ -695,6 +754,13 @@ export default function ProjectDetail() {
                           </span>
                         )}
                       </div>
+                      {/* Status Badge - Top Right on mobile */}
+                      <Badge 
+                        className={`${projectStatus.color} text-xs px-3 py-1 font-semibold flex-shrink-0`}
+                        data-testid="badge-project-status-mobile"
+                      >
+                        {projectStatus.status}
+                      </Badge>
                     </div>
                     
                     {/* Back to Projects link - under client name */}
@@ -810,7 +876,7 @@ export default function ProjectDetail() {
                 <div className="mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8 space-y-4">
                   {/* Project header with client name, project type, and action buttons */}
                   <div className="bg-card border border-border rounded-lg p-5">
-                    {/* Header row: Client/Project info on left, Action buttons on right */}
+                    {/* Header row: Client/Project info on left, Status badge + Action buttons on right */}
                     <div className="flex items-start justify-between gap-4 mb-2">
                       <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
                         <RouterLink to={`/clients/${project.clientId}`}>
@@ -825,8 +891,14 @@ export default function ProjectDetail() {
                         )}
                       </div>
                       
-                      {/* Action Buttons - Top Right */}
-                      <div className="flex flex-wrap gap-2 flex-shrink-0">
+                      {/* Status Badge + Action Buttons - Top Right */}
+                      <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                        <Badge 
+                          className={`${projectStatus.color} text-sm px-4 py-1 font-semibold`}
+                          data-testid="badge-project-status"
+                        >
+                          {projectStatus.status}
+                        </Badge>
                         <Button
                           variant="outline"
                           size="sm"

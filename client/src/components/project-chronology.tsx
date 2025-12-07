@@ -22,7 +22,7 @@ interface ProjectChronologyProps {
 interface TimelineEntry {
   id: string;
   timestamp: Date;
-  type: 'stage_change' | 'role_change' | 'benched' | 'unbenched' | 'task_created' | 'task_completed' | 'phone_call' | 'note' | 'sms_sent' | 'sms_received' | 'email_sent' | 'email_received' | 'message_thread';
+  type: 'stage_change' | 'role_change' | 'benched' | 'unbenched' | 'task_created' | 'task_completed' | 'phone_call' | 'note' | 'sms_sent' | 'sms_received' | 'email_sent' | 'email_received' | 'message_thread' | 'activity';
   detail: string;
   assignedTo?: string;
   changedBy?: string;
@@ -213,6 +213,9 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
         const isUnbenchedEntry = entry.entryType === 'unbenched';
         
         let detail: string;
+        // Check if this is an activity log entry (no_change status) - these are things like emails sent, queries sent, etc.
+        const isActivityLogEntry = entry.toStatus === 'no_change' && !entry.fromStatus;
+        
         if (isRoleChange) {
           // Role change entries use notes field for "Changed from X to Y"
           detail = entry.notes || `Role changed`;
@@ -225,6 +228,9 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
           detail = entry.notes || `Removed from Bench → ${formatStageName(entry.toStatus)}`;
         } else if (isInactiveEntry) {
           detail = entry.notes || 'Project status changed';
+        } else if (isActivityLogEntry) {
+          // Activity log entries (emails, queries, tasks) should show their notes
+          detail = entry.notes || 'Activity logged';
         } else if (entry.fromStatus) {
           detail = `${formatStageName(entry.fromStatus)} → ${formatStageName(entry.toStatus)}`;
         } else {
@@ -277,6 +283,8 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
           timelineType = 'benched';
         } else if (isUnbenchedEntry) {
           timelineType = 'unbenched';
+        } else if (isActivityLogEntry) {
+          timelineType = 'activity';
         }
         
         entries.push({

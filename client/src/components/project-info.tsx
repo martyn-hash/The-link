@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import { useQuery } from "@tanstack/react-query";
 import type { ProjectWithRelations, User, KanbanStage } from "@shared/schema";
 import { calculateCurrentInstanceTime, addBusinessHours } from "@shared/businessTime";
@@ -162,16 +161,6 @@ export default function ProjectInfo({ project, user, currentStage, currentAssign
 
   return (
     <div className="space-y-6">
-      {/* Status Indicator Badge - Prominent at top */}
-      <div className="flex justify-center">
-        <Badge 
-          className={`${projectStatus.color} text-lg px-6 py-2 font-semibold`}
-          data-testid="badge-project-status"
-        >
-          {projectStatus.status}
-        </Badge>
-      </div>
-
       {/* Progress Metrics Section */}
       {project.progressMetrics && project.progressMetrics.length > 0 && (
         <div>
