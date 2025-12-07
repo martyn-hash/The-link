@@ -83,22 +83,27 @@ export function useStatusChangeMutations({
       const pendingQueries = getPendingQueries?.() ?? [];
       if (pendingQueries.length > 0) {
         try {
-          for (const query of pendingQueries) {
-            if (query.description || query.ourQuery) {
-              await apiRequest("POST", `/api/projects/${projectId}/queries`, {
-                projectId: projectId,
-                date: query.date?.toISOString() || null,
-                description: query.description || null,
-                moneyIn: query.moneyIn ? query.moneyIn : null,
-                moneyOut: query.moneyOut ? query.moneyOut : null,
-                ourQuery: query.ourQuery || "",
-                status: "open",
-              });
-            }
+          const validQueries = pendingQueries
+            .filter(query => query.description || query.ourQuery)
+            .map(query => ({
+              projectId: projectId,
+              date: query.date?.toISOString() || null,
+              description: query.description || null,
+              moneyIn: query.moneyIn ? query.moneyIn : null,
+              moneyOut: query.moneyOut ? query.moneyOut : null,
+              ourQuery: query.ourQuery || "",
+              status: "open" as const,
+            }));
+          
+          if (validQueries.length > 0) {
+            await apiRequest("POST", `/api/projects/${projectId}/queries/bulk`, {
+              queries: validQueries,
+            });
           }
+          
           toast({
             title: "Success",
-            description: `Stage updated and ${pendingQueries.length} ${pendingQueries.length === 1 ? 'query' : 'queries'} created`,
+            description: `Stage updated and ${validQueries.length} ${validQueries.length === 1 ? 'query' : 'queries'} created`,
           });
         } catch (error) {
           console.error("Failed to create queries:", error);

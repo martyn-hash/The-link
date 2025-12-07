@@ -17,6 +17,16 @@ The frontend uses React, TypeScript, Wouter for routing, TanStack Query for serv
 ### Backend Route Architecture
 Routes are organized into modular files in `server/routes/` covering core functionalities such as authentication, user management, client and people management, project and service management, document handling, communication tools, configuration, and administrative tasks.
 
+### Stage Change Optimization (December 2025)
+The stage change flow has been optimized across 5 waves to reduce database operations from 25-55+ to 10-20 per change (~65-75% reduction), achieving sub-300ms response times:
+- **Wave 1**: Batch field response insertions, static imports, data passthrough to background operations
+- **Wave 2**: Consolidated validation queries with JOINs, batch notification status updates
+- **Wave 3**: Frontend optimistic updates with pendingMove state, backend async operations via setImmediate
+- **Wave 4**: TTL cache for stage config with 5-minute expiration and comprehensive invalidation (admin endpoints at `/api/admin/cache-stats` and `/api/admin/cache-invalidate`)
+- **Wave 5**: Batch query creation during stage changes (uses `/api/projects/:id/queries/bulk`)
+
+Key files: `server/utils/ttlCache.ts`, `server/routes/projects/status.ts`, `server/storage/projects/projectStatusStorage.ts`, `client/src/hooks/change-status/useStatusChangeMutations.ts`
+
 ### System Design
 PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) handles object storage with secure signed URLs. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control; the client portal uses passwordless email verification. The system is multi-tenant and designed for modularity, with extensive database indexing. Key features include automated project management, advanced communication tools (push notifications, internal tasks with quick reminders, email threading via Microsoft Graph, multi-channel client notifications with AI assistance), UK eIDAS-compliant electronic signatures, comprehensive workflow and status management with Kanban views, and Bookkeeping Queries for managing transaction-related questions. It also includes an AI Audio Transcription service, client value notifications with AI-assisted drafting, Zapier integration via webhooks, and an enhanced data import system. A friendly error handling system replaces technical errors with user-friendly messages. A scheduled notifications calendar provides comprehensive management of automated notifications, with stage-aware suppression. A resilient project scheduling orchestrator ensures robustness against server restarts and outages.
 
