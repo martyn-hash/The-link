@@ -95,6 +95,7 @@ import { applyProjectsFacade } from './facade/projects.facade.js';
 import { applyServicesFacade } from './facade/services.facade.js';
 import { applyTagsCommsFacade } from './facade/tags-comms.facade.js';
 import { applyIntegrationsFacade } from './facade/integrations.facade.js';
+import { applyDocumentsFacade } from './facade/documents.facade.js';
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -130,11 +131,11 @@ class StorageBase {
   protected integrationStorage: IntegrationStorage;
   protected pushNotificationStorage: PushNotificationStorage;
   protected emailStorage: EmailStorage;
-  private documentStorage: DocumentStorage;
-  private riskAssessmentStorage: RiskAssessmentStorage;
-  private portalDocumentStorage: PortalDocumentStorage;
-  private signatureStorage: SignatureStorage;
-  private portalStorage: PortalStorage;
+  protected documentStorage: DocumentStorage;
+  protected riskAssessmentStorage: RiskAssessmentStorage;
+  protected portalDocumentStorage: PortalDocumentStorage;
+  protected signatureStorage: SignatureStorage;
+  protected portalStorage: PortalStorage;
   private messageThreadStorage: MessageThreadStorage;
   private messageStorage: MessageStorage;
   private projectMessageThreadStorage: ProjectMessageThreadStorage;
@@ -418,7 +419,7 @@ class StorageBase {
 }
 
 // Apply facade mixins to StorageBase
-// User (33), People (20), Clients (27), Projects (68), Services (53), Tags/Comms (44), and Integrations (54) domain methods are now provided by mixins
+// User (33), People (20), Clients (27), Projects (68), Services (53), Tags/Comms (44), Integrations (54), and Documents (50) domain methods are now provided by mixins
 const DatabaseStorageWithUsers = applyUsersFacade(StorageBase);
 const DatabaseStorageWithPeople = applyPeopleFacade(DatabaseStorageWithUsers);
 const DatabaseStorageWithClients = applyClientsFacade(DatabaseStorageWithPeople);
@@ -426,226 +427,12 @@ const DatabaseStorageWithProjects = applyProjectsFacade(DatabaseStorageWithClien
 const DatabaseStorageWithServices = applyServicesFacade(DatabaseStorageWithProjects);
 const DatabaseStorageWithTagsComms = applyTagsCommsFacade(DatabaseStorageWithServices);
 const DatabaseStorageWithIntegrations = applyIntegrationsFacade(DatabaseStorageWithTagsComms);
+const DatabaseStorageWithDocuments = applyDocumentsFacade(DatabaseStorageWithIntegrations);
 
 // DatabaseStorage extends the composed class and implements IStorage
-export class DatabaseStorage extends DatabaseStorageWithIntegrations implements IStorage {
+export class DatabaseStorage extends DatabaseStorageWithDocuments implements IStorage {
   constructor() {
     super();
-  }
-
-  // ============================================================================
-  // DOCUMENTS & PORTAL DOMAIN - Delegated to Document & Portal Storage Modules (Stage 9)
-  // ============================================================================
-
-  // Document Folder Operations - DocumentStorage
-  async createDocumentFolder(folder: any) {
-    return this.documentStorage.createDocumentFolder(folder);
-  }
-
-  async getDocumentFolderById(id: string) {
-    return this.documentStorage.getDocumentFolderById(id);
-  }
-
-  async getDocumentFoldersByClientId(clientId: string) {
-    return this.documentStorage.getDocumentFoldersByClientId(clientId);
-  }
-
-  async deleteDocumentFolder(id: string) {
-    return this.documentStorage.deleteDocumentFolder(id);
-  }
-
-  // Document Operations - DocumentStorage
-  async createDocument(document: any) {
-    return this.documentStorage.createDocument(document);
-  }
-
-  async getDocumentById(id: string) {
-    return this.documentStorage.getDocumentById(id);
-  }
-
-  async getDocumentsByClientId(clientId: string) {
-    return this.documentStorage.getDocumentsByClientId(clientId);
-  }
-
-  async getDocumentsByFolderId(folderId: string) {
-    return this.documentStorage.getDocumentsByFolderId(folderId);
-  }
-
-  async deleteDocument(id: string) {
-    return this.documentStorage.deleteDocument(id);
-  }
-
-  async getSignedUrl(objectPath: string) {
-    return this.documentStorage.getSignedUrl(objectPath);
-  }
-
-  // Portal Document Operations - PortalDocumentStorage
-  async listPortalDocuments(clientId: string, clientPortalUserId: string) {
-    return this.portalDocumentStorage.listPortalDocuments(clientId, clientPortalUserId);
-  }
-
-  async createPortalDocument(document: any) {
-    return this.portalDocumentStorage.createPortalDocument(document);
-  }
-
-  async deletePortalDocument(id: string, clientId: string, clientPortalUserId: string) {
-    return this.portalDocumentStorage.deletePortalDocument(id, clientId, clientPortalUserId);
-  }
-
-  async getPortalDocumentById(id: string, clientId: string, clientPortalUserId: string) {
-    return this.portalDocumentStorage.getPortalDocumentById(id, clientId, clientPortalUserId);
-  }
-
-  // Risk Assessment Operations - RiskAssessmentStorage
-  async createRiskAssessment(assessment: any) {
-    return this.riskAssessmentStorage.createRiskAssessment(assessment);
-  }
-
-  async getRiskAssessmentById(id: string) {
-    return this.riskAssessmentStorage.getRiskAssessmentById(id);
-  }
-
-  async getRiskAssessmentsByClientId(clientId: string) {
-    return this.riskAssessmentStorage.getRiskAssessmentsByClientId(clientId);
-  }
-
-  async updateRiskAssessment(id: string, assessment: any) {
-    return this.riskAssessmentStorage.updateRiskAssessment(id, assessment);
-  }
-
-  async deleteRiskAssessment(id: string) {
-    return this.riskAssessmentStorage.deleteRiskAssessment(id);
-  }
-
-  async saveRiskAssessmentResponses(assessmentId: string, responses: any[]) {
-    return this.riskAssessmentStorage.saveRiskAssessmentResponses(assessmentId, responses);
-  }
-
-  async getRiskAssessmentResponses(assessmentId: string) {
-    return this.riskAssessmentStorage.getRiskAssessmentResponses(assessmentId);
-  }
-
-  // Signature Request Operations - SignatureStorage
-  async createSignatureRequest(request: any) {
-    return this.signatureStorage.createSignatureRequest(request);
-  }
-
-  async getSignatureRequestById(id: string) {
-    return this.signatureStorage.getSignatureRequestById(id);
-  }
-
-  async getSignatureRequestsByClientId(clientId: string) {
-    return this.signatureStorage.getSignatureRequestsByClientId(clientId);
-  }
-
-  async getSignatureRequestByPublicToken(token: string) {
-    return this.signatureStorage.getSignatureRequestByPublicToken(token);
-  }
-
-  async updateSignatureRequest(id: string, request: any) {
-    return this.signatureStorage.updateSignatureRequest(id, request);
-  }
-
-  async deleteSignatureRequest(id: string) {
-    return this.signatureStorage.deleteSignatureRequest(id);
-  }
-
-  async createSignatureRequestRecipient(recipient: any) {
-    return this.signatureStorage.createSignatureRequestRecipient(recipient);
-  }
-
-  async getSignatureRequestRecipientsByRequestId(requestId: string) {
-    return this.signatureStorage.getSignatureRequestRecipientsByRequestId(requestId);
-  }
-
-  async getSignatureRequestRecipientByToken(token: string) {
-    return this.signatureStorage.getSignatureRequestRecipientByToken(token);
-  }
-
-  async updateSignatureRequestRecipient(id: string, recipient: any) {
-    return this.signatureStorage.updateSignatureRequestRecipient(id, recipient);
-  }
-
-  async deleteSignatureRequestRecipient(id: string) {
-    return this.signatureStorage.deleteSignatureRequestRecipient(id);
-  }
-
-  async createSignatureField(field: any) {
-    return this.signatureStorage.createSignatureField(field);
-  }
-
-  async getSignatureFieldsByRequestId(requestId: string) {
-    return this.signatureStorage.getSignatureFieldsByRequestId(requestId);
-  }
-
-  async getSignatureFieldsBySignerId(signerId: string) {
-    return this.signatureStorage.getSignatureFieldsBySignerId(signerId);
-  }
-
-  async updateSignatureField(id: string, field: any) {
-    return this.signatureStorage.updateSignatureField(id, field);
-  }
-
-  async deleteSignatureField(id: string) {
-    return this.signatureStorage.deleteSignatureField(id);
-  }
-
-  async createSignatureAuditLog(log: any) {
-    return this.signatureStorage.createSignatureAuditLog(log);
-  }
-
-  async getSignatureAuditLogsByRequestId(requestId: string) {
-    return this.signatureStorage.getSignatureAuditLogsByRequestId(requestId);
-  }
-
-  // Client Portal User Operations - PortalStorage
-  async createClientPortalUser(user: any) {
-    return this.portalStorage.createClientPortalUser(user);
-  }
-
-  async getClientPortalUserById(id: string) {
-    return this.portalStorage.getClientPortalUserById(id);
-  }
-
-  async getClientPortalUserByEmail(email: string) {
-    return this.portalStorage.getClientPortalUserByEmail(email);
-  }
-
-  async getClientPortalUserByMagicLinkToken(token: string) {
-    return this.portalStorage.getClientPortalUserByMagicLinkToken(token);
-  }
-
-  async getClientPortalUsersByClientId(clientId: string) {
-    return this.portalStorage.getClientPortalUsersByClientId(clientId);
-  }
-
-  async getClientPortalUserByPersonId(personId: string) {
-    return this.portalStorage.getClientPortalUserByPersonId(personId);
-  }
-
-  async updateClientPortalUser(id: string, user: any) {
-    return this.portalStorage.updateClientPortalUser(id, user);
-  }
-
-  async deleteClientPortalUser(id: string) {
-    return this.portalStorage.deleteClientPortalUser(id);
-  }
-
-  // Client Portal Session Operations - PortalStorage
-  async createClientPortalSession(data: any) {
-    return this.portalStorage.createClientPortalSession(data);
-  }
-
-  async getClientPortalSessionByToken(token: string) {
-    return this.portalStorage.getClientPortalSessionByToken(token);
-  }
-
-  async deleteClientPortalSession(id: string) {
-    return this.portalStorage.deleteClientPortalSession(id);
-  }
-
-  async cleanupExpiredSessions() {
-    return this.portalStorage.cleanupExpiredSessions();
   }
 
   // ============================================================================
