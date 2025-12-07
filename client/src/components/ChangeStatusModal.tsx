@@ -471,6 +471,8 @@ export default function ChangeStatusModal({
             pendingQueriesCount={pendingQueries.length}
             onToggleQueriesForm={handleToggleQueriesForm}
             formatChangeReason={formatChangeReason}
+            isPreselectedStage={!!initialNewStatus}
+            preselectedStageLabel={initialNewStatus ? formatStageName(initialNewStatus) : undefined}
           />
 
           {/* Right column: Stage approval form (conditional) */}

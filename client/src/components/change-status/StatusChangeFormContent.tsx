@@ -1,6 +1,5 @@
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { TiptapEditor } from "@/components/TiptapEditor";
 import {
@@ -10,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { AlertCircle, HelpCircle } from "lucide-react";
+import { AlertCircle, HelpCircle, ArrowRight } from "lucide-react";
 import { CustomFieldsSection } from "./CustomFieldsSection";
 import { AttachmentsSection } from "./AttachmentsSection";
 import type { ReasonCustomField, ChangeReason } from "@shared/schema";
@@ -44,6 +43,8 @@ interface StatusChangeFormContentProps {
   pendingQueriesCount: number;
   onToggleQueriesForm: () => void;
   formatChangeReason: (reason: string) => string;
+  isPreselectedStage?: boolean;
+  preselectedStageLabel?: string;
 }
 
 export function StatusChangeFormContent({
@@ -70,30 +71,64 @@ export function StatusChangeFormContent({
   pendingQueriesCount,
   onToggleQueriesForm,
   formatChangeReason,
+  isPreselectedStage,
+  preselectedStageLabel,
 }: StatusChangeFormContentProps) {
   return (
     <div className="space-y-4">
-      <h3 className="font-semibold text-sm">Status Change Details</h3>
-
-      <div className="space-y-2">
-        <Label htmlFor="status-select">Move to Stage *</Label>
-        {stagesLoading ? (
-          <div className="h-10 bg-muted animate-pulse rounded" />
-        ) : (
-          <Select value={newStatus} onValueChange={onStatusChange}>
-            <SelectTrigger id="status-select" data-testid="select-stage">
-              <SelectValue placeholder="Select new stage..." />
-            </SelectTrigger>
-            <SelectContent>
-              {availableStatuses.map((status) => (
-                <SelectItem key={status.value} value={status.value}>
-                  {status.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-sm">Status Change Details</h3>
+        {!showApprovalForm && (
+          <Button
+            type="button"
+            variant="default"
+            size="sm"
+            onClick={onToggleQueriesForm}
+            className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            data-testid="button-toggle-queries"
+          >
+            <HelpCircle className="w-4 h-4 mr-2" />
+            {showQueriesForm ? "Hide Queries" : "Add Queries"}
+            {pendingQueriesCount > 0 && (
+              <Badge variant="secondary" className="ml-2 bg-white/20 text-white">
+                {pendingQueriesCount}
+              </Badge>
+            )}
+          </Button>
         )}
       </div>
+
+      {isPreselectedStage && preselectedStageLabel ? (
+        <div className="space-y-2">
+          <Label>Move to Stage</Label>
+          <div className="flex items-center gap-2 p-3 bg-primary/10 border border-primary/20 rounded-md">
+            <ArrowRight className="w-4 h-4 text-primary" />
+            <span className="font-medium text-primary" data-testid="text-preselected-stage">
+              {preselectedStageLabel}
+            </span>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <Label htmlFor="status-select">Move to Stage *</Label>
+          {stagesLoading ? (
+            <div className="h-10 bg-muted animate-pulse rounded" />
+          ) : (
+            <Select value={newStatus} onValueChange={onStatusChange}>
+              <SelectTrigger id="status-select" data-testid="select-stage">
+                <SelectValue placeholder="Select new stage..." />
+              </SelectTrigger>
+              <SelectContent>
+                {availableStatuses.map((status) => (
+                  <SelectItem key={status.value} value={status.value}>
+                    {status.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      )}
 
       {newStatus && (
         <div className="space-y-2">
@@ -146,28 +181,6 @@ export function StatusChangeFormContent({
         onFilesSelected={onFilesSelected}
         onRemoveFile={onRemoveFile}
       />
-
-      {!showApprovalForm && (
-        <div className="pt-2">
-          <Separator className="mb-4" />
-          <Button
-            type="button"
-            variant={showQueriesForm ? "secondary" : "outline"}
-            size="sm"
-            onClick={onToggleQueriesForm}
-            className="w-full"
-            data-testid="button-toggle-queries"
-          >
-            <HelpCircle className="w-4 h-4 mr-2" />
-            {showQueriesForm ? "Hide Queries" : "Add Queries"}
-            {pendingQueriesCount > 0 && (
-              <Badge variant="secondary" className="ml-2">
-                {pendingQueriesCount}
-              </Badge>
-            )}
-          </Button>
-        </div>
-      )}
     </div>
   );
 }
