@@ -92,6 +92,11 @@ import { WebhookStorage } from './webhooks/index.js';
 import { QboStorage, QcStorage } from './qbo/index.js';
 import { QueryStorage, QueryTokenStorage, ScheduledReminderStorage } from './queries/index.js';
 
+// Import facade mixins
+import { applyUsersFacade } from './facade/users.facade.js';
+import { applyPeopleFacade } from './facade/people.facade.js';
+import { applyClientsFacade } from './facade/clients.facade.js';
+
 // Export shared types (new modular architecture)
 export * from './base/types.js';
 
@@ -101,16 +106,16 @@ export type IStorage = OriginalIStorage;
 // Re-export initialization function
 export const initializeDefaultNotificationTemplates = modularInitTemplates;
 
-// Create composite DatabaseStorage class that delegates methods
-export class DatabaseStorage implements IStorage {
-  // Domain storage instances
-  private userStorage: UserStorage;
-  private userActivityStorage: UserActivityStorage;
-  private clientStorage: ClientStorage;
-  private companiesHouseStorage: CompaniesHouseStorage;
-  private searchStorage: SearchStorage;
-  private peopleStorage: PeopleStorage;
-  private clientPeopleStorage: ClientPeopleStorage;
+// StorageBase class contains all storage instances and helper registration
+class StorageBase {
+  // Domain storage instances - protected so facade mixins can access them
+  protected userStorage: UserStorage;
+  protected userActivityStorage: UserActivityStorage;
+  protected clientStorage: ClientStorage;
+  protected companiesHouseStorage: CompaniesHouseStorage;
+  protected searchStorage: SearchStorage;
+  protected peopleStorage: PeopleStorage;
+  protected clientPeopleStorage: ClientPeopleStorage;
   private projectStorage: ProjectStorage;
   private projectChronologyStorage: ProjectChronologyStorage;
   private projectTypesStorage: ProjectTypesStorage;
@@ -411,367 +416,18 @@ export class DatabaseStorage implements IStorage {
       getProject: (projectId: string) => this.projectStorage.getProject(projectId),
     });
   }
-
-  // ============================================================================
-  // USER DOMAIN - Delegated to UserStorage
-  // ============================================================================
-  
-  // User CRUD methods
-  async getUser(id: string) {
-    return this.userStorage.getUser(id);
-  }
-
-  async getFallbackUser() {
-    return this.userStorage.getFallbackUser();
-  }
-
-  async setFallbackUser(userId: string) {
-    return this.userStorage.setFallbackUser(userId);
-  }
-
-  async upsertUser(userData: any) {
-    return this.userStorage.upsertUser(userData);
-  }
-
-  async getUserByEmail(email: string) {
-    return this.userStorage.getUserByEmail(email);
-  }
-
-  async createUser(userData: any) {
-    return this.userStorage.createUser(userData);
-  }
-
-  async updateUser(id: string, userData: any) {
-    return this.userStorage.updateUser(id, userData);
-  }
-
-  async deleteUser(id: string) {
-    return this.userStorage.deleteUser(id);
-  }
-
-  async getAllUsers() {
-    return this.userStorage.getAllUsers();
-  }
-
-  async getUsersByRole(role: string) {
-    return this.userStorage.getUsersByRole(role);
-  }
-
-  // Admin operations
-  async createAdminIfNone(userData: any) {
-    return this.userStorage.createAdminIfNone(userData);
-  }
-
-  // Impersonation operations
-  async startImpersonation(adminUserId: string, targetUserId: string) {
-    return this.userStorage.startImpersonation(adminUserId, targetUserId);
-  }
-
-  async stopImpersonation(adminUserId: string) {
-    return this.userStorage.stopImpersonation(adminUserId);
-  }
-
-  async getImpersonationState(adminUserId: string) {
-    return this.userStorage.getImpersonationState(adminUserId);
-  }
-
-  async getEffectiveUser(adminUserId: string) {
-    return this.userStorage.getEffectiveUser(adminUserId);
-  }
-
-  // Session operations
-  async createUserSession(session: any) {
-    return this.userStorage.createUserSession(session);
-  }
-
-  async updateUserSessionActivity(userId: string) {
-    return this.userStorage.updateUserSessionActivity(userId);
-  }
-
-  async getUserSessions(userId?: string, options?: any) {
-    return this.userStorage.getUserSessions(userId, options);
-  }
-
-  async markSessionAsLoggedOut(sessionId: string) {
-    return this.userStorage.markSessionAsLoggedOut(sessionId);
-  }
-
-  async cleanupOldSessions(daysToKeep: number) {
-    return this.userStorage.cleanupOldSessions(daysToKeep);
-  }
-
-  async markInactiveSessions() {
-    return this.userStorage.markInactiveSessions();
-  }
-
-  // Login attempt operations
-  async createLoginAttempt(attempt: any) {
-    return this.userStorage.createLoginAttempt(attempt);
-  }
-
-  async getLoginAttempts(options?: any) {
-    return this.userStorage.getLoginAttempts(options);
-  }
-
-  async cleanupOldLoginAttempts(daysToKeep: number) {
-    return this.userStorage.cleanupOldLoginAttempts(daysToKeep);
-  }
-
-  // Magic link operations
-  async createMagicLinkToken(tokenData: any) {
-    return this.userStorage.createMagicLinkToken(tokenData);
-  }
-
-  async getMagicLinkTokenByToken(token: string) {
-    return this.userStorage.getMagicLinkTokenByToken(token);
-  }
-
-  async getMagicLinkTokenByCodeAndEmail(code: string, email: string) {
-    return this.userStorage.getMagicLinkTokenByCodeAndEmail(code, email);
-  }
-
-  async markMagicLinkTokenAsUsed(id: string) {
-    return this.userStorage.markMagicLinkTokenAsUsed(id);
-  }
-
-  async cleanupExpiredMagicLinkTokens() {
-    return this.userStorage.cleanupExpiredMagicLinkTokens();
-  }
-
-  async getValidMagicLinkTokensForUser(userId: string) {
-    return this.userStorage.getValidMagicLinkTokensForUser(userId);
-  }
-
-  // ============================================================================
-  // USER ACTIVITY DOMAIN - Delegated to UserActivityStorage
-  // ============================================================================
-  
-  async trackUserActivity(userId: string, entityType: string, entityId: string) {
-    return this.userActivityStorage.trackUserActivity(userId, entityType, entityId);
-  }
-
-  async getRecentlyViewedByUser(userId: string, limit?: number) {
-    return this.userActivityStorage.getRecentlyViewedByUser(userId, limit);
-  }
-
-  async getUserActivityTracking(options?: any) {
-    return this.userActivityStorage.getUserActivityTracking(options);
-  }
-
-  // ============================================================================
-  // CLIENT DOMAIN - Delegated to ClientStorage
-  // ============================================================================
-  
-  // Client CRUD operations
-  async createClient(clientData: any) {
-    return this.clientStorage.createClient(clientData);
-  }
-
-  async getClientById(id: string) {
-    return this.clientStorage.getClientById(id);
-  }
-
-  async getClientByName(name: string) {
-    return this.clientStorage.getClientByName(name);
-  }
-
-  async getAllClients(search?: string) {
-    return this.clientStorage.getAllClients(search);
-  }
-
-  async updateClient(id: string, clientData: any) {
-    return this.clientStorage.updateClient(id, clientData);
-  }
-
-  async deleteClient(id: string) {
-    return this.clientStorage.deleteClient(id);
-  }
-
-  // Client-Person relationships
-  async unlinkPersonFromClient(clientId: string, personId: string) {
-    return this.clientStorage.unlinkPersonFromClient(clientId, personId);
-  }
-
-  async convertIndividualToCompanyClient(personId: string, companyData: any, oldIndividualClientId?: string) {
-    return this.clientStorage.convertIndividualToCompanyClient(personId, companyData, oldIndividualClientId);
-  }
-
-  async linkPersonToClient(clientId: string, personId: string, officerRole?: string, isPrimaryContact?: boolean) {
-    return this.clientStorage.linkPersonToClient(clientId, personId, officerRole, isPrimaryContact);
-  }
-
-  async getClientWithPeople(clientId: string) {
-    return this.clientStorage.getClientWithPeople(clientId);
-  }
-
-  // Client Chronology
-  async createClientChronologyEntry(entry: any) {
-    return this.clientStorage.createClientChronologyEntry(entry);
-  }
-
-  async getClientChronology(clientId: string) {
-    return this.clientStorage.getClientChronology(clientId);
-  }
-
-  // IStorage interface alias
-  async getClientChronologyByClientId(clientId: string) {
-    return this.clientStorage.getClientChronology(clientId);
-  }
-
-  // NOTE: Client Tags moved to Stage 7 TagStorage (lines 1267+)
-  // Removed duplicate delegations that were previously in clientStorage
-
-  // Client Email Aliases
-  async getAllClientEmailAliases() {
-    return this.clientStorage.getAllClientEmailAliases();
-  }
-
-  async createClientEmailAlias(alias: any) {
-    return this.clientStorage.createClientEmailAlias(alias);
-  }
-
-  async getClientEmailAliasesByClientId(clientId: string) {
-    return this.clientStorage.getClientEmailAliasesByClientId(clientId);
-  }
-
-  // IStorage interface alias
-  async getClientEmailAliases(clientId: string) {
-    return this.clientStorage.getClientEmailAliasesByClientId(clientId);
-  }
-
-  async getClientByEmailAlias(email: string) {
-    return this.clientStorage.getClientByEmailAlias(email);
-  }
-
-  async deleteClientEmailAlias(id: string) {
-    return this.clientStorage.deleteClientEmailAlias(id);
-  }
-
-  // Client Domain Allowlisting
-  async createClientDomainAllowlist(domain: any) {
-    return this.clientStorage.createClientDomainAllowlist(domain);
-  }
-
-  async getClientDomainAllowlist() {
-    return this.clientStorage.getClientDomainAllowlist();
-  }
-
-  async getClientByDomain(domain: string) {
-    return this.clientStorage.getClientByDomain(domain);
-  }
-
-  async deleteClientDomainAllowlist(id: string) {
-    return this.clientStorage.deleteClientDomainAllowlist(id);
-  }
-
-  // ============================================================================
-  // COMPANIES HOUSE DOMAIN - Delegated to CompaniesHouseStorage
-  // ============================================================================
-  
-  async getClientByCompanyNumber(companyNumber: string) {
-    return this.companiesHouseStorage.getClientByCompanyNumber(companyNumber);
-  }
-
-  async upsertClientFromCH(clientData: any) {
-    return this.companiesHouseStorage.upsertClientFromCH(clientData);
-  }
-
-  // ============================================================================
-  // SEARCH DOMAIN - Delegated to SearchStorage
-  // ============================================================================
-  
-  async superSearch(query: string, limit?: number) {
-    return this.searchStorage.superSearch(query, limit);
-  }
-
-  // ============================================================================
-  // PEOPLE DOMAIN - Delegated to PeopleStorage & ClientPeopleStorage
-  // ============================================================================
-  
-  // People CRUD operations
-  async createPerson(personData: any) {
-    console.log('[FACADE] createPerson called - delegating to peopleStorage');
-    const result = await this.peopleStorage.createPerson(personData);
-    console.log('[FACADE] createPerson result ID:', result.id);
-    return result;
-  }
-
-  async getPersonById(id: string) {
-    return this.peopleStorage.getPersonById(id);
-  }
-
-  async getPersonByPersonNumber(personNumber: string) {
-    return this.peopleStorage.getPersonByPersonNumber(personNumber);
-  }
-
-  async getPersonByEmail(email: string) {
-    return this.peopleStorage.getPersonByEmail(email);
-  }
-
-  async getPersonByFullName(fullName: string) {
-    return this.peopleStorage.getPersonByFullName(fullName);
-  }
-
-  async getAllPeople() {
-    return this.peopleStorage.getAllPeople();
-  }
-
-  async getAllPeopleWithPortalStatus() {
-    return this.peopleStorage.getAllPeopleWithPortalStatus();
-  }
-
-  async getPersonWithDetails(id: string) {
-    return this.peopleStorage.getPersonWithDetails(id);
-  }
-
-  async updatePerson(id: string, personData: any) {
-    return this.peopleStorage.updatePerson(id, personData);
-  }
-
-  async deletePerson(id: string) {
-    return this.peopleStorage.deletePerson(id);
-  }
-
-  async upsertPersonFromCH(personData: any) {
-    return this.peopleStorage.upsertPersonFromCH(personData);
-  }
-
-  async findPeopleByNameAndBirthDate(firstName: string, lastName: string, year: number, month: number) {
-    return this.peopleStorage.findPeopleByNameAndBirthDate(firstName, lastName, year, month);
-  }
-
-  // Client-People relationship operations
-  async createClientPerson(relationship: any) {
-    return this.clientPeopleStorage.createClientPerson(relationship);
-  }
-
-  async getClientPerson(clientId: string, personId: string) {
-    return this.clientPeopleStorage.getClientPerson(clientId, personId);
-  }
-
-  async getClientPeopleByClientId(clientId: string) {
-    return this.clientPeopleStorage.getClientPeopleByClientId(clientId);
-  }
-
-  async getClientPeopleByPersonId(personId: string) {
-    return this.clientPeopleStorage.getClientPeopleByPersonId(personId);
-  }
-
-  // IStorage interface aliases (legacy method names)
-  async getClientPersonsByClientId(clientId: string) {
-    return this.clientPeopleStorage.getClientPeopleByClientId(clientId);
-  }
-
-  async getClientPersonsByPersonId(personId: string) {
-    return this.clientPeopleStorage.getClientPeopleByPersonId(personId);
-  }
-
-  async updateClientPerson(id: string, relationship: any) {
-    return this.clientPeopleStorage.updateClientPerson(id, relationship);
-  }
-
-  async deleteClientPerson(id: string) {
-    return this.clientPeopleStorage.deleteClientPerson(id);
+}
+
+// Apply facade mixins to StorageBase
+// User (33), People (20), and Clients (27) domain methods are now provided by mixins
+const DatabaseStorageWithUsers = applyUsersFacade(StorageBase);
+const DatabaseStorageWithPeople = applyPeopleFacade(DatabaseStorageWithUsers);
+const DatabaseStorageWithClients = applyClientsFacade(DatabaseStorageWithPeople);
+
+// DatabaseStorage extends the composed class and implements IStorage
+export class DatabaseStorage extends DatabaseStorageWithClients implements IStorage {
+  constructor() {
+    super();
   }
 
   // ============================================================================
