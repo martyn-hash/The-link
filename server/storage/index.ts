@@ -87,21 +87,38 @@ import { WebhookStorage } from './webhooks/index.js';
 import { QboStorage, QcStorage } from './qbo/index.js';
 import { QueryStorage, QueryTokenStorage, ScheduledReminderStorage } from './queries/index.js';
 
-// Import facade mixins
-import { applyUsersFacade } from './facade/users.facade.js';
-import { applyPeopleFacade } from './facade/people.facade.js';
-import { applyClientsFacade } from './facade/clients.facade.js';
-import { applyProjectsFacade } from './facade/projects.facade.js';
-import { applyServicesFacade } from './facade/services.facade.js';
-import { applyTagsCommsFacade } from './facade/tags-comms.facade.js';
-import { applyIntegrationsFacade } from './facade/integrations.facade.js';
-import { applyDocumentsFacade } from './facade/documents.facade.js';
-import { applyMessagesFacade } from './facade/messages.facade.js';
-import { applyRequestsFacade } from './facade/requests.facade.js';
-import { applyTasksFacade } from './facade/tasks.facade.js';
-import { applyNotificationsFacade } from './facade/notifications.facade.js';
-import { applySettingsFacade } from './facade/settings.facade.js';
-import { applyMiscFacade } from './facade/misc.facade.js';
+// Import facade mixins and their dependency interfaces
+import { applyUsersFacade, type UsersFacadeDeps } from './facade/users.facade.js';
+import { applyPeopleFacade, type PeopleFacadeDeps } from './facade/people.facade.js';
+import { applyClientsFacade, type ClientsFacadeDeps } from './facade/clients.facade.js';
+import { applyProjectsFacade, type ProjectsFacadeDeps } from './facade/projects.facade.js';
+import { applyServicesFacade, type ServicesFacadeDeps } from './facade/services.facade.js';
+import { applyTagsCommsFacade, type TagsCommsFacadeDeps } from './facade/tags-comms.facade.js';
+import { applyIntegrationsFacade, type IntegrationsFacadeDeps } from './facade/integrations.facade.js';
+import { applyDocumentsFacade, type DocumentsFacadeDeps } from './facade/documents.facade.js';
+import { applyMessagesFacade, type MessagesFacadeDeps } from './facade/messages.facade.js';
+import { applyRequestsFacade, type RequestsFacadeDeps } from './facade/requests.facade.js';
+import { applyTasksFacade, type TasksFacadeDeps } from './facade/tasks.facade.js';
+import { applyNotificationsFacade, type NotificationsFacadeDeps } from './facade/notifications.facade.js';
+import { applySettingsFacade, type SettingsFacadeDeps } from './facade/settings.facade.js';
+import { applyMiscFacade, type MiscFacadeDeps } from './facade/misc.facade.js';
+
+// Combined type that includes all facade dependencies
+// This allows TypeScript to properly type the mixin chain
+type AllStorageDeps = UsersFacadeDeps & 
+  PeopleFacadeDeps & 
+  ClientsFacadeDeps & 
+  ProjectsFacadeDeps & 
+  ServicesFacadeDeps & 
+  TagsCommsFacadeDeps & 
+  IntegrationsFacadeDeps & 
+  DocumentsFacadeDeps & 
+  MessagesFacadeDeps & 
+  RequestsFacadeDeps & 
+  TasksFacadeDeps & 
+  NotificationsFacadeDeps & 
+  SettingsFacadeDeps & 
+  MiscFacadeDeps;
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -114,66 +131,66 @@ export const initializeDefaultNotificationTemplates = modularInitTemplates;
 
 // StorageBase class contains all storage instances and helper registration
 class StorageBase {
-  // Domain storage instances - protected so facade mixins can access them
-  protected userStorage: UserStorage;
-  protected userActivityStorage: UserActivityStorage;
-  protected clientStorage: ClientStorage;
-  protected companiesHouseStorage: CompaniesHouseStorage;
-  protected searchStorage: SearchStorage;
-  protected peopleStorage: PeopleStorage;
-  protected clientPeopleStorage: ClientPeopleStorage;
-  protected projectStorage: ProjectStorage;
-  protected projectChronologyStorage: ProjectChronologyStorage;
-  protected projectTypesStorage: ProjectTypesStorage;
-  protected projectStagesStorage: ProjectStagesStorage;
-  protected projectApprovalsStorage: ProjectApprovalsStorage;
-  protected projectSchedulingStorage: ProjectSchedulingStorage;
-  protected stageChangeNotificationStorage: StageChangeNotificationStorage;
-  protected serviceStorage: ServiceStorage;
-  protected workRoleStorage: WorkRoleStorage;
-  protected serviceAssignmentStorage: ServiceAssignmentStorage;
-  protected tagStorage: TagStorage;
-  protected communicationStorage: CommunicationStorage;
-  protected integrationStorage: IntegrationStorage;
-  protected pushNotificationStorage: PushNotificationStorage;
-  protected emailStorage: EmailStorage;
-  protected documentStorage: DocumentStorage;
-  protected riskAssessmentStorage: RiskAssessmentStorage;
-  protected portalDocumentStorage: PortalDocumentStorage;
-  protected signatureStorage: SignatureStorage;
-  protected portalStorage: PortalStorage;
-  protected messageThreadStorage: MessageThreadStorage;
-  protected messageStorage: MessageStorage;
-  protected projectMessageThreadStorage: ProjectMessageThreadStorage;
-  protected projectMessageStorage: ProjectMessageStorage;
-  protected projectMessageParticipantStorage: ProjectMessageParticipantStorage;
-  protected staffMessageThreadStorage: StaffMessageThreadStorage;
-  protected staffMessageStorage: StaffMessageStorage;
-  protected staffMessageParticipantStorage: StaffMessageParticipantStorage;
-  protected chChangeRequestStorage: ChChangeRequestStorage;
-  protected requestTemplateStorage: RequestTemplateStorage;
-  protected customRequestStorage: CustomRequestStorage;
-  protected taskInstanceStorage: TaskInstanceStorage;
-  protected taskInstanceResponseStorage: TaskInstanceResponseStorage;
-  protected taskTypeStorage: TaskTypeStorage;
-  protected internalTaskStorage: InternalTaskStorage;
-  protected taskTimeEntryStorage: TaskTimeEntryStorage;
-  protected projectTypeNotificationStorage: ProjectTypeNotificationStorage;
-  protected clientReminderStorage: ClientReminderStorage;
-  protected scheduledNotificationStorage: ScheduledNotificationStorage;
-  protected notificationHistoryStorage: NotificationHistoryStorage;
-  protected userNotificationPreferencesStorage: UserNotificationPreferencesStorage;
-  protected viewsStorage: ViewsStorage;
-  protected columnPreferencesStorage: ColumnPreferencesStorage;
-  protected dashboardStorage: DashboardStorage;
-  protected userPreferencesStorage: UserPreferencesStorage;
-  protected companySettingsStorage: CompanySettingsStorage;
-  protected webhookStorage: WebhookStorage;
-  protected qboStorage: QboStorage;
-  protected qcStorage: QcStorage;
-  protected queryStorage: QueryStorage;
-  protected queryTokenStorage: QueryTokenStorage;
-  protected scheduledReminderStorage: ScheduledReminderStorage;
+  // Domain storage instances - public for facade mixin access
+  public readonly userStorage: UserStorage;
+  public readonly userActivityStorage: UserActivityStorage;
+  public readonly clientStorage: ClientStorage;
+  public readonly companiesHouseStorage: CompaniesHouseStorage;
+  public readonly searchStorage: SearchStorage;
+  public readonly peopleStorage: PeopleStorage;
+  public readonly clientPeopleStorage: ClientPeopleStorage;
+  public readonly projectStorage: ProjectStorage;
+  public readonly projectChronologyStorage: ProjectChronologyStorage;
+  public readonly projectTypesStorage: ProjectTypesStorage;
+  public readonly projectStagesStorage: ProjectStagesStorage;
+  public readonly projectApprovalsStorage: ProjectApprovalsStorage;
+  public readonly projectSchedulingStorage: ProjectSchedulingStorage;
+  public readonly stageChangeNotificationStorage: StageChangeNotificationStorage;
+  public readonly serviceStorage: ServiceStorage;
+  public readonly workRoleStorage: WorkRoleStorage;
+  public readonly serviceAssignmentStorage: ServiceAssignmentStorage;
+  public readonly tagStorage: TagStorage;
+  public readonly communicationStorage: CommunicationStorage;
+  public readonly integrationStorage: IntegrationStorage;
+  public readonly pushNotificationStorage: PushNotificationStorage;
+  public readonly emailStorage: EmailStorage;
+  public readonly documentStorage: DocumentStorage;
+  public readonly riskAssessmentStorage: RiskAssessmentStorage;
+  public readonly portalDocumentStorage: PortalDocumentStorage;
+  public readonly signatureStorage: SignatureStorage;
+  public readonly portalStorage: PortalStorage;
+  public readonly messageThreadStorage: MessageThreadStorage;
+  public readonly messageStorage: MessageStorage;
+  public readonly projectMessageThreadStorage: ProjectMessageThreadStorage;
+  public readonly projectMessageStorage: ProjectMessageStorage;
+  public readonly projectMessageParticipantStorage: ProjectMessageParticipantStorage;
+  public readonly staffMessageThreadStorage: StaffMessageThreadStorage;
+  public readonly staffMessageStorage: StaffMessageStorage;
+  public readonly staffMessageParticipantStorage: StaffMessageParticipantStorage;
+  public readonly chChangeRequestStorage: ChChangeRequestStorage;
+  public readonly requestTemplateStorage: RequestTemplateStorage;
+  public readonly customRequestStorage: CustomRequestStorage;
+  public readonly taskInstanceStorage: TaskInstanceStorage;
+  public readonly taskInstanceResponseStorage: TaskInstanceResponseStorage;
+  public readonly taskTypeStorage: TaskTypeStorage;
+  public readonly internalTaskStorage: InternalTaskStorage;
+  public readonly taskTimeEntryStorage: TaskTimeEntryStorage;
+  public readonly projectTypeNotificationStorage: ProjectTypeNotificationStorage;
+  public readonly clientReminderStorage: ClientReminderStorage;
+  public readonly scheduledNotificationStorage: ScheduledNotificationStorage;
+  public readonly notificationHistoryStorage: NotificationHistoryStorage;
+  public readonly userNotificationPreferencesStorage: UserNotificationPreferencesStorage;
+  public readonly viewsStorage: ViewsStorage;
+  public readonly columnPreferencesStorage: ColumnPreferencesStorage;
+  public readonly dashboardStorage: DashboardStorage;
+  public readonly userPreferencesStorage: UserPreferencesStorage;
+  public readonly companySettingsStorage: CompanySettingsStorage;
+  public readonly webhookStorage: WebhookStorage;
+  public readonly qboStorage: QboStorage;
+  public readonly qcStorage: QcStorage;
+  public readonly queryStorage: QueryStorage;
+  public readonly queryTokenStorage: QueryTokenStorage;
+  public readonly scheduledReminderStorage: ScheduledReminderStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -424,8 +441,13 @@ class StorageBase {
   }
 }
 
-// Apply facade mixins to StorageBase - All 535+ methods provided by 15 facades
-const DatabaseStorageWithUsers = applyUsersFacade(StorageBase);
+// Type helper for mixin composition
+type Constructor<T = {}> = new (...args: any[]) => T;
+
+// Apply facade mixins to StorageBase - All 535+ methods provided by 14 facades
+// Cast StorageBase as Constructor<AllStorageDeps> since it implements all required properties
+const StorageBaseAsAllDeps = StorageBase as unknown as Constructor<AllStorageDeps>;
+const DatabaseStorageWithUsers = applyUsersFacade(StorageBaseAsAllDeps);
 const DatabaseStorageWithPeople = applyPeopleFacade(DatabaseStorageWithUsers);
 const DatabaseStorageWithClients = applyClientsFacade(DatabaseStorageWithPeople);
 const DatabaseStorageWithProjects = applyProjectsFacade(DatabaseStorageWithClients);
