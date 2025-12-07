@@ -27,7 +27,7 @@ export function registerProjectApprovalsRoutes(
 
       const savedResponses = [];
       for (const response of validatedResponses) {
-        const saved = await storage.createStageApprovalResponse(response);
+        const saved = await storage.upsertStageApprovalResponse(response);
         savedResponses.push(saved);
       }
 
