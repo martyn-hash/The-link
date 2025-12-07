@@ -408,7 +408,8 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
       }
       if (entry.type === 'phone_call' || entry.type === 'note' || 
           entry.type === 'sms_sent' || entry.type === 'sms_received' ||
-          entry.type === 'email_sent' || entry.type === 'email_received') {
+          entry.type === 'email_sent' || entry.type === 'email_received' ||
+          entry.type === 'activity') {
         return filters.progressNotes;
       }
       if (entry.type === 'message_thread') {
@@ -458,6 +459,8 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
         return <Badge variant="outline" className="gap-1"><Mail className="w-3 h-3" />Email Received</Badge>;
       case 'message_thread':
         return <Badge variant="outline" className="gap-1"><MessageSquare className="w-3 h-3" />Message Thread</Badge>;
+      case 'activity':
+        return <Badge variant="outline" className="gap-1 bg-blue-100 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200"><FileText className="w-3 h-3" />Activity</Badge>;
       default:
         return <Badge variant="outline">Unknown</Badge>;
     }
