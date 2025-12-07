@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -57,6 +57,14 @@ export function SettingsTab({
   const [dialoraSettings, setDialoraSettings] = useState<DialoraSettings>(() => 
     projectType?.dialoraSettings || { outboundWebhooks: [], inboundWebhookUrl: '' }
   );
+
+  // Sync local dialoraSettings state when projectType changes (e.g., after refetch)
+  // Only sync when NOT in editing mode to avoid overwriting user's edits
+  useEffect(() => {
+    if (!isEditingDialora && projectType?.dialoraSettings) {
+      setDialoraSettings(projectType.dialoraSettings);
+    }
+  }, [projectType?.dialoraSettings, isEditingDialora]);
 
   const handleAddWebhook = () => {
     const newWebhook: DialoraOutboundWebhook = {
