@@ -23,7 +23,8 @@ import { registerServiceRoutes } from "./routes/services";
 import { registerTaskRoutes } from "./routes/tasks";
 import { registerMessageRoutes } from "./routes/messages";
 import { registerIntegrationRoutes } from "./routes/integrations";
-import { registerAuthAndMiscRoutes } from "./routes/auth";
+// Note: registerAuthAndMiscRoutes from "./routes/auth" has been deprecated
+// All routes have been extracted to modular files in ./routes/ directory
 import { registerInternalTaskRoutes } from "./routes/internalTasks";
 import { registerEmailRoutes } from "./routes/emails";
 import { registerSuperAdminRoutes } from "./routes/superAdmin";
@@ -38,6 +39,24 @@ import { registerFriendlyErrorRoutes } from "./routes/friendlyErrors";
 import { registerQuickBooksRoutes } from "./routes/quickbooks";
 import { registerCalendarRoutes } from "./routes/calendar";
 import { registerQueryRoutes } from "./routes/queries";
+
+// Import new refactored route modules (from auth.ts refactoring)
+import { registerSystemRoutes } from "./routes/system";
+import { registerAuthRoutes } from "./routes/auth/index";
+import { registerUsersRoutes } from "./routes/users";
+import { registerDashboardsRoutes } from "./routes/dashboards";
+import { registerAnalyticsRoutes } from "./routes/analytics";
+import { registerDocumentRoutes } from "./routes/documents";
+import { registerObjectRoutes } from "./routes/objects";
+import { registerPortalUserRoutes } from "./routes/portal-users";
+import { registerViewRoutes } from "./routes/views";
+import { registerPreferenceRoutes } from "./routes/preferences";
+import { registerRiskAssessmentRoutes } from "./routes/risk-assessments";
+import { registerActivityRoutes } from "./routes/activity";
+import { registerSearchRoutes } from "./routes/search";
+import { registerAddressRoutes } from "./routes/address";
+import { registerImportRoutes } from "./routes/import";
+import { registerAdminMiscRoutes } from "./routes/admin/misc";
 
 /**
  * Register all application routes
@@ -97,7 +116,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Order matters for some routes (e.g., portal auth routes must come before authenticated portal routes)
 
   registerPortalRoutes(app);
-  await registerAuthAndMiscRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
   registerConfigRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
   registerClientRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
   registerPeopleRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
@@ -120,6 +138,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerQuickBooksRoutes(app, isAuthenticated, resolveEffectiveUser, requireSuperAdmin);
   registerCalendarRoutes(app, isAuthenticated, resolveEffectiveUser);
   registerQueryRoutes(app, isAuthenticated, resolveEffectiveUser);
+
+  // Register new refactored route modules (from auth.ts refactoring)
+  registerSystemRoutes(app, isAuthenticated);
+  registerAuthRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin);
+  registerUsersRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
+  registerDashboardsRoutes(app, isAuthenticated, resolveEffectiveUser);
+  registerAnalyticsRoutes(app, isAuthenticated, resolveEffectiveUser);
+  registerDocumentRoutes(app, isAuthenticated);
+  await registerObjectRoutes(app, isAuthenticated);
+  registerPortalUserRoutes(app, isAuthenticated);
+  registerViewRoutes(app, isAuthenticated, resolveEffectiveUser);
+  registerPreferenceRoutes(app, isAuthenticated, resolveEffectiveUser);
+  registerRiskAssessmentRoutes(app, isAuthenticated, resolveEffectiveUser);
+  registerActivityRoutes(app, isAuthenticated, resolveEffectiveUser);
+  registerSearchRoutes(app, isAuthenticated, resolveEffectiveUser);
+  registerAddressRoutes(app, isAuthenticated);
+  registerImportRoutes(app, isAuthenticated, resolveEffectiveUser);
+  registerAdminMiscRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin);
 
   const httpServer = createServer(app);
   return httpServer;
