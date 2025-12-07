@@ -15,9 +15,9 @@
 | Stage | Status | Notes |
 |-------|--------|-------|
 | Stage 1: Setup and Preparation | ✅ COMPLETE | Created helpers/projectFilterBuilder.ts, helpers/index.ts, types.ts |
-| Stage 2: Extract Filter Builder | 🔄 IN PROGRESS | Filter builder created, needs integration |
-| Stage 3: Extract CRUD Operations | ⏳ PENDING | |
-| Stage 4: Extract Query Operations | ⏳ PENDING | |
+| Stage 2: Extract Filter Builder | ✅ COMPLETE | Filter builder created with shared filtering functions |
+| Stage 3: Extract CRUD Operations | ✅ COMPLETE | Created projectCrudStorage.ts, delegated 6 methods |
+| Stage 4: Extract Query Operations | 🔄 IN PROGRESS | |
 | Stage 5: Extract Status Updates | ⏳ PENDING | |
 | Stage 6: Extract Analytics | ⏳ PENDING | |
 | Stage 7: Extract Bulk Operations | ⏳ PENDING | |
@@ -28,6 +28,7 @@
 - `server/storage/projects/helpers/projectFilterBuilder.ts` - Shared filtering logic
 - `server/storage/projects/helpers/index.ts` - Barrel export
 - `server/storage/projects/types.ts` - Shared types (ProjectStorageHelpers, ProjectQueryFilters)
+- `server/storage/projects/projectCrudStorage.ts` - CRUD operations (293 lines)
 
 ---
 
