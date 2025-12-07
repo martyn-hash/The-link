@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowLeft, AlertCircle, User as UserIcon, CheckCircle2, XCircle, Info, Plus, CheckSquare, Ban, Calendar, PauseCircle, PlayCircle } from "lucide-react";
+import { ArrowLeft, AlertCircle, CheckCircle2, XCircle, Info, Ban, PauseCircle, PlayCircle, ChevronDown } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -34,8 +35,6 @@ import ProjectInfo from "@/components/project-info";
 import ChangeStatusModal from "@/components/ChangeStatusModal";
 import ProjectChronology from "@/components/project-chronology";
 import ProjectMessaging from "@/components/ProjectMessaging";
-import { ProjectProgressNotes } from "@/components/project-progress-notes";
-import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { QueriesTab } from "@/components/queries/QueriesTab";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SwipeableTabsWrapper } from "@/components/swipeable-tabs";
@@ -113,7 +112,6 @@ export default function ProjectDetail() {
   const [currentTab, setCurrentTab] = useState<string>("overview");
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [showInactiveDialog, setShowInactiveDialog] = useState(false);
-  const [showTaskModal, setShowTaskModal] = useState(false);
   const [showBenchDialog, setShowBenchDialog] = useState(false);
   const [showUnbenchConfirm, setShowUnbenchConfirm] = useState(false);
   
@@ -181,13 +179,7 @@ export default function ProjectDetail() {
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
-  // Fetch internal tasks for this project
-  const { data: projectInternalTasks, isLoading: projectInternalTasksLoading } = useQuery<any[]>({
-    queryKey: [`/api/internal-tasks/project/${projectId}`],
-    enabled: !!projectId,
-  });
-
-  // Fetch client people for progress notes
+  // Fetch client people for queries
   const { data: clientPeople } = useQuery<any[]>({
     queryKey: [`/api/clients/${project?.clientId}/people`],
     enabled: !!project?.clientId,
@@ -545,10 +537,10 @@ export default function ProjectDetail() {
     <div className="min-h-screen bg-background flex flex-col">
       <TopNavigation user={user} />
       
-      <div className="page-container py-6 md:py-8">
-        {/* Header with back navigation */}
-        <div className="mb-8">
-          <div className="flex items-center space-x-4 mb-4">
+      <div className="page-container py-4 md:py-5">
+        {/* Compact header with back navigation and actions */}
+        <div className="mb-4">
+          <div className="flex items-center justify-between">
             <Button 
               variant="ghost" 
               size="sm" 
@@ -558,94 +550,78 @@ export default function ProjectDetail() {
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Projects
             </Button>
-          </div>
-          
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex-1">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-                <RouterLink to={`/clients/${project.clientId}`}>
-                  <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground hover:text-primary cursor-pointer transition-colors" data-testid="text-client-name">
-                    {project.client?.name || 'Unknown Client'}
-                  </h1>
-                </RouterLink>
-                {project.projectType?.name && (
-                  <span className="text-lg md:text-xl font-medium text-meta" data-testid="text-project-type">
-                    {project.projectType.name}
-                  </span>
-                )}
-              </div>
-            </div>
             
-            <div className="flex gap-2">
-              {/* Change Status Button */}
-              <Button
-                variant="default"
-                size="sm"
-                onClick={() => setShowChangeStatusModal(true)}
-                data-testid="button-change-status"
-                className="bg-[#3e7195] hover:bg-[#325b7a] text-white"
-              >
-                Change Status
-              </Button>
-
-              {/* Complete Project Button - Only visible when at a completable stage */}
-              {canComplete && (
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => setShowCompleteDialog(true)}
-                  disabled={completeMutation.isPending}
-                  data-testid="button-complete"
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                >
-                  <CheckCircle2 className="w-4 h-4 mr-2" />
-                  Complete
-                </Button>
-              )}
-              
-              {/* Make Inactive Button - Only visible for non-inactive projects with permission */}
-              {user?.canMakeProjectsInactive && !project.inactive && (
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => setShowInactiveDialog(true)}
-                  data-testid="button-make-inactive"
-                >
-                  <Ban className="w-4 h-4 mr-2" />
-                  Make Inactive
-                </Button>
-              )}
-              
-              {/* Move to Bench Button - Only visible when user has permission, project is not benched, and not completed/inactive */}
-              {user?.canBenchProjects && !project.isBenched && !project.completionStatus && !project.inactive && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setShowBenchDialog(true)}
-                  disabled={benchMutation.isPending}
-                  data-testid="button-move-to-bench"
-                  className="border-amber-500 text-amber-700 hover:bg-amber-50 dark:border-amber-400 dark:text-amber-400 dark:hover:bg-amber-950"
+                  data-testid="button-actions-menu"
+                  className="gap-2"
                 >
-                  <PauseCircle className="w-4 h-4 mr-2" />
-                  Move to Bench
+                  Actions
+                  <ChevronDown className="w-4 h-4" />
                 </Button>
-              )}
-              
-              {/* Take Off Bench Button - Only visible when user has permission and project is benched */}
-              {user?.canBenchProjects && project.isBenched && (
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={() => setShowUnbenchConfirm(true)}
-                  disabled={unbenchMutation.isPending}
-                  data-testid="button-take-off-bench"
-                  className="bg-amber-600 hover:bg-amber-700 text-white"
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem 
+                  onClick={() => setShowChangeStatusModal(true)}
+                  data-testid="menu-change-status"
                 >
-                  <PlayCircle className="w-4 h-4 mr-2" />
-                  Take Off Bench
-                </Button>
-              )}
-            </div>
+                  Change Status
+                </DropdownMenuItem>
+                
+                {canComplete && (
+                  <DropdownMenuItem 
+                    onClick={() => setShowCompleteDialog(true)}
+                    disabled={completeMutation.isPending}
+                    data-testid="menu-complete"
+                    className="text-green-600 focus:text-green-600"
+                  >
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    Complete Project
+                  </DropdownMenuItem>
+                )}
+                
+                {user?.canBenchProjects && !project.isBenched && !project.completionStatus && !project.inactive && (
+                  <DropdownMenuItem 
+                    onClick={() => setShowBenchDialog(true)}
+                    disabled={benchMutation.isPending}
+                    data-testid="menu-move-to-bench"
+                    className="text-amber-600 focus:text-amber-600"
+                  >
+                    <PauseCircle className="w-4 h-4 mr-2" />
+                    Move to Bench
+                  </DropdownMenuItem>
+                )}
+                
+                {user?.canBenchProjects && project.isBenched && (
+                  <DropdownMenuItem 
+                    onClick={() => setShowUnbenchConfirm(true)}
+                    disabled={unbenchMutation.isPending}
+                    data-testid="menu-take-off-bench"
+                    className="text-amber-600 focus:text-amber-600"
+                  >
+                    <PlayCircle className="w-4 h-4 mr-2" />
+                    Take Off Bench
+                  </DropdownMenuItem>
+                )}
+                
+                {user?.canMakeProjectsInactive && !project.inactive && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem 
+                      onClick={() => setShowInactiveDialog(true)}
+                      data-testid="menu-make-inactive"
+                      className="text-red-600 focus:text-red-600"
+                    >
+                      <Ban className="w-4 h-4 mr-2" />
+                      Make Inactive
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
         
@@ -732,12 +708,10 @@ export default function ProjectDetail() {
       <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full" data-client-tabs="project">
           {/* Desktop Tabs - Centered */}
           <div className="hidden md:block mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8">
-            <TabsList className="grid w-full max-w-5xl grid-cols-5">
+            <TabsList className="grid w-full max-w-3xl grid-cols-3">
               <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
               <TabsTrigger value="messages" data-testid="tab-messages">Messages</TabsTrigger>
               <TabsTrigger value="queries" data-testid="tab-queries">Queries</TabsTrigger>
-              <TabsTrigger value="tasks" data-testid="tab-tasks">Internal Tasks</TabsTrigger>
-              <TabsTrigger value="progress-notes" data-testid="tab-progress-notes">Progress Notes</TabsTrigger>
             </TabsList>
           </div>
 
@@ -768,22 +742,6 @@ export default function ProjectDetail() {
               >
                 Queries
               </TabsTrigger>
-              <TabsTrigger 
-                value="tasks" 
-                data-testid="tab-tasks" 
-                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
-                style={{ width: '80vw' }}
-              >
-                Internal Tasks
-              </TabsTrigger>
-              <TabsTrigger 
-                value="progress-notes" 
-                data-testid="tab-progress-notes" 
-                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
-                style={{ width: '80vw' }}
-              >
-                Progress Notes
-              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -794,34 +752,44 @@ export default function ProjectDetail() {
                 {currentTab === "overview" && "Overview"}
                 {currentTab === "messages" && "Messages"}
                 {currentTab === "queries" && "Queries"}
-                {currentTab === "tasks" && "Internal Tasks"}
-                {currentTab === "progress-notes" && "Progress Notes"}
               </h2>
             </div>
           )}
 
           {isMobile ? (
             <SwipeableTabsWrapper
-              tabs={["overview", "messages", "queries", "tasks", "progress-notes"]}
+              tabs={["overview", "messages", "queries"]}
               currentTab={currentTab}
               onTabChange={setCurrentTab}
               enabled={true}
               dataAttribute="project"
             >
-              <TabsContent value="overview" className="mt-6">
-              <div className="mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8 space-y-6">
-                {/* Row 1: Full-width project info */}
-                <div className="bg-card border border-border rounded-lg p-6">
-                <ProjectInfo 
-                  project={project} 
-                  user={user} 
-                  currentStage={currentStage}
-                  currentAssignee={currentAssignee}
-                />
-              </div>
+              <TabsContent value="overview" className="mt-4">
+              <div className="mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8 space-y-4">
+                {/* Project header with client name and project type */}
+                <div className="bg-card border border-border rounded-lg p-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mb-3">
+                    <RouterLink to={`/clients/${project.clientId}`}>
+                      <h1 className="text-lg md:text-xl font-semibold tracking-tight text-foreground hover:text-primary cursor-pointer transition-colors" data-testid="text-client-name">
+                        {project.client?.name || 'Unknown Client'}
+                      </h1>
+                    </RouterLink>
+                    {project.projectType?.name && (
+                      <span className="text-base md:text-lg font-medium text-meta" data-testid="text-project-type">
+                        {project.projectType.name}
+                      </span>
+                    )}
+                  </div>
+                  <ProjectInfo 
+                    project={project} 
+                    user={user} 
+                    currentStage={currentStage}
+                    currentAssignee={currentAssignee}
+                  />
+                </div>
 
-                {/* Row 2: Full-width chronology */}
-                <div className="bg-card border border-border rounded-lg p-6">
+                {/* Chronology */}
+                <div className="bg-card border border-border rounded-lg p-4">
                   <ProjectChronology project={project} />
                 </div>
               </div>
@@ -840,203 +808,25 @@ export default function ProjectDetail() {
               clientName={project.client?.name}
             />
           </TabsContent>
-
-          <TabsContent value="tasks" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
-              {/* Internal Tasks Section */}
-              <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <CheckSquare className="w-5 h-5" />
-                    Internal Tasks
-                  </CardTitle>
-                  <CreateTaskDialog
-                    trigger={
-                      <Button
-                        variant="default"
-                        size="sm"
-                        data-testid="button-new-internal-task"
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Create Task
-                      </Button>
-                    }
-                    defaultConnections={{ projectId }}
-                  />
-                </div>
-              </CardHeader>
-              <CardContent>
-                {projectInternalTasksLoading ? (
-                  <div className="space-y-4">
-                    <Skeleton className="h-16 w-full" />
-                    <Skeleton className="h-16 w-full" />
-                  </div>
-                ) : !projectInternalTasks || projectInternalTasks.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-muted-foreground">No internal tasks for this project yet.</p>
-                  </div>
-                ) : (
-                  <>
-                    {/* Desktop Table */}
-                    <div className="hidden md:block border rounded-lg">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Title</TableHead>
-                            <TableHead>Type</TableHead>
-                            <TableHead>Priority</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Assigned To</TableHead>
-                            <TableHead>Created</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {projectInternalTasks.map((task: any) => (
-                            <TableRow key={task.id} data-testid={`row-internal-task-${task.id}`}>
-                              <TableCell className="font-medium">
-                                <RouterLink to={`/internal-tasks?task=${task.id}`}>
-                                  <button className="hover:underline text-left" data-testid={`link-task-${task.id}`}>
-                                    {task.title}
-                                  </button>
-                                </RouterLink>
-                              </TableCell>
-                              <TableCell className="text-sm">{task.taskType?.name || '-'}</TableCell>
-                              <TableCell>
-                                <Badge 
-                                  variant={
-                                    task.priority === 'urgent' ? 'destructive' :
-                                    task.priority === 'high' ? 'default' :
-                                    'secondary'
-                                  }
-                                  data-testid={`badge-priority-${task.id}`}
-                                >
-                                  {task.priority}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <Badge
-                                  variant={
-                                    task.status === 'closed' ? 'outline' :
-                                    task.status === 'in_progress' ? 'default' :
-                                    'secondary'
-                                  }
-                                  data-testid={`badge-status-${task.id}`}
-                                >
-                                  {task.status === 'in_progress' ? 'In Progress' : task.status}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-sm">
-                                {task.assignee ? `${task.assignee.firstName} ${task.assignee.lastName}` : 'Unassigned'}
-                              </TableCell>
-                              <TableCell className="text-sm text-muted-foreground">
-                                {format(new Date(task.createdAt), 'MMM d, yyyy')}
-                              </TableCell>
-                              <TableCell className="text-right">
-                                <RouterLink to={`/internal-tasks/${task.id}?from=project&projectId=${projectId}`}>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    data-testid={`button-view-task-${task.id}`}
-                                  >
-                                    View
-                                  </Button>
-                                </RouterLink>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-
-                    {/* Mobile Cards */}
-                    <div className="md:hidden space-y-3">
-                      {projectInternalTasks.map((task: any) => (
-                        <Card key={task.id} data-testid={`card-internal-task-${task.id}`}>
-                          <CardContent className="p-4">
-                            <div className="space-y-3">
-                              <div className="font-medium text-base">{task.title}</div>
-                              
-                              <div className="grid grid-cols-2 gap-2 text-sm">
-                                <div>
-                                  <span className="text-muted-foreground">Type:</span>
-                                  <p className="font-medium">{task.taskType?.name || '-'}</p>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Assigned To:</span>
-                                  <p className="font-medium">
-                                    {task.assignee ? `${task.assignee.firstName} ${task.assignee.lastName}` : 'Unassigned'}
-                                  </p>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Priority:</span>
-                                  <div className="mt-1">
-                                    <Badge 
-                                      variant={
-                                        task.priority === 'urgent' ? 'destructive' :
-                                        task.priority === 'high' ? 'default' :
-                                        'secondary'
-                                      }
-                                      data-testid={`badge-priority-${task.id}`}
-                                    >
-                                      {task.priority}
-                                    </Badge>
-                                  </div>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Status:</span>
-                                  <div className="mt-1">
-                                    <Badge
-                                      variant={
-                                        task.status === 'closed' ? 'outline' :
-                                        task.status === 'in_progress' ? 'default' :
-                                        'secondary'
-                                      }
-                                      data-testid={`badge-status-${task.id}`}
-                                    >
-                                      {task.status === 'in_progress' ? 'In Progress' : task.status}
-                                    </Badge>
-                                  </div>
-                                </div>
-                                <div className="col-span-2">
-                                  <span className="text-muted-foreground">Created:</span>
-                                  <p className="font-medium">{format(new Date(task.createdAt), 'MMM d, yyyy')}</p>
-                                </div>
-                              </div>
-
-                              <RouterLink to={`/internal-tasks/${task.id}?from=project&projectId=${projectId}`}>
-                                <Button
-                                  variant="outline"
-                                  className="w-full h-11"
-                                  data-testid={`button-view-task-${task.id}`}
-                                >
-                                  View Task
-                                </Button>
-                              </RouterLink>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="progress-notes" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
-            <ProjectProgressNotes 
-              projectId={projectId!} 
-              clientId={project?.clientId || ''} 
-              clientPeople={clientPeople}
-            />
-          </TabsContent>
             </SwipeableTabsWrapper>
           ) : (
             <>
-              <TabsContent value="overview" className="mt-6">
-                <div className="mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8 space-y-6">
-                  <div className="bg-card border border-border rounded-lg p-6">
+              <TabsContent value="overview" className="mt-4">
+                <div className="mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8 space-y-4">
+                  {/* Project header with client name and project type */}
+                  <div className="bg-card border border-border rounded-lg p-5">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mb-4">
+                      <RouterLink to={`/clients/${project.clientId}`}>
+                        <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-foreground hover:text-primary cursor-pointer transition-colors" data-testid="text-client-name">
+                          {project.client?.name || 'Unknown Client'}
+                        </h1>
+                      </RouterLink>
+                      {project.projectType?.name && (
+                        <span className="text-base md:text-lg font-medium text-meta" data-testid="text-project-type">
+                          {project.projectType.name}
+                        </span>
+                      )}
+                    </div>
                     <ProjectInfo 
                       project={project} 
                       user={user} 
@@ -1044,7 +834,7 @@ export default function ProjectDetail() {
                       currentAssignee={currentAssignee}
                     />
                   </div>
-                  <div className="bg-card border border-border rounded-lg p-6">
+                  <div className="bg-card border border-border rounded-lg p-5">
                     <ProjectChronology project={project} />
                   </div>
                 </div>
@@ -1061,119 +851,6 @@ export default function ProjectDetail() {
                   clientPeople={clientPeople}
                   user={user}
                   clientName={project.client?.name}
-                />
-              </TabsContent>
-
-              <TabsContent value="tasks" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
-                <Card>
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <CardTitle className="flex items-center gap-2">
-                          <CheckSquare className="w-5 h-5" />
-                          Internal Tasks
-                        </CardTitle>
-                        <Button
-                          onClick={() => setShowTaskModal(true)}
-                          size="sm"
-                          data-testid="button-create-task"
-                        >
-                          <Plus className="w-4 h-4 mr-2" />
-                          Create Task
-                        </Button>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      {projectInternalTasksLoading ? (
-                        <div className="space-y-4">
-                          {[1, 2, 3].map((i) => (
-                            <Skeleton key={i} className="h-20" />
-                          ))}
-                        </div>
-                      ) : projectInternalTasks && projectInternalTasks.length > 0 ? (
-                        <>
-                          <div className="text-sm text-muted-foreground mb-4">
-                            {projectInternalTasks.length} {projectInternalTasks.length === 1 ? 'task' : 'tasks'}
-                          </div>
-                          <div className="space-y-4">
-                            {projectInternalTasks.map((task) => (
-                              <Card key={task.id} className="hover:shadow-md transition-shadow">
-                                <CardContent className="p-4">
-                                  <div className="space-y-3">
-                                    <div className="flex items-start justify-between gap-4">
-                                      <div className="flex-1 space-y-1">
-                                        <div className="flex items-center gap-2">
-                                          <div className="font-medium text-base">{task.title}</div>
-                                          <Badge variant={
-                                            task.priority === 'urgent' ? 'destructive' :
-                                            task.priority === 'high' ? 'default' :
-                                            task.priority === 'medium' ? 'secondary' :
-                                            'outline'
-                                          } data-testid={`badge-priority-${task.id}`}>
-                                            {task.priority}
-                                          </Badge>
-                                          <Badge variant={
-                                            task.status === 'completed' ? 'default' :
-                                            task.status === 'in_progress' ? 'secondary' :
-                                            'outline'
-                                          } data-testid={`badge-status-${task.id}`}>
-                                            {task.status.replace('_', ' ')}
-                                          </Badge>
-                                        </div>
-                                        {task.description && (
-                                          <p className="text-sm text-muted-foreground line-clamp-2">
-                                            {task.description}
-                                          </p>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                                      {task.assignedTo && (
-                                        <div className="flex items-center gap-1" data-testid={`text-assigned-${task.id}`}>
-                                          <UserIcon className="w-3 h-3" />
-                                          <span>{task.assignedTo.firstName} {task.assignedTo.lastName}</span>
-                                        </div>
-                                      )}
-                                      {task.dueDate && (
-                                        <div className="flex items-center gap-1" data-testid={`text-due-${task.id}`}>
-                                          <Calendar className="w-3 h-3" />
-                                          <span>Due: {format(new Date(task.dueDate), 'MMM d, yyyy')}</span>
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    <div className="flex justify-end">
-                                      <RouterLink to={`/internal-tasks/${task.id}?from=project&projectId=${projectId}`}>
-                                        <Button
-                                          variant="outline"
-                                          className="w-full h-11"
-                                          data-testid={`button-view-task-${task.id}`}
-                                        >
-                                          View Task
-                                        </Button>
-                                      </RouterLink>
-                                    </div>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            ))}
-                          </div>
-                        </>
-                      ) : (
-                        <div className="text-center py-12 text-muted-foreground">
-                          <CheckSquare className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                          <p>No internal tasks for this project yet.</p>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-              </TabsContent>
-
-              <TabsContent value="progress-notes" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
-                <ProjectProgressNotes 
-                  projectId={projectId!} 
-                  clientId={project?.clientId || ''} 
-                  clientPeople={clientPeople}
                 />
               </TabsContent>
             </>
