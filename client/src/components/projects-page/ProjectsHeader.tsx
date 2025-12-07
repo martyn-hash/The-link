@@ -91,7 +91,7 @@ export function ProjectsHeader({
 }: ProjectsHeaderProps) {
   return (
     <header className="bg-card border-b border-border page-container py-6">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-center gap-4">
         <WorkspaceModeToggle
           workspaceMode={workspaceMode}
           setWorkspaceMode={setWorkspaceMode}
