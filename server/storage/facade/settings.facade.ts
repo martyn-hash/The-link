@@ -30,6 +30,10 @@ export function applySettingsFacade<TBase extends Constructor<SettingsFacadeDeps
       return this.userNotificationPreferencesStorage.getUserNotificationPreferences(userId);
     }
 
+    async getUserNotificationPreferencesForUsers(userIds: string[]) {
+      return this.userNotificationPreferencesStorage.getUserNotificationPreferencesForUsers(userIds);
+    }
+
     async createUserNotificationPreferences(preferences: any) {
       return this.userNotificationPreferencesStorage.createUserNotificationPreferences(preferences);
     }

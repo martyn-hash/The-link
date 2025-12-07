@@ -22,6 +22,9 @@ import { sendStageChangeNotificationEmail, sendBulkProjectAssignmentSummaryEmail
 import { z } from "zod";
 import { clientValueNotificationPreviewSchema, clientValueNotificationRecipientSchema } from "@shared/schema/notifications/schemas";
 import { processNotificationVariables, type NotificationVariableContext, type StageApprovalData } from "../../notification-variables";
+import { addBusinessHours } from "@shared/businessTime";
+import { isApplicationGraphConfigured } from "../../utils/applicationGraphClient";
+import { sendProjectStageChangeNotification } from "../../notification-template-service";
 
 export type ClientValueNotificationPreview = z.infer<typeof clientValueNotificationPreviewSchema>;
 export type ClientValueNotificationRecipient = z.infer<typeof clientValueNotificationRecipientSchema>;
@@ -187,8 +190,6 @@ export class StageChangeNotificationStorage {
       let formattedDueDate: string | undefined = undefined;
       
       if (chronologyForEmail && chronologyForEmail.length > 0 && stageConfigForEmail.maxInstanceTime) {
-        const { addBusinessHours } = await import('@shared/businessTime');
-        
         const sortedChronology = [...chronologyForEmail].sort((a, b) => 
           new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         );
@@ -378,7 +379,6 @@ export class StageChangeNotificationStorage {
 
       // Check if the user has email access enabled by admin (tenant-wide Microsoft 365 access)
       // Also check if Microsoft Graph is configured at the application level
-      const { isApplicationGraphConfigured } = await import('../../utils/applicationGraphClient');
       const senderHasOutlook = !!sendingUser.accessEmail && isApplicationGraphConfigured();
       const senderEmail = sendingUser.email || null;
 
@@ -404,7 +404,6 @@ export class StageChangeNotificationStorage {
 
       let formattedDueDate: string | undefined = undefined;
       if (newStage?.maxInstanceTime) {
-        const { addBusinessHours } = await import('@shared/businessTime');
         const chronologyForEmail = chronologyEntries.map((entry: any) => ({
           toStatus: entry.toStatus,
           timestamp: entry.timestamp instanceof Date ? entry.timestamp.toISOString() : entry.timestamp,
@@ -781,13 +780,9 @@ export class StageChangeNotificationStorage {
       console.log(`Stage change notifications for project ${projectId}: ${successful} successful, ${failed} failed`);
 
       try {
-        const { sendProjectStageChangeNotification } = await import('../../notification-template-service');
-        
         let formattedDueDate: string | undefined = undefined;
         
         if (chronologyForEmail && chronologyForEmail.length > 0) {
-          const { addBusinessHours } = await import('@shared/businessTime');
-          
           const sortedChronology = [...chronologyForEmail].sort((a, b) => 
             new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
           );

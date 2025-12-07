@@ -7,7 +7,7 @@ import {
   reasonCustomFields,
   reasonFieldResponses,
 } from '@shared/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import type {
   Project,
   UpdateProjectStatus,
@@ -78,13 +78,26 @@ export class ProjectStatusStorage {
       throw new Error(stageReasonValidation.reason || "Invalid stage-reason mapping");
     }
 
+    let validatedCustomFields: Map<string, typeof reasonCustomFields.$inferSelect> = new Map();
+    
     if (update.fieldResponses && update.fieldResponses.length > 0) {
-      for (const fieldResponse of update.fieldResponses) {
-        const [customField] = await db.select().from(reasonCustomFields).where(eq(reasonCustomFields.id, fieldResponse.customFieldId));
-        if (!customField) {
-          throw new Error(`Custom field with ID '${fieldResponse.customFieldId}' not found`);
-        }
+      const fieldIds = update.fieldResponses.map(fr => fr.customFieldId);
+      const customFields = await db
+        .select()
+        .from(reasonCustomFields)
+        .where(inArray(reasonCustomFields.id, fieldIds));
+      
+      const customFieldsMap = new Map(customFields.map(cf => [cf.id, cf]));
+      
+      const invalidFieldIds = fieldIds.filter(id => !customFieldsMap.has(id));
+      if (invalidFieldIds.length > 0) {
+        throw new Error(`Custom field(s) with ID '${invalidFieldIds.join(', ')}' not found`);
+      }
+      
+      validatedCustomFields = customFieldsMap;
 
+      for (const fieldResponse of update.fieldResponses) {
+        const customField = customFieldsMap.get(fieldResponse.customFieldId)!;
         const { fieldType, options } = customField;
         
         const hasNumber = fieldResponse.valueNumber !== undefined && fieldResponse.valueNumber !== null;
@@ -217,13 +230,12 @@ export class ProjectStatusStorage {
       chronologyEntryId = chronologyEntry.id;
 
       if (update.fieldResponses && update.fieldResponses.length > 0) {
-        for (const fieldResponse of update.fieldResponses) {
-          const [customField] = await tx.select().from(reasonCustomFields).where(eq(reasonCustomFields.id, fieldResponse.customFieldId));
+        const fieldResponseRecords = update.fieldResponses.map(fieldResponse => {
+          const customField = validatedCustomFields.get(fieldResponse.customFieldId);
           if (!customField) {
-            throw new Error(`Custom field with ID '${fieldResponse.customFieldId}' not found`);
+            throw new Error(`Custom field with ID '${fieldResponse.customFieldId}' not found in validated fields`);
           }
-          
-          await tx.insert(reasonFieldResponses).values({
+          return {
             chronologyId: chronologyEntry.id,
             customFieldId: fieldResponse.customFieldId,
             fieldType: customField.fieldType,
@@ -231,8 +243,10 @@ export class ProjectStatusStorage {
             valueShortText: fieldResponse.valueShortText,
             valueLongText: fieldResponse.valueLongText,
             valueMultiSelect: fieldResponse.valueMultiSelect,
-          });
-        }
+          };
+        });
+        
+        await tx.insert(reasonFieldResponses).values(fieldResponseRecords);
       }
 
       const [updatedProject] = await tx

@@ -390,6 +390,7 @@ export interface IStorage {
   getValidMagicLinkTokensForUser(userId: string): Promise<MagicLinkToken[]>;
   
   getUserNotificationPreferences(userId: string): Promise<UserNotificationPreferences | undefined>;
+  getUserNotificationPreferencesForUsers(userIds: string[]): Promise<Map<string, UserNotificationPreferences>>;
   createUserNotificationPreferences(preferences: InsertUserNotificationPreferences): Promise<UserNotificationPreferences>;
   updateUserNotificationPreferences(userId: string, preferences: UpdateUserNotificationPreferences): Promise<UserNotificationPreferences>;
   getOrCreateDefaultNotificationPreferences(userId: string): Promise<UserNotificationPreferences>;

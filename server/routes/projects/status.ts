@@ -1,6 +1,8 @@
 import type { Express } from "express";
 import { storage } from "../../storage/index";
 import { updateProjectStatusSchema } from "@shared/schema";
+import { sendStageChangeNotificationEmail } from "../../emailService";
+import { handleProjectStageChangeForNotifications } from "../../notification-scheduler";
 
 export function registerProjectStatusRoutes(
   app: Express,
@@ -227,44 +229,64 @@ export function registerProjectStatusRoutes(
         notificationType: 'client' as const
       });
 
+      const backgroundContext = {
+        stageId: targetStage.id,
+        stageName: targetStage.name,
+        stageAssignedUserId: targetStage.assignedUserId,
+        stageAssignedWorkRoleId: targetStage.assignedWorkRoleId,
+        stageMaxInstanceTime: targetStage.maxInstanceTime,
+        projectId: updatedProject.id,
+        projectDescription: project.description,
+        projectClientId: project.clientId,
+        projectClientName: project.client?.name || 'Unknown Client',
+        projectTypeId: project.projectTypeId,
+        projectCreatedAt: project.createdAt?.toISOString(),
+        previousStatus: project.currentStatus,
+        previousAssigneeId: project.currentAssigneeId,
+        newStatus: updateData.newStatus,
+        changeReason: updateData.changeReason,
+        notes: updateData.notesHtml || updateData.notes,
+        attachments: updateData.attachments,
+      };
+
       setImmediate(async () => {
         try {
-          const { sendStageChangeNotificationEmail } = await import("../../emailService");
+          let usersToNotify: any[] = [];
           
-          const newStage = await storage.getStageById(targetStage.id);
-          if (!newStage) {
-            console.warn(`[Stage Change Email] Stage ${targetStage.id} not found`);
-          } else {
-            let usersToNotify: any[] = [];
-            
-            if (newStage.assignedUserId) {
-              const assignedUser = await storage.getUser(newStage.assignedUserId);
-              if (assignedUser) {
-                usersToNotify = [assignedUser];
-              }
-            } else if (newStage.assignedWorkRoleId) {
-              const workRole = await storage.getWorkRoleById(newStage.assignedWorkRoleId);
-              if (workRole) {
-                const roleAssignment = await storage.resolveRoleAssigneeForClient(
-                  project.clientId,
-                  project.projectTypeId,
-                  workRole.name
-                );
-                if (roleAssignment) {
-                  usersToNotify = [roleAssignment];
-                }
+          if (backgroundContext.stageAssignedUserId) {
+            const assignedUser = await storage.getUser(backgroundContext.stageAssignedUserId);
+            if (assignedUser) {
+              usersToNotify = [assignedUser];
+            }
+          } else if (backgroundContext.stageAssignedWorkRoleId) {
+            const workRole = await storage.getWorkRoleById(backgroundContext.stageAssignedWorkRoleId);
+            if (workRole) {
+              const roleAssignment = await storage.resolveRoleAssigneeForClient(
+                backgroundContext.projectClientId,
+                backgroundContext.projectTypeId,
+                workRole.name
+              );
+              if (roleAssignment) {
+                usersToNotify = [roleAssignment];
               }
             }
+          }
 
-            const previousAssigneeId = project.currentAssigneeId;
+          if (usersToNotify.length === 0) {
+            console.log(`[Stage Change Email] No users to notify for stage ${backgroundContext.stageName}`);
+          } else {
+            const userIds = usersToNotify.map(u => u.id);
+            const allPreferences = await storage.getUserNotificationPreferencesForUsers(userIds);
+            
+            let chronology: any[] | null = null;
             
             for (const user of usersToNotify) {
-              if (user.id === previousAssigneeId) {
+              if (user.id === backgroundContext.previousAssigneeId) {
                 console.log(`[Stage Change Email] User ${user.email} is same as previous assignee, skipping email notification`);
                 continue;
               }
               
-              const preferences = await storage.getUserNotificationPreferences(user.id);
+              const preferences = allPreferences.get(user.id);
               const notifyStageChanges = preferences?.notifyStageChanges ?? true;
 
               if (!notifyStageChanges) {
@@ -277,46 +299,44 @@ export function registerProjectStatusRoutes(
                 continue;
               }
 
-              const projectWithDetails = await storage.getProject(updatedProject.id);
-              if (!projectWithDetails) {
-                console.warn(`[Stage Change Email] Project ${updatedProject.id} not found`);
-                continue;
-              }
-
               const userName = user.firstName && user.lastName 
                 ? `${user.firstName} ${user.lastName}` 
                 : user.email;
 
-              const stageConfig = newStage.maxInstanceTime ? { maxInstanceTime: newStage.maxInstanceTime } : undefined;
-              const chronology = await storage.getProjectChronology(updatedProject.id);
-              const notesForEmail = updateData.notesHtml || updateData.notes;
+              const stageConfig = backgroundContext.stageMaxInstanceTime 
+                ? { maxInstanceTime: backgroundContext.stageMaxInstanceTime } 
+                : undefined;
+              
+              if (!chronology) {
+                chronology = await storage.getProjectChronology(backgroundContext.projectId);
+              }
               
               const emailSent = await sendStageChangeNotificationEmail(
                 user.email,
                 userName,
-                projectWithDetails.description || 'Untitled Project',
-                projectWithDetails.client?.name || 'Unknown Client',
-                updateData.newStatus,
-                project.currentStatus,
-                updatedProject.id,
+                backgroundContext.projectDescription || 'Untitled Project',
+                backgroundContext.projectClientName,
+                backgroundContext.newStatus,
+                backgroundContext.previousStatus,
+                backgroundContext.projectId,
                 stageConfig,
                 chronology
-                  .filter(c => c.timestamp !== null)
-                  .map(c => ({ 
+                  .filter((c: any) => c.timestamp !== null)
+                  .map((c: any) => ({ 
                     toStatus: c.toStatus, 
                     timestamp: c.timestamp!.toISOString() 
                   })),
-                projectWithDetails.createdAt?.toISOString(),
-                updateData.changeReason,
-                notesForEmail,
+                backgroundContext.projectCreatedAt,
+                backgroundContext.changeReason,
+                backgroundContext.notes,
                 undefined,
-                updateData.attachments
+                backgroundContext.attachments
               );
 
               if (emailSent) {
-                console.log(`[Stage Change Email] Sent to ${user.email} for project ${updatedProject.id}`);
+                console.log(`[Stage Change Email] Sent to ${user.email} for project ${backgroundContext.projectId}`);
               } else {
-                console.warn(`[Stage Change Email] Failed to send to ${user.email} for project ${updatedProject.id}`);
+                console.warn(`[Stage Change Email] Failed to send to ${user.email} for project ${backgroundContext.projectId}`);
               }
             }
           }
@@ -325,16 +345,12 @@ export function registerProjectStatusRoutes(
         }
 
         try {
-          const { handleProjectStageChangeForNotifications, getStageIdByName } = await import("../../notification-scheduler");
-          const newStageId = await getStageIdByName(project.projectTypeId, updateData.newStatus);
-          if (newStageId) {
-            const { suppressed, reactivated } = await handleProjectStageChangeForNotifications(
-              updatedProject.id,
-              newStageId
-            );
-            if (suppressed > 0 || reactivated > 0) {
-              console.log(`[Stage Change Notifications] Project ${updatedProject.id}: ${suppressed} suppressed, ${reactivated} reactivated`);
-            }
+          const { suppressed, reactivated } = await handleProjectStageChangeForNotifications(
+            backgroundContext.projectId,
+            backgroundContext.stageId
+          );
+          if (suppressed > 0 || reactivated > 0) {
+            console.log(`[Stage Change Notifications] Project ${backgroundContext.projectId}: ${suppressed} suppressed, ${reactivated} reactivated`);
           }
         } catch (notificationError) {
           console.error("[Stage Change Notifications] Error handling notification suppression/reactivation:", notificationError);

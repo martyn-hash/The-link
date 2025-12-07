@@ -1,4 +1,4 @@
-import { eq, and, not, isNull } from 'drizzle-orm';
+import { eq, and, not, isNull, inArray } from 'drizzle-orm';
 import { db } from '../../db';
 import {
   userNotificationPreferences,
@@ -16,6 +16,17 @@ export class UserNotificationPreferencesStorage {
       .from(userNotificationPreferences)
       .where(eq(userNotificationPreferences.userId, userId));
     return preferences;
+  }
+
+  async getUserNotificationPreferencesForUsers(userIds: string[]): Promise<Map<string, UserNotificationPreferences>> {
+    if (userIds.length === 0) {
+      return new Map();
+    }
+    const preferences = await db
+      .select()
+      .from(userNotificationPreferences)
+      .where(inArray(userNotificationPreferences.userId, userIds));
+    return new Map(preferences.map(p => [p.userId, p]));
   }
 
   async createUserNotificationPreferences(preferences: InsertUserNotificationPreferences): Promise<UserNotificationPreferences> {
