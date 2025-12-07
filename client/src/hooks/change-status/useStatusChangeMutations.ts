@@ -27,6 +27,7 @@ interface StatusChangeData {
 
 interface UpdateStatusSuccessContext {
   clientNotificationPreview?: ClientValueNotificationPreview;
+  staffNotificationPreview?: StageChangeNotificationPreview;
   notificationType?: 'client' | 'staff';
 }
 
@@ -121,8 +122,9 @@ export function useStatusChangeMutations({
       resetFormState?.();
 
       onStatusUpdateSuccess?.({
-        clientNotificationPreview: clientPreview,
-        notificationType: type === 'client' ? 'client' : undefined,
+        clientNotificationPreview: type === 'client' ? clientPreview : undefined,
+        staffNotificationPreview: type === 'staff' ? (data.notificationPreview as StageChangeNotificationPreview | undefined) : undefined,
+        notificationType: type === 'client' ? 'client' : type === 'staff' ? 'staff' : undefined,
       });
     },
     onError: (error: any, _variables, context) => {

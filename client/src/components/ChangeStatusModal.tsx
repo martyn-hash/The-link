@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { useStageChangeConfig } from "@/hooks/change-status/useStageChangeConfig";
+import { useStatusChangeMutations } from "@/hooks/change-status/useStatusChangeMutations";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
@@ -405,125 +406,37 @@ export default function ChangeStatusModal({
     }
   }, [changeReason, selectedReasonObj]);
 
-  // Mutation for submitting stage approval responses
-  const submitApprovalResponsesMutation = useMutation({
-    mutationFn: async (responses: InsertStageApprovalResponse[]) => {
-      return await apiRequest("POST", `/api/projects/${project.id}/stage-approval-responses`, {
-        responses,
-      });
-    },
-    onSuccess: () => {
-      // After successful approval submission, proceed with status change
-      updateStatusMutation.mutate({
-        newStatus,
-        changeReason,
-        stageId: selectedStage?.id,
-        reasonId: selectedReasonObj?.id,
-        notesHtml: notesHtml.trim() || undefined,
-        attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
-        fieldResponses: formatFieldResponses(),
-      });
-    },
-    onError: (error: any) => {
-      showFriendlyError({ error });
-    },
-  });
-
-  const updateStatusMutation = useMutation({
-    mutationFn: async (data: {
-      newStatus: string;
-      changeReason: string;
-      stageId?: string;
-      reasonId?: string;
-      notesHtml?: string;
-      attachments?: Array<{
-        fileName: string;
-        fileSize: number;
-        fileType: string;
-        objectPath: string;
-      }>;
-      fieldResponses?: Array<{
-        customFieldId: string;
-        fieldType: "number" | "short_text" | "long_text" | "multi_select";
-        valueNumber?: number;
-        valueShortText?: string;
-        valueLongText?: string;
-        valueMultiSelect?: string[];
-      }>;
-    }) => {
-      return await apiRequest("PATCH", `/api/projects/${project.id}/status`, data);
-    },
-    onMutate: async (data) => {
-      // Cancel any outgoing refetches to avoid overwriting optimistic update
-      await queryClient.cancelQueries({ queryKey: ["/api/projects"] });
-
-      // Snapshot the previous value
-      const previousProjects = queryClient.getQueryData(["/api/projects"]);
-
-      // Optimistically update the project status in cache
-      queryClient.setQueryData(["/api/projects"], (old: any) => {
-        if (!old || !Array.isArray(old)) return old;
-        
-        return old.map((p: any) => 
-          p.id === project.id 
-            ? { ...p, currentStatus: data.newStatus }
-            : p
-        );
-      });
-
-      // Return context with previous data for rollback
-      return { previousProjects };
-    },
-    onSuccess: async (data: any) => {
-      // Handle response format: { project, clientNotificationPreview, notificationType }
-      const updatedProject = data.project || data;
-      const clientPreview = data.clientNotificationPreview;
-      const type = data.notificationType;
-
-      // If there are pending queries, create them
-      if (pendingQueries.length > 0) {
-        try {
-          // Create each query
-          for (const query of pendingQueries) {
-            if (query.description || query.ourQuery) {
-              await apiRequest("POST", `/api/projects/${project.id}/queries`, {
-                projectId: project.id,
-                date: query.date?.toISOString() || null,
-                description: query.description || null,
-                moneyIn: query.moneyIn ? query.moneyIn : null,
-                moneyOut: query.moneyOut ? query.moneyOut : null,
-                ourQuery: query.ourQuery || "",
-                status: "open",
-              });
-            }
-          }
-          toast({
-            title: "Success",
-            description: `Stage updated and ${pendingQueries.length} ${pendingQueries.length === 1 ? 'query' : 'queries'} created`,
-          });
-        } catch (error) {
-          console.error("Failed to create queries:", error);
-          toast({
-            title: "Stage Updated",
-            description: "Stage was updated but some queries failed to create",
-            variant: "destructive",
-          });
-        }
-      } else {
-        // ALWAYS show success immediately - stage change is committed
-        toast({
-          title: "Success",
-          description: "Stage updated successfully",
-        });
-      }
-      
-      // Refresh data immediately so user sees the change
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id, "queries"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/queries/counts"] });
+  // Status change mutations from custom hook
+  const mutations = useStatusChangeMutations({
+    projectId: project.id,
+    onStatusUpdateSuccess: (context) => {
       onStatusUpdated?.();
-      
-      // Reset form state - stage change is complete
+      if (context.clientNotificationPreview && context.notificationType === 'client') {
+        setClientNotificationPreview(context.clientNotificationPreview);
+        setNotificationType('client');
+        setShowNotificationModal(true);
+      } else if (context.staffNotificationPreview && context.notificationType === 'staff') {
+        setNotificationPreview(context.staffNotificationPreview);
+        setNotificationType('staff');
+        setShowNotificationModal(true);
+      } else {
+        onClose();
+      }
+    },
+    onClientNotificationSuccess: () => {
+      setShowNotificationModal(false);
+      setClientNotificationPreview(null);
+      setNotificationType(null);
+      onClose();
+    },
+    onStaffNotificationSuccess: () => {
+      setShowNotificationModal(false);
+      setNotificationPreview(null);
+      setNotificationType(null);
+      onClose();
+    },
+    getPendingQueries: () => pendingQueries,
+    resetFormState: () => {
       setNewStatus("");
       setChangeReason("");
       setNotesHtml("");
@@ -533,112 +446,9 @@ export default function ChangeStatusModal({
       setPendingQueries([]);
       setSelectedFiles([]);
       setUploadedAttachments([]);
-
-      if (clientPreview && type === 'client') {
-        // Show client notification approval modal AFTER confirming stage change
-        // Closing this modal will NOT affect the stage change
-        setClientNotificationPreview(clientPreview);
-        setNotificationType('client');
-        setShowNotificationModal(true);
-      } else {
-        // No notification to send, close the modal
-        onClose();
-      }
     },
-    onError: (error: any, _variables, context) => {
-      // Rollback to previous state on error
-      if (context?.previousProjects) {
-        queryClient.setQueryData(["/api/projects"], context.previousProjects);
-      }
-      showFriendlyError({ error });
-    },
-  });
-
-  // Mutation for sending client value notification after user approval
-  const sendClientNotificationMutation = useMutation({
-    mutationFn: async (data: {
-      emailSubject: string;
-      emailBody: string;
-      suppress: boolean;
-      sendEmail: boolean;
-      sendSms: boolean;
-      smsBody: string | null;
-      emailRecipientIds: string[];
-      smsRecipientIds: string[];
-    }) => {
-      if (!clientNotificationPreview) throw new Error("No client notification preview available");
-      
-      return await apiRequest("POST", `/api/projects/${project.id}/send-client-value-notification`, {
-        projectId: project.id,
-        dedupeKey: clientNotificationPreview.dedupeKey,
-        ...data,
-      });
-    },
-    onSuccess: (data: any) => {
-      const wasSent = !data.suppress && data.sent;
-      
-      if (wasSent) {
-        toast({
-          title: "Notification sent",
-          description: "Client contacts have been notified of the stage change",
-        });
-      }
-      // If suppressed, no need for another toast - stage success was already shown
-      
-      // Close notification modal and main modal
-      setShowNotificationModal(false);
-      setClientNotificationPreview(null);
-      setNotificationType(null);
-      onClose();
-    },
-    onError: (error: any) => {
-      showFriendlyError({ error });
-    },
-  });
-
-  // Legacy mutation for sending internal staff stage change notification (kept for compatibility)
-  const sendNotificationMutation = useMutation({
-    mutationFn: async (data: {
-      emailSubject: string;
-      emailBody: string;
-      pushTitle: string | null;
-      pushBody: string | null;
-      suppress: boolean;
-      sendEmail: boolean;
-      sendPush: boolean;
-      sendSms: boolean;
-      smsBody: string | null;
-      emailRecipientIds: string[];
-      pushRecipientIds: string[];
-      smsRecipientIds: string[];
-    }) => {
-      if (!notificationPreview) throw new Error("No notification preview available");
-      
-      return await apiRequest("POST", `/api/projects/${project.id}/send-stage-change-notification`, {
-        projectId: project.id,
-        dedupeKey: notificationPreview.dedupeKey,
-        ...data,
-      });
-    },
-    onSuccess: (data: any) => {
-      const wasSent = !data.suppress && data.sent;
-      
-      if (wasSent) {
-        toast({
-          title: "Notification sent",
-          description: "Staff has been notified of the stage change",
-        });
-      }
-      // If suppressed, no need for another toast - stage success was already shown
-      
-      // Close notification modal and main modal
-      setShowNotificationModal(false);
-      setNotificationPreview(null);
-      onClose();
-    },
-    onError: (error: any) => {
-      showFriendlyError({ error });
-    },
+    notificationPreview,
+    clientNotificationPreview,
   });
 
   const getAvailableStatuses = () => {
@@ -815,10 +625,21 @@ export default function ChangeStatusModal({
           return false;
         });
 
-      submitApprovalResponsesMutation.mutate(responses);
+      mutations.submitApprovalResponses.mutate({
+        responses,
+        statusData: {
+          newStatus,
+          changeReason,
+          stageId: selectedStage?.id,
+          reasonId: selectedReasonObj?.id,
+          notesHtml: notesHtml.trim() || undefined,
+          attachments: uploadedAttachments.length > 0 ? uploadedAttachments : undefined,
+          fieldResponses: formatFieldResponses(),
+        },
+      });
     } else {
       // No stage approval required, proceed with normal status change
-      updateStatusMutation.mutate({
+      mutations.updateStatus.mutate({
         newStatus,
         changeReason,
         stageId: selectedStage?.id,
@@ -915,7 +736,7 @@ export default function ChangeStatusModal({
 
   const availableStatuses = getAvailableStatuses();
   const isSubmitting =
-    updateStatusMutation.isPending || submitApprovalResponsesMutation.isPending || isUploadingFiles;
+    mutations.updateStatus.isPending || mutations.submitApprovalResponses.isPending || isUploadingFiles;
 
   // Handle closing the entire modal (both stage change and notification)
   const handleFullClose = () => {
@@ -998,10 +819,10 @@ export default function ChangeStatusModal({
               preview={clientNotificationPreview}
               projectId={project.id}
               onSend={async (editedData) => {
-                await sendClientNotificationMutation.mutateAsync(editedData);
+                await mutations.sendClientNotification.mutateAsync(editedData);
               }}
               onClose={handleFullClose}
-              isSending={sendClientNotificationMutation.isPending}
+              isSending={mutations.sendClientNotification.isPending}
               senderName={getSenderName(user)}
               onAiRefine={async (prompt, currentSubject, currentBody, context) => {
                 const response = await fetch("/api/ai/refine-email", {
@@ -1037,10 +858,10 @@ export default function ChangeStatusModal({
               preview={notificationPreview}
               projectId={project.id}
               onSend={async (editedData) => {
-                await sendNotificationMutation.mutateAsync(editedData);
+                await mutations.sendStaffNotification.mutateAsync(editedData);
               }}
               onClose={handleFullClose}
-              isSending={sendNotificationMutation.isPending}
+              isSending={mutations.sendStaffNotification.isPending}
               senderName={getSenderName(user)}
             />
           </>
