@@ -91,3 +91,26 @@ Neon database configuration recommendations for production include disabling aut
 ### Frontend Libraries
 -   **UI Components**: `@radix-ui/*`, `@dnd-kit/*`, `@tiptap/*`, `react-hook-form` with `zod`, `sonner`.
 -   **Utilities**: `date-fns`, `clsx`, `tailwind-merge`, `@getaddress/autocomplete`.
+
+### Projects Page Architecture (Refactored)
+The Projects page (`client/src/pages/projects.tsx`) has been refactored into modular hooks and components for better maintainability. The main file is now 270 lines (reduced from 2,507 lines).
+
+**Hooks** (`client/src/hooks/projects-page/`):
+- `useProjectsData.ts` - Data fetching with useQuery for projects, users, services
+- `useProjectFiltering.ts` - Project filtering logic and state
+- `useProjectsUrlSync.ts` - URL synchronization for filters
+- `useProjectsMutations.ts` - All mutation operations (create/update/delete)
+- `useViewManagement.ts` - Saved views load/save handlers
+- `useDashboardManagement.ts` - Dashboard CRUD and state management
+- `useProjectsPageState.ts` - Main state coordinator that combines all hooks
+
+**Components** (`client/src/components/projects-page/`):
+- `ProjectsHeader.tsx` - Toolbar, view mode buttons, filters toolbar
+- `ProjectsContent.tsx` - Main content area showing projects
+- `modals/CreateDashboardModal.tsx` - Dashboard creation/editing modal
+- `modals/AddWidgetDialog.tsx` - Widget type selection dialog
+- `modals/SaveViewDialog.tsx` - Save view dialog
+- `modals/DeleteConfirmDialogs.tsx` - Confirmation dialogs for deletion
+
+**Types** (`client/src/types/projects-page.ts`):
+- Shared types for Widget, Dashboard, CalendarSettings, etc.
