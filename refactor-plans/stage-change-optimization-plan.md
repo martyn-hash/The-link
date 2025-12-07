@@ -1,9 +1,59 @@
 # Stage-Change Optimization Plan
 
 **Created:** December 7, 2025  
-**Status:** Wave 3 Complete ✓  
+**Status:** Wave 4 Complete ✓  
 **Based on:** `stage-change-pressure-analysis.md`  
 **Considers:** Bookkeeping Queries Feature Integration
+
+---
+
+## Wave 4 Completion Summary (December 7, 2025)
+
+### Tasks Completed
+
+1. **TTL Cache Utility** - `server/utils/ttlCache.ts`
+   - Created generic TTLCache class with configurable TTL and automatic cleanup
+   - Tracks hits, misses, and cache size for monitoring
+   - Methods: get, set, invalidate, invalidateByPrefix, invalidateAll, getStats, getHitRate
+   - Automatic cleanup every 60 seconds for expired entries
+   - Logging with [Cache:${name}] prefix for debugging
+
+2. **Stage Config Caching** - `server/routes/projects/status.ts`
+   - Created `getStageConfigForProjectType()` function with 5-minute TTL cache
+   - Caches: stages, reasons, stageApprovals, stageApprovalFields, stageReasonMap, reasonCustomFieldsMap
+   - Cache key: `projectType:{projectTypeId}`
+   - Updated `/api/projects/:id/stage-change-config` to use cached function
+   - **Reduction:** 4-6 queries on cache hit → 0 queries (cache hit)
+
+3. **Cache Invalidation** - `server/routes/config.ts`
+   - Comprehensive invalidation on all config mutations:
+     - Stage create/update/delete → invalidate by projectTypeId
+     - Change reason create/update/delete → invalidate all
+     - Stage-reason mapping changes → invalidate all
+     - Custom field create/update/delete → invalidate by projectTypeId
+     - Stage approval create/update/delete → invalidate by projectTypeId
+     - Stage approval field create/update/delete → invalidate all
+   - Helper function `invalidateStageConfigCache(projectTypeId?)` for consistent invalidation
+
+4. **Admin Monitoring Endpoints** - `server/routes/projects/status.ts`
+   - GET /api/admin/cache-stats - View cache statistics (hits, misses, size, hitRatePercent)
+   - POST /api/admin/cache-invalidate - Manually invalidate cache (by projectTypeId or all)
+   - Both endpoints require admin authentication
+
+### Files Modified
+- `server/utils/ttlCache.ts` - New TTL cache utility
+- `server/routes/projects/status.ts` - Stage config caching + admin endpoints
+- `server/routes/config.ts` - Cache invalidation on all config mutations
+
+### Testing & Verification
+- E2E test confirmed: First request MISS, second request HIT
+- Cache stats endpoint shows accurate metrics (50% hit rate in test)
+- Architect review passed (after adding missing stage approval invalidations)
+
+### Estimated Improvement
+- **Cache hit rate (expected in production):** 80-90% for stage config requests
+- **Queries saved per cache hit:** 4-6 queries
+- **Cumulative reduction (Waves 1-4):** 60-70% DB operations, sub-300ms response
 
 ---
 
