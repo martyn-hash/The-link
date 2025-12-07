@@ -34,6 +34,7 @@ export const projects = pgTable("projects", {
   benchReason: benchReasonEnum("bench_reason"),
   benchReasonOtherText: text("bench_reason_other_text"),
   preBenchStatus: varchar("pre_bench_status"),
+  useVoiceAiForQueries: boolean("use_voice_ai_for_queries").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [

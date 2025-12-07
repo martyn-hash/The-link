@@ -407,8 +407,9 @@ async function sendSMSReminder(
 }
 
 /**
- * Get Dialora webhook configuration for a project type
- * Cycles through active webhooks based on reminder count for the token
+ * Get Dialora webhook configuration for a project
+ * Checks if voice AI is enabled for the project, then cycles through 
+ * active webhooks from the project type based on reminder count
  */
 async function getDialoraWebhookConfig(
   projectId: string,
@@ -416,12 +417,20 @@ async function getDialoraWebhookConfig(
 ): Promise<DialoraWebhookConfig | null> {
   try {
     const project = await db
-      .select({ projectTypeId: projects.projectTypeId })
+      .select({ 
+        projectTypeId: projects.projectTypeId,
+        useVoiceAiForQueries: projects.useVoiceAiForQueries
+      })
       .from(projects)
       .where(eq(projects.id, projectId))
       .limit(1);
 
     if (!project[0]?.projectTypeId) return null;
+    
+    if (!project[0].useVoiceAiForQueries) {
+      console.log(`[QueryReminder] Voice AI not enabled for project ${projectId}`);
+      return null;
+    }
 
     const projectType = await db
       .select({ dialoraSettings: projectTypes.dialoraSettings })
@@ -430,7 +439,10 @@ async function getDialoraWebhookConfig(
       .limit(1);
 
     const settings = projectType[0]?.dialoraSettings as DialoraSettings | null;
-    if (!settings?.outboundWebhooks?.length) return null;
+    if (!settings?.outboundWebhooks?.length) {
+      console.log(`[QueryReminder] No webhooks configured for project type, voice AI disabled for project ${projectId}`);
+      return null;
+    }
 
     const activeWebhooks = settings.outboundWebhooks.filter(w => w.active);
     if (activeWebhooks.length === 0) return null;
@@ -471,10 +483,17 @@ async function sendVoiceReminder(
   clientName: string,
   pendingQueries: number,
   totalQueries: number,
-  webhookConfig?: DialoraWebhookConfig | null
+  webhookConfig: DialoraWebhookConfig | null
 ): Promise<ReminderSendResult> {
   try {
-    const message = webhookConfig?.messageTemplate || 
+    if (!webhookConfig?.url) {
+      return {
+        success: false,
+        error: 'No voice AI webhook configured for this project'
+      };
+    }
+
+    const message = webhookConfig.messageTemplate || 
       generateVoiceCallMessage(recipientName, pendingQueries, totalQueries);
     
     const result = await triggerDialoraCall(
@@ -486,7 +505,7 @@ async function sendVoiceReminder(
         message,
         querycount: pendingQueries
       },
-      webhookConfig || undefined
+      webhookConfig
     );
 
     return {

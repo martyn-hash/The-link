@@ -257,6 +257,87 @@ export function registerProjectCoreRoutes(
     }
   });
 
+  // GET /api/projects/:id/voice-ai-status - Get voice AI availability for a project
+  app.get("/api/projects/:id/voice-ai-status", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const project = await storage.getProject(req.params.id);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      const projectType = await storage.getProjectTypeById(project.projectTypeId);
+      const dialoraSettings = projectType?.dialoraSettings as any;
+      const hasWebhooksConfigured = dialoraSettings?.outboundWebhooks?.some((w: any) => w.active) ?? false;
+
+      res.json({
+        useVoiceAiForQueries: project.useVoiceAiForQueries ?? false,
+        hasWebhooksConfigured,
+        isVoiceAvailable: (project.useVoiceAiForQueries ?? false) && hasWebhooksConfigured,
+      });
+    } catch (error) {
+      console.error("Error fetching voice AI status:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch voice AI status" });
+    }
+  });
+
+  // PATCH /api/projects/:id/voice-ai-settings - Update voice AI settings for a project
+  app.patch("/api/projects/:id/voice-ai-settings", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      const effectiveUser = req.user?.effectiveUser;
+
+      if (!effectiveUserId || !effectiveUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const voiceAiSettingsSchema = z.object({
+        useVoiceAiForQueries: z.boolean(),
+      });
+      
+      const { useVoiceAiForQueries } = voiceAiSettingsSchema.parse(req.body);
+
+      const project = await storage.getProject(req.params.id);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
+      // Get project type to check webhooks
+      const projectType = await storage.getProjectTypeById(project.projectTypeId);
+      const dialoraSettings = projectType?.dialoraSettings as any;
+      const hasWebhooksConfigured = dialoraSettings?.outboundWebhooks?.some((w: any) => w.active) ?? false;
+
+      // If enabling voice AI, check that project type has webhooks configured
+      if (useVoiceAiForQueries && !hasWebhooksConfigured) {
+        return res.status(400).json({ 
+          message: "Cannot enable Voice AI: No active webhooks configured for this project type. Please configure webhooks in the project type settings first.",
+          code: "NO_WEBHOOKS_CONFIGURED"
+        });
+      }
+
+      const updatedProject = await storage.updateProject(req.params.id, {
+        useVoiceAiForQueries,
+      });
+
+      // Return the full status payload to match GET endpoint structure
+      const updatedUseVoiceAi = updatedProject.useVoiceAiForQueries ?? false;
+      res.json({
+        useVoiceAiForQueries: updatedUseVoiceAi,
+        hasWebhooksConfigured,
+        isVoiceAvailable: updatedUseVoiceAi && hasWebhooksConfigured,
+        message: useVoiceAiForQueries 
+          ? "Voice AI enabled for queries" 
+          : "Voice AI disabled for queries"
+      });
+    } catch (error) {
+      console.error("Error updating voice AI settings:", error instanceof Error ? error.message : error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        res.status(400).json({ message: "Validation failed", errors: (error as any).issues });
+      } else {
+        res.status(500).json({ message: "Failed to update voice AI settings" });
+      }
+    }
+  });
+
   app.patch("/api/projects/:id/complete", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const effectiveUserId = req.user?.effectiveUserId;

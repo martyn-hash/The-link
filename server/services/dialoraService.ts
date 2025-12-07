@@ -21,8 +21,6 @@ export interface DialoraCallResult {
   error?: string;
 }
 
-const DEFAULT_DIALORA_WEBHOOK_URL = 'https://api.dialora.ai/webhooks/agents/webh_ue3l5mxy04ixiwctstmnc5v9/trigger';
-
 export interface DialoraWebhookConfig {
   url: string;
   messageTemplate?: string;
@@ -69,13 +67,20 @@ export function validatePhoneForVoiceCall(phone: string | null): { isValid: bool
 /**
  * Trigger an outbound voice call via Dialora webhook
  * @param payload - Call payload with recipient and message details
- * @param webhookConfig - Optional webhook configuration (uses default if not provided)
+ * @param webhookConfig - Webhook configuration (required - no default fallback)
  */
 export async function triggerDialoraCall(
   payload: DialoraCallPayload,
-  webhookConfig?: DialoraWebhookConfig
+  webhookConfig: DialoraWebhookConfig
 ): Promise<DialoraCallResult> {
   try {
+    if (!webhookConfig?.url) {
+      return {
+        success: false,
+        error: 'No webhook URL configured for voice calls'
+      };
+    }
+
     const formattedPhone = formatPhoneForDialora(payload.phone);
     
     const phoneValidation = validatePhoneForVoiceCall(formattedPhone);
@@ -91,7 +96,7 @@ export async function triggerDialoraCall(
       phone: formattedPhone
     };
 
-    const webhookUrl = webhookConfig?.url || DEFAULT_DIALORA_WEBHOOK_URL;
+    const webhookUrl = webhookConfig.url;
     console.log(`[Dialora] Triggering outbound call to ${formattedPhone} for ${payload.company} via ${webhookUrl}`);
 
     const response = await fetch(webhookUrl, {
