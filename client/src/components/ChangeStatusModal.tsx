@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useStageChangeConfig } from "@/hooks/change-status/useStageChangeConfig";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
@@ -87,15 +88,6 @@ interface ChangeStatusModalProps {
   user: User;
   onStatusUpdated?: () => void;
   initialNewStatus?: string; // Pre-select a status (for drag-and-drop from kanban)
-}
-
-interface StageChangeConfig {
-  projectTypeId: string;
-  currentStatus: string;
-  stages: (KanbanStage & { validReasonIds: string[] })[];
-  reasons: (ChangeReason & { customFields: ReasonCustomField[] })[];
-  stageApprovals: StageApproval[];
-  stageApprovalFields: StageApprovalField[];
 }
 
 // Helper function to format stage names for display
@@ -244,36 +236,27 @@ export default function ChangeStatusModal({
     }
   }, [isOpen, initialNewStatus]);
 
-  // Fetch all stage change configuration in a single request (eliminates 6+ cascading queries)
-  const { data: stageChangeConfig, isLoading: configLoading } = useQuery<StageChangeConfig>({
-    queryKey: ["/api/projects", project.id, "stage-change-config"],
-    enabled: !!project.id && isOpen,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+  // Stage change configuration from custom hook
+  const {
+    isLoading: configLoading,
+    stages,
+    getFilteredReasons,
+    getSelectedStage,
+    getSelectedReason,
+    getCustomFields,
+    getEffectiveApprovalId,
+    getTargetStageApproval,
+    getTargetStageApprovalFields,
+  } = useStageChangeConfig({
+    projectId: project.id,
+    isOpen,
   });
 
-  // Derive data from combined config (no additional network requests needed)
-  const stages = stageChangeConfig?.stages ?? [];
-  const stageApprovals = stageChangeConfig?.stageApprovals ?? [];
-  const stageApprovalFields = stageChangeConfig?.stageApprovalFields ?? [];
-  const allReasons = stageChangeConfig?.reasons ?? [];
-
-  // Find the selected stage to get its ID
-  const selectedStage = stages.find((stage) => stage.name === newStatus);
-
-  // Filter to valid reasons for the selected stage (uses pre-computed validReasonIds)
-  const filteredReasons = useMemo(() => {
-    if (!selectedStage) return [];
-    const validIds = new Set(selectedStage.validReasonIds);
-    return allReasons.filter((r) => validIds.has(r.id));
-  }, [selectedStage, allReasons]);
-
-  // Find the selected reason to get its ID
-  const selectedReasonObj = filteredReasons.find(
-    (reason) => reason.reason === changeReason
-  );
-
-  // Get custom fields from the pre-loaded reason object (no network request needed)
-  const customFields = selectedReasonObj?.customFields ?? [];
+  // Derive data using hook functions
+  const selectedStage = getSelectedStage(newStatus);
+  const filteredReasons = useMemo(() => getFilteredReasons(selectedStage), [selectedStage, getFilteredReasons]);
+  const selectedReasonObj = getSelectedReason(filteredReasons, changeReason);
+  const customFields = getCustomFields(selectedReasonObj);
 
   // Loading states for backward compatibility
   const stagesLoading = configLoading;
@@ -283,22 +266,21 @@ export default function ChangeStatusModal({
   const stageApprovalFieldsLoading = configLoading;
 
   // Determine effective approval ID (reason-level takes precedence over stage-level)
-  const effectiveApprovalId = useMemo(() => {
-    return selectedReasonObj?.stageApprovalId || selectedStage?.stageApprovalId || null;
-  }, [selectedReasonObj, selectedStage]);
+  const effectiveApprovalId = useMemo(
+    () => getEffectiveApprovalId(selectedReasonObj, selectedStage),
+    [selectedReasonObj, selectedStage, getEffectiveApprovalId]
+  );
 
   // Get target stage approval and fields using effective approval ID
-  const targetStageApproval = useMemo(() => {
-    if (!effectiveApprovalId) return null;
-    return stageApprovals.find((a) => a.id === effectiveApprovalId) || null;
-  }, [effectiveApprovalId, stageApprovals]);
+  const targetStageApproval = useMemo(
+    () => getTargetStageApproval(effectiveApprovalId),
+    [effectiveApprovalId, getTargetStageApproval]
+  );
 
-  const targetStageApprovalFields = useMemo(() => {
-    if (!targetStageApproval) return [];
-    return stageApprovalFields
-      .filter((field) => field.stageApprovalId === targetStageApproval.id)
-      .sort((a, b) => a.order - b.order);
-  }, [targetStageApproval, stageApprovalFields]);
+  const targetStageApprovalFields = useMemo(
+    () => getTargetStageApprovalFields(targetStageApproval),
+    [targetStageApproval, getTargetStageApprovalFields]
+  );
 
   // Create dynamic Zod schema for stage approval form
   const approvalFormSchema = useMemo(() => {
