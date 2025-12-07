@@ -1,7 +1,7 @@
 # Stage-Change Optimization Plan
 
 **Created:** December 7, 2025  
-**Status:** Wave 1 Complete ✓  
+**Status:** Wave 2 Complete ✓  
 **Based on:** `stage-change-pressure-analysis.md`  
 **Considers:** Bookkeeping Queries Feature Integration
 
@@ -44,6 +44,45 @@
 ### Estimated Improvement
 - **Database operations reduction:** 30-40%
 - **Expected response time improvement:** ~200-300ms for complex projects
+
+---
+
+## Wave 2 Completion Summary (December 7, 2025)
+
+### Tasks Completed
+
+1. **getStageChangeValidationData()** - `projectStagesStorage.ts`
+   - Created consolidated validation query with JOINs
+   - Combines stage lookup, reason lookup, and mapping validation in single query
+   - Enforces projectTypeId at JOIN/WHERE level for security
+   - Fixed varchar/UUID type mismatch that caused 400 errors
+   - **Reduction:** 4 parallel queries → 1 query + 1 field validation query
+
+2. **getClientNotificationPreviewData()** - `stageChangeNotificationStorage.ts`
+   - Created consolidated preview data method
+   - Fetches project + client + projectType + stage + contacts + template in 2 parallel queries
+   - Uses Promise.all for efficient parallel fetching
+   - **Reduction:** 5-6 separate queries → 2 parallel queries
+
+3. **Batch Notification Status Updates** - `notification-scheduler.ts`
+   - Refactored handleProjectStageChangeForNotifications to use batch updates
+   - Uses inArray for bulk UPDATE instead of individual updates
+   - Uses returning() for accurate affected row counts
+   - **Reduction:** N queries → 2 queries (suppress + reactivate)
+
+4. **Testing & Verification**
+   - E2E test passed: Stage change from "Do the work" to "Final Review" completed successfully
+   - PATCH /api/projects/:id/status returns 200
+   - All background operations execute without errors
+
+### Files Modified
+- `server/storage/projects/projectStagesStorage.ts` - Consolidated validation query
+- `server/storage/notifications/stageChangeNotificationStorage.ts` - Consolidated preview data
+- `server/notification-scheduler.ts` - Batch notification updates
+
+### Estimated Improvement
+- **Additional database operations reduction:** 20-30%
+- **Cumulative reduction (Wave 1 + Wave 2):** 50-60%
 
 ---
 
