@@ -49,14 +49,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { 
   Building2, 
-  Users, 
   AlertTriangle, 
   CheckCircle, 
-  Plus, 
   X, 
   Loader2,
-  UserCheck,
-  UserX,
   Search,
   Building,
   ArrowLeft,
@@ -95,31 +91,6 @@ interface CompanyProfile {
     country?: string;
   };
   sic_codes?: string[];
-}
-
-interface CompanyOfficer {
-  name: string;
-  officer_role: string;
-  date_of_birth?: {
-    month: number;
-    year: number;
-  };
-  nationality?: string;
-  country_of_residence?: string;
-  occupation?: string;
-  address: {
-    address_line_1?: string;
-    address_line_2?: string;
-    locality?: string;
-    region?: string;
-    postal_code?: string;
-    country?: string;
-  };
-}
-
-interface CompanyOfficersResponse {
-  officers: CompanyOfficer[];
-  total_results: number;
 }
 
 // Form schemas
@@ -184,17 +155,8 @@ export function CompaniesHouseClientModal({
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const [clientType, setClientType] = useState<'company' | 'individual'>('company');
-  const [step, setStep] = useState<'ch-search' | 'ch-confirm' | 'officer-matching' | 'individual-details'>('ch-search');
+  const [step, setStep] = useState<'ch-search' | 'ch-confirm' | 'individual-details'>('ch-search');
   const [selectedCompany, setSelectedCompany] = useState<CompanyProfile | null>(null);
-  const [primaryContactIndex, setPrimaryContactIndex] = useState<number | null>(null);
-  const [officerMatches, setOfficerMatches] = useState<{
-    index: number;
-    officer: CompanyOfficer & { parsedFirstName?: string; parsedLastName?: string };
-    matches: any[];
-  }[]>([]);
-  const [officerDecisions, setOfficerDecisions] = useState<{
-    [key: number]: { action: 'create' | 'link', personId?: string }
-  }>({});
 
   const isEditing = !!client;
 
@@ -230,9 +192,6 @@ export function CompaniesHouseClientModal({
       setClientType('company'); // Default to company mode
       setStep('ch-search'); // Start on CH search for creation
       setSelectedCompany(null);
-      setPrimaryContactIndex(null);
-      setOfficerMatches([]);
-      setOfficerDecisions({});
       searchForm.reset();
       individualForm.reset();
     }
@@ -353,9 +312,8 @@ export function CompaniesHouseClientModal({
     }
   };
 
-  // Get company profile and officers
+  // Get company profile
   const [isLoadingCompany, setIsLoadingCompany] = useState(false);
-  const [companyOfficers, setCompanyOfficers] = useState<CompanyOfficer[]>([]);
 
   const loadCompanyDetails = async (companyNumber: string) => {
     setIsLoadingCompany(true);
@@ -363,15 +321,7 @@ export function CompaniesHouseClientModal({
       // Fetch company profile
       const companyProfile = await apiRequest("GET", `/api/companies-house/company/${companyNumber}`) as CompanyProfile;
       
-      // Fetch company officers
-      const officersData = await apiRequest("GET", `/api/companies-house/company/${companyNumber}/officers`) as CompanyOfficersResponse;
-      
-      console.log("📋 Officers API response:", officersData);
-      console.log("📋 Officers array length:", officersData.officers?.length || 0);
-      console.log("📋 Raw officers data:", officersData);
-      
       setSelectedCompany(companyProfile);
-      setCompanyOfficers(officersData.officers || []);
       setStep('ch-confirm');
     } catch (error) {
       console.error("Error loading company details:", error);
@@ -383,16 +333,12 @@ export function CompaniesHouseClientModal({
 
   // Create client from Companies House data
   const createClientFromCHMutation = useMutation({
-    mutationFn: async (options?: { officerDecisions?: { [key: number]: { action: 'create' | 'link', personId?: string } }, primaryContactIdx?: number | null }) => {
+    mutationFn: async () => {
       if (!selectedCompany) throw new Error("No company selected");
-      
-      const contactIdx = options?.primaryContactIdx !== undefined ? options.primaryContactIdx : primaryContactIndex;
-      console.log("📋 Creating client with primaryContactIndex:", contactIdx);
       
       const response = await apiRequest("POST", "/api/clients/from-companies-house", {
         companyNumber: selectedCompany.company_number,
-        primaryContactIndex: contactIdx,
-        ...(options?.officerDecisions && { officerDecisions: options.officerDecisions })
+        primaryContactIndex: null,
       });
       
       return response as { client: Client & { people: any[] }, message: string };
@@ -415,56 +361,6 @@ export function CompaniesHouseClientModal({
       showFriendlyError({ error });
     },
   });
-
-  // Officer matching mutation
-  const findOfficerMatchesMutation = useMutation({
-    mutationFn: async (officers: CompanyOfficer[]) => {
-      console.log("🔍 Finding officer matches for:", officers.length, "officers");
-      const requestData = {
-        officers: officers.map(officer => ({
-          fullName: officer.name,
-          dateOfBirth: officer.date_of_birth || { year: 1900, month: 1 } // Fallback if no DOB
-        }))
-      };
-      console.log("📤 Officer match request data:", requestData);
-      
-      const response = await apiRequest("POST", "/api/people/match", requestData);
-      return response as { matches: any[] };
-    },
-    onSuccess: (data) => {
-      // Check if any officers actually have potential duplicates
-      const officersWithMatches = data.matches.filter(match => match.matches && match.matches.length > 0);
-      
-      if (officersWithMatches.length > 0) {
-        // Some officers have potential duplicates - show matching step
-        setOfficerMatches(data.matches);
-        // Initialize decisions - default to 'create' for officers with matches only
-        const initialDecisions: { [key: number]: { action: 'create' | 'link', personId?: string } } = {};
-        officersWithMatches.forEach((match) => {
-          initialDecisions[match.index] = { action: 'create' };
-        });
-        setOfficerDecisions(initialDecisions);
-        setStep('officer-matching');
-      } else {
-        // No officers have duplicates - proceed directly to client creation
-        console.log("✨ No duplicate officers found - proceeding directly to client creation");
-        console.log("📋 Primary contact index at mutation call:", primaryContactIndex);
-        createClientFromCHMutation.mutate({ primaryContactIdx: primaryContactIndex });
-      }
-    },
-    onError: (error: any) => {
-      console.error("❌ Error finding officer matches:", error);
-      console.error("❌ Error details:", JSON.stringify(error, null, 2));
-      showFriendlyError({ error: "Failed to find officer matches. Proceeding with creating new people." });
-      // Skip to direct client creation if matching fails
-      createClientFromCHMutation.mutate({ primaryContactIdx: primaryContactIndex });
-    },
-  });
-
-  // Handle primary contact selection
-  const selectPrimaryContact = (index: number) => {
-    setPrimaryContactIndex(prev => prev === index ? null : index);
-  };
 
 
   // Search companies when search query changes
@@ -627,60 +523,6 @@ export function CompaniesHouseClientModal({
           </CardContent>
         </Card>
 
-        {/* Officers Selection */}
-        {companyOfficers.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Company Officers
-              </CardTitle>
-              <CardDescription>
-                All officers will be added as related people. Select one as the primary contact (optional).
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {companyOfficers.map((officer, index) => (
-                <div 
-                  key={index} 
-                  className={`flex items-center space-x-3 p-3 border rounded-lg cursor-pointer transition-colors ${
-                    primaryContactIndex === index 
-                      ? 'border-blue-500 bg-blue-50' 
-                      : 'hover:bg-gray-50'
-                  }`}
-                  onClick={() => selectPrimaryContact(index)}
-                  data-testid={`officer-item-${index}`}
-                >
-                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
-                    primaryContactIndex === index 
-                      ? 'border-blue-600 bg-blue-600' 
-                      : 'border-gray-300'
-                  }`}>
-                    {primaryContactIndex === index && (
-                      <div className="w-2 h-2 rounded-full bg-white" />
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <h5 className="font-medium">{officer.name}</h5>
-                      <Badge variant="outline">{officer.officer_role}</Badge>
-                      {primaryContactIndex === index && (
-                        <Badge className="bg-blue-600">Primary Contact</Badge>
-                      )}
-                    </div>
-                    {officer.nationality && (
-                      <p className="text-sm text-gray-600">Nationality: {officer.nationality}</p>
-                    )}
-                    {officer.occupation && (
-                      <p className="text-sm text-gray-600">Occupation: {officer.occupation}</p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
         {/* Action Buttons */}
         <div className="flex justify-between">
           <Button 
@@ -693,24 +535,18 @@ export function CompaniesHouseClientModal({
           </Button>
           <Button 
             onClick={() => {
-              // Always check for officer matches if company has officers
-              if (companyOfficers.length > 0) {
-                // Find matches for all officers (user can select during matching)
-                findOfficerMatchesMutation.mutate(companyOfficers);
-              } else {
-                // No officers exist, proceed directly to creation
-                createClientFromCHMutation.mutate({ primaryContactIdx: primaryContactIndex });
-              }
+              // Create client directly - officers will be imported in the background
+              createClientFromCHMutation.mutate();
             }}
-            disabled={createClientFromCHMutation.isPending || findOfficerMatchesMutation.isPending}
+            disabled={createClientFromCHMutation.isPending}
             data-testid="button-create-client"
           >
-            {(createClientFromCHMutation.isPending || findOfficerMatchesMutation.isPending) ? (
+            {createClientFromCHMutation.isPending ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
             ) : (
-              <ArrowRight className="h-4 w-4 mr-2" />
+              <CheckCircle className="h-4 w-4 mr-2" />
             )}
-            Continue
+            Create Client
           </Button>
         </div>
       </div>
@@ -959,189 +795,6 @@ export function CompaniesHouseClientModal({
     </div>
   );
 
-  // Officer matching step
-  const renderOfficerMatchingStep = () => {
-    if (!selectedCompany || officerMatches.length === 0) return null;
-
-    const handleOfficerDecision = (officerIndex: number, action: 'create' | 'link', personId?: string) => {
-      setOfficerDecisions(prev => ({
-        ...prev,
-        [officerIndex]: { action, personId }
-      }));
-    };
-
-    // Only consider officers with matches for the proceed check
-    const officersWithMatches = officerMatches.filter(match => match.matches && match.matches.length > 0);
-    const canProceed = Object.keys(officerDecisions).length === officersWithMatches.length &&
-                       Object.values(officerDecisions).every(decision => 
-                         decision.action === 'create' || (decision.action === 'link' && decision.personId)
-                       );
-
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center gap-2">
-          <UserCheck className="h-5 w-5 text-blue-600" />
-          <h3 className="text-lg font-semibold">Resolve Officer Matches</h3>
-        </div>
-        <p className="text-sm text-gray-600">
-          We found potential matches for some officers in your system. Please review and decide whether to link to existing people or create new ones.
-        </p>
-
-        <div className="space-y-4">
-          {officerMatches.filter(match => match.matches && match.matches.length > 0).map((match) => (
-            <Card key={match.index} className="p-4">
-              <div className="space-y-4">
-                {/* Officer Details */}
-                <div className="border-b pb-3">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-medium">{match.officer.name}</h4>
-                    <Badge variant="outline">{match.officer.officer_role}</Badge>
-                  </div>
-                  {match.officer.parsedFirstName && match.officer.parsedLastName && (
-                    <p className="text-sm text-gray-600">
-                      Parsed as: {match.officer.parsedFirstName} {match.officer.parsedLastName}
-                    </p>
-                  )}
-                  {match.officer.date_of_birth && (
-                    <p className="text-sm text-gray-600">
-                      Birth: {match.officer.date_of_birth.month}/{match.officer.date_of_birth.year}
-                    </p>
-                  )}
-                </div>
-
-                {/* Matches Section */}
-                <div className="space-y-3">
-                  {match.matches.length > 0 ? (
-                    <>
-                      <h5 className="font-medium text-amber-700">
-                        Found {match.matches.length} potential match{match.matches.length !== 1 ? 'es' : ''}:
-                      </h5>
-                      <div className="space-y-2">
-                        {match.matches.map((person, personIndex) => (
-                          <div key={personIndex} className="border rounded-lg p-3 bg-amber-50">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1">
-                                <p className="font-medium">{person.fullName}</p>
-                                {person.dateOfBirth && (
-                                  <p className="text-sm text-gray-600">
-                                    Born: {person.dateOfBirth}
-                                  </p>
-                                )}
-                                {person.email && (
-                                  <p className="text-sm text-gray-600">Email: {person.email}</p>
-                                )}
-                                {person.companies && person.companies.length > 0 ? (
-                                  <div className="mt-1">
-                                    <p className="text-xs text-gray-600 font-medium">Connected to:</p>
-                                    <div className="flex flex-wrap gap-1 mt-1">
-                                      {person.companies.map((company: any, companyIndex: number) => (
-                                        <span 
-                                          key={company.id || company.number || companyIndex}
-                                          data-testid={`badge-company-${company.id || company.number || companyIndex}`}
-                                          className="inline-flex items-center px-2 py-1 rounded-md bg-blue-50 border border-blue-200 text-xs text-blue-700"
-                                          title={`${company.role} at ${company.name}${company.number ? ` (${company.number})` : ''}`}
-                                        >
-                                          <span className="font-medium">{company.name}</span>
-                                          {company.role && (
-                                            <span className="ml-1 text-blue-600">
-                                              ({company.role})
-                                            </span>
-                                          )}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <p className="text-xs text-gray-500 mt-1">
-                                    No company connections found
-                                  </p>
-                                )}
-                              </div>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => handleOfficerDecision(match.index, 'link', person.id)}
-                                className={
-                                  officerDecisions[match.index]?.action === 'link' && 
-                                  officerDecisions[match.index]?.personId === person.id
-                                    ? 'bg-blue-100 border-blue-300'
-                                    : ''
-                                }
-                                data-testid={`button-link-person-${match.index}-${personIndex}`}
-                              >
-                                {officerDecisions[match.index]?.action === 'link' && 
-                                 officerDecisions[match.index]?.personId === person.id ? (
-                                  <CheckCircle className="h-4 w-4 mr-1" />
-                                ) : (
-                                  <UserCheck className="h-4 w-4 mr-1" />
-                                )}
-                                Link to This Person
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="text-center py-4">
-                      <UserX className="h-8 w-8 mx-auto text-gray-400 mb-2" />
-                      <p className="text-sm text-gray-600">No potential matches found</p>
-                    </div>
-                  )}
-                  
-                  {/* Create New Person Option */}
-                  <div className="border-t pt-3">
-                    <Button
-                      variant="outline"
-                      onClick={() => handleOfficerDecision(match.index, 'create')}
-                      className={
-                        officerDecisions[match.index]?.action === 'create'
-                          ? 'bg-green-100 border-green-300 w-full'
-                          : 'w-full'
-                      }
-                      data-testid={`button-create-person-${match.index}`}
-                    >
-                      {officerDecisions[match.index]?.action === 'create' ? (
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                      ) : (
-                        <Plus className="h-4 w-4 mr-2" />
-                      )}
-                      Create New Person
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex justify-between">
-          <Button 
-            variant="outline" 
-            onClick={() => setStep('ch-confirm')}
-            data-testid="button-back-to-confirm"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Review
-          </Button>
-          <Button 
-            onClick={() => createClientFromCHMutation.mutate({ officerDecisions, primaryContactIdx: primaryContactIndex })}
-            disabled={!canProceed || createClientFromCHMutation.isPending}
-            data-testid="button-proceed-create-client"
-          >
-            {createClientFromCHMutation.isPending ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <CheckCircle className="h-4 w-4 mr-2" />
-            )}
-            Create Client & {Object.values(officerDecisions).filter(d => d.action === 'link').length > 0 ? 'Link People' : 'Add People'}
-          </Button>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -1155,10 +808,8 @@ export function CompaniesHouseClientModal({
               : step === 'ch-search' 
                 ? "Search for a company using Companies House data"
                 : step === 'ch-confirm'
-                  ? "Confirm company details and select officers"
-                  : step === 'officer-matching'
-                    ? "Resolve potential duplicate officers and decide linking options"
-                    : "Enter individual client details"
+                  ? "Confirm company details to create client"
+                  : "Enter individual client details"
             }
           </DialogDescription>
         </DialogHeader>
@@ -1174,7 +825,6 @@ export function CompaniesHouseClientModal({
             }
             // Reset any previous state
             setSelectedCompany(null);
-            setPrimaryContactIndex(null);
             searchForm.reset();
             individualForm.reset();
           }} className="w-full">
@@ -1192,7 +842,6 @@ export function CompaniesHouseClientModal({
             <TabsContent value="company" className="mt-6">
               {step === 'ch-search' && renderCompanySearchStep()}
               {step === 'ch-confirm' && renderCompanyConfirmStep()}
-              {step === 'officer-matching' && renderOfficerMatchingStep()}
             </TabsContent>
             
             <TabsContent value="individual" className="mt-6">
