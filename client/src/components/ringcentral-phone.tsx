@@ -607,24 +607,77 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
     console.log('[RingCentral] Current call state:', callState);
     
     if (sessionRef.current) {
+      const session = sessionRef.current;
+      
       try {
         console.log('[RingCentral] Attempting to hang up call');
+        console.log('[RingCentral] Session state:', session.state);
+        console.log('[RingCentral] Session methods available:', 
+          Object.getOwnPropertyNames(Object.getPrototypeOf(session)));
         
-        // Try to terminate the session properly
-        if (typeof sessionRef.current.terminate === 'function') {
-          console.log('[RingCentral] Calling session.terminate()');
-          await sessionRef.current.terminate();
-        } else if (typeof sessionRef.current.dispose === 'function') {
-          console.log('[RingCentral] Calling session.dispose()');
-          await sessionRef.current.dispose();
-        } else if (typeof sessionRef.current.bye === 'function') {
+        // For RingCentral WebPhone v2, the proper way to hang up depends on call state:
+        // - If call is not yet connected (ringing), use cancel()
+        // - If call is connected, we need to send BYE via the sipClient
+        
+        let terminated = false;
+        
+        // Try hangup() first (some versions have this)
+        if (typeof session.hangup === 'function') {
+          console.log('[RingCentral] Calling session.hangup()');
+          await session.hangup();
+          terminated = true;
+        }
+        // Try bye() for connected calls
+        else if (typeof session.bye === 'function') {
           console.log('[RingCentral] Calling session.bye()');
-          await sessionRef.current.bye();
-        } else {
-          console.warn('[RingCentral] No terminate/dispose/bye method found on session');
+          await session.bye();
+          terminated = true;
+        }
+        // Try terminate()
+        else if (typeof session.terminate === 'function') {
+          console.log('[RingCentral] Calling session.terminate()');
+          await session.terminate();
+          terminated = true;
+        }
+        // For ringing/outbound calls that haven't connected, use cancel()
+        else if (typeof session.cancel === 'function' && 
+                 (callState.status === 'ringing' || callState.status === 'idle' || session.state === 'init')) {
+          console.log('[RingCentral] Calling session.cancel() for non-connected call');
+          await session.cancel();
+          terminated = true;
+        }
+        // Try to access the WebPhone's sipClient to send BYE directly
+        else if (session.webPhone?.sipClient) {
+          console.log('[RingCentral] Attempting to send BYE via sipClient');
+          try {
+            // For connected calls, we need to send a BYE message
+            if (session.sipMessage) {
+              const callId = session.sipMessage.headers?.['Call-Id']?.[0]?.raw ||
+                           session.sipMessage.headers?.['call-id']?.[0]?.raw;
+              console.log('[RingCentral] Call-Id for BYE:', callId);
+            }
+            // Try dispose which should trigger BYE for connected sessions
+            if (typeof session.dispose === 'function') {
+              console.log('[RingCentral] Calling session.dispose() as fallback');
+              await session.dispose();
+              terminated = true;
+            }
+          } catch (sipError) {
+            console.error('[RingCentral] Error sending BYE via sipClient:', sipError);
+          }
+        }
+        // Final fallback to dispose
+        else if (typeof session.dispose === 'function') {
+          console.log('[RingCentral] Calling session.dispose() as final fallback');
+          await session.dispose();
+          terminated = true;
         }
         
-        console.log('[RingCentral] Hangup successful, clearing session reference');
+        if (!terminated) {
+          console.warn('[RingCentral] No suitable method found to terminate call');
+        }
+        
+        console.log('[RingCentral] Hangup attempt complete, clearing session reference');
         sessionRef.current = null;
         stopCallTimer();
         
@@ -632,6 +685,14 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
         setCallState(initialCallState);
       } catch (error) {
         console.error('[RingCentral] Error hanging up:', error);
+        // Try dispose as emergency fallback
+        try {
+          if (typeof session.dispose === 'function') {
+            await session.dispose();
+          }
+        } catch (e) {
+          console.error('[RingCentral] Emergency dispose also failed:', e);
+        }
         // Reset state even if there was an error
         sessionRef.current = null;
         stopCallTimer();
