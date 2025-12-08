@@ -86,6 +86,61 @@ export function CallDialog({
     }
   }, [isOpen]);
 
+  const waitForPhoneReady = (maxWaitMs: number = 15000): Promise<boolean> => {
+    return new Promise((resolve) => {
+      const startTime = Date.now();
+      const checkReady = () => {
+        if (webPhoneRef.current) {
+          resolve(true);
+          return;
+        }
+        if (phoneStatus === 'error') {
+          resolve(false);
+          return;
+        }
+        if (Date.now() - startTime > maxWaitMs) {
+          resolve(false);
+          return;
+        }
+        setTimeout(checkReady, 200);
+      };
+      checkReady();
+    });
+  };
+
+  const initializeAndCall = async () => {
+    const number = selectedPhoneNumber;
+    if (!number) {
+      toast({
+        title: 'No phone number',
+        description: 'Please select a person with a phone number',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsDialing(true);
+
+    if (!webPhoneRef.current) {
+      if (phoneStatus === 'not_ready' || phoneStatus === 'error') {
+        initializeWebPhone();
+      }
+      
+      const isReady = await waitForPhoneReady(15000);
+      if (!isReady) {
+        toast({
+          title: 'Connection failed',
+          description: 'Could not connect to phone system. Please try again.',
+          variant: 'destructive',
+        });
+        setIsDialing(false);
+        return;
+      }
+    }
+
+    await makeCallInternal(number);
+  };
+
   useEffect(() => {
     return () => {
       if (timerIntervalRef.current) {
@@ -211,29 +266,8 @@ export function CallDialog({
     }, 2000);
   };
 
-  const makeCall = async () => {
-    const number = selectedPhoneNumber;
-    if (!number) {
-      toast({
-        title: 'No phone number',
-        description: 'Please select a person with a phone number',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (!webPhoneRef.current || phoneStatus !== 'ready') {
-      toast({
-        title: 'Phone not ready',
-        description: 'Please wait for the phone to initialize',
-        variant: 'destructive',
-      });
-      return;
-    }
-
+  const makeCallInternal = async (number: string) => {
     try {
-      setIsDialing(true);
-      
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         stream.getTracks().forEach(track => track.stop());
@@ -401,7 +435,6 @@ export function CallDialog({
   };
 
   const isCallActive = callState.status === 'ringing' || callState.status === 'connected';
-  const canMakeCall = phoneStatus === 'ready' && selectedPhoneNumber && !isCallActive && !isDialing;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
@@ -434,7 +467,7 @@ export function CallDialog({
                       setSelectedPhoneNumber(selected?.person?.primaryPhone || undefined);
                     }
                   }}
-                  disabled={phoneStatus === 'initializing'}
+                  disabled={isDialing}
                 >
                   <SelectTrigger data-testid="select-call-person">
                     <SelectValue placeholder="Select a person to call..." />
@@ -455,33 +488,16 @@ export function CallDialog({
                 </Select>
               </div>
 
-              {selectedPhoneNumber && (
-                <div className="bg-muted/50 rounded-lg p-3 text-center">
-                  <p className="text-sm text-muted-foreground">Calling</p>
-                  <p className="text-lg font-medium">{selectedPhoneNumber}</p>
-                </div>
-              )}
-
               <Button
-                onClick={makeCall}
-                disabled={!canMakeCall}
+                onClick={initializeAndCall}
+                disabled={!selectedPhoneNumber || isDialing}
                 className="w-full h-12 text-base"
                 data-testid="button-call"
               >
-                {phoneStatus === 'initializing' ? (
+                {isDialing ? (
                   <>
                     <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                    Connecting...
-                  </>
-                ) : isDialing ? (
-                  <>
-                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                    Dialing...
-                  </>
-                ) : phoneStatus === 'error' ? (
-                  <>
-                    <Phone className="h-5 w-5 mr-2" />
-                    Retry Connection
+                    {phoneStatus !== 'ready' ? 'Connecting...' : 'Dialing...'}
                   </>
                 ) : (
                   <>
