@@ -8,6 +8,8 @@ export const emailDirectionEnum = pgEnum("email_direction", ["inbound", "outboun
 
 export const emailMatchConfidenceEnum = pgEnum("email_match_confidence", ["high", "medium", "low"]);
 
+export const emailSlaStatusEnum = pgEnum("email_sla_status", ["active", "complete", "snoozed"]);
+
 export const emailThreads = pgTable("email_threads", {
   canonicalConversationId: varchar("canonical_conversation_id").primaryKey(),
   threadKey: varchar("thread_key").unique(),
@@ -19,12 +21,19 @@ export const emailThreads = pgTable("email_threads", {
   messageCount: integer("message_count").default(1),
   latestPreview: text("latest_preview"),
   latestDirection: emailDirectionEnum("latest_direction"),
+  slaStatus: emailSlaStatusEnum("sla_status").default("active"),
+  slaBecameActiveAt: timestamp("sla_became_active_at"),
+  slaCompletedAt: timestamp("sla_completed_at"),
+  slaCompletedBy: varchar("sla_completed_by").references(() => users.id, { onDelete: "set null" }),
+  slaSnoozeUntil: timestamp("sla_snooze_until"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
   index("idx_email_threads_client_id").on(table.clientId),
   index("idx_email_threads_last_message_at").on(table.lastMessageAt),
   index("idx_email_threads_thread_key").on(table.threadKey),
+  index("idx_email_threads_sla_status").on(table.slaStatus),
+  index("idx_email_threads_sla_became_active_at").on(table.slaBecameActiveAt),
 ]);
 
 export const emailMessages = pgTable("email_messages", {

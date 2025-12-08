@@ -239,6 +239,12 @@ export const companySettings = pgTable("company_settings", {
   aiSystemPromptNotes: text("ai_system_prompt_notes"),
   aiSystemPromptEmails: text("ai_system_prompt_emails"),
   aiSystemPromptStageNotifications: text("ai_system_prompt_stage_notifications"),
+  // Email SLA Settings
+  slaResponseDays: integer("sla_response_days").default(2),
+  slaWorkingDaysOnly: boolean("sla_working_days_only").default(true),
+  workingHoursStart: varchar("working_hours_start").default("09:00"),
+  workingHoursEnd: varchar("working_hours_end").default("17:30"),
+  workingDays: jsonb("working_days").default(sql`'["mon","tue","wed","thu","fri"]'::jsonb`),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
