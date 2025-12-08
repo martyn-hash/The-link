@@ -51,7 +51,6 @@ import {
   PeopleServiceWithRelations
 } from "../../utils/types";
 import { formatPersonName, formatBirthDate, formatDate } from "../../utils/formatters";
-import { PersonEmailHistory } from "@/components/PersonEmailHistory";
 
 interface PersonTabbedViewProps {
   clientPerson: ClientPersonWithPerson;
@@ -97,7 +96,7 @@ export function PersonTabbedView({
 
     const handleSwipe = () => {
       const swipeThreshold = 50;
-      const allTabs = ["basic-info", "contact-info", "email-history", "personal-services", "related-companies"];
+      const allTabs = ["basic-info", "contact-info", "personal-services", "related-companies"];
       const currentIndex = allTabs.indexOf(activeTab);
       
       if (touchStartX - touchEndX > swipeThreshold && currentIndex < allTabs.length - 1) {
@@ -324,10 +323,9 @@ export function PersonTabbedView({
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         {/* Desktop Tabs */}
         <div className="hidden md:block w-full">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="basic-info" data-testid="tab-basic-info">Basic Info</TabsTrigger>
             <TabsTrigger value="contact-info" data-testid="tab-contact-info">Contact Info</TabsTrigger>
-            <TabsTrigger value="email-history" data-testid="tab-email-history">Email History</TabsTrigger>
             <TabsTrigger value="personal-services" data-testid="tab-personal-services">Personal Services</TabsTrigger>
             <TabsTrigger value="related-companies" data-testid="tab-related-companies">Related Companies</TabsTrigger>
           </TabsList>
@@ -340,7 +338,7 @@ export function PersonTabbedView({
             size="icon"
             className="absolute left-0 top-1/2 -translate-y-1/2 z-10 h-12 w-12 rounded-full bg-background/80 backdrop-blur-sm shadow-md"
             onClick={() => {
-              const tabs = ["basic-info", "contact-info", "email-history", "personal-services", "related-companies"];
+              const tabs = ["basic-info", "contact-info", "personal-services", "related-companies"];
               const currentIndex = tabs.indexOf(activeTab);
               if (currentIndex > 0) {
                 setActiveTab(tabs[currentIndex - 1]);
@@ -357,7 +355,7 @@ export function PersonTabbedView({
             size="icon"
             className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-12 w-12 rounded-full bg-background/80 backdrop-blur-sm shadow-md"
             onClick={() => {
-              const tabs = ["basic-info", "contact-info", "email-history", "personal-services", "related-companies"];
+              const tabs = ["basic-info", "contact-info", "personal-services", "related-companies"];
               const currentIndex = tabs.indexOf(activeTab);
               if (currentIndex < tabs.length - 1) {
                 setActiveTab(tabs[currentIndex + 1]);
@@ -373,7 +371,6 @@ export function PersonTabbedView({
             <TabsList className="inline-flex gap-2 h-auto">
               <TabsTrigger value="basic-info" data-testid="tab-basic-info" className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" style={{ width: '80vw' }}>Basic Info</TabsTrigger>
               <TabsTrigger value="contact-info" data-testid="tab-contact-info" className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" style={{ width: '80vw' }}>Contact Info</TabsTrigger>
-              <TabsTrigger value="email-history" data-testid="tab-email-history" className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" style={{ width: '80vw' }}>Email History</TabsTrigger>
               <TabsTrigger value="personal-services" data-testid="tab-personal-services" className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" style={{ width: '80vw' }}>Personal Services</TabsTrigger>
               <TabsTrigger value="related-companies" data-testid="tab-related-companies" className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" style={{ width: '80vw' }}>Related Companies</TabsTrigger>
             </TabsList>
@@ -403,16 +400,6 @@ export function PersonTabbedView({
             cancelEditing={cancelEditing}
             saveChanges={saveChanges}
             updatePersonMutation={updatePersonMutation}
-          />
-        </TabsContent>
-
-        {/* Email History Tab */}
-        <TabsContent value="email-history" className="mt-4">
-          <PersonEmailHistory 
-            personId={clientPerson.person.id}
-            personName={formatPersonName(clientPerson.person.fullName)}
-            showHeader={false}
-            maxHeight="500px"
           />
         </TabsContent>
 

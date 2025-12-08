@@ -1,7 +1,9 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { MessageSquare, PhoneCall, Send, Mail, FileText, Plus } from "lucide-react";
+import { MessageSquare, PhoneCall, Send, Mail, FileText, Plus, RefreshCw } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -46,6 +48,7 @@ interface CommunicationsTimelineProps {
 export function CommunicationsTimeline({ clientId, user, clientCompany }: CommunicationsTimelineProps) {
   const isMobile = useIsMobile();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   
   const [isAddingCommunication, setIsAddingCommunication] = useState(false);
   const [isSendingSMS, setIsSendingSMS] = useState(false);
@@ -85,6 +88,26 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
 
   const { data: featureFlags } = useQuery<{ ringCentralLive: boolean; appIsLive: boolean }>({
     queryKey: ['/api/feature-flags'],
+  });
+
+  const syncEmailsMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest('POST', `/api/emails/sync/client/${clientId}`);
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/emails/client', clientId] });
+      toast({
+        title: "Email sync complete",
+        description: data.message || `Found ${data.stats?.emailsIngested || 0} new emails`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Email sync failed",
+        description: error.message || "Failed to sync emails from Microsoft Graph",
+        variant: "destructive",
+      });
+    },
   });
 
   const emailThreads = emailThreadsData?.threads || [];
@@ -269,6 +292,14 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
                   <FileText className="h-4 w-4 mr-2" />
                   Add Note
                 </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => syncEmailsMutation.mutate()} 
+                  disabled={syncEmailsMutation.isPending || !hasEmailContacts}
+                  data-testid="menu-sync-emails"
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${syncEmailsMutation.isPending ? 'animate-spin' : ''}`} />
+                  {syncEmailsMutation.isPending ? 'Syncing...' : 'Sync Emails'}
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
@@ -345,6 +376,27 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
                 <Plus className="h-4 w-4 mr-2" />
                 Add Communication
               </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>
+                    <Button
+                      onClick={() => syncEmailsMutation.mutate()}
+                      size="sm"
+                      variant="outline"
+                      disabled={syncEmailsMutation.isPending || !hasEmailContacts}
+                      data-testid="button-sync-emails"
+                    >
+                      <RefreshCw className={`h-4 w-4 mr-2 ${syncEmailsMutation.isPending ? 'animate-spin' : ''}`} />
+                      {syncEmailsMutation.isPending ? 'Syncing...' : 'Sync Emails'}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!hasEmailContacts && (
+                  <TooltipContent>
+                    <p>Add email addresses to contacts to sync their email history</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
             </div>
           )}
         </div>

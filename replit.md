@@ -93,24 +93,24 @@ PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, sof
 -   **UI Components**: `@radix-ui/*`, `@dnd-kit/*`, `@tiptap/*`, `react-hook-form` with `zod`, `sonner`.
 -   **Utilities**: `date-fns`, `clsx`, `tailwind-merge`, `@getaddress/autocomplete`.
 
-### Person Email History Feature (December 2025)
-Read-only view of all inbound/outbound emails filtered by a person's email addresses. Uses existing ingested emails from MS Graph and allows staff to see full email history for any contact.
+### Client Email History in Communications Tab (December 2025)
+Email history is displayed in the client's Communications tab (Comms), showing all inbound/outbound emails involving the client's contacts. Uses MS Graph integration for email sync.
 
-- **Multi-Email Support**: Queries against person's `email`, `primaryEmail`, and `email2` fields
-- **Search Capability**: Filter emails by subject/body keywords with ILIKE matching
+- **Sync Emails Button**: Click "Sync Emails" in the Communications tab header to pull email history from MS Graph
+- **Multi-Email Support**: Queries all tenant mailboxes for emails involving contact's `email`, `primaryEmail`, and `email2` fields
+- **Thread Linking**: Synced emails are automatically linked to the client for display in Communications timeline
 - **AI Reply Assistant**: Token-efficient OpenAI gpt-4o-mini integration for drafting email replies with tone selection (professional/friendly/formal/concise)
-- **Email History Tab**: Integrated into PersonTabbedView as 5th tab alongside Basic Info, Contact Info, Personal Services, Related Companies
 
 Key files:
-- `server/routes/emails.ts` - Person email API endpoints and AI reply assistant
-- `client/src/components/PersonEmailHistory.tsx` - Email history list component
+- `server/routes/emails.ts` - Email sync, threading, and AI reply endpoints
+- `client/src/pages/client-detail/components/communications/CommunicationsTimeline.tsx` - Communications tab with Sync Emails button
 - `client/src/components/EmailThreadViewer.tsx` - Thread viewer with AI Reply Assistant UI
-- `client/src/pages/client-detail/components/people/PersonTabbedView.tsx` - Tab integration
+- `server/services/emailIngestionService.ts` - Email ingestion and threading logic
 - `server/storage/integrations/emailStorage.ts` - Email query methods
 
 API Endpoints:
-- `GET /api/emails/person/:personId` - Get emails involving person's email addresses (supports ?search= query)
-- `GET /api/emails/person/:personId/threads` - Get email threads for person
+- `POST /api/emails/sync/client/:clientId` - Sync emails from MS Graph for a client's contacts
+- `GET /api/emails/client/:clientId` - Get email threads for a client
 - `POST /api/emails/ai-reply` - AI-powered reply drafting with tone selection
 - `POST /api/emails/ai-summarize` - AI-powered email thread summarization
 

@@ -11,6 +11,7 @@ import {
   createReplyAllToMessage,
 } from "../utils/applicationGraphClient";
 import { slaCalculationService } from "../services/slaCalculationService";
+import { emailIngestionService } from "../services/emailIngestionService";
 
 /**
  * Email Routes
@@ -1373,6 +1374,220 @@ Rules:
       console.error('[AI Summarize] Error summarizing emails:', error);
       res.status(500).json({ 
         message: "Failed to summarize emails",
+        error: error.message 
+      });
+    }
+  });
+
+  // ============================================================================
+  // CLIENT EMAIL SYNC - Initial ingestion of emails from MS Graph for a client
+  // ============================================================================
+
+  /**
+   * POST /api/emails/sync/client/:clientId
+   * Trigger initial email sync for a client by querying MS Graph
+   * for emails involving the client's contacts across all tenant mailboxes.
+   * 
+   * This endpoint:
+   * 1. Gets all people associated with the client
+   * 2. Collects their email addresses
+   * 3. Queries each tenant mailbox for emails involving those addresses
+   * 4. Ingests the emails into the database
+   * 5. Processes threading and client association
+   */
+  app.post('/api/emails/sync/client/:clientId', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { clientId } = req.params;
+      const userId = req.user!.effectiveUserId;
+
+      // Verify client exists
+      const client = await storage.getClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+
+      // Get people associated with this client
+      const clientPeople = await storage.getClientPeopleByClientId(clientId);
+      if (!clientPeople || clientPeople.length === 0) {
+        return res.json({
+          success: true,
+          message: "No contacts found for this client. Add people with email addresses to sync their email history.",
+          stats: { emailsFound: 0, emailsIngested: 0, threadsCreated: 0 }
+        });
+      }
+
+      // Collect all email addresses from the client's contacts
+      const contactEmails: string[] = [];
+      for (const cp of clientPeople) {
+        const person = cp.person;
+        if (person) {
+          if (person.primaryEmail) contactEmails.push(person.primaryEmail.toLowerCase());
+          if (person.email) contactEmails.push(person.email.toLowerCase());
+          if (person.email2) contactEmails.push(person.email2.toLowerCase());
+        }
+      }
+
+      // Remove duplicates
+      const uniqueContactEmails = Array.from(new Set(contactEmails.filter(e => e && e.includes('@'))));
+
+      if (uniqueContactEmails.length === 0) {
+        return res.json({
+          success: true,
+          message: "No email addresses found for this client's contacts. Add email addresses to people to sync their email history.",
+          stats: { emailsFound: 0, emailsIngested: 0, threadsCreated: 0 }
+        });
+      }
+
+      console.log(`[Client Email Sync] Starting sync for client ${clientId} with ${uniqueContactEmails.length} contact emails:`, uniqueContactEmails);
+
+      // Get all tenant users (mailboxes)
+      const tenantResult = await listTenantUsers({ top: 100 });
+      const tenantUsers = tenantResult.users;
+
+      if (tenantUsers.length === 0) {
+        return res.status(400).json({
+          message: "No tenant mailboxes found. Please ensure Microsoft Graph is properly configured."
+        });
+      }
+
+      console.log(`[Client Email Sync] Found ${tenantUsers.length} tenant mailboxes to search`);
+
+      // Stats to track progress
+      const stats = {
+        mailboxesSearched: 0,
+        emailsFound: 0,
+        emailsIngested: 0,
+        errors: 0
+      };
+
+      // Search each tenant mailbox for emails involving contact email addresses
+      for (const tenantUser of tenantUsers) {
+        const mailboxEmail = tenantUser.mail || tenantUser.userPrincipalName;
+        if (!mailboxEmail) continue;
+
+        try {
+          stats.mailboxesSearched++;
+          
+          // Build search filter for emails involving any of the contact emails
+          // Search in from, to, and cc fields
+          const searchQueries = uniqueContactEmails.map(email => 
+            `(from/emailAddress/address eq '${email}' or recipients/any(r: r/emailAddress/address eq '${email}'))`
+          ).join(' or ');
+
+          // Query Graph API for messages matching these email addresses
+          // Use a simpler approach: fetch recent messages and filter
+          const messagesResult = await getUserEmails(mailboxEmail, {
+            top: 50,
+            orderBy: 'receivedDateTime desc'
+          });
+
+          if (!messagesResult.messages || messagesResult.messages.length === 0) continue;
+
+          // Filter messages to only those involving our contact emails
+          const relevantMessages = messagesResult.messages.filter((msg: any) => {
+            const fromEmail = msg.from?.emailAddress?.address?.toLowerCase() || '';
+            const toEmails = (msg.toRecipients || []).map((r: any) => r.emailAddress?.address?.toLowerCase() || '');
+            const ccEmails = (msg.ccRecipients || []).map((r: any) => r.emailAddress?.address?.toLowerCase() || '');
+            
+            return uniqueContactEmails.some(contactEmail => 
+              fromEmail === contactEmail ||
+              toEmails.includes(contactEmail) ||
+              ccEmails.includes(contactEmail)
+            );
+          });
+
+          stats.emailsFound += relevantMessages.length;
+
+          // Ingest relevant messages using the email ingestion service
+          if (relevantMessages.length > 0) {
+            // Find or create a user record for this tenant mailbox
+            const mailboxUser = await storage.getUserByEmail(mailboxEmail);
+            // Use the current user's ID for attribution if mailbox user doesn't exist
+            const attributeUserId = mailboxUser?.id || userId;
+
+            // Use the ingestion service to process messages
+            const ingestionResult = await emailIngestionService.ingestMessages(
+              attributeUserId,
+              relevantMessages,
+              'Inbox'
+            );
+            stats.emailsIngested += ingestionResult.processed;
+          }
+
+        } catch (mailboxError: any) {
+          console.error(`[Client Email Sync] Error searching mailbox ${mailboxEmail}:`, mailboxError.message);
+          stats.errors++;
+          // Continue with other mailboxes
+        }
+      }
+
+      // Process threading and client association
+      console.log('[Client Email Sync] Processing threading...');
+      await emailIngestionService.processThreading();
+      
+      // Directly link threads to this client based on contact email addresses
+      // This ensures synced emails appear in the Communications tab immediately
+      console.log('[Client Email Sync] Linking threads to client...');
+      let threadsLinked = 0;
+      
+      // Get all threads without a clientId
+      const unmatchedThreads = await storage.getThreadsWithoutClient();
+      
+      for (const thread of unmatchedThreads) {
+        try {
+          // Get messages in this thread
+          const messages = await storage.getEmailMessagesByThreadId(thread.canonicalConversationId);
+          
+          // Check if any message involves our contact emails
+          const involvesContact = messages.some(msg => {
+            const msgFrom = (msg.from || '').toLowerCase();
+            const msgTo = (msg.to || []).map(e => e.toLowerCase());
+            const msgCc = (msg.cc || []).map(e => e.toLowerCase());
+            
+            return uniqueContactEmails.some(contactEmail => 
+              msgFrom === contactEmail ||
+              msgTo.includes(contactEmail) ||
+              msgCc.includes(contactEmail)
+            );
+          });
+          
+          if (involvesContact) {
+            // Link this thread and its messages to the client
+            await storage.updateEmailThread(thread.canonicalConversationId, {
+              clientId: clientId
+            });
+            
+            for (const message of messages) {
+              await storage.updateEmailMessage(message.internetMessageId, {
+                clientId: clientId,
+                clientMatchConfidence: 'high'
+              });
+            }
+            
+            threadsLinked++;
+          }
+        } catch (threadError: any) {
+          console.error(`[Client Email Sync] Error linking thread ${thread.canonicalConversationId}:`, threadError.message);
+        }
+      }
+      
+      console.log(`[Client Email Sync] Linked ${threadsLinked} threads to client ${clientId}`);
+
+      console.log(`[Client Email Sync] Sync complete for client ${clientId}:`, stats);
+
+      res.json({
+        success: true,
+        message: `Email sync complete. Found ${stats.emailsFound} emails across ${stats.mailboxesSearched} mailboxes, ingested ${stats.emailsIngested} new messages, linked ${threadsLinked} threads.`,
+        stats: {
+          ...stats,
+          threadsLinked
+        }
+      });
+
+    } catch (error: any) {
+      console.error('[Client Email Sync] Error syncing client emails:', error);
+      res.status(500).json({ 
+        message: "Failed to sync client emails",
         error: error.message 
       });
     }
