@@ -110,7 +110,7 @@ export default function SmsTemplates() {
   if (isLoading || templatesLoading) {
     return (
       <div className="flex flex-col h-screen bg-background dark:bg-background">
-        <TopNavigation />
+        <TopNavigation user={user} />
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -121,7 +121,7 @@ export default function SmsTemplates() {
   if (!user?.isAdmin) {
     return (
       <div className="flex flex-col h-screen bg-background dark:bg-background">
-        <TopNavigation />
+        <TopNavigation user={user} />
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
             <AlertCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -135,7 +135,7 @@ export default function SmsTemplates() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background dark:bg-background">
-      <TopNavigation />
+      <TopNavigation user={user} />
       
       <div className="border-b border-border bg-card">
         <div className="page-container py-6 md:py-8">
