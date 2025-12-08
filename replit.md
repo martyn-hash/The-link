@@ -74,6 +74,19 @@ Key files: `client/src/pages/client-detail/components/communications/dialogs/Cal
 
 Required OAuth scopes: RingOut, ReadCallLog, ReadCallRecording, AI (optional), VoIP, WebSocket
 
+### AI Magic Call/SMS Integration (December 2025)
+Natural language voice calling and SMS through the AI Magic assistant. Users can say things like "call Josie from Victoriam" or "text Sarah at ABC Ltd" and the AI will find matching contacts and initiate communications.
+
+- **Natural Language Parsing**: AI recognizes call/SMS intent with flexible phrasing (e.g., "ring", "phone", "call", "text", "message", "sms")
+- **Fuzzy Person Matching**: Uses `fuzzyMatchPeopleWithClient` to find contacts by name with optional client context boosting
+- **Disambiguation UI**: When multiple matches found, presents selection cards for user to choose the correct person
+- **Client Context Optional**: Calls work without explicit client association, showing "Call Completed (not logged)" toast
+- **With Client Context**: Calls are logged to the client's communication history with full metadata
+- **Phone Validation**: Automatically validates that matched contacts have valid phone numbers before initiating calls
+- **Event Pattern**: Action cards dispatch custom DOM events → AIMagicCallHandler catches events → Opens CallDialog/SMSDialog with pre-filled data
+
+Key files: `client/src/components/ai-magic/AIMagicCallHandler.tsx`, `client/src/components/ai-magic/AIMagicActionCards.tsx`, `server/services/ai-magic-service.ts`
+
 ### System Design
 PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) handles object storage with secure signed URLs. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control; the client portal uses passwordless email verification. The system is multi-tenant and designed for modularity, with extensive database indexing. Key features include automated project management, advanced communication tools (push notifications, internal tasks with quick reminders, email threading via Microsoft Graph, multi-channel client notifications with AI assistance, RingCentral VoIP with automatic transcription), UK eIDAS-compliant electronic signatures, comprehensive workflow and status management with Kanban views, and Bookkeeping Queries for managing transaction-related questions. It also includes an AI Audio Transcription service, client value notifications with AI-assisted drafting, Zapier integration via webhooks, and an enhanced data import system. A friendly error handling system replaces technical errors with user-friendly messages. A scheduled notifications calendar provides comprehensive management of automated notifications, with stage-aware suppression. A resilient project scheduling orchestrator ensures robustness against server restarts and outages.
 
