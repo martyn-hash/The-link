@@ -10,6 +10,7 @@ import {
   createReplyToMessage,
   createReplyAllToMessage,
 } from "../utils/applicationGraphClient";
+import { slaCalculationService } from "../services/slaCalculationService";
 
 /**
  * Email Routes
@@ -656,6 +657,357 @@ export function registerEmailRoutes(
         success: false,
         message: "Failed to list tenant users",
         error: error.message
+      });
+    }
+  });
+
+  // ============================================================================
+  // EMAIL DASHBOARD ROUTES - Smart Inbox / SLA Management
+  // ============================================================================
+
+  /**
+   * GET /api/email-dashboard/threads
+   * Get email threads for the dashboard with SLA information
+   * 
+   * Query params:
+   * - status: 'active' | 'complete' | 'snoozed' | 'all' (default: 'active')
+   * - clientId: optional filter by client
+   * - limit: number of threads (default: 50)
+   */
+  app.get('/api/email-dashboard/threads', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(403).json({ message: "User not found" });
+      }
+      
+      if (!user.accessEmail) {
+        return res.status(403).json({ 
+          message: "Email access is not enabled for your account."
+        });
+      }
+      
+      const status = (req.query.status as string) || 'active';
+      const clientId = req.query.clientId as string | undefined;
+      const limit = parseInt(req.query.limit as string) || 50;
+      
+      let threads: any[] = [];
+      
+      if (status === 'all') {
+        threads = await storage.getAllEmailThreads();
+      } else if (status === 'active' || status === 'complete' || status === 'snoozed') {
+        threads = await storage.getEmailThreadsBySlaStatus(status);
+      } else {
+        return res.status(400).json({ message: "Invalid status filter" });
+      }
+      
+      // Filter by clientId if provided
+      if (clientId) {
+        threads = threads.filter(t => t.clientId === clientId);
+      }
+      
+      // Limit results
+      threads = threads.slice(0, limit);
+      
+      // Enrich with SLA calculation for each thread
+      const enrichedThreads = await Promise.all(threads.map(async (thread) => {
+        const slaInfo = await slaCalculationService.calculateSla(thread);
+        
+        // Get client info if linked
+        let client = null;
+        if (thread.clientId) {
+          client = await storage.getClientById(thread.clientId);
+        }
+        
+        return {
+          ...thread,
+          client: client ? { id: client.id, name: client.name } : null,
+          sla: slaInfo ? {
+            deadline: slaInfo.deadline,
+            isBreached: slaInfo.isBreached,
+            urgencyLevel: slaInfo.urgencyLevel,
+            hoursRemaining: Math.round(slaInfo.hoursRemaining * 10) / 10,
+            workingHoursRemaining: Math.round(slaInfo.workingHoursRemaining * 10) / 10
+          } : null
+        };
+      }));
+      
+      res.json({
+        threads: enrichedThreads,
+        total: enrichedThreads.length
+      });
+      
+    } catch (error: any) {
+      console.error('[Email Dashboard] Error fetching threads:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch email threads",
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * GET /api/email-dashboard/stats
+   * Get SLA statistics for the dashboard
+   */
+  app.get('/api/email-dashboard/stats', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(403).json({ message: "User not found" });
+      }
+      
+      if (!user.accessEmail) {
+        return res.status(403).json({ 
+          message: "Email access is not enabled for your account."
+        });
+      }
+      
+      const stats = await slaCalculationService.getSlaStats();
+      const settings = await slaCalculationService.getSlaSettings();
+      
+      res.json({
+        ...stats,
+        settings: {
+          responseDays: settings.slaResponseDays,
+          workingDaysOnly: settings.slaWorkingDaysOnly,
+          workingHoursStart: settings.workingHoursStart,
+          workingHoursEnd: settings.workingHoursEnd,
+          workingDays: settings.workingDays
+        }
+      });
+      
+    } catch (error: any) {
+      console.error('[Email Dashboard] Error fetching stats:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch SLA stats",
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * PATCH /api/email-dashboard/threads/:threadId/complete
+   * Mark a thread as complete (zero-inbox workflow)
+   */
+  app.patch('/api/email-dashboard/threads/:threadId/complete', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { threadId } = req.params;
+      const userId = req.user!.effectiveUserId;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(403).json({ message: "User not found" });
+      }
+      
+      if (!user.accessEmail) {
+        return res.status(403).json({ 
+          message: "Email access is not enabled for your account."
+        });
+      }
+      
+      const thread = await slaCalculationService.markComplete(threadId, userId);
+      
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+      
+      res.json({
+        success: true,
+        thread
+      });
+      
+    } catch (error: any) {
+      console.error('[Email Dashboard] Error marking thread complete:', error);
+      res.status(500).json({ 
+        message: "Failed to mark thread complete",
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * PATCH /api/email-dashboard/threads/:threadId/reopen
+   * Reopen a completed thread (mark as active)
+   */
+  app.patch('/api/email-dashboard/threads/:threadId/reopen', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { threadId } = req.params;
+      const userId = req.user!.effectiveUserId;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(403).json({ message: "User not found" });
+      }
+      
+      if (!user.accessEmail) {
+        return res.status(403).json({ 
+          message: "Email access is not enabled for your account."
+        });
+      }
+      
+      const thread = await slaCalculationService.transitionToActive(threadId, new Date());
+      
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+      
+      res.json({
+        success: true,
+        thread
+      });
+      
+    } catch (error: any) {
+      console.error('[Email Dashboard] Error reopening thread:', error);
+      res.status(500).json({ 
+        message: "Failed to reopen thread",
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * PATCH /api/email-dashboard/threads/:threadId/snooze
+   * Snooze a thread until a specified date
+   * 
+   * Body:
+   * - snoozeUntil: ISO date string
+   */
+  app.patch('/api/email-dashboard/threads/:threadId/snooze', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { threadId } = req.params;
+      const userId = req.user!.effectiveUserId;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(403).json({ message: "User not found" });
+      }
+      
+      if (!user.accessEmail) {
+        return res.status(403).json({ 
+          message: "Email access is not enabled for your account."
+        });
+      }
+      
+      const snoozeSchema = z.object({
+        snoozeUntil: z.string().datetime()
+      });
+      
+      const validation = snoozeSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({
+          message: "Invalid request data",
+          errors: validation.error.errors
+        });
+      }
+      
+      const snoozeUntil = new Date(validation.data.snoozeUntil);
+      
+      if (snoozeUntil <= new Date()) {
+        return res.status(400).json({ message: "Snooze date must be in the future" });
+      }
+      
+      const thread = await slaCalculationService.snoozeThread(threadId, snoozeUntil);
+      
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+      
+      res.json({
+        success: true,
+        thread
+      });
+      
+    } catch (error: any) {
+      console.error('[Email Dashboard] Error snoozing thread:', error);
+      res.status(500).json({ 
+        message: "Failed to snooze thread",
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * GET /api/email-dashboard/threads/:threadId
+   * Get a single thread with all messages and SLA info
+   */
+  app.get('/api/email-dashboard/threads/:threadId', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { threadId } = req.params;
+      const userId = req.user!.effectiveUserId;
+      const user = await storage.getUser(userId);
+      
+      if (!user) {
+        return res.status(403).json({ message: "User not found" });
+      }
+      
+      if (!user.accessEmail) {
+        return res.status(403).json({ 
+          message: "Email access is not enabled for your account."
+        });
+      }
+      
+      const thread = await storage.getEmailThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+      
+      // Get all messages in this thread
+      const messages = await storage.getEmailMessagesByThreadId(threadId);
+      
+      // Sort messages by sent time (oldest first for conversation view)
+      messages.sort((a, b) => 
+        new Date(a.sentDateTime || a.receivedDateTime).getTime() - 
+        new Date(b.sentDateTime || b.receivedDateTime).getTime()
+      );
+      
+      // Get SLA info
+      const slaInfo = await slaCalculationService.calculateSla(thread);
+      
+      // Get client info if linked
+      let client = null;
+      if (thread.clientId) {
+        client = await storage.getClientById(thread.clientId);
+      }
+      
+      // Get attachments for each message
+      const messagesWithAttachments = await Promise.all(messages.map(async (msg) => {
+        const attachments = await storage.getAttachmentsByMessageId(msg.internetMessageId);
+        return {
+          ...msg,
+          attachments: attachments.map(att => ({
+            id: att.id,
+            filename: att.fileName,
+            contentType: att.contentType,
+            size: att.fileSize
+          }))
+        };
+      }));
+      
+      res.json({
+        thread: {
+          ...thread,
+          client: client ? { id: client.id, name: client.name } : null,
+          sla: slaInfo ? {
+            deadline: slaInfo.deadline,
+            isBreached: slaInfo.isBreached,
+            urgencyLevel: slaInfo.urgencyLevel,
+            hoursRemaining: Math.round(slaInfo.hoursRemaining * 10) / 10,
+            workingHoursRemaining: Math.round(slaInfo.workingHoursRemaining * 10) / 10
+          } : null
+        },
+        messages: messagesWithAttachments
+      });
+      
+    } catch (error: any) {
+      console.error('[Email Dashboard] Error fetching thread:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch thread",
+        error: error.message 
       });
     }
   });

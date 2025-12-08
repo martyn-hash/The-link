@@ -86,6 +86,7 @@ const SignPage = lazy(() => import("@/pages/sign"));
 const SignatureRequestsPage = lazy(() => import("@/pages/signature-requests"));
 const SignatureRequestBuilder = lazy(() => import("@/pages/signature-request-builder"));
 const QueryResponsePage = lazy(() => import("@/pages/query-response"));
+const EmailDashboard = lazy(() => import("@/pages/email-dashboard"));
 
 function PageLoader() {
   return (
@@ -171,6 +172,7 @@ function Router() {
         
         {/* Protected routes - render regardless of auth state, let components handle auth */}
         <Route path="/messages" component={Messages} />
+        <Route path="/email-dashboard" component={EmailDashboard} />
         <Route path="/internal-chat" component={InternalChat} />
         <Route path="/client-requests" component={ClientRequests} />
         {/* Redirect /projects to root since Projects is now the home page */}

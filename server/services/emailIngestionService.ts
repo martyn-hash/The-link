@@ -15,6 +15,7 @@ import { storage } from '../storage/index';
 import { nanoid } from 'nanoid';
 import type { EmailMessage, EmailThread, ClientDomainAllowlist, InsertEmailMessage } from '@shared/schema';
 import { emailAttachmentService } from './emailAttachmentService';
+import { slaCalculationService } from './slaCalculationService';
 
 // Message fields to fetch from Graph API
 // Keep this lean to minimize data transfer and processing time
@@ -781,6 +782,38 @@ export class EmailIngestionService {
         threadKey: thread.canonicalConversationId 
       });
     }
+
+    // Update SLA status based on latest message direction
+    await this.processSlaForThread(thread.canonicalConversationId, messages);
+  }
+
+  /**
+   * Process SLA status for a thread based on its messages
+   * Inbound messages → active, Outbound messages → complete
+   */
+  private async processSlaForThread(threadId: string, messages: EmailMessage[]): Promise<void> {
+    if (!messages.length) return;
+
+    // Sort messages by time to get the latest
+    const sortedMessages = messages.sort((a, b) => 
+      new Date(b.sentDateTime || b.receivedDateTime).getTime() - new Date(a.sentDateTime || a.receivedDateTime).getTime()
+    );
+    const latestMessage = sortedMessages[0];
+
+    // Only process if the message has a direction
+    if (!latestMessage.direction) return;
+
+    const messageTime = latestMessage.sentDateTime || latestMessage.receivedDateTime;
+
+    try {
+      await slaCalculationService.processEmailForSla(
+        threadId,
+        latestMessage.direction as 'inbound' | 'outbound' | 'internal' | 'external',
+        new Date(messageTime)
+      );
+    } catch (error) {
+      console.error(`[SLA Processing] Error processing SLA for thread ${threadId}:`, error);
+    }
   }
 
   /**
@@ -802,6 +835,9 @@ export class EmailIngestionService {
             lastMessageAt: messageTime,
             messageCount: (thread.messageCount || 0) + 1
           });
+          
+          // Process SLA for the updated thread
+          await this.processSlaForThread(thread.canonicalConversationId, [message]);
         }
         return;
       }
@@ -851,6 +887,9 @@ export class EmailIngestionService {
 
     // Link message to thread
     await storage.updateEmailMessage(message.internetMessageId, { threadKey: thread.threadKey });
+
+    // Process SLA for the thread
+    await this.processSlaForThread(thread.canonicalConversationId, [message]);
   }
 
   /**

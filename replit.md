@@ -51,6 +51,29 @@ Reusable SMS message templates with variable support for personalization. Admins
 
 Key files: `client/src/pages/sms-templates.tsx`, `client/src/components/SmsTemplatePicker.tsx`, `client/src/pages/client-detail/components/communications/dialogs/SMSDialog.tsx`
 
+### AI Email Dashboard (December 2025)
+Zero-inbox email management system with SLA tracking for staff to manage client emails efficiently. Uses MS Graph for email integration and provides a unified inbox view.
+
+- **SLA Tracking**: Automatic deadline calculation based on company settings (response days, working hours 09:00-17:30, Mon-Fri)
+- **Thread Status Management**: Active/Complete/Snoozed states with automatic transitions when clients reply
+- **Visual SLA Indicators**: Color-coded urgency (green=OK, yellow=warning, orange=danger, red=breached)
+- **Zero-Inbox Workflow**: Staff can mark threads complete or snooze until a future date
+- **Thread Detail View**: Full email conversation with attachments, sender info, and action buttons
+
+Key files:
+- `client/src/pages/email-dashboard.tsx` - Frontend dashboard page
+- `server/services/slaCalculationService.ts` - SLA calculation logic
+- `server/routes/emails.ts` - API endpoints for dashboard
+- `DOCS/ai_email_dashboard.md` - Detailed specification
+
+API Endpoints:
+- `GET /api/email-dashboard/threads` - List threads with SLA info (status filter: active/complete/snoozed)
+- `GET /api/email-dashboard/threads/:threadId` - Single thread with messages
+- `GET /api/email-dashboard/stats` - Dashboard statistics
+- `PATCH /api/email-dashboard/threads/:threadId/complete` - Mark thread complete
+- `PATCH /api/email-dashboard/threads/:threadId/snooze` - Snooze until date
+- `PATCH /api/email-dashboard/threads/:threadId/reopen` - Reopen completed thread
+
 ### System Design
 PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) handles object storage with secure signed URLs. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control; the client portal uses passwordless email verification. The system is multi-tenant and designed for modularity, with extensive database indexing. Key features include automated project management, advanced communication tools (push notifications, internal tasks, email threading via Microsoft Graph, multi-channel client notifications with AI assistance, RingCentral VoIP with automatic transcription), UK eIDAS-compliant electronic signatures, comprehensive workflow and status management with Kanban views, and Bookkeeping Queries. It also includes an AI Audio Transcription service, client value notifications with AI-assisted drafting, Zapier integration via webhooks, and an enhanced data import system. A friendly error handling system replaces technical errors with user-friendly messages. A scheduled notifications calendar provides comprehensive management of automated notifications, with stage-aware suppression. A resilient project scheduling orchestrator ensures robustness against server restarts and outages.
 

@@ -632,6 +632,7 @@ export interface IStorage {
   getEmailThreadByConversationId(conversationId: string): Promise<EmailThread | undefined>;
   getEmailThreadById(id: string): Promise<EmailThread | undefined>;
   getEmailThreadsByClientId(clientId: string): Promise<EmailThread[]>;
+  getEmailThreadsBySlaStatus(slaStatus: 'active' | 'complete' | 'snoozed'): Promise<EmailThread[]>;
   updateEmailThread(id: string, thread: Partial<InsertEmailThread>): Promise<EmailThread>;
   
   createEmailMessage(message: InsertEmailMessage): Promise<EmailMessage>;

@@ -312,6 +312,14 @@ export class EmailStorage {
       .orderBy(desc(emailThreads.lastMessageAt));
   }
 
+  async getEmailThreadsBySlaStatus(slaStatus: 'active' | 'complete' | 'snoozed'): Promise<EmailThread[]> {
+    return await db
+      .select()
+      .from(emailThreads)
+      .where(eq(emailThreads.slaStatus, slaStatus))
+      .orderBy(desc(emailThreads.lastMessageAt));
+  }
+
   async getEmailThreadsByUserId(userId: string, myEmailsOnly: boolean): Promise<EmailThread[]> {
     if (myEmailsOnly) {
       const user = await db
@@ -338,6 +346,11 @@ export class EmailStorage {
           messageCount: emailThreads.messageCount,
           latestPreview: emailThreads.latestPreview,
           latestDirection: emailThreads.latestDirection,
+          slaStatus: emailThreads.slaStatus,
+          slaBecameActiveAt: emailThreads.slaBecameActiveAt,
+          slaCompletedAt: emailThreads.slaCompletedAt,
+          slaCompletedBy: emailThreads.slaCompletedBy,
+          slaSnoozeUntil: emailThreads.slaSnoozeUntil,
           createdAt: emailThreads.createdAt,
           updatedAt: emailThreads.updatedAt,
         })
@@ -369,6 +382,11 @@ export class EmailStorage {
           messageCount: emailThreads.messageCount,
           latestPreview: emailThreads.latestPreview,
           latestDirection: emailThreads.latestDirection,
+          slaStatus: emailThreads.slaStatus,
+          slaBecameActiveAt: emailThreads.slaBecameActiveAt,
+          slaCompletedAt: emailThreads.slaCompletedAt,
+          slaCompletedBy: emailThreads.slaCompletedBy,
+          slaSnoozeUntil: emailThreads.slaSnoozeUntil,
           createdAt: emailThreads.createdAt,
           updatedAt: emailThreads.updatedAt,
         })

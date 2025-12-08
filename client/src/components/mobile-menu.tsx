@@ -14,7 +14,8 @@ import {
   MessageCircle,
   Building,
   Users,
-  List
+  List,
+  Inbox
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import type { User } from "@shared/schema";
@@ -58,6 +59,7 @@ export default function MobileMenu({ user }: MobileMenuProps) {
     { href: "/", label: "Dashboard", icon: Home, show: true },
     { href: "/services", label: "Services", icon: List, show: true },
     { href: "/messages", label: "Messages", icon: MessageCircle, show: true },
+    { href: "/email-dashboard", label: "Email Dashboard", icon: Inbox, show: true },
     { href: "/companies", label: "Clients", icon: Building, show: true },
   ];
 

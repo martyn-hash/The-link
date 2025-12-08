@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { List, UserX, Calendar, Home, ChevronDown, User as UserIcon, Settings, Building, MessageCircle, Users, ClipboardList, FileSignature, Bell } from "lucide-react";
+import { List, UserX, Calendar, Home, ChevronDown, User as UserIcon, Settings, Building, MessageCircle, Users, ClipboardList, FileSignature, Bell, Inbox } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import SuperSearch from "@/components/super-search";
@@ -179,6 +179,18 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="font-medium text-foreground text-sm">Messages</div>
+                            </div>
+                          </div>
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href="/email-dashboard" className="w-full">
+                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-email-dashboard-menu">
+                            <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center shrink-0">
+                              <Inbox className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-foreground text-sm">Email Dashboard</div>
                             </div>
                           </div>
                         </Link>

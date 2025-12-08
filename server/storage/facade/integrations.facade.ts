@@ -247,6 +247,10 @@ export function applyIntegrationsFacade<TBase extends Constructor<IntegrationsFa
       return this.emailStorage.getEmailThreadsByClientId(clientId);
     }
 
+    async getEmailThreadsBySlaStatus(slaStatus: 'active' | 'complete' | 'snoozed') {
+      return this.emailStorage.getEmailThreadsBySlaStatus(slaStatus);
+    }
+
     async getEmailThreadsByUserId(userId: string, myEmailsOnly: boolean) {
       return this.emailStorage.getEmailThreadsByUserId(userId, myEmailsOnly);
     }
