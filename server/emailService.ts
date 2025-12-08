@@ -293,10 +293,12 @@ export async function sendStageChangeNotificationEmail(
     ? `from "${fromStage.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}" to "${formattedStageName}"`
     : `to "${formattedStageName}"`;
   
-  // Sanitize HTML notes to prevent injection attacks - only allow safe formatting tags
+  // Sanitize HTML notes to prevent injection attacks - only allow safe formatting tags and images
+  // Note: style attribute is restricted to safe properties via DOMPurify hooks
   const sanitizedNotes = notes ? DOMPurify.sanitize(notes, {
-    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'table', 'tr', 'td', 'th', 'thead', 'tbody'],
-    ALLOWED_ATTR: []
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'table', 'tr', 'td', 'th', 'thead', 'tbody', 'img', 'a', 'span'],
+    ALLOWED_ATTR: ['src', 'alt', 'width', 'height', 'class', 'href', 'target'],
+    ALLOW_DATA_ATTR: false,
   }) : '';
   
   // Convert sanitized notes to plain text for text email

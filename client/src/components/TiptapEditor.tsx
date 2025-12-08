@@ -26,8 +26,41 @@ import {
   TableProperties,
   Trash2,
   Plus,
+  ImageIcon,
+  Loader2,
 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
+import { useToast } from '@/hooks/use-toast';
+
+async function uploadInlineImage(imageData: string): Promise<{ success: boolean; url?: string; error?: string }> {
+  try {
+    const response = await fetch('/api/objects/upload/inline-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ imageData }),
+      credentials: 'include',
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      return { success: false, error: error.message || 'Upload failed' };
+    }
+    
+    const result = await response.json();
+    return { success: true, url: result.url };
+  } catch (error) {
+    return { success: false, error: 'Network error during upload' };
+  }
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 export interface TiptapEditorProps {
   content: string;
@@ -305,13 +338,35 @@ const EditorMenuBar = ({ editor }: { editor: Editor | null }) => {
 
       <Separator orientation="vertical" className="h-8" />
 
-      {/* Link and Table */}
+      {/* Link, Image, and Table */}
       <MenuButton
         onClick={setLink}
         active={editor.isActive('link')}
         title="Insert Link"
       >
         <LinkIcon className="h-4 w-4" />
+      </MenuButton>
+      <MenuButton
+        onClick={() => {
+          const input = document.createElement('input');
+          input.type = 'file';
+          input.accept = 'image/png,image/jpeg,image/gif,image/webp';
+          input.onchange = async (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0];
+            if (file) {
+              const dataUrl = await fileToDataUrl(file);
+              const result = await uploadInlineImage(dataUrl);
+              if (result.success && result.url) {
+                editor.chain().focus().setImage({ src: result.url }).run();
+              }
+            }
+          };
+          input.click();
+        }}
+        active={editor.isActive('image')}
+        title="Insert Image"
+      >
+        <ImageIcon className="h-4 w-4" />
       </MenuButton>
       <TableInsertPicker editor={editor} />
 
@@ -406,17 +461,98 @@ export function TiptapEditor({
   className = '',
   editable = true,
 }: TiptapEditorProps) {
+  const { toast } = useToast();
+  const [isUploading, setIsUploading] = useState(false);
+  const editorRef = useRef<Editor | null>(null);
+
+  const handleImagePaste = useCallback(async (files: File[]) => {
+    const imageFiles = files.filter(f => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) return false;
+
+    setIsUploading(true);
+    
+    for (const file of imageFiles) {
+      try {
+        const dataUrl = await fileToDataUrl(file);
+        const result = await uploadInlineImage(dataUrl);
+        
+        if (result.success && result.url) {
+          editorRef.current?.chain().focus().setImage({ src: result.url }).run();
+        } else {
+          toast({
+            title: "Image upload failed",
+            description: result.error || "Could not upload image",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        toast({
+          title: "Image upload failed",
+          description: "An error occurred while uploading the image",
+          variant: "destructive",
+        });
+      }
+    }
+    
+    setIsUploading(false);
+    return true;
+  }, [toast]);
+
   const editor = useEditor({
     extensions: getTiptapExtensions(),
     content,
-    editorProps: getEditorProps(),
+    editorProps: {
+      ...getEditorProps(),
+      handlePaste: (view, event) => {
+        const items = event.clipboardData?.items;
+        if (!items) return false;
+
+        const imageFiles: File[] = [];
+        for (let i = 0; i < items.length; i++) {
+          const item = items[i];
+          if (item.type.startsWith('image/')) {
+            const file = item.getAsFile();
+            if (file) imageFiles.push(file);
+          }
+        }
+
+        if (imageFiles.length > 0) {
+          handleImagePaste(imageFiles);
+          return true;
+        }
+        
+        return false;
+      },
+      handleDrop: (view, event) => {
+        const files = event.dataTransfer?.files;
+        if (!files || files.length === 0) return false;
+
+        const imageFiles: File[] = [];
+        for (let i = 0; i < files.length; i++) {
+          if (files[i].type.startsWith('image/')) {
+            imageFiles.push(files[i]);
+          }
+        }
+
+        if (imageFiles.length > 0) {
+          event.preventDefault();
+          handleImagePaste(imageFiles);
+          return true;
+        }
+        
+        return false;
+      },
+    },
     editable,
     onUpdate: ({ editor }) => {
       onChange(editor.getHTML());
     },
   });
 
-  // Update editor content when prop changes
+  useEffect(() => {
+    editorRef.current = editor;
+  }, [editor]);
+
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
       editor.commands.setContent(content);
@@ -425,13 +561,21 @@ export function TiptapEditor({
 
   return (
     <TooltipProvider>
-      <div className={`border border-border rounded-md overflow-hidden ${className}`}>
+      <div className={`border border-border rounded-md overflow-hidden relative ${className}`}>
         {editable && <EditorMenuBar editor={editor} />}
         <EditorContent 
           editor={editor} 
           className="tiptap-editor"
           placeholder={placeholder}
         />
+        {isUploading && (
+          <div className="absolute inset-0 bg-background/80 flex items-center justify-center z-10">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Uploading image...
+            </div>
+          </div>
+        )}
       </div>
     </TooltipProvider>
   );

@@ -8,6 +8,7 @@ import { TextStyle } from '@tiptap/extension-text-style';
 import { Color } from '@tiptap/extension-color';
 import { Underline } from '@tiptap/extension-underline';
 import { Link } from '@tiptap/extension-link';
+import Image from '@tiptap/extension-image';
 
 /**
  * Standard Tiptap extensions for rich text editing with table support
@@ -35,6 +36,14 @@ export const getTiptapExtensions = (): Extensions => [
     openOnClick: false,
     HTMLAttributes: {
       class: 'text-primary underline',
+    },
+  }),
+  Image.configure({
+    inline: true,
+    allowBase64: false,
+    HTMLAttributes: {
+      class: 'inline-image',
+      style: 'max-width: 100%; height: auto; border-radius: 4px;',
     },
   }),
 ];
