@@ -297,11 +297,12 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
       
       // Let RingCentral use the default line for caller ID - don't specify fromNumber
       // This allows the user's configured digital line to be used automatically
-      console.log('[RingCentral] Calling webPhone.call() with params:', { toNumber: formattedNumber });
+      // NOTE: WebPhone v2 uses 'phoneNumber' not 'toNumber'
+      console.log('[RingCentral] Calling webPhone.call() with params:', { phoneNumber: formattedNumber });
       
       try {
         const session = await webPhoneRef.current.call({
-          toNumber: formattedNumber,
+          phoneNumber: formattedNumber,
         });
         
         console.log('[RingCentral] call() returned session:', session);
