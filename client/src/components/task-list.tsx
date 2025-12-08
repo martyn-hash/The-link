@@ -259,17 +259,29 @@ export default function TaskList({
     columnWidths: Record<string, number>;
   }
 
-  // Column preferences state
-  const [visibleColumns, setVisibleColumns] = useState<string[]>(
-    ALL_COLUMNS.filter(col => col.defaultVisible).map(col => col.id)
-  );
-  const [columnOrder, setColumnOrder] = useState<string[]>(
-    ALL_COLUMNS.map(col => col.id)
-  );
+  // Track whether initial preferences have been applied to prevent flash
+  const [preferencesInitialized, setPreferencesInitialized] = useState(false);
+  // Track the viewType to detect changes and reset preferences initialization
+  const [lastViewType, setLastViewType] = useState(viewType);
+
+  // Reset preferences initialization when viewType changes (e.g., switching between saved views)
+  useEffect(() => {
+    if (viewType !== lastViewType) {
+      setPreferencesInitialized(false);
+      setVisibleColumns(null);
+      setColumnOrder(null);
+      setColumnWidths({});
+      setLastViewType(viewType);
+    }
+  }, [viewType, lastViewType]);
+
+  // Column preferences state - start with null to indicate "not yet determined"
+  const [visibleColumns, setVisibleColumns] = useState<string[] | null>(null);
+  const [columnOrder, setColumnOrder] = useState<string[] | null>(null);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
 
   // Load column preferences from API with viewType
-  const { data: savedPreferences } = useQuery<SavedPreferences>({
+  const { data: savedPreferences, isLoading: preferencesLoading, isFetched: preferencesFetched } = useQuery<SavedPreferences>({
     queryKey: ["/api/column-preferences", { viewType }],
     queryFn: async () => {
       const response = await fetch(`/api/column-preferences?viewType=${encodeURIComponent(viewType)}`);
@@ -281,6 +293,7 @@ export default function TaskList({
       }
       return response.json();
     },
+    staleTime: 30000,
   });
 
   // Save column preferences mutation with viewType
@@ -294,10 +307,19 @@ export default function TaskList({
   });
 
   // Apply saved preferences on load - with proper validation
+  // Only runs once when preferences are first fetched to prevent flash
   useEffect(() => {
+    // Wait until query has completed at least once
+    if (!preferencesFetched) return;
+    
+    // Don't re-initialize if already done (prevents flash on refetch)
+    if (preferencesInitialized) return;
+    
+    const currentColumnIds = new Set(ALL_COLUMNS.map(c => c.id));
+    const defaultColumns = ALL_COLUMNS.filter(col => col.defaultVisible).map(col => col.id);
+    const defaultOrder = ALL_COLUMNS.map(col => col.id);
+    
     if (savedPreferences) {
-      const currentColumnIds = new Set(ALL_COLUMNS.map(c => c.id));
-      
       // Apply column order - filter out any saved columns that no longer exist,
       // and add any new columns that weren't in the saved order
       if (savedPreferences.columnOrder && savedPreferences.columnOrder.length > 0) {
@@ -306,7 +328,7 @@ export default function TaskList({
         const mergedOrder = [...validSavedOrder, ...newColumns];
         setColumnOrder(mergedOrder);
       } else {
-        setColumnOrder(ALL_COLUMNS.map(c => c.id));
+        setColumnOrder(defaultOrder);
       }
       
       // Apply visible columns - validate against current columns
@@ -323,24 +345,35 @@ export default function TaskList({
           setVisibleColumns(validVisibleColumns);
         } else {
           // Fallback to defaults if saved preferences are invalid/empty
-          setVisibleColumns(ALL_COLUMNS.filter(col => col.defaultVisible).map(col => col.id));
+          setVisibleColumns(defaultColumns);
         }
       } else {
         // No saved visible columns - use defaults
-        setVisibleColumns(ALL_COLUMNS.filter(col => col.defaultVisible).map(col => col.id));
+        setVisibleColumns(defaultColumns);
       }
       
       if (savedPreferences.columnWidths) {
         setColumnWidths(savedPreferences.columnWidths as Record<string, number>);
       }
+    } else {
+      // No saved preferences exist - use defaults
+      setVisibleColumns(defaultColumns);
+      setColumnOrder(defaultOrder);
     }
-  }, [savedPreferences]);
+    
+    setPreferencesInitialized(true);
+  }, [preferencesFetched, savedPreferences, preferencesInitialized]);
+
+  // Computed values with fallback to defaults (used for rendering and saving)
+  const effectiveColumnOrder = columnOrder ?? ALL_COLUMNS.map(col => col.id);
+  const effectiveVisibleColumns = visibleColumns ?? ALL_COLUMNS.filter(col => col.defaultVisible).map(col => col.id);
 
   // Save preferences whenever they change (debounced would be better in production)
   const savePreferences = () => {
+    if (!preferencesInitialized) return;
     savePreferencesMutation.mutate({
-      columnOrder,
-      visibleColumns,
+      columnOrder: effectiveColumnOrder,
+      visibleColumns: effectiveVisibleColumns,
       columnWidths,
     });
   };
@@ -357,33 +390,33 @@ export default function TaskList({
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
-      setColumnOrder((items) => {
-        const oldIndex = items.indexOf(active.id as string);
-        const newIndex = items.indexOf(over.id as string);
-        const newOrder = arrayMove(items, oldIndex, newIndex);
-        // Save to backend after reordering
-        setTimeout(() => {
-          savePreferencesMutation.mutate({
-            columnOrder: newOrder,
-            visibleColumns,
-            columnWidths,
-          });
-        }, 100);
-        return newOrder;
-      });
+      const currentOrder = effectiveColumnOrder;
+      const oldIndex = currentOrder.indexOf(active.id as string);
+      const newIndex = currentOrder.indexOf(over.id as string);
+      const newOrder = arrayMove(currentOrder, oldIndex, newIndex);
+      setColumnOrder(newOrder);
+      // Save to backend after reordering
+      setTimeout(() => {
+        savePreferencesMutation.mutate({
+          columnOrder: newOrder,
+          visibleColumns: effectiveVisibleColumns,
+          columnWidths,
+        });
+      }, 100);
     }
   };
 
   const toggleColumnVisibility = (columnId: string) => {
-    const newVisible = visibleColumns.includes(columnId)
-      ? visibleColumns.filter((id) => id !== columnId)
-      : [...visibleColumns, columnId];
+    const currentVisible = effectiveVisibleColumns;
+    const newVisible = currentVisible.includes(columnId)
+      ? currentVisible.filter((id) => id !== columnId)
+      : [...currentVisible, columnId];
     
     setVisibleColumns(newVisible);
     
     // Save to backend immediately (no setTimeout to avoid race conditions)
     savePreferencesMutation.mutate({
-      columnOrder,
+      columnOrder: effectiveColumnOrder,
       visibleColumns: newVisible,
       columnWidths,
     });
@@ -695,9 +728,9 @@ export default function TaskList({
   const visibleProjects = sortedProjects;
 
   // Get columns in order and filter to visible ones
-  const orderedColumns = columnOrder
+  const orderedColumns = effectiveColumnOrder
     .map(id => ALL_COLUMNS.find(col => col.id === id))
-    .filter((col): col is ColumnConfig => col !== undefined && visibleColumns.includes(col.id));
+    .filter((col): col is ColumnConfig => col !== undefined && effectiveVisibleColumns.includes(col.id));
 
   const renderCellContent = (columnId: string, project: ProjectWithRelations) => {
     switch (columnId) {
@@ -849,6 +882,37 @@ export default function TaskList({
     }
   };
 
+  // Show loading skeleton while preferences are being loaded to prevent flash
+  if (!preferencesInitialized && preferencesLoading) {
+    return (
+      <div className="p-6" data-testid="task-list-loading">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <span>Task List</span>
+                <Badge variant="secondary">{projects.length} tasks</Badge>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button variant="outline" size="sm" disabled>
+                  <Settings2 className="w-4 h-4 mr-2" />
+                  Columns
+                </Button>
+              </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <div key={i} className="h-12 bg-muted/50 rounded animate-pulse" />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6" data-testid="task-list">
       <Card>
@@ -879,7 +943,7 @@ export default function TaskList({
                         <div key={column.id} className="flex items-center space-x-2">
                           <Checkbox
                             id={`column-${column.id}`}
-                            checked={visibleColumns.includes(column.id)}
+                            checked={effectiveVisibleColumns.includes(column.id)}
                             onCheckedChange={() => toggleColumnVisibility(column.id)}
                             data-testid={`checkbox-column-${column.id}`}
                           />
