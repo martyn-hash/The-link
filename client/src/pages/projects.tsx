@@ -62,6 +62,7 @@ export default function Projects() {
           openTasksAndRemindersCount={state.openTasksAndRemindersCount}
           isMobile={state.isMobile}
           currentSavedViewId={state.currentSavedViewId}
+          currentSavedViewName={state.currentSavedViewName}
           currentDashboard={state.currentDashboard}
           kanbanCompactMode={state.kanbanCompactMode}
           dashboardWidgets={state.dashboardWidgets}

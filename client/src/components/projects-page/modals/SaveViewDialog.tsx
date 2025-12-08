@@ -11,6 +11,8 @@ import {
 } from "@/components/ui/dialog";
 import type { ViewMode } from "@/types/projects-page";
 
+const MAX_VIEW_NAME_LENGTH = 50;
+
 interface SaveViewDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -54,10 +56,14 @@ export function SaveViewDialog({
             <Input
               id="view-name"
               value={newViewName}
-              onChange={(e) => setNewViewName(e.target.value)}
+              onChange={(e) => setNewViewName(e.target.value.slice(0, MAX_VIEW_NAME_LENGTH))}
               placeholder="e.g., My Active Projects"
+              maxLength={MAX_VIEW_NAME_LENGTH}
               data-testid="input-view-name"
             />
+            <p className="text-xs text-muted-foreground mt-1">
+              {newViewName.length}/{MAX_VIEW_NAME_LENGTH} characters
+            </p>
           </div>
           <div className="text-sm text-muted-foreground">
             <p>Current view mode: <strong>{viewModeLabel}</strong></p>

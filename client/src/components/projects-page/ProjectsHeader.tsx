@@ -13,7 +13,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Filter, Plus, X, Calendar as CalendarIcon, Minimize2, Maximize2, ClipboardList, FolderKanban } from "lucide-react";
+import { Filter, Plus, X, Calendar as CalendarIcon, Minimize2, Maximize2, ClipboardList, FolderKanban, Bookmark } from "lucide-react";
 import LayoutsMenu from "@/components/LayoutsMenu";
 import ViewMegaMenu from "@/components/ViewMegaMenu";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
@@ -29,6 +29,7 @@ export interface ProjectsHeaderProps {
   openTasksAndRemindersCount: number;
   isMobile: boolean;
   currentSavedViewId: string | null;
+  currentSavedViewName: string | null;
   currentDashboard: Dashboard | null;
   kanbanCompactMode: boolean;
   dashboardWidgets: Widget[];
@@ -65,6 +66,7 @@ export function ProjectsHeader({
   openTasksAndRemindersCount,
   isMobile,
   currentSavedViewId,
+  currentSavedViewName,
   currentDashboard,
   kanbanCompactMode,
   tasksOwnershipFilter,
@@ -92,6 +94,8 @@ export function ProjectsHeader({
   return (
     <header className="bg-card border-b border-border page-container py-6">
       <div className="flex flex-wrap items-center justify-center gap-4">
+        <CurrentViewName viewName={currentSavedViewName} />
+        
         <WorkspaceModeToggle
           workspaceMode={workspaceMode}
           setWorkspaceMode={setWorkspaceMode}
@@ -155,6 +159,32 @@ export function ProjectsHeader({
         />
       </div>
     </header>
+  );
+}
+
+interface CurrentViewNameProps {
+  viewName: string | null;
+}
+
+function CurrentViewName({ viewName }: CurrentViewNameProps) {
+  if (!viewName) {
+    return <div className="hidden md:block w-[160px]" />;
+  }
+
+  return (
+    <div 
+      className="hidden md:flex items-center gap-2 w-[160px] flex-shrink-0"
+      data-testid="current-view-name-container"
+    >
+      <Bookmark className="h-4 w-4 text-primary flex-shrink-0" />
+      <span 
+        className="text-sm font-medium text-foreground line-clamp-2 leading-tight"
+        title={viewName}
+        data-testid="text-current-view-name"
+      >
+        {viewName}
+      </span>
+    </div>
   );
 }
 

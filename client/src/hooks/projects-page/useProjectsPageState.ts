@@ -440,6 +440,12 @@ export function useProjectsPageState() {
 
   const activeFilterCount = useCallback(() => filtering.activeFilterCount, [filtering.activeFilterCount]);
 
+  const currentSavedViewName = useMemo(() => {
+    if (!currentSavedViewId) return null;
+    const view = projectsData.savedViews?.find(v => v.id === currentSavedViewId);
+    return view?.name || null;
+  }, [currentSavedViewId, projectsData.savedViews]);
+
   return {
     user,
     authLoading,
@@ -503,6 +509,7 @@ export function useProjectsPageState() {
     setCurrentDashboard,
     currentSavedViewId,
     setCurrentSavedViewId,
+    currentSavedViewName,
     dashboardWidgets,
     setDashboardWidgets,
     dashboardEditMode,
