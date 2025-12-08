@@ -221,7 +221,7 @@ export function SMSDialog({
               ref={textareaRef}
               name="message"
               placeholder="Enter your SMS message..."
-              className="min-h-[100px]"
+              className="min-h-[160px]"
               required
               value={message}
               onChange={(e) => setMessage(e.target.value)}

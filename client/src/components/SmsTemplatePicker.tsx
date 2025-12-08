@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,7 +9,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { FileText, Loader2, MessageSquare, AlertCircle } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { FileText, Loader2, MessageSquare, AlertCircle, Search } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useAuth } from "@/hooks/useAuth";
@@ -37,6 +38,7 @@ export function SmsTemplatePicker({
   recipientFirstName,
 }: SmsTemplatePickerProps) {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const { user } = useAuth();
 
   const { data: templates, isLoading } = useQuery<SmsTemplate[]>({
@@ -45,6 +47,16 @@ export function SmsTemplatePicker({
   });
 
   const availableTemplates = templates || [];
+  
+  const filteredTemplates = useMemo(() => {
+    if (!searchQuery.trim()) return availableTemplates;
+    const query = searchQuery.toLowerCase();
+    return availableTemplates.filter(
+      (t) =>
+        t.name.toLowerCase().includes(query) ||
+        t.content.toLowerCase().includes(query)
+    );
+  }, [availableTemplates, searchQuery]);
 
   const getPreviewContent = (content: string): string => {
     let result = content;
@@ -87,10 +99,11 @@ export function SmsTemplatePicker({
     if (!open) {
       onClose();
       setSelectedTemplateId(null);
+      setSearchQuery("");
     }
   };
 
-  const selectedTemplate = availableTemplates.find(t => t.id === selectedTemplateId);
+  const selectedTemplate = filteredTemplates.find(t => t.id === selectedTemplateId);
   const selectedHasVariables = selectedTemplate && hasVariables(selectedTemplate.content) && !recipientFirstName;
 
   return (
@@ -126,34 +139,52 @@ export function SmsTemplatePicker({
             <p className="text-sm mt-1">Ask an admin to create some templates.</p>
           </div>
         ) : (
-          <ScrollArea className="max-h-[400px] pr-4">
-            <div className="space-y-3">
-              {availableTemplates.map((template) => (
-                <Card
-                  key={template.id}
-                  className={`cursor-pointer transition-colors hover:border-primary ${
-                    selectedTemplateId === template.id ? "border-primary bg-primary/5" : ""
-                  }`}
-                  onClick={() => setSelectedTemplateId(template.id)}
-                  data-testid={`template-card-${template.id}`}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-sm">{template.name}</h4>
-                        <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">
-                          {getPreviewContent(template.content)}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          {template.content.length} characters
-                        </p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search templates..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9"
+                data-testid="input-search-templates"
+              />
             </div>
-          </ScrollArea>
+            <ScrollArea className="h-[320px] pr-4">
+              <div className="space-y-3">
+                {filteredTemplates.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground">
+                    <p className="text-sm">No templates match your search.</p>
+                  </div>
+                ) : (
+                  filteredTemplates.map((template) => (
+                    <Card
+                      key={template.id}
+                      className={`cursor-pointer transition-colors hover:border-primary ${
+                        selectedTemplateId === template.id ? "border-primary bg-primary/5" : ""
+                      }`}
+                      onClick={() => setSelectedTemplateId(template.id)}
+                      data-testid={`template-card-${template.id}`}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-medium text-sm">{template.name}</h4>
+                            <p className="text-sm text-muted-foreground mt-1 whitespace-pre-wrap">
+                              {getPreviewContent(template.content)}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              {template.content.length} characters
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </div>
         )}
 
         {selectedHasVariables && (
