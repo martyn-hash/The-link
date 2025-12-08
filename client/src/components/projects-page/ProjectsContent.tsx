@@ -318,6 +318,7 @@ function ViewContent({
         user={user} 
         serviceFilter={serviceFilter}
         onSwitchToKanban={() => handleManualViewModeChange("kanban")}
+        viewType="projects-list"
         initialSortBy={listSortBy}
         initialSortOrder={listSortOrder}
         onSortChange={onListSortChange}

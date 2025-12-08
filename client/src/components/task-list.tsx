@@ -336,15 +336,16 @@ export default function TaskList({
       if (savedPreferences.visibleColumns && savedPreferences.visibleColumns.length > 0) {
         const validVisibleColumns = savedPreferences.visibleColumns.filter(id => currentColumnIds.has(id));
         
-        // Ensure at least one essential column (client, actions) is visible
-        // If saved preferences would hide all columns, fallback to defaults
-        const essentialColumns = ['client', 'actions', 'status'];
-        const hasEssentialColumn = validVisibleColumns.some(id => essentialColumns.includes(id));
+        // Require at least 'client' column to be visible and at least 3 total columns
+        // This ensures saved preferences from a different table type (e.g., companies) don't corrupt the view
+        const hasClientColumn = validVisibleColumns.includes('client');
+        const hasMinimumColumns = validVisibleColumns.length >= 3;
         
-        if (validVisibleColumns.length > 0 && hasEssentialColumn) {
+        if (hasClientColumn && hasMinimumColumns) {
           setVisibleColumns(validVisibleColumns);
         } else {
-          // Fallback to defaults if saved preferences are invalid/empty
+          // Fallback to defaults if saved preferences are invalid/insufficient
+          console.warn('Saved column preferences are invalid or insufficient, using defaults');
           setVisibleColumns(defaultColumns);
         }
       } else {

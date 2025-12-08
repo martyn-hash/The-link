@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useBackgroundPrefetch, getTasksPrefetchConfigs } from "@/hooks/useBackgroundPrefetch";
+import { queryClient } from "@/lib/queryClient";
 import { useProjectsData } from "./useProjectsData";
 import { useProjectFiltering } from "./useProjectFiltering";
 import { useProjectsUrlSync } from "./useProjectsUrlSync";
@@ -315,6 +316,22 @@ export function useProjectsPageState() {
       return;
     }
 
+    let columnPreferences = undefined;
+    if (viewMode === "list") {
+      const cachedPrefs = queryClient.getQueryData<{
+        columnOrder?: string[];
+        visibleColumns?: string[];
+        columnWidths?: Record<string, number>;
+      }>(["/api/column-preferences", { viewType: "projects-list" }]);
+      if (cachedPrefs) {
+        columnPreferences = {
+          columnOrder: cachedPrefs.columnOrder,
+          visibleColumns: cachedPrefs.visibleColumns,
+          columnWidths: cachedPrefs.columnWidths,
+        };
+      }
+    }
+
     const filtersToSave = {
       serviceFilter,
       taskAssigneeFilter,
@@ -335,6 +352,7 @@ export function useProjectsPageState() {
         sortBy: listSortBy,
         sortOrder: listSortOrder,
         itemsPerPage,
+        columnPreferences,
       } : undefined,
     };
 
@@ -371,6 +389,22 @@ export function useProjectsPageState() {
     const currentView = projectsData.savedViews.find(v => v.id === currentSavedViewId);
     if (!currentView) return;
 
+    let columnPreferences = undefined;
+    if (viewMode === "list") {
+      const cachedPrefs = queryClient.getQueryData<{
+        columnOrder?: string[];
+        visibleColumns?: string[];
+        columnWidths?: Record<string, number>;
+      }>(["/api/column-preferences", { viewType: "projects-list" }]);
+      if (cachedPrefs) {
+        columnPreferences = {
+          columnOrder: cachedPrefs.columnOrder,
+          visibleColumns: cachedPrefs.visibleColumns,
+          columnWidths: cachedPrefs.columnWidths,
+        };
+      }
+    }
+
     const filtersToSave = {
       serviceFilter,
       taskAssigneeFilter,
@@ -391,6 +425,7 @@ export function useProjectsPageState() {
         sortBy: listSortBy,
         sortOrder: listSortOrder,
         itemsPerPage,
+        columnPreferences,
       } : undefined,
     };
 

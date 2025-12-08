@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { showFriendlyError } from "@/lib/friendlyErrors";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { 
   ViewMode, 
   Dashboard, 
@@ -145,6 +145,24 @@ export function useViewManagement(
           }
           if (filters.listViewSettings.itemsPerPage) {
             stateSetters.setItemsPerPage(filters.listViewSettings.itemsPerPage);
+          }
+          // Restore column preferences if saved with the view
+          if (filters.listViewSettings.columnPreferences) {
+            const { columnOrder, visibleColumns, columnWidths } = filters.listViewSettings.columnPreferences;
+            if (visibleColumns && visibleColumns.length > 0) {
+              try {
+                await apiRequest("POST", "/api/column-preferences", {
+                  viewType: "projects-list",
+                  columnOrder: columnOrder || [],
+                  visibleColumns: visibleColumns,
+                  columnWidths: columnWidths || {},
+                });
+                // Invalidate the query to force TaskList to refetch
+                queryClient.invalidateQueries({ queryKey: ["/api/column-preferences", { viewType: "projects-list" }] });
+              } catch (error) {
+                console.warn("Failed to restore column preferences from saved view:", error);
+              }
+            }
           }
         }
       } else if (view.viewMode === "calendar") {
