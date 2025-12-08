@@ -8,6 +8,7 @@ import {
   clientRequestReminders,
   scheduledNotifications,
   notificationHistory,
+  smsTemplates,
 } from "./tables";
 
 export const insertPushSubscriptionSchema = createInsertSchema(pushSubscriptions).omit({
@@ -56,6 +57,14 @@ export const insertNotificationHistorySchema = createInsertSchema(notificationHi
   id: true,
   createdAt: true,
 });
+
+export const insertSmsTemplateSchema = createInsertSchema(smsTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateSmsTemplateSchema = insertSmsTemplateSchema.partial();
 
 // Preview candidate schemas for notification previews
 export const previewCandidateRecipientSchema = z.object({

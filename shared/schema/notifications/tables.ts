@@ -218,3 +218,14 @@ export const notificationHistory = pgTable("notification_history", {
   index("idx_notification_history_notification_type").on(table.notificationType),
   index("idx_notification_history_client_created").on(table.clientId, table.createdAt),
 ]);
+
+export const smsTemplates = pgTable("sms_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  content: text("content").notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  nameIdx: index("sms_templates_name_idx").on(table.name),
+}));

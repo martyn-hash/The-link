@@ -7,6 +7,7 @@ import {
   clientRequestReminders,
   scheduledNotifications,
   notificationHistory,
+  smsTemplates,
 } from "./tables";
 import {
   insertPushSubscriptionSchema,
@@ -19,6 +20,8 @@ import {
   insertScheduledNotificationSchema,
   updateScheduledNotificationSchema,
   insertNotificationHistorySchema,
+  insertSmsTemplateSchema,
+  updateSmsTemplateSchema,
   previewCandidateRecipientSchema,
   previewCandidateSchema,
   previewCandidatesResponseSchema,
