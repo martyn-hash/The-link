@@ -37,6 +37,17 @@ A dynamic filter that allows users to filter projects based on whether the same 
 
 Key files: `client/src/lib/projectFilterUtils.ts`, `client/src/components/filter-panel.tsx`, `client/src/hooks/projects-page/useProjectsPageState.ts`
 
+### List View Settings Persistence (December 2025)
+Fixes two issues with the project management list view: columns sometimes not displaying and pagination/sort settings not being saved.
+
+- **Defensive Column Validation**: Task-list validates saved column preferences against valid column IDs, filtering out invalid values and ensuring essential columns (name, checkbox, actions) always display. Mirrors the pattern used in companies-table.
+- **List View Settings**: New `ListViewSettings` interface stores sortBy, sortOrder, and itemsPerPage in saved views' filters JSON field
+- **Sort State Management**: `listSortBy` and `listSortOrder` state with `handleListSortChange` callback propagated through component tree to TaskList
+- **Pagination Reset**: Loading a saved list view resets currentPage to 1 to ensure consistent pagination with restored settings
+- **End-to-End Flow**: Save view → includes listViewSettings → Load view → restores sort/pagination → TaskList receives initial props
+
+Key files: `client/src/components/task-list.tsx`, `client/src/types/projects-page.ts`, `client/src/hooks/projects-page/useProjectsPageState.ts`, `client/src/hooks/projects-page/useViewManagement.ts`, `client/src/components/projects-page/ProjectsContent.tsx`
+
 ### Background Prefetch Optimization (December 2025)
 Improves perceived performance by preloading data for secondary views after the primary content loads. When the user loads the Projects view, tasks data is prefetched in the background during browser idle time.
 

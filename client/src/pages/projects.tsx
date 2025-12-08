@@ -143,6 +143,9 @@ export default function Projects() {
           calendarSettings={state.calendarSettings}
           setCalendarSettings={state.setCalendarSettings}
           onAddDashboardWidget={() => state.setNewWidgetDialogOpen(true)}
+          listSortBy={state.listSortBy}
+          listSortOrder={state.listSortOrder}
+          onListSortChange={state.handleListSortChange}
         />
       </main>
 

@@ -69,6 +69,16 @@ export function useProjectsPageState() {
 
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_ITEMS_PER_PAGE);
+  
+  // List view sort settings
+  const [listSortBy, setListSortBy] = useState<string>("timeInStage");
+  const [listSortOrder, setListSortOrder] = useState<"asc" | "desc">("desc");
+  
+  // Callback for when TaskList sort changes
+  const handleListSortChange = useCallback((sortBy: string, sortOrder: "asc" | "desc") => {
+    setListSortBy(sortBy);
+    setListSortOrder(sortOrder);
+  }, []);
 
   const [kanbanCompactMode, setKanbanCompactMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -257,6 +267,11 @@ export function useProjectsPageState() {
     setDashboardServiceDueDateFilter: dashboardManagement.setDashboardServiceDueDateFilter,
     setDashboardClientFilter: dashboardManagement.setDashboardClientFilter,
     setDashboardProjectTypeFilter: dashboardManagement.setDashboardProjectTypeFilter,
+    // List view settings
+    setListSortBy,
+    setListSortOrder,
+    setItemsPerPage,
+    setCurrentPage,
   }), [dashboardManagement]);
 
   const viewManagement = useViewManagement(
@@ -315,6 +330,12 @@ export function useProjectsPageState() {
       scheduleStatusFilter,
       clientHasProjectTypeIds,
       calendarSettings: viewMode === "calendar" ? calendarSettings : undefined,
+      // List view settings
+      listViewSettings: viewMode === "list" ? {
+        sortBy: listSortBy,
+        sortOrder: listSortOrder,
+        itemsPerPage,
+      } : undefined,
     };
 
     mutations.saveViewMutation.mutate({
@@ -337,6 +358,9 @@ export function useProjectsPageState() {
     clientHasProjectTypeIds,
     viewMode,
     calendarSettings,
+    listSortBy,
+    listSortOrder,
+    itemsPerPage,
     mutations.saveViewMutation,
     toast,
   ]);
@@ -362,6 +386,12 @@ export function useProjectsPageState() {
       scheduleStatusFilter,
       clientHasProjectTypeIds,
       calendarSettings: viewMode === "calendar" ? calendarSettings : undefined,
+      // List view settings
+      listViewSettings: viewMode === "list" ? {
+        sortBy: listSortBy,
+        sortOrder: listSortOrder,
+        itemsPerPage,
+      } : undefined,
     };
 
     mutations.updateViewMutation.mutate({
@@ -384,6 +414,9 @@ export function useProjectsPageState() {
     clientHasProjectTypeIds,
     viewMode,
     calendarSettings,
+    listSortBy,
+    listSortOrder,
+    itemsPerPage,
     mutations.updateViewMutation,
   ]);
 
@@ -521,6 +554,13 @@ export function useProjectsPageState() {
     setFilterPanelOpen,
     itemsPerPage,
     setItemsPerPage,
+    
+    // List view sort settings
+    listSortBy,
+    setListSortBy,
+    listSortOrder,
+    setListSortOrder,
+    handleListSortChange,
 
     kanbanCompactMode,
     kanbanExpandedStages,

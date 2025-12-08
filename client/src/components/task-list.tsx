@@ -52,6 +52,9 @@ interface TaskListProps {
   serviceFilter?: string;
   onSwitchToKanban?: () => void;
   viewType?: string; // 'projects', 'my-projects', 'my-tasks'
+  initialSortBy?: string;
+  initialSortOrder?: "asc" | "desc";
+  onSortChange?: (sortBy: string, sortOrder: "asc" | "desc") => void;
 }
 
 // Column configuration with ID, label, and metadata
@@ -174,12 +177,34 @@ function SortableColumnHeader({ column, sortBy, sortOrder, onSort, width, onResi
   );
 }
 
-export default function TaskList({ projects, user, serviceFilter, onSwitchToKanban, viewType = 'projects' }: TaskListProps) {
+export default function TaskList({ 
+  projects, 
+  user, 
+  serviceFilter, 
+  onSwitchToKanban, 
+  viewType = 'projects',
+  initialSortBy,
+  initialSortOrder,
+  onSortChange,
+}: TaskListProps) {
   const [, setLocation] = useLocation();
-  const [sortBy, setSortBy] = useState<string>("timeInStage");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [sortBy, setSortBy] = useState<string>(initialSortBy || "timeInStage");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">(initialSortOrder || "desc");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const isMobile = useIsMobile();
+
+  // Update sort state when initial values change (e.g., when loading a saved view)
+  useEffect(() => {
+    if (initialSortBy !== undefined) {
+      setSortBy(initialSortBy);
+    }
+  }, [initialSortBy]);
+
+  useEffect(() => {
+    if (initialSortOrder !== undefined) {
+      setSortOrder(initialSortOrder);
+    }
+  }, [initialSortOrder]);
 
   // Fetch stage configurations for all unique project types
   const uniqueProjectTypeIds = useMemo(() => {
@@ -268,25 +293,41 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
     },
   });
 
-  // Apply saved preferences on load
+  // Apply saved preferences on load - with proper validation
   useEffect(() => {
     if (savedPreferences) {
-      // Apply column order - merge saved order with any new columns that were added since
-      if (savedPreferences.columnOrder) {
-        const allColumnIds = ALL_COLUMNS.map(col => col.id);
-        // Keep the saved order for known columns, then append any new columns at the end
-        const newColumnsNotInSaved = allColumnIds.filter(id => !savedPreferences.columnOrder.includes(id));
-        const mergedOrder = [
-          ...savedPreferences.columnOrder.filter(id => allColumnIds.includes(id)), // Remove any deleted columns
-          ...newColumnsNotInSaved, // Add new columns at the end
-        ];
+      const currentColumnIds = new Set(ALL_COLUMNS.map(c => c.id));
+      
+      // Apply column order - filter out any saved columns that no longer exist,
+      // and add any new columns that weren't in the saved order
+      if (savedPreferences.columnOrder && savedPreferences.columnOrder.length > 0) {
+        const validSavedOrder = savedPreferences.columnOrder.filter(id => currentColumnIds.has(id));
+        const newColumns = ALL_COLUMNS.map(c => c.id).filter(id => !savedPreferences.columnOrder.includes(id));
+        const mergedOrder = [...validSavedOrder, ...newColumns];
         setColumnOrder(mergedOrder);
+      } else {
+        setColumnOrder(ALL_COLUMNS.map(c => c.id));
       }
       
-      // Apply visible columns - use saved preferences directly without merging defaults
-      // This ensures user's explicit hide/show choices are respected
-      if (savedPreferences.visibleColumns) {
-        setVisibleColumns(savedPreferences.visibleColumns);
+      // Apply visible columns - validate against current columns
+      // Only apply saved preferences if they result in at least some visible columns
+      if (savedPreferences.visibleColumns && savedPreferences.visibleColumns.length > 0) {
+        const validVisibleColumns = savedPreferences.visibleColumns.filter(id => currentColumnIds.has(id));
+        
+        // Ensure at least one essential column (client, actions) is visible
+        // If saved preferences would hide all columns, fallback to defaults
+        const essentialColumns = ['client', 'actions', 'status'];
+        const hasEssentialColumn = validVisibleColumns.some(id => essentialColumns.includes(id));
+        
+        if (validVisibleColumns.length > 0 && hasEssentialColumn) {
+          setVisibleColumns(validVisibleColumns);
+        } else {
+          // Fallback to defaults if saved preferences are invalid/empty
+          setVisibleColumns(ALL_COLUMNS.filter(col => col.defaultVisible).map(col => col.id));
+        }
+      } else {
+        // No saved visible columns - use defaults
+        setVisibleColumns(ALL_COLUMNS.filter(col => col.defaultVisible).map(col => col.id));
       }
       
       if (savedPreferences.columnWidths) {
@@ -632,12 +673,22 @@ export default function TaskList({ projects, user, serviceFilter, onSwitchToKanb
   });
 
   const handleSort = (columnId: string) => {
+    let newSortBy: string;
+    let newSortOrder: "asc" | "desc";
+    
     if (sortBy === columnId) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+      newSortBy = columnId;
+      newSortOrder = sortOrder === "asc" ? "desc" : "asc";
     } else {
-      setSortBy(columnId);
-      setSortOrder("desc");
+      newSortBy = columnId;
+      newSortOrder = "desc";
     }
+    
+    setSortBy(newSortBy);
+    setSortOrder(newSortOrder);
+    
+    // Notify parent of sort change for view persistence
+    onSortChange?.(newSortBy, newSortOrder);
   };
 
   // All authenticated users can see all projects

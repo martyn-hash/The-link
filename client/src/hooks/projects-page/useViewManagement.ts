@@ -59,6 +59,11 @@ interface ViewManagementState {
   setDashboardServiceDueDateFilter: (value: string) => void;
   setDashboardClientFilter: (value: string) => void;
   setDashboardProjectTypeFilter: (value: string) => void;
+  // List view settings
+  setListSortBy: (value: string) => void;
+  setListSortOrder: (value: "asc" | "desc") => void;
+  setItemsPerPage: (value: number) => void;
+  setCurrentPage: (value: number | ((prev: number) => number)) => void;
 }
 
 export function useViewManagement(
@@ -128,6 +133,20 @@ export function useViewManagement(
       } else if (view.viewMode === "list") {
         stateSetters.setViewMode("list");
         stateSetters.setCalendarSettings(undefined);
+        // Always reset to first page when loading a list view to avoid stale pagination
+        stateSetters.setCurrentPage(1);
+        // Restore list view settings (sorting and pagination)
+        if (filters.listViewSettings) {
+          if (filters.listViewSettings.sortBy) {
+            stateSetters.setListSortBy(filters.listViewSettings.sortBy);
+          }
+          if (filters.listViewSettings.sortOrder) {
+            stateSetters.setListSortOrder(filters.listViewSettings.sortOrder);
+          }
+          if (filters.listViewSettings.itemsPerPage) {
+            stateSetters.setItemsPerPage(filters.listViewSettings.itemsPerPage);
+          }
+        }
       } else if (view.viewMode === "calendar") {
         stateSetters.setViewMode("calendar");
         if (filters.calendarSettings) {

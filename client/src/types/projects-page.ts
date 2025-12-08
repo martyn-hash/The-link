@@ -34,6 +34,12 @@ export interface CalendarSettings {
   showTaskDueDates: boolean;
 }
 
+export interface ListViewSettings {
+  sortBy: string;
+  sortOrder: "asc" | "desc";
+  itemsPerPage: number;
+}
+
 export interface CustomDateRange {
   from: Date | undefined;
   to: Date | undefined;

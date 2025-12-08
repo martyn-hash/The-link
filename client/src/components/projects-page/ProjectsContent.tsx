@@ -67,6 +67,10 @@ export interface ProjectsContentProps {
   calendarSettings: CalendarSettings | undefined;
   setCalendarSettings: (settings: CalendarSettings | undefined) => void;
   onAddDashboardWidget: () => void;
+  // List view sort settings
+  listSortBy: string;
+  listSortOrder: "asc" | "desc";
+  onListSortChange: (sortBy: string, sortOrder: "asc" | "desc") => void;
 }
 
 function LoadingState() {
@@ -198,6 +202,10 @@ interface ViewContentProps {
   calendarSettings: CalendarSettings | undefined;
   setCalendarSettings: (settings: CalendarSettings | undefined) => void;
   onAddDashboardWidget: () => void;
+  // List view sort settings
+  listSortBy: string;
+  listSortOrder: "asc" | "desc";
+  onListSortChange: (sortBy: string, sortOrder: "asc" | "desc") => void;
 }
 
 function ViewContent({
@@ -242,6 +250,9 @@ function ViewContent({
   calendarSettings,
   setCalendarSettings,
   onAddDashboardWidget,
+  listSortBy,
+  listSortOrder,
+  onListSortChange,
 }: ViewContentProps) {
   if (projectsLoading || (isManagerOrAdmin && usersLoading)) {
     return <LoadingState />;
@@ -307,6 +318,9 @@ function ViewContent({
         user={user} 
         serviceFilter={serviceFilter}
         onSwitchToKanban={() => handleManualViewModeChange("kanban")}
+        initialSortBy={listSortBy}
+        initialSortOrder={listSortOrder}
+        onSortChange={onListSortChange}
       />
       <PaginationControls
         currentPage={currentPage}
@@ -373,6 +387,9 @@ export function ProjectsContent({
   calendarSettings,
   setCalendarSettings,
   onAddDashboardWidget,
+  listSortBy,
+  listSortOrder,
+  onListSortChange,
 }: ProjectsContentProps) {
   const viewContentProps = {
     viewMode,
@@ -416,6 +433,9 @@ export function ProjectsContent({
     calendarSettings,
     setCalendarSettings,
     onAddDashboardWidget,
+    listSortBy,
+    listSortOrder,
+    onListSortChange,
   };
 
   if (workspaceMode === "tasks") {
