@@ -289,14 +289,19 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
     // Get call context from ref
     const ctx = callContextRef.current;
     console.log('[RingCentral] 📋 Call context from ref:', ctx);
+    console.log('[RingCentral] 📋 callStartTimeRef.current:', callStartTimeRef.current);
     
     // Calculate duration directly from ref (more reliable than state)
+    // IMPORTANT: Calculate duration BEFORE stopping the timer!
     let finalDuration = 0;
     if (callStartTimeRef.current) {
       finalDuration = Math.floor((Date.now() - callStartTimeRef.current) / 1000);
-      console.log('[RingCentral] 📋 Calculated duration from timer ref:', finalDuration);
+      console.log('[RingCentral] 📋 Calculated duration from timer ref:', finalDuration, 'seconds');
+    } else {
+      console.log('[RingCentral] ⚠️ callStartTimeRef.current is NULL - timer was never started!');
     }
     
+    // Now stop the timer (which clears callStartTimeRef)
     stopCallTimer();
     setCallState(prev => ({ ...prev, status: 'disconnected' }));
     
@@ -459,12 +464,40 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
       session.on('accepted', () => {
         console.log('[RingCentral] ✅ Outbound call ACCEPTED - call connected!');
         setCallState(prev => ({ ...prev, status: 'connected' }));
-        startCallTimer();
+        // Start timer if not already started (could have started on progress)
+        if (!callStartTimeRef.current) {
+          console.log('[RingCentral] ⏱️ Starting call timer on ACCEPTED');
+          startCallTimer();
+        }
       });
 
       session.on('progress', () => {
         console.log('[RingCentral] 📞 Call PROGRESS - phone is ringing');
         setCallState(prev => ({ ...prev, status: 'ringing' }));
+        // Start timer on progress as fallback (in case 'accepted' doesn't fire for some sessions)
+        if (!callStartTimeRef.current) {
+          console.log('[RingCentral] ⏱️ Starting call timer on PROGRESS (fallback)');
+          startCallTimer();
+        }
+      });
+      
+      // Also listen for 'confirmed' event (some SIP implementations use this)
+      session.on('confirmed', () => {
+        console.log('[RingCentral] ✅ Outbound call CONFIRMED');
+        setCallState(prev => ({ ...prev, status: 'connected' }));
+        if (!callStartTimeRef.current) {
+          console.log('[RingCentral] ⏱️ Starting call timer on CONFIRMED');
+          startCallTimer();
+        }
+      });
+      
+      // Listen for 'connecting' event
+      session.on('connecting', () => {
+        console.log('[RingCentral] 🔄 Call CONNECTING');
+        if (!callStartTimeRef.current) {
+          console.log('[RingCentral] ⏱️ Starting call timer on CONNECTING (fallback)');
+          startCallTimer();
+        }
       });
 
       // Reset the logged flag for this new call
