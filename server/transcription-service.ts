@@ -20,6 +20,52 @@ interface TranscriptionJob {
 
 const pendingJobs: TranscriptionJob[] = [];
 let isProcessing = false;
+let recoveryCompleted = false;
+
+// Recover pending transcription jobs on startup
+export async function recoverPendingTranscriptions() {
+  if (recoveryCompleted) return;
+  recoveryCompleted = true;
+  
+  try {
+    console.log('[Transcription] Checking for pending transcription jobs to recover...');
+    
+    // Find communications with pending/requesting/processing status that are more than 2 minutes old
+    // (to avoid interfering with jobs that are currently being processed)
+    const pendingCommunications = await storage.getCommunicationsWithPendingTranscription();
+    
+    if (!pendingCommunications || pendingCommunications.length === 0) {
+      console.log('[Transcription] No pending transcription jobs to recover');
+      return;
+    }
+    
+    console.log(`[Transcription] Found ${pendingCommunications.length} pending transcription job(s) to recover`);
+    
+    for (const comm of pendingCommunications) {
+      const metadata = comm.metadata as Record<string, any> | null;
+      const phoneNumber = metadata?.phoneNumber || '';
+      const duration = metadata?.duration || 0;
+      
+      // Only retry if call was long enough and we have a phone number
+      if (duration >= 5 && phoneNumber) {
+        console.log(`[Transcription] Recovering job for communication: ${comm.id}`);
+        scheduleTranscription(
+          comm.id,
+          comm.userId,
+          phoneNumber,
+          comm.actualContactTime ? new Date(comm.actualContactTime) : new Date(comm.createdAt || Date.now())
+        );
+      } else {
+        // Mark as not_available if not recoverable
+        await updateCommunicationTranscription(comm.id, {
+          transcriptionStatus: 'not_available'
+        });
+      }
+    }
+  } catch (error) {
+    console.error('[Transcription] Error recovering pending jobs:', error);
+  }
+}
 
 export function scheduleTranscription(
   communicationId: string,
@@ -118,22 +164,37 @@ async function processTranscriptionJob(job: TranscriptionJob) {
     return;
   }
 
-  // Step 2: Fall back to Speech-to-Text API
-  console.log('[Transcription] RingSense not available, using Speech-to-Text API...');
+  // Step 2: Try RingCentral Speech-to-Text API
+  console.log('[Transcription] RingSense not available, trying Speech-to-Text API...');
   
-  const recordingUrlWithAuth = await getCallRecordingUrl(job.userId, recording.recordingId);
-  
-  const transcriptionJob = await requestCallTranscription(job.userId, recordingUrlWithAuth);
-  const jobId = transcriptionJob.jobId;
+  try {
+    const recordingUrlWithAuth = await getCallRecordingUrl(job.userId, recording.recordingId);
+    
+    const transcriptionJob = await requestCallTranscription(job.userId, recordingUrlWithAuth);
+    const jobId = transcriptionJob.jobId;
 
-  console.log('[Transcription] Transcription job started:', jobId);
+    console.log('[Transcription] Transcription job started:', jobId);
 
-  await updateCommunicationTranscription(job.communicationId, {
-    transcriptionJobId: jobId,
-    transcriptionStatus: 'processing'
-  });
+    await updateCommunicationTranscription(job.communicationId, {
+      transcriptionJobId: jobId,
+      transcriptionStatus: 'processing'
+    });
 
-  await pollForTranscriptionResult(job.communicationId, job.userId, jobId);
+    await pollForTranscriptionResult(job.communicationId, job.userId, jobId);
+    return;
+  } catch (error: any) {
+    // Check if this is an AI permission error
+    const errorMessage = error?.message || '';
+    if (errorMessage.includes('[AI] permission') || errorMessage.includes('403')) {
+      console.log('[Transcription] RingCentral AI permission not available, falling back to OpenAI Whisper...');
+    } else {
+      throw error; // Re-throw other errors for retry
+    }
+  }
+
+  // Step 3: Fall back to OpenAI Whisper for transcription
+  console.log('[Transcription] Using OpenAI Whisper for transcription...');
+  await transcribeWithOpenAI(job.communicationId, job.userId, recording.recordingId);
 }
 
 // Extract transcript from RingSense insights
@@ -374,6 +435,109 @@ Do not include greetings, small talk, or filler content in the summary.`
     return null;
   } catch (error) {
     console.error('[Transcription] Error generating OpenAI summary:', error);
+    return null;
+  }
+}
+
+// Transcribe recording using OpenAI Whisper (fallback when RingCentral AI is not available)
+async function transcribeWithOpenAI(communicationId: string, userId: string, recordingId: string) {
+  try {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      console.log('[Transcription] OpenAI API key not configured, marking as not available');
+      await updateCommunicationTranscription(communicationId, {
+        transcriptionStatus: 'not_available',
+        transcriptionError: 'No transcription API available'
+      });
+      return;
+    }
+
+    await updateCommunicationTranscription(communicationId, {
+      transcriptionStatus: 'processing'
+    });
+
+    // Download the recording from RingCentral
+    console.log('[Transcription] Downloading recording from RingCentral...');
+    const recordingBuffer = await downloadRecording(userId, recordingId);
+    
+    if (!recordingBuffer) {
+      console.log('[Transcription] Failed to download recording');
+      await updateCommunicationTranscription(communicationId, {
+        transcriptionStatus: 'failed',
+        transcriptionError: 'Failed to download recording'
+      });
+      return;
+    }
+
+    console.log(`[Transcription] Recording downloaded: ${recordingBuffer.length} bytes`);
+
+    // Transcribe using OpenAI Whisper
+    console.log('[Transcription] Transcribing with OpenAI Whisper...');
+    const openai = new OpenAI({ apiKey });
+    
+    // Create a file-like object for the API
+    const file = new File([recordingBuffer], 'recording.mp3', { type: 'audio/mpeg' });
+    
+    const transcription = await openai.audio.transcriptions.create({
+      file,
+      model: 'whisper-1',
+      language: 'en',
+      response_format: 'text'
+    });
+
+    const transcript = transcription.toString().trim();
+    
+    if (!transcript || transcript.length < 10) {
+      console.log('[Transcription] Transcript too short or empty');
+      await updateCommunicationTranscription(communicationId, {
+        transcriptionStatus: 'completed',
+        transcript: transcript || '',
+        transcriptionSource: 'openai_whisper'
+      });
+      return;
+    }
+
+    console.log('[Transcription] Transcript generated, generating summary...');
+
+    // Generate summary using OpenAI
+    const summary = await generateOpenAISummary(transcript);
+
+    await updateCommunicationTranscription(communicationId, {
+      transcriptionStatus: 'completed',
+      transcript,
+      summary: summary || '',
+      transcriptionSource: 'openai_whisper',
+      summarySource: 'openai'
+    });
+
+    console.log('[Transcription] OpenAI transcription and summary completed');
+  } catch (error) {
+    console.error('[Transcription] Error with OpenAI transcription:', error);
+    await updateCommunicationTranscription(communicationId, {
+      transcriptionStatus: 'failed',
+      transcriptionError: error instanceof Error ? error.message : 'OpenAI transcription failed'
+    });
+  }
+}
+
+// Download recording from RingCentral
+async function downloadRecording(userId: string, recordingId: string): Promise<Buffer | null> {
+  try {
+    const { getUserRingCentralSDK } = await import('./utils/userRingCentralClient.js');
+    const sdk = await getUserRingCentralSDK(userId);
+    if (!sdk) {
+      console.log('[Transcription] RingCentral client not available');
+      return null;
+    }
+
+    const platform = sdk.platform();
+    const response = await platform.get(`/restapi/v1.0/account/~/recording/${recordingId}/content`);
+    
+    // Get the raw response as a buffer
+    const buffer = await response.buffer();
+    return buffer;
+  } catch (error) {
+    console.error('[Transcription] Error downloading recording:', error);
     return null;
   }
 }

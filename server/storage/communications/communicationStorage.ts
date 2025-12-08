@@ -1,7 +1,7 @@
 import { BaseStorage } from '../base/BaseStorage.js';
 import { db } from '../../db.js';
 import { communications, clients, people, users, projects } from '@shared/schema';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, sql, and, inArray, lt } from 'drizzle-orm';
 import type { Communication, InsertCommunication, Client, Person, User, Project } from '@shared/schema';
 
 /**
@@ -155,5 +155,28 @@ export class CommunicationStorage extends BaseStorage {
 
   async deleteCommunication(id: string): Promise<void> {
     await db.delete(communications).where(eq(communications.id, id));
+  }
+
+  // ============================================================================
+  // COMMUNICATIONS - Transcription Recovery
+  // ============================================================================
+
+  async getCommunicationsWithPendingTranscription(): Promise<Communication[]> {
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+    
+    const results = await db
+      .select()
+      .from(communications)
+      .where(
+        and(
+          eq(communications.type, 'phone_call'),
+          lt(communications.createdAt, twoMinutesAgo),
+          sql`${communications.metadata}->>'transcriptionStatus' IN ('pending', 'requesting', 'processing')`
+        )
+      )
+      .orderBy(desc(communications.createdAt))
+      .limit(20);
+
+    return results;
   }
 }

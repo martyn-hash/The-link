@@ -53,19 +53,22 @@ Full VoIP phone system integration enabling staff to make and receive calls dire
 - **OAuth Authentication**: Per-user OAuth flow stores tokens in database, auto-refreshes before expiry
 - **WebRTC Calling**: SIP-based WebPhone with WebSocket signaling for real-time calls
 - **Call Logging**: Automatic creation of communication records with call metadata (direction, duration, session ID)
-- **Automatic Transcription**: Calls >5 seconds trigger background transcription via RingCentral AI API
+- **Automatic Transcription**: Calls >5 seconds trigger background transcription with three-tier approach:
   - Status flow: `pending` → `requesting` → `processing` → `completed`/`failed`
   - Short calls get `not_available` status immediately
   - Uses polling approach (30s wait, then queries every 10s up to 5 minutes)
-- **AI Summaries**: Three-tier approach for generating call summaries:
+- **AI Summaries & Transcription**: Three-tier fallback approach:
   1. **RingSense API** (if available): Provides transcript + AI summary + action items in one call
-  2. **RingCentral Text Summarization API**: Abstractive/extractive summaries from utterances
-  3. **OpenAI Fallback**: Uses GPT-4o-mini to generate professional call summaries when RingCentral AI is unavailable
+  2. **RingCentral Speech-to-Text API**: Native transcription if AI scope enabled
+  3. **OpenAI Whisper Fallback**: Downloads recording directly from RingCentral and transcribes using OpenAI Whisper, with GPT-4o-mini generating professional summaries
+- **Startup Recovery**: Pending transcription jobs are automatically recovered on server restart
+  - Query finds communications with `pending`/`requesting`/`processing` status older than 2 minutes
+  - Jobs are re-scheduled for processing to prevent data loss from server restarts
 - **UI Display**: ViewCommunicationDialog shows transcript status, summary, and expandable full transcript
 
-Key files: `client/src/components/ringcentral-phone.tsx`, `server/routes/integrations.ts`, `server/utils/userRingCentralClient.ts`, `server/transcription-service.ts`
+Key files: `client/src/components/ringcentral-phone.tsx`, `server/routes/integrations.ts`, `server/utils/userRingCentralClient.ts`, `server/transcription-service.ts`, `server/storage/communications/communicationStorage.ts`
 
-Required OAuth scopes: RingOut, ReadCallLog, ReadCallRecording, AI, VoIP, WebSocket
+Required OAuth scopes: RingOut, ReadCallLog, ReadCallRecording, AI (optional), VoIP, WebSocket
 
 ### System Design
 PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) handles object storage with secure signed URLs. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control; the client portal uses passwordless email verification. The system is multi-tenant and designed for modularity, with extensive database indexing. Key features include automated project management, advanced communication tools (push notifications, internal tasks with quick reminders, email threading via Microsoft Graph, multi-channel client notifications with AI assistance, RingCentral VoIP with automatic transcription), UK eIDAS-compliant electronic signatures, comprehensive workflow and status management with Kanban views, and Bookkeeping Queries for managing transaction-related questions. It also includes an AI Audio Transcription service, client value notifications with AI-assisted drafting, Zapier integration via webhooks, and an enhanced data import system. A friendly error handling system replaces technical errors with user-friendly messages. A scheduled notifications calendar provides comprehensive management of automated notifications, with stage-aware suppression. A resilient project scheduling orchestrator ensures robustness against server restarts and outages.

@@ -12,6 +12,7 @@ import { startNotificationCron } from "./notification-cron";
 import { startSignatureReminderCron } from "./signature-reminder-cron";
 import { startReminderNotificationCron } from "./reminder-notification-cron";
 import { startQueryReminderCron } from "./query-reminder-cron";
+import { recoverPendingTranscriptions } from "./transcription-service";
 import fs from "fs";
 import path from "path";
 import cookieParser from "cookie-parser";
@@ -142,6 +143,13 @@ app.use((req, res, next) => {
       log(`[Scheduling Orchestrator] ${catchupResult.message}`);
     } catch (catchupError) {
       console.error('[Scheduling Orchestrator] Error in startup catch-up:', catchupError);
+    }
+    
+    // Recover any pending transcription jobs that were interrupted by server restart
+    try {
+      await recoverPendingTranscriptions();
+    } catch (transcriptionError) {
+      console.error('[Transcription] Error recovering pending transcriptions:', transcriptionError);
     }
     
     // Setup nightly project scheduling via orchestrator

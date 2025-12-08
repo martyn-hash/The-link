@@ -348,26 +348,35 @@ export async function getRecentCallLogs(userId: string, phoneNumber?: string, da
 // Find a specific call by session ID or phone number from recent logs
 export async function findCallRecording(userId: string, phoneNumber: string, callTime: Date): Promise<{ recordingId: string; recordingUrl: string } | null> {
   try {
-    // Query calls from 5 minutes before the call time
-    const dateFrom = new Date(callTime.getTime() - 5 * 60 * 1000);
+    // Query calls from 10 minutes before the call time (increased window)
+    const dateFrom = new Date(callTime.getTime() - 10 * 60 * 1000);
     const callLogs = await getRecentCallLogs(userId, undefined, dateFrom);
 
     if (!callLogs?.records) {
-      console.log('[RingCentral] No call records found');
+      console.log('[RingCentral] No call records found in call log');
       return null;
     }
+
+    console.log(`[RingCentral] Found ${callLogs.records.length} call records, searching for phone: ${phoneNumber}`);
 
     // Normalize the phone number for comparison
     const normalizedPhone = phoneNumber.replace(/[^0-9+]/g, '');
     const phoneWithoutPlus = normalizedPhone.replace(/^\+/, '');
+    // Get last 7-10 digits for matching (handles country codes)
+    const phoneLastDigits = phoneWithoutPlus.slice(-10);
 
     // Find the matching call with a recording
     for (const record of callLogs.records) {
       const toNumber = record.to?.phoneNumber?.replace(/[^0-9+]/g, '') || '';
       const fromNumber = record.from?.phoneNumber?.replace(/[^0-9+]/g, '') || '';
+      const toLastDigits = toNumber.replace(/^\+/, '').slice(-10);
+      const fromLastDigits = fromNumber.replace(/^\+/, '').slice(-10);
       
-      const matchesTo = toNumber.includes(phoneWithoutPlus) || phoneWithoutPlus.includes(toNumber.replace(/^\+/, ''));
-      const matchesFrom = fromNumber.includes(phoneWithoutPlus) || phoneWithoutPlus.includes(fromNumber.replace(/^\+/, ''));
+      const matchesTo = toLastDigits === phoneLastDigits || toNumber.includes(phoneWithoutPlus) || phoneWithoutPlus.includes(toNumber.replace(/^\+/, ''));
+      const matchesFrom = fromLastDigits === phoneLastDigits || fromNumber.includes(phoneWithoutPlus) || phoneWithoutPlus.includes(fromNumber.replace(/^\+/, ''));
+
+      // Log details for debugging
+      console.log(`[RingCentral] Checking call: to=${toNumber}, from=${fromNumber}, hasRecording=${!!record.recording?.id}, matchesTo=${matchesTo}, matchesFrom=${matchesFrom}`);
 
       if ((matchesTo || matchesFrom) && record.recording?.id) {
         console.log('[RingCentral] Found matching call with recording:', record.recording.id);
@@ -375,6 +384,11 @@ export async function findCallRecording(userId: string, phoneNumber: string, cal
           recordingId: record.recording.id,
           recordingUrl: record.recording.contentUri
         };
+      }
+      
+      // Also check if the call matches but recording is not yet available
+      if (matchesTo || matchesFrom) {
+        console.log(`[RingCentral] Found matching call but no recording yet. Call result: ${record.result}, duration: ${record.duration}`);
       }
     }
 

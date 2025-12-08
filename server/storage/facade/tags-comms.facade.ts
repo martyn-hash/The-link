@@ -146,6 +146,10 @@ export function applyTagsCommsFacade<TBase extends Constructor<TagsCommsFacadeDe
       return this.communicationStorage.deleteCommunication(id);
     }
 
+    async getCommunicationsWithPendingTranscription() {
+      return this.communicationStorage.getCommunicationsWithPendingTranscription();
+    }
+
     // ============================================================================
     // PROJECT SCHEDULING DOMAIN - ProjectSchedulingStorage (14 methods)
     // ============================================================================
