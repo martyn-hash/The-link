@@ -55,7 +55,7 @@ async function startProcessing() {
     } catch (error) {
       console.error('[Transcription] Error processing job:', error);
       
-      if (job.retryCount < 3) {
+      if (job.retryCount < 10) {
         job.retryCount++;
         console.log('[Transcription] Retrying job, attempt:', job.retryCount + 1);
         pendingJobs.push(job);
@@ -63,7 +63,7 @@ async function startProcessing() {
         console.log('[Transcription] Max retries exceeded for communication:', job.communicationId);
         await updateCommunicationTranscription(job.communicationId, {
           transcriptionStatus: 'failed',
-          transcriptionError: 'Max retries exceeded'
+          transcriptionError: 'Recording not available after 10 attempts'
         });
       }
     }
