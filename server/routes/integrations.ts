@@ -36,8 +36,10 @@ import {
   getSIPProvisionCredentials,
   getCallRecordingUrl,
   requestCallTranscription,
-  getTranscriptionResult
+  getTranscriptionResult,
+  findCallRecording
 } from "../utils/userRingCentralClient";
+import { scheduleTranscription } from "../transcription-service";
 import { sendPushNotificationToMultiple, getVapidPublicKey, type PushNotificationPayload } from "../push-service";
 import { objectStorageClient } from "../objectStorage";
 
@@ -414,6 +416,11 @@ export function registerIntegrationRoutes(
 
       const { clientId, personId, phoneNumber, direction, duration, sessionId, recordingId } = validation.data;
 
+      const callTime = new Date();
+      
+      // Determine if we should schedule transcription (only for calls > 5 seconds)
+      const shouldTranscribe = duration && duration > 5;
+      
       // Create communication entry
       const communication = await storage.createCommunication({
         clientId,
@@ -422,7 +429,7 @@ export function registerIntegrationRoutes(
         type: 'phone_call',
         content: `${direction === 'outbound' ? 'Outbound' : 'Inbound'} call to ${phoneNumber}. Duration: ${duration || 0}s`,
         subject: `Phone Call - ${phoneNumber}`,
-        actualContactTime: new Date(),
+        actualContactTime: callTime,
         metadata: {
           integration: 'ringcentral',
           sessionId,
@@ -430,9 +437,16 @@ export function registerIntegrationRoutes(
           direction,
           duration,
           phoneNumber,
-          transcriptionStatus: recordingId ? 'pending' : 'not_available'
+          transcriptionStatus: shouldTranscribe ? 'pending' : 'not_available'
         }
       });
+
+      // Schedule automatic transcription retrieval
+      // This runs in the background after the call ends
+      if (communication.id && shouldTranscribe) {
+        console.log('[RingCentral] Scheduling transcription for communication:', communication.id);
+        scheduleTranscription(communication.id, effectiveUserId, phoneNumber, callTime);
+      }
 
       res.json(communication);
     } catch (error) {

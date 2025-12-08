@@ -263,6 +263,76 @@ export async function getTranscriptionResult(userId: string, jobId: string) {
   }
 }
 
+// Get recent call log entries for a user
+export async function getRecentCallLogs(userId: string, phoneNumber?: string, dateFrom?: Date) {
+  try {
+    const rcsdk = await getUserRingCentralSDK(userId);
+    const platform = rcsdk.platform();
+
+    const params: Record<string, string> = {
+      view: 'Detailed',
+      recordingType: 'All',
+      perPage: '50'
+    };
+
+    if (dateFrom) {
+      params.dateFrom = dateFrom.toISOString();
+    }
+
+    if (phoneNumber) {
+      params.phoneNumber = phoneNumber;
+    }
+
+    const response = await platform.get('/restapi/v1.0/account/~/extension/~/call-log', params);
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error getting call logs:', error);
+    throw error;
+  }
+}
+
+// Find a specific call by session ID or phone number from recent logs
+export async function findCallRecording(userId: string, phoneNumber: string, callTime: Date): Promise<{ recordingId: string; recordingUrl: string } | null> {
+  try {
+    // Query calls from 5 minutes before the call time
+    const dateFrom = new Date(callTime.getTime() - 5 * 60 * 1000);
+    const callLogs = await getRecentCallLogs(userId, undefined, dateFrom);
+
+    if (!callLogs?.records) {
+      console.log('[RingCentral] No call records found');
+      return null;
+    }
+
+    // Normalize the phone number for comparison
+    const normalizedPhone = phoneNumber.replace(/[^0-9+]/g, '');
+    const phoneWithoutPlus = normalizedPhone.replace(/^\+/, '');
+
+    // Find the matching call with a recording
+    for (const record of callLogs.records) {
+      const toNumber = record.to?.phoneNumber?.replace(/[^0-9+]/g, '') || '';
+      const fromNumber = record.from?.phoneNumber?.replace(/[^0-9+]/g, '') || '';
+      
+      const matchesTo = toNumber.includes(phoneWithoutPlus) || phoneWithoutPlus.includes(toNumber.replace(/^\+/, ''));
+      const matchesFrom = fromNumber.includes(phoneWithoutPlus) || phoneWithoutPlus.includes(fromNumber.replace(/^\+/, ''));
+
+      if ((matchesTo || matchesFrom) && record.recording?.id) {
+        console.log('[RingCentral] Found matching call with recording:', record.recording.id);
+        return {
+          recordingId: record.recording.id,
+          recordingUrl: record.recording.contentUri
+        };
+      }
+    }
+
+    console.log('[RingCentral] No matching call with recording found');
+    return null;
+  } catch (error) {
+    console.error('Error finding call recording:', error);
+    return null;
+  }
+}
+
 // Generate RingCentral OAuth authorization URL
 export async function generateUserRingCentralAuthUrl(userId: string): Promise<string> {
   if (!isOAuthConfigured()) {
