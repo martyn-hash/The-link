@@ -38,8 +38,18 @@ Provides natural language voice calling and SMS capabilities through an AI Magic
 ### Email Image Paste Feature
 Enables pasting and dragging images directly into email composition areas, with automatic upload to object storage and embedding via permanent URLs.
 
-### SMS Templates Feature
-Introduces reusable SMS message templates with variable support for personalization, managed by admins and selectable by staff when composing SMS messages.
+### SMS Templates Feature (December 2025)
+Reusable SMS message templates with variable support for personalization. Admins create templates at `/sms-templates`; staff select them when composing SMS messages.
+
+- **Variable Support**: Three variables available:
+  - `{firstName}` - Recipient's first name (from person.firstName field)
+  - `{userFirstName}` - Sender's first name (from user profile)
+  - `{calendlyLink}` - Sender's Calendly booking link (from user profile)
+- **Auto-Substitution**: Variables replaced when template selected; updates when recipient changes
+- **Placeholder Alerts**: Contextual warnings for missing data (no recipient, incomplete user profile)
+- **Audit Trail**: Template ID captured when sending SMS for tracking
+
+Key files: `client/src/pages/sms-templates.tsx`, `client/src/components/SmsTemplatePicker.tsx`, `client/src/pages/client-detail/components/communications/dialogs/SMSDialog.tsx`
 
 ### System Design
 PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) handles object storage with secure signed URLs. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control; the client portal uses passwordless email verification. The system is multi-tenant and designed for modularity, with extensive database indexing. Key features include automated project management, advanced communication tools (push notifications, internal tasks, email threading via Microsoft Graph, multi-channel client notifications with AI assistance, RingCentral VoIP with automatic transcription), UK eIDAS-compliant electronic signatures, comprehensive workflow and status management with Kanban views, and Bookkeeping Queries. It also includes an AI Audio Transcription service, client value notifications with AI-assisted drafting, Zapier integration via webhooks, and an enhanced data import system. A friendly error handling system replaces technical errors with user-friendly messages. A scheduled notifications calendar provides comprehensive management of automated notifications, with stage-aware suppression. A resilient project scheduling orchestrator ensures robustness against server restarts and outages.
