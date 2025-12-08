@@ -290,14 +290,15 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
     const ctx = callContextRef.current;
     console.log('[RingCentral] 📋 Call context from ref:', ctx);
     
-    stopCallTimer();
-    
-    // Get the final duration from state
+    // Calculate duration directly from ref (more reliable than state)
     let finalDuration = 0;
-    setCallState(prev => {
-      finalDuration = prev.duration;
-      return { ...prev, status: 'disconnected' };
-    });
+    if (callStartTimeRef.current) {
+      finalDuration = Math.floor((Date.now() - callStartTimeRef.current) / 1000);
+      console.log('[RingCentral] 📋 Calculated duration from timer ref:', finalDuration);
+    }
+    
+    stopCallTimer();
+    setCallState(prev => ({ ...prev, status: 'disconnected' }));
     
     // Use context from ref (should always be available if makeCall was called properly)
     const logClientId = ctx?.clientId || clientId;
