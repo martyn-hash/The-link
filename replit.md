@@ -26,6 +26,12 @@ A dynamic filter allows users to filter projects based on whether the same clien
 ### List View Settings Persistence
 Ensures consistent display of columns, pagination, and sort settings in project management list views through defensive validation and state management.
 
+- **Per-View Column Preferences**: Saved views now store column visibility, order, and widths alongside filters. When loading a saved list view, the column preferences are restored automatically.
+- **Unique viewType Isolation**: The main projects list uses `viewType="projects-list"` to prevent column preference conflicts with other table components.
+- **Robust Validation**: Column preferences are validated to require the 'client' column and at least 3 visible columns. Invalid/corrupted preferences fallback to defaults.
+
+Key files: `client/src/components/task-list.tsx`, `client/src/hooks/projects-page/useViewManagement.ts`, `client/src/hooks/projects-page/useProjectsPageState.ts`
+
 ### Background Prefetch Optimization
 Improves perceived performance by preloading data for secondary views during browser idle time using `requestIdleCallback`.
 
