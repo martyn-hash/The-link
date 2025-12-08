@@ -215,17 +215,26 @@ export function registerClientRoutes(
   app.post("/api/clients/individual", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const bodySchema = z.object({
-        firstName: z.string().min(1, "First name is required"),
-        lastName: z.string().min(1, "Last name is required"),
-        email: z.string().email("Valid email address is required"),
-        address: z.object({
-          line1: z.string().min(1, "Address line 1 is required"),
-          line2: z.string().optional(),
-          city: z.string().min(1, "Town/City is required"),
-          county: z.string().optional(),
-          postcode: z.string().min(1, "Postcode is required"),
-          country: z.string().default("United Kingdom"),
-        }),
+        fullName: z.string().min(1, "Full name is required"),
+        title: z.string().optional(),
+        dateOfBirth: z.string().optional(),
+        nationality: z.string().optional(),
+        occupation: z.string().optional(),
+        primaryEmail: z.string().min(1, "Email is required").email("Valid email required"),
+        primaryPhone: z.string().optional(),
+        email2: z.string().email("Valid email format").optional().or(z.literal("")),
+        telephone2: z.string().optional(),
+        addressLine1: z.string().min(1, "Address is required"),
+        addressLine2: z.string().optional(),
+        locality: z.string().min(1, "Town/City is required"),
+        region: z.string().optional(),
+        postalCode: z.string().min(1, "Postcode is required"),
+        country: z.string().default("United Kingdom"),
+        niNumber: z.string().optional(),
+        personalUtrNumber: z.string().optional(),
+        photoIdVerified: z.boolean().optional(),
+        addressVerified: z.boolean().optional(),
+        isMainContact: z.boolean().default(true),
       });
 
       const bodyValidation = bodySchema.safeParse(req.body);
@@ -236,27 +245,42 @@ export function registerClientRoutes(
         });
       }
 
-      const { firstName, lastName, email, address } = bodyValidation.data;
+      const data = bodyValidation.data;
 
-      const clientName = `${firstName} ${lastName} - Personal Tax Client`;
+      const clientName = `${data.fullName} - Personal Tax Client`;
       const clientData = {
         name: clientName,
-        email: email,
+        email: data.primaryEmail || null,
         clientType: 'individual' as const,
-        registeredAddress1: address.line1,
-        registeredAddress2: address.line2 || null,
-        registeredPostcode: address.postcode,
+        registeredAddress1: data.addressLine1 || null,
+        registeredAddress2: data.addressLine2 || null,
+        registeredPostcode: data.postalCode || null,
       };
 
       const client = await storage.createClient(clientData);
 
       const personData = {
-        fullName: `${firstName} ${lastName}`,
-        firstName: firstName,
-        lastName: lastName,
-        email: email,
-        addressLine1: address.line1,
-        addressLine2: address.line2 || null,
+        fullName: data.fullName,
+        title: data.title || null,
+        dateOfBirth: data.dateOfBirth || null,
+        nationality: data.nationality || null,
+        occupation: data.occupation || null,
+        primaryEmail: data.primaryEmail || null,
+        primaryPhone: data.primaryPhone || null,
+        email: data.primaryEmail || null,
+        telephone: data.primaryPhone || null,
+        email2: data.email2 || null,
+        telephone2: data.telephone2 || null,
+        addressLine1: data.addressLine1 || null,
+        addressLine2: data.addressLine2 || null,
+        locality: data.locality || null,
+        region: data.region || null,
+        postalCode: data.postalCode || null,
+        country: data.country || "United Kingdom",
+        niNumber: data.niNumber || null,
+        personalUtrNumber: data.personalUtrNumber || null,
+        photoIdVerified: data.photoIdVerified || false,
+        addressVerified: data.addressVerified || false,
         isMainContact: true,
       };
 

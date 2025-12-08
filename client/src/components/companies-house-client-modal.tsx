@@ -40,6 +40,24 @@ import {
   Alert,
   AlertDescription,
 } from "@/components/ui/alert";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -47,6 +65,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
+import AddressLookup from "@/components/address-lookup";
 import { 
   Building2, 
   AlertTriangle, 
@@ -57,8 +77,249 @@ import {
   Building,
   ArrowLeft,
   ArrowRight,
-  User as PersonIcon
+  User as PersonIcon,
+  Phone,
+  MapPin,
+  ShieldCheck,
+  Check,
+  Circle,
+  ChevronsUpDown,
+  ChevronDown,
+  ChevronUp,
+  Mail
 } from "lucide-react";
+
+// Fixed list of titles
+const TITLES = [
+  { value: "Mr", label: "Mr" },
+  { value: "Mrs", label: "Mrs" },
+  { value: "Ms", label: "Ms" },
+  { value: "Miss", label: "Miss" },
+  { value: "Dr", label: "Dr" },
+  { value: "Prof", label: "Prof" },
+  { value: "Rev", label: "Rev" },
+  { value: "Sir", label: "Sir" },
+  { value: "Dame", label: "Dame" },
+  { value: "Lord", label: "Lord" },
+  { value: "Lady", label: "Lady" },
+  { value: "Mx", label: "Mx" },
+];
+
+// Fixed list of occupations
+const OCCUPATIONS = [
+  { value: "Director", label: "Director" },
+  { value: "Manager", label: "Manager" },
+  { value: "Advisor", label: "Advisor" },
+  { value: "Consultant", label: "Consultant" },
+  { value: "Employee", label: "Employee" },
+  { value: "Contractor", label: "Contractor" },
+  { value: "Supplier", label: "Supplier" },
+  { value: "Family Member", label: "Family Member" },
+  { value: "Billing Contact", label: "Billing Contact" },
+  { value: "Decision Maker", label: "Decision Maker" },
+  { value: "Technical Contact", label: "Technical Contact" },
+  { value: "Legal Representative", label: "Legal Representative" },
+  { value: "Accountant / Bookkeeper", label: "Accountant / Bookkeeper" },
+  { value: "Auditor", label: "Auditor" },
+  { value: "Trustee", label: "Trustee" },
+  { value: "Beneficiary", label: "Beneficiary" },
+  { value: "Other", label: "Other" },
+];
+
+const NATIONALITIES = [
+  { value: "afghan", label: "Afghan" },
+  { value: "albanian", label: "Albanian" },
+  { value: "algerian", label: "Algerian" },
+  { value: "american", label: "American" },
+  { value: "andorran", label: "Andorran" },
+  { value: "angolan", label: "Angolan" },
+  { value: "antiguans", label: "Antiguans" },
+  { value: "argentinean", label: "Argentinean" },
+  { value: "armenian", label: "Armenian" },
+  { value: "australian", label: "Australian" },
+  { value: "austrian", label: "Austrian" },
+  { value: "azerbaijani", label: "Azerbaijani" },
+  { value: "bahamian", label: "Bahamian" },
+  { value: "bahraini", label: "Bahraini" },
+  { value: "bangladeshi", label: "Bangladeshi" },
+  { value: "barbadian", label: "Barbadian" },
+  { value: "barbudans", label: "Barbudans" },
+  { value: "batswana", label: "Batswana" },
+  { value: "belarusian", label: "Belarusian" },
+  { value: "belgian", label: "Belgian" },
+  { value: "belizean", label: "Belizean" },
+  { value: "beninese", label: "Beninese" },
+  { value: "bhutanese", label: "Bhutanese" },
+  { value: "bolivian", label: "Bolivian" },
+  { value: "bosnian", label: "Bosnian" },
+  { value: "brazilian", label: "Brazilian" },
+  { value: "british", label: "British" },
+  { value: "bruneian", label: "Bruneian" },
+  { value: "bulgarian", label: "Bulgarian" },
+  { value: "burkinabe", label: "Burkinabe" },
+  { value: "burmese", label: "Burmese" },
+  { value: "burundian", label: "Burundian" },
+  { value: "cambodian", label: "Cambodian" },
+  { value: "cameroonian", label: "Cameroonian" },
+  { value: "canadian", label: "Canadian" },
+  { value: "cape_verdean", label: "Cape Verdean" },
+  { value: "central_african", label: "Central African" },
+  { value: "chadian", label: "Chadian" },
+  { value: "chilean", label: "Chilean" },
+  { value: "chinese", label: "Chinese" },
+  { value: "colombian", label: "Colombian" },
+  { value: "comoran", label: "Comoran" },
+  { value: "congolese", label: "Congolese" },
+  { value: "costa_rican", label: "Costa Rican" },
+  { value: "croatian", label: "Croatian" },
+  { value: "cuban", label: "Cuban" },
+  { value: "cypriot", label: "Cypriot" },
+  { value: "czech", label: "Czech" },
+  { value: "danish", label: "Danish" },
+  { value: "djibouti", label: "Djibouti" },
+  { value: "dominican", label: "Dominican" },
+  { value: "dutch", label: "Dutch" },
+  { value: "east_timorese", label: "East Timorese" },
+  { value: "ecuadorean", label: "Ecuadorean" },
+  { value: "egyptian", label: "Egyptian" },
+  { value: "emirian", label: "Emirian" },
+  { value: "equatorial_guinean", label: "Equatorial Guinean" },
+  { value: "eritrean", label: "Eritrean" },
+  { value: "estonian", label: "Estonian" },
+  { value: "ethiopian", label: "Ethiopian" },
+  { value: "fijian", label: "Fijian" },
+  { value: "filipino", label: "Filipino" },
+  { value: "finnish", label: "Finnish" },
+  { value: "french", label: "French" },
+  { value: "gabonese", label: "Gabonese" },
+  { value: "gambian", label: "Gambian" },
+  { value: "georgian", label: "Georgian" },
+  { value: "german", label: "German" },
+  { value: "ghanaian", label: "Ghanaian" },
+  { value: "greek", label: "Greek" },
+  { value: "grenadian", label: "Grenadian" },
+  { value: "guatemalan", label: "Guatemalan" },
+  { value: "guinea_bissauan", label: "Guinea-Bissauan" },
+  { value: "guinean", label: "Guinean" },
+  { value: "guyanese", label: "Guyanese" },
+  { value: "haitian", label: "Haitian" },
+  { value: "herzegovinian", label: "Herzegovinian" },
+  { value: "honduran", label: "Honduran" },
+  { value: "hungarian", label: "Hungarian" },
+  { value: "icelander", label: "Icelander" },
+  { value: "indian", label: "Indian" },
+  { value: "indonesian", label: "Indonesian" },
+  { value: "iranian", label: "Iranian" },
+  { value: "iraqi", label: "Iraqi" },
+  { value: "irish", label: "Irish" },
+  { value: "israeli", label: "Israeli" },
+  { value: "italian", label: "Italian" },
+  { value: "ivorian", label: "Ivorian" },
+  { value: "jamaican", label: "Jamaican" },
+  { value: "japanese", label: "Japanese" },
+  { value: "jordanian", label: "Jordanian" },
+  { value: "kazakhstani", label: "Kazakhstani" },
+  { value: "kenyan", label: "Kenyan" },
+  { value: "kittian_and_nevisian", label: "Kittian and Nevisian" },
+  { value: "kuwaiti", label: "Kuwaiti" },
+  { value: "kyrgyz", label: "Kyrgyz" },
+  { value: "laotian", label: "Laotian" },
+  { value: "latvian", label: "Latvian" },
+  { value: "lebanese", label: "Lebanese" },
+  { value: "liberian", label: "Liberian" },
+  { value: "libyan", label: "Libyan" },
+  { value: "liechtensteiner", label: "Liechtensteiner" },
+  { value: "lithuanian", label: "Lithuanian" },
+  { value: "luxembourger", label: "Luxembourger" },
+  { value: "macedonian", label: "Macedonian" },
+  { value: "malagasy", label: "Malagasy" },
+  { value: "malawian", label: "Malawian" },
+  { value: "malaysian", label: "Malaysian" },
+  { value: "maldivan", label: "Maldivan" },
+  { value: "malian", label: "Malian" },
+  { value: "maltese", label: "Maltese" },
+  { value: "marshallese", label: "Marshallese" },
+  { value: "mauritanian", label: "Mauritanian" },
+  { value: "mauritian", label: "Mauritian" },
+  { value: "mexican", label: "Mexican" },
+  { value: "micronesian", label: "Micronesian" },
+  { value: "moldovan", label: "Moldovan" },
+  { value: "monacan", label: "Monacan" },
+  { value: "mongolian", label: "Mongolian" },
+  { value: "moroccan", label: "Moroccan" },
+  { value: "mosotho", label: "Mosotho" },
+  { value: "motswana", label: "Motswana" },
+  { value: "mozambican", label: "Mozambican" },
+  { value: "namibian", label: "Namibian" },
+  { value: "nauruan", label: "Nauruan" },
+  { value: "nepalese", label: "Nepalese" },
+  { value: "new_zealander", label: "New Zealander" },
+  { value: "ni_vanuatu", label: "Ni-Vanuatu" },
+  { value: "nicaraguan", label: "Nicaraguan" },
+  { value: "nigerien", label: "Nigerien" },
+  { value: "north_korean", label: "North Korean" },
+  { value: "northern_irish", label: "Northern Irish" },
+  { value: "norwegian", label: "Norwegian" },
+  { value: "omani", label: "Omani" },
+  { value: "pakistani", label: "Pakistani" },
+  { value: "palauan", label: "Palauan" },
+  { value: "panamanian", label: "Panamanian" },
+  { value: "papua_new_guinean", label: "Papua New Guinean" },
+  { value: "paraguayan", label: "Paraguayan" },
+  { value: "peruvian", label: "Peruvian" },
+  { value: "polish", label: "Polish" },
+  { value: "portuguese", label: "Portuguese" },
+  { value: "qatari", label: "Qatari" },
+  { value: "romanian", label: "Romanian" },
+  { value: "russian", label: "Russian" },
+  { value: "rwandan", label: "Rwandan" },
+  { value: "saint_lucian", label: "Saint Lucian" },
+  { value: "salvadoran", label: "Salvadoran" },
+  { value: "samoan", label: "Samoan" },
+  { value: "san_marinese", label: "San Marinese" },
+  { value: "sao_tomean", label: "Sao Tomean" },
+  { value: "saudi", label: "Saudi" },
+  { value: "scottish", label: "Scottish" },
+  { value: "senegalese", label: "Senegalese" },
+  { value: "serbian", label: "Serbian" },
+  { value: "seychellois", label: "Seychellois" },
+  { value: "sierra_leonean", label: "Sierra Leonean" },
+  { value: "singaporean", label: "Singaporean" },
+  { value: "slovakian", label: "Slovakian" },
+  { value: "slovenian", label: "Slovenian" },
+  { value: "solomon_islander", label: "Solomon Islander" },
+  { value: "somali", label: "Somali" },
+  { value: "south_african", label: "South African" },
+  { value: "south_korean", label: "South Korean" },
+  { value: "spanish", label: "Spanish" },
+  { value: "sri_lankan", label: "Sri Lankan" },
+  { value: "sudanese", label: "Sudanese" },
+  { value: "surinamer", label: "Surinamer" },
+  { value: "swazi", label: "Swazi" },
+  { value: "swedish", label: "Swedish" },
+  { value: "swiss", label: "Swiss" },
+  { value: "syrian", label: "Syrian" },
+  { value: "taiwanese", label: "Taiwanese" },
+  { value: "tajik", label: "Tajik" },
+  { value: "tanzanian", label: "Tanzanian" },
+  { value: "thai", label: "Thai" },
+  { value: "togolese", label: "Togolese" },
+  { value: "tongan", label: "Tongan" },
+  { value: "trinidadian_or_tobagonian", label: "Trinidadian or Tobagonian" },
+  { value: "tunisian", label: "Tunisian" },
+  { value: "turkish", label: "Turkish" },
+  { value: "tuvaluan", label: "Tuvaluan" },
+  { value: "ugandan", label: "Ugandan" },
+  { value: "ukrainian", label: "Ukrainian" },
+  { value: "uruguayan", label: "Uruguayan" },
+  { value: "uzbekistani", label: "Uzbekistani" },
+  { value: "venezuelan", label: "Venezuelan" },
+  { value: "vietnamese", label: "Vietnamese" },
+  { value: "welsh", label: "Welsh" },
+  { value: "yemenite", label: "Yemenite" },
+  { value: "zambian", label: "Zambian" },
+  { value: "zimbabwean", label: "Zimbabwean" },
+];
 
 // Companies House data types
 interface CompanySearchResult {
@@ -99,17 +360,26 @@ const companySearchSchema = z.object({
 });
 
 const individualClientSchema = z.object({
-  firstName: z.string().min(1, "First name is required"),
-  lastName: z.string().min(1, "Last name is required"),
-  email: z.string().email("Valid email address is required"),
-  address: z.object({
-    line1: z.string().min(1, "Address line 1 is required"),
-    line2: z.string().optional(),
-    city: z.string().min(1, "Town/City is required"),
-    county: z.string().optional(),
-    postcode: z.string().min(1, "Postcode is required").regex(/^[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}$/i, "Invalid UK postcode format"),
-    country: z.string().default("United Kingdom"),
-  }),
+  fullName: z.string().min(1, "Full name is required"),
+  title: z.string().optional(),
+  dateOfBirth: z.string().optional(),
+  nationality: z.string().optional(),
+  occupation: z.string().optional(),
+  primaryEmail: z.string().min(1, "Email is required").email("Valid email required"),
+  primaryPhone: z.string().optional(),
+  email2: z.string().email("Valid email format").optional().or(z.literal("")),
+  telephone2: z.string().optional(),
+  addressLine1: z.string().min(1, "Address is required"),
+  addressLine2: z.string().optional(),
+  locality: z.string().min(1, "Town/City is required"),
+  region: z.string().optional(),
+  postalCode: z.string().min(1, "Postcode is required"),
+  country: z.string().default("United Kingdom"),
+  niNumber: z.string().optional(),
+  personalUtrNumber: z.string().optional(),
+  photoIdVerified: z.boolean().optional(),
+  addressVerified: z.boolean().optional(),
+  isMainContact: z.boolean().default(true),
 });
 
 type CompanySearchData = z.infer<typeof companySearchSchema>;
@@ -158,6 +428,13 @@ export function CompaniesHouseClientModal({
   const [step, setStep] = useState<'ch-search' | 'ch-confirm' | 'individual-details'>('ch-search');
   const [selectedCompany, setSelectedCompany] = useState<CompanyProfile | null>(null);
 
+  // Individual form tab state
+  const [individualTab, setIndividualTab] = useState("personal");
+  const [nationalityOpen, setNationalityOpen] = useState(false);
+  const [occupationOpen, setOccupationOpen] = useState(false);
+  const [showComplianceSection, setShowComplianceSection] = useState(false);
+  const [showSecondaryContacts, setShowSecondaryContacts] = useState(false);
+
   const isEditing = !!client;
 
   // Company search form
@@ -172,26 +449,40 @@ export function CompaniesHouseClientModal({
   const individualForm = useForm<IndividualClientData>({
     resolver: zodResolver(individualClientSchema),
     defaultValues: {
-      firstName: "",
-      lastName: "",
-      email: "",
-      address: {
-        line1: "",
-        line2: "",
-        city: "",
-        county: "",
-        postcode: "",
-        country: "United Kingdom",
-      },
+      fullName: "",
+      title: "",
+      dateOfBirth: "",
+      nationality: "",
+      occupation: "",
+      primaryEmail: "",
+      primaryPhone: "",
+      email2: "",
+      telephone2: "",
+      addressLine1: "",
+      addressLine2: "",
+      locality: "",
+      region: "",
+      postalCode: "",
+      country: "United Kingdom",
+      niNumber: "",
+      personalUtrNumber: "",
+      photoIdVerified: false,
+      addressVerified: false,
+      isMainContact: true,
     },
   });
 
   // Reset state when modal opens/closes or client changes
   useEffect(() => {
     if (!client) {
-      setClientType('company'); // Default to company mode
-      setStep('ch-search'); // Start on CH search for creation
+      setClientType('company');
+      setStep('ch-search');
       setSelectedCompany(null);
+      setIndividualTab("personal");
+      setNationalityOpen(false);
+      setOccupationOpen(false);
+      setShowComplianceSection(false);
+      setShowSecondaryContacts(false);
       searchForm.reset();
       individualForm.reset();
     }
@@ -201,74 +492,6 @@ export function CompaniesHouseClientModal({
   // Search for company using Companies House API
   const [searchQuery, setSearchQuery] = useState("");
   const [companySearchResults, setCompanySearchResults] = useState<CompanySearchResult[]>([]);
-  
-  // Address auto-complete state
-  const [addressQuery, setAddressQuery] = useState("");
-  const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
-  const [isLoadingAddresses, setIsLoadingAddresses] = useState(false);
-
-  // Debounced address lookup
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      if (addressQuery.trim().length >= 3) {
-        setIsLoadingAddresses(true);
-        try {
-          const response = await apiRequest("GET", `/api/address-lookup/${encodeURIComponent(addressQuery)}`);
-          const data = await response.json();
-          setAddressSuggestions(data.suggestions || []);
-        } catch (error) {
-          console.log("Address lookup failed - user can enter manually");
-          setAddressSuggestions([]);
-        }
-        setIsLoadingAddresses(false);
-      } else {
-        setAddressSuggestions([]);
-      }
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [addressQuery]);
-
-  // Select address from suggestions and populate form fields
-  const selectAddress = async (suggestion: any) => {
-    if (!suggestion.id) {
-      console.log("No address ID available");
-      return;
-    }
-
-    setIsLoadingAddresses(true);
-    try {
-      // Fetch full address details including postcode
-      const response = await apiRequest("GET", `/api/address-details/${encodeURIComponent(suggestion.id)}`);
-      const addressDetails = await response.json();
-      
-      // Populate form fields with complete address data
-      individualForm.setValue("address.line1", addressDetails.line1 || "");
-      individualForm.setValue("address.line2", addressDetails.line2 || "");
-      individualForm.setValue("address.city", addressDetails.city || "");
-      individualForm.setValue("address.county", addressDetails.county || "");
-      individualForm.setValue("address.postcode", addressDetails.postcode || "");
-      individualForm.setValue("address.country", "United Kingdom");
-      
-      // Update the address query field with the first line
-      setAddressQuery(addressDetails.line1 || suggestion.address);
-      
-    } catch (error) {
-      console.log("Failed to fetch address details");
-      // Fallback to parsing suggestion
-      const addressParts = suggestion.address.split(', ');
-      individualForm.setValue("address.line1", addressParts[0] || "");
-      individualForm.setValue("address.line2", "");
-      individualForm.setValue("address.city", addressParts[1] || "");
-      individualForm.setValue("address.county", addressParts[2] || "");
-      individualForm.setValue("address.postcode", "");
-      individualForm.setValue("address.country", "United Kingdom");
-      setAddressQuery(suggestion.address);
-    }
-    
-    setAddressSuggestions([]);
-    setIsLoadingAddresses(false);
-  };
   
   // Individual client creation mutation
   const createIndividualClientMutation = useMutation({
@@ -535,7 +758,6 @@ export function CompaniesHouseClientModal({
           </Button>
           <Button 
             onClick={() => {
-              // Create client directly - officers will be imported in the background
               createClientFromCHMutation.mutate();
             }}
             disabled={createClientFromCHMutation.isPending}
@@ -553,176 +775,137 @@ export function CompaniesHouseClientModal({
     );
   };
 
-  // Individual client details step
+  // Address lookup handler
+  const handleAddressSelect = (addressData: {
+    addressLine1: string;
+    addressLine2?: string;
+    locality: string;
+    region: string;
+    postalCode: string;
+    country: string;
+  }) => {
+    individualForm.setValue("addressLine1", addressData.addressLine1 || "");
+    individualForm.setValue("addressLine2", addressData.addressLine2 || "");
+    individualForm.setValue("locality", addressData.locality || "");
+    individualForm.setValue("region", addressData.region || "");
+    individualForm.setValue("postalCode", addressData.postalCode || "");
+    individualForm.setValue("country", addressData.country || "United Kingdom");
+  };
+
+  // Check if each tab has data
+  const hasPersonalData = individualForm.watch("fullName");
+  const hasContactData = individualForm.watch("primaryEmail") || individualForm.watch("primaryPhone");
+  const hasAddressData = individualForm.watch("addressLine1") || individualForm.watch("postalCode");
+
+  // Individual client details step with 3-tab layout
   const renderIndividualDetailsStep = () => (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center gap-2">
         <PersonIcon className="h-5 w-5 text-blue-600" />
         <h3 className="text-lg font-semibold">Individual Client Details</h3>
       </div>
+      <p className="text-sm text-muted-foreground">
+        Enter the details for the individual client. Review each tab to ensure all information is captured.
+      </p>
       
       <Form {...individualForm}>
         <form onSubmit={individualForm.handleSubmit((data) => {
           createIndividualClientMutation.mutate(data);
         })} className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FormField
-              control={individualForm.control}
-              name="firstName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>First Name</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      placeholder="Enter first name"
-                      data-testid="input-first-name"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            
-            <FormField
-              control={individualForm.control}
-              name="lastName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Last Name</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      placeholder="Enter last name"
-                      data-testid="input-last-name"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-          
-          <FormField
-            control={individualForm.control}
-            name="email"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Email Address</FormLabel>
-                <FormControl>
-                  <Input
-                    {...field}
-                    type="email"
-                    placeholder="Enter email address"
-                    data-testid="input-email"
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          
-          {/* Address Fields with GetAddress Auto-complete */}
-          <div className="space-y-4 border-t pt-4">
-            <h4 className="font-medium text-gray-900">Address</h4>
-            <p className="text-sm text-gray-600">Start typing your address and select from the suggestions</p>
-            
-            <FormField
-              control={individualForm.control}
-              name="address.line1"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Address</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      id="individual-address-line1"
-                      placeholder="Start typing your address..."
-                      data-testid="input-address-line1"
-                      onChange={(e) => {
-                        field.onChange(e);
-                        setAddressQuery(e.target.value);
-                      }}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                  {isLoadingAddresses && (
-                    <p className="text-sm text-gray-500">Looking up addresses...</p>
-                  )}
-                </FormItem>
-              )}
-            />
+          <Tabs value={individualTab} onValueChange={setIndividualTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-3 mb-4">
+              <TabsTrigger 
+                value="personal" 
+                className="flex items-center gap-2"
+                data-testid="tab-individual-personal"
+              >
+                <PersonIcon className="h-4 w-4" />
+                <span className="hidden sm:inline">Personal</span>
+                {hasPersonalData && (
+                  <Check className="h-3 w-3 text-green-500" />
+                )}
+              </TabsTrigger>
+              <TabsTrigger 
+                value="contact" 
+                className="flex items-center gap-2"
+                data-testid="tab-individual-contact"
+              >
+                <Phone className="h-4 w-4" />
+                <span className="hidden sm:inline">Contact</span>
+                {hasContactData && (
+                  <Check className="h-3 w-3 text-green-500" />
+                )}
+              </TabsTrigger>
+              <TabsTrigger 
+                value="address" 
+                className="flex items-center gap-2"
+                data-testid="tab-individual-address"
+              >
+                <MapPin className="h-4 w-4" />
+                <span className="hidden sm:inline">Address</span>
+                {hasAddressData && (
+                  <Check className="h-3 w-3 text-green-500" />
+                )}
+              </TabsTrigger>
+            </TabsList>
 
-            {addressSuggestions.length > 0 && (
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Select Address:
-                </label>
-                <div className="space-y-1 max-h-32 overflow-y-auto border rounded-md bg-white shadow-sm">
-                  {addressSuggestions.map((address, index) => (
-                    <button
-                      key={index}
-                      type="button"
-                      className="w-full text-left p-3 text-sm hover:bg-gray-50 focus:bg-gray-50 first:rounded-t-md last:rounded-b-md border-b last:border-b-0"
-                      onClick={() => selectAddress(address)}
-                      data-testid={`button-select-address-${index}`}
-                    >
-                      <div className="font-medium">{address.address}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            <div className="grid grid-cols-1 gap-4">
+            {/* Personal Tab */}
+            <TabsContent value="personal" className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
               <FormField
                 control={individualForm.control}
-                name="address.line2"
+                name="fullName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Address Line 2 (Optional)</FormLabel>
+                    <FormLabel>Full Name *</FormLabel>
                     <FormControl>
                       <Input
                         {...field}
-                        placeholder="Apartment, suite, etc."
-                        data-testid="input-address-line2"
+                        placeholder="Enter full name"
+                        data-testid="input-full-name"
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={individualForm.control}
-                  name="address.city"
+                  name="title"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Town/City</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          placeholder="Auto-populated"
-                          data-testid="input-city"
-                        />
-                      </FormControl>
+                      <FormLabel>Title</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-title">
+                            <SelectValue placeholder="Select title" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {TITLES.map((title) => (
+                            <SelectItem key={title.value} value={title.value}>
+                              {title.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                
+
                 <FormField
                   control={individualForm.control}
-                  name="address.county"
+                  name="dateOfBirth"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>County</FormLabel>
+                      <FormLabel>Date of Birth</FormLabel>
                       <FormControl>
                         <Input
                           {...field}
-                          placeholder="Auto-populated"
-                          data-testid="input-county"
+                          type="date"
+                          data-testid="input-date-of-birth"
                         />
                       </FormControl>
                       <FormMessage />
@@ -730,48 +913,490 @@ export function CompaniesHouseClientModal({
                   )}
                 />
               </div>
-              
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={individualForm.control}
-                  name="address.postcode"
+                  name="nationality"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Nationality</FormLabel>
+                      <Popover open={nationalityOpen} onOpenChange={setNationalityOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={nationalityOpen}
+                              className={cn(
+                                "w-full justify-between",
+                                !field.value && "text-muted-foreground"
+                              )}
+                              data-testid="combobox-nationality"
+                            >
+                              {field.value
+                                ? NATIONALITIES.find((n) => n.value === field.value)?.label
+                                : "Select nationality"}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-full p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search nationality..." />
+                            <CommandList>
+                              <CommandEmpty>No nationality found.</CommandEmpty>
+                              <CommandGroup className="max-h-64 overflow-auto">
+                                {NATIONALITIES.map((nationality) => (
+                                  <CommandItem
+                                    key={nationality.value}
+                                    value={nationality.label}
+                                    onSelect={() => {
+                                      field.onChange(nationality.value);
+                                      setNationalityOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        field.value === nationality.value
+                                          ? "opacity-100"
+                                          : "opacity-0"
+                                      )}
+                                    />
+                                    {nationality.label}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={individualForm.control}
+                  name="occupation"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                      <FormLabel>Occupation</FormLabel>
+                      <Popover open={occupationOpen} onOpenChange={setOccupationOpen}>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={occupationOpen}
+                              className={cn(
+                                "w-full justify-between",
+                                !field.value && "text-muted-foreground"
+                              )}
+                              data-testid="combobox-occupation"
+                            >
+                              {field.value
+                                ? OCCUPATIONS.find((o) => o.value === field.value)?.label
+                                : "Select occupation"}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-full p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search occupation..." />
+                            <CommandList>
+                              <CommandEmpty>No occupation found.</CommandEmpty>
+                              <CommandGroup className="max-h-64 overflow-auto">
+                                {OCCUPATIONS.map((occupation) => (
+                                  <CommandItem
+                                    key={occupation.value}
+                                    value={occupation.label}
+                                    onSelect={() => {
+                                      field.onChange(occupation.value);
+                                      setOccupationOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        field.value === occupation.value
+                                          ? "opacity-100"
+                                          : "opacity-0"
+                                      )}
+                                    />
+                                    {occupation.label}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* Compliance Section */}
+              <Collapsible open={showComplianceSection} onOpenChange={setShowComplianceSection}>
+                <CollapsibleTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="flex items-center gap-2 w-full justify-between p-3 border rounded-lg hover:bg-muted/50"
+                    data-testid="button-toggle-compliance"
+                  >
+                    <div className="flex items-center gap-2">
+                      <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium">Compliance Information</span>
+                    </div>
+                    {showComplianceSection ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-4 pt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={individualForm.control}
+                      name="niNumber"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>NI Number</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder="AB123456C"
+                              data-testid="input-ni-number"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={individualForm.control}
+                      name="personalUtrNumber"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Personal UTR Number</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              placeholder="1234567890"
+                              data-testid="input-personal-utr"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={individualForm.control}
+                      name="photoIdVerified"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-photo-id-verified"
+                            />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel>Photo ID Verified</FormLabel>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={individualForm.control}
+                      name="addressVerified"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-address-verified"
+                            />
+                          </FormControl>
+                          <div className="space-y-1 leading-none">
+                            <FormLabel>Address Verified</FormLabel>
+                          </div>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </TabsContent>
+
+            {/* Contact Tab */}
+            <TabsContent value="contact" className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={individualForm.control}
+                  name="primaryEmail"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Postcode</FormLabel>
+                      <FormLabel>Primary Email *</FormLabel>
                       <FormControl>
-                        <Input
-                          {...field}
-                          placeholder="Auto-populated"
-                          data-testid="input-postcode"
-                        />
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            {...field}
+                            type="email"
+                            placeholder="email@example.com"
+                            className="pl-10"
+                            data-testid="input-primary-email"
+                          />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                
+
                 <FormField
                   control={individualForm.control}
-                  name="address.country"
+                  name="primaryPhone"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Country</FormLabel>
+                      <FormLabel>Primary Phone</FormLabel>
                       <FormControl>
-                        <Input
-                          {...field}
-                          placeholder="Auto-populated"
-                          data-testid="input-country"
-                        />
+                        <div className="relative">
+                          <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            {...field}
+                            placeholder="07XXX XXXXXX"
+                            className="pl-10"
+                            data-testid="input-primary-phone"
+                          />
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
-            </div>
-          </div>
+
+              {/* Secondary Contacts */}
+              <Collapsible open={showSecondaryContacts} onOpenChange={setShowSecondaryContacts}>
+                <CollapsibleTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="flex items-center gap-2 w-full justify-between p-3 border rounded-lg hover:bg-muted/50"
+                    data-testid="button-toggle-secondary-contacts"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium">Secondary Contact Details</span>
+                    </div>
+                    {showSecondaryContacts ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                  </Button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="space-y-4 pt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={individualForm.control}
+                      name="email2"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Secondary Email</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                              <Input
+                                {...field}
+                                type="email"
+                                placeholder="secondary@example.com"
+                                className="pl-10"
+                                data-testid="input-email-2"
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={individualForm.control}
+                      name="telephone2"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Secondary Phone</FormLabel>
+                          <FormControl>
+                            <div className="relative">
+                              <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                              <Input
+                                {...field}
+                                placeholder="07XXX XXXXXX"
+                                className="pl-10"
+                                data-testid="input-telephone-2"
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            </TabsContent>
+
+            {/* Address Tab */}
+            <TabsContent value="address" className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
+              <AddressLookup
+                onAddressSelect={handleAddressSelect}
+                value={{
+                  addressLine1: individualForm.watch("addressLine1"),
+                  addressLine2: individualForm.watch("addressLine2"),
+                  locality: individualForm.watch("locality"),
+                  region: individualForm.watch("region"),
+                  postalCode: individualForm.watch("postalCode"),
+                  country: individualForm.watch("country"),
+                }}
+              />
+
+              <Separator />
+
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium text-muted-foreground">Address Details</h4>
+                
+                <FormField
+                  control={individualForm.control}
+                  name="addressLine1"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Address Line 1 *</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="Street address"
+                          data-testid="input-address-line-1"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={individualForm.control}
+                  name="addressLine2"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Address Line 2</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="Apartment, suite, etc. (optional)"
+                          data-testid="input-address-line-2"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={individualForm.control}
+                    name="locality"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Town/City *</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="Town or city"
+                            data-testid="input-locality"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={individualForm.control}
+                    name="region"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>County/Region</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="County or region"
+                            data-testid="input-region"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={individualForm.control}
+                    name="postalCode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Postcode *</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="SW1A 1AA"
+                            data-testid="input-postal-code"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={individualForm.control}
+                    name="country"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Country</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="United Kingdom"
+                            data-testid="input-country"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
           
-          <div className="flex justify-end">
+          <div className="flex justify-end pt-4 border-t">
             <Button
               type="submit"
               disabled={createIndividualClientMutation.isPending}
@@ -817,13 +1442,11 @@ export function CompaniesHouseClientModal({
         {!isEditing && (
           <Tabs value={clientType} onValueChange={(value) => {
             setClientType(value as 'company' | 'individual');
-            // Reset to appropriate first step based on selection
             if (value === 'company') {
               setStep('ch-search');
             } else {
               setStep('individual-details');
             }
-            // Reset any previous state
             setSelectedCompany(null);
             searchForm.reset();
             individualForm.reset();
