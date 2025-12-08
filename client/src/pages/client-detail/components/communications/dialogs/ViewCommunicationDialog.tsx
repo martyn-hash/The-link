@@ -1,5 +1,5 @@
 import DOMPurify from "dompurify";
-import { Clock, UserIcon, FileAudio, Loader2, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Clock, UserIcon, FileAudio, Loader2, AlertCircle, ChevronDown, ChevronUp, Phone, Timer } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,6 +12,18 @@ import {
 import { formatPersonName } from "../../../utils/formatters";
 import { getIcon, getTypeLabel, getTypeColor } from "../helpers";
 import type { ViewCommunicationDialogProps } from "../types";
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) {
+    return `${seconds} second${seconds !== 1 ? 's' : ''}`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (remainingSeconds === 0) {
+    return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+  }
+  return `${minutes}m ${remainingSeconds}s`;
+}
 
 export function ViewCommunicationDialog({ 
   communication, 
@@ -27,6 +39,8 @@ export function ViewCommunicationDialog({
   const transcriptionStatus = metadata?.transcriptionStatus;
   const transcript = metadata?.transcript;
   const summary = metadata?.summary;
+  const duration = metadata?.duration;
+  const phoneNumber = metadata?.phoneNumber;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -82,6 +96,28 @@ export function ViewCommunicationDialog({
                 )}
               </div>
             </div>
+            {isPhoneCall && phoneNumber && (
+              <div>
+                <span className="text-xs text-muted-foreground">Phone Number</span>
+                <div className="mt-1 flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm" data-testid={`text-modal-phone-${communication.id}`}>
+                    {phoneNumber}
+                  </span>
+                </div>
+              </div>
+            )}
+            {isPhoneCall && typeof duration === 'number' && (
+              <div>
+                <span className="text-xs text-muted-foreground">Duration</span>
+                <div className="mt-1 flex items-center gap-2">
+                  <Timer className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-sm" data-testid={`text-modal-duration-${communication.id}`}>
+                    {formatDuration(duration)}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
           {communication.subject && (

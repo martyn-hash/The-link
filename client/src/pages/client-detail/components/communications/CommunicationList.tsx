@@ -8,11 +8,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Clock, Eye, MessageSquare, UserIcon } from "lucide-react";
+import { Clock, Eye, MessageSquare, UserIcon, Phone, Loader2, FileText, XCircle } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CommunicationCard } from "@/components/communication-card";
 import { getIcon, getTypeLabel, getTypeColor } from "./helpers.tsx";
-import type { CommunicationListProps, TimelineItem } from "./types";
+import type { CommunicationListProps, TimelineItem, CommunicationTimelineItem } from "./types";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ProjectLinkProps {
   projectId: string;
@@ -31,6 +32,85 @@ function ProjectLink({ projectId, projectName, onClick }: ProjectLinkProps) {
     >
       {projectName || 'Unknown Project'}
     </button>
+  );
+}
+
+function getCallRecipient(item: CommunicationTimelineItem): string | null {
+  const comm = item.data;
+  
+  if (comm.person) {
+    const firstName = comm.person.firstName || '';
+    const lastName = comm.person.lastName || '';
+    const fullName = `${firstName} ${lastName}`.trim();
+    if (fullName) return fullName;
+  }
+  
+  const metadata = comm.metadata as Record<string, any> | null;
+  if (metadata?.phoneNumber) {
+    return metadata.phoneNumber;
+  }
+  
+  if (comm.subject && comm.subject.includes(' - ')) {
+    const parts = comm.subject.split(' - ');
+    if (parts.length > 1) {
+      return parts[parts.length - 1];
+    }
+  }
+  
+  return null;
+}
+
+function TranscriptionStatusIcon({ item }: { item: CommunicationTimelineItem }) {
+  if (item.type !== 'phone_call') return null;
+  
+  const metadata = item.data.metadata as Record<string, any> | null;
+  if (!metadata) return null;
+  
+  const status = metadata.transcriptionStatus;
+  const duration = metadata.duration || 0;
+  
+  if (duration < 5 && !status) return null;
+  
+  let icon = null;
+  let tooltipText = '';
+  
+  switch (status) {
+    case 'pending':
+    case 'requesting':
+    case 'processing':
+      icon = <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />;
+      tooltipText = 'Transcription in progress...';
+      break;
+    case 'completed':
+      icon = <FileText className="h-3 w-3 text-green-600 dark:text-green-400" />;
+      tooltipText = 'Transcript available';
+      break;
+    case 'failed':
+      icon = <XCircle className="h-3 w-3 text-red-500" />;
+      tooltipText = 'Transcription failed';
+      break;
+    case 'not_available':
+      return null;
+    default:
+      if (duration >= 5) {
+        icon = <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />;
+        tooltipText = 'Waiting for transcript...';
+      }
+  }
+  
+  if (!icon) return null;
+  
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex ml-1">{icon}</span>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{tooltipText}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -212,21 +292,38 @@ export function CommunicationList({
               </div>
             </TableCell>
             <TableCell data-testid={`cell-connected-${item.id}`}>
-              {item.projectId ? (
-                <ProjectLink 
-                  projectId={item.projectId} 
-                  projectName={
-                    // First try to get from embedded project data on communication
-                    (item.kind === 'communication' && item.data.project?.description) ||
-                    // Fallback to projectCache
-                    projectCache[item.projectId]?.description || 
-                    projectCache[item.projectId]?.client?.name
-                  }
-                  onClick={onProjectClick ? () => onProjectClick(item.projectId!) : undefined}
-                />
-              ) : (
-                <span className="text-sm text-muted-foreground">-</span>
-              )}
+              <div className="flex flex-col gap-1">
+                {/* Show call recipient for phone calls */}
+                {item.kind === 'communication' && item.type === 'phone_call' && (
+                  (() => {
+                    const recipient = getCallRecipient(item);
+                    return recipient ? (
+                      <div className="flex items-center gap-1.5">
+                        <Phone className="w-3 h-3 text-muted-foreground" />
+                        <span className="text-sm">{recipient}</span>
+                        <TranscriptionStatusIcon item={item} />
+                      </div>
+                    ) : null;
+                  })()
+                )}
+                {/* Show project link if available */}
+                {item.projectId ? (
+                  <ProjectLink 
+                    projectId={item.projectId} 
+                    projectName={
+                      (item.kind === 'communication' && item.data.project?.description) ||
+                      projectCache[item.projectId]?.description || 
+                      projectCache[item.projectId]?.client?.name
+                    }
+                    onClick={onProjectClick ? () => onProjectClick(item.projectId!) : undefined}
+                  />
+                ) : (
+                  /* Only show dash if no recipient and no project */
+                  !(item.kind === 'communication' && item.type === 'phone_call' && getCallRecipient(item)) && (
+                    <span className="text-sm text-muted-foreground">-</span>
+                  )
+                )}
+              </div>
             </TableCell>
             <TableCell>
               {item.kind === 'message_thread' ? (
