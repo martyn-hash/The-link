@@ -459,12 +459,24 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
         }
         
         sessionRef.current = session;
+      
+      // IMPORTANT: The call() promise resolves AFTER the call connects (session.state === 'answered')
+      // So we need to start the timer immediately when the promise resolves, not wait for events
+      console.log('[RingCentral] Session state after call():', session.state);
+      
+      // If the session is already answered/connected, start the timer now
+      if (session.state === 'answered' || session.state === 'confirmed' || session.state === 'connected') {
+        console.log('[RingCentral] ⏱️ Call already connected (state:', session.state, '), starting timer IMMEDIATELY');
+        setCallState(prev => ({ ...prev, status: 'connected' }));
+        startCallTimer();
+      }
 
-      // Setup session event listeners IMMEDIATELY
+      // Setup session event listeners for future events
+      // These may not fire if the events already happened before we set up listeners
       session.on('accepted', () => {
         console.log('[RingCentral] ✅ Outbound call ACCEPTED - call connected!');
         setCallState(prev => ({ ...prev, status: 'connected' }));
-        // Start timer if not already started (could have started on progress)
+        // Start timer if not already started
         if (!callStartTimeRef.current) {
           console.log('[RingCentral] ⏱️ Starting call timer on ACCEPTED');
           startCallTimer();
