@@ -79,6 +79,7 @@ import {
   Users,
   Bell,
   AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -206,6 +207,10 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   const [extendDays, setExtendDays] = useState(3);
   const [reminderTokenId, setReminderTokenId] = useState<string | null>(null);
   const [isPreparingReminder, setIsPreparingReminder] = useState(false);
+  
+  // Import loading state
+  const [isImporting, setIsImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
 
   // Add Query form state
   const [newQueryText, setNewQueryText] = useState("");
@@ -415,39 +420,50 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
 
   // Bulk import handler
   const handleBulkImport = async (parsedQueries: ParsedQuery[]) => {
+    setIsImporting(true);
+    setImportProgress({ current: 0, total: parsedQueries.length });
+    
     let successCount = 0;
     let failCount = 0;
     
-    for (const query of parsedQueries) {
-      try {
-        await apiRequest('POST', `/api/projects/${projectId}/queries`, {
-          ourQuery: query.ourQuery || "Please clarify this transaction",
-          description: query.description || undefined,
-          date: query.date ? query.date.toISOString() : undefined,
-          moneyIn: query.moneyIn || undefined,
-          moneyOut: query.moneyOut || undefined,
-        });
-        successCount++;
-      } catch (error) {
-        failCount++;
-        console.error("Failed to create query:", error);
+    try {
+      for (let i = 0; i < parsedQueries.length; i++) {
+        const query = parsedQueries[i];
+        try {
+          await apiRequest('POST', `/api/projects/${projectId}/queries`, {
+            ourQuery: query.ourQuery || "Please clarify this transaction",
+            description: query.description || undefined,
+            date: query.date ? query.date.toISOString() : undefined,
+            moneyIn: query.moneyIn || undefined,
+            moneyOut: query.moneyOut || undefined,
+          });
+          successCount++;
+        } catch (error) {
+          failCount++;
+          console.error("Failed to create query:", error);
+        }
+        setImportProgress({ current: i + 1, total: parsedQueries.length });
       }
-    }
-    
-    queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/queries/counts'] });
-    
-    if (failCount === 0) {
-      toast({ 
-        title: "Import complete", 
-        description: `Successfully imported ${successCount} queries.` 
-      });
-    } else {
-      toast({ 
-        title: "Import partially complete", 
-        description: `Imported ${successCount} queries, ${failCount} failed.`,
-        variant: "destructive" 
-      });
+      
+      // Refresh data
+      await queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/queries/counts'] });
+      
+      if (failCount === 0) {
+        toast({ 
+          title: "Import complete", 
+          description: `Successfully imported ${successCount} queries.` 
+        });
+      } else {
+        toast({ 
+          title: "Import partially complete", 
+          description: `Imported ${successCount} queries, ${failCount} failed.`,
+          variant: "destructive" 
+        });
+      }
+    } finally {
+      setIsImporting(false);
+      setImportProgress({ current: 0, total: 0 });
     }
   };
 
@@ -727,7 +743,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   return (
     <>
       <Tabs value={activeSubTab} onValueChange={(v) => setActiveSubTab(v as "queries" | "reminders")} className="w-full">
-        <Card>
+        <Card className="relative">
           <CardHeader className="pb-3">
             <div className="flex flex-col gap-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -943,6 +959,44 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
               </div>
             </div>
           </CardHeader>
+          
+          {/* Loading Overlay - shows during import or email preparation */}
+          {(isImporting || isPreparingEmail || isPreparingReminder) && (
+            <div 
+              className="absolute inset-0 bg-background/80 backdrop-blur-sm z-10 flex items-center justify-center rounded-lg"
+              data-testid="loading-overlay"
+            >
+              <div className="flex flex-col items-center gap-3 p-6 bg-card rounded-lg shadow-lg border">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <div className="text-center">
+                  {isImporting && (
+                    <>
+                      <p className="font-medium text-foreground">Importing queries...</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {importProgress.current} of {importProgress.total} complete
+                      </p>
+                    </>
+                  )}
+                  {isPreparingEmail && (
+                    <>
+                      <p className="font-medium text-foreground">Preparing email...</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Setting up your message
+                      </p>
+                    </>
+                  )}
+                  {isPreparingReminder && (
+                    <>
+                      <p className="font-medium text-foreground">Preparing reminder...</p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Loading reminder details
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
             
           {/* Queries Tab Content */}
           <TabsContent value="queries" className="mt-0">
