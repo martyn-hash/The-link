@@ -271,8 +271,8 @@ export function useProjectsPageState() {
     setListSortBy,
     setListSortOrder,
     setItemsPerPage,
-    setCurrentPage,
-  }), [dashboardManagement]);
+    setCurrentPage: filtering.setCurrentPage,
+  }), [dashboardManagement, filtering.setCurrentPage]);
 
   const viewManagement = useViewManagement(
     {
