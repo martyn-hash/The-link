@@ -1,7 +1,7 @@
 # The Link - CRM & Project Management Application
 
 ## Overview
-The Link is a full-stack CRM and project management application designed for accounting and bookkeeping firms. It aims to automate recurring service delivery, streamline client relationship management, and provide a secure client portal. Key capabilities include intelligent scheduling, automated project generation, Companies House integration, and a mobile-first user experience. The application focuses on enhancing efficiency and client satisfaction through automation, compliance, and robust access controls within a multi-tenant architecture.
+The Link is a full-stack CRM and project management application for accounting and bookkeeping firms. It automates recurring service delivery, streamlines client relationship management, and provides a secure client portal. Key features include intelligent scheduling, automated project generation, Companies House integration, and a mobile-first user experience. The application aims to enhance efficiency and client satisfaction through automation, compliance, and robust access controls within a multi-tenant architecture. It focuses on business vision, market potential, and project ambitions to improve firm operations and client engagement.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
@@ -17,115 +17,32 @@ The frontend uses React, TypeScript, Wouter for routing, TanStack Query for serv
 ### Backend Route Architecture
 Routes are organized into modular files in `server/routes/` covering core functionalities such as authentication, user management, client and people management, project and service management, document handling, communication tools, configuration, and administrative tasks.
 
-### Stage Change Optimization (December 2025)
-The stage change flow has been optimized across 5 waves to reduce database operations from 25-55+ to 10-20 per change (~65-75% reduction), achieving sub-300ms response times:
-- **Wave 1**: Batch field response insertions, static imports, data passthrough to background operations
-- **Wave 2**: Consolidated validation queries with JOINs, batch notification status updates
-- **Wave 3**: Frontend optimistic updates with pendingMove state, backend async operations via setImmediate
-- **Wave 4**: TTL cache for stage config with 5-minute expiration and comprehensive invalidation (admin endpoints at `/api/admin/cache-stats` and `/api/admin/cache-invalidate`)
-- **Wave 5**: Batch query creation during stage changes (uses `/api/projects/:id/queries/bulk`)
+### Stage Change Optimization
+The stage change flow has been optimized to reduce database operations and achieve sub-300ms response times through batch operations, optimized validation, frontend optimistic updates, and caching.
 
-Key files: `server/utils/ttlCache.ts`, `server/routes/projects/status.ts`, `server/storage/projects/projectStatusStorage.ts`, `client/src/hooks/change-status/useStatusChangeMutations.ts`
+### Client Also Has Filter
+A dynamic filter allows users to filter projects based on whether the same client has other active projects of specified types, enabling prioritization of work for clients with multiple service needs.
 
-### Client Also Has Filter (December 2025)
-A dynamic filter that allows users to filter projects based on whether the same client has other active projects of specified types. This enables prioritizing work for clients with multiple service needs (e.g., show bookkeeping projects only for clients who also have active VAT projects).
+### List View Settings Persistence
+Ensures consistent display of columns, pagination, and sort settings in project management list views through defensive validation and state management.
 
-- **Filter UI**: Multi-select checkboxes in the FilterPanel showing all project types, with badges displaying selected types
-- **Filter Logic**: Client-side filtering in `filterByClientHasProjectTypes()` checks if the client has other active projects matching selected types
-- **Persistence**: Filter state saved in views' `filters` JSON field as `clientHasProjectTypeIds` array
-- **Integration**: Works with saved views, URL sync, and filter count calculations
+### Background Prefetch Optimization
+Improves perceived performance by preloading data for secondary views during browser idle time using `requestIdleCallback`.
 
-Key files: `client/src/lib/projectFilterUtils.ts`, `client/src/components/filter-panel.tsx`, `client/src/hooks/projects-page/useProjectsPageState.ts`
+### RingCentral VoIP Integration
+Full VoIP phone system integration enabling staff to make and receive calls directly from the CRM with automatic call logging and AI-powered transcription, including a three-tier fallback for transcription services (RingSense, RingCentral Speech-to-Text, OpenAI Whisper).
 
-### List View Settings Persistence (December 2025)
-Fixes two issues with the project management list view: columns sometimes not displaying and pagination/sort settings not being saved.
+### AI Magic Call/SMS Integration
+Provides natural language voice calling and SMS capabilities through an AI Magic assistant, allowing users to initiate communications using conversational commands with fuzzy contact matching and disambiguation.
 
-- **Defensive Column Validation**: Task-list validates saved column preferences against valid column IDs, filtering out invalid values and ensuring essential columns (name, checkbox, actions) always display. Mirrors the pattern used in companies-table.
-- **List View Settings**: New `ListViewSettings` interface stores sortBy, sortOrder, and itemsPerPage in saved views' filters JSON field
-- **Sort State Management**: `listSortBy` and `listSortOrder` state with `handleListSortChange` callback propagated through component tree to TaskList
-- **Pagination Reset**: Loading a saved list view resets currentPage to 1 to ensure consistent pagination with restored settings
-- **End-to-End Flow**: Save view → includes listViewSettings → Load view → restores sort/pagination → TaskList receives initial props
+### Email Image Paste Feature
+Enables pasting and dragging images directly into email composition areas, with automatic upload to object storage and embedding via permanent URLs.
 
-Key files: `client/src/components/task-list.tsx`, `client/src/types/projects-page.ts`, `client/src/hooks/projects-page/useProjectsPageState.ts`, `client/src/hooks/projects-page/useViewManagement.ts`, `client/src/components/projects-page/ProjectsContent.tsx`
-
-### Background Prefetch Optimization (December 2025)
-Improves perceived performance by preloading data for secondary views after the primary content loads. When the user loads the Projects view, tasks data is prefetched in the background during browser idle time.
-
-- **Hook**: `useBackgroundPrefetch` - reusable hook for scheduling background data fetches
-- **Idle Scheduling**: Uses `requestIdleCallback` with `setTimeout` fallback for cross-browser support
-- **Cache Awareness**: Checks cache freshness before prefetching to avoid redundant network requests
-- **Trigger**: Prefetch starts 500ms after projects finish loading, only when authenticated
-
-Key files: `client/src/hooks/useBackgroundPrefetch.ts`, `client/src/hooks/projects-page/useProjectsPageState.ts`
-
-### RingCentral VoIP Integration (December 2025)
-Full VoIP phone system integration enabling staff to make and receive calls directly from the CRM with automatic call logging and AI-powered transcription.
-
-- **OAuth Authentication**: Per-user OAuth flow stores tokens in database, auto-refreshes before expiry
-- **WebRTC Calling**: SIP-based WebPhone with WebSocket signaling for real-time calls
-- **Call Logging**: Automatic creation of communication records with call metadata (direction, duration, session ID)
-- **Automatic Transcription**: Calls >5 seconds trigger background transcription with three-tier approach:
-  - Status flow: `pending` → `requesting` → `processing` → `completed`/`failed`
-  - Short calls get `not_available` status immediately
-  - Uses polling approach (30s wait, then queries every 10s up to 5 minutes)
-- **AI Summaries & Transcription**: Three-tier fallback approach:
-  1. **RingSense API** (if available): Provides transcript + AI summary + action items in one call
-  2. **RingCentral Speech-to-Text API**: Native transcription if AI scope enabled
-  3. **OpenAI Whisper Fallback**: Downloads recording directly from RingCentral and transcribes using OpenAI Whisper, with GPT-4o-mini generating professional summaries
-- **Startup Recovery**: Pending transcription jobs are automatically recovered on server restart
-  - Query finds communications with `pending`/`requesting`/`processing` status older than 2 minutes
-  - Jobs are re-scheduled for processing to prevent data loss from server restarts
-- **Simplified Calling UI**: One-step calling workflow with auto-initialization
-  - Phone initializes automatically when call dialog opens (shows "Connecting..." state)
-  - User selects person from dropdown, clicks "Call" - system handles everything
-  - Dialog auto-closes after call ends and is logged
-- **UI Display**: ViewCommunicationDialog shows transcript status, summary, and expandable full transcript
-
-Key files: `client/src/pages/client-detail/components/communications/dialogs/CallDialog.tsx`, `client/src/components/ringcentral-phone.tsx`, `server/routes/integrations.ts`, `server/utils/userRingCentralClient.ts`, `server/transcription-service.ts`, `server/storage/communications/communicationStorage.ts`
-
-Required OAuth scopes: RingOut, ReadCallLog, ReadCallRecording, AI (optional), VoIP, WebSocket
-
-### AI Magic Call/SMS Integration (December 2025)
-Natural language voice calling and SMS through the AI Magic assistant. Users can say things like "call Josie from Victoriam" or "text Sarah at ABC Ltd" and the AI will find matching contacts and initiate communications.
-
-- **Natural Language Parsing**: AI recognizes call/SMS intent with flexible phrasing (e.g., "ring", "phone", "call", "text", "message", "sms")
-- **Fuzzy Person Matching**: Uses `fuzzyMatchPeopleWithClient` to find contacts by name with optional client context boosting
-- **Disambiguation UI**: When multiple matches found, presents selection cards for user to choose the correct person
-- **Client Context Optional**: Calls work without explicit client association, showing "Call Completed (not logged)" toast
-- **With Client Context**: Calls are logged to the client's communication history with full metadata
-- **Phone Validation**: Automatically validates that matched contacts have valid phone numbers before initiating calls
-- **Event Pattern**: Action cards dispatch custom DOM events → AIMagicCallHandler catches events → Opens CallDialog/SMSDialog with pre-filled data
-
-Key files: `client/src/components/ai-magic/AIMagicCallHandler.tsx`, `client/src/components/ai-magic/AIMagicActionCards.tsx`, `server/services/ai-magic-service.ts`
-
-### Email Image Paste Feature (December 2025)
-Enables pasting and dragging images directly into email composition areas across the application. Images are automatically uploaded to object storage and embedded with permanent URLs.
-
-- **Paste/Drop Support**: Users can paste images from clipboard or drag-drop files into the editor
-- **Automatic Upload**: Images are uploaded to `/objects/inline-images/` with unique UUIDs
-- **Permanent URLs**: Uses authenticated `/objects/...` URLs that don't expire (unlike signed URLs)
-- **Size Limit**: Maximum 5MB per image, supports PNG, JPEG, GIF, WebP
-- **Security**: DOMPurify sanitization allows img tags with src/alt attributes only
-- **Toolbar Button**: Image icon in TiptapEditor toolbar for manual insertion via file picker
-
-Key files: `client/src/components/TiptapEditor.tsx`, `client/src/lib/tiptapSetup.ts`, `server/routes/objects.ts`, `server/emailService.ts`
-
-### SMS Templates Feature (December 2025)
-Reusable SMS message templates with variable support for personalization. Admins can create templates; staff can select them when composing SMS messages.
-
-- **Template Management**: Admin-only CRUD at `/sms-templates` with name, content, and active status
-- **Variable Support**: Templates use `{firstName}` placeholder for automatic personalization
-- **Template Picker**: Modal in SMSDialog lets staff browse and select templates
-- **Auto-Substitution**: When recipient is selected, `{firstName}` is replaced with actual name
-- **Recipient Switching**: Changing recipients after applying template re-applies substitution with new name
-- **Placeholder Alert**: Warning shown when message contains `[First Name]` placeholder until recipient selected
-- **Audit Trail**: Template ID captured when sending SMS for tracking which templates are used
-- **Server Filtering**: Non-admin users only see active templates
-
-Key files: `client/src/pages/sms-templates.tsx`, `client/src/components/SmsTemplatePicker.tsx`, `client/src/pages/client-detail/components/communications/dialogs/SMSDialog.tsx`, `server/routes/integrations.ts`, `server/storage/integrations/smsTemplateStorage.ts`, `shared/schema/notifications/tables.ts`
+### SMS Templates Feature
+Introduces reusable SMS message templates with variable support for personalization, managed by admins and selectable by staff when composing SMS messages.
 
 ### System Design
-PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) handles object storage with secure signed URLs. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control; the client portal uses passwordless email verification. The system is multi-tenant and designed for modularity, with extensive database indexing. Key features include automated project management, advanced communication tools (push notifications, internal tasks with quick reminders, email threading via Microsoft Graph, multi-channel client notifications with AI assistance, RingCentral VoIP with automatic transcription), UK eIDAS-compliant electronic signatures, comprehensive workflow and status management with Kanban views, and Bookkeeping Queries for managing transaction-related questions. It also includes an AI Audio Transcription service, client value notifications with AI-assisted drafting, Zapier integration via webhooks, and an enhanced data import system. A friendly error handling system replaces technical errors with user-friendly messages. A scheduled notifications calendar provides comprehensive management of automated notifications, with stage-aware suppression. A resilient project scheduling orchestrator ensures robustness against server restarts and outages.
+PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) handles object storage with secure signed URLs. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control; the client portal uses passwordless email verification. The system is multi-tenant and designed for modularity, with extensive database indexing. Key features include automated project management, advanced communication tools (push notifications, internal tasks, email threading via Microsoft Graph, multi-channel client notifications with AI assistance, RingCentral VoIP with automatic transcription), UK eIDAS-compliant electronic signatures, comprehensive workflow and status management with Kanban views, and Bookkeeping Queries. It also includes an AI Audio Transcription service, client value notifications with AI-assisted drafting, Zapier integration via webhooks, and an enhanced data import system. A friendly error handling system replaces technical errors with user-friendly messages. A scheduled notifications calendar provides comprehensive management of automated notifications, with stage-aware suppression. A resilient project scheduling orchestrator ensures robustness against server restarts and outages.
 
 ## External Dependencies
 
