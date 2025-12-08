@@ -54,6 +54,23 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
   const callStartTimeRef = useRef<number | null>(null);
   const autoRejectTimerRef = useRef<number | null>(null);
   const sipInfoRef = useRef<any>(null);
+  
+  // Refs to capture call context at call time (prevents stale closures)
+  const callContextRef = useRef<{
+    clientId: string | undefined;
+    personId: string | undefined;
+    phoneNumber: string;
+    sessionId: string;
+  } | null>(null);
+
+  // Warn if mounted without clientId - calls won't be logged without it
+  useEffect(() => {
+    if (!clientId) {
+      console.warn('[RingCentral] ⚠️ Component mounted WITHOUT clientId - calls will NOT be logged to communications!');
+    } else {
+      console.log('[RingCentral] ✓ Component mounted with clientId:', clientId);
+    }
+  }, [clientId]);
 
   // Update phone number when defaultPhoneNumber prop changes
   useEffect(() => {
@@ -282,6 +299,15 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
 
       const sessionId = `call-${Date.now()}`;
       
+      // Capture call context in ref to avoid stale closures in event handlers
+      callContextRef.current = {
+        clientId,
+        personId,
+        phoneNumber: number,
+        sessionId,
+      };
+      console.log('[RingCentral] 📋 Captured call context in ref:', callContextRef.current);
+      
       // Format phone number for RingCentral (add +44 for UK numbers if needed)
       let formattedNumber = number;
       if (number.startsWith('07')) {
@@ -354,6 +380,12 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
 
       session.on('terminated', async () => {
         console.log('[RingCentral] ❌ Outbound call TERMINATED');
+        
+        // Use the ref to get call context (avoids stale closure issues)
+        const ctx = callContextRef.current;
+        console.log('[RingCentral] 📋 Call context from ref:', ctx);
+        console.log('[RingCentral] 📋 Closure values - clientId:', clientId, 'sessionId:', sessionId);
+        
         stopCallTimer();
         
         let finalDuration = 0;
@@ -362,35 +394,66 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
           return { ...prev, status: 'disconnected' };
         });
 
+        // Use context from ref (primary) or fall back to closure values
+        const logClientId = ctx?.clientId || clientId;
+        const logPersonId = ctx?.personId || personId;
+        const logPhoneNumber = ctx?.phoneNumber || number;
+        const logSessionId = ctx?.sessionId || sessionId;
+
         // Log the outbound call
-        if (clientId && sessionId) {
+        if (logClientId && logSessionId) {
+          console.log('[RingCentral] ✅ Logging call to API with duration:', finalDuration);
+          console.log('[RingCentral] ✅ Using clientId:', logClientId, 'sessionId:', logSessionId);
           try {
-            await apiRequest('POST', '/api/ringcentral/log-call', {
-              clientId,
-              personId: personId || undefined,
-              phoneNumber: number,
+            const response = await apiRequest('POST', '/api/ringcentral/log-call', {
+              clientId: logClientId,
+              personId: logPersonId || undefined,
+              phoneNumber: logPhoneNumber,
               direction: 'outbound',
               duration: finalDuration,
-              sessionId,
+              sessionId: logSessionId,
             });
 
+            console.log('[RingCentral] ✅ Call logged successfully to communications:', response);
             toast({
               title: 'Call Logged',
               description: 'Call has been logged to communications',
             });
 
             if (onCallComplete) {
-              onCallComplete(finalDuration, number);
+              onCallComplete(finalDuration, logPhoneNumber);
             }
-          } catch (error) {
-            console.error('Error logging outbound call:', error);
+          } catch (error: any) {
+            console.error('[RingCentral] ❌ Error logging outbound call:', error);
+            console.error('[RingCentral] ❌ Error details:', error?.message, error?.response);
+            toast({
+              title: 'Call Logging Failed',
+              description: 'The call completed but failed to save to communications',
+              variant: 'destructive',
+            });
           }
+        } else {
+          console.warn('[RingCentral] ⚠️ Call NOT logged - missing required data:', { 
+            hasClientId: !!logClientId, 
+            logClientId,
+            hasSessionId: !!logSessionId,
+            logSessionId,
+            refContext: ctx,
+            closureClientId: clientId,
+            closureSessionId: sessionId
+          });
+          toast({
+            title: 'Call Not Logged',
+            description: logClientId ? 'Missing session data' : 'No client context - call was not saved',
+            variant: 'destructive',
+          });
         }
 
-        // Reset state
+        // Reset state and clear call context
         setTimeout(() => {
           setCallState(initialCallState);
           sessionRef.current = null;
+          callContextRef.current = null;
         }, 2000);
       });
 
