@@ -27,6 +27,16 @@ The stage change flow has been optimized across 5 waves to reduce database opera
 
 Key files: `server/utils/ttlCache.ts`, `server/routes/projects/status.ts`, `server/storage/projects/projectStatusStorage.ts`, `client/src/hooks/change-status/useStatusChangeMutations.ts`
 
+### Client Also Has Filter (December 2025)
+A dynamic filter that allows users to filter projects based on whether the same client has other active projects of specified types. This enables prioritizing work for clients with multiple service needs (e.g., show bookkeeping projects only for clients who also have active VAT projects).
+
+- **Filter UI**: Multi-select checkboxes in the FilterPanel showing all project types, with badges displaying selected types
+- **Filter Logic**: Client-side filtering in `filterByClientHasProjectTypes()` checks if the client has other active projects matching selected types
+- **Persistence**: Filter state saved in views' `filters` JSON field as `clientHasProjectTypeIds` array
+- **Integration**: Works with saved views, URL sync, and filter count calculations
+
+Key files: `client/src/lib/projectFilterUtils.ts`, `client/src/components/filter-panel.tsx`, `client/src/hooks/projects-page/useProjectsPageState.ts`
+
 ### System Design
 PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) handles object storage with secure signed URLs. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control; the client portal uses passwordless email verification. The system is multi-tenant and designed for modularity, with extensive database indexing. Key features include automated project management, advanced communication tools (push notifications, internal tasks with quick reminders, email threading via Microsoft Graph, multi-channel client notifications with AI assistance), UK eIDAS-compliant electronic signatures, comprehensive workflow and status management with Kanban views, and Bookkeeping Queries for managing transaction-related questions. It also includes an AI Audio Transcription service, client value notifications with AI-assisted drafting, Zapier integration via webhooks, and an enhanced data import system. A friendly error handling system replaces technical errors with user-friendly messages. A scheduled notifications calendar provides comprehensive management of automated notifications, with stage-aware suppression. A resilient project scheduling orchestrator ensures robustness against server restarts and outages.
 
