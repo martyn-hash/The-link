@@ -94,7 +94,7 @@ export function ProjectsHeader({
   return (
     <header className="bg-card border-b border-border page-container py-6">
       <div className="flex flex-wrap items-center justify-center gap-4">
-        <CurrentViewName viewName={currentSavedViewName} />
+        {workspaceMode !== "tasks" && <CurrentViewName viewName={currentSavedViewName} />}
         
         <WorkspaceModeToggle
           workspaceMode={workspaceMode}
