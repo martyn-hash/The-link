@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Send, FileText, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
 import { formatPersonName } from "../../../utils/formatters";
@@ -35,6 +36,7 @@ export function SMSDialog({
   initialValues
 }: SMSDialogProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [smsPersonId, setSmsPersonId] = useState<string | undefined>(initialValues?.personId);
   const [message, setMessage] = useState(initialValues?.message || '');
   const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
@@ -79,18 +81,44 @@ export function SMSDialog({
   const getRecipientFirstName = (personId?: string): string | undefined => {
     const idToCheck = personId ?? smsPersonId;
     const selected = (clientPeople || []).find((cp: any) => cp.person.id === idToCheck);
-    if (selected?.person?.fullName) {
-      const names = selected.person.fullName.split(' ');
-      return names[0];
+    if (selected?.person) {
+      // Use firstName field if available, otherwise extract from fullName
+      if (selected.person.firstName) {
+        return selected.person.firstName;
+      }
+      if (selected.person.fullName) {
+        const names = selected.person.fullName.split(' ');
+        return names[0];
+      }
     }
     return undefined;
   };
 
-  const applyVariableSubstitution = (content: string, firstName?: string): string => {
-    if (firstName) {
-      return content.replace(/\{firstName\}/g, firstName).replace(/\[First Name\]/g, firstName);
+  const applyVariableSubstitution = (content: string, recipientFirstName?: string): string => {
+    let result = content;
+    
+    // Replace {firstName} with recipient's first name
+    if (recipientFirstName) {
+      result = result.replace(/\{firstName\}/g, recipientFirstName).replace(/\[First Name\]/g, recipientFirstName);
+    } else {
+      result = result.replace(/\{firstName\}/g, '[First Name]');
     }
-    return content.replace(/\{firstName\}/g, '[First Name]');
+    
+    // Replace {userFirstName} with current user's first name
+    if (user?.firstName) {
+      result = result.replace(/\{userFirstName\}/g, user.firstName).replace(/\[Your Name\]/g, user.firstName);
+    } else {
+      result = result.replace(/\{userFirstName\}/g, '[Your Name]');
+    }
+    
+    // Replace {calendlyLink} with current user's Calendly link
+    if (user?.calendlyLink) {
+      result = result.replace(/\{calendlyLink\}/g, user.calendlyLink).replace(/\[Calendly Link\]/g, user.calendlyLink);
+    } else {
+      result = result.replace(/\{calendlyLink\}/g, '[Calendly Link]');
+    }
+    
+    return result;
   };
 
   const handleTemplateSelect = (content: string, templateId: string) => {
@@ -108,7 +136,7 @@ export function SMSDialog({
     }
   };
 
-  const hasUnreplacedVariables = message.includes('[First Name]');
+  const hasUnreplacedVariables = message.includes('[First Name]') || message.includes('[Your Name]') || message.includes('[Calendly Link]');
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -208,7 +236,10 @@ export function SMSDialog({
             <Alert variant="default" data-testid="alert-unreplaced-variables">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                Message contains "[First Name]" placeholder. Select a recipient above to automatically fill in their name, or edit the message manually.
+                {message.includes('[First Name]') && 'Message contains "[First Name]" placeholder - select a recipient to fill in their name. '}
+                {message.includes('[Your Name]') && 'Your name is not set in your profile. '}
+                {message.includes('[Calendly Link]') && 'Your Calendly link is not set in your profile. '}
+                Edit the message manually or update your profile settings.
               </AlertDescription>
             </Alert>
           )}

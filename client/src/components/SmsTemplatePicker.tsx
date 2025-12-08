@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { FileText, Loader2, MessageSquare, AlertCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAuth } from "@/hooks/useAuth";
 
 interface SmsTemplate {
   id: string;
@@ -36,6 +37,7 @@ export function SmsTemplatePicker({
   recipientFirstName,
 }: SmsTemplatePickerProps) {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const { user } = useAuth();
 
   const { data: templates, isLoading } = useQuery<SmsTemplate[]>({
     queryKey: ["/api/sms/templates"],
@@ -45,14 +47,34 @@ export function SmsTemplatePicker({
   const availableTemplates = templates || [];
 
   const getPreviewContent = (content: string): string => {
+    let result = content;
+    
+    // Replace {firstName} with recipient's first name or placeholder
     if (recipientFirstName) {
-      return content.replace(/\{firstName\}/g, recipientFirstName);
+      result = result.replace(/\{firstName\}/g, recipientFirstName);
+    } else {
+      result = result.replace(/\{firstName\}/g, "[First Name]");
     }
-    return content.replace(/\{firstName\}/g, "[First Name]");
+    
+    // Replace {userFirstName} with current user's first name or placeholder
+    if (user?.firstName) {
+      result = result.replace(/\{userFirstName\}/g, user.firstName);
+    } else {
+      result = result.replace(/\{userFirstName\}/g, "[Your Name]");
+    }
+    
+    // Replace {calendlyLink} with current user's Calendly link or placeholder
+    if (user?.calendlyLink) {
+      result = result.replace(/\{calendlyLink\}/g, user.calendlyLink);
+    } else {
+      result = result.replace(/\{calendlyLink\}/g, "[Calendly Link]");
+    }
+    
+    return result;
   };
 
   const hasVariables = (content: string): boolean => {
-    return /\{firstName\}/.test(content);
+    return /\{firstName\}|\{userFirstName\}|\{calendlyLink\}/.test(content);
   };
 
   const handleSelect = (template: SmsTemplate) => {

@@ -28,6 +28,8 @@ interface SmsTemplate {
 
 const AVAILABLE_VARIABLES = [
   { name: "firstName", description: "Recipient's first name" },
+  { name: "userFirstName", description: "Your first name (the sender)" },
+  { name: "calendlyLink", description: "Your Calendly booking link" },
 ];
 
 export default function SmsTemplates() {
@@ -141,7 +143,7 @@ export default function SmsTemplates() {
             <div>
               <h1 className="text-2xl md:text-3xl font-semibold tracking-tight" data-testid="text-page-title">SMS Templates</h1>
               <p className="text-meta mt-1">
-                Create reusable SMS message templates for quick sending. Use variables like {"{firstName}"} for personalization.
+                Create reusable SMS message templates for quick sending. Use variables for personalization.
               </p>
             </div>
             <Button onClick={() => setIsCreating(true)} data-testid="button-create-template">
@@ -389,7 +391,7 @@ function TemplateFormDialog({ template, isCreating, onClose, onSave, isLoading }
                 placeholder="e.g., Hi {firstName}, just a reminder about your upcoming appointment..."
                 rows={4}
                 required
-                data-testid="input-template-content"
+                data-testid="textarea-template-content"
               />
               <div className="flex items-center justify-between mt-2">
                 <p className="text-xs text-muted-foreground">
@@ -416,7 +418,10 @@ function TemplateFormDialog({ template, isCreating, onClose, onSave, isLoading }
               <div className="p-3 bg-muted rounded-lg">
                 <p className="text-sm font-medium mb-1">Preview:</p>
                 <p className="text-sm text-muted-foreground">
-                  {formData.content.replace(/\{firstName\}/g, "John")}
+                  {formData.content
+                    .replace(/\{firstName\}/g, "John")
+                    .replace(/\{userFirstName\}/g, "Sarah")
+                    .replace(/\{calendlyLink\}/g, "calendly.com/sarah")}
                 </p>
               </div>
             )}
