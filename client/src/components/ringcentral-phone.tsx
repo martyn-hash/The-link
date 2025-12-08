@@ -295,27 +295,13 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
 
       console.log('[RingCentral] Initiating call to:', formattedNumber);
       
-      // Extract fromNumber from SIP info - the username contains the extension number
-      // Format: "443459900041*301" -> we need the full number for caller ID
-      let fromNumber: string | undefined;
-      if (sipInfoRef.current?.username) {
-        // The SIP username format is typically "mainNumber*extension"
-        // We extract the main number part for the fromNumber
-        const username = sipInfoRef.current.username;
-        const mainNumber = username.split('*')[0];
-        if (mainNumber) {
-          fromNumber = '+' + mainNumber;
-          console.log('[RingCentral] Using fromNumber:', fromNumber, '(extracted from SIP username:', username, ')');
-        }
-      }
-      
-      // Initiate the call with fromNumber - MUST await the promise to catch errors
-      console.log('[RingCentral] Calling webPhone.call() with params:', { toNumber: formattedNumber, fromNumber });
+      // Let RingCentral use the default line for caller ID - don't specify fromNumber
+      // This allows the user's configured digital line to be used automatically
+      console.log('[RingCentral] Calling webPhone.call() with params:', { toNumber: formattedNumber });
       
       try {
         const session = await webPhoneRef.current.call({
           toNumber: formattedNumber,
-          fromNumber: fromNumber,
         });
         
         console.log('[RingCentral] call() returned session:', session);
