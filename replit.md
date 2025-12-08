@@ -64,9 +64,13 @@ Full VoIP phone system integration enabling staff to make and receive calls dire
 - **Startup Recovery**: Pending transcription jobs are automatically recovered on server restart
   - Query finds communications with `pending`/`requesting`/`processing` status older than 2 minutes
   - Jobs are re-scheduled for processing to prevent data loss from server restarts
+- **Simplified Calling UI**: One-step calling workflow with auto-initialization
+  - Phone initializes automatically when call dialog opens (shows "Connecting..." state)
+  - User selects person from dropdown, clicks "Call" - system handles everything
+  - Dialog auto-closes after call ends and is logged
 - **UI Display**: ViewCommunicationDialog shows transcript status, summary, and expandable full transcript
 
-Key files: `client/src/components/ringcentral-phone.tsx`, `server/routes/integrations.ts`, `server/utils/userRingCentralClient.ts`, `server/transcription-service.ts`, `server/storage/communications/communicationStorage.ts`
+Key files: `client/src/pages/client-detail/components/communications/dialogs/CallDialog.tsx`, `client/src/components/ringcentral-phone.tsx`, `server/routes/integrations.ts`, `server/utils/userRingCentralClient.ts`, `server/transcription-service.ts`, `server/storage/communications/communicationStorage.ts`
 
 Required OAuth scopes: RingOut, ReadCallLog, ReadCallRecording, AI (optional), VoIP, WebSocket
 
