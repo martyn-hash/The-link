@@ -87,6 +87,18 @@ Natural language voice calling and SMS through the AI Magic assistant. Users can
 
 Key files: `client/src/components/ai-magic/AIMagicCallHandler.tsx`, `client/src/components/ai-magic/AIMagicActionCards.tsx`, `server/services/ai-magic-service.ts`
 
+### Email Image Paste Feature (December 2025)
+Enables pasting and dragging images directly into email composition areas across the application. Images are automatically uploaded to object storage and embedded with permanent URLs.
+
+- **Paste/Drop Support**: Users can paste images from clipboard or drag-drop files into the editor
+- **Automatic Upload**: Images are uploaded to `/objects/inline-images/` with unique UUIDs
+- **Permanent URLs**: Uses authenticated `/objects/...` URLs that don't expire (unlike signed URLs)
+- **Size Limit**: Maximum 5MB per image, supports PNG, JPEG, GIF, WebP
+- **Security**: DOMPurify sanitization allows img tags with src/alt attributes only
+- **Toolbar Button**: Image icon in TiptapEditor toolbar for manual insertion via file picker
+
+Key files: `client/src/components/TiptapEditor.tsx`, `client/src/lib/tiptapSetup.ts`, `server/routes/objects.ts`, `server/emailService.ts`
+
 ### System Design
 PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) handles object storage with secure signed URLs. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control; the client portal uses passwordless email verification. The system is multi-tenant and designed for modularity, with extensive database indexing. Key features include automated project management, advanced communication tools (push notifications, internal tasks with quick reminders, email threading via Microsoft Graph, multi-channel client notifications with AI assistance, RingCentral VoIP with automatic transcription), UK eIDAS-compliant electronic signatures, comprehensive workflow and status management with Kanban views, and Bookkeeping Queries for managing transaction-related questions. It also includes an AI Audio Transcription service, client value notifications with AI-assisted drafting, Zapier integration via webhooks, and an enhanced data import system. A friendly error handling system replaces technical errors with user-friendly messages. A scheduled notifications calendar provides comprehensive management of automated notifications, with stage-aware suppression. A resilient project scheduling orchestrator ensures robustness against server restarts and outages.
 
