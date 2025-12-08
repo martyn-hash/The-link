@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useBackgroundPrefetch, getTasksPrefetchConfigs } from "@/hooks/useBackgroundPrefetch";
 import { useProjectsData } from "./useProjectsData";
 import { useProjectFiltering } from "./useProjectFiltering";
 import { useProjectsUrlSync } from "./useProjectsUrlSync";
@@ -129,6 +130,17 @@ export function useProjectsPageState() {
     showArchived,
     showCompletedRegardless,
     serviceDueDateFilter,
+  });
+
+  const tasksPrefetchConfigs = useMemo(
+    () => getTasksPrefetchConfigs(user?.id),
+    [user?.id]
+  );
+
+  useBackgroundPrefetch({
+    enabled: !projectsData.projectsLoading && isAuthenticated && !!user?.id,
+    prefetches: tasksPrefetchConfigs,
+    delay: 500,
   });
 
   const filters: ProjectFilters = useMemo(() => ({
