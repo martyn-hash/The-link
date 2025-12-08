@@ -40,6 +40,7 @@ interface ViewManagementState {
   setDynamicDateFilter: (value: DynamicDateFilter) => void;
   setCustomDateRange: (value: { from: Date | undefined; to: Date | undefined }) => void;
   setServiceDueDateFilter: (value: string) => void;
+  setClientHasProjectTypeIds: (value: string[]) => void;
   setCalendarSettings: (settings: CalendarSettings | undefined) => void;
   setCurrentSavedViewId: (id: string | null) => void;
   setCurrentDashboard: (dashboard: Dashboard | null) => void;
@@ -119,6 +120,7 @@ export function useViewManagement(
         to: filters.customDateRange?.to ? new Date(filters.customDateRange.to) : undefined,
       });
       stateSetters.setServiceDueDateFilter(filters.serviceDueDateFilter || "all");
+      stateSetters.setClientHasProjectTypeIds(filters.clientHasProjectTypeIds || []);
       
       if (view.viewMode === "kanban") {
         stateSetters.setViewMode("kanban");
@@ -230,6 +232,7 @@ export function useViewManagement(
     stateSetters.setCustomDateRange({ from: undefined, to: undefined });
     stateSetters.setScheduleStatusFilter("all");
     stateSetters.setServiceDueDateFilter("all");
+    stateSetters.setClientHasProjectTypeIds([]);
     stateSetters.setCurrentSavedViewId(null);
     stateSetters.setViewMode("list");
     

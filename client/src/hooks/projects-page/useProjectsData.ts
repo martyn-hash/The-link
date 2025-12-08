@@ -96,7 +96,7 @@ export function useProjectsData({
 
   const { data: allProjectTypes = [] } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["/api/project-types"],
-    enabled: isAuthenticated && !!userId && viewMode === "dashboard",
+    enabled: isAuthenticated && !!userId,
     retry: false,
     staleTime: 5 * 60 * 1000,
     select: (data: any[]) => data.map((pt: any) => ({ id: pt.id, name: pt.name })).sort((a, b) => a.name.localeCompare(b.name))

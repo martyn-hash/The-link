@@ -64,6 +64,7 @@ export function useProjectsPageState() {
     to: undefined,
   });
   const [serviceDueDateFilter, setServiceDueDateFilter] = useState("all");
+  const [clientHasProjectTypeIds, setClientHasProjectTypeIds] = useState<string[]>([]);
 
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_ITEMS_PER_PAGE);
@@ -141,6 +142,7 @@ export function useProjectsPageState() {
     customDateRange,
     serviceDueDateFilter,
     scheduleStatusFilter,
+    clientHasProjectTypeIds,
   }), [
     serviceFilter,
     taskAssigneeFilter,
@@ -152,6 +154,7 @@ export function useProjectsPageState() {
     customDateRange,
     serviceDueDateFilter,
     scheduleStatusFilter,
+    clientHasProjectTypeIds,
   ]);
 
   const filtering = useProjectFiltering({
@@ -223,6 +226,7 @@ export function useProjectsPageState() {
     setDynamicDateFilter,
     setCustomDateRange,
     setServiceDueDateFilter,
+    setClientHasProjectTypeIds,
     setCalendarSettings,
     setCurrentSavedViewId,
     setCurrentDashboard,
@@ -297,6 +301,7 @@ export function useProjectsPageState() {
       },
       serviceDueDateFilter,
       scheduleStatusFilter,
+      clientHasProjectTypeIds,
       calendarSettings: viewMode === "calendar" ? calendarSettings : undefined,
     };
 
@@ -317,6 +322,7 @@ export function useProjectsPageState() {
     customDateRange,
     serviceDueDateFilter,
     scheduleStatusFilter,
+    clientHasProjectTypeIds,
     viewMode,
     calendarSettings,
     mutations.saveViewMutation,
@@ -342,6 +348,7 @@ export function useProjectsPageState() {
       },
       serviceDueDateFilter,
       scheduleStatusFilter,
+      clientHasProjectTypeIds,
       calendarSettings: viewMode === "calendar" ? calendarSettings : undefined,
     };
 
@@ -362,6 +369,7 @@ export function useProjectsPageState() {
     customDateRange,
     serviceDueDateFilter,
     scheduleStatusFilter,
+    clientHasProjectTypeIds,
     viewMode,
     calendarSettings,
     mutations.updateViewMutation,
@@ -493,6 +501,8 @@ export function useProjectsPageState() {
     setCustomDateRange,
     serviceDueDateFilter,
     setServiceDueDateFilter,
+    clientHasProjectTypeIds,
+    setClientHasProjectTypeIds,
     filters,
 
     filterPanelOpen,

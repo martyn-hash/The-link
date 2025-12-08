@@ -13,6 +13,7 @@ import {
   filterByDateRange,
   filterByScheduleStatus,
   filterByArchiveStatus,
+  filterByClientHasProjectTypes,
   calculateActiveFilterCount,
 } from "@/lib/projectFilterUtils";
 
@@ -48,10 +49,13 @@ export function useProjectFiltering({
     dynamicDateFilter,
     customDateRange,
     scheduleStatusFilter,
+    clientHasProjectTypeIds,
   } = filters;
 
+  const allProjects = projects || [];
+
   const filteredProjects = useMemo(() => 
-    (projects || []).filter((project: ProjectWithRelations) => {
+    allProjects.filter((project: ProjectWithRelations) => {
       const serviceMatch = filterByService(project, serviceFilter);
       if (!serviceMatch) return false;
 
@@ -80,10 +84,13 @@ export function useProjectFiltering({
       const archiveMatch = filterByArchiveStatus(project, showArchived, viewMode);
       if (archiveMatch !== 'continue' && !archiveMatch) return false;
 
+      const clientHasMatch = filterByClientHasProjectTypes(project, clientHasProjectTypeIds, allProjects);
+      if (!clientHasMatch) return false;
+
       return true;
     }), 
     [
-      projects, 
+      allProjects, 
       serviceFilter, 
       taskAssigneeFilter, 
       serviceOwnerFilter, 
@@ -96,7 +103,8 @@ export function useProjectFiltering({
       stagesLoading, 
       stagesError, 
       showArchived, 
-      viewMode
+      viewMode,
+      clientHasProjectTypeIds,
     ]
   );
 
@@ -113,7 +121,7 @@ export function useProjectFiltering({
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [serviceFilter, taskAssigneeFilter, serviceOwnerFilter, userFilter, showArchived, dynamicDateFilter, customDateRange, viewMode]);
+  }, [serviceFilter, taskAssigneeFilter, serviceOwnerFilter, userFilter, showArchived, dynamicDateFilter, customDateRange, viewMode, clientHasProjectTypeIds]);
 
   useEffect(() => {
     if (currentPage > totalPages && totalPages > 0) {
@@ -129,9 +137,10 @@ export function useProjectFiltering({
       userFilter,
       showArchived,
       dynamicDateFilter,
-      isManagerOrAdmin
+      isManagerOrAdmin,
+      clientHasProjectTypeIds
     ),
-    [serviceFilter, taskAssigneeFilter, serviceOwnerFilter, userFilter, showArchived, dynamicDateFilter, isManagerOrAdmin]
+    [serviceFilter, taskAssigneeFilter, serviceOwnerFilter, userFilter, showArchived, dynamicDateFilter, isManagerOrAdmin, clientHasProjectTypeIds]
   );
 
   return {

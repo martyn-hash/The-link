@@ -50,6 +50,7 @@ export interface ProjectFilters {
   customDateRange: CustomDateRange;
   serviceDueDateFilter: string;
   scheduleStatusFilter: ScheduleStatusFilter;
+  clientHasProjectTypeIds: string[];
 }
 
 export interface DashboardFilters extends ProjectFilters {
@@ -68,6 +69,7 @@ export const DEFAULT_PROJECT_FILTERS: ProjectFilters = {
   customDateRange: { from: undefined, to: undefined },
   serviceDueDateFilter: "all",
   scheduleStatusFilter: "all",
+  clientHasProjectTypeIds: [],
 };
 
 export const DEFAULT_DASHBOARD_FILTERS: DashboardFilters = {

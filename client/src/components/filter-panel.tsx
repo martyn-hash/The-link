@@ -4,6 +4,8 @@ import { type User } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import {
   Sheet,
   SheetContent,
@@ -34,7 +36,8 @@ import {
   UserCircle,
   Archive,
   Folder,
-  AlertTriangle
+  AlertTriangle,
+  Link2
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -67,6 +70,10 @@ interface FilterPanelProps {
   viewMode: "kanban" | "list" | "dashboard" | "calendar";
   setViewMode: (value: "kanban" | "list" | "dashboard" | "calendar") => void;
   
+  // Client has project types filter
+  clientHasProjectTypeIds?: string[];
+  setClientHasProjectTypeIds?: (value: string[]) => void;
+  
   // Optional new filters for dashboards
   clientFilter?: string;
   setClientFilter?: (value: string) => void;
@@ -79,6 +86,7 @@ interface FilterPanelProps {
   taskAssignees: User[];
   serviceOwners: User[];
   isManagerOrAdmin: boolean;
+  allProjectTypes?: { id: string; name: string }[];
   
   // Optional data for new filters
   clients?: { id: string; name: string }[];
@@ -110,6 +118,8 @@ export default function FilterPanel({
   setServiceDueDateFilter,
   viewMode,
   setViewMode,
+  clientHasProjectTypeIds,
+  setClientHasProjectTypeIds,
   clientFilter,
   setClientFilter,
   projectTypeFilter,
@@ -119,6 +129,7 @@ export default function FilterPanel({
   taskAssignees,
   serviceOwners,
   isManagerOrAdmin,
+  allProjectTypes,
   clients,
   projectTypes,
 }: FilterPanelProps) {
@@ -139,6 +150,9 @@ export default function FilterPanel({
     setDynamicDateFilter("all");
     setCustomDateRange({ from: undefined, to: undefined });
     setServiceDueDateFilter("all");
+    if (setClientHasProjectTypeIds) {
+      setClientHasProjectTypeIds([]);
+    }
   };
 
   // Mutual exclusivity wrapper for dynamic date filter
@@ -176,6 +190,7 @@ export default function FilterPanel({
     if (scheduleStatusFilter !== "all") count++;
     // Count only the active date filter (mutual exclusivity)
     if (dynamicDateFilter !== "all" || serviceDueDateFilter !== "all") count++;
+    if (clientHasProjectTypeIds && clientHasProjectTypeIds.length > 0) count++;
     return count;
   };
 
@@ -381,6 +396,78 @@ export default function FilterPanel({
                   data-testid="switch-kanban-view"
                 />
               </div>
+            )}
+
+            {/* Client Also Has Filter - Multi-select for project types */}
+            {allProjectTypes && allProjectTypes.length > 0 && setClientHasProjectTypeIds && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <Label className="flex items-center gap-2">
+                    <Link2 className="w-4 h-4" />
+                    Client Also Has
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Show only projects where the client also has these active project types
+                  </p>
+                  
+                  {/* Selected project types badges */}
+                  {clientHasProjectTypeIds && clientHasProjectTypeIds.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {clientHasProjectTypeIds.map(typeId => {
+                        const projectType = allProjectTypes.find(pt => pt.id === typeId);
+                        return projectType ? (
+                          <Badge 
+                            key={typeId} 
+                            variant="secondary" 
+                            className="flex items-center gap-1 text-xs"
+                            data-testid={`badge-project-type-${typeId}`}
+                          >
+                            {projectType.name}
+                            <X 
+                              className="w-3 h-3 cursor-pointer hover:text-destructive" 
+                              onClick={() => setClientHasProjectTypeIds(
+                                clientHasProjectTypeIds.filter(id => id !== typeId)
+                              )}
+                            />
+                          </Badge>
+                        ) : null;
+                      })}
+                    </div>
+                  )}
+                  
+                  {/* Project type checkboxes */}
+                  <div className="max-h-48 overflow-y-auto space-y-2 border rounded-md p-3">
+                    {allProjectTypes.map(projectType => (
+                      <div key={projectType.id} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`project-type-${projectType.id}`}
+                          checked={clientHasProjectTypeIds?.includes(projectType.id) || false}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setClientHasProjectTypeIds([
+                                ...(clientHasProjectTypeIds || []),
+                                projectType.id
+                              ]);
+                            } else {
+                              setClientHasProjectTypeIds(
+                                (clientHasProjectTypeIds || []).filter(id => id !== projectType.id)
+                              );
+                            }
+                          }}
+                          data-testid={`checkbox-project-type-${projectType.id}`}
+                        />
+                        <label
+                          htmlFor={`project-type-${projectType.id}`}
+                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                        >
+                          {projectType.name}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
 
             {/* Client Filter - Only show in dashboard mode with clients available */}

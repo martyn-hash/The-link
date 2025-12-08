@@ -143,6 +143,28 @@ export function filterByArchiveStatus(
   return 'continue';
 }
 
+export function filterByClientHasProjectTypes(
+  project: ProjectWithRelations,
+  clientHasProjectTypeIds: string[],
+  allProjects: ProjectWithRelations[]
+): boolean {
+  if (!clientHasProjectTypeIds || clientHasProjectTypeIds.length === 0) return true;
+  
+  const clientId = project.clientId;
+  if (!clientId) return false;
+  
+  const clientProjects = allProjects.filter(p => 
+    p.clientId === clientId && 
+    p.id !== project.id && 
+    !p.archived && 
+    !p.completionStatus
+  );
+  
+  return clientHasProjectTypeIds.every(requiredTypeId => 
+    clientProjects.some(p => p.projectTypeId === requiredTypeId)
+  );
+}
+
 export function calculateActiveFilterCount(
   serviceFilter: string,
   taskAssigneeFilter: string,
@@ -150,7 +172,8 @@ export function calculateActiveFilterCount(
   userFilter: string,
   showArchived: boolean,
   dynamicDateFilter: DynamicDateFilter,
-  isManagerOrAdmin: boolean
+  isManagerOrAdmin: boolean,
+  clientHasProjectTypeIds: string[] = []
 ): number {
   let count = 0;
   if (serviceFilter !== "all") count++;
@@ -159,5 +182,6 @@ export function calculateActiveFilterCount(
   if (userFilter !== "all" && isManagerOrAdmin) count++;
   if (showArchived) count++;
   if (dynamicDateFilter !== "all") count++;
+  if (clientHasProjectTypeIds.length > 0) count++;
   return count;
 }

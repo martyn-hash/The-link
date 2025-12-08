@@ -186,6 +186,9 @@ export default function Projects() {
         taskAssignees={state.taskAssignees || []}
         serviceOwners={state.serviceOwners || []}
         isManagerOrAdmin={state.isManagerOrAdmin}
+        allProjectTypes={state.allProjectTypes || []}
+        clientHasProjectTypeIds={state.clientHasProjectTypeIds}
+        setClientHasProjectTypeIds={state.setClientHasProjectTypeIds}
       />
 
       <CreateDashboardModal
