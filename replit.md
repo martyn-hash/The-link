@@ -37,6 +37,16 @@ A dynamic filter that allows users to filter projects based on whether the same 
 
 Key files: `client/src/lib/projectFilterUtils.ts`, `client/src/components/filter-panel.tsx`, `client/src/hooks/projects-page/useProjectsPageState.ts`
 
+### Background Prefetch Optimization (December 2025)
+Improves perceived performance by preloading data for secondary views after the primary content loads. When the user loads the Projects view, tasks data is prefetched in the background during browser idle time.
+
+- **Hook**: `useBackgroundPrefetch` - reusable hook for scheduling background data fetches
+- **Idle Scheduling**: Uses `requestIdleCallback` with `setTimeout` fallback for cross-browser support
+- **Cache Awareness**: Checks cache freshness before prefetching to avoid redundant network requests
+- **Trigger**: Prefetch starts 500ms after projects finish loading, only when authenticated
+
+Key files: `client/src/hooks/useBackgroundPrefetch.ts`, `client/src/hooks/projects-page/useProjectsPageState.ts`
+
 ### System Design
 PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) handles object storage with secure signed URLs. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control; the client portal uses passwordless email verification. The system is multi-tenant and designed for modularity, with extensive database indexing. Key features include automated project management, advanced communication tools (push notifications, internal tasks with quick reminders, email threading via Microsoft Graph, multi-channel client notifications with AI assistance), UK eIDAS-compliant electronic signatures, comprehensive workflow and status management with Kanban views, and Bookkeeping Queries for managing transaction-related questions. It also includes an AI Audio Transcription service, client value notifications with AI-assisted drafting, Zapier integration via webhooks, and an enhanced data import system. A friendly error handling system replaces technical errors with user-friendly messages. A scheduled notifications calendar provides comprehensive management of automated notifications, with stage-aware suppression. A resilient project scheduling orchestrator ensures robustness against server restarts and outages.
 
