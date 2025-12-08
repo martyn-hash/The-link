@@ -1,0 +1,96 @@
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: {clientId: 'f6f4dd22-3f09-4c0f-969f-288e5a3f4227', personId: 'person_1759054559839_595k7oijx', defaultPhoneNumber: '07380253800'}
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: {clientId: 'f6f4dd22-3f09-4c0f-969f-288e5a3f4227', personId: 'person_1759054559839_595k7oijx', defaultPhoneNumber: '07380253800'}
+ringcentral-phone.tsx:60 [RingCentral] Setting phone number from prop: 07380253800
+dialog.tsx:542  Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ dialog.tsx:542
+commitHookEffectListMount @ react-dom.development.js:23189
+commitPassiveMountOnFiber @ react-dom.development.js:24965
+commitPassiveMountEffects_complete @ react-dom.development.js:24930
+commitPassiveMountEffects_begin @ react-dom.development.js:24917
+commitPassiveMountEffects @ react-dom.development.js:24905
+flushPassiveEffectsImpl @ react-dom.development.js:27078
+flushPassiveEffects @ react-dom.development.js:27023
+commitRootImpl @ react-dom.development.js:26974
+commitRoot @ react-dom.development.js:26721
+performSyncWorkOnRoot @ react-dom.development.js:26156
+flushSyncCallbacks @ react-dom.development.js:12042
+flushSync @ react-dom.development.js:26240
+flushSync$1 @ react-dom.development.js:29878
+dispatchDiscreteCustomEvent @ primitive.tsx:96
+handleSelect @ menu.tsx:628
+handleEvent @ primitive.tsx:10
+callCallback2 @ react-dom.development.js:4164
+invokeGuardedCallbackDev @ react-dom.development.js:4213
+invokeGuardedCallback @ react-dom.development.js:4277
+invokeGuardedCallbackAndCatchFirstError @ react-dom.development.js:4291
+executeDispatch @ react-dom.development.js:9041
+processDispatchQueueItemsInOrder @ react-dom.development.js:9073
+processDispatchQueue @ react-dom.development.js:9086
+dispatchEventsForPlugins @ react-dom.development.js:9097
+(anonymous) @ react-dom.development.js:9288
+batchedUpdates$1 @ react-dom.development.js:26179
+batchedUpdates @ react-dom.development.js:3991
+dispatchEventForPluginEventSystem @ react-dom.development.js:9287
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ react-dom.development.js:6465
+dispatchEvent @ react-dom.development.js:6457
+dispatchDiscreteEvent @ react-dom.development.js:6430
+ringcentral-phone.tsx:74 [RingCentral] initializeWebPhone called
+ringcentral-phone.tsx:75 [RingCentral] isInitializing: false isInitialized: false
+ringcentral-phone.tsx:84 [RingCentral] Starting initialization...
+ringcentral-phone.tsx:87 [RingCentral] Requesting SIP provisioning from backend...
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: {clientId: 'f6f4dd22-3f09-4c0f-969f-288e5a3f4227', personId: 'person_1759054559839_595k7oijx', defaultPhoneNumber: '07380253800'}
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: {clientId: 'f6f4dd22-3f09-4c0f-969f-288e5a3f4227', personId: 'person_1759054559839_595k7oijx', defaultPhoneNumber: '07380253800'}
+ringcentral-phone.tsx:90 [RingCentral] SIP provision response received: {device: {…}, sipInfo: Array(1), sipInfoPstn: Array(0), sipFlags: {…}, sipErrorCodes: Array(1)}
+ringcentral-phone.tsx:96 [RingCentral] SIP provisioning successful
+ringcentral-phone.tsx:97 [RingCentral] sipInfo details: {username: '443459900041*301', domain: 'sip.ringcentral.co.uk', outboundProxy: 'sip121-1221.ringcentral.com:8083', transport: 'WSS'}
+ringcentral-phone.tsx:105 [RingCentral] Creating WebPhone instance with sipInfo[0]...
+ringcentral-phone.tsx:107 [RingCentral] WebPhone instance created: WebPhone {listeners: Map(0), tempListeners: Map(0), sipInfo: {…}, sipClient: DefaultSipClient, deviceManager: DefaultDeviceManager, …}
+ringcentral-phone.tsx:108 [RingCentral] WebPhone available methods: (4) ['constructor', 'start', 'dispose', 'call']
+ringcentral-phone.tsx:109 [RingCentral] WebPhone own properties: (9) ['listeners', 'tempListeners', 'sipInfo', 'sipClient', 'deviceManager', 'callSessions', 'autoAnswer', 'options', 'disposed']
+ringcentral-phone.tsx:112 [RingCentral] Starting WebPhone (connecting WebSocket)...
+ringcentral-phone.tsx:114 [RingCentral] WebPhone started and registered successfully
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: {clientId: 'f6f4dd22-3f09-4c0f-969f-288e5a3f4227', personId: 'person_1759054559839_595k7oijx', defaultPhoneNumber: '07380253800'}
+mixpanel.module.js:21133   POST https://api-js.mixpanel.com/track/?verbose=1&ip=1&_=1765186312180 net::ERR_BLOCKED_BY_CLIENT
+MixpanelLib._send_request @ mixpanel.module.js:21133
+(anonymous) @ mixpanel.module.js:21227
+(anonymous) @ mixpanel.module.js:16881
+RequestBatcher.sendRequestPromise @ mixpanel.module.js:16880
+(anonymous) @ mixpanel.module.js:17076
+Promise.then
+RequestBatcher.flush @ mixpanel.module.js:16910
+(anonymous) @ mixpanel.module.js:16869
+setTimeout
+RequestBatcher.scheduleFlush @ mixpanel.module.js:16867
+RequestBatcher.resetFlush @ mixpanel.module.js:16858
+(anonymous) @ mixpanel.module.js:16957
+Promise.then
+RequestBatcher.flush @ mixpanel.module.js:16910
+(anonymous) @ mixpanel.module.js:16869
+setTimeout
+RequestBatcher.scheduleFlush @ mixpanel.module.js:16867
+RequestBatcher.resetFlush @ mixpanel.module.js:16858
+(anonymous) @ mixpanel.module.js:16957
+Promise.then
+RequestBatcher.flush @ mixpanel.module.js:16910
+(anonymous) @ mixpanel.module.js:16869
+setTimeout
+RequestBatcher.scheduleFlush @ mixpanel.module.js:16867
+RequestBatcher.resetFlush @ mixpanel.module.js:16858
+(anonymous) @ mixpanel.module.js:16957
+Promise.then
+RequestBatcher.flush @ mixpanel.module.js:16910
+(anonymous) @ mixpanel.module.js:16869
+setTimeout
+RequestBatcher.scheduleFlush @ mixpanel.module.js:16867
+RequestBatcher.resetFlush @ mixpanel.module.js:16858
+(anonymous) @ mixpanel.module.js:16957
+Promise.then
+RequestBatcher.flush @ mixpanel.module.js:16910
+(anonymous) @ mixpanel.module.js:16869
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: {clientId: 'f6f4dd22-3f09-4c0f-969f-288e5a3f4227', personId: 'person_1759054559839_595k7oijx', defaultPhoneNumber: '07380253800'}

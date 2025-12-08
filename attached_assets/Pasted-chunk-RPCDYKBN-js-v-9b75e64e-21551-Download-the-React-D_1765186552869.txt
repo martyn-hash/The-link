@@ -1,0 +1,96 @@
+chunk-RPCDYKBN.js?v=9b75e64e:21551 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+main.tsx:9 Service Worker registered: ServiceWorkerRegistration
+PortalAuthContext.tsx:124 [Portal Auth] Initialized with token: none
+PortalAuthContext.tsx:201 [Portal Auth] Token changed, validating... none
+PortalAuthContext.tsx:220 [Portal Auth] No token, clearing user
+chunk-D3QB3GSL.js?v=9b75e64e:13495 [tiptap warn]: Duplicate extension names found: ['link', 'underline']. This can lead to issues.
+resolveExtensions @ chunk-D3QB3GSL.js?v=9b75e64e:13495
+/api/users/notifications:1  Failed to load resource: the server responded with a status of 404 (Not Found)
+AIMagicChatPanel.tsx:251 [AI Magic] Updated conversation context: Object
+/api/portal-user/by-person/person_1759054560266_jb2m51idw:1  Failed to load resource: the server responded with a status of 400 (Bad Request)
+/api/portal-user/by-person/person_1759075590554_u6m86odqu:1  Failed to load resource: the server responded with a status of 400 (Bad Request)
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: Object
+chunk-LY4YDYTP.js?v=9b75e64e:339 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ chunk-LY4YDYTP.js?v=9b75e64e:339
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: Object
+ringcentral-phone.tsx:60 [RingCentral] Setting phone number from prop: 07380253800
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: Object
+ringcentral-phone.tsx:74 [RingCentral] initializeWebPhone called
+ringcentral-phone.tsx:75 [RingCentral] isInitializing: false isInitialized: false
+ringcentral-phone.tsx:84 [RingCentral] Starting initialization...
+ringcentral-phone.tsx:87 [RingCentral] Requesting SIP provisioning from backend...
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: Object
+ringcentral-phone.tsx:90 [RingCentral] SIP provision response received: Object
+ringcentral-phone.tsx:96 [RingCentral] SIP provisioning successful
+ringcentral-phone.tsx:97 [RingCentral] sipInfo details: Object
+ringcentral-phone.tsx:105 [RingCentral] Creating WebPhone instance with sipInfo[0]...
+ringcentral-phone.tsx:107 [RingCentral] WebPhone instance created: WebPhone
+ringcentral-phone.tsx:108 [RingCentral] WebPhone available methods: Array(4)
+ringcentral-phone.tsx:109 [RingCentral] WebPhone own properties: Array(9)
+ringcentral-phone.tsx:112 [RingCentral] Starting WebPhone (connecting WebSocket)...
+ringcentral-phone.tsx:114 [RingCentral] WebPhone started and registered successfully
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: Object
+ringcentral-phone.tsx:245 [RingCentral] makeCall called with number: 07380253800
+ringcentral-phone.tsx:255 [RingCentral] Requesting microphone permission...
+ringcentral-phone.tsx:258 [RingCentral] Microphone permission granted
+ringcentral-phone.tsx:273 [RingCentral] Formatted UK mobile: 07380253800 -> +447380253800
+ringcentral-phone.tsx:292 [RingCentral] Initiating call to: +447380253800
+ringcentral-phone.tsx:299 [RingCentral] call() returned: Promise
+ringcentral-phone.tsx:309 [RingCentral] Session retrieved: OutboundCallSession
+ringcentral-phone.tsx:310 [RingCentral] Session state: init
+ringcentral-phone.tsx:378 [RingCentral] Event listeners attached, waiting for call to connect...
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: Object
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: Object
+ringcentral-phone.tsx:391 [RingCentral] Hangup called, sessionRef.current: OutboundCallSession
+ringcentral-phone.tsx:392 [RingCentral] Current call state: Object
+ringcentral-phone.tsx:396 [RingCentral] Attempting to hang up call
+ringcentral-phone.tsx:403 [RingCentral] Calling session.dispose()
+ringcentral-phone.tsx:412 [RingCentral] Hangup successful, clearing session reference
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: Object
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: Object
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: Object
+ringcentral-phone.tsx:60 [RingCentral] Setting phone number from prop: 07380253800
+chunk-LY4YDYTP.js?v=9b75e64e:339 Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.
+(anonymous) @ chunk-LY4YDYTP.js?v=9b75e64e:339
+ringcentral-phone.tsx:74 [RingCentral] initializeWebPhone called
+ringcentral-phone.tsx:75 [RingCentral] isInitializing: false isInitialized: false
+ringcentral-phone.tsx:84 [RingCentral] Starting initialization...
+ringcentral-phone.tsx:87 [RingCentral] Requesting SIP provisioning from backend...
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: Object
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: Object
+ringcentral-phone.tsx:90 [RingCentral] SIP provision response received: Object
+ringcentral-phone.tsx:96 [RingCentral] SIP provisioning successful
+ringcentral-phone.tsx:97 [RingCentral] sipInfo details: Object
+ringcentral-phone.tsx:105 [RingCentral] Creating WebPhone instance with sipInfo[0]...
+ringcentral-phone.tsx:107 [RingCentral] WebPhone instance created: WebPhone
+ringcentral-phone.tsx:108 [RingCentral] WebPhone available methods: Array(4)
+ringcentral-phone.tsx:109 [RingCentral] WebPhone own properties: Array(9)
+ringcentral-phone.tsx:112 [RingCentral] Starting WebPhone (connecting WebSocket)...
+ringcentral-phone.tsx:114 [RingCentral] WebPhone started and registered successfully
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: Object
+ringcentral-phone.tsx:245 [RingCentral] makeCall called with number: 07380253800
+ringcentral-phone.tsx:255 [RingCentral] Requesting microphone permission...
+ringcentral-phone.tsx:258 [RingCentral] Microphone permission granted
+ringcentral-phone.tsx:273 [RingCentral] Formatted UK mobile: 07380253800 -> +447380253800
+ringcentral-phone.tsx:292 [RingCentral] Initiating call to: +447380253800
+ringcentral-phone.tsx:299 [RingCentral] call() returned: Promise
+ringcentral-phone.tsx:309 [RingCentral] Session retrieved: OutboundCallSession
+ringcentral-phone.tsx:310 [RingCentral] Session state: init
+ringcentral-phone.tsx:378 [RingCentral] Event listeners attached, waiting for call to connect...
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: Object
+ringcentral-phone.tsx:30 🔄 RingCentral Phone Component LOADED - Version: 2025-10-03-085500
+ringcentral-phone.tsx:31 🔄 Props: Object
