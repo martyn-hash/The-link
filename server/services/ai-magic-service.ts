@@ -459,6 +459,52 @@ const AI_MAGIC_FUNCTIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         }
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "call_contact",
+      description: "Initiate a phone call to a contact person. Use for commands like 'call Josie', 'phone John from ABC Ltd', 'ring Sarah', 'call Josie Allan', 'call the contact at Victoriam'. This opens the call dialog with the person pre-selected.",
+      parameters: {
+        type: "object",
+        properties: {
+          personName: {
+            type: "string",
+            description: "Name of the person to call. Can be first name only ('Josie'), full name ('Josie Allan'), or with qualifiers."
+          },
+          clientName: {
+            type: "string",
+            description: "Name of the client/company they belong to. Extract from phrases like 'from Victoriam', 'at ABC Ltd'. Helps find the right person if multiple have the same name."
+          }
+        },
+        required: ["personName"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "quick_sms",
+      description: "Send a quick SMS text message to a contact person. Use for commands like 'text Josie', 'send sms to John from ABC', 'message Sarah', 'sms Josie Allan'. This opens the SMS composer with the person pre-selected.",
+      parameters: {
+        type: "object",
+        properties: {
+          personName: {
+            type: "string",
+            description: "Name of the person to text. Can be first name only, full name, or with client qualifier."
+          },
+          clientName: {
+            type: "string",
+            description: "Name of the client/company they belong to. Extract from phrases like 'from Victoriam', 'at ABC Ltd'."
+          },
+          message: {
+            type: "string",
+            description: "Optional pre-written message content. If not provided, user will compose in the dialog."
+          }
+        },
+        required: ["personName"]
+      }
+    }
   }
 ];
 
@@ -549,9 +595,16 @@ Current date/time: ${currentDateTime} (UK timezone - Europe/London)${taskTypesCo
 - Create quick reminders (time-based personal notifications)
 - Create internal tasks (assignable work items with priority)
 - Compose emails and SMS messages
+- Make VoIP phone calls to contacts (use call_contact for "call X", "phone X", "ring X")
+- Send quick SMS to contacts (use quick_sms for "text X", "message X", "SMS X")
 - Show filtered lists of tasks and reminders
 - Navigate to client or person detail pages
 - Search for clients
+
+## Communication Commands:
+- For calling: "call Josie from Victoriam", "ring John Smith", "phone the client"
+- For texting: "text Sarah at ABC Ltd", "send SMS to Josie", "message David"
+- The system matches people by name and optional client association (e.g., "from Victoriam", "at ABC Ltd")
 
 ## Guidelines:
 1. ALWAYS use UK timezone (Europe/London) for all dates and times
@@ -754,6 +807,48 @@ export async function processAIMagicChat(
               }
             };
           }
+        }
+      }
+      
+      // Enrich call_contact with person matches (requires phone)
+      if (functionName === 'call_contact' && functionArgs.personName) {
+        const matches = await fuzzyMatchPeopleWithClient(
+          functionArgs.personName,
+          functionArgs.clientName,
+          true, // requirePhone
+          5
+        );
+        console.log('[AI Magic] Call contact matches for:', functionArgs.personName, 'with client hint:', functionArgs.clientName);
+        console.log('[AI Magic] Found', matches.length, 'matches:', matches.map(m => ({ name: m.name, phone: m.phone, client: m.clientName, conf: m.confidence })));
+        
+        functionArgs.matches = matches;
+        functionArgs.needsDisambiguation = matches.length > 1 && needsDisambiguation(matches);
+        functionArgs.noMatches = matches.length === 0;
+        
+        if (matches.length === 1 && matches[0].confidence >= CONFIDENCE_THRESHOLDS.MEDIUM) {
+          // Single good match - pre-select it
+          functionArgs.selectedPerson = matches[0];
+        }
+      }
+      
+      // Enrich quick_sms with person matches (requires phone)
+      if (functionName === 'quick_sms' && functionArgs.personName) {
+        const matches = await fuzzyMatchPeopleWithClient(
+          functionArgs.personName,
+          functionArgs.clientName,
+          true, // requirePhone for SMS
+          5
+        );
+        console.log('[AI Magic] Quick SMS matches for:', functionArgs.personName, 'with client hint:', functionArgs.clientName);
+        console.log('[AI Magic] Found', matches.length, 'matches:', matches.map(m => ({ name: m.name, phone: m.phone, client: m.clientName, conf: m.confidence })));
+        
+        functionArgs.matches = matches;
+        functionArgs.needsDisambiguation = matches.length > 1 && needsDisambiguation(matches);
+        functionArgs.noMatches = matches.length === 0;
+        
+        if (matches.length === 1 && matches[0].confidence >= CONFIDENCE_THRESHOLDS.MEDIUM) {
+          // Single good match - pre-select it
+          functionArgs.selectedPerson = matches[0];
         }
       }
 
@@ -1146,6 +1241,162 @@ export async function fuzzyMatchPeople(
       .slice(0, limit);
   } catch (error) {
     console.error('[AI Magic] Error matching people:', error);
+    return [];
+  }
+}
+
+// Enhanced person matching with client association for call/SMS features
+export interface PersonWithClientMatch {
+  id: string;
+  name: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  phone: string | null;
+  clientId: string | null;
+  clientName: string | null;
+  confidence: number;
+  matchType: string;
+  hasPhone: boolean;
+}
+
+export async function fuzzyMatchPeopleWithClient(
+  personName: string,
+  clientNameHint?: string,
+  requirePhone: boolean = false,
+  limit: number = 5
+): Promise<PersonWithClientMatch[]> {
+  try {
+    const allPeople = await storage.getAllPeople();
+    const allClients = await storage.getAllClients();
+    
+    // Create client lookup map
+    const clientMap = new Map(allClients.map(c => [c.id, c.name]));
+    
+    // Build person -> clients mapping by querying client associations for each matched person
+    // We'll do this lazily after finding name matches to avoid excessive queries
+    const personToClientMap = new Map<string, { clientId: string; clientName: string }[]>();
+    
+    // Pre-fetch all client-people associations by iterating clients
+    for (const client of allClients) {
+      try {
+        const clientPeople = await storage.getClientPeopleByClientId(client.id);
+        for (const cp of clientPeople) {
+          const personId = cp.person?.id || cp.personId;
+          if (personId) {
+            const existing = personToClientMap.get(personId) || [];
+            existing.push({ clientId: client.id, clientName: client.name || 'Unknown' });
+            personToClientMap.set(personId, existing);
+          }
+        }
+      } catch (e) {
+        // Skip clients that fail to load people
+      }
+    }
+    
+    const searchLower = personName.toLowerCase().trim();
+    const clientHintLower = clientNameHint?.toLowerCase().trim() || '';
+    
+    const results: PersonWithClientMatch[] = [];
+    
+    for (const person of allPeople) {
+      const fullName = `${person.firstName || ''} ${person.lastName || ''}`.trim().toLowerCase();
+      const firstName = (person.firstName || '').toLowerCase();
+      const lastName = (person.lastName || '').toLowerCase();
+      const phone = person.primaryPhone || person.telephone || null;
+      
+      // Skip if phone required but not available
+      if (requirePhone && !phone) continue;
+      
+      let nameConfidence = 0;
+      let matchType = '';
+      
+      // Calculate name match confidence
+      if (fullName === searchLower) {
+        nameConfidence = 1.0;
+        matchType = 'exact';
+      } else if (firstName === searchLower || lastName === searchLower) {
+        nameConfidence = 0.9;
+        matchType = 'exact_partial';
+      } else if (fullName.startsWith(searchLower)) {
+        nameConfidence = 0.85;
+        matchType = 'starts_with';
+      } else if (firstName.startsWith(searchLower) || lastName.startsWith(searchLower)) {
+        nameConfidence = 0.75;
+        matchType = 'starts_with';
+      } else if (fullName.includes(searchLower)) {
+        nameConfidence = 0.6;
+        matchType = 'contains';
+      } else if (searchLower.length >= 3) {
+        const firstNameSim = firstName.length >= 3 ? calculateSimilarity(searchLower, firstName) : 0;
+        const lastNameSim = lastName.length >= 3 ? calculateSimilarity(searchLower, lastName) : 0;
+        const fullNameSim = calculateSimilarity(searchLower, fullName);
+        const bestSimilarity = Math.max(firstNameSim, lastNameSim, fullNameSim);
+        
+        if (bestSimilarity > 0.7) {
+          nameConfidence = bestSimilarity * 0.5;
+          matchType = 'fuzzy';
+        }
+      }
+      
+      if (nameConfidence === 0) continue;
+      
+      // Get client associations for this person
+      const clientAssociations = personToClientMap.get(person.id) || [];
+      
+      // Find best client match if client hint provided
+      let bestClientMatch: { clientId: string; clientName: string } | null = null;
+      let clientBoost = 0;
+      
+      if (clientHintLower && clientAssociations.length > 0) {
+        for (const assoc of clientAssociations) {
+          const clientLower = assoc.clientName.toLowerCase();
+          let clientConfidence = 0;
+          
+          if (clientLower === clientHintLower) {
+            clientConfidence = 1.0;
+          } else if (clientLower.startsWith(clientHintLower) || clientHintLower.startsWith(clientLower)) {
+            clientConfidence = 0.9;
+          } else if (clientLower.includes(clientHintLower) || clientHintLower.includes(clientLower)) {
+            clientConfidence = 0.7;
+          } else if (calculateSimilarity(clientHintLower, clientLower) > 0.7) {
+            clientConfidence = 0.6;
+          }
+          
+          if (clientConfidence > clientBoost) {
+            clientBoost = clientConfidence * 0.15; // Boost up to 15% for client match
+            bestClientMatch = assoc;
+          }
+        }
+      }
+      
+      // Use first client if no specific match but associations exist
+      if (!bestClientMatch && clientAssociations.length > 0) {
+        bestClientMatch = clientAssociations[0];
+      }
+      
+      const finalConfidence = Math.min(1.0, nameConfidence + clientBoost);
+      
+      results.push({
+        id: person.id,
+        name: `${person.firstName || ''} ${person.lastName || ''}`.trim(),
+        firstName: person.firstName,
+        lastName: person.lastName,
+        email: person.email || null,
+        phone,
+        clientId: bestClientMatch?.clientId || null,
+        clientName: bestClientMatch?.clientName || null,
+        confidence: finalConfidence,
+        matchType: clientBoost > 0 ? `${matchType}+client` : matchType,
+        hasPhone: !!phone
+      });
+    }
+    
+    return results
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, limit);
+  } catch (error) {
+    console.error('[AI Magic] Error matching people with client:', error);
     return [];
   }
 }

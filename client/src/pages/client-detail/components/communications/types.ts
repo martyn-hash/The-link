@@ -163,9 +163,10 @@ export interface ViewCommunicationDialogProps {
 }
 
 export interface CallDialogProps {
-  clientId: string;
+  clientId?: string;
   personId?: string;
   phoneNumber?: string;
+  personName?: string;
   isOpen: boolean;
   onClose: () => void;
 }

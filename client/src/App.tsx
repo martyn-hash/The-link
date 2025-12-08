@@ -11,6 +11,7 @@ import { PWAUpdatePrompt } from "@/components/PWAUpdatePrompt";
 import { FirstLoginPasswordDialog } from "@/components/FirstLoginPasswordDialog";
 import { PortalAuthProvider, usePortalAuth } from "@/contexts/PortalAuthContext";
 import { AIMagicButton } from "@/components/ai-magic";
+import { AIMagicCallHandler } from "@/components/ai-magic/AIMagicCallHandler";
 import logoPath from "@assets/full_logo_transparent_600_1761924125378.png";
 
 const NotFound = lazy(() => import("@/pages/not-found"));
@@ -272,6 +273,7 @@ function AppContent() {
       {isAuthenticated && <PushNotificationPrompt />}
       {isAuthenticated && <FirstLoginPasswordDialog />}
       {isAuthenticated && !isPortalRoute && !isClientQueryPage && <AIMagicButton />}
+      {isAuthenticated && !isPortalRoute && <AIMagicCallHandler />}
       {isPortalAuthenticated && <PortalPushNotificationPrompt />}
     </>
   );

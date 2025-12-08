@@ -32,7 +32,9 @@ export type AIActionType =
   | 'bench_project'
   | 'unbench_project'
   | 'move_project_stage'
-  | 'get_analytics';
+  | 'get_analytics'
+  | 'call_contact'
+  | 'quick_sms';
 
 // Project match result for AI Magic
 export interface ProjectMatch {
@@ -153,13 +155,20 @@ export interface AICommandExample {
 
 export const AI_COMMAND_CATEGORIES: AICommandCategory[] = [
   {
+    title: 'Communicate',
+    icon: 'phone',
+    commands: [
+      { phrase: 'Call Josie from Victoriam', description: 'Start a VoIP call to a contact' },
+      { phrase: 'Text Sarah at ABC Ltd', description: 'Send an SMS to a contact' },
+      { phrase: 'Send an email to ABC Ltd about their documents', description: 'Compose an email to a client' },
+    ]
+  },
+  {
     title: 'Create',
     icon: 'plus',
     commands: [
       { phrase: 'Remind me to call John tomorrow at 2pm', description: 'Create a quick reminder' },
       { phrase: 'Create a task for Harry to review the VAT return', description: 'Create a task for a team member' },
-      { phrase: 'Send an email to ABC Ltd about their documents', description: 'Compose an email to a client' },
-      { phrase: 'Text Sarah at Victoriam about the meeting', description: 'Send an SMS to a contact' },
     ]
   },
   {

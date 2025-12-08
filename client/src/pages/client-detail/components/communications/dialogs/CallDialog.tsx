@@ -46,6 +46,7 @@ export function CallDialog({
   clientId, 
   personId, 
   phoneNumber,
+  personName,
   isOpen,
   onClose
 }: CallDialogProps) {
@@ -74,6 +75,17 @@ export function CallDialog({
     queryKey: ['/api/clients', clientId, 'people'],
     enabled: !!clientId && isOpen,
   });
+
+  const derivedPersonName = (() => {
+    if (personName) return personName;
+    if (selectedPersonId && clientPeople) {
+      const found = clientPeople.find((cp: any) => cp.person.id === selectedPersonId);
+      if (found) {
+        return `${found.person.firstName || ''} ${found.person.lastName || ''}`.trim();
+      }
+    }
+    return undefined;
+  })();
 
   useEffect(() => {
     setSelectedPersonId(personId);
@@ -232,27 +244,34 @@ export function CallDialog({
     const logPhoneNumber = ctx?.phoneNumber;
     const logSessionId = ctx?.sessionId;
     
-    if (logClientId && logSessionId) {
+    if (logSessionId) {
       callLoggedRef.current = true;
       
-      try {
-        await apiRequest('POST', '/api/ringcentral/log-call', {
-          clientId: logClientId,
-          personId: logPersonId || undefined,
-          phoneNumber: logPhoneNumber,
-          direction: 'outbound',
-          duration: finalDuration,
-          sessionId: logSessionId,
-        });
-        
+      if (logClientId) {
+        try {
+          await apiRequest('POST', '/api/ringcentral/log-call', {
+            clientId: logClientId,
+            personId: logPersonId || undefined,
+            phoneNumber: logPhoneNumber,
+            direction: 'outbound',
+            duration: finalDuration,
+            sessionId: logSessionId,
+          });
+          
+          toast({
+            title: 'Call Logged',
+            description: 'Call has been logged to communications',
+          });
+          
+          queryClient.invalidateQueries({ queryKey: ['/api/communications/client', logClientId] });
+        } catch (error: any) {
+          console.error('[RingCentral] Error logging call:', error);
+        }
+      } else {
         toast({
-          title: 'Call Logged',
-          description: 'Call has been logged to communications',
+          title: 'Call Completed',
+          description: 'Call ended. Note: Call was not logged as no client context was provided.',
         });
-        
-        queryClient.invalidateQueries({ queryKey: ['/api/communications/client', clientId] });
-      } catch (error: any) {
-        console.error('[RingCentral] Error logging call:', error);
       }
     }
     
@@ -453,40 +472,54 @@ export function CallDialog({
         <div className="space-y-4">
           {!isCallActive ? (
             <>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Select Person</label>
-                <Select
-                  value={selectedPersonId || 'none'}
-                  onValueChange={(value) => {
-                    if (value === 'none') {
-                      setSelectedPersonId(undefined);
-                      setSelectedPhoneNumber(undefined);
-                    } else {
-                      setSelectedPersonId(value);
-                      const selected = (clientPeople || []).find((cp: any) => cp.person.id === value);
-                      setSelectedPhoneNumber(selected?.person?.primaryPhone || undefined);
-                    }
-                  }}
-                  disabled={isDialing}
-                >
-                  <SelectTrigger data-testid="select-call-person">
-                    <SelectValue placeholder="Select a person to call..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No person selected</SelectItem>
-                    {(clientPeople || []).map((cp: any) => (
-                      <SelectItem 
-                        key={cp.person.id} 
-                        value={cp.person.id}
-                        disabled={!cp.person.primaryPhone}
-                      >
-                        {cp.person.firstName} {cp.person.lastName}
-                        {cp.person.primaryPhone ? ` - ${cp.person.primaryPhone}` : ' (no phone)'}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {derivedPersonName && selectedPhoneNumber && !clientId ? (
+                <div className="p-4 bg-muted/50 rounded-lg border space-y-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Phone className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <div className="font-medium">{derivedPersonName}</div>
+                      <div className="text-sm text-muted-foreground font-mono">{selectedPhoneNumber}</div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Select Person</label>
+                  <Select
+                    value={selectedPersonId || 'none'}
+                    onValueChange={(value) => {
+                      if (value === 'none') {
+                        setSelectedPersonId(undefined);
+                        setSelectedPhoneNumber(undefined);
+                      } else {
+                        setSelectedPersonId(value);
+                        const selected = (clientPeople || []).find((cp: any) => cp.person.id === value);
+                        setSelectedPhoneNumber(selected?.person?.primaryPhone || undefined);
+                      }
+                    }}
+                    disabled={isDialing}
+                  >
+                    <SelectTrigger data-testid="select-call-person">
+                      <SelectValue placeholder="Select a person to call..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No person selected</SelectItem>
+                      {(clientPeople || []).map((cp: any) => (
+                        <SelectItem 
+                          key={cp.person.id} 
+                          value={cp.person.id}
+                          disabled={!cp.person.primaryPhone}
+                        >
+                          {cp.person.firstName} {cp.person.lastName}
+                          {cp.person.primaryPhone ? ` - ${cp.person.primaryPhone}` : ' (no phone)'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               <Button
                 onClick={initializeAndCall}
