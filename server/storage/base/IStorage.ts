@@ -632,7 +632,6 @@ export interface IStorage {
   getEmailThreadByConversationId(conversationId: string): Promise<EmailThread | undefined>;
   getEmailThreadById(id: string): Promise<EmailThread | undefined>;
   getEmailThreadsByClientId(clientId: string): Promise<EmailThread[]>;
-  getEmailThreadsBySlaStatus(slaStatus: 'active' | 'complete' | 'snoozed'): Promise<EmailThread[]>;
   updateEmailThread(id: string, thread: Partial<InsertEmailThread>): Promise<EmailThread>;
   
   createEmailMessage(message: InsertEmailMessage): Promise<EmailMessage>;
@@ -669,15 +668,6 @@ export interface IStorage {
   getAttachmentsByMessageId(internetMessageId: string): Promise<EmailAttachment[]>;
   checkEmailMessageAttachmentExists(internetMessageId: string, attachmentId: string): Promise<boolean>;
   getSignedUrl(objectPath: string): Promise<string>;
-  
-  getEmailMessagesByEmailAddresses(
-    emailAddresses: string[],
-    options?: { search?: string; limit?: number; offset?: number }
-  ): Promise<{ messages: EmailMessage[]; total: number }>;
-  getEmailThreadsByEmailAddresses(
-    emailAddresses: string[],
-    options?: { search?: string; limit?: number; offset?: number }
-  ): Promise<{ threads: EmailThread[]; total: number }>;
 
   createDocumentFolder(folder: InsertDocumentFolder): Promise<DocumentFolder>;
   getDocumentFolderById(id: string): Promise<DocumentFolder | undefined>;

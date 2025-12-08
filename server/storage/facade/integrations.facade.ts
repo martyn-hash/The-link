@@ -247,10 +247,6 @@ export function applyIntegrationsFacade<TBase extends Constructor<IntegrationsFa
       return this.emailStorage.getEmailThreadsByClientId(clientId);
     }
 
-    async getEmailThreadsBySlaStatus(slaStatus: 'active' | 'complete' | 'snoozed') {
-      return this.emailStorage.getEmailThreadsBySlaStatus(slaStatus);
-    }
-
     async getEmailThreadsByUserId(userId: string, myEmailsOnly: boolean) {
       return this.emailStorage.getEmailThreadsByUserId(userId, myEmailsOnly);
     }
@@ -305,20 +301,6 @@ export function applyIntegrationsFacade<TBase extends Constructor<IntegrationsFa
 
     async checkEmailMessageAttachmentExists(internetMessageId: string, attachmentId: string) {
       return this.emailStorage.checkEmailMessageAttachmentExists(internetMessageId, attachmentId);
-    }
-
-    async getEmailMessagesByEmailAddresses(
-      emailAddresses: string[],
-      options: { search?: string; limit?: number; offset?: number } = {}
-    ) {
-      return this.emailStorage.getEmailMessagesByEmailAddresses(emailAddresses, options);
-    }
-
-    async getEmailThreadsByEmailAddresses(
-      emailAddresses: string[],
-      options: { search?: string; limit?: number; offset?: number } = {}
-    ) {
-      return this.emailStorage.getEmailThreadsByEmailAddresses(emailAddresses, options);
     }
 
     // ============================================================================

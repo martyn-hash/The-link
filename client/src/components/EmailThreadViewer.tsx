@@ -8,7 +8,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AttachmentList, AttachmentPreview, FileUploadZone, type AttachmentData } from '@/components/attachments';
 import { useToast } from '@/hooks/use-toast';
 import { apiRequest, queryClient } from '@/lib/queryClient';
@@ -24,9 +23,7 @@ import {
   ReplyAll,
   Send,
   X,
-  RefreshCw,
-  Sparkles,
-  Loader2
+  RefreshCw
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import DOMPurify from 'isomorphic-dompurify';
@@ -81,11 +78,6 @@ export function EmailThreadViewer({ threadId, open, onOpenChange }: EmailThreadV
   const [replyType, setReplyType] = useState<'reply' | 'reply-all'>('reply');
   const [replyBody, setReplyBody] = useState('');
   const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
-  
-  // AI Reply Assistant state
-  const [aiSuggestion, setAiSuggestion] = useState<string | null>(null);
-  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
-  const [aiTone, setAiTone] = useState<'professional' | 'friendly' | 'formal' | 'concise'>('professional');
 
   // Reset reply state when dialog closes
   const handleOpenChange = (newOpen: boolean) => {
@@ -94,56 +86,8 @@ export function EmailThreadViewer({ threadId, open, onOpenChange }: EmailThreadV
       setReplyBody('');
       setReplyAttachments([]);
       setExpandedMessages(new Set());
-      setAiSuggestion(null);
-      setIsGeneratingAI(false);
     }
     onOpenChange(newOpen);
-  };
-
-  // AI Reply generation
-  const generateAIReply = async () => {
-    if (!threadData?.messages || threadData.messages.length === 0) return;
-    
-    const latestMessage = threadData.messages[threadData.messages.length - 1];
-    
-    setIsGeneratingAI(true);
-    setAiSuggestion(null);
-    
-    try {
-      const response = await fetch('/api/emails/ai-reply', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          originalEmail: {
-            from: latestMessage.from,
-            subject: latestMessage.subject,
-            body: latestMessage.body,
-            bodyPreview: latestMessage.bodyPreview,
-          },
-          tone: aiTone,
-          includeContext: true,
-        }),
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to generate AI reply');
-      }
-      
-      const data = await response.json();
-      setAiSuggestion(data.suggestion);
-    } catch (error) {
-      showFriendlyError({ error: "Unable to generate AI suggestion. Please try again." });
-    } finally {
-      setIsGeneratingAI(false);
-    }
-  };
-
-  const applyAISuggestion = () => {
-    if (aiSuggestion) {
-      setReplyBody(aiSuggestion);
-      setAiSuggestion(null);
-    }
   };
 
   const { data: threadData, isLoading } = useQuery<{
@@ -570,82 +514,6 @@ export function EmailThreadViewer({ threadId, open, onOpenChange }: EmailThreadV
                   </div>
                 );
               })()}
-
-              {/* AI Reply Assistant */}
-              <div className="border rounded-lg p-3 bg-muted/30">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-medium">AI Reply Assistant</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Select value={aiTone} onValueChange={(value: 'professional' | 'friendly' | 'formal' | 'concise') => setAiTone(value)}>
-                      <SelectTrigger className="w-32 h-8" data-testid="select-ai-tone">
-                        <SelectValue placeholder="Tone" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="professional">Professional</SelectItem>
-                        <SelectItem value="friendly">Friendly</SelectItem>
-                        <SelectItem value="formal">Formal</SelectItem>
-                        <SelectItem value="concise">Concise</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={generateAIReply}
-                      disabled={isGeneratingAI}
-                      data-testid="button-generate-ai-reply"
-                    >
-                      {isGeneratingAI ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="h-4 w-4 mr-2" />
-                          Help me reply
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-                
-                {aiSuggestion && (
-                  <div className="mt-3 space-y-2">
-                    <div className="bg-background border rounded-md p-3">
-                      <p className="text-sm whitespace-pre-wrap">{aiSuggestion}</p>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={applyAISuggestion}
-                        data-testid="button-use-suggestion"
-                      >
-                        Use this suggestion
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={generateAIReply}
-                        disabled={isGeneratingAI}
-                        data-testid="button-regenerate"
-                      >
-                        Try again
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setAiSuggestion(null)}
-                        data-testid="button-dismiss-suggestion"
-                      >
-                        Dismiss
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </div>
 
               {/* Rich Text Editor */}
               <TiptapEditor

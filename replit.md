@@ -51,29 +51,6 @@ Reusable SMS message templates with variable support for personalization. Admins
 
 Key files: `client/src/pages/sms-templates.tsx`, `client/src/components/SmsTemplatePicker.tsx`, `client/src/pages/client-detail/components/communications/dialogs/SMSDialog.tsx`
 
-### AI Email Dashboard (December 2025)
-Zero-inbox email management system with SLA tracking for staff to manage client emails efficiently. Uses MS Graph for email integration and provides a unified inbox view.
-
-- **SLA Tracking**: Automatic deadline calculation based on company settings (response days, working hours 09:00-17:30, Mon-Fri)
-- **Thread Status Management**: Active/Complete/Snoozed states with automatic transitions when clients reply
-- **Visual SLA Indicators**: Color-coded urgency (green=OK, yellow=warning, orange=danger, red=breached)
-- **Zero-Inbox Workflow**: Staff can mark threads complete or snooze until a future date
-- **Thread Detail View**: Full email conversation with attachments, sender info, and action buttons
-
-Key files:
-- `client/src/pages/email-dashboard.tsx` - Frontend dashboard page
-- `server/services/slaCalculationService.ts` - SLA calculation logic
-- `server/routes/emails.ts` - API endpoints for dashboard
-- `DOCS/ai_email_dashboard.md` - Detailed specification
-
-API Endpoints:
-- `GET /api/email-dashboard/threads` - List threads with SLA info (status filter: active/complete/snoozed)
-- `GET /api/email-dashboard/threads/:threadId` - Single thread with messages
-- `GET /api/email-dashboard/stats` - Dashboard statistics
-- `PATCH /api/email-dashboard/threads/:threadId/complete` - Mark thread complete
-- `PATCH /api/email-dashboard/threads/:threadId/snooze` - Snooze until date
-- `PATCH /api/email-dashboard/threads/:threadId/reopen` - Reopen completed thread
-
 ### System Design
 PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) handles object storage with secure signed URLs. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control; the client portal uses passwordless email verification. The system is multi-tenant and designed for modularity, with extensive database indexing. Key features include automated project management, advanced communication tools (push notifications, internal tasks, email threading via Microsoft Graph, multi-channel client notifications with AI assistance, RingCentral VoIP with automatic transcription), UK eIDAS-compliant electronic signatures, comprehensive workflow and status management with Kanban views, and Bookkeeping Queries. It also includes an AI Audio Transcription service, client value notifications with AI-assisted drafting, Zapier integration via webhooks, and an enhanced data import system. A friendly error handling system replaces technical errors with user-friendly messages. A scheduled notifications calendar provides comprehensive management of automated notifications, with stage-aware suppression. A resilient project scheduling orchestrator ensures robustness against server restarts and outages.
 
@@ -92,29 +69,3 @@ PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, sof
 ### Frontend Libraries
 -   **UI Components**: `@radix-ui/*`, `@dnd-kit/*`, `@tiptap/*`, `react-hook-form` with `zod`, `sonner`.
 -   **Utilities**: `date-fns`, `clsx`, `tailwind-merge`, `@getaddress/autocomplete`.
-
-### Client Email History in Communications Tab (December 2025)
-Email history is displayed in the client's Communications tab (Comms), showing all inbound/outbound emails involving the client's contacts. Uses MS Graph integration for email sync.
-
-- **Sync Emails Button**: Click "Sync Emails" in the Communications tab header to pull email history from MS Graph
-- **Multi-Email Support**: Queries all tenant mailboxes for emails involving contact's `email`, `primaryEmail`, and `email2` fields
-- **Thread Linking**: Synced emails are automatically linked to the client for display in Communications timeline
-- **AI Reply Assistant**: Token-efficient OpenAI gpt-4o-mini integration for drafting email replies with tone selection (professional/friendly/formal/concise)
-
-Key files:
-- `server/routes/emails.ts` - Email sync, threading, and AI reply endpoints
-- `client/src/pages/client-detail/components/communications/CommunicationsTimeline.tsx` - Communications tab with Sync Emails button
-- `client/src/components/EmailThreadViewer.tsx` - Thread viewer with AI Reply Assistant UI
-- `server/services/emailIngestionService.ts` - Email ingestion and threading logic
-- `server/storage/integrations/emailStorage.ts` - Email query methods
-
-API Endpoints:
-- `POST /api/emails/sync/client/:clientId` - Sync emails from MS Graph for a client's contacts
-- `GET /api/emails/client/:clientId` - Get email threads for a client
-- `POST /api/emails/ai-reply` - AI-powered reply drafting with tone selection
-- `POST /api/emails/ai-summarize` - AI-powered email thread summarization
-
-## Testing Credentials
-- Login via root page, passwords tab: `jamsplan1@gmail.com` | `admin123`
-- Dev system connected to: `martyn@growth.accountants` (real work account)
-- Example person: James Galbraith with email `sergei@growth.accountants`

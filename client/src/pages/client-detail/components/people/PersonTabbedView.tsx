@@ -96,13 +96,12 @@ export function PersonTabbedView({
 
     const handleSwipe = () => {
       const swipeThreshold = 50;
-      const allTabs = ["basic-info", "contact-info", "personal-services", "related-companies"];
-      const currentIndex = allTabs.indexOf(activeTab);
+      const currentIndex = tabs.indexOf(activeTab);
       
-      if (touchStartX - touchEndX > swipeThreshold && currentIndex < allTabs.length - 1) {
-        setActiveTab(allTabs[currentIndex + 1]);
+      if (touchStartX - touchEndX > swipeThreshold && currentIndex < tabs.length - 1) {
+        setActiveTab(tabs[currentIndex + 1]);
       } else if (touchEndX - touchStartX > swipeThreshold && currentIndex > 0) {
-        setActiveTab(allTabs[currentIndex - 1]);
+        setActiveTab(tabs[currentIndex - 1]);
       }
     };
 
