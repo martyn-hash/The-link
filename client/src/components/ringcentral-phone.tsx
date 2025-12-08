@@ -106,11 +106,23 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
       sipInfoRef.current = sipProvision.sipInfo[0];
 
       // Initialize WebPhone with version 2.x API - pass single sipInfo object (not array)
-      console.log('[RingCentral] Creating WebPhone instance with sipInfo[0]...');
-      const webPhone = new RingCentralWebPhone({ sipInfo: sipProvision.sipInfo[0] });
+      // Enable debug mode to get detailed SIP logs
+      console.log('[RingCentral] Creating WebPhone instance with sipInfo[0] and debug=true...');
+      const webPhone = new RingCentralWebPhone({ 
+        sipInfo: sipProvision.sipInfo[0],
+        debug: true  // Enable SIP debug logs
+      });
       console.log('[RingCentral] WebPhone instance created:', webPhone);
       console.log('[RingCentral] WebPhone available methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(webPhone)));
       console.log('[RingCentral] WebPhone own properties:', Object.keys(webPhone));
+
+      // Add WebPhone-level event listeners to catch all events
+      webPhone.on('outboundCall', (session: any) => {
+        console.log('[RingCentral] 📤 WebPhone outboundCall event fired!');
+        console.log('[RingCentral] Session from event:', session);
+        console.log('[RingCentral] Session state:', session?.state);
+        console.log('[RingCentral] Session direction:', session?.direction);
+      });
 
       // Start the WebPhone (connects and registers)
       console.log('[RingCentral] Starting WebPhone (connecting WebSocket)...');
@@ -295,15 +307,28 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
 
       console.log('[RingCentral] Initiating call to:', formattedNumber);
       
-      // Let RingCentral use the default line for caller ID - don't specify fromNumber
-      // This allows the user's configured digital line to be used automatically
-      // NOTE: WebPhone v2 uses 'phoneNumber' not 'toNumber'
-      console.log('[RingCentral] Calling webPhone.call() with params:', { phoneNumber: formattedNumber });
+      // WebPhone v2 call() signature: call(callee, callerId?, options?)
+      // callee = the phone number to call (positional argument, NOT an object)
+      // callerId = optional caller ID (we omit to use default line)
+      // options = optional call options
+      console.log('[RingCentral] Calling webPhone.call() with callee:', formattedNumber);
+      console.log('[RingCentral] WebPhone instance state:', {
+        isStarted: webPhoneRef.current?.sipClient ? 'has sipClient' : 'no sipClient',
+        callSessions: webPhoneRef.current?.callSessions?.length || 0,
+      });
       
       try {
-        const session = await webPhoneRef.current.call({
-          phoneNumber: formattedNumber,
+        // call() takes positional arguments, not an object!
+        // Add a timeout wrapper to detect if call() hangs
+        const callPromise = webPhoneRef.current.call(formattedNumber);
+        console.log('[RingCentral] webPhone.call() returned promise:', callPromise);
+        
+        // Race against a timeout to detect hanging
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Call setup timed out after 30 seconds')), 30000);
         });
+        
+        const session = await Promise.race([callPromise, timeoutPromise]) as any;
         
         console.log('[RingCentral] call() returned session:', session);
         console.log('[RingCentral] Session state:', session?.state);
