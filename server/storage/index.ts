@@ -37,6 +37,7 @@ import {
   IntegrationStorage, 
   PushNotificationStorage, 
   EmailStorage,
+  SmsTemplateStorage,
   initializeDefaultNotificationTemplates as modularInitTemplates
 } from './integrations/index.js';
 import { 
@@ -154,6 +155,7 @@ class StorageBase {
   public readonly integrationStorage: IntegrationStorage;
   public readonly pushNotificationStorage: PushNotificationStorage;
   public readonly emailStorage: EmailStorage;
+  public readonly smsTemplateStorage: SmsTemplateStorage;
   public readonly documentStorage: DocumentStorage;
   public readonly riskAssessmentStorage: RiskAssessmentStorage;
   public readonly portalDocumentStorage: PortalDocumentStorage;
@@ -229,6 +231,7 @@ class StorageBase {
     this.integrationStorage = new IntegrationStorage();
     this.pushNotificationStorage = new PushNotificationStorage();
     this.emailStorage = new EmailStorage();
+    this.smsTemplateStorage = new SmsTemplateStorage();
     
     // Initialize documents domain storage (Stage 9)
     this.documentStorage = new DocumentStorage();

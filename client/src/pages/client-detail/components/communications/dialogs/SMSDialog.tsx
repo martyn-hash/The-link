@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Send } from "lucide-react";
+import { Send, FileText, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Dialog,
   DialogContent,
@@ -21,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
 import { formatPersonName } from "../../../utils/formatters";
+import { SmsTemplatePicker } from "@/components/SmsTemplatePicker";
 import type { SMSDialogProps } from "../types";
 
 export function SMSDialog({ 
@@ -34,7 +36,11 @@ export function SMSDialog({
 }: SMSDialogProps) {
   const { toast } = useToast();
   const [smsPersonId, setSmsPersonId] = useState<string | undefined>(initialValues?.personId);
-  const [initialMessage] = useState(initialValues?.message || '');
+  const [message, setMessage] = useState(initialValues?.message || '');
+  const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
+  const [usedTemplateId, setUsedTemplateId] = useState<string | null>(null);
+  const [rawTemplateContent, setRawTemplateContent] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   
   // Filter to only show people with mobile numbers (check primaryPhone first, fallback to telephone)
   const peopleWithMobile = (clientPeople || []).filter((cp: any) => {
@@ -43,7 +49,7 @@ export function SMSDialog({
   });
 
   const sendSmsMutation = useMutation({
-    mutationFn: (data: { to: string; message: string; clientId: string; personId?: string; projectId?: string }) => 
+    mutationFn: (data: { to: string; message: string; clientId: string; personId?: string; projectId?: string; templateId?: string }) => 
       apiRequest('POST', '/api/sms/send', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/communications/client', clientId] });
@@ -64,13 +70,48 @@ export function SMSDialog({
 
   const handleClose = () => {
     setSmsPersonId(undefined);
+    setMessage('');
+    setUsedTemplateId(null);
+    setRawTemplateContent(null);
     onClose();
   };
 
+  const getRecipientFirstName = (personId?: string): string | undefined => {
+    const idToCheck = personId ?? smsPersonId;
+    const selected = (clientPeople || []).find((cp: any) => cp.person.id === idToCheck);
+    if (selected?.person?.fullName) {
+      const names = selected.person.fullName.split(' ');
+      return names[0];
+    }
+    return undefined;
+  };
+
+  const applyVariableSubstitution = (content: string, firstName?: string): string => {
+    if (firstName) {
+      return content.replace(/\{firstName\}/g, firstName).replace(/\[First Name\]/g, firstName);
+    }
+    return content.replace(/\{firstName\}/g, '[First Name]');
+  };
+
+  const handleTemplateSelect = (content: string, templateId: string) => {
+    setRawTemplateContent(content);
+    setUsedTemplateId(templateId);
+    const firstName = getRecipientFirstName();
+    setMessage(applyVariableSubstitution(content, firstName));
+  };
+
+  const handlePersonChange = (newPersonId: string) => {
+    setSmsPersonId(newPersonId);
+    if (rawTemplateContent) {
+      const firstName = getRecipientFirstName(newPersonId);
+      setMessage(applyVariableSubstitution(rawTemplateContent, firstName));
+    }
+  };
+
+  const hasUnreplacedVariables = message.includes('[First Name]');
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const message = formData.get('message') as string;
 
     if (!smsPersonId) {
       showFriendlyError({ error: 'Please select a person to send the SMS to.' });
@@ -94,6 +135,7 @@ export function SMSDialog({
       clientId,
       personId: smsPersonId,
       projectId,
+      ...(usedTemplateId && { templateId: usedTemplateId }),
     });
   };
 
@@ -114,7 +156,7 @@ export function SMSDialog({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">Contact Person <span className="text-destructive">*</span></label>
-            <Select value={smsPersonId} onValueChange={(value) => setSmsPersonId(value)}>
+            <Select value={smsPersonId} onValueChange={handlePersonChange}>
               <SelectTrigger data-testid="select-sms-person">
                 <SelectValue placeholder="Select person" />
               </SelectTrigger>
@@ -134,17 +176,42 @@ export function SMSDialog({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Message <span className="text-destructive">*</span></label>
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">Message <span className="text-destructive">*</span></label>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsTemplatePickerOpen(true)}
+                data-testid="button-add-from-template"
+              >
+                <FileText className="h-4 w-4 mr-1" />
+                Add from template
+              </Button>
+            </div>
             <Textarea
+              ref={textareaRef}
               name="message"
               placeholder="Enter your SMS message..."
               className="min-h-[100px]"
               required
-              defaultValue={initialMessage}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
               data-testid="textarea-sms-message"
             />
-            <p className="text-xs text-muted-foreground">Maximum 160 characters for a single SMS</p>
+            <p className="text-xs text-muted-foreground">
+              {message.length} / 160 characters {message.length > 160 ? `(${Math.ceil(message.length / 160)} SMS)` : '(1 SMS)'}
+            </p>
           </div>
+
+          {hasUnreplacedVariables && (
+            <Alert variant="default" data-testid="alert-unreplaced-variables">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Message contains "[First Name]" placeholder. Select a recipient above to automatically fill in their name, or edit the message manually.
+              </AlertDescription>
+            </Alert>
+          )}
 
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={handleClose}>
@@ -156,6 +223,13 @@ export function SMSDialog({
           </div>
         </form>
       </DialogContent>
+
+      <SmsTemplatePicker
+        isOpen={isTemplatePickerOpen}
+        onClose={() => setIsTemplatePickerOpen(false)}
+        onSelect={handleTemplateSelect}
+        recipientFirstName={getRecipientFirstName()}
+      />
     </Dialog>
   );
 }

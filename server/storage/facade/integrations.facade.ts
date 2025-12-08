@@ -1,9 +1,10 @@
-import { IntegrationStorage, PushNotificationStorage, EmailStorage } from '../integrations/index.js';
+import { IntegrationStorage, PushNotificationStorage, EmailStorage, SmsTemplateStorage } from '../integrations/index.js';
 
 export interface IntegrationsFacadeDeps {
   integrationStorage: IntegrationStorage;
   pushNotificationStorage: PushNotificationStorage;
   emailStorage: EmailStorage;
+  smsTemplateStorage: SmsTemplateStorage;
 }
 
 type Constructor<T = {}> = new (...args: any[]) => T;
@@ -300,6 +301,34 @@ export function applyIntegrationsFacade<TBase extends Constructor<IntegrationsFa
 
     async checkEmailMessageAttachmentExists(internetMessageId: string, attachmentId: string) {
       return this.emailStorage.checkEmailMessageAttachmentExists(internetMessageId, attachmentId);
+    }
+
+    // ============================================================================
+    // SMS TEMPLATES - SmsTemplateStorage (6 methods)
+    // ============================================================================
+
+    async getAllSmsTemplates() {
+      return this.smsTemplateStorage.getAllSmsTemplates();
+    }
+
+    async getActiveSmsTemplates() {
+      return this.smsTemplateStorage.getActiveSmsTemplates();
+    }
+
+    async getSmsTemplateById(id: string) {
+      return this.smsTemplateStorage.getSmsTemplateById(id);
+    }
+
+    async createSmsTemplate(template: any) {
+      return this.smsTemplateStorage.createSmsTemplate(template);
+    }
+
+    async updateSmsTemplate(id: string, template: any) {
+      return this.smsTemplateStorage.updateSmsTemplate(id, template);
+    }
+
+    async deleteSmsTemplate(id: string) {
+      return this.smsTemplateStorage.deleteSmsTemplate(id);
     }
   };
 }

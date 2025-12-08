@@ -57,6 +57,10 @@ export type UpdateScheduledNotification = z.infer<typeof updateScheduledNotifica
 export type NotificationHistory = typeof notificationHistory.$inferSelect;
 export type InsertNotificationHistory = z.infer<typeof insertNotificationHistorySchema>;
 
+export type SmsTemplate = typeof smsTemplates.$inferSelect;
+export type InsertSmsTemplate = z.infer<typeof insertSmsTemplateSchema>;
+export type UpdateSmsTemplate = z.infer<typeof updateSmsTemplateSchema>;
+
 // Preview candidate types
 export type PreviewCandidateRecipient = z.infer<typeof previewCandidateRecipientSchema>;
 export type PreviewCandidate = z.infer<typeof previewCandidateSchema>;

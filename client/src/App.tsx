@@ -57,6 +57,7 @@ const ClientsImport = lazy(() => import("@/pages/clients-import"));
 const PeopleImport = lazy(() => import("@/pages/people-import"));
 const PushDiagnostics = lazy(() => import("@/pages/push-diagnostics"));
 const PushNotificationTemplates = lazy(() => import("@/pages/push-notification-templates"));
+const SmsTemplates = lazy(() => import("@/pages/sms-templates"));
 const ScheduledNotifications = lazy(() => import("@/pages/scheduled-notifications"));
 const ActivityLogs = lazy(() => import("@/pages/activity-logs"));
 const UserActivityTracking = lazy(() => import("@/pages/user-activity-tracking"));
@@ -221,6 +222,7 @@ function Router() {
         <Route path="/admin/import" component={DataImport} />
         <Route path="/admin/push-templates" component={PushNotificationTemplates} />
         <Route path="/push-notification-templates" component={PushNotificationTemplates} />
+        <Route path="/admin/sms-templates" component={SmsTemplates} />
         <Route path="/data-import" component={DataImport} />
         <Route path="/import" component={Import} />
         <Route path="/excel-import" component={ExcelImport} />

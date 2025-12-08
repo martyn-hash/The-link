@@ -21,7 +21,7 @@ import {
   requireAdmin,
   userHasClientAccess,
 } from "./routeHelpers";
-import { insertUserIntegrationSchema } from "@shared/schema";
+import { insertUserIntegrationSchema, insertSmsTemplateSchema, updateSmsTemplateSchema } from "@shared/schema";
 import { sendTaskAssignmentEmail } from "../emailService";
 import {
   isApplicationGraphConfigured,
@@ -870,6 +870,106 @@ export function registerIntegrationRoutes(
     } catch (error) {
       console.error("Error deleting notification template:", error);
       res.status(500).json({ message: "Failed to delete notification template" });
+    }
+  });
+
+  // ==================================================
+  // SMS TEMPLATE API ROUTES
+  // ==================================================
+
+  // GET /api/sms/templates - Get all SMS templates (admin) or active templates (regular users)
+  app.get("/api/sms/templates", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const user = req.user;
+      // Admin users get all templates, regular users get only active templates
+      if (user?.isAdmin) {
+        const templates = await storage.getAllSmsTemplates();
+        res.json(templates);
+      } else {
+        const templates = await storage.getActiveSmsTemplates();
+        res.json(templates);
+      }
+    } catch (error) {
+      console.error("Error fetching SMS templates:", error);
+      res.status(500).json({ message: "Failed to fetch SMS templates" });
+    }
+  });
+
+  // GET /api/sms/templates/:id - Get a single SMS template
+  app.get("/api/sms/templates/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      const template = await storage.getSmsTemplateById(id);
+      if (!template) {
+        return res.status(404).json({ message: "SMS template not found" });
+      }
+      res.json(template);
+    } catch (error) {
+      console.error("Error fetching SMS template:", error);
+      res.status(500).json({ message: "Failed to fetch SMS template" });
+    }
+  });
+
+  // POST /api/sms/templates - Create a new SMS template (admin only)
+  app.post("/api/sms/templates", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const validationResult = insertSmsTemplateSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid template data",
+          errors: validationResult.error.issues 
+        });
+      }
+
+      const template = await storage.createSmsTemplate(validationResult.data);
+      res.status(201).json(template);
+    } catch (error) {
+      console.error("Error creating SMS template:", error);
+      res.status(500).json({ message: "Failed to create SMS template" });
+    }
+  });
+
+  // PATCH /api/sms/templates/:id - Update an SMS template (admin only)
+  app.patch("/api/sms/templates/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      
+      const validationResult = updateSmsTemplateSchema.safeParse(req.body);
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid template data",
+          errors: validationResult.error.issues 
+        });
+      }
+
+      const existing = await storage.getSmsTemplateById(id);
+      if (!existing) {
+        return res.status(404).json({ message: "SMS template not found" });
+      }
+
+      const template = await storage.updateSmsTemplate(id, validationResult.data);
+      res.json(template);
+    } catch (error) {
+      console.error("Error updating SMS template:", error);
+      res.status(500).json({ message: "Failed to update SMS template" });
+    }
+  });
+
+  // DELETE /api/sms/templates/:id - Delete an SMS template (admin only)
+  app.delete("/api/sms/templates/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+
+      const existing = await storage.getSmsTemplateById(id);
+      if (!existing) {
+        return res.status(404).json({ message: "SMS template not found" });
+      }
+
+      await storage.deleteSmsTemplate(id);
+      res.json({ message: "SMS template deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting SMS template:", error);
+      res.status(500).json({ message: "Failed to delete SMS template" });
     }
   });
 

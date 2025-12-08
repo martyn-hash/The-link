@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Settings, Settings2, ChevronDown, FileCheck, Tags, ClipboardList, FolderTree } from "lucide-react";
+import { Settings, Settings2, ChevronDown, FileCheck, Tags, ClipboardList, FolderTree, MessageSquare } from "lucide-react";
 import type { User } from "@shared/schema";
 
 interface AdminDropdownProps {
@@ -56,6 +56,11 @@ export default function AdminDropdown({ user }: AdminDropdownProps) {
       label: "Client Request Templates",
       href: "/request-templates",
       icon: ClipboardList,
+    },
+    {
+      label: "SMS Templates",
+      href: "/admin/sms-templates",
+      icon: MessageSquare,
     },
   ];
 

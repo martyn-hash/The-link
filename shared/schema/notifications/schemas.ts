@@ -58,13 +58,25 @@ export const insertNotificationHistorySchema = createInsertSchema(notificationHi
   createdAt: true,
 });
 
-export const insertSmsTemplateSchema = createInsertSchema(smsTemplates).omit({
+export const insertSmsTemplateSchema = createInsertSchema(smsTemplates, {
+  name: z.string().min(1, "Name is required").max(100, "Name must be 100 characters or less"),
+  content: z.string().min(1, "Content is required").max(1600, "Content must be 1600 characters or less"),
+  isActive: z.boolean().default(true),
+}).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
 
-export const updateSmsTemplateSchema = insertSmsTemplateSchema.partial();
+export const updateSmsTemplateSchema = createInsertSchema(smsTemplates, {
+  name: z.string().min(1, "Name is required").max(100, "Name must be 100 characters or less").optional(),
+  content: z.string().min(1, "Content is required").max(1600, "Content must be 1600 characters or less").optional(),
+  isActive: z.boolean().optional(),
+}).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).partial();
 
 // Preview candidate schemas for notification previews
 export const previewCandidateRecipientSchema = z.object({
