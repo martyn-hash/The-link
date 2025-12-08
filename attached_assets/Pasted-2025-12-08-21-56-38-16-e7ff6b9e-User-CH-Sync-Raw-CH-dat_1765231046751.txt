@@ -1,0 +1,172 @@
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+[CH Sync] Raw CH data for Pub Marketing Circle Ltd (08300230): {
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+newValue: '{"formatted":"The Fox At Peasemore Hill Green Road, Peasemore, Newbury, RG20 7JN","components":{"registeredAddress1":"The Fox At Peasemore Hill Green Road","registeredAddress2":"Peasemore","registeredAddress3":"Newbury","registeredPostcode":"RG20 7JN","registeredCountry":null}}'
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"address_line_1": "The Fox At Peasemore Hill Green Road",
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+]
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"next_due": "2025-12-04",
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+},
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+nextAccountsDue: 2025-12-31T00:00:00.000Z,
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+}
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"confirmation_statement": {
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"next_made_up_to": "2025-11-20",
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"locality": "Newbury",
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"accounts": {
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+}
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"period_end_on": "2024-03-31",
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"overdue": true
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"period_start_on": "2024-04-01"
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"overdue": false,
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"due_on": "2025-12-31",
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"made_up_to": "2024-03-31",
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"type": "total-exemption-full"
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"last_made_up_to": "2024-11-20",
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+fieldName: 'registeredOfficeAddress',
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"last_accounts": {
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"period_end_on": "2025-03-31",
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"month": "03"
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"accounting_reference_date": {
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+{
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"region": "Berkshire"
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+},
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+confirmationStatementNextDue: 2025-12-04T00:00:00.000Z,
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"next_accounts": {
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+},
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"period_start_on": "2023-04-01",
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+},
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+companyStatusDetail: null,
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+},
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+registeredAddress: 'The Fox At Peasemore Hill Green Road, Peasemore, Newbury, RG20 7JN'
+2025-12-08 21:56:38.16
+e7ff6b9e
+User
+"postal_code": "RG20 7JN",
+2025-12-08 21:56:38.34
+e7ff6b9e
+User
+[CH Sync] Completed in 693ms. Processed 1 clients, created 0 change requests, 0 errors
+2025-12-08 21:56:38.34
+e7ff6b9e
+User
+[CH Sync] Skipping duplicate request for Pub Marketing Circle Ltd.registeredOfficeAddress
+2025-12-08 21:56:38.86
+e7ff6b9e
+User
+9:56:38 PM [express] GET /api/clients 200 in 305ms :: [{"id":"7fc6afb3-1849-4881-aaba-35843f803744",…
+2025-12-08 21:56:38.86
+e7ff6b9e
+User
+9:56:38 PM [express] GET /api/clients 200 in 305ms :: [{"id":"7fc6afb3-1849-4881-aaba-35843f803744",…
+
+Collapse
+
+Wrap
