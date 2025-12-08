@@ -47,8 +47,24 @@ Improves perceived performance by preloading data for secondary views after the 
 
 Key files: `client/src/hooks/useBackgroundPrefetch.ts`, `client/src/hooks/projects-page/useProjectsPageState.ts`
 
+### RingCentral VoIP Integration (December 2025)
+Full VoIP phone system integration enabling staff to make and receive calls directly from the CRM with automatic call logging and AI-powered transcription.
+
+- **OAuth Authentication**: Per-user OAuth flow stores tokens in database, auto-refreshes before expiry
+- **WebRTC Calling**: SIP-based WebPhone with WebSocket signaling for real-time calls
+- **Call Logging**: Automatic creation of communication records with call metadata (direction, duration, session ID)
+- **Automatic Transcription**: Calls >5 seconds trigger background transcription via RingCentral AI API
+  - Status flow: `pending` → `requesting` → `processing` → `completed`/`failed`
+  - Short calls get `not_available` status immediately
+  - Uses polling approach (30s wait, then queries every 10s up to 5 minutes)
+- **UI Display**: ViewCommunicationDialog shows transcript status, summary, and expandable full transcript
+
+Key files: `client/src/components/ringcentral-phone.tsx`, `server/routes/integrations.ts`, `server/utils/userRingCentralClient.ts`, `server/transcription-service.ts`
+
+Required OAuth scopes: RingOut, ReadCallLog, ReadCallRecording, AI, VoIP, WebSocket
+
 ### System Design
-PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) handles object storage with secure signed URLs. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control; the client portal uses passwordless email verification. The system is multi-tenant and designed for modularity, with extensive database indexing. Key features include automated project management, advanced communication tools (push notifications, internal tasks with quick reminders, email threading via Microsoft Graph, multi-channel client notifications with AI assistance), UK eIDAS-compliant electronic signatures, comprehensive workflow and status management with Kanban views, and Bookkeeping Queries for managing transaction-related questions. It also includes an AI Audio Transcription service, client value notifications with AI-assisted drafting, Zapier integration via webhooks, and an enhanced data import system. A friendly error handling system replaces technical errors with user-friendly messages. A scheduled notifications calendar provides comprehensive management of automated notifications, with stage-aware suppression. A resilient project scheduling orchestrator ensures robustness against server restarts and outages.
+PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) handles object storage with secure signed URLs. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control; the client portal uses passwordless email verification. The system is multi-tenant and designed for modularity, with extensive database indexing. Key features include automated project management, advanced communication tools (push notifications, internal tasks with quick reminders, email threading via Microsoft Graph, multi-channel client notifications with AI assistance, RingCentral VoIP with automatic transcription), UK eIDAS-compliant electronic signatures, comprehensive workflow and status management with Kanban views, and Bookkeeping Queries for managing transaction-related questions. It also includes an AI Audio Transcription service, client value notifications with AI-assisted drafting, Zapier integration via webhooks, and an enhanced data import system. A friendly error handling system replaces technical errors with user-friendly messages. A scheduled notifications calendar provides comprehensive management of automated notifications, with stage-aware suppression. A resilient project scheduling orchestrator ensures robustness against server restarts and outages.
 
 ## External Dependencies
 
