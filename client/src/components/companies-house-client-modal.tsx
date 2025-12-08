@@ -53,11 +53,6 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -432,8 +427,6 @@ export function CompaniesHouseClientModal({
   const [individualTab, setIndividualTab] = useState("personal");
   const [nationalityOpen, setNationalityOpen] = useState(false);
   const [occupationOpen, setOccupationOpen] = useState(false);
-  const [showComplianceSection, setShowComplianceSection] = useState(false);
-  const [showSecondaryContacts, setShowSecondaryContacts] = useState(false);
 
   const isEditing = !!client;
 
@@ -481,8 +474,6 @@ export function CompaniesHouseClientModal({
       setIndividualTab("personal");
       setNationalityOpen(false);
       setOccupationOpen(false);
-      setShowComplianceSection(false);
-      setShowSecondaryContacts(false);
       searchForm.reset();
       individualForm.reset();
     }
@@ -850,7 +841,7 @@ export function CompaniesHouseClientModal({
             </TabsList>
 
             {/* Personal Tab */}
-            <TabsContent value="personal" className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
+            <TabsContent value="personal" className="space-y-4 min-h-[380px] max-h-[50vh] overflow-y-auto pr-2">
               <FormField
                 control={individualForm.control}
                 name="fullName"
@@ -1040,110 +1031,95 @@ export function CompaniesHouseClientModal({
                 />
               </div>
 
-              {/* Compliance Section */}
-              <Collapsible open={showComplianceSection} onOpenChange={setShowComplianceSection}>
-                <CollapsibleTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="flex items-center gap-2 w-full justify-between p-3 border rounded-lg hover:bg-muted/50"
-                    data-testid="button-toggle-compliance"
-                  >
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">Compliance Information</span>
-                    </div>
-                    {showComplianceSection ? (
-                      <ChevronUp className="h-4 w-4" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4" />
+              {/* Compliance Section - Always visible */}
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/30">
+                  <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium">Compliance Information</span>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={individualForm.control}
+                    name="niNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>NI Number</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="AB123456C"
+                            data-testid="input-ni-number"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
                     )}
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="space-y-4 pt-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={individualForm.control}
-                      name="niNumber"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>NI Number</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="AB123456C"
-                              data-testid="input-ni-number"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  />
 
-                    <FormField
-                      control={individualForm.control}
-                      name="personalUtrNumber"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Personal UTR Number</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              placeholder="1234567890"
-                              data-testid="input-personal-utr"
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+                  <FormField
+                    control={individualForm.control}
+                    name="personalUtrNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Personal UTR Number</FormLabel>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            placeholder="1234567890"
+                            data-testid="input-personal-utr"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={individualForm.control}
-                      name="photoIdVerified"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              data-testid="checkbox-photo-id-verified"
-                            />
-                          </FormControl>
-                          <div className="space-y-1 leading-none">
-                            <FormLabel>Photo ID Verified</FormLabel>
-                          </div>
-                        </FormItem>
-                      )}
-                    />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={individualForm.control}
+                    name="photoIdVerified"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            data-testid="checkbox-photo-id-verified"
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>Photo ID Verified</FormLabel>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
 
-                    <FormField
-                      control={individualForm.control}
-                      name="addressVerified"
-                      render={({ field }) => (
-                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value}
-                              onCheckedChange={field.onChange}
-                              data-testid="checkbox-address-verified"
-                            />
-                          </FormControl>
-                          <div className="space-y-1 leading-none">
-                            <FormLabel>Address Verified</FormLabel>
-                          </div>
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
+                  <FormField
+                    control={individualForm.control}
+                    name="addressVerified"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            data-testid="checkbox-address-verified"
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel>Address Verified</FormLabel>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
             </TabsContent>
 
             {/* Contact Tab */}
-            <TabsContent value="contact" className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
+            <TabsContent value="contact" className="space-y-4 min-h-[380px] max-h-[50vh] overflow-y-auto pr-2">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={individualForm.control}
@@ -1191,79 +1167,64 @@ export function CompaniesHouseClientModal({
                 />
               </div>
 
-              {/* Secondary Contacts */}
-              <Collapsible open={showSecondaryContacts} onOpenChange={setShowSecondaryContacts}>
-                <CollapsibleTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="flex items-center gap-2 w-full justify-between p-3 border rounded-lg hover:bg-muted/50"
-                    data-testid="button-toggle-secondary-contacts"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">Secondary Contact Details</span>
-                    </div>
-                    {showSecondaryContacts ? (
-                      <ChevronUp className="h-4 w-4" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4" />
+              {/* Secondary Contacts - Always visible */}
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center gap-2 p-3 border rounded-lg bg-muted/30">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium">Secondary Contact Details</span>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <FormField
+                    control={individualForm.control}
+                    name="email2"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Secondary Email</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                            <Input
+                              {...field}
+                              type="email"
+                              placeholder="secondary@example.com"
+                              className="pl-10"
+                              data-testid="input-email-2"
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
                     )}
-                  </Button>
-                </CollapsibleTrigger>
-                <CollapsibleContent className="space-y-4 pt-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={individualForm.control}
-                      name="email2"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Secondary Email</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                              <Input
-                                {...field}
-                                type="email"
-                                placeholder="secondary@example.com"
-                                className="pl-10"
-                                data-testid="input-email-2"
-                              />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
+                  />
 
-                    <FormField
-                      control={individualForm.control}
-                      name="telephone2"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Secondary Phone</FormLabel>
-                          <FormControl>
-                            <div className="relative">
-                              <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                              <Input
-                                {...field}
-                                placeholder="07XXX XXXXXX"
-                                className="pl-10"
-                                data-testid="input-telephone-2"
-                              />
-                            </div>
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
+                  <FormField
+                    control={individualForm.control}
+                    name="telephone2"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Secondary Phone</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                            <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                            <Input
+                              {...field}
+                              placeholder="07XXX XXXXXX"
+                              className="pl-10"
+                              data-testid="input-telephone-2"
+                            />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
             </TabsContent>
 
             {/* Address Tab */}
-            <TabsContent value="address" className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
+            <TabsContent value="address" className="space-y-4 min-h-[380px] max-h-[50vh] overflow-y-auto pr-2">
               <AddressLookup
                 onAddressSelect={handleAddressSelect}
                 value={{
