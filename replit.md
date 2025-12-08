@@ -110,6 +110,20 @@ Enables pasting and dragging images directly into email composition areas across
 
 Key files: `client/src/components/TiptapEditor.tsx`, `client/src/lib/tiptapSetup.ts`, `server/routes/objects.ts`, `server/emailService.ts`
 
+### SMS Templates Feature (December 2025)
+Reusable SMS message templates with variable support for personalization. Admins can create templates; staff can select them when composing SMS messages.
+
+- **Template Management**: Admin-only CRUD at `/sms-templates` with name, content, and active status
+- **Variable Support**: Templates use `{firstName}` placeholder for automatic personalization
+- **Template Picker**: Modal in SMSDialog lets staff browse and select templates
+- **Auto-Substitution**: When recipient is selected, `{firstName}` is replaced with actual name
+- **Recipient Switching**: Changing recipients after applying template re-applies substitution with new name
+- **Placeholder Alert**: Warning shown when message contains `[First Name]` placeholder until recipient selected
+- **Audit Trail**: Template ID captured when sending SMS for tracking which templates are used
+- **Server Filtering**: Non-admin users only see active templates
+
+Key files: `client/src/pages/sms-templates.tsx`, `client/src/components/SmsTemplatePicker.tsx`, `client/src/pages/client-detail/components/communications/dialogs/SMSDialog.tsx`, `server/routes/integrations.ts`, `server/storage/integrations/smsTemplateStorage.ts`, `shared/schema/notifications/tables.ts`
+
 ### System Design
 PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) handles object storage with secure signed URLs. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control; the client portal uses passwordless email verification. The system is multi-tenant and designed for modularity, with extensive database indexing. Key features include automated project management, advanced communication tools (push notifications, internal tasks with quick reminders, email threading via Microsoft Graph, multi-channel client notifications with AI assistance, RingCentral VoIP with automatic transcription), UK eIDAS-compliant electronic signatures, comprehensive workflow and status management with Kanban views, and Bookkeeping Queries for managing transaction-related questions. It also includes an AI Audio Transcription service, client value notifications with AI-assisted drafting, Zapier integration via webhooks, and an enhanced data import system. A friendly error handling system replaces technical errors with user-friendly messages. A scheduled notifications calendar provides comprehensive management of automated notifications, with stage-aware suppression. A resilient project scheduling orchestrator ensures robustness against server restarts and outages.
 
