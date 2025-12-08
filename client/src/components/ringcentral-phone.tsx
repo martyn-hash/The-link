@@ -62,6 +62,9 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
     phoneNumber: string;
     sessionId: string;
   } | null>(null);
+  
+  // Track if we've already logged this call (prevents duplicate logs from multiple events)
+  const callLoggedRef = useRef<boolean>(false);
 
   // Warn if mounted without clientId - calls won't be logged without it
   useEffect(() => {
@@ -273,6 +276,91 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
     callStartTimeRef.current = null;
   };
 
+  // Unified call logging function - handles logging from any termination event
+  const logCallToServer = async (eventName: string) => {
+    // Prevent duplicate logging from multiple events
+    if (callLoggedRef.current) {
+      console.log(`[RingCentral] 🔄 Call already logged, skipping (triggered by ${eventName})`);
+      return;
+    }
+    
+    console.log(`[RingCentral] 📞 Call ended via ${eventName} event - attempting to log...`);
+    
+    // Get call context from ref
+    const ctx = callContextRef.current;
+    console.log('[RingCentral] 📋 Call context from ref:', ctx);
+    
+    stopCallTimer();
+    
+    // Get the final duration from state
+    let finalDuration = 0;
+    setCallState(prev => {
+      finalDuration = prev.duration;
+      return { ...prev, status: 'disconnected' };
+    });
+    
+    // Use context from ref (should always be available if makeCall was called properly)
+    const logClientId = ctx?.clientId || clientId;
+    const logPersonId = ctx?.personId || personId;
+    const logPhoneNumber = ctx?.phoneNumber;
+    const logSessionId = ctx?.sessionId;
+    
+    console.log('[RingCentral] 📋 Logging values:', { logClientId, logSessionId, logPhoneNumber, finalDuration });
+    
+    // Log the call
+    if (logClientId && logSessionId) {
+      callLoggedRef.current = true; // Mark as logged to prevent duplicates
+      
+      console.log('[RingCentral] ✅ Logging call to API...');
+      try {
+        const response = await apiRequest('POST', '/api/ringcentral/log-call', {
+          clientId: logClientId,
+          personId: logPersonId || undefined,
+          phoneNumber: logPhoneNumber,
+          direction: 'outbound',
+          duration: finalDuration,
+          sessionId: logSessionId,
+        });
+        
+        console.log('[RingCentral] ✅ Call logged successfully:', response);
+        toast({
+          title: 'Call Logged',
+          description: 'Call has been logged to communications',
+        });
+        
+        if (onCallComplete) {
+          onCallComplete(finalDuration, logPhoneNumber || '');
+        }
+      } catch (error: any) {
+        console.error('[RingCentral] ❌ Error logging call:', error);
+        toast({
+          title: 'Call Logging Failed',
+          description: 'The call completed but failed to save',
+          variant: 'destructive',
+        });
+      }
+    } else {
+      console.warn('[RingCentral] ⚠️ Cannot log call - missing data:', {
+        hasClientId: !!logClientId,
+        hasSessionId: !!logSessionId,
+        context: ctx
+      });
+      toast({
+        title: 'Call Not Logged',
+        description: 'Missing client or session data',
+        variant: 'destructive',
+      });
+    }
+    
+    // Reset state after a delay
+    setTimeout(() => {
+      setCallState(initialCallState);
+      sessionRef.current = null;
+      callContextRef.current = null;
+      callLoggedRef.current = false; // Reset for next call
+    }, 2000);
+  };
+
   // Make outbound call
   const makeCall = async (number: string) => {
     console.log('[RingCentral] makeCall called with number:', number);
@@ -378,87 +466,44 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
         setCallState(prev => ({ ...prev, status: 'ringing' }));
       });
 
-      session.on('terminated', async () => {
-        console.log('[RingCentral] ❌ Outbound call TERMINATED');
-        
-        // Use the ref to get call context (avoids stale closure issues)
-        const ctx = callContextRef.current;
-        console.log('[RingCentral] 📋 Call context from ref:', ctx);
-        console.log('[RingCentral] 📋 Closure values - clientId:', clientId, 'sessionId:', sessionId);
-        
-        stopCallTimer();
-        
-        let finalDuration = 0;
-        setCallState(prev => {
-          finalDuration = prev.duration;
-          return { ...prev, status: 'disconnected' };
-        });
+      // Reset the logged flag for this new call
+      callLoggedRef.current = false;
 
-        // Use context from ref (primary) or fall back to closure values
-        const logClientId = ctx?.clientId || clientId;
-        const logPersonId = ctx?.personId || personId;
-        const logPhoneNumber = ctx?.phoneNumber || number;
-        const logSessionId = ctx?.sessionId || sessionId;
+      // Listen for ALL possible session termination events
+      // Different WebPhone versions may emit different events
+      
+      session.on('terminated', () => {
+        console.log('[RingCentral] 🔴 EVENT: terminated');
+        logCallToServer('terminated');
+      });
 
-        // Log the outbound call
-        if (logClientId && logSessionId) {
-          console.log('[RingCentral] ✅ Logging call to API with duration:', finalDuration);
-          console.log('[RingCentral] ✅ Using clientId:', logClientId, 'sessionId:', logSessionId);
-          try {
-            const response = await apiRequest('POST', '/api/ringcentral/log-call', {
-              clientId: logClientId,
-              personId: logPersonId || undefined,
-              phoneNumber: logPhoneNumber,
-              direction: 'outbound',
-              duration: finalDuration,
-              sessionId: logSessionId,
-            });
+      session.on('ended', () => {
+        console.log('[RingCentral] 🔴 EVENT: ended');
+        logCallToServer('ended');
+      });
 
-            console.log('[RingCentral] ✅ Call logged successfully to communications:', response);
-            toast({
-              title: 'Call Logged',
-              description: 'Call has been logged to communications',
-            });
+      session.on('bye', () => {
+        console.log('[RingCentral] 🔴 EVENT: bye');
+        logCallToServer('bye');
+      });
 
-            if (onCallComplete) {
-              onCallComplete(finalDuration, logPhoneNumber);
-            }
-          } catch (error: any) {
-            console.error('[RingCentral] ❌ Error logging outbound call:', error);
-            console.error('[RingCentral] ❌ Error details:', error?.message, error?.response);
-            toast({
-              title: 'Call Logging Failed',
-              description: 'The call completed but failed to save to communications',
-              variant: 'destructive',
-            });
-          }
-        } else {
-          console.warn('[RingCentral] ⚠️ Call NOT logged - missing required data:', { 
-            hasClientId: !!logClientId, 
-            logClientId,
-            hasSessionId: !!logSessionId,
-            logSessionId,
-            refContext: ctx,
-            closureClientId: clientId,
-            closureSessionId: sessionId
-          });
-          toast({
-            title: 'Call Not Logged',
-            description: logClientId ? 'Missing session data' : 'No client context - call was not saved',
-            variant: 'destructive',
-          });
-        }
+      session.on('disposed', () => {
+        console.log('[RingCentral] 🔴 EVENT: disposed');
+        logCallToServer('disposed');
+      });
 
-        // Reset state and clear call context
-        setTimeout(() => {
-          setCallState(initialCallState);
-          sessionRef.current = null;
-          callContextRef.current = null;
-        }, 2000);
+      session.on('cancel', () => {
+        console.log('[RingCentral] 🔴 EVENT: cancel');
+        logCallToServer('cancel');
+      });
+
+      session.on('rejected', () => {
+        console.log('[RingCentral] 🔴 EVENT: rejected');
+        logCallToServer('rejected');
       });
 
       session.on('failed', (error: any) => {
-        console.error('[RingCentral] ⚠️ Outbound call FAILED:', error);
+        console.error('[RingCentral] ⚠️ EVENT: failed', error);
         console.error('[RingCentral] Failure details:', {
           message: error?.message,
           statusCode: error?.statusCode,
@@ -467,9 +512,24 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
         stopCallTimer();
         setCallState(prev => ({ ...prev, status: 'disconnected' }));
         showFriendlyError({ error: error?.message || error?.reasonPhrase || 'Failed to connect call' });
+        // Also try to log on failure in case the call connected briefly
+        logCallToServer('failed');
       });
 
-      console.log('[RingCentral] Event listeners attached, waiting for call to connect...');
+      // Also log all session events for debugging
+      const knownEvents = ['accepted', 'progress', 'terminated', 'ended', 'bye', 'disposed', 'cancel', 'rejected', 'failed'];
+      const logUnknownEvent = (eventName: string) => {
+        console.log(`[RingCentral] 🔵 Unknown session event: ${eventName}`);
+      };
+      
+      // Try to catch any events we might have missed
+      if (session.on) {
+        const originalOn = session.on.bind(session);
+        // Don't override, just log that we've set up listeners
+        console.log('[RingCentral] ✅ Set up listeners for events:', knownEvents.join(', '));
+      }
+
+      console.log('[RingCentral] Event listeners attached for all termination events, waiting for call to connect...');
 
       } catch (callError: any) {
         // Handle errors from the call() promise itself
