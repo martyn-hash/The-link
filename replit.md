@@ -97,18 +97,22 @@ PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, sof
 Read-only view of all inbound/outbound emails filtered by a person's email addresses. Uses existing ingested emails from MS Graph and allows staff to see full email history for any contact.
 
 - **Multi-Email Support**: Queries against person's `email`, `primaryEmail`, and `email2` fields
-- **Search Capability**: Filter emails by subject/body keywords
-- **AI Reply Assistant**: Token-efficient OpenAI integration for drafting email replies
-- **Live Refresh**: Optional on-demand Graph API query to pull latest emails across tenant mailboxes
+- **Search Capability**: Filter emails by subject/body keywords with ILIKE matching
+- **AI Reply Assistant**: Token-efficient OpenAI gpt-4o-mini integration for drafting email replies with tone selection (professional/friendly/formal/concise)
+- **Email History Tab**: Integrated into PersonTabbedView as 5th tab alongside Basic Info, Contact Info, Personal Services, Related Companies
 
 Key files:
-- `server/routes/emails.ts` - Person email API endpoints
-- `client/src/components/PersonEmailHistory.tsx` - Frontend component
+- `server/routes/emails.ts` - Person email API endpoints and AI reply assistant
+- `client/src/components/PersonEmailHistory.tsx` - Email history list component
+- `client/src/components/EmailThreadViewer.tsx` - Thread viewer with AI Reply Assistant UI
+- `client/src/pages/client-detail/components/people/PersonTabbedView.tsx` - Tab integration
 - `server/storage/integrations/emailStorage.ts` - Email query methods
 
 API Endpoints:
-- `GET /api/emails/person/:personId` - Get emails involving person's email addresses
-- `POST /api/emails/ai-reply-assist` - AI-powered reply drafting
+- `GET /api/emails/person/:personId` - Get emails involving person's email addresses (supports ?search= query)
+- `GET /api/emails/person/:personId/threads` - Get email threads for person
+- `POST /api/emails/ai-reply` - AI-powered reply drafting with tone selection
+- `POST /api/emails/ai-summarize` - AI-powered email thread summarization
 
 ## Testing Credentials
 - Login via root page, passwords tab: `jamsplan1@gmail.com` | `admin123`
