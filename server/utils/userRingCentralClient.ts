@@ -263,6 +263,59 @@ export async function getTranscriptionResult(userId: string, jobId: string) {
   }
 }
 
+// Request text summarization from RingCentral AI API
+export async function requestTextSummarization(userId: string, utterances: Array<{ start: number; end: number; speakerId: string; text: string }>) {
+  try {
+    const rcsdk = await getUserRingCentralSDK(userId);
+    const platform = rcsdk.platform();
+
+    const body = {
+      utterances,
+      summaryType: 'All' // Get both abstractive and extractive summaries
+    };
+
+    const response = await platform.post('/ai/text/v1/async/summarize', body);
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error('Error requesting text summarization:', error);
+    throw error;
+  }
+}
+
+// Get summarization result
+export async function getSummarizationResult(userId: string, jobId: string) {
+  try {
+    const rcsdk = await getUserRingCentralSDK(userId);
+    const platform = rcsdk.platform();
+
+    const response = await platform.get(`/ai/text/v1/async/summarize/${jobId}`);
+    return await response.json();
+  } catch (error) {
+    console.error('Error getting summarization result:', error);
+    throw error;
+  }
+}
+
+// Try to get RingSense insights (requires RingSense license)
+export async function getRingSenseInsights(userId: string, recordingId: string) {
+  try {
+    const rcsdk = await getUserRingCentralSDK(userId);
+    const platform = rcsdk.platform();
+
+    const response = await platform.get(`/ai/ringsense/v1/public/accounts/~/domains/pbx/records/${recordingId}/insights`);
+    return await response.json();
+  } catch (error: any) {
+    // RingSense may not be available for all accounts
+    if (error?.response?.status === 403 || error?.response?.status === 404) {
+      console.log('[RingCentral] RingSense not available for this account');
+      return null;
+    }
+    console.error('Error getting RingSense insights:', error);
+    return null;
+  }
+}
+
 // Get recent call log entries for a user
 export async function getRecentCallLogs(userId: string, phoneNumber?: string, dateFrom?: Date) {
   try {

@@ -57,6 +57,9 @@ Full VoIP phone system integration enabling staff to make and receive calls dire
   - Status flow: `pending` → `requesting` → `processing` → `completed`/`failed`
   - Short calls get `not_available` status immediately
   - Uses polling approach (30s wait, then queries every 10s up to 5 minutes)
+- **AI Summaries**: Two-tier approach for generating call summaries:
+  1. **RingSense API** (if available): Provides transcript + AI summary + action items in one call
+  2. **Fallback**: Speech-to-Text API + Text Summarization API (abstractive/extractive summaries)
 - **UI Display**: ViewCommunicationDialog shows transcript status, summary, and expandable full transcript
 
 Key files: `client/src/components/ringcentral-phone.tsx`, `server/routes/integrations.ts`, `server/utils/userRingCentralClient.ts`, `server/transcription-service.ts`
