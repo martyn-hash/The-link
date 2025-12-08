@@ -92,3 +92,25 @@ PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, sof
 ### Frontend Libraries
 -   **UI Components**: `@radix-ui/*`, `@dnd-kit/*`, `@tiptap/*`, `react-hook-form` with `zod`, `sonner`.
 -   **Utilities**: `date-fns`, `clsx`, `tailwind-merge`, `@getaddress/autocomplete`.
+
+### Person Email History Feature (December 2025)
+Read-only view of all inbound/outbound emails filtered by a person's email addresses. Uses existing ingested emails from MS Graph and allows staff to see full email history for any contact.
+
+- **Multi-Email Support**: Queries against person's `email`, `primaryEmail`, and `email2` fields
+- **Search Capability**: Filter emails by subject/body keywords
+- **AI Reply Assistant**: Token-efficient OpenAI integration for drafting email replies
+- **Live Refresh**: Optional on-demand Graph API query to pull latest emails across tenant mailboxes
+
+Key files:
+- `server/routes/emails.ts` - Person email API endpoints
+- `client/src/components/PersonEmailHistory.tsx` - Frontend component
+- `server/storage/integrations/emailStorage.ts` - Email query methods
+
+API Endpoints:
+- `GET /api/emails/person/:personId` - Get emails involving person's email addresses
+- `POST /api/emails/ai-reply-assist` - AI-powered reply drafting
+
+## Testing Credentials
+- Login via root page, passwords tab: `jamsplan1@gmail.com` | `admin123`
+- Dev system connected to: `martyn@growth.accountants` (real work account)
+- Example person: James Galbraith with email `sergei@growth.accountants`

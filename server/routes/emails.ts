@@ -1011,4 +1011,370 @@ export function registerEmailRoutes(
       });
     }
   });
+
+  /**
+   * GET /api/emails/person/:personId
+   * Get all emails involving a person's email addresses (from, to, cc)
+   * Queries against all email addresses stored for the person (email, primaryEmail, email2)
+   * 
+   * Query params:
+   * - search: string (optional) - keyword search in subject/body
+   * - limit: number (default 50)
+   * - offset: number (default 0)
+   */
+  app.get('/api/emails/person/:personId', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { personId } = req.params;
+      const search = req.query.search as string | undefined;
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+      const offset = parseInt(req.query.offset as string) || 0;
+      
+      // Get the person to fetch their email addresses
+      const person = await storage.getPersonById(personId);
+      if (!person) {
+        return res.status(404).json({ message: "Person not found" });
+      }
+      
+      // Collect all email addresses for this person
+      const emailAddresses: string[] = [];
+      if (person.email) emailAddresses.push(person.email);
+      if (person.primaryEmail) emailAddresses.push(person.primaryEmail);
+      if ((person as any).email2) emailAddresses.push((person as any).email2);
+      
+      // Remove duplicates
+      const uniqueEmails = Array.from(new Set(emailAddresses.filter(Boolean)));
+      
+      if (uniqueEmails.length === 0) {
+        return res.json({
+          person: {
+            id: person.id,
+            fullName: person.fullName,
+            emails: []
+          },
+          messages: [],
+          total: 0,
+          limit,
+          offset
+        });
+      }
+      
+      // Query emails by these email addresses
+      const { messages, total } = await storage.getEmailMessagesByEmailAddresses(
+        uniqueEmails,
+        { search, limit, offset }
+      );
+      
+      // Get attachments for each message
+      const messagesWithAttachments = await Promise.all(messages.map(async (msg) => {
+        const attachments = await storage.getAttachmentsByMessageId(msg.internetMessageId);
+        return {
+          ...msg,
+          attachments: attachments.map(att => ({
+            id: att.id,
+            filename: att.fileName,
+            contentType: att.contentType,
+            size: att.fileSize
+          }))
+        };
+      }));
+      
+      res.json({
+        person: {
+          id: person.id,
+          fullName: person.fullName,
+          emails: uniqueEmails
+        },
+        messages: messagesWithAttachments,
+        total,
+        limit,
+        offset
+      });
+      
+    } catch (error: any) {
+      console.error('[Person Emails] Error fetching person emails:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch person emails",
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * GET /api/emails/person/:personId/threads
+   * Get all email threads involving a person's email addresses
+   * 
+   * Query params:
+   * - search: string (optional) - keyword search in subject/preview
+   * - limit: number (default 50)
+   * - offset: number (default 0)
+   */
+  app.get('/api/emails/person/:personId/threads', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { personId } = req.params;
+      const search = req.query.search as string | undefined;
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+      const offset = parseInt(req.query.offset as string) || 0;
+      
+      // Get the person to fetch their email addresses
+      const person = await storage.getPersonById(personId);
+      if (!person) {
+        return res.status(404).json({ message: "Person not found" });
+      }
+      
+      // Collect all email addresses for this person
+      const emailAddresses: string[] = [];
+      if (person.email) emailAddresses.push(person.email);
+      if (person.primaryEmail) emailAddresses.push(person.primaryEmail);
+      if ((person as any).email2) emailAddresses.push((person as any).email2);
+      
+      // Remove duplicates
+      const uniqueEmails = Array.from(new Set(emailAddresses.filter(Boolean)));
+      
+      if (uniqueEmails.length === 0) {
+        return res.json({
+          person: {
+            id: person.id,
+            fullName: person.fullName,
+            emails: []
+          },
+          threads: [],
+          total: 0,
+          limit,
+          offset
+        });
+      }
+      
+      // Query threads by these email addresses
+      const { threads, total } = await storage.getEmailThreadsByEmailAddresses(
+        uniqueEmails,
+        { search, limit, offset }
+      );
+      
+      res.json({
+        person: {
+          id: person.id,
+          fullName: person.fullName,
+          emails: uniqueEmails
+        },
+        threads,
+        total,
+        limit,
+        offset
+      });
+      
+    } catch (error: any) {
+      console.error('[Person Emails] Error fetching person email threads:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch person email threads",
+        error: error.message 
+      });
+    }
+  });
+
+  // ============================================================================
+  // AI REPLY ASSISTANT - Generate email reply suggestions using OpenAI
+  // ============================================================================
+
+  const aiReplySchema = z.object({
+    originalEmail: z.object({
+      from: z.string(),
+      subject: z.string().nullable(),
+      body: z.string().nullable(),
+      bodyPreview: z.string().nullable(),
+    }),
+    context: z.string().optional(),
+    tone: z.enum(['professional', 'friendly', 'formal', 'concise']).optional().default('professional'),
+    includeContext: z.boolean().optional().default(true),
+  });
+
+  /**
+   * POST /api/emails/ai-reply
+   * Generate an AI-assisted reply suggestion for an email
+   * 
+   * Uses OpenAI with minimal token usage by extracting key points
+   * from the email and generating a concise reply suggestion.
+   * 
+   * Body:
+   * - originalEmail: { from, subject, body, bodyPreview }
+   * - context: optional additional context about the relationship
+   * - tone: 'professional' | 'friendly' | 'formal' | 'concise'
+   * - includeContext: whether to include relationship context in the prompt
+   */
+  app.post('/api/emails/ai-reply', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const validation = aiReplySchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({
+          message: "Invalid request data",
+          errors: validation.error.errors
+        });
+      }
+
+      const { originalEmail, context, tone, includeContext } = validation.data;
+
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        return res.status(400).json({
+          message: "OpenAI API key not configured"
+        });
+      }
+
+      const emailContent = originalEmail.body || originalEmail.bodyPreview || '';
+      const truncatedContent = emailContent.length > 1500 
+        ? emailContent.substring(0, 1500) + '...'
+        : emailContent;
+
+      const toneInstructions = {
+        professional: 'Use a professional, business-appropriate tone.',
+        friendly: 'Use a warm, friendly tone while remaining professional.',
+        formal: 'Use a formal, respectful tone suitable for official correspondence.',
+        concise: 'Keep the response brief and to the point.',
+      };
+
+      const systemPrompt = `You are an email assistant helping compose reply suggestions.
+
+Rules:
+- Generate a concise, well-structured email reply
+- ${toneInstructions[tone]}
+- Do NOT include a subject line - only the reply body
+- Do NOT include greetings like "Hi [Name]" at the start - the user will add this
+- Do NOT include sign-offs like "Best regards" - the user will add their signature
+- Focus on addressing the key points from the original email
+- Keep responses brief but complete (ideally under 150 words)
+- If the email requires action items or follow-ups, list them clearly
+${includeContext && context ? `\nContext about the sender/relationship: ${context}` : ''}`;
+
+      const userPrompt = `Please draft a reply to this email:
+
+From: ${originalEmail.from}
+Subject: ${originalEmail.subject || '(No subject)'}
+
+${truncatedContent}`;
+
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          temperature: 0.7,
+          max_tokens: 500,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error("[AI Reply] OpenAI API error:", error);
+        return res.status(500).json({
+          message: "AI service temporarily unavailable"
+        });
+      }
+
+      const result = await response.json();
+      const suggestion = result.choices[0]?.message?.content || '';
+      const tokensUsed = result.usage?.total_tokens || 0;
+
+      res.json({
+        suggestion,
+        tone,
+        tokensUsed,
+        model: 'gpt-4o-mini',
+      });
+
+    } catch (error: any) {
+      console.error('[AI Reply] Error generating reply:', error);
+      res.status(500).json({ 
+        message: "Failed to generate reply suggestion",
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * POST /api/emails/ai-summarize
+   * Generate a brief summary of an email or thread
+   * Useful for quickly understanding long email chains
+   */
+  app.post('/api/emails/ai-summarize', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { emails, maxLength } = req.body;
+
+      if (!emails || !Array.isArray(emails) || emails.length === 0) {
+        return res.status(400).json({
+          message: "At least one email is required"
+        });
+      }
+
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        return res.status(400).json({
+          message: "OpenAI API key not configured"
+        });
+      }
+
+      const emailSummaries = emails.slice(0, 10).map((email: any, idx: number) => {
+        const content = email.body || email.bodyPreview || '';
+        const truncated = content.length > 500 ? content.substring(0, 500) + '...' : content;
+        return `Email ${idx + 1}:\nFrom: ${email.from}\nSubject: ${email.subject || '(No subject)'}\n${truncated}`;
+      });
+
+      const systemPrompt = `You are an email summarizer. Create a brief, actionable summary of the email thread.
+
+Rules:
+- Summarize the key points and action items
+- Keep the summary under ${maxLength || 150} words
+- Use bullet points for multiple items
+- Highlight any deadlines or urgent items
+- Be objective and factual`;
+
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: emailSummaries.join('\n\n---\n\n') },
+          ],
+          temperature: 0.3,
+          max_tokens: 300,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        console.error("[AI Summarize] OpenAI API error:", error);
+        return res.status(500).json({
+          message: "AI service temporarily unavailable"
+        });
+      }
+
+      const result = await response.json();
+      const summary = result.choices[0]?.message?.content || '';
+      const tokensUsed = result.usage?.total_tokens || 0;
+
+      res.json({
+        summary,
+        emailCount: emails.length,
+        tokensUsed,
+        model: 'gpt-4o-mini',
+      });
+
+    } catch (error: any) {
+      console.error('[AI Summarize] Error summarizing emails:', error);
+      res.status(500).json({ 
+        message: "Failed to summarize emails",
+        error: error.message 
+      });
+    }
+  });
 }

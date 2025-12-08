@@ -669,6 +669,15 @@ export interface IStorage {
   getAttachmentsByMessageId(internetMessageId: string): Promise<EmailAttachment[]>;
   checkEmailMessageAttachmentExists(internetMessageId: string, attachmentId: string): Promise<boolean>;
   getSignedUrl(objectPath: string): Promise<string>;
+  
+  getEmailMessagesByEmailAddresses(
+    emailAddresses: string[],
+    options?: { search?: string; limit?: number; offset?: number }
+  ): Promise<{ messages: EmailMessage[]; total: number }>;
+  getEmailThreadsByEmailAddresses(
+    emailAddresses: string[],
+    options?: { search?: string; limit?: number; offset?: number }
+  ): Promise<{ threads: EmailThread[]; total: number }>;
 
   createDocumentFolder(folder: InsertDocumentFolder): Promise<DocumentFolder>;
   getDocumentFolderById(id: string): Promise<DocumentFolder | undefined>;

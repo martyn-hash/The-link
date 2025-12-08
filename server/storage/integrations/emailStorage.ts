@@ -640,4 +640,123 @@ export class EmailStorage {
     
     return url;
   }
+
+  /**
+   * Get all email messages involving any of the specified email addresses
+   * Searches from, to, and cc fields
+   */
+  async getEmailMessagesByEmailAddresses(
+    emailAddresses: string[],
+    options: {
+      search?: string;
+      limit?: number;
+      offset?: number;
+    } = {}
+  ): Promise<{ messages: EmailMessage[]; total: number }> {
+    const { search, limit = 50, offset = 0 } = options;
+    
+    if (!emailAddresses.length) {
+      return { messages: [], total: 0 };
+    }
+    
+    const normalizedEmails = emailAddresses.map(e => e.toLowerCase().trim()).filter(Boolean);
+    if (!normalizedEmails.length) {
+      return { messages: [], total: 0 };
+    }
+    
+    const emailConditions = normalizedEmails.map(email => 
+      or(
+        sql`LOWER(${emailMessages.from}) = ${email}`,
+        sql`${email} = ANY(SELECT LOWER(unnest(${emailMessages.to})))`,
+        sql`${email} = ANY(SELECT LOWER(unnest(${emailMessages.cc})))`
+      )
+    );
+    
+    let whereCondition = or(...emailConditions);
+    
+    if (search && search.trim()) {
+      const searchTerm = `%${search.trim().toLowerCase()}%`;
+      whereCondition = and(
+        whereCondition,
+        or(
+          sql`LOWER(${emailMessages.subject}) LIKE ${searchTerm}`,
+          sql`LOWER(${emailMessages.bodyPreview}) LIKE ${searchTerm}`
+        )
+      );
+    }
+    
+    const countResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(emailMessages)
+      .where(whereCondition!);
+    
+    const total = Number(countResult[0]?.count || 0);
+    
+    const messages = await db
+      .select()
+      .from(emailMessages)
+      .where(whereCondition!)
+      .orderBy(desc(emailMessages.receivedDateTime))
+      .limit(limit)
+      .offset(offset);
+    
+    return { messages, total };
+  }
+
+  /**
+   * Get email threads involving any of the specified email addresses
+   */
+  async getEmailThreadsByEmailAddresses(
+    emailAddresses: string[],
+    options: {
+      search?: string;
+      limit?: number;
+      offset?: number;
+    } = {}
+  ): Promise<{ threads: EmailThread[]; total: number }> {
+    const { search, limit = 50, offset = 0 } = options;
+    
+    if (!emailAddresses.length) {
+      return { threads: [], total: 0 };
+    }
+    
+    const normalizedEmails = emailAddresses.map(e => e.toLowerCase().trim()).filter(Boolean);
+    if (!normalizedEmails.length) {
+      return { threads: [], total: 0 };
+    }
+    
+    const emailConditions = normalizedEmails.map(email =>
+      sql`${email} = ANY(SELECT LOWER(unnest(${emailThreads.participants})))`
+    );
+    
+    let whereCondition = or(...emailConditions);
+    
+    if (search && search.trim()) {
+      const searchTerm = `%${search.trim().toLowerCase()}%`;
+      whereCondition = and(
+        whereCondition,
+        or(
+          sql`LOWER(${emailThreads.subject}) LIKE ${searchTerm}`,
+          sql`LOWER(${emailThreads.latestPreview}) LIKE ${searchTerm}`
+        )
+      );
+    }
+    
+    const countResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(emailThreads)
+      .where(whereCondition!);
+    
+    const total = Number(countResult[0]?.count || 0);
+    
+    const threads = await db
+      .select()
+      .from(emailThreads)
+      .where(whereCondition!)
+      .orderBy(desc(emailThreads.lastMessageAt))
+      .limit(limit)
+      .offset(offset);
+    
+    return { threads, total };
+  }
 }

@@ -307,6 +307,20 @@ export function applyIntegrationsFacade<TBase extends Constructor<IntegrationsFa
       return this.emailStorage.checkEmailMessageAttachmentExists(internetMessageId, attachmentId);
     }
 
+    async getEmailMessagesByEmailAddresses(
+      emailAddresses: string[],
+      options: { search?: string; limit?: number; offset?: number } = {}
+    ) {
+      return this.emailStorage.getEmailMessagesByEmailAddresses(emailAddresses, options);
+    }
+
+    async getEmailThreadsByEmailAddresses(
+      emailAddresses: string[],
+      options: { search?: string; limit?: number; offset?: number } = {}
+    ) {
+      return this.emailStorage.getEmailThreadsByEmailAddresses(emailAddresses, options);
+    }
+
     // ============================================================================
     // SMS TEMPLATES - SmsTemplateStorage (6 methods)
     // ============================================================================
