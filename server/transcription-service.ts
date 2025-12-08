@@ -8,6 +8,7 @@ import {
   requestTextSummarization,
   getSummarizationResult
 } from './utils/userRingCentralClient';
+import OpenAI from 'openai';
 
 interface TranscriptionJob {
   communicationId: string;
@@ -254,67 +255,126 @@ async function pollForTranscriptionResult(communicationId: string, userId: strin
 
 // Request and poll for AI-generated summary
 async function requestAndPollSummary(communicationId: string, userId: string, utterances: Array<{ start: number; end: number; speakerId: string; text: string }>) {
+  // First, try RingCentral's AI summarization
   try {
+    console.log('[Transcription] Trying RingCentral AI summarization...');
     const summaryJob = await requestTextSummarization(userId, utterances);
     
-    if (!summaryJob?.jobId) {
-      console.log('[Transcription] No summary job ID returned, marking as complete without summary');
-      await updateCommunicationTranscription(communicationId, {
-        transcriptionStatus: 'completed'
-      });
-      return;
-    }
-    
-    const summaryJobId = summaryJob.jobId;
-    console.log('[Transcription] Summary job started:', summaryJobId);
-    
-    // Poll for summary result
-    const maxSummaryAttempts = 20;
-    const summaryPollInterval = 5000;
-    
-    for (let attempt = 0; attempt < maxSummaryAttempts; attempt++) {
-      console.log(`[Transcription] Polling summary attempt ${attempt + 1}/${maxSummaryAttempts}`);
+    if (summaryJob?.jobId) {
+      const summaryJobId = summaryJob.jobId;
+      console.log('[Transcription] RingCentral summary job started:', summaryJobId);
       
-      try {
-        const summaryResult = await getSummarizationResult(userId, summaryJobId);
+      // Poll for summary result (shorter timeout since we have a fallback)
+      const maxSummaryAttempts = 10;
+      const summaryPollInterval = 5000;
+      
+      for (let attempt = 0; attempt < maxSummaryAttempts; attempt++) {
+        console.log(`[Transcription] Polling summary attempt ${attempt + 1}/${maxSummaryAttempts}`);
         
-        if (summaryResult.status === 'Success' || summaryResult.status === 'Completed') {
-          console.log('[Transcription] Summary completed successfully');
+        try {
+          const summaryResult = await getSummarizationResult(userId, summaryJobId);
           
-          const summary = extractAISummary(summaryResult);
+          if (summaryResult.status === 'Success' || summaryResult.status === 'Completed') {
+            console.log('[Transcription] RingCentral summary completed successfully');
+            
+            const summary = extractAISummary(summaryResult);
+            
+            await updateCommunicationTranscription(communicationId, {
+              transcriptionStatus: 'completed',
+              summary,
+              summarySource: 'ringcentral'
+            });
+            
+            return;
+          }
           
-          await updateCommunicationTranscription(communicationId, {
-            transcriptionStatus: 'completed',
-            summary
-          });
-          
-          return;
+          if (summaryResult.status === 'Failed') {
+            console.log('[Transcription] RingCentral summary failed, trying OpenAI fallback...');
+            break; // Exit loop to try OpenAI fallback
+          }
+        } catch (error) {
+          console.error('[Transcription] Error polling RingCentral summary:', error);
         }
         
-        if (summaryResult.status === 'Failed') {
-          console.log('[Transcription] Summary failed, completing without summary');
-          await updateCommunicationTranscription(communicationId, {
-            transcriptionStatus: 'completed'
-          });
-          return;
-        }
-      } catch (error) {
-        console.error('[Transcription] Error polling for summary:', error);
+        await new Promise(resolve => setTimeout(resolve, summaryPollInterval));
       }
-      
-      await new Promise(resolve => setTimeout(resolve, summaryPollInterval));
+    }
+  } catch (error) {
+    console.log('[Transcription] RingCentral AI summarization not available:', error);
+  }
+
+  // Fallback to OpenAI for summary generation
+  console.log('[Transcription] Using OpenAI fallback for summary...');
+  const transcript = utterances.map(u => `${u.speakerId === '0' ? 'Agent' : 'Caller'}: ${u.text}`).join('\n');
+  const openAISummary = await generateOpenAISummary(transcript);
+  
+  if (openAISummary) {
+    await updateCommunicationTranscription(communicationId, {
+      transcriptionStatus: 'completed',
+      summary: openAISummary,
+      summarySource: 'openai'
+    });
+  } else {
+    // No summary available, just mark as complete
+    await updateCommunicationTranscription(communicationId, {
+      transcriptionStatus: 'completed'
+    });
+  }
+}
+
+// Generate summary using OpenAI as fallback
+async function generateOpenAISummary(transcript: string): Promise<string | null> {
+  try {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      console.log('[Transcription] OpenAI API key not configured, skipping summary');
+      return null;
+    }
+
+    if (!transcript || transcript.trim().length < 50) {
+      console.log('[Transcription] Transcript too short for summary');
+      return null;
+    }
+
+    console.log('[Transcription] Generating summary with OpenAI...');
+    
+    const openai = new OpenAI({ apiKey });
+    
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `You are a professional assistant that summarizes phone call transcripts for a CRM system.
+          
+Create a concise summary (2-4 sentences) that captures:
+- The main purpose/topic of the call
+- Key decisions or outcomes
+- Any action items or next steps mentioned
+
+Be professional and factual. Focus on business-relevant information.
+Do not include greetings, small talk, or filler content in the summary.`
+        },
+        {
+          role: 'user',
+          content: `Please summarize this phone call transcript:\n\n${transcript}`
+        }
+      ],
+      temperature: 0.3,
+      max_tokens: 300
+    });
+
+    const summary = response.choices[0]?.message?.content?.trim();
+    
+    if (summary) {
+      console.log('[Transcription] OpenAI summary generated successfully');
+      return summary;
     }
     
-    // Timed out waiting for summary, complete without it
-    console.log('[Transcription] Summary polling timed out, completing without summary');
-    await updateCommunicationTranscription(communicationId, {
-      transcriptionStatus: 'completed'
-    });
+    return null;
   } catch (error) {
-    console.error('[Transcription] Error requesting summary:', error);
-    await updateCommunicationTranscription(communicationId, {
-      transcriptionStatus: 'completed'
-    });
+    console.error('[Transcription] Error generating OpenAI summary:', error);
+    return null;
   }
 }
 
