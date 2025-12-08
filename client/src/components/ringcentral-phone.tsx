@@ -53,6 +53,7 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
   const timerIntervalRef = useRef<number | null>(null);
   const callStartTimeRef = useRef<number | null>(null);
   const autoRejectTimerRef = useRef<number | null>(null);
+  const sipInfoRef = useRef<any>(null);
 
   // Update phone number when defaultPhoneNumber prop changes
   useEffect(() => {
@@ -100,6 +101,9 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
         outboundProxy: sipProvision.sipInfo[0].outboundProxy,
         transport: sipProvision.sipInfo[0].transport
       });
+
+      // Store sipInfo for later use (extracting fromNumber for outbound calls)
+      sipInfoRef.current = sipProvision.sipInfo[0];
 
       // Initialize WebPhone with version 2.x API - pass single sipInfo object (not array)
       console.log('[RingCentral] Creating WebPhone instance with sipInfo[0]...');
@@ -291,23 +295,38 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
 
       console.log('[RingCentral] Initiating call to:', formattedNumber);
       
-      // Initiate the call - session created synchronously in webPhone.callSessions
-      const callPromise = webPhoneRef.current.call({
-        toNumber: formattedNumber,
-      });
-      
-      console.log('[RingCentral] call() returned:', callPromise);
-      
-      // Get the session from webPhone.callSessions array (created synchronously)
-      const sessions = (webPhoneRef.current as any).callSessions;
-      if (!sessions || sessions.length === 0) {
-        throw new Error('No session created in callSessions');
+      // Extract fromNumber from SIP info - the username contains the extension number
+      // Format: "443459900041*301" -> we need the full number for caller ID
+      let fromNumber: string | undefined;
+      if (sipInfoRef.current?.username) {
+        // The SIP username format is typically "mainNumber*extension"
+        // We extract the main number part for the fromNumber
+        const username = sipInfoRef.current.username;
+        const mainNumber = username.split('*')[0];
+        if (mainNumber) {
+          fromNumber = '+' + mainNumber;
+          console.log('[RingCentral] Using fromNumber:', fromNumber, '(extracted from SIP username:', username, ')');
+        }
       }
       
-      const session = sessions[sessions.length - 1];
-      sessionRef.current = session;
-      console.log('[RingCentral] Session retrieved:', session);
-      console.log('[RingCentral] Session state:', (session as any).state);
+      // Initiate the call with fromNumber - MUST await the promise to catch errors
+      console.log('[RingCentral] Calling webPhone.call() with params:', { toNumber: formattedNumber, fromNumber });
+      
+      try {
+        const session = await webPhoneRef.current.call({
+          toNumber: formattedNumber,
+          fromNumber: fromNumber,
+        });
+        
+        console.log('[RingCentral] call() returned session:', session);
+        console.log('[RingCentral] Session state:', session?.state);
+        console.log('[RingCentral] Session available methods:', session ? Object.getOwnPropertyNames(Object.getPrototypeOf(session)) : 'null');
+        
+        if (!session) {
+          throw new Error('call() returned null/undefined session');
+        }
+        
+        sessionRef.current = session;
 
       // Setup session event listeners IMMEDIATELY
       session.on('accepted', () => {
@@ -376,6 +395,21 @@ export function RingCentralPhone({ clientId, personId, defaultPhoneNumber, onCal
       });
 
       console.log('[RingCentral] Event listeners attached, waiting for call to connect...');
+
+      } catch (callError: any) {
+        // Handle errors from the call() promise itself
+        console.error('[RingCentral] ⚠️ call() promise rejected:', callError);
+        console.error('[RingCentral] Call error message:', callError?.message);
+        console.error('[RingCentral] Call error details:', JSON.stringify(callError, Object.getOwnPropertyNames(callError), 2));
+        
+        stopCallTimer();
+        setCallState(initialCallState);
+        
+        // Show user-friendly error
+        const errorMessage = callError?.message || callError?.reasonPhrase || 'Failed to initiate call';
+        showFriendlyError({ error: errorMessage });
+        return;
+      }
 
     } catch (error: any) {
       console.error('[RingCentral] Error making call:', error);
