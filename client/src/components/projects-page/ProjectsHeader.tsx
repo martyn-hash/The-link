@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -40,13 +41,11 @@ export interface ProjectsHeaderProps {
   tasksOwnershipFilter: OwnershipFilter;
   tasksStatusFilter: string;
   tasksPriorityFilter: string;
-  tasksFilterOpen: boolean;
   tasksActiveFilterCount: number;
   canSeeAllTasks?: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
-  setTasksFilterOpen: (open: boolean) => void;
   clearTasksFilters: () => void;
   handleManualViewModeChange: (mode: ViewMode) => void;
   handleLoadSavedView: (view: ProjectView) => void;
@@ -75,13 +74,11 @@ export function ProjectsHeader({
   tasksOwnershipFilter,
   tasksStatusFilter,
   tasksPriorityFilter,
-  tasksFilterOpen,
   tasksActiveFilterCount,
   canSeeAllTasks = false,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
-  setTasksFilterOpen,
   clearTasksFilters,
   handleManualViewModeChange,
   handleLoadSavedView,
@@ -117,13 +114,11 @@ export function ProjectsHeader({
           tasksOwnershipFilter={tasksOwnershipFilter}
           tasksStatusFilter={tasksStatusFilter}
           tasksPriorityFilter={tasksPriorityFilter}
-          tasksFilterOpen={tasksFilterOpen}
           tasksActiveFilterCount={tasksActiveFilterCount}
           canSeeAllTasks={canSeeAllTasks}
           setTasksOwnershipFilter={setTasksOwnershipFilter}
           setTasksStatusFilter={setTasksStatusFilter}
           setTasksPriorityFilter={setTasksPriorityFilter}
-          setTasksFilterOpen={setTasksFilterOpen}
           clearTasksFilters={clearTasksFilters}
           handleManualViewModeChange={handleManualViewModeChange}
           handleLoadSavedView={handleLoadSavedView}
@@ -147,13 +142,11 @@ export function ProjectsHeader({
           tasksOwnershipFilter={tasksOwnershipFilter}
           tasksStatusFilter={tasksStatusFilter}
           tasksPriorityFilter={tasksPriorityFilter}
-          tasksFilterOpen={tasksFilterOpen}
           tasksActiveFilterCount={tasksActiveFilterCount}
           canSeeAllTasks={canSeeAllTasks}
           setTasksOwnershipFilter={setTasksOwnershipFilter}
           setTasksStatusFilter={setTasksStatusFilter}
           setTasksPriorityFilter={setTasksPriorityFilter}
-          setTasksFilterOpen={setTasksFilterOpen}
           clearTasksFilters={clearTasksFilters}
           handleManualViewModeChange={handleManualViewModeChange}
           handleLoadSavedView={handleLoadSavedView}
@@ -265,13 +258,11 @@ interface DesktopToolbarProps {
   tasksOwnershipFilter: OwnershipFilter;
   tasksStatusFilter: string;
   tasksPriorityFilter: string;
-  tasksFilterOpen: boolean;
   tasksActiveFilterCount: number;
   canSeeAllTasks?: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
-  setTasksFilterOpen: (open: boolean) => void;
   clearTasksFilters: () => void;
   handleManualViewModeChange: (mode: ViewMode) => void;
   handleLoadSavedView: (view: ProjectView) => void;
@@ -296,13 +287,11 @@ function DesktopToolbar({
   tasksOwnershipFilter,
   tasksStatusFilter,
   tasksPriorityFilter,
-  tasksFilterOpen,
   tasksActiveFilterCount,
   canSeeAllTasks = false,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
-  setTasksFilterOpen,
   clearTasksFilters,
   handleManualViewModeChange,
   handleLoadSavedView,
@@ -420,13 +409,11 @@ function DesktopToolbar({
           tasksOwnershipFilter={tasksOwnershipFilter}
           tasksStatusFilter={tasksStatusFilter}
           tasksPriorityFilter={tasksPriorityFilter}
-          tasksFilterOpen={tasksFilterOpen}
           tasksActiveFilterCount={tasksActiveFilterCount}
           canSeeAllTasks={canSeeAllTasks}
           setTasksOwnershipFilter={setTasksOwnershipFilter}
           setTasksStatusFilter={setTasksStatusFilter}
           setTasksPriorityFilter={setTasksPriorityFilter}
-          setTasksFilterOpen={setTasksFilterOpen}
           clearTasksFilters={clearTasksFilters}
         />
       )}
@@ -443,13 +430,11 @@ interface MobileToolbarProps {
   tasksOwnershipFilter: OwnershipFilter;
   tasksStatusFilter: string;
   tasksPriorityFilter: string;
-  tasksFilterOpen: boolean;
   tasksActiveFilterCount: number;
   canSeeAllTasks?: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
-  setTasksFilterOpen: (open: boolean) => void;
   clearTasksFilters: () => void;
   handleManualViewModeChange: (mode: ViewMode) => void;
   handleLoadSavedView: (view: ProjectView) => void;
@@ -470,13 +455,11 @@ function MobileToolbar({
   tasksOwnershipFilter,
   tasksStatusFilter,
   tasksPriorityFilter,
-  tasksFilterOpen,
   tasksActiveFilterCount,
   canSeeAllTasks = false,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
-  setTasksFilterOpen,
   clearTasksFilters,
   handleManualViewModeChange,
   handleLoadSavedView,
@@ -551,13 +534,11 @@ function MobileToolbar({
           tasksOwnershipFilter={tasksOwnershipFilter}
           tasksStatusFilter={tasksStatusFilter}
           tasksPriorityFilter={tasksPriorityFilter}
-          tasksFilterOpen={tasksFilterOpen}
           tasksActiveFilterCount={tasksActiveFilterCount}
           canSeeAllTasks={canSeeAllTasks}
           setTasksOwnershipFilter={setTasksOwnershipFilter}
           setTasksStatusFilter={setTasksStatusFilter}
           setTasksPriorityFilter={setTasksPriorityFilter}
-          setTasksFilterOpen={setTasksFilterOpen}
           clearTasksFilters={clearTasksFilters}
         />
       )}
@@ -570,13 +551,11 @@ interface TasksToolbarProps {
   tasksOwnershipFilter: OwnershipFilter;
   tasksStatusFilter: string;
   tasksPriorityFilter: string;
-  tasksFilterOpen: boolean;
   tasksActiveFilterCount: number;
   canSeeAllTasks?: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
-  setTasksFilterOpen: (open: boolean) => void;
   clearTasksFilters: () => void;
 }
 
@@ -585,15 +564,15 @@ function TasksToolbar({
   tasksOwnershipFilter,
   tasksStatusFilter,
   tasksPriorityFilter,
-  tasksFilterOpen,
   tasksActiveFilterCount,
   canSeeAllTasks = false,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
-  setTasksFilterOpen,
   clearTasksFilters,
 }: TasksToolbarProps) {
+  const [filterOpen, setFilterOpen] = useState(false);
+  
   if (isMobile) {
     return (
       <>
@@ -611,7 +590,7 @@ function TasksToolbar({
             </Button>
           }
         />
-        <Popover open={tasksFilterOpen} onOpenChange={setTasksFilterOpen}>
+        <Popover open={filterOpen} onOpenChange={setFilterOpen}>
           <PopoverTrigger asChild>
             <Button variant="outline" size="sm" className="relative h-11 px-3" data-testid="button-tasks-filters-mobile">
               <Filter className="h-4 w-4" />
@@ -658,7 +637,7 @@ function TasksToolbar({
           </Button>
         }
       />
-      <Popover open={tasksFilterOpen} onOpenChange={setTasksFilterOpen}>
+      <Popover open={filterOpen} onOpenChange={setFilterOpen}>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="relative" data-testid="button-tasks-filters">
             <Filter className="h-4 w-4 mr-2" />

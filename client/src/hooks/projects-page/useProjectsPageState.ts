@@ -41,7 +41,6 @@ export function useProjectsPageState() {
   const [tasksOwnershipFilter, setTasksOwnershipFilter] = useState<OwnershipFilter>("assigned");
   const [tasksStatusFilter, setTasksStatusFilter] = useState("open");
   const [tasksPriorityFilter, setTasksPriorityFilter] = useState("all");
-  const [tasksFilterOpen, setTasksFilterOpen] = useState(false);
 
   const tasksActiveFilterCount = (tasksOwnershipFilter !== "assigned" ? 1 : 0) + 
     (tasksStatusFilter !== "open" ? 1 : 0) + 
@@ -556,8 +555,6 @@ export function useProjectsPageState() {
     setTasksStatusFilter,
     tasksPriorityFilter,
     setTasksPriorityFilter,
-    tasksFilterOpen,
-    setTasksFilterOpen,
     tasksActiveFilterCount,
     clearTasksFilters,
 

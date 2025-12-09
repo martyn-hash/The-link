@@ -83,13 +83,11 @@ export default function Projects() {
           tasksOwnershipFilter={state.tasksOwnershipFilter}
           tasksStatusFilter={state.tasksStatusFilter}
           tasksPriorityFilter={state.tasksPriorityFilter}
-          tasksFilterOpen={state.tasksFilterOpen}
           tasksActiveFilterCount={state.tasksActiveFilterCount}
           canSeeAllTasks={state.user?.canSeeAllTasks || false}
           setTasksOwnershipFilter={state.setTasksOwnershipFilter}
           setTasksStatusFilter={state.setTasksStatusFilter}
           setTasksPriorityFilter={state.setTasksPriorityFilter}
-          setTasksFilterOpen={state.setTasksFilterOpen}
           clearTasksFilters={state.clearTasksFilters}
           handleManualViewModeChange={state.handleManualViewModeChange}
           handleLoadSavedView={state.handleLoadSavedView}
