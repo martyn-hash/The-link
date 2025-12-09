@@ -906,6 +906,77 @@ export function registerEmailRoutes(
   });
 
   /**
+   * POST /api/users/:userId/inbox-access/bulk
+   * Grant a user access to multiple inboxes at once (super admin only)
+   */
+  app.post('/api/users/:userId/inbox-access/bulk', isAuthenticated, resolveEffectiveUser, requireSuperAdmin, async (req: any, res: any) => {
+    try {
+      const { userId } = req.params;
+      const grantedById = req.user!.effectiveUserId;
+
+      const bulkGrantSchema = z.object({
+        inboxIds: z.array(z.string().min(1)).min(1, "At least one inbox is required"),
+        accessLevel: z.enum(['read', 'write', 'full']).optional().default('read'),
+      });
+
+      const validation = bulkGrantSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({
+          message: "Invalid request data",
+          errors: validation.error.errors
+        });
+      }
+
+      const { inboxIds, accessLevel } = validation.data;
+
+      // Verify user exists
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const results: any[] = [];
+      const errors: any[] = [];
+
+      for (const inboxId of inboxIds) {
+        try {
+          // Verify inbox exists
+          const inbox = await storage.getInboxById(inboxId);
+          if (!inbox) {
+            errors.push({ inboxId, error: "Inbox not found" });
+            continue;
+          }
+
+          // Check if access already exists
+          const existing = await storage.getUserInboxAccessByUserAndInbox(userId, inboxId);
+          if (existing) {
+            // Update existing access
+            const updated = await storage.updateUserInboxAccess(existing.id, { accessLevel, grantedBy: grantedById });
+            results.push({ ...updated, inbox });
+          } else {
+            // Create new access
+            const access = await storage.grantInboxAccess(userId, inboxId, accessLevel, grantedById);
+            results.push({ ...access, inbox });
+          }
+        } catch (err: any) {
+          errors.push({ inboxId, error: err.message });
+        }
+      }
+
+      res.status(201).json({ 
+        success: true, 
+        granted: results.length, 
+        failed: errors.length,
+        results,
+        errors 
+      });
+    } catch (error: any) {
+      console.error('[Bulk Grant Inbox Access] Error:', error);
+      res.status(500).json({ message: "Failed to grant inbox access", error: error.message });
+    }
+  });
+
+  /**
    * DELETE /api/users/:userId/inbox-access/:inboxId
    * Revoke a user's access to an inbox (super admin only)
    */
@@ -947,6 +1018,144 @@ export function registerEmailRoutes(
     } catch (error: any) {
       console.error('[Get My Inboxes] Error:', error);
       res.status(500).json({ message: "Failed to fetch your inboxes", error: error.message });
+    }
+  });
+
+  /**
+   * GET /api/comms/inbox/:inboxId/messages
+   * Fetch emails from a specific inbox the user has access to
+   * Queries Microsoft Graph API directly for fresh email data
+   */
+  app.get('/api/comms/inbox/:inboxId/messages', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const { inboxId } = req.params;
+      const { top = '25', skip = '0', folder = 'Inbox' } = req.query;
+
+      // Verify user has access to this inbox
+      const hasAccess = await storage.canUserAccessInbox(userId, inboxId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this inbox" });
+      }
+
+      // Get the inbox to find the email address
+      const inbox = await storage.getInboxById(inboxId);
+      if (!inbox) {
+        return res.status(404).json({ message: "Inbox not found" });
+      }
+
+      // Check if Graph API is configured
+      if (!isApplicationGraphConfigured()) {
+        return res.status(400).json({
+          message: "Microsoft 365 email integration is not configured"
+        });
+      }
+
+      // Fetch messages from Graph API
+      const { getApplicationGraphClient } = await import('../utils/applicationGraphClient');
+      const client = await getApplicationGraphClient();
+      
+      const emailAddress = inbox.emailAddress;
+      const topNum = Math.min(parseInt(top as string) || 25, 50);
+      const skipNum = parseInt(skip as string) || 0;
+
+      const response = await client
+        .api(`/users/${encodeURIComponent(emailAddress)}/mailFolders/${folder}/messages`)
+        .select('id,subject,from,toRecipients,receivedDateTime,bodyPreview,hasAttachments,isRead,importance')
+        .orderby('receivedDateTime DESC')
+        .top(topNum)
+        .skip(skipNum)
+        .get();
+
+      const messages = response.value || [];
+      const nextLink = response['@odata.nextLink'];
+
+      res.json({
+        messages,
+        hasMore: !!nextLink,
+        total: response['@odata.count'] || null,
+        inbox: {
+          id: inbox.id,
+          email: inbox.emailAddress,
+          displayName: inbox.displayName,
+        }
+      });
+    } catch (error: any) {
+      console.error('[Comms Inbox Messages] Error:', error);
+      
+      // Handle Graph API specific errors
+      if (error.code === 'MailboxNotEnabledForRESTAPI') {
+        return res.status(400).json({ 
+          message: "This mailbox is not enabled for email access" 
+        });
+      }
+      if (error.code === 'ErrorItemNotFound') {
+        return res.status(404).json({ 
+          message: "Mailbox or folder not found" 
+        });
+      }
+      
+      res.status(500).json({ 
+        message: "Failed to fetch emails", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * GET /api/comms/inbox/:inboxId/messages/:messageId
+   * Fetch a single email message with full body content
+   */
+  app.get('/api/comms/inbox/:inboxId/messages/:messageId', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const { inboxId, messageId } = req.params;
+
+      // Verify user has access to this inbox
+      const hasAccess = await storage.canUserAccessInbox(userId, inboxId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this inbox" });
+      }
+
+      // Get the inbox to find the email address
+      const inbox = await storage.getInboxById(inboxId);
+      if (!inbox) {
+        return res.status(404).json({ message: "Inbox not found" });
+      }
+
+      // Check if Graph API is configured
+      if (!isApplicationGraphConfigured()) {
+        return res.status(400).json({
+          message: "Microsoft 365 email integration is not configured"
+        });
+      }
+
+      // Fetch the full message from Graph API
+      const { getApplicationGraphClient } = await import('../utils/applicationGraphClient');
+      const client = await getApplicationGraphClient();
+      
+      const emailAddress = inbox.emailAddress;
+
+      const message = await client
+        .api(`/users/${encodeURIComponent(emailAddress)}/messages/${messageId}`)
+        .select('id,subject,from,toRecipients,ccRecipients,receivedDateTime,sentDateTime,body,bodyPreview,hasAttachments,isRead,importance,conversationId')
+        .expand('attachments($select=id,name,size,contentType,isInline)')
+        .get();
+
+      res.json(message);
+    } catch (error: any) {
+      console.error('[Comms Get Message] Error:', error);
+      
+      if (error.code === 'ErrorItemNotFound') {
+        return res.status(404).json({ 
+          message: "Message not found" 
+        });
+      }
+      
+      res.status(500).json({ 
+        message: "Failed to fetch email", 
+        error: error.message 
+      });
     }
   });
 

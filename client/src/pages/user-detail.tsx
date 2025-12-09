@@ -43,6 +43,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
@@ -65,6 +72,8 @@ import {
   Inbox,
   Plus,
   Trash2,
+  ChevronDown,
+  Check,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import type { User, UserSession, Inbox as InboxType, UserInboxAccess } from "@shared/schema";
@@ -132,8 +141,9 @@ export default function UserDetailPage() {
     enabled: !!currentUser?.superAdmin,
   });
 
-  const [selectedInboxId, setSelectedInboxId] = useState<string>("");
+  const [selectedInboxIds, setSelectedInboxIds] = useState<string[]>([]);
   const [selectedAccessLevel, setSelectedAccessLevel] = useState<string>("read");
+  const [inboxPopoverOpen, setInboxPopoverOpen] = useState(false);
 
   useEffect(() => {
     if (targetUser) {
@@ -192,17 +202,18 @@ export default function UserDetailPage() {
   });
 
   const grantInboxAccessMutation = useMutation({
-    mutationFn: async (data: { inboxId: string; accessLevel: string }) => {
-      return await apiRequest("POST", `/api/users/${userId}/inbox-access`, data);
+    mutationFn: async (data: { inboxIds: string[]; accessLevel: string }) => {
+      return await apiRequest("POST", `/api/users/${userId}/inbox-access/bulk`, data);
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "inbox-access"] });
       toast({
         title: "Success",
-        description: "Inbox access granted successfully",
+        description: `Granted access to ${data.granted} inbox${data.granted !== 1 ? 'es' : ''}`,
       });
-      setSelectedInboxId("");
+      setSelectedInboxIds([]);
       setSelectedAccessLevel("read");
+      setInboxPopoverOpen(false);
     },
     onError: (error: any) => {
       showFriendlyError({ error });
@@ -632,31 +643,111 @@ export default function UserDetailPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex flex-col sm:flex-row gap-4">
-                  <Select value={selectedInboxId} onValueChange={setSelectedInboxId}>
-                    <SelectTrigger className="flex-1" data-testid="select-inbox">
-                      <SelectValue placeholder="Select an inbox..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {allInboxesLoading ? (
-                        <SelectItem value="_loading" disabled>Loading inboxes...</SelectItem>
-                      ) : allInboxes && allInboxes.length > 0 ? (
-                        allInboxes
-                          .filter(inbox => !userInboxAccess?.some(access => access.inboxId === inbox.id))
-                          .map(inbox => (
-                            <SelectItem key={inbox.id} value={inbox.id}>
-                              <span className="flex items-center gap-2">
-                                {inbox.displayName || inbox.emailAddress}
-                                <span className="text-muted-foreground text-xs">
-                                  ({inbox.inboxType})
-                                </span>
-                              </span>
-                            </SelectItem>
-                          ))
-                      ) : (
-                        <SelectItem value="_none" disabled>No inboxes available</SelectItem>
+                  <Popover open={inboxPopoverOpen} onOpenChange={setInboxPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={inboxPopoverOpen}
+                        className="flex-1 justify-between"
+                        data-testid="select-inboxes"
+                      >
+                        {selectedInboxIds.length === 0
+                          ? "Select inboxes..."
+                          : `${selectedInboxIds.length} inbox${selectedInboxIds.length !== 1 ? 'es' : ''} selected`}
+                        <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0" align="start">
+                      <div className="p-3 border-b">
+                        <p className="text-sm font-medium">Select inboxes to grant access</p>
+                        <p className="text-xs text-muted-foreground">
+                          {selectedInboxIds.length} selected
+                        </p>
+                      </div>
+                      <ScrollArea className="h-[300px]">
+                        <div className="p-2 space-y-1">
+                          {allInboxesLoading ? (
+                            <div className="py-6 text-center text-sm text-muted-foreground">
+                              Loading inboxes...
+                            </div>
+                          ) : (() => {
+                            const availableInboxes = allInboxes?.filter(
+                              inbox => !userInboxAccess?.some(access => access.inboxId === inbox.id)
+                            ) || [];
+                            
+                            if (availableInboxes.length === 0) {
+                              return (
+                                <div className="py-6 text-center text-sm text-muted-foreground">
+                                  No additional inboxes available
+                                </div>
+                              );
+                            }
+                            
+                            return availableInboxes.map(inbox => {
+                              const isSelected = selectedInboxIds.includes(inbox.id);
+                              return (
+                                <div
+                                  key={inbox.id}
+                                  className={`flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted ${
+                                    isSelected ? 'bg-muted' : ''
+                                  }`}
+                                  onClick={() => {
+                                    if (isSelected) {
+                                      setSelectedInboxIds(prev => prev.filter(id => id !== inbox.id));
+                                    } else {
+                                      setSelectedInboxIds(prev => [...prev, inbox.id]);
+                                    }
+                                  }}
+                                  data-testid={`checkbox-inbox-${inbox.id}`}
+                                >
+                                  <Checkbox
+                                    checked={isSelected}
+                                    onCheckedChange={(checked) => {
+                                      if (checked) {
+                                        setSelectedInboxIds(prev => [...prev, inbox.id]);
+                                      } else {
+                                        setSelectedInboxIds(prev => prev.filter(id => id !== inbox.id));
+                                      }
+                                    }}
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-medium text-sm truncate">
+                                      {inbox.displayName || inbox.emailAddress}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground truncate">
+                                      {inbox.emailAddress}
+                                    </div>
+                                  </div>
+                                  <Badge variant="outline" className="text-xs shrink-0">
+                                    {inbox.inboxType}
+                                  </Badge>
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                      </ScrollArea>
+                      {selectedInboxIds.length > 0 && (
+                        <div className="p-2 border-t flex justify-between">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedInboxIds([])}
+                          >
+                            Clear selection
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => setInboxPopoverOpen(false)}
+                          >
+                            <Check className="w-4 h-4 mr-1" />
+                            Done
+                          </Button>
+                        </div>
                       )}
-                    </SelectContent>
-                  </Select>
+                    </PopoverContent>
+                  </Popover>
                   
                   <Select value={selectedAccessLevel} onValueChange={setSelectedAccessLevel}>
                     <SelectTrigger className="w-[140px]" data-testid="select-access-level">
@@ -671,14 +762,14 @@ export default function UserDetailPage() {
                   
                   <Button
                     onClick={() => {
-                      if (selectedInboxId) {
+                      if (selectedInboxIds.length > 0) {
                         grantInboxAccessMutation.mutate({
-                          inboxId: selectedInboxId,
+                          inboxIds: selectedInboxIds,
                           accessLevel: selectedAccessLevel,
                         });
                       }
                     }}
-                    disabled={!selectedInboxId || grantInboxAccessMutation.isPending}
+                    disabled={selectedInboxIds.length === 0 || grantInboxAccessMutation.isPending}
                     data-testid="button-grant-access"
                   >
                     <Plus className="w-4 h-4 mr-2" />
