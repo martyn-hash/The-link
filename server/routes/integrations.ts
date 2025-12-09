@@ -137,16 +137,40 @@ export function registerIntegrationRoutes(
         });
       }
 
+      // Process inline images - convert /objects/ URLs to CID-based inline attachments
+      let processedContent = content;
+      let inlineAttachments: Array<{
+        name: string;
+        contentType: string;
+        contentBytes: string;
+        contentId: string;
+        isInline: boolean;
+      }> = [];
+
+      if (content.includes('/objects/')) {
+        try {
+          const { processInlineImages } = await import('../utils/inlineImageProcessor');
+          const processed = await processInlineImages(content);
+          processedContent = processed.html;
+          inlineAttachments = processed.inlineAttachments;
+          console.log(`[Outlook Email] Processed ${inlineAttachments.length} inline image(s)`);
+        } catch (imgError) {
+          console.error('[Outlook Email] Error processing inline images:', imgError);
+          // Continue with original content if processing fails
+        }
+      }
+
       // Send email using tenant-wide application permissions
       await sendEmailAsUserTenantWide(
         user.email,
         to,
         subject,
-        content,
-        true // isHtml
+        processedContent,
+        true, // isHtml
+        { inlineAttachments }
       );
 
-      // Log the communication only if linked to a client
+      // Log the communication with original content (not CID-processed) for readability
       if (clientId) {
         await storage.createCommunication({
           clientId,
@@ -1181,6 +1205,32 @@ export function registerIntegrationRoutes(
       let sentVia = 'unknown';
       let outlookError: Error | null = null;
 
+      // Process inline images (convert /objects/ URLs to CID-embedded attachments)
+      let processedContent = content;
+      let inlineAttachments: Array<{
+        name: string;
+        contentType: string;
+        contentBytes: string;
+        contentId: string;
+        isInline: boolean;
+      }> = [];
+
+      if (isHtml && content.includes('/objects/')) {
+        try {
+          const { processInlineImages } = await import('../utils/inlineImageProcessor');
+          const processed = await processInlineImages(content);
+          processedContent = processed.html;
+          inlineAttachments = processed.inlineAttachments;
+          
+          if (inlineAttachments.length > 0) {
+            console.log(`[EMAIL SEND] Processed ${inlineAttachments.length} inline image(s) for CID embedding`);
+          }
+        } catch (inlineErr) {
+          console.error('[EMAIL SEND] Error processing inline images:', inlineErr);
+          // Continue with original content if processing fails
+        }
+      }
+
       // Try Outlook (Microsoft Graph) first if configured and user has access
       const outlookConfigured = isApplicationGraphConfigured();
       const userHasOutlookAccess = user.accessEmail && user.email;
@@ -1200,9 +1250,12 @@ export function registerIntegrationRoutes(
             user.email!,
             to,
             subject,
-            content,
+            processedContent,
             isHtml || false,
-            { attachments: formattedAttachments }
+            { 
+              attachments: formattedAttachments,
+              inlineAttachments: inlineAttachments.length > 0 ? inlineAttachments : undefined
+            }
           );
           sentVia = 'outlook';
           console.log('[EMAIL SEND] Email sent successfully via Outlook:', { to, subject });
@@ -1233,17 +1286,33 @@ export function registerIntegrationRoutes(
               name: senderName
             },
             subject,
-            ...(isHtml ? { html: content } : { text: content }),
+            ...(isHtml ? { html: processedContent } : { text: processedContent }),
           };
           
-          // Add attachments if present
+          // Add attachments if present (including inline attachments for SendGrid)
+          const sgAttachments: any[] = [];
           if (attachments && attachments.length > 0) {
-            sgMessage.attachments = attachments.map(att => ({
+            sgAttachments.push(...attachments.map(att => ({
               filename: att.filename,
               content: att.content, // Already base64 encoded
               type: att.contentType,
               disposition: 'attachment',
-            }));
+            })));
+          }
+          
+          // Add inline attachments for SendGrid
+          if (inlineAttachments.length > 0) {
+            sgAttachments.push(...inlineAttachments.map(att => ({
+              filename: att.name,
+              content: att.contentBytes,
+              type: att.contentType,
+              disposition: 'inline',
+              content_id: att.contentId,
+            })));
+          }
+          
+          if (sgAttachments.length > 0) {
+            sgMessage.attachments = sgAttachments;
           }
           
           emailResult = await sgMail.send(sgMessage);

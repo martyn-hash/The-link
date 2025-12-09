@@ -815,6 +815,13 @@ export async function sendEmailAsUser(
       contentType: string;
       contentBytes: string; // Base64 encoded
     }>;
+    inlineAttachments?: Array<{
+      name: string;
+      contentType: string;
+      contentBytes: string; // Base64 encoded
+      contentId: string;
+      isInline: boolean;
+    }>;
     saveToSentItems?: boolean;
   } = {}
 ): Promise<{ success: boolean }> {
@@ -845,13 +852,31 @@ export async function sendEmailAsUser(
     }));
   }
 
+  // Combine regular attachments and inline attachments
+  const allAttachments: any[] = [];
+  
   if (options.attachments && options.attachments.length > 0) {
-    message.attachments = options.attachments.map(att => ({
+    allAttachments.push(...options.attachments.map(att => ({
       '@odata.type': '#microsoft.graph.fileAttachment',
       name: att.name,
       contentType: att.contentType,
       contentBytes: att.contentBytes
-    }));
+    })));
+  }
+  
+  if (options.inlineAttachments && options.inlineAttachments.length > 0) {
+    allAttachments.push(...options.inlineAttachments.map(att => ({
+      '@odata.type': '#microsoft.graph.fileAttachment',
+      name: att.name,
+      contentType: att.contentType,
+      contentBytes: att.contentBytes,
+      contentId: att.contentId,
+      isInline: true
+    })));
+  }
+  
+  if (allAttachments.length > 0) {
+    message.attachments = allAttachments;
   }
 
   await client

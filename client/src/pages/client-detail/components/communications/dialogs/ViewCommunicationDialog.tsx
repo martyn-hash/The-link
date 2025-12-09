@@ -278,11 +278,11 @@ export function ViewCommunicationDialog({
               <div className="mt-2 p-4 bg-muted/30 rounded-lg" data-testid={`div-modal-content-${communication.id}`}>
                 {communication.type === 'email_sent' || communication.type === 'email_received' ? (
                   <div 
-                    className="prose prose-sm dark:prose-invert max-w-none [&_table]:border-collapse [&_table]:w-full [&_td]:border [&_td]:border-gray-300 [&_td]:p-2 [&_th]:border [&_th]:border-gray-300 [&_th]:p-2 [&_th]:bg-gray-100 [&_th]:dark:bg-gray-800"
+                    className="prose prose-sm dark:prose-invert max-w-none [&_table]:border-collapse [&_table]:w-full [&_td]:border [&_td]:border-gray-300 [&_td]:p-2 [&_th]:border [&_th]:border-gray-300 [&_th]:p-2 [&_th]:bg-gray-100 [&_th]:dark:bg-gray-800 [&_img]:max-w-full [&_img]:h-auto [&_img]:rounded"
                     dangerouslySetInnerHTML={{ 
                       __html: DOMPurify.sanitize(communication.content, {
-                        ALLOWED_TAGS: ['br', 'p', 'strong', 'em', 'b', 'i', 'u', 'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'div', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'caption'],
-                        ALLOWED_ATTR: ['href', 'style', 'class', 'colspan', 'rowspan', 'border', 'cellpadding', 'cellspacing', 'align', 'valign', 'width'],
+                        ALLOWED_TAGS: ['br', 'p', 'strong', 'em', 'b', 'i', 'u', 'ul', 'ol', 'li', 'a', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'div', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'caption', 'img'],
+                        ALLOWED_ATTR: ['href', 'style', 'class', 'colspan', 'rowspan', 'border', 'cellpadding', 'cellspacing', 'align', 'valign', 'width', 'src', 'alt', 'title', 'height'],
                         ALLOW_DATA_ATTR: false
                       })
                     }}
