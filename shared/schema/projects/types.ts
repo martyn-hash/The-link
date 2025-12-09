@@ -16,7 +16,8 @@ import {
   schedulingExceptions,
 } from './tables';
 
-export type { DialoraSettings, DialoraOutboundWebhook } from './base';
+export type { DialoraSettings, DialoraOutboundWebhook, DialoraVariableMapping } from './base';
+export { DIALORA_AVAILABLE_FIELDS } from './base';
 import {
   insertProjectSchema,
   updateProjectSchema,

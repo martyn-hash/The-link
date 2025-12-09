@@ -21,10 +21,129 @@ export interface DialoraCallResult {
   error?: string;
 }
 
+export interface DialoraVariableMapping {
+  key: string;
+  field: string;
+}
+
+export interface DialoraCallContext {
+  recipient?: {
+    firstName?: string;
+    lastName?: string;
+    fullName?: string;
+    email?: string;
+    phone?: string;
+  };
+  client?: {
+    name?: string;
+    tradingAs?: string;
+    companyNumber?: string;
+    companyUtr?: string;
+    telephone?: string;
+    email?: string;
+  };
+  project?: {
+    name?: string;
+    reference?: string;
+    dueDate?: string;
+    status?: string;
+  };
+  queries?: {
+    pending?: number;
+    total?: number;
+    answered?: number;
+  };
+}
+
 export interface DialoraWebhookConfig {
   url: string;
   messageTemplate?: string;
   variables?: string;
+  variableMappings?: DialoraVariableMapping[];
+}
+
+/**
+ * Resolve variable mappings to actual values from context
+ */
+export function resolveVariableMappings(
+  mappings: DialoraVariableMapping[] | undefined,
+  context: DialoraCallContext
+): Record<string, string | number> {
+  if (!mappings || mappings.length === 0) {
+    return {};
+  }
+
+  const result: Record<string, string | number> = {};
+
+  for (const mapping of mappings) {
+    const { key, field } = mapping;
+    if (!key || !field) continue;
+
+    let value: string | number | undefined;
+
+    switch (field) {
+      case 'recipient.firstName':
+        value = context.recipient?.firstName;
+        break;
+      case 'recipient.lastName':
+        value = context.recipient?.lastName;
+        break;
+      case 'recipient.fullName':
+        value = context.recipient?.fullName;
+        break;
+      case 'recipient.email':
+        value = context.recipient?.email;
+        break;
+      case 'recipient.phone':
+        value = context.recipient?.phone;
+        break;
+      case 'client.name':
+        value = context.client?.name;
+        break;
+      case 'client.tradingAs':
+        value = context.client?.tradingAs;
+        break;
+      case 'client.companyNumber':
+        value = context.client?.companyNumber;
+        break;
+      case 'client.companyUtr':
+        value = context.client?.companyUtr;
+        break;
+      case 'client.telephone':
+        value = context.client?.telephone;
+        break;
+      case 'client.email':
+        value = context.client?.email;
+        break;
+      case 'project.name':
+        value = context.project?.name;
+        break;
+      case 'project.reference':
+        value = context.project?.reference;
+        break;
+      case 'project.dueDate':
+        value = context.project?.dueDate;
+        break;
+      case 'project.status':
+        value = context.project?.status;
+        break;
+      case 'queries.pending':
+        value = context.queries?.pending;
+        break;
+      case 'queries.total':
+        value = context.queries?.total;
+        break;
+      case 'queries.answered':
+        value = context.queries?.answered;
+        break;
+    }
+
+    if (value !== undefined && value !== null && value !== '') {
+      result[key] = value;
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -94,10 +213,12 @@ export function validatePhoneForVoiceCall(phone: string | null): { isValid: bool
  * Trigger an outbound voice call via Dialora webhook
  * @param payload - Call payload with recipient and message details
  * @param webhookConfig - Webhook configuration (required - no default fallback)
+ * @param context - Optional context for resolving variable mappings
  */
 export async function triggerDialoraCall(
   payload: DialoraCallPayload,
-  webhookConfig: DialoraWebhookConfig
+  webhookConfig: DialoraWebhookConfig,
+  context?: DialoraCallContext
 ): Promise<DialoraCallResult> {
   try {
     if (!webhookConfig?.url) {
@@ -118,11 +239,19 @@ export async function triggerDialoraCall(
     }
 
     const customVariables = processWebhookVariables(webhookConfig.variables);
+    const resolvedVariables = context 
+      ? resolveVariableMappings(webhookConfig.variableMappings, context)
+      : {};
+    
+    const mergedCustomVariables = {
+      ...customVariables,
+      ...resolvedVariables
+    };
     
     const webhookPayload = {
       ...payload,
       phone: formattedPhone,
-      ...(Object.keys(customVariables).length > 0 ? { customVariables } : {})
+      ...(Object.keys(mergedCustomVariables).length > 0 ? { customVariables: mergedCustomVariables } : {})
     };
 
     const webhookUrl = webhookConfig.url;

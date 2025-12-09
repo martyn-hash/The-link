@@ -31,7 +31,8 @@ import { getUncachableSendGridClient } from "../lib/sendgrid";
 import { 
   triggerDialoraCall, 
   generateVoiceCallMessage,
-  DialoraWebhookConfig
+  DialoraWebhookConfig,
+  DialoraCallContext
 } from "./dialoraService";
 
 interface ReminderSendResult {
@@ -486,7 +487,8 @@ async function sendVoiceReminder(
   clientName: string,
   pendingQueries: number,
   totalQueries: number,
-  webhookConfig: DialoraWebhookConfig | null
+  webhookConfig: DialoraWebhookConfig | null,
+  context?: DialoraCallContext
 ): Promise<ReminderSendResult> {
   try {
     if (!webhookConfig?.url) {
@@ -508,7 +510,8 @@ async function sendVoiceReminder(
         message,
         querycount: pendingQueries
       },
-      webhookConfig
+      webhookConfig,
+      context
     );
 
     return {
@@ -561,13 +564,35 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
   const responseLink = `${process.env.PUBLIC_URL || ''}/queries/respond/${token[0].token}`;
   
   const clientData = await db
-    .select({ name: clients.name })
+    .select({ 
+      name: clients.name,
+      tradingAs: clients.tradingAs,
+      companyNumber: clients.companyNumber,
+      companyUtr: clients.companyUtr,
+      telephone: clients.telephone,
+      email: clients.primaryContactEmail
+    })
     .from(clients)
-    .innerJoin(queryResponseTokens, eq(queryResponseTokens.projectId, clients.id))
+    .innerJoin(queryResponseTokens, eq(queryResponseTokens.clientId, clients.id))
     .where(eq(queryResponseTokens.id, reminder.tokenId))
     .limit(1);
 
   const clientName = clientData[0]?.name || 'Your Company';
+  const clientInfo = clientData[0];
+  
+  const projectData = token[0].projectId ? await db
+    .select({
+      name: projects.name,
+      reference: projects.reference,
+      dueDate: projects.dueDate,
+      status: projects.status
+    })
+    .from(projects)
+    .where(eq(projects.id, token[0].projectId))
+    .limit(1)
+  : [];
+  
+  const projectInfo = projectData[0];
 
   let result: ReminderSendResult;
 
@@ -620,6 +645,39 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
         const webhookConfig = token[0].projectId 
           ? await getDialoraWebhookConfig(token[0].projectId, reminder.tokenId)
           : null;
+        
+        const nameParts = (reminder.recipientName || '').split(' ');
+        const dialoraContext: DialoraCallContext = {
+          recipient: {
+            firstName: nameParts[0] || '',
+            lastName: nameParts.slice(1).join(' ') || '',
+            fullName: reminder.recipientName || '',
+            email: reminder.recipientEmail || '',
+            phone: reminder.recipientPhone || ''
+          },
+          client: {
+            name: clientInfo?.name || '',
+            tradingAs: clientInfo?.tradingAs || undefined,
+            companyNumber: clientInfo?.companyNumber || undefined,
+            companyUtr: clientInfo?.companyUtr || undefined,
+            telephone: clientInfo?.telephone || undefined,
+            email: clientInfo?.email || undefined
+          },
+          project: projectInfo ? {
+            name: projectInfo.name || undefined,
+            reference: projectInfo.reference || undefined,
+            dueDate: projectInfo.dueDate 
+              ? new Date(projectInfo.dueDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+              : undefined,
+            status: projectInfo.status || undefined
+          } : undefined,
+          queries: {
+            pending: queryStatus.pendingQueries,
+            total: queryStatus.totalQueries,
+            answered: queryStatus.answeredQueries
+          }
+        };
+        
         result = await sendVoiceReminder(
           reminder.recipientPhone,
           reminder.recipientName || '',
@@ -627,7 +685,8 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
           clientName,
           queryStatus.pendingQueries,
           queryStatus.totalQueries,
-          webhookConfig
+          webhookConfig,
+          dialoraContext
         );
       }
       break;

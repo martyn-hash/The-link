@@ -15,7 +15,8 @@ import {
 } from "@/components/ui/select";
 import { TabsContent } from "@/components/ui/tabs";
 import { Edit2, Save, X, Plus, Trash2, Phone, Webhook } from "lucide-react";
-import type { ProjectType, Service, DialoraSettings, DialoraOutboundWebhook } from "@shared/schema";
+import type { ProjectType, Service, DialoraSettings, DialoraOutboundWebhook, DialoraVariableMapping } from "@shared/schema";
+import { DIALORA_AVAILABLE_FIELDS } from "@shared/schema";
 import { nanoid } from "nanoid";
 
 interface SettingsTabProps {
@@ -410,23 +411,100 @@ export function SettingsTab({
                           </div>
 
                           <div className="space-y-2">
-                            <Label>Variables (comma-separated)</Label>
-                            <Input
-                              value={webhook.variables || ''}
-                              onChange={(e) => handleUpdateWebhook(webhook.id, { variables: e.target.value })}
-                              placeholder="e.g., name, number of transactions, due date"
-                              data-testid={`input-webhook-variables-${webhook.id}`}
-                            />
-                            {webhook.variables && webhook.variables.trim() && (
-                              <div className="p-2 bg-muted/50 rounded text-xs font-mono">
-                                <span className="text-muted-foreground">Sent in customVariables: </span>
-                                {webhook.variables.split(',').map(v => 
-                                  `{${v.trim().replace(/\s+/g, '')}}`
-                                ).join(', ')}
+                            <div className="flex items-center justify-between">
+                              <Label>Data Variables</Label>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  const newMapping: DialoraVariableMapping = { key: '', field: '' };
+                                  handleUpdateWebhook(webhook.id, { 
+                                    variableMappings: [...(webhook.variableMappings || []), newMapping]
+                                  });
+                                }}
+                                data-testid={`button-add-variable-mapping-${webhook.id}`}
+                              >
+                                <Plus className="w-4 h-4 mr-1" />
+                                Add Variable
+                              </Button>
+                            </div>
+                            
+                            {(webhook.variableMappings || []).length === 0 ? (
+                              <p className="text-xs text-muted-foreground">
+                                No variables configured. Add variables to send client/recipient data to Dialora.
+                              </p>
+                            ) : (
+                              <div className="space-y-2">
+                                {(webhook.variableMappings || []).map((mapping, mappingIndex) => (
+                                  <div key={mappingIndex} className="flex items-center gap-2 p-2 border rounded-lg bg-muted/30">
+                                    <div className="flex-1 space-y-1">
+                                      <Input
+                                        value={mapping.key}
+                                        onChange={(e) => {
+                                          const updated = [...(webhook.variableMappings || [])];
+                                          updated[mappingIndex] = { ...mapping, key: e.target.value };
+                                          handleUpdateWebhook(webhook.id, { variableMappings: updated });
+                                        }}
+                                        placeholder="Variable name for Dialora (e.g., name)"
+                                        className="h-8 text-sm"
+                                        data-testid={`input-mapping-key-${webhook.id}-${mappingIndex}`}
+                                      />
+                                    </div>
+                                    <span className="text-muted-foreground">=</span>
+                                    <div className="flex-1">
+                                      <Select
+                                        value={mapping.field}
+                                        onValueChange={(value) => {
+                                          const updated = [...(webhook.variableMappings || [])];
+                                          updated[mappingIndex] = { ...mapping, field: value };
+                                          handleUpdateWebhook(webhook.id, { variableMappings: updated });
+                                        }}
+                                      >
+                                        <SelectTrigger className="h-8 text-sm" data-testid={`select-mapping-field-${webhook.id}-${mappingIndex}`}>
+                                          <SelectValue placeholder="Select data field" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {DIALORA_AVAILABLE_FIELDS.map((field) => (
+                                            <SelectItem key={field.value} value={field.value}>
+                                              {field.label}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => {
+                                        const updated = (webhook.variableMappings || []).filter((_, i) => i !== mappingIndex);
+                                        handleUpdateWebhook(webhook.id, { variableMappings: updated });
+                                      }}
+                                      className="h-8 w-8 p-0"
+                                      data-testid={`button-remove-mapping-${webhook.id}-${mappingIndex}`}
+                                    >
+                                      <Trash2 className="w-4 h-4 text-destructive" />
+                                    </Button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {(webhook.variableMappings || []).some(m => m.key && m.field) && (
+                              <div className="p-2 bg-muted/50 rounded text-xs">
+                                <span className="text-muted-foreground font-medium">Preview: </span>
+                                {(webhook.variableMappings || [])
+                                  .filter(m => m.key && m.field)
+                                  .map(m => {
+                                    const fieldLabel = DIALORA_AVAILABLE_FIELDS.find(f => f.value === m.field)?.label || m.field;
+                                    return `${m.key} = [${fieldLabel}]`;
+                                  })
+                                  .join(', ')}
                               </div>
                             )}
                             <p className="text-xs text-muted-foreground">
-                              Enter variable names separated by commas. They will be sent in a "customVariables" object with bracketed placeholders (e.g., "due date" becomes {'{duedate}'}).
+                              Map data fields to variable names that Dialora expects. For example, map "name" to "Recipient First Name" to send the client's first name.
                             </p>
                           </div>
                         </div>
