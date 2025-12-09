@@ -168,3 +168,11 @@ export {
   qboConnections,
   qboOAuthStates,
 } from './qbo/tables';
+
+// AI Interactions domain tables
+export {
+  aiInteractions,
+  aiFunctionInvocations,
+  aiInsights,
+  aiInteractionStatusEnum,
+} from './ai-interactions/tables';

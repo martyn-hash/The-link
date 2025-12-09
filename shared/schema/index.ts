@@ -42,3 +42,4 @@ export * from './errors';
 export * from './qbo';
 export * from './calendar';
 export * from './queries';
+export * from './ai-interactions';
