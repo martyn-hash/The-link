@@ -79,10 +79,12 @@ A dedicated workspace mode for email communications, accessible via toggle along
 - **Public Settings API**: `GET /api/company-settings` returns feature flags for all authenticated users
 - **Inbox Selector**: Users see only inboxes they've been granted access to
 - **2-Column Layout**: Left column for inbox list, right column for email view (top) and AI Assist (bottom)
+- **Email Fetching**: `GET /api/comms/inbox/:inboxId/messages` and `GET /api/comms/inbox/:inboxId/messages/:messageId` query Microsoft Graph API directly with access control and feature flag checks
+- **Multi-Select Inbox Assignment**: `POST /api/users/:userId/inbox-access/bulk` allows granting access to multiple inboxes at once with validation
 - **Person Matching**: Only emails from/to contacts matching CRM person records are displayed (planned)
 - **AI Assist Panel**: Context-aware briefing notes and suggested replies powered by OpenAI (planned)
 
-Key files: `client/src/components/comms/CommsWorkspace.tsx`, `client/src/components/projects-page/ProjectsContent.tsx`, `server/routes/superAdmin.ts`
+Key files: `client/src/components/comms/CommsWorkspace.tsx`, `client/src/components/projects-page/ProjectsContent.tsx`, `server/routes/emails.ts`, `server/routes/superAdmin.ts`
 
 ### System Design
 PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) handles object storage with secure signed URLs. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control; the client portal uses passwordless email verification. The system is multi-tenant and designed for modularity, with extensive database indexing. Key features include automated project management, advanced communication tools (push notifications, internal tasks, email threading via Microsoft Graph, multi-channel client notifications with AI assistance, RingCentral VoIP with automatic transcription), UK eIDAS-compliant electronic signatures, comprehensive workflow and status management with Kanban views, and Bookkeeping Queries. It also includes an AI Audio Transcription service, client value notifications with AI-assisted drafting, Zapier integration via webhooks, and an enhanced data import system. A friendly error handling system replaces technical errors with user-friendly messages. A scheduled notifications calendar provides comprehensive management of automated notifications, with stage-aware suppression. A resilient project scheduling orchestrator ensures robustness against server restarts and outages.

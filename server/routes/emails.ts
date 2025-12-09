@@ -1032,6 +1032,14 @@ export function registerEmailRoutes(
       const { inboxId } = req.params;
       const { top = '25', skip = '0', folder = 'Inbox' } = req.query;
 
+      // Check company-level email feature flag
+      const companySettings = await storage.getCompanySettings();
+      if (!companySettings?.emailModuleActive) {
+        return res.status(403).json({ 
+          message: "Email features are not enabled for your organization" 
+        });
+      }
+
       // Verify user has access to this inbox
       const hasAccess = await storage.canUserAccessInbox(userId, inboxId);
       if (!hasAccess) {
@@ -1110,6 +1118,14 @@ export function registerEmailRoutes(
     try {
       const userId = req.user!.effectiveUserId;
       const { inboxId, messageId } = req.params;
+
+      // Check company-level email feature flag
+      const companySettings = await storage.getCompanySettings();
+      if (!companySettings?.emailModuleActive) {
+        return res.status(403).json({ 
+          message: "Email features are not enabled for your organization" 
+        });
+      }
 
       // Verify user has access to this inbox
       const hasAccess = await storage.canUserAccessInbox(userId, inboxId);

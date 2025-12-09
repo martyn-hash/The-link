@@ -307,7 +307,14 @@ export function CommsWorkspace() {
               <div className="flex items-center justify-center h-full text-muted-foreground">
                 <div className="text-center">
                   <AlertCircle className="h-12 w-12 mx-auto mb-4 text-destructive opacity-70" />
-                  <p className="text-sm text-destructive">{(emailsError as Error).message}</p>
+                  <p className="text-sm text-destructive font-medium">Unable to load emails</p>
+                  <p className="text-xs text-muted-foreground mt-1 max-w-xs">
+                    {(emailsError as Error).message.includes("not configured") 
+                      ? "Email integration is not set up. Please contact your administrator."
+                      : (emailsError as Error).message.includes("not enabled")
+                      ? "Email features are currently disabled for your organization."
+                      : "There was a problem connecting to the email server. Please try again."}
+                  </p>
                   <Button variant="outline" size="sm" className="mt-4" onClick={() => refetchEmails()}>
                     Try Again
                   </Button>
