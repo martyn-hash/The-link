@@ -1,4 +1,4 @@
-import { LayoutGrid, List, Columns3, BarChart3, Calendar, Check } from "lucide-react";
+import { LayoutGrid, List, Columns3, BarChart3, Calendar, Check, Table2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -6,8 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
-type ViewMode = "list" | "kanban" | "dashboard" | "calendar";
+import type { ViewMode } from "@/types/projects-page";
 
 interface LayoutsMenuProps {
   currentViewMode: ViewMode;
@@ -25,6 +24,7 @@ export default function LayoutsMenu({
     { id: "kanban" as const, label: "Kanban", icon: Columns3 },
     { id: "dashboard" as const, label: "Dashboard", icon: BarChart3 },
     { id: "calendar" as const, label: "Calendar", icon: Calendar },
+    { id: "pivot" as const, label: "Pivot Table", icon: Table2 },
   ];
 
   const currentLayout = layouts.find(l => l.id === currentViewMode) || layouts[0];

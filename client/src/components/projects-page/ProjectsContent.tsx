@@ -12,9 +12,10 @@ import DashboardBuilder from "@/components/dashboard-builder";
 import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
 import { CalendarView } from "@/components/calendar";
+import PivotTableView from "@/components/PivotTableView";
 import { TasksWorkspace, type OwnershipFilter } from "@/components/tasks/TasksWorkspace";
 import { CommsWorkspace } from "@/components/comms/CommsWorkspace";
-import type { ViewMode, WorkspaceMode, Dashboard, Widget, CalendarSettings, CustomDateRange, DynamicDateFilter } from "@/types/projects-page";
+import type { ViewMode, WorkspaceMode, Dashboard, Widget, CalendarSettings, CustomDateRange, DynamicDateFilter, PivotConfig } from "@/types/projects-page";
 import type { ProjectWithRelations, User } from "@shared/schema";
 
 export interface ProjectsContentProps {
@@ -82,6 +83,9 @@ export interface ProjectsContentProps {
   listSortBy: string;
   listSortOrder: "asc" | "desc";
   onListSortChange: (sortBy: string, sortOrder: "asc" | "desc") => void;
+  // Pivot table settings
+  pivotConfig?: PivotConfig | null;
+  onPivotConfigChange?: (config: PivotConfig) => void;
 }
 
 function LoadingState() {
@@ -217,6 +221,9 @@ interface ViewContentProps {
   listSortBy: string;
   listSortOrder: "asc" | "desc";
   onListSortChange: (sortBy: string, sortOrder: "asc" | "desc") => void;
+  // Pivot table settings
+  pivotConfig?: PivotConfig | null;
+  onPivotConfigChange?: (config: PivotConfig) => void;
 }
 
 function ViewContent({
@@ -264,9 +271,21 @@ function ViewContent({
   listSortBy,
   listSortOrder,
   onListSortChange,
+  pivotConfig,
+  onPivotConfigChange,
 }: ViewContentProps) {
   if (projectsLoading || (isManagerOrAdmin && usersLoading)) {
     return <LoadingState />;
+  }
+
+  if (viewMode === "pivot") {
+    return (
+      <PivotTableView
+        projects={filteredProjects}
+        pivotConfig={pivotConfig}
+        onPivotConfigChange={onPivotConfigChange}
+      />
+    );
   }
 
   if (viewMode === "dashboard") {
@@ -410,6 +429,8 @@ export function ProjectsContent({
   listSortBy,
   listSortOrder,
   onListSortChange,
+  pivotConfig,
+  onPivotConfigChange,
 }: ProjectsContentProps) {
   const viewContentProps = {
     viewMode,
@@ -456,6 +477,8 @@ export function ProjectsContent({
     listSortBy,
     listSortOrder,
     onListSortChange,
+    pivotConfig,
+    onPivotConfigChange,
   };
 
   if (workspaceMode === "tasks") {

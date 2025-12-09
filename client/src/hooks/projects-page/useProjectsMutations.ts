@@ -7,14 +7,14 @@ import type { Widget, Dashboard, CalendarSettings } from "@/types/projects-page"
 interface SaveViewData {
   name: string;
   filters: string;
-  viewMode: "list" | "kanban" | "calendar";
+  viewMode: "list" | "kanban" | "calendar" | "pivot";
   calendarSettings?: CalendarSettings;
 }
 
 interface UpdateViewData {
   id: string;
   filters: string;
-  viewMode: "list" | "kanban" | "calendar";
+  viewMode: "list" | "kanban" | "calendar" | "pivot";
 }
 
 interface SaveDashboardData {

@@ -22,6 +22,7 @@ import type {
   CustomDateRange,
   ProjectFilters,
   ProjectView,
+  PivotConfig,
 } from "@/types/projects-page";
 import type { OwnershipFilter } from "@/components/tasks/TasksWorkspace";
 
@@ -98,6 +99,13 @@ export function useProjectsPageState() {
   const handleListSortChange = useCallback((sortBy: string, sortOrder: "asc" | "desc") => {
     setListSortBy(sortBy);
     setListSortOrder(sortOrder);
+  }, []);
+
+  // Pivot table configuration
+  const [pivotConfig, setPivotConfig] = useState<PivotConfig | null>(null);
+  
+  const handlePivotConfigChange = useCallback((config: PivotConfig) => {
+    setPivotConfig(config);
   }, []);
 
   const [kanbanCompactMode, setKanbanCompactMode] = useState<boolean>(() => {
@@ -378,7 +386,7 @@ export function useProjectsPageState() {
     mutations.saveViewMutation.mutate({
       name: newViewName,
       filters: JSON.stringify(filtersToSave),
-      viewMode: viewMode === "dashboard" ? "list" : viewMode,
+      viewMode: viewMode === "dashboard" ? "list" : (viewMode === "pivot" ? "pivot" : viewMode),
       calendarSettings: viewMode === "calendar" ? calendarSettings : undefined,
     });
   }, [
@@ -451,7 +459,7 @@ export function useProjectsPageState() {
     mutations.updateViewMutation.mutate({
       id: currentSavedViewId,
       filters: JSON.stringify(filtersToSave),
-      viewMode: viewMode === "dashboard" ? "list" : viewMode,
+      viewMode: viewMode === "dashboard" ? "list" : (viewMode === "pivot" ? "pivot" : viewMode),
     });
   }, [
     currentSavedViewId,
@@ -623,6 +631,10 @@ export function useProjectsPageState() {
     listSortOrder,
     setListSortOrder,
     handleListSortChange,
+
+    // Pivot table settings
+    pivotConfig,
+    onPivotConfigChange: handlePivotConfigChange,
 
     kanbanCompactMode,
     kanbanExpandedStages,

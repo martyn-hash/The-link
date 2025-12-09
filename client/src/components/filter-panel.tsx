@@ -67,8 +67,8 @@ interface FilterPanelProps {
   setCustomDateRange: (value: { from: Date | undefined; to: Date | undefined }) => void;
   serviceDueDateFilter: string;
   setServiceDueDateFilter: (value: string) => void;
-  viewMode: "kanban" | "list" | "dashboard" | "calendar";
-  setViewMode: (value: "kanban" | "list" | "dashboard" | "calendar") => void;
+  viewMode: "kanban" | "list" | "dashboard" | "calendar" | "pivot";
+  setViewMode: (value: "kanban" | "list" | "dashboard" | "calendar" | "pivot") => void;
   
   // Client has project types filter
   clientHasProjectTypeIds?: string[];

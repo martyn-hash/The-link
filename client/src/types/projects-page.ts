@@ -1,6 +1,17 @@
 import type { ProjectWithRelations, User, ProjectView, UserProjectPreferences } from "@shared/schema";
 
-export type ViewMode = "kanban" | "list" | "dashboard" | "calendar";
+export type ViewMode = "kanban" | "list" | "dashboard" | "calendar" | "pivot";
+
+export interface PivotConfig {
+  rows: string[];
+  cols: string[];
+  vals: string[];
+  aggregatorName: string;
+  rendererName: string;
+  valueFilter?: Record<string, Record<string, boolean>>;
+  rowOrder?: string;
+  colOrder?: string;
+}
 export type WorkspaceMode = "projects" | "tasks" | "comms";
 export type DynamicDateFilter = "all" | "overdue" | "today" | "next7days" | "next14days" | "next30days" | "custom";
 export type ScheduleStatusFilter = "all" | "behind" | "overdue" | "both";

@@ -131,6 +131,7 @@ export const projectViews = pgTable("project_views", {
   name: text("name").notNull(),
   filters: text("filters").notNull(),
   viewMode: varchar("view_mode").notNull(),
+  pivotConfig: text("pivot_config"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_project_views_user_id").on(table.userId),
