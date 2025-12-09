@@ -419,14 +419,14 @@ export function SettingsTab({
                             />
                             {webhook.variables && webhook.variables.trim() && (
                               <div className="p-2 bg-muted/50 rounded text-xs font-mono">
-                                <span className="text-muted-foreground">Appended to webhook: </span>
+                                <span className="text-muted-foreground">Sent in customVariables: </span>
                                 {webhook.variables.split(',').map(v => 
-                                  `{${v.trim().toLowerCase().replace(/\s+/g, '')}}`
+                                  `{${v.trim().replace(/\s+/g, '')}}`
                                 ).join(', ')}
                               </div>
                             )}
                             <p className="text-xs text-muted-foreground">
-                              Enter variable names separated by commas. They will be converted to bracketed format (e.g., "due date" becomes {'{duedate}'}).
+                              Enter variable names separated by commas. They will be sent in a "customVariables" object with bracketed placeholders (e.g., "due date" becomes {'{duedate}'}).
                             </p>
                           </div>
                         </div>

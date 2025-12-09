@@ -38,7 +38,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Webhook, Plus, Edit, Trash2, History, ArrowLeft, CheckCircle, XCircle, Clock } from "lucide-react";
+import { Webhook, Plus, Edit, Trash2, History, ArrowLeft, CheckCircle, XCircle, Clock, Play, FlaskConical } from "lucide-react";
 import { Link } from "wouter";
 import type { WebhookConfig, WebhookLogWithDetails } from "@shared/schema";
 
@@ -74,6 +74,19 @@ export default function AdminWebhooks() {
     requiredClientFields: [] as string[],
     requiredPersonFields: [] as string[],
   });
+
+  const [testWebhookUrl, setTestWebhookUrl] = useState("");
+  const [testVariables, setTestVariables] = useState<Array<{ key: string; value: string }>>([
+    { key: "", value: "" }
+  ]);
+  const [testResult, setTestResult] = useState<{
+    success: boolean;
+    status?: number;
+    statusText?: string;
+    response?: any;
+    message?: string;
+    requestBody?: Record<string, string>;
+  } | null>(null);
 
   const { data: webhooks = [], isLoading: webhooksLoading } = useQuery<WebhookConfig[]>({
     queryKey: ["/api/super-admin/webhooks"],
@@ -129,6 +142,50 @@ export default function AdminWebhooks() {
       showFriendlyError({ error });
     },
   });
+
+  const testMutation = useMutation({
+    mutationFn: async () => {
+      const variables: Record<string, string> = {};
+      testVariables.forEach(v => {
+        if (v.key.trim()) {
+          variables[v.key.trim()] = v.value;
+        }
+      });
+      const result = await apiRequest("POST", "/api/super-admin/webhooks/test", {
+        webhookUrl: testWebhookUrl,
+        variables
+      });
+      return { ...result, requestBody: variables };
+    },
+    onSuccess: (data: any) => {
+      setTestResult(data);
+      if (data.success) {
+        toast({ title: "Webhook test successful", description: `Status: ${data.status} ${data.statusText}` });
+      } else {
+        toast({ 
+          title: "Webhook test completed", 
+          description: `Status: ${data.status} ${data.statusText}`,
+          variant: "destructive"
+        });
+      }
+    },
+    onError: (error: any) => {
+      setTestResult({ success: false, message: error.message || "Failed to test webhook" });
+      showFriendlyError({ error });
+    },
+  });
+
+  const addTestVariable = () => {
+    setTestVariables(prev => [...prev, { key: "", value: "" }]);
+  };
+
+  const removeTestVariable = (index: number) => {
+    setTestVariables(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateTestVariable = (index: number, field: "key" | "value", value: string) => {
+    setTestVariables(prev => prev.map((v, i) => i === index ? { ...v, [field]: value } : v));
+  };
 
   const resetForm = () => {
     setFormData({
@@ -220,6 +277,125 @@ export default function AdminWebhooks() {
             Add Webhook
           </Button>
         </div>
+
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FlaskConical className="h-5 w-5" />
+              Webhook Tester
+            </CardTitle>
+            <CardDescription>
+              Test any webhook URL by sending a custom payload with variables
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="test-webhook-url">Webhook URL</Label>
+              <Input
+                id="test-webhook-url"
+                placeholder="https://hooks.zapier.com/hooks/catch/..."
+                value={testWebhookUrl}
+                onChange={(e) => setTestWebhookUrl(e.target.value)}
+                data-testid="input-test-webhook-url"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Variables (Key-Value Pairs)</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addTestVariable}
+                  data-testid="btn-add-test-variable"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add Variable
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {testVariables.map((variable, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <Input
+                      placeholder="Key (e.g., name)"
+                      value={variable.key}
+                      onChange={(e) => updateTestVariable(index, "key", e.target.value)}
+                      className="flex-1"
+                      data-testid={`input-test-var-key-${index}`}
+                    />
+                    <Input
+                      placeholder="Value (e.g., John Doe)"
+                      value={variable.value}
+                      onChange={(e) => updateTestVariable(index, "value", e.target.value)}
+                      className="flex-1"
+                      data-testid={`input-test-var-value-${index}`}
+                    />
+                    {testVariables.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeTestVariable(index)}
+                        data-testid={`btn-remove-test-variable-${index}`}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <Button
+                onClick={() => testMutation.mutate()}
+                disabled={!testWebhookUrl || testMutation.isPending}
+                data-testid="btn-trigger-test-webhook"
+              >
+                <Play className="h-4 w-4 mr-2" />
+                {testMutation.isPending ? "Testing..." : "Trigger Webhook"}
+              </Button>
+            </div>
+
+            {testResult && (
+              <div className={`p-4 rounded-lg border ${testResult.success ? 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800' : 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800'}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  {testResult.success ? (
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                  ) : (
+                    <XCircle className="h-5 w-5 text-red-600" />
+                  )}
+                  <span className="font-medium">
+                    {testResult.success ? 'Success' : 'Failed'}
+                    {testResult.status && ` - ${testResult.status} ${testResult.statusText}`}
+                  </span>
+                </div>
+                {testResult.requestBody && Object.keys(testResult.requestBody).length > 0 && (
+                  <div className="mt-2">
+                    <Label className="text-xs text-muted-foreground">Request Body Sent:</Label>
+                    <pre className="mt-1 p-2 bg-muted rounded text-xs overflow-auto max-h-32">
+                      {JSON.stringify(testResult.requestBody, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                {testResult.response && (
+                  <div className="mt-2">
+                    <Label className="text-xs text-muted-foreground">Response:</Label>
+                    <pre className="mt-1 p-2 bg-muted rounded text-xs overflow-auto max-h-40">
+                      {typeof testResult.response === 'string' 
+                        ? testResult.response 
+                        : JSON.stringify(testResult.response, null, 2)}
+                    </pre>
+                  </div>
+                )}
+                {testResult.message && (
+                  <p className="text-sm text-red-600">{testResult.message}</p>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {webhooksLoading ? (
           <Card>

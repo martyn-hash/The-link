@@ -24,6 +24,32 @@ export interface DialoraCallResult {
 export interface DialoraWebhookConfig {
   url: string;
   messageTemplate?: string;
+  variables?: string;
+}
+
+/**
+ * Process variable string into key format and create placeholder object
+ * Converts "name, number of transactions, Due Date" to { name: "{name}", numberoftransactions: "{numberoftransactions}", DueDate: "{DueDate}" }
+ * Spaces are removed but casing is preserved
+ * These are sent in a separate "customVariables" object to avoid overwriting core payload fields
+ */
+export function processWebhookVariables(variablesString: string | undefined): Record<string, string> {
+  if (!variablesString || !variablesString.trim()) {
+    return {};
+  }
+  
+  const result: Record<string, string> = {};
+  const variables = variablesString.split(',');
+  
+  for (const variable of variables) {
+    const trimmed = variable.trim();
+    if (trimmed) {
+      const key = trimmed.replace(/\s+/g, '');
+      result[key] = `{${key}}`;
+    }
+  }
+  
+  return result;
 }
 
 /**
@@ -91,9 +117,12 @@ export async function triggerDialoraCall(
       };
     }
 
+    const customVariables = processWebhookVariables(webhookConfig.variables);
+    
     const webhookPayload = {
       ...payload,
-      phone: formattedPhone
+      phone: formattedPhone,
+      ...(Object.keys(customVariables).length > 0 ? { customVariables } : {})
     };
 
     const webhookUrl = webhookConfig.url;

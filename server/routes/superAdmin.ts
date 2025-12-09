@@ -1325,6 +1325,64 @@ export function registerSuperAdminRoutes(
     }
   );
 
+  // Test webhook - allows sending a test payload to any webhook URL
+  app.post(
+    "/api/super-admin/webhooks/test",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const { webhookUrl, variables } = req.body;
+
+        if (!webhookUrl) {
+          return res.status(400).json({ message: "Webhook URL is required" });
+        }
+
+        console.log(`[Webhook Test] Testing webhook: ${webhookUrl}`);
+        console.log(`[Webhook Test] Payload:`, variables);
+
+        const response = await fetch(webhookUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(variables || {})
+        });
+
+        const responseText = await response.text();
+        let responseData;
+        try {
+          responseData = JSON.parse(responseText);
+        } catch {
+          responseData = responseText;
+        }
+
+        if (!response.ok) {
+          return res.json({
+            success: false,
+            status: response.status,
+            statusText: response.statusText,
+            response: responseData
+          });
+        }
+
+        res.json({
+          success: true,
+          status: response.status,
+          statusText: response.statusText,
+          response: responseData
+        });
+      } catch (error: any) {
+        console.error("[Webhook Test] Error:", error);
+        res.status(500).json({ 
+          success: false,
+          message: error.message || "Failed to test webhook" 
+        });
+      }
+    }
+  );
+
   // Get calendar events for a user
   app.get(
     "/api/super-admin/graph/users/:userEmail/calendar",
