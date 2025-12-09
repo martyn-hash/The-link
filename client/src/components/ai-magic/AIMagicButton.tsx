@@ -27,7 +27,8 @@ export function AIMagicButton() {
     setIsOpen(prev => !prev);
   }, []);
 
-  const shouldShowButton = featureFlags?.aiButtonEnabled || user?.superAdmin;
+  // Only show button if global setting is enabled AND user has permission (or is superAdmin)
+  const shouldShowButton = featureFlags?.aiButtonEnabled && (user?.canAccessMagicAiButton || user?.superAdmin);
 
   // Handler to trigger voice recording from the chat panel
   const handleVoiceTrigger = useCallback((toggleFn: () => void) => {

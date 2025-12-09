@@ -74,6 +74,7 @@ import {
   Trash2,
   ChevronDown,
   Check,
+  Sparkles,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import type { User, UserSession, Inbox as InboxType, UserInboxAccess } from "@shared/schema";
@@ -108,6 +109,7 @@ export default function UserDetailPage() {
     canBenchProjects: false,
     accessEmail: false,
     accessCalendar: false,
+    canAccessMagicAiButton: false,
   });
 
   const { data: targetUser, isLoading: userLoading } = useQuery<User>({
@@ -156,6 +158,7 @@ export default function UserDetailPage() {
         canBenchProjects: targetUser.canBenchProjects || false,
         accessEmail: targetUser.accessEmail || false,
         accessCalendar: targetUser.accessCalendar || false,
+        canAccessMagicAiButton: targetUser.canAccessMagicAiButton || false,
       });
     }
   }, [targetUser]);
@@ -559,6 +562,25 @@ export default function UserDetailPage() {
                       onCheckedChange={(checked) => handlePermissionChange("accessCalendar", checked)}
                       disabled={updatePermissionsMutation.isPending}
                       data-testid="switch-access-calendar"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between py-2 border-b">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="canAccessMagicAiButton" className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4" />
+                        Can Access Magic AI Button
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        Access to the AI Magic assistant button (also requires global setting to be enabled)
+                      </p>
+                    </div>
+                    <Switch
+                      id="canAccessMagicAiButton"
+                      checked={permissions.canAccessMagicAiButton}
+                      onCheckedChange={(checked) => handlePermissionChange("canAccessMagicAiButton", checked)}
+                      disabled={updatePermissionsMutation.isPending}
+                      data-testid="switch-can-access-magic-ai-button"
                     />
                   </div>
                 </div>

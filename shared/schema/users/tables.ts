@@ -42,6 +42,7 @@ export const users = pgTable("users", {
   canSeeAllTasks: boolean("can_see_all_tasks").default(false),
   accessEmail: boolean("access_email").default(false),
   accessCalendar: boolean("access_calendar").default(false),
+  canAccessMagicAiButton: boolean("can_access_magic_ai_button").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   lastLoginAt: timestamp("last_login_at"),
