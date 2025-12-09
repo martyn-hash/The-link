@@ -333,3 +333,6 @@ export const VAT_UDF_FIELD_NAME = 'VAT Number';
 
 export const VAT_ADDRESS_UDF_FIELD_ID = 'vat_address_auto';
 export const VAT_ADDRESS_UDF_FIELD_NAME = 'VAT Address';
+
+export const VAT_COMPANY_NAME_UDF_FIELD_ID = 'vat_company_name_auto';
+export const VAT_COMPANY_NAME_UDF_FIELD_NAME = 'VAT Company Name';

@@ -452,10 +452,13 @@ export class ServiceStorage extends BaseStorage {
     const VAT_NUMBER_REGEX_ERROR = 'Please enter a valid UK VAT number (e.g., 123456789 or GB123456789)';
     const VAT_ADDRESS_UDF_FIELD_ID = 'vat_address_auto';
     const VAT_ADDRESS_UDF_FIELD_NAME = 'VAT Address';
+    const VAT_COMPANY_NAME_UDF_FIELD_ID = 'vat_company_name_auto';
+    const VAT_COMPANY_NAME_UDF_FIELD_NAME = 'VAT Company Name';
 
     const udfs = Array.isArray(udfDefinitions) ? [...udfDefinitions] : [];
     const existingVatUdfIndex = udfs.findIndex(udf => udf.id === VAT_UDF_FIELD_ID);
     const existingVatAddressUdfIndex = udfs.findIndex(udf => udf.id === VAT_ADDRESS_UDF_FIELD_ID);
+    const existingVatCompanyNameUdfIndex = udfs.findIndex(udf => udf.id === VAT_COMPANY_NAME_UDF_FIELD_ID);
 
     if (isVatService) {
       if (existingVatUdfIndex === -1) {
@@ -469,9 +472,21 @@ export class ServiceStorage extends BaseStorage {
           regexError: VAT_NUMBER_REGEX_ERROR,
         });
       }
-      if (existingVatAddressUdfIndex === -1) {
+      if (existingVatCompanyNameUdfIndex === -1) {
         const insertIndex = udfs.findIndex(udf => udf.id === VAT_UDF_FIELD_ID);
         udfs.splice(insertIndex + 1, 0, {
+          id: VAT_COMPANY_NAME_UDF_FIELD_ID,
+          name: VAT_COMPANY_NAME_UDF_FIELD_NAME,
+          type: 'short_text',
+          required: false,
+          placeholder: 'Auto-populated from HMRC validation',
+          readOnly: true,
+        });
+      }
+      if (existingVatAddressUdfIndex === -1) {
+        const vatCompanyNameIndex = udfs.findIndex(udf => udf.id === VAT_COMPANY_NAME_UDF_FIELD_ID);
+        const insertIndex = vatCompanyNameIndex !== -1 ? vatCompanyNameIndex + 1 : udfs.findIndex(udf => udf.id === VAT_UDF_FIELD_ID) + 1;
+        udfs.splice(insertIndex, 0, {
           id: VAT_ADDRESS_UDF_FIELD_ID,
           name: VAT_ADDRESS_UDF_FIELD_NAME,
           type: 'long_text',

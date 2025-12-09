@@ -17,7 +17,9 @@ import {
   VAT_UDF_FIELD_ID,
   VAT_UDF_FIELD_NAME,
   VAT_ADDRESS_UDF_FIELD_ID,
-  VAT_ADDRESS_UDF_FIELD_NAME
+  VAT_ADDRESS_UDF_FIELD_NAME,
+  VAT_COMPANY_NAME_UDF_FIELD_ID,
+  VAT_COMPANY_NAME_UDF_FIELD_NAME
 } from "../hmrc-vat-service";
 
 // Parameter validation schemas
@@ -593,6 +595,10 @@ export function registerServiceRoutes(
         return res.status(400).json({ message: "This service is not configured as a VAT service" });
       }
 
+      // Get the client to compare company names
+      const client = await storage.getClientById(clientService.clientId);
+      const clientName = client?.name || '';
+
       // Get the VAT number from UDF values
       const udfValues = (clientService.udfValues || {}) as Record<string, any>;
       const vatNumber = udfValues[VAT_UDF_FIELD_ID];
@@ -613,7 +619,15 @@ export function registerServiceRoutes(
         }
       }
 
-      // Update the UDF values with validation metadata and address
+      // Check if company names match (case-insensitive, trim whitespace)
+      let companyNameMismatch = false;
+      if (result.isValid && result.companyName && clientName) {
+        const normalizedHmrcName = result.companyName.toLowerCase().trim();
+        const normalizedClientName = clientName.toLowerCase().trim();
+        companyNameMismatch = normalizedHmrcName !== normalizedClientName;
+      }
+
+      // Update the UDF values with validation metadata, company name, and address
       const updatedUdfValues = {
         ...udfValues,
         [`${VAT_UDF_FIELD_ID}_validation`]: {
@@ -626,6 +640,7 @@ export function registerServiceRoutes(
           error: result.error,
           errorCode: result.errorCode,
         },
+        [VAT_COMPANY_NAME_UDF_FIELD_ID]: result.isValid && !result.bypassed && result.companyName ? result.companyName : (udfValues[VAT_COMPANY_NAME_UDF_FIELD_ID] || ''),
         [VAT_ADDRESS_UDF_FIELD_ID]: result.isValid && !result.bypassed ? fullAddress : (udfValues[VAT_ADDRESS_UDF_FIELD_ID] || ''),
       };
 
@@ -636,6 +651,8 @@ export function registerServiceRoutes(
         ...result,
         clientServiceId,
         vatNumber,
+        clientName,
+        companyNameMismatch,
       });
     } catch (error) {
       console.error("Error validating VAT for client service:", error instanceof Error ? error.message : error);
@@ -829,11 +846,12 @@ export function registerServiceRoutes(
                 address: validationResult.address,
                 postcode: validationResult.postcode,
               },
+              [VAT_COMPANY_NAME_UDF_FIELD_ID]: validationResult.companyName || (udfValues[VAT_COMPANY_NAME_UDF_FIELD_ID] || ''),
               [VAT_ADDRESS_UDF_FIELD_ID]: hmrcFullAddress,
             };
             await storage.updateClientService(cs.id, { udfValues: updatedUdfValues });
           } else {
-            // Only update validation metadata, not the address (requires approval)
+            // Only update validation metadata and company name, not the address (requires approval)
             const updatedUdfValues = {
               ...udfValues,
               [`${VAT_UDF_FIELD_ID}_validation`]: {
@@ -845,6 +863,7 @@ export function registerServiceRoutes(
                 postcode: validationResult.postcode,
                 pendingAddressUpdate: true,
               },
+              [VAT_COMPANY_NAME_UDF_FIELD_ID]: validationResult.companyName || (udfValues[VAT_COMPANY_NAME_UDF_FIELD_ID] || ''),
             };
             await storage.updateClientService(cs.id, { udfValues: updatedUdfValues });
           }

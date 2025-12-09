@@ -13,17 +13,20 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useToast } from "@/hooks/use-toast";
 import { showFriendlyError } from "@/lib/friendlyErrors";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { InvalidVatModal, CompanyNameMismatchModal } from "@/components/VatValidationModals";
 import type { UDFDefinition, Service, ClientService } from "@shared/schema";
 import type { EnhancedClientService } from "../../../utils/types";
 
 const VAT_UDF_FIELD_ID = 'vat_number_auto';
 const VAT_ADDRESS_UDF_FIELD_ID = 'vat_address_auto';
+const VAT_COMPANY_NAME_UDF_FIELD_ID = 'vat_company_name_auto';
 
 interface VatValidationStatus {
   status: 'validated' | 'invalid' | 'unvalidated' | 'validating' | 'bypassed';
   companyName?: string;
   validatedAt?: string;
   error?: string;
+  errorCode?: string;
 }
 
 interface ServicesDataSubTabProps {
@@ -162,17 +165,29 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
   const [isEditing, setIsEditing] = useState(false);
   const [editedValues, setEditedValues] = useState<Record<string, any>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
+  
+  const [showInvalidVatModal, setShowInvalidVatModal] = useState(false);
+  const [showMismatchModal, setShowMismatchModal] = useState(false);
+  const [pendingVatData, setPendingVatData] = useState<{
+    vatNumber: string;
+    hmrcCompanyName: string;
+    clientName: string;
+    validatedAt?: string;
+  } | null>(null);
+  const [invalidVatData, setInvalidVatData] = useState<{
+    vatNumber: string;
+    error?: string;
+    errorCode?: string;
+  } | null>(null);
 
   const udfDefinitions = (clientService.service.udfDefinitions as UDFDefinition[] | null) || [];
   const currentValues = (clientService.udfValues as Record<string, any>) || {};
 
-  // Initialize VAT validation status from stored metadata
   const getInitialVatStatus = (): VatValidationStatus => {
     const validationKey = `${VAT_UDF_FIELD_ID}_validation`;
     const validationData = currentValues[validationKey];
     
     if (validationData?.isValid !== undefined) {
-      // Check if validation was bypassed
       if (validationData.bypassed) {
         return {
           status: 'bypassed',
@@ -184,6 +199,7 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
         companyName: validationData.companyName,
         validatedAt: validationData.validatedAt,
         error: validationData.error,
+        errorCode: validationData.errorCode,
       };
     }
     
@@ -203,19 +219,17 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
   const hasVatField = udfDefinitions.some(def => def.id === VAT_UDF_FIELD_ID);
   const isVatService = (clientService.service as any).isVatService === true;
 
-  // VAT validation mutation
   const validateVatMutation = useMutation({
     mutationFn: async () => {
-      // First save current values if editing
       if (isEditing && Object.keys(editedValues).length > 0) {
         await onSave(clientService.id, editedValues);
       }
       
-      return await apiRequest("POST", `/api/client-services/${clientService.id}/validate-vat`, {});
+      const response = await apiRequest("POST", `/api/client-services/${clientService.id}/validate-vat`, {});
+      return response;
     },
     onSuccess: (data: any) => {
       if (data.isValid) {
-        // Check if validation was bypassed (HMRC API disabled)
         if (data.bypassed) {
           setVatStatus({
             status: 'bypassed',
@@ -225,25 +239,72 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
             title: "VAT Validation Bypassed",
             description: "HMRC validation is temporarily unavailable. VAT number accepted without verification.",
           });
+          onRefetch();
+        } else if (data.companyNameMismatch) {
+          setPendingVatData({
+            vatNumber: data.vatNumber,
+            hmrcCompanyName: data.companyName,
+            clientName: data.clientName,
+            validatedAt: data.validatedAt,
+          });
+          setShowMismatchModal(true);
+          if (isEditing) {
+            const updates: Record<string, any> = {};
+            if (data.companyName) {
+              updates[VAT_COMPANY_NAME_UDF_FIELD_ID] = data.companyName;
+            }
+            if (data.address) {
+              let fullAddress = data.address;
+              if (data.postcode) {
+                fullAddress += '\n' + data.postcode;
+              }
+              updates[VAT_ADDRESS_UDF_FIELD_ID] = fullAddress;
+            }
+            if (Object.keys(updates).length > 0) {
+              setEditedValues(prev => ({ ...prev, ...updates }));
+            }
+          }
         } else {
           setVatStatus({
             status: 'validated',
             companyName: data.companyName,
             validatedAt: data.validatedAt,
           });
+          if (isEditing) {
+            const updates: Record<string, any> = {};
+            if (data.companyName) {
+              updates[VAT_COMPANY_NAME_UDF_FIELD_ID] = data.companyName;
+            }
+            if (data.address) {
+              let fullAddress = data.address;
+              if (data.postcode) {
+                fullAddress += '\n' + data.postcode;
+              }
+              updates[VAT_ADDRESS_UDF_FIELD_ID] = fullAddress;
+            }
+            if (Object.keys(updates).length > 0) {
+              setEditedValues(prev => ({ ...prev, ...updates }));
+            }
+          }
           toast({
             title: "VAT Validated",
             description: `VAT number is registered to ${data.companyName}`,
           });
+          onRefetch();
         }
       } else {
         setVatStatus({
           status: 'invalid',
           error: data.error,
+          errorCode: data.errorCode,
         });
-        showFriendlyError({ error: data.error || "VAT number not found in HMRC records" });
+        setInvalidVatData({
+          vatNumber: data.vatNumber || currentValues[VAT_UDF_FIELD_ID] || '',
+          error: data.error,
+          errorCode: data.errorCode,
+        });
+        setShowInvalidVatModal(true);
       }
-      onRefetch();
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientService.clientId, "services"] });
     },
     onError: (error: any) => {
@@ -254,6 +315,29 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
       showFriendlyError({ error: error instanceof Error ? error : "Could not connect to HMRC API" });
     },
   });
+
+  const handleMismatchProceed = () => {
+    if (pendingVatData) {
+      setVatStatus({
+        status: 'validated',
+        companyName: pendingVatData.hmrcCompanyName,
+        validatedAt: pendingVatData.validatedAt,
+      });
+      toast({
+        title: "VAT Validated",
+        description: `VAT number is registered to ${pendingVatData.hmrcCompanyName}`,
+      });
+      onRefetch();
+    }
+    setShowMismatchModal(false);
+    setPendingVatData(null);
+  };
+
+  const handleMismatchClose = () => {
+    setShowMismatchModal(false);
+    setPendingVatData(null);
+    onRefetch();
+  };
 
   if (udfDefinitions.length === 0) {
     return null;
@@ -306,17 +390,23 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
   const handleSave = async () => {
     if (!validateAll()) return;
     
-    // When saving, if VAT value changed, mark as unvalidated
     const originalVat = currentValues[VAT_UDF_FIELD_ID];
     const newVat = editedValues[VAT_UDF_FIELD_ID];
+    
+    const valuesToSave = { ...editedValues };
+    
     if (originalVat !== newVat && hasVatField) {
-      // Clear validation metadata when VAT number changes
-      const updatedValues = { ...editedValues };
-      delete updatedValues[`${VAT_UDF_FIELD_ID}_validation`];
-      await onSave(clientService.id, updatedValues);
+      delete valuesToSave[`${VAT_UDF_FIELD_ID}_validation`];
+      delete valuesToSave[VAT_ADDRESS_UDF_FIELD_ID];
+      delete valuesToSave[VAT_COMPANY_NAME_UDF_FIELD_ID];
+      await onSave(clientService.id, valuesToSave);
       setVatStatus({ status: 'unvalidated' });
     } else {
-      await onSave(clientService.id, editedValues);
+      const validationKey = `${VAT_UDF_FIELD_ID}_validation`;
+      if (currentValues[validationKey] && !valuesToSave[validationKey]) {
+        valuesToSave[validationKey] = currentValues[validationKey];
+      }
+      await onSave(clientService.id, valuesToSave);
     }
     
     setIsEditing(false);
@@ -370,6 +460,7 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
   };
 
   return (
+    <>
     <Card className="mb-4" data-testid={`card-service-data-${clientService.id}`}>
       <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
         <CardTitle className="text-base font-medium">{clientService.service.name}</CardTitle>
@@ -413,6 +504,7 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
             const displayValue = isEditing ? editedValues[def.id] : currentValues[def.id];
             const isVatField = def.id === VAT_UDF_FIELD_ID;
             const isVatAddressField = def.id === VAT_ADDRESS_UDF_FIELD_ID;
+            const isVatCompanyNameField = def.id === VAT_COMPANY_NAME_UDF_FIELD_ID;
             
             return (
               <div key={def.id} className="space-y-1.5">
@@ -519,7 +611,7 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
                 ) : (
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <div className={`text-sm text-muted-foreground p-2 rounded-md min-h-[2.5rem] flex items-center flex-1 ${isVatAddressField && vatStatus.status === 'validated' ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-muted/30'}`}>
+                      <div className={`text-sm text-muted-foreground p-2 rounded-md min-h-[2.5rem] flex items-center flex-1 ${(isVatAddressField || isVatCompanyNameField) && vatStatus.status === 'validated' && displayValue ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800' : 'bg-muted/30'}`}>
                         {def.type === "boolean" ? (
                           displayValue ? "Yes" : "No"
                         ) : def.type === "date" && displayValue ? (
@@ -603,6 +695,13 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
                       </p>
                     )}
                     
+                    {/* VAT company name auto-populated note */}
+                    {isVatCompanyNameField && vatStatus.status === 'validated' && displayValue && (
+                      <p className="text-xs text-muted-foreground" data-testid="text-vat-company-name-note">
+                        Company name from HMRC VAT records
+                      </p>
+                    )}
+                    
                     {/* VAT address auto-populated note */}
                     {isVatAddressField && vatStatus.status === 'validated' && displayValue && (
                       <p className="text-xs text-muted-foreground" data-testid="text-vat-address-note">
@@ -616,7 +715,30 @@ function ServiceDataCard({ clientService, onSave, isSaving, onRefetch }: Service
           })}
         </div>
       </CardContent>
+      
     </Card>
+    
+    <InvalidVatModal
+      isOpen={showInvalidVatModal}
+      onClose={() => {
+        setShowInvalidVatModal(false);
+        setInvalidVatData(null);
+      }}
+      vatNumber={invalidVatData?.vatNumber || ''}
+      error={invalidVatData?.error}
+      errorCode={invalidVatData?.errorCode}
+    />
+    
+    <CompanyNameMismatchModal
+      isOpen={showMismatchModal}
+      onClose={handleMismatchClose}
+      onProceed={handleMismatchProceed}
+      vatNumber={pendingVatData?.vatNumber || ''}
+      hmrcCompanyName={pendingVatData?.hmrcCompanyName || ''}
+      clientCompanyName={pendingVatData?.clientName || ''}
+      isPending={false}
+    />
+    </>
   );
 }
 

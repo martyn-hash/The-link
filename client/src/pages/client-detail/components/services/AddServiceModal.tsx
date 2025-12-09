@@ -45,6 +45,7 @@ import type { User, Client } from "@shared/schema";
 
 const VAT_UDF_FIELD_ID = 'vat_number_auto';
 const VAT_ADDRESS_UDF_FIELD_ID = 'vat_address_auto';
+const VAT_COMPANY_NAME_UDF_FIELD_ID = 'vat_company_name_auto';
 
 interface VatValidationStatus {
   status: 'idle' | 'validating' | 'valid' | 'invalid' | 'bypassed';
@@ -375,13 +376,20 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
             companyName: data.companyName,
             address: data.address,
           });
-          // Auto-populate the VAT address field
+          // Auto-populate the VAT address and company name fields
+          const updates: Record<string, string> = {};
+          if (data.companyName) {
+            updates[VAT_COMPANY_NAME_UDF_FIELD_ID] = data.companyName;
+          }
           if (data.address) {
             let fullAddress = data.address;
             if (data.postcode) {
               fullAddress += '\n' + data.postcode;
             }
-            setUdfValues(prev => ({ ...prev, [VAT_ADDRESS_UDF_FIELD_ID]: fullAddress }));
+            updates[VAT_ADDRESS_UDF_FIELD_ID] = fullAddress;
+          }
+          if (Object.keys(updates).length > 0) {
+            setUdfValues(prev => ({ ...prev, ...updates }));
           }
           toast({
             title: "VAT Number Validated",
