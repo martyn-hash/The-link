@@ -44,6 +44,7 @@ export default function CompanySettingsPage() {
   const [appIsLive, setAppIsLive] = useState(false);
   const [aiButtonEnabled, setAiButtonEnabled] = useState(false);
   const [schedulingEmailsEnabled, setSchedulingEmailsEnabled] = useState(true);
+  const [emailModuleActive, setEmailModuleActive] = useState(false);
   
   // AI System Prompts
   const [aiSystemPromptNotes, setAiSystemPromptNotes] = useState("");
@@ -88,6 +89,7 @@ export default function CompanySettingsPage() {
       setAppIsLive(settings.appIsLive || false);
       setAiButtonEnabled(settings.aiButtonEnabled || false);
       setSchedulingEmailsEnabled(settings.schedulingEmailsEnabled !== false);
+      setEmailModuleActive(settings.emailModuleActive || false);
       setAiSystemPromptNotes(settings.aiSystemPromptNotes || "");
       setAiSystemPromptEmails(settings.aiSystemPromptEmails || "");
       setAiSystemPromptStageNotifications(settings.aiSystemPromptStageNotifications || "");
@@ -255,6 +257,7 @@ export default function CompanySettingsPage() {
       appIsLive,
       aiButtonEnabled,
       schedulingEmailsEnabled,
+      emailModuleActive,
       aiSystemPromptNotes: aiSystemPromptNotes || null,
       aiSystemPromptEmails: aiSystemPromptEmails || null,
       aiSystemPromptStageNotifications: aiSystemPromptStageNotifications || null,
@@ -551,6 +554,25 @@ export default function CompanySettingsPage() {
                   data-testid="switch-scheduling-emails-enabled"
                   checked={schedulingEmailsEnabled}
                   onCheckedChange={setSchedulingEmailsEnabled}
+                  disabled={settingsLoading || updateSettingsMutation.isPending}
+                />
+              </div>
+
+              <div className="flex items-center justify-between space-x-4">
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="email-module-active" className="flex items-center gap-2">
+                    <Mail className="w-4 h-4" />
+                    Email Module (Comms)
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    When enabled, the "Comms" tab will be visible on the dashboard, allowing staff to access shared inboxes and view emails from known contacts.
+                  </p>
+                </div>
+                <Switch
+                  id="email-module-active"
+                  data-testid="switch-email-module-active"
+                  checked={emailModuleActive}
+                  onCheckedChange={setEmailModuleActive}
                   disabled={settingsLoading || updateSettingsMutation.isPending}
                 />
               </div>

@@ -246,7 +246,31 @@ export function registerSuperAdminRoutes(
     }
   );
 
-  // Get company settings
+  // Get public company settings (feature flags for all authenticated users)
+  app.get(
+    "/api/company-settings",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res: any) => {
+      try {
+        const settings = await storage.getCompanySettings();
+        
+        // Return only public settings (feature flags visible to all staff)
+        res.json({
+          emailModuleActive: settings?.emailModuleActive || false,
+          ringCentralLive: settings?.ringCentralLive || false,
+          appIsLive: settings?.appIsLive || false,
+          aiButtonEnabled: settings?.aiButtonEnabled || false,
+          firmName: settings?.firmName || "The Link",
+        });
+      } catch (error) {
+        console.error("Error fetching public company settings:", error);
+        res.status(500).json({ message: "Failed to fetch company settings" });
+      }
+    }
+  );
+
+  // Get company settings (super admin - full access)
   app.get(
     "/api/super-admin/company-settings",
     isAuthenticated,

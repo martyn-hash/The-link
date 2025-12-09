@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import TopNavigation from "@/components/top-navigation";
@@ -9,6 +10,7 @@ import FilterPanel from "@/components/filter-panel";
 import { useProjectsPageState } from "@/hooks/projects-page/useProjectsPageState";
 import { ProjectsHeader } from "@/components/projects-page/ProjectsHeader";
 import { ProjectsContent } from "@/components/projects-page/ProjectsContent";
+import type { CompanySettings } from "@shared/schema";
 import {
   CreateDashboardModal,
   AddWidgetDialog,
@@ -24,6 +26,14 @@ export default function Projects() {
   const { isLoading: authLoading, isAuthenticated } = useAuth();
   
   const state = useProjectsPageState();
+
+  const { data: companySettings } = useQuery<CompanySettings>({
+    queryKey: ["/api/company-settings"],
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const emailModuleActive = companySettings?.emailModuleActive || false;
 
   useEffect(() => {
     if (state.error && isUnauthorizedError(state.error)) {
@@ -61,6 +71,7 @@ export default function Projects() {
           viewMode={state.viewMode}
           openTasksAndRemindersCount={state.openTasksAndRemindersCount}
           isMobile={state.isMobile}
+          emailModuleActive={emailModuleActive}
           currentSavedViewId={state.currentSavedViewId}
           currentSavedViewName={state.currentSavedViewName}
           currentDashboard={state.currentDashboard}

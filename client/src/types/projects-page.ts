@@ -1,7 +1,7 @@
 import type { ProjectWithRelations, User, ProjectView, UserProjectPreferences } from "@shared/schema";
 
 export type ViewMode = "kanban" | "list" | "dashboard" | "calendar";
-export type WorkspaceMode = "projects" | "tasks";
+export type WorkspaceMode = "projects" | "tasks" | "comms";
 export type DynamicDateFilter = "all" | "overdue" | "today" | "next7days" | "next14days" | "next30days" | "custom";
 export type ScheduleStatusFilter = "all" | "behind" | "overdue" | "both";
 

@@ -235,6 +235,7 @@ export const companySettings = pgTable("company_settings", {
   appIsLive: boolean("app_is_live").default(false).notNull(),
   aiButtonEnabled: boolean("ai_button_enabled").default(false).notNull(),
   schedulingEmailsEnabled: boolean("scheduling_emails_enabled").default(true).notNull(),
+  emailModuleActive: boolean("email_module_active").default(false).notNull(),
   // AI Assistant system prompts
   aiSystemPromptNotes: text("ai_system_prompt_notes"),
   aiSystemPromptEmails: text("ai_system_prompt_emails"),

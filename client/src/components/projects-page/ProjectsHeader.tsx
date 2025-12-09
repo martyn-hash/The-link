@@ -13,7 +13,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Filter, Plus, X, Calendar as CalendarIcon, Minimize2, Maximize2, ClipboardList, FolderKanban, Bookmark } from "lucide-react";
+import { Filter, Plus, X, Calendar as CalendarIcon, Minimize2, Maximize2, ClipboardList, FolderKanban, Bookmark, Mail } from "lucide-react";
 import LayoutsMenu from "@/components/LayoutsMenu";
 import ViewMegaMenu from "@/components/ViewMegaMenu";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
@@ -28,6 +28,7 @@ export interface ProjectsHeaderProps {
   viewMode: ViewMode;
   openTasksAndRemindersCount: number;
   isMobile: boolean;
+  emailModuleActive?: boolean;
   currentSavedViewId: string | null;
   currentSavedViewName: string | null;
   currentDashboard: Dashboard | null;
@@ -65,6 +66,7 @@ export function ProjectsHeader({
   viewMode,
   openTasksAndRemindersCount,
   isMobile,
+  emailModuleActive = false,
   currentSavedViewId,
   currentSavedViewName,
   currentDashboard,
@@ -100,6 +102,7 @@ export function ProjectsHeader({
           workspaceMode={workspaceMode}
           setWorkspaceMode={setWorkspaceMode}
           openTasksAndRemindersCount={openTasksAndRemindersCount}
+          emailModuleActive={emailModuleActive}
         />
         
         <DesktopToolbar
@@ -192,12 +195,14 @@ interface WorkspaceModeToggleProps {
   workspaceMode: WorkspaceMode;
   setWorkspaceMode: (mode: WorkspaceMode) => void;
   openTasksAndRemindersCount: number;
+  emailModuleActive?: boolean;
 }
 
 function WorkspaceModeToggle({
   workspaceMode,
   setWorkspaceMode,
   openTasksAndRemindersCount,
+  emailModuleActive = false,
 }: WorkspaceModeToggleProps) {
   return (
     <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
@@ -230,6 +235,18 @@ function WorkspaceModeToggle({
           </Badge>
         )}
       </Button>
+      {emailModuleActive && (
+        <Button
+          variant={workspaceMode === "comms" ? "default" : "ghost"}
+          size="sm"
+          onClick={() => setWorkspaceMode("comms")}
+          className="gap-2"
+          data-testid="button-workspace-comms"
+        >
+          <Mail className="h-4 w-4" />
+          Comms
+        </Button>
+      )}
     </div>
   );
 }

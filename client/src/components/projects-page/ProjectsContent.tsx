@@ -13,6 +13,7 @@ import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
 import { CalendarView } from "@/components/calendar";
 import { TasksWorkspace, type OwnershipFilter } from "@/components/tasks/TasksWorkspace";
+import { CommsWorkspace } from "@/components/comms/CommsWorkspace";
 import type { ViewMode, WorkspaceMode, Dashboard, Widget, CalendarSettings, CustomDateRange, DynamicDateFilter } from "@/types/projects-page";
 import type { ProjectWithRelations, User } from "@shared/schema";
 
@@ -450,6 +451,14 @@ export function ProjectsContent({
           onStatusFilterChange={setTasksStatusFilter}
           onPriorityFilterChange={setTasksPriorityFilter}
         />
+      </main>
+    );
+  }
+
+  if (workspaceMode === "comms") {
+    return (
+      <main className="flex-1 overflow-auto w-full px-4 md:px-6 lg:px-8 py-6 md:py-8" style={{ paddingBottom: isMobile ? '4rem' : '0' }}>
+        <CommsWorkspace />
       </main>
     );
   }
