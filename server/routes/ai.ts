@@ -1041,6 +1041,119 @@ Please refine the email according to the request above.`;
     }
   );
 
+  // AI Telemetry - Get interaction stats
+  router.get(
+    "/telemetry/stats",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res: Response) => {
+      try {
+        const user = await storage.getUser(req.user?.effectiveUserId || req.user?.id);
+        if (!user?.isSuperAdmin) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+        
+        const days = parseInt(req.query.days as string) || 7;
+        const endDate = new Date();
+        const startDate = new Date(endDate.getTime() - days * 24 * 60 * 60 * 1000);
+        
+        const stats = await storage.aiInteractionStorage.getInteractionStats(startDate, endDate);
+        
+        res.json({
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          ...stats
+        });
+      } catch (error: any) {
+        console.error("[AI Telemetry] Error getting stats:", error);
+        res.status(500).json({ error: "Failed to get stats" });
+      }
+    }
+  );
+
+  // AI Telemetry - Get recent insights
+  router.get(
+    "/telemetry/insights",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res: Response) => {
+      try {
+        const user = await storage.getUser(req.user?.effectiveUserId || req.user?.id);
+        if (!user?.isSuperAdmin) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+        
+        const limit = parseInt(req.query.limit as string) || 10;
+        const insights = await storage.aiInteractionStorage.getRecentInsights(limit);
+        
+        res.json(insights);
+      } catch (error: any) {
+        console.error("[AI Telemetry] Error getting insights:", error);
+        res.status(500).json({ error: "Failed to get insights" });
+      }
+    }
+  );
+
+  // AI Telemetry - Get failed interactions (for debugging)
+  router.get(
+    "/telemetry/failures",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res: Response) => {
+      try {
+        const user = await storage.getUser(req.user?.effectiveUserId || req.user?.id);
+        if (!user?.isSuperAdmin) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+        
+        const days = parseInt(req.query.days as string) || 7;
+        const endDate = new Date();
+        const startDate = new Date(endDate.getTime() - days * 24 * 60 * 60 * 1000);
+        
+        const failures = await storage.aiInteractionStorage.aggregateFailedInteractions(startDate, endDate);
+        
+        res.json({
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          patterns: failures
+        });
+      } catch (error: any) {
+        console.error("[AI Telemetry] Error getting failures:", error);
+        res.status(500).json({ error: "Failed to get failures" });
+      }
+    }
+  );
+
+  // AI Telemetry - Trigger manual analysis
+  router.post(
+    "/telemetry/analyze",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res: Response) => {
+      try {
+        const user = await storage.getUser(req.user?.effectiveUserId || req.user?.id);
+        if (!user?.isSuperAdmin) {
+          return res.status(403).json({ error: "Forbidden" });
+        }
+        
+        const { runWeeklyAnalysis } = await import("../ai-weekly-analysis-cron");
+        
+        console.log("[AI Telemetry] Manual analysis triggered by:", user.email);
+        
+        const result = await runWeeklyAnalysis();
+        
+        res.json({
+          success: true,
+          message: result ? "Analysis completed successfully" : "No failures to analyze",
+          result
+        });
+      } catch (error: any) {
+        console.error("[AI Telemetry] Error running analysis:", error);
+        res.status(500).json({ error: "Failed to run analysis" });
+      }
+    }
+  );
+
   app.use("/api/ai", router);
 }
 

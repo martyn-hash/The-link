@@ -152,7 +152,7 @@ export class AIInteractionStorage {
     return results.map(r => ({ intent: r.intent, count: Number(r.count) }));
   }
 
-  async aggregateFailedRequests(startDate: Date, endDate: Date): Promise<AggregatedFailure[]> {
+  async aggregateFailedInteractions(startDate: Date, endDate: Date): Promise<AggregatedFailure[]> {
     const failures = await this.getFailedInteractionsInRange(startDate, endDate);
     
     const patternMap = new Map<string, {count: number, examples: string[], intentDetected?: string}>();

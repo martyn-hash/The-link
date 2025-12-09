@@ -24,6 +24,13 @@ function redactPII(text: string): string {
   redacted = redacted.replace(/\$\s?\d+(?:,\d{3})*(?:\.\d{2})?/g, '[AMOUNT]');
   redacted = redacted.replace(/\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/g, '[PHONE]');
   redacted = redacted.replace(/\b\d{5}[-.\s]?\d{6}\b/g, '[PHONE]');
+  redacted = redacted.replace(/\b\d{2,4}[-.\s]?\d{2,4}[-.\s]?\d{2,4}\b/g, '[ID]');
+  redacted = redacted.replace(/\b(?:Mr|Mrs|Ms|Dr|Prof)\.?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?\b/g, '[PERSON]');
+  redacted = redacted.replace(/\b[A-Z][a-z]+(?:\s+[A-Z&][a-z]*)?\s+(?:Ltd|Limited|LLP|PLC|Inc|Corp|LLC|Partners|Group|Holdings|Services|Consulting)\b/gi, '[COMPANY]');
+  redacted = redacted.replace(/\b[A-Z]+\s+(?:ltd|limited|llp|plc|inc|corp|llc)\b/gi, '[COMPANY]');
+  redacted = redacted.replace(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}(?=\s+(?:client|account|project|invoice|call|email|sms|text|reminder|task))/gi, '[NAME]');
+  redacted = redacted.replace(/(?:call|email|text|sms|remind)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\b/gi, (match, name) => match.replace(name, '[NAME]'));
+  redacted = redacted.replace(/\b[A-Z][a-z]{2,}(?:\s+[A-Z][a-z]{2,}){1,2}\b(?!\s+(?:and|or|the|for|to|in|on|at|by))/g, '[NAME]');
   return redacted;
 }
 
@@ -86,7 +93,7 @@ export async function runWeeklyAnalysis(): Promise<WeeklyAnalysisResult | null> 
       weekStartDate: weekAgo,
       weekEndDate: now,
       totalInteractions: stats.total,
-      successfulInteractions: stats.success,
+      successfulInteractions: stats.successful,
       failedInteractions: stats.failed,
       partialInteractions: stats.partial,
       clarificationNeededCount: stats.clarificationNeeded,
@@ -107,10 +114,10 @@ export async function runWeeklyAnalysis(): Promise<WeeklyAnalysisResult | null> 
 
 ## Weekly Stats
 - Total interactions: ${stats.total}
-- Successful: ${stats.success} (${((stats.success / stats.total) * 100).toFixed(1)}%)
-- Failed: ${stats.failed} (${((stats.failed / stats.total) * 100).toFixed(1)}%)
-- Partial (fallback messages): ${stats.partial} (${((stats.partial / stats.total) * 100).toFixed(1)}%)
-- Needed clarification: ${stats.clarificationNeeded} (${((stats.clarificationNeeded / stats.total) * 100).toFixed(1)}%)
+- Successful: ${stats.successful} (${stats.total > 0 ? ((stats.successful / stats.total) * 100).toFixed(1) : 0}%)
+- Failed: ${stats.failed} (${stats.total > 0 ? ((stats.failed / stats.total) * 100).toFixed(1) : 0}%)
+- Partial (fallback messages): ${stats.partial} (${stats.total > 0 ? ((stats.partial / stats.total) * 100).toFixed(1) : 0}%)
+- Needed clarification: ${stats.clarificationNeeded} (${stats.total > 0 ? ((stats.clarificationNeeded / stats.total) * 100).toFixed(1) : 0}%)
 
 ## Aggregated Failure Patterns (grouped by similarity)
 ${redactedFailures.map((f, i) => `
@@ -187,7 +194,7 @@ Respond ONLY with valid JSON matching this structure:
       weekStartDate: weekAgo,
       weekEndDate: now,
       totalInteractions: stats.total,
-      successfulInteractions: stats.success,
+      successfulInteractions: stats.successful,
       failedInteractions: stats.failed,
       partialInteractions: stats.partial,
       clarificationNeededCount: stats.clarificationNeeded,
@@ -208,7 +215,7 @@ Respond ONLY with valid JSON matching this structure:
       weekStartDate: weekAgo,
       weekEndDate: now,
       totalInteractions: stats.total,
-      successfulInteractions: stats.success,
+      successfulInteractions: stats.successful,
       failedInteractions: stats.failed,
       partialInteractions: stats.partial,
       clarificationNeededCount: stats.clarificationNeeded,
