@@ -109,8 +109,6 @@ defaultBucketID = "replit-objstore-fb4ebf31-d972-4a71-8d64-00fd32c62d4e"
 
 [userenv.development]
 HMRC_VAT_VALIDATION_ENABLED = "true"
-HMRC_API_BASE_URL = "https://test-api.service.hmrc.gov.uk"
-HMRC_AUTH_URL = "https://test-api.service.hmrc.gov.uk/oauth/token"
 QUICKBOOKS_REDIRECT_URI = "https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/api/oauth/callback"
 RINGCENTRAL_REDIRECT_URI = "https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/api/oauth/ringcentral/callback"
 
