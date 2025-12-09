@@ -203,6 +203,180 @@ function ProjectItem({ project, onClick }: { project: ProjectWithRelations; onCl
   );
 }
 
+interface OverdueWorkModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  filterUserId?: string;
+  filterUserName?: string;
+}
+
+export function OverdueWorkModal({ 
+  isOpen, 
+  onClose, 
+  filterUserId,
+  filterUserName 
+}: OverdueWorkModalProps) {
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+  const [activeTab, setActiveTab] = useState<"tasks" | "reminders">("tasks");
+
+  const effectiveUserId = filterUserId || user?.id;
+
+  const { data: tasks = [], isLoading: isLoadingTasks } = useQuery<InternalTaskWithRelations[]>({
+    queryKey: ['/api/internal-tasks/assigned', effectiveUserId],
+    queryFn: async () => {
+      const response = await fetch(`/api/internal-tasks/assigned/${effectiveUserId}`, { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to fetch tasks');
+      return response.json();
+    },
+    enabled: isOpen && !!effectiveUserId,
+  });
+
+  const overdueTasks = useMemo(() => 
+    tasks.filter(t => 
+      !t.isQuickReminder && 
+      t.status !== "closed" && 
+      t.dueDate && 
+      isPast(new Date(t.dueDate))
+    ),
+    [tasks]
+  );
+
+  const overdueReminders = useMemo(() => 
+    tasks.filter(t => 
+      t.isQuickReminder === true && 
+      t.status !== "closed" && 
+      t.dueDate && 
+      isPast(new Date(t.dueDate))
+    ),
+    [tasks]
+  );
+
+  const handleViewTask = (taskId: string) => {
+    onClose();
+    setLocation(`/internal-tasks/${taskId}`);
+  };
+
+  const handleViewAllTasks = () => {
+    onClose();
+    setLocation('/internal-tasks?tab=tasks');
+  };
+
+  const handleViewAllReminders = () => {
+    onClose();
+    setLocation('/internal-tasks?tab=reminders');
+  };
+
+  const displayName = filterUserName || (user ? `${user.firstName} ${user.lastName}` : "Your");
+  const isViewingOther = filterUserId && filterUserId !== user?.id;
+  const totalOverdue = overdueTasks.length + overdueReminders.length;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[80vh] p-0" data-testid="modal-overdue-work">
+        <DialogHeader className="px-6 pt-6 pb-4 border-b bg-gradient-to-r from-red-50 to-orange-50 dark:from-red-950/30 dark:to-orange-950/30">
+          <DialogTitle className="flex items-center gap-2 text-red-700 dark:text-red-400">
+            <AlertCircle className="w-5 h-5" />
+            {isViewingOther ? `${filterUserName}'s Overdue Work` : "My Overdue Work"}
+            {totalOverdue > 0 && (
+              <Badge variant="destructive" className="ml-2">
+                {totalOverdue}
+              </Badge>
+            )}
+          </DialogTitle>
+        </DialogHeader>
+
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "tasks" | "reminders")} className="flex-1">
+          <div className="px-6 pt-2">
+            <TabsList className="w-full">
+              <TabsTrigger value="tasks" className="flex-1 gap-2" data-testid="tab-overdue-tasks">
+                <ClipboardList className="w-4 h-4" />
+                Overdue Tasks
+                <Badge variant={overdueTasks.length > 0 ? "destructive" : "secondary"} className="ml-1">
+                  {overdueTasks.length}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="reminders" className="flex-1 gap-2" data-testid="tab-overdue-reminders">
+                <Bell className="w-4 h-4" />
+                Overdue Reminders
+                <Badge variant={overdueReminders.length > 0 ? "destructive" : "secondary"} className="ml-1">
+                  {overdueReminders.length}
+                </Badge>
+              </TabsTrigger>
+            </TabsList>
+          </div>
+
+          <TabsContent value="tasks" className="mt-0 flex-1">
+            <ScrollArea className="h-[400px] px-6 py-4">
+              {isLoadingTasks ? (
+                <div className="space-y-3">
+                  {[1, 2, 3, 4].map(i => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : overdueTasks.length > 0 ? (
+                <div className="space-y-2">
+                  {overdueTasks.map(task => (
+                    <TaskItem 
+                      key={task.id} 
+                      task={task} 
+                      onClick={() => handleViewTask(task.id)} 
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <ClipboardList className="w-12 h-12 mx-auto mb-4 text-green-500" />
+                  <p className="text-muted-foreground">No overdue tasks - great job!</p>
+                </div>
+              )}
+            </ScrollArea>
+            <div className="px-6 py-3 border-t flex justify-end">
+              <Button variant="outline" size="sm" onClick={handleViewAllTasks} data-testid="button-view-all-tasks-overdue">
+                <ExternalLink className="w-4 h-4 mr-2" />
+                View All Tasks
+              </Button>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="reminders" className="mt-0 flex-1">
+            <ScrollArea className="h-[400px] px-6 py-4">
+              {isLoadingTasks ? (
+                <div className="space-y-3">
+                  {[1, 2, 3, 4].map(i => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : overdueReminders.length > 0 ? (
+                <div className="space-y-2">
+                  {overdueReminders.map(reminder => (
+                    <ReminderItem 
+                      key={reminder.id} 
+                      task={reminder} 
+                      onClick={() => handleViewTask(reminder.id)} 
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Bell className="w-12 h-12 mx-auto mb-4 text-green-500" />
+                  <p className="text-muted-foreground">No overdue reminders - all caught up!</p>
+                </div>
+              )}
+            </ScrollArea>
+            <div className="px-6 py-3 border-t flex justify-end">
+              <Button variant="outline" size="sm" onClick={handleViewAllReminders} data-testid="button-view-all-reminders-overdue">
+                <ExternalLink className="w-4 h-4 mr-2" />
+                View All Reminders
+              </Button>
+            </div>
+          </TabsContent>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function TasksRemindersModal({ 
   isOpen, 
   onClose, 
