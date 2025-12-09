@@ -860,7 +860,7 @@ function TasksFilterContent({
             <SelectItem value="all">All Statuses</SelectItem>
             <SelectItem value="open">Open</SelectItem>
             <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="closed">Closed</SelectItem>
+            <SelectItem value="closed">Completed</SelectItem>
           </SelectContent>
         </Select>
       </div>

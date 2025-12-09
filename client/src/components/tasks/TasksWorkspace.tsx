@@ -227,7 +227,7 @@ function TaskRow({ task, selected, onSelect, onViewClick, isMobile, showLinkedEn
         <Checkbox
           checked={reassignMode ? selected : task.status === "closed"}
           onCheckedChange={onSelect}
-          disabled={isCompleting || (!reassignMode && task.status === "closed")}
+          disabled={isCompleting}
           data-testid={`checkbox-task-${task.id}`}
         />
       </TableCell>
@@ -249,7 +249,7 @@ function TaskRow({ task, selected, onSelect, onViewClick, isMobile, showLinkedEn
             {task.priority}
           </Badge>
           <Badge className={`text-xs ${getStatusColor(task.status)}`}>
-            {task.status === "in_progress" ? "In Progress" : task.status}
+            {task.status === "in_progress" ? "In Progress" : task.status === "closed" ? "Completed" : task.status}
           </Badge>
         </div>
       </TableCell>
@@ -323,7 +323,7 @@ function ReminderRow({ reminder, selected, onSelect, onViewClick, isMobile, show
         <Checkbox
           checked={reassignMode ? selected : reminder.status === "closed"}
           onCheckedChange={onSelect}
-          disabled={isCompleting || (!reassignMode && reminder.status === "closed")}
+          disabled={isCompleting}
           data-testid={`checkbox-reminder-${reminder.id}`}
         />
       </TableCell>
@@ -344,7 +344,7 @@ function ReminderRow({ reminder, selected, onSelect, onViewClick, isMobile, show
       )}
       <TableCell className={colWidths.status}>
         <Badge className={`text-xs ${getStatusColor(reminder.status)}`}>
-          {reminder.status === "in_progress" ? "In Progress" : reminder.status}
+          {reminder.status === "in_progress" ? "In Progress" : reminder.status === "closed" ? "Completed" : reminder.status}
         </Badge>
       </TableCell>
       {!isMobile && showLinkedEntities && (
@@ -802,14 +802,14 @@ export function TasksWorkspace({
     setSelectedReminders([]);
   };
 
-  const quickCompleteMutation = useMutation({
-    mutationFn: async (taskId: string) => {
+  const toggleStatusMutation = useMutation({
+    mutationFn: async ({ taskId, newStatus }: { taskId: string; newStatus: string }) => {
       setCompletingIds(prev => [...prev, taskId]);
       return await apiRequest("PATCH", `/api/internal-tasks/${taskId}`, {
-        status: "closed",
+        status: newStatus,
       });
     },
-    onSuccess: (_, taskId) => {
+    onSuccess: (_, { taskId, newStatus }) => {
       setCompletingIds(prev => prev.filter(id => id !== taskId));
       queryClient.invalidateQueries({
         predicate: (query) => {
@@ -818,13 +818,15 @@ export function TasksWorkspace({
         }
       });
       toast({
-        title: "Item completed",
-        description: "The item has been marked as closed.",
+        title: newStatus === "closed" ? "Item completed" : "Item reopened",
+        description: newStatus === "closed" 
+          ? "The item has been marked as completed." 
+          : "The item has been reopened.",
       });
     },
-    onError: (error: Error, taskId) => {
+    onError: (error: Error, { taskId }) => {
       setCompletingIds(prev => prev.filter(id => id !== taskId));
-      showFriendlyError({ error: error.message || "Failed to complete item" });
+      showFriendlyError({ error: error.message || "Failed to update item" });
     },
   });
 
@@ -835,8 +837,10 @@ export function TasksWorkspace({
       } else {
         setSelectedTasks(selectedTasks.filter(t => t !== id));
       }
-    } else if (checked) {
-      quickCompleteMutation.mutate(id);
+    } else {
+      const task = allTasks.find(t => t.id === id);
+      const newStatus = checked ? "closed" : "open";
+      toggleStatusMutation.mutate({ taskId: id, newStatus });
     }
   };
 
@@ -847,8 +851,9 @@ export function TasksWorkspace({
       } else {
         setSelectedReminders(selectedReminders.filter(r => r !== id));
       }
-    } else if (checked) {
-      quickCompleteMutation.mutate(id);
+    } else {
+      const newStatus = checked ? "closed" : "open";
+      toggleStatusMutation.mutate({ taskId: id, newStatus });
     }
   };
 
@@ -924,7 +929,7 @@ export function TasksWorkspace({
 
   return (
     <div className={className}>
-      {/* Header Row with Search and Reassign button */}
+      {/* Header Row with Search */}
       <div className="mb-4 flex items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -936,17 +941,6 @@ export function TasksWorkspace({
             data-testid="input-tasks-search"
           />
         </div>
-        {!reassignMode && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onReassignModeChange?.(true)}
-            data-testid="button-enter-reassign-mode"
-          >
-            <UserCog className="h-4 w-4 mr-2" />
-            Reassign
-          </Button>
-        )}
       </div>
 
       {/* Bulk Actions Bar - Always shown in reassign mode */}
@@ -1105,7 +1099,7 @@ export function TasksWorkspace({
               <SelectContent>
                 <SelectItem value="open">Open</SelectItem>
                 <SelectItem value="in_progress">In Progress</SelectItem>
-                <SelectItem value="closed">Closed</SelectItem>
+                <SelectItem value="closed">Completed</SelectItem>
               </SelectContent>
             </Select>
           </div>
