@@ -9,15 +9,33 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { cn } from '@/lib/utils';
 import type { User as UserType } from '@shared/schema';
 import type { ActionCardProps } from './types';
 
+// Exact-match self-assignment keywords (must match entire input exactly)
+const EXACT_SELF_KEYWORDS = ['myself', 'me', 'self', 'for me', 'to me', 'my own', 'assign to me', 'assign to myself'];
+
+// Check if input is a self-assignment phrase - ONLY exact matches to avoid false positives
+// with names like "Jerome", "Mel Smith", "Chris Self" etc.
+function isSelfAssignmentPhrase(input: string): boolean {
+  // Normalize: lowercase, trim, remove trailing punctuation
+  const normalized = input.toLowerCase().trim().replace(/[?!.,]+$/, '');
+  // Must be an exact match - no partial/word-boundary matching
+  return EXACT_SELF_KEYWORDS.includes(normalized);
+}
+
 export function TaskActionCard({ functionCall, onComplete, onDismiss }: ActionCardProps) {
   const { toast } = useToast();
+  const { user: currentUser } = useAuth();
   const args = functionCall.arguments;
   const suggestedTaskTypeName = args.taskTypeName as string | undefined;
+  
+  // Check if the AI suggested self-assignment
+  const assigneeNameArg = (args.assigneeName as string || '').toLowerCase().trim();
+  const isSelfAssignment = isSelfAssignmentPhrase(assigneeNameArg);
   
   const [title, setTitle] = useState(args.title as string || '');
   const [description, setDescription] = useState(args.description as string || '');
@@ -64,13 +82,14 @@ export function TaskActionCard({ functionCall, onComplete, onDismiss }: ActionCa
   // Default to first available type if no match found
   const effectiveTaskTypeId = taskTypeId || matchedTaskType?.id || availableTaskTypes[0]?.id || '';
 
-  const matchedAssignee = users?.find(u => {
-    const assigneeName = (args.assigneeName as string || '').toLowerCase();
+  // Only try to match by name if NOT self-assignment (avoid matching "myself" to "Penny Payroll" etc.)
+  const matchedAssignee = !isSelfAssignment ? users?.find(u => {
     const fullName = `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase().trim();
-    return fullName.includes(assigneeName) || assigneeName.includes(fullName);
-  });
+    return fullName.includes(assigneeNameArg) || assigneeNameArg.includes(fullName);
+  }) : undefined;
 
-  const effectiveAssigneeId = assigneeId || matchedAssignee?.id || '';
+  // Priority: manual selection > self-assignment (current user) > fuzzy matched name > empty
+  const effectiveAssigneeId = assigneeId || (isSelfAssignment && currentUser?.id ? currentUser.id : '') || matchedAssignee?.id || '';
   const hasValidTaskType = effectiveTaskTypeId.length > 0;
   const isValid = title.trim().length > 0 && effectiveAssigneeId.length > 0 && hasValidTaskType;
 
@@ -110,9 +129,12 @@ export function TaskActionCard({ functionCall, onComplete, onDismiss }: ActionCa
     }
   });
 
-  const assigneeName = matchedAssignee 
-    ? `${matchedAssignee.firstName} ${matchedAssignee.lastName}` 
-    : args.assigneeName as string || 'Unassigned';
+  // Display name: for self-assignment show current user name, otherwise matched name or original arg
+  const assigneeName = isSelfAssignment && currentUser
+    ? `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim() || 'You'
+    : matchedAssignee 
+      ? `${matchedAssignee.firstName} ${matchedAssignee.lastName}` 
+      : args.assigneeName as string || 'Unassigned';
     
   const taskTypeName = availableTaskTypes.find(t => t.id === effectiveTaskTypeId)?.name 
     || (suggestedTaskTypeName ? `${suggestedTaskTypeName} (suggested)` : 'Not selected');
