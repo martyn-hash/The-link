@@ -22,6 +22,7 @@ export type AIActionType =
   | 'show_reminders'
   | 'show_projects'
   | 'show_tasks_modal'
+  | 'show_overdue_work'
   | 'get_phone_number'
   | 'navigate_to_client'
   | 'navigate_to_person'
@@ -176,7 +177,8 @@ export const AI_COMMAND_CATEGORIES: AICommandCategory[] = [
     icon: 'eye',
     commands: [
       { phrase: 'Show me my tasks', description: 'View your open tasks' },
-      { phrase: 'Show me all overdue reminders', description: 'View reminders that are past due' },
+      { phrase: 'Show all overdue tasks', description: 'View overdue tasks and reminders' },
+      { phrase: "Show Bob's overdue tasks", description: 'View a team member\'s overdue work' },
       { phrase: 'Show Harry\'s VAT projects', description: 'View projects by type and assignee' },
       { phrase: 'Show me projects due this week', description: 'View upcoming project deadlines' },
     ]

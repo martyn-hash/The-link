@@ -407,6 +407,9 @@ export function AIMagicChatPanel({ onClose, triggerVoice, onVoiceTriggered, onRe
           description = `I'll help you move that project to a new stage.`;
         } else if (data.functionCall.name === 'get_analytics') {
           description = `Let me get that data for you.`;
+        } else if (data.functionCall.name === 'show_overdue_work') {
+          const userName = data.functionCall.arguments?.userName;
+          description = userName && userName !== 'me' ? `Checking ${userName}'s overdue work...` : `Checking your overdue tasks and reminders...`;
         }
         
         responseMessage = {

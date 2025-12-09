@@ -1880,6 +1880,238 @@ export function TasksModalCard({ functionCall, onComplete, onDismiss }: ActionCa
   );
 }
 
+export function ShowOverdueWorkActionCard({ functionCall, onComplete, onDismiss }: ActionCardProps) {
+  const { user } = useAuth();
+  const [, setLocation] = useLocation();
+  const args = functionCall.arguments;
+  const userName = args.userName as string | undefined;
+  
+  const [resolvedUserId, setResolvedUserId] = useState<string | undefined>(undefined);
+  const [resolvedUserName, setResolvedUserName] = useState<string | undefined>(undefined);
+  const resolvedRef = useRef(false);
+
+  const { data: users } = useQuery<UserType[]>({
+    queryKey: ['/api/users/for-messaging'],
+  });
+
+  interface OverdueTaskWithRelations {
+    id: string;
+    title: string;
+    description?: string | null;
+    dueDate: string | null;
+    status: string;
+    priority: string;
+    isQuickReminder?: boolean;
+    assignee?: { id: string; firstName: string; lastName: string } | null;
+    taskType?: { id: string; name: string } | null;
+  }
+
+  const { data: assignedTasks = [], isLoading: isLoadingTasks } = useQuery<OverdueTaskWithRelations[]>({
+    queryKey: ['/api/internal-tasks/assigned', resolvedUserId],
+    queryFn: async () => {
+      const response = await fetch(`/api/internal-tasks/assigned/${resolvedUserId}`, { credentials: 'include' });
+      if (!response.ok) throw new Error('Failed to fetch tasks');
+      return response.json();
+    },
+    enabled: !!resolvedUserId,
+  });
+
+  useEffect(() => {
+    if (resolvedRef.current) return;
+    if (!users) return;
+
+    let targetUserId: string | undefined;
+    let targetUserName: string | undefined;
+
+    if (!userName || userName === 'me' || userName.toLowerCase() === 'my') {
+      if (!user?.id) return;
+      targetUserId = user.id;
+      targetUserName = `${user.firstName} ${user.lastName}`;
+    } else {
+      const searchLower = userName.toLowerCase().trim();
+      const matchedUser = users.find(u => {
+        const fullName = `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase().trim();
+        const firstName = (u.firstName || '').toLowerCase();
+        const lastName = (u.lastName || '').toLowerCase();
+        return fullName === searchLower || 
+               firstName === searchLower || 
+               lastName === searchLower ||
+               fullName.includes(searchLower);
+      });
+      if (matchedUser) {
+        targetUserId = matchedUser.id;
+        targetUserName = `${matchedUser.firstName || ''} ${matchedUser.lastName || ''}`.trim();
+      }
+    }
+
+    if (targetUserId) {
+      setResolvedUserId(targetUserId);
+      setResolvedUserName(targetUserName);
+      resolvedRef.current = true;
+    }
+  }, [users, userName, user]);
+
+  const now = new Date();
+  const overdueTasks = useMemo(() => 
+    assignedTasks.filter(t => 
+      !t.isQuickReminder && 
+      t.status !== 'closed' && 
+      t.dueDate && 
+      new Date(t.dueDate) < now
+    ),
+    [assignedTasks, now]
+  );
+
+  const overdueReminders = useMemo(() => 
+    assignedTasks.filter(t => 
+      t.isQuickReminder === true && 
+      t.status !== 'closed' && 
+      t.dueDate && 
+      new Date(t.dueDate) < now
+    ),
+    [assignedTasks, now]
+  );
+
+  const totalOverdue = overdueTasks.length + overdueReminders.length;
+
+  const handleViewTask = (taskId: string) => {
+    setLocation(`/internal-tasks/${taskId}`);
+    onComplete(true, 'Navigating to task');
+  };
+
+  const handleViewAll = () => {
+    setLocation('/internal-tasks?tab=tasks');
+    onComplete(true, 'Navigating to all tasks');
+  };
+
+  const isLoading = isLoadingTasks || !resolvedRef.current;
+
+  const displayName = resolvedUserName === `${user?.firstName} ${user?.lastName}` ? 'your' : `${resolvedUserName}'s`;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-950/30 dark:to-orange-950/30 border border-red-200 dark:border-red-800 rounded-xl p-4 space-y-3"
+      data-testid="action-card-overdue-work"
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-red-700 dark:text-red-400">
+          <AlertCircle className="w-4 h-4" />
+          <span className="font-medium text-sm">Overdue Tasks & Reminders</span>
+        </div>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onDismiss}
+          className="h-6 w-6 p-0"
+          data-testid="button-dismiss-overdue"
+        >
+          <X className="w-3.5 h-3.5" />
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Loading {displayName} overdue items...
+        </div>
+      ) : !resolvedUserId && userName ? (
+        <div className="text-sm text-red-600 dark:text-red-400 py-2">
+          Could not find a team member named "{userName}"
+        </div>
+      ) : totalOverdue === 0 ? (
+        <div className="text-sm text-muted-foreground py-2">
+          No overdue tasks or reminders for {resolvedUserName || 'you'}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="text-sm text-muted-foreground">
+            Found {totalOverdue} overdue item{totalOverdue !== 1 ? 's' : ''} for {resolvedUserName || 'you'}
+          </div>
+
+          {overdueTasks.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="text-xs font-medium text-red-600 dark:text-red-400 flex items-center gap-1.5">
+                <ClipboardList className="w-3.5 h-3.5" />
+                Overdue Tasks ({overdueTasks.length})
+              </div>
+              <div className="space-y-1 max-h-32 overflow-y-auto">
+                {overdueTasks.slice(0, 5).map(task => (
+                  <div
+                    key={task.id}
+                    onClick={() => handleViewTask(task.id)}
+                    className="flex items-center gap-2 p-2 bg-background/80 rounded-lg border hover:border-red-300 cursor-pointer transition-colors text-sm"
+                    data-testid={`overdue-task-${task.id}`}
+                  >
+                    <ClipboardList className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                    <span className="flex-1 truncate">{task.title}</span>
+                    {task.dueDate && (
+                      <span className="text-xs text-red-500 flex-shrink-0">
+                        {format(new Date(task.dueDate), 'd MMM')}
+                      </span>
+                    )}
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                  </div>
+                ))}
+                {overdueTasks.length > 5 && (
+                  <div className="text-xs text-muted-foreground text-center py-1">
+                    +{overdueTasks.length - 5} more overdue tasks
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {overdueReminders.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="text-xs font-medium text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                <Bell className="w-3.5 h-3.5" />
+                Overdue Reminders ({overdueReminders.length})
+              </div>
+              <div className="space-y-1 max-h-32 overflow-y-auto">
+                {overdueReminders.slice(0, 5).map(reminder => (
+                  <div
+                    key={reminder.id}
+                    onClick={() => handleViewTask(reminder.id)}
+                    className="flex items-center gap-2 p-2 bg-background/80 rounded-lg border hover:border-amber-300 cursor-pointer transition-colors text-sm"
+                    data-testid={`overdue-reminder-${reminder.id}`}
+                  >
+                    <Bell className="w-3.5 h-3.5 text-amber-500 flex-shrink-0" />
+                    <span className="flex-1 truncate">{reminder.title}</span>
+                    {reminder.dueDate && (
+                      <span className="text-xs text-red-500 flex-shrink-0">
+                        {format(new Date(reminder.dueDate), 'd MMM')}
+                      </span>
+                    )}
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                  </div>
+                ))}
+                {overdueReminders.length > 5 && (
+                  <div className="text-xs text-muted-foreground text-center py-1">
+                    +{overdueReminders.length - 5} more overdue reminders
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleViewAll}
+            className="w-full h-7 text-xs"
+            data-testid="button-view-all-overdue"
+          >
+            <ExternalLink className="w-3 h-3 mr-1" />
+            View All Tasks
+          </Button>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
 export function ActionCard({ functionCall, onComplete, onDismiss }: ActionCardProps) {
   switch (functionCall.name) {
     case 'create_reminder':
@@ -1895,6 +2127,8 @@ export function ActionCard({ functionCall, onComplete, onDismiss }: ActionCardPr
       return <ShowRemindersActionCard functionCall={functionCall} onComplete={onComplete} onDismiss={onDismiss} />;
     case 'show_tasks_modal':
       return <TasksModalCard functionCall={functionCall} onComplete={onComplete} onDismiss={onDismiss} />;
+    case 'show_overdue_work':
+      return <ShowOverdueWorkActionCard functionCall={functionCall} onComplete={onComplete} onDismiss={onDismiss} />;
     case 'get_phone_number':
       return <PhoneNumberCard functionCall={functionCall} onComplete={onComplete} onDismiss={onDismiss} />;
     case 'search_clients':

@@ -463,6 +463,22 @@ const AI_MAGIC_FUNCTIONS: OpenAI.Chat.Completions.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "show_overdue_work",
+      description: "Show all overdue tasks AND reminders (not projects). Use for requests like 'show overdue tasks', 'all overdue tasks', 'show me overdue work', 'what's overdue', 'Bob's overdue tasks', 'show overdue items'. This displays both internal tasks and reminders that are past their due date.",
+      parameters: {
+        type: "object",
+        properties: {
+          userName: {
+            type: "string",
+            description: "Name of the team member whose overdue work to show. Use 'me' for current user, or a name like 'Bob', 'Sarah' to view their overdue work. If not specified, shows current user's overdue work."
+          }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
       name: "call_contact",
       description: "Initiate a phone call to a contact person. Use for commands like 'call Josie', 'phone John from ABC Ltd', 'ring Sarah', 'call Josie Allan', 'call the contact at Victoriam'. This opens the call dialog with the person pre-selected.",
       parameters: {
