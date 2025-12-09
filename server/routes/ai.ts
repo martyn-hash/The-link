@@ -581,6 +581,9 @@ Please refine the email according to the request above.`;
     isAuthenticated,
     resolveEffectiveUser,
     async (req: any, res: Response) => {
+      const startTime = Date.now();
+      let interactionId: string | null = null;
+      
       try {
         const userId = req.user?.effectiveUserId || req.user?.id;
         
@@ -623,9 +626,107 @@ Please refine the email according to the request above.`;
           currentViewContext
         );
 
+        // Log the interaction for analytics
+        try {
+          const latencyMs = Date.now() - startTime;
+          const aiStorage = storage.aiInteractionStorage;
+          
+          // Determine status based on result type
+          let status: 'success' | 'failed' | 'partial' | 'clarification_needed' = 'failed';
+          let intentDetected: string | undefined;
+          let resolvedEntityType: string | undefined;
+          let resolvedEntityId: string | undefined;
+          let resolvedEntityName: string | undefined;
+          
+          if (result.type === 'function_call' && result.functionCall) {
+            status = 'success';
+            intentDetected = result.functionCall.name;
+            
+            // Extract entity info from function arguments
+            const args = result.functionCall.arguments || {};
+            if (args.clientId) {
+              resolvedEntityType = 'client';
+              resolvedEntityId = args.clientId;
+              resolvedEntityName = args.clientName;
+            } else if (args.personId) {
+              resolvedEntityType = 'person';
+              resolvedEntityId = args.personId;
+              resolvedEntityName = args.personName;
+            } else if (args.projectIdentifier) {
+              resolvedEntityType = 'project';
+              resolvedEntityName = args.projectIdentifier;
+            }
+          } else if (result.type === 'clarification') {
+            status = 'clarification_needed';
+          } else if (result.type === 'message') {
+            status = 'partial';
+          } else if (result.type === 'error') {
+            status = 'failed';
+          }
+          
+          // Create the interaction log
+          const interaction = await aiStorage.createInteraction({
+            userId: userId || null,
+            sessionId: req.sessionID || null,
+            requestText: message,
+            intentDetected: intentDetected || null,
+            status,
+            resolvedEntityType: resolvedEntityType || null,
+            resolvedEntityId: resolvedEntityId || null,
+            resolvedEntityName: resolvedEntityName || null,
+            responseMessage: result.message || null,
+            currentViewContext: currentViewContext || null,
+            metadata: {
+              latencyMs,
+              hasConversationHistory: conversationHistory.length > 0,
+              resultType: result.type
+            }
+          });
+          
+          interactionId = interaction.id;
+          
+          // Log function invocation if applicable
+          if (result.type === 'function_call' && result.functionCall) {
+            await aiStorage.createFunctionInvocation({
+              interactionId: interaction.id,
+              functionName: result.functionCall.name,
+              functionArguments: result.functionCall.arguments,
+              succeeded: true,
+              latencyMs
+            });
+          }
+          
+          console.log("[AI Magic] Logged interaction:", interaction.id, "status:", status);
+        } catch (logError) {
+          // Don't fail the request if logging fails
+          console.error("[AI Magic] Failed to log interaction:", logError);
+        }
+
         res.json(result);
       } catch (error: any) {
         console.error("[AI Magic] Error:", error);
+        
+        // Log failed interaction
+        try {
+          const userId = req.user?.effectiveUserId || req.user?.id;
+          const parseResult = chatRequestSchema.safeParse(req.body);
+          if (parseResult.success) {
+            const latencyMs = Date.now() - startTime;
+            await storage.aiInteractionStorage.createInteraction({
+              userId: userId || null,
+              sessionId: req.sessionID || null,
+              requestText: parseResult.data.message,
+              intentDetected: null,
+              status: 'failed',
+              responseMessage: error.message || 'Unknown error',
+              currentViewContext: parseResult.data.currentViewContext || null,
+              metadata: { latencyMs, error: error.message }
+            });
+          }
+        } catch (logError) {
+          console.error("[AI Magic] Failed to log error interaction:", logError);
+        }
+        
         // Always return structured error response
         res.status(500).json({
           type: 'error',
