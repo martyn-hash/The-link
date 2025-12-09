@@ -39,6 +39,7 @@ export const users = pgTable("users", {
   canMakeServicesInactive: boolean("can_make_services_inactive").default(false),
   canMakeProjectsInactive: boolean("can_make_projects_inactive").default(false),
   canBenchProjects: boolean("can_bench_projects").default(false),
+  canSeeAllTasks: boolean("can_see_all_tasks").default(false),
   accessEmail: boolean("access_email").default(false),
   accessCalendar: boolean("access_calendar").default(false),
   createdAt: timestamp("created_at").defaultNow(),
