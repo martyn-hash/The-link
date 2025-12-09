@@ -527,6 +527,14 @@ export interface IStorage {
     roleAssignments: (ClientServiceRoleAssignment & { workRole: WorkRole; user: User })[];
   })[]>;
   getClientServicesByServiceId(serviceId: string): Promise<(ClientService & { client: Client })[]>;
+  getActiveVatClientServicesWithClientData(vatServiceIds: string[]): Promise<Array<{
+    id: string;
+    clientId: string;
+    serviceId: string;
+    udfValues: any;
+    clientName: string;
+    serviceName: string;
+  }>>;
   createClientService(clientService: InsertClientService): Promise<ClientService>;
   updateClientService(id: string, clientService: Partial<InsertClientService>): Promise<ClientService>;
   deleteClientService(id: string): Promise<void>;

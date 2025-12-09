@@ -647,6 +647,326 @@ export function registerServiceRoutes(
     }
   });
 
+  // POST /api/vat/validate-bulk - Bulk validate all active VAT services and identify address differences
+  app.post("/api/vat/validate-bulk", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      // Check if HMRC validation is configured and enabled
+      if (!isHmrcConfigured()) {
+        return res.json({
+          message: "HMRC API is not configured",
+          summary: {
+            totalProcessed: 0,
+            valid: 0,
+            invalid: 0,
+            bypassed: 0,
+            addressUpdatesRequired: 0,
+            autoUpdated: 0,
+          },
+          results: [],
+          hmrcDisabled: true,
+          disabledReason: "HMRC API credentials are not configured. Please set up the HMRC API credentials to enable VAT validation."
+        });
+      }
+
+      if (!isVatValidationEnabled()) {
+        return res.json({
+          message: "VAT validation is disabled",
+          summary: {
+            totalProcessed: 0,
+            valid: 0,
+            invalid: 0,
+            bypassed: 0,
+            addressUpdatesRequired: 0,
+            autoUpdated: 0,
+          },
+          results: [],
+          hmrcDisabled: true,
+          disabledReason: "VAT validation is currently disabled. Enable VAT validation in settings to use this feature."
+        });
+      }
+
+      // Get all active services that are VAT services
+      const allServices = await storage.getAllServices();
+      const vatServices = allServices.filter(s => s.isVatService === true && s.isActive !== false);
+      
+      if (vatServices.length === 0) {
+        return res.json({
+          message: "No active VAT services found",
+          summary: {
+            totalProcessed: 0,
+            valid: 0,
+            invalid: 0,
+            bypassed: 0,
+            addressUpdatesRequired: 0,
+            autoUpdated: 0,
+          },
+          results: []
+        });
+      }
+
+      const vatServiceIds = vatServices.map(s => s.id);
+      
+      // Get all active client services for these VAT services with client data
+      const allClientServicesData = await storage.getActiveVatClientServicesWithClientData(vatServiceIds);
+      
+      // Filter to only those with a VAT number
+      const clientServicesWithVat = allClientServicesData.filter(cs => {
+        const udfValues = (cs.udfValues || {}) as Record<string, any>;
+        return !!udfValues[VAT_UDF_FIELD_ID];
+      });
+
+      if (clientServicesWithVat.length === 0) {
+        return res.json({
+          message: "No client services with VAT numbers found",
+          summary: {
+            totalProcessed: 0,
+            valid: 0,
+            invalid: 0,
+            bypassed: 0,
+            addressUpdatesRequired: 0,
+            autoUpdated: 0,
+          },
+          results: []
+        });
+      }
+
+      // Process each client service
+      const results: Array<{
+        clientServiceId: string;
+        clientId: string;
+        clientName: string;
+        serviceName: string;
+        vatNumber: string;
+        validationResult: {
+          isValid: boolean;
+          error?: string;
+          errorCode?: string;
+          bypassed?: boolean;
+          companyName?: string;
+          hmrcAddress?: string;
+          hmrcPostcode?: string;
+          validatedAt?: string;
+        };
+        addressComparison?: {
+          hasExistingAddress: boolean;
+          existingAddress: string;
+          hmrcAddress: string;
+          addressesDiffer: boolean;
+          requiresApproval: boolean;
+        };
+      }> = [];
+
+      // Add rate limiting - HMRC recommends no more than 1 request per second
+      const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+      for (const cs of clientServicesWithVat) {
+        const udfValues = (cs.udfValues || {}) as Record<string, any>;
+        const vatNumber = udfValues[VAT_UDF_FIELD_ID];
+        
+        // Validate with HMRC
+        const validationResult = await validateVatNumber(vatNumber);
+        
+        // Build the result entry
+        const resultEntry: typeof results[0] = {
+          clientServiceId: cs.id,
+          clientId: cs.clientId,
+          clientName: cs.clientName || 'Unknown',
+          serviceName: cs.serviceName || 'Unknown',
+          vatNumber,
+          validationResult: {
+            isValid: validationResult.isValid,
+            error: validationResult.error,
+            errorCode: validationResult.errorCode,
+            bypassed: validationResult.bypassed,
+            companyName: validationResult.companyName,
+            hmrcAddress: validationResult.address,
+            hmrcPostcode: validationResult.postcode,
+            validatedAt: validationResult.validatedAt,
+          }
+        };
+
+        // If valid and not bypassed, check for address differences
+        if (validationResult.isValid && !validationResult.bypassed) {
+          // Format HMRC address
+          let hmrcFullAddress = '';
+          if (validationResult.address) {
+            hmrcFullAddress = validationResult.address;
+            if (validationResult.postcode) {
+              hmrcFullAddress += '\n' + validationResult.postcode;
+            }
+          }
+
+          // Get existing address from UDF (VAT address field)
+          const existingVatAddress = udfValues[VAT_ADDRESS_UDF_FIELD_ID] || '';
+          
+          // Normalize addresses for comparison (trim whitespace, lowercase, remove extra spaces)
+          const normalizeAddress = (addr: string) => 
+            addr.toLowerCase().replace(/\s+/g, ' ').replace(/[\n\r]+/g, ', ').trim();
+          
+          const normalizedExisting = normalizeAddress(existingVatAddress);
+          const normalizedHmrc = normalizeAddress(hmrcFullAddress);
+          
+          const hasExistingAddress = existingVatAddress.trim().length > 0;
+          const addressesDiffer = hasExistingAddress && normalizedExisting !== normalizedHmrc;
+          
+          resultEntry.addressComparison = {
+            hasExistingAddress,
+            existingAddress: existingVatAddress,
+            hmrcAddress: hmrcFullAddress,
+            addressesDiffer,
+            requiresApproval: addressesDiffer // Show differences and require manual approval
+          };
+
+          // If no existing address or addresses match, auto-update
+          if (!addressesDiffer) {
+            const updatedUdfValues = {
+              ...udfValues,
+              [`${VAT_UDF_FIELD_ID}_validation`]: {
+                isValid: true,
+                bypassed: false,
+                validatedAt: validationResult.validatedAt || new Date().toISOString(),
+                companyName: validationResult.companyName,
+                address: validationResult.address,
+                postcode: validationResult.postcode,
+              },
+              [VAT_ADDRESS_UDF_FIELD_ID]: hmrcFullAddress,
+            };
+            await storage.updateClientService(cs.id, { udfValues: updatedUdfValues });
+          } else {
+            // Only update validation metadata, not the address (requires approval)
+            const updatedUdfValues = {
+              ...udfValues,
+              [`${VAT_UDF_FIELD_ID}_validation`]: {
+                isValid: true,
+                bypassed: false,
+                validatedAt: validationResult.validatedAt || new Date().toISOString(),
+                companyName: validationResult.companyName,
+                address: validationResult.address,
+                postcode: validationResult.postcode,
+                pendingAddressUpdate: true,
+              },
+            };
+            await storage.updateClientService(cs.id, { udfValues: updatedUdfValues });
+          }
+        } else if (!validationResult.isValid) {
+          // Update with invalid status
+          const updatedUdfValues = {
+            ...udfValues,
+            [`${VAT_UDF_FIELD_ID}_validation`]: {
+              isValid: false,
+              validatedAt: new Date().toISOString(),
+              error: validationResult.error,
+              errorCode: validationResult.errorCode,
+            },
+          };
+          await storage.updateClientService(cs.id, { udfValues: updatedUdfValues });
+        }
+
+        results.push(resultEntry);
+
+        // Rate limit - wait 1.1 seconds between requests to HMRC
+        if (clientServicesWithVat.indexOf(cs) < clientServicesWithVat.length - 1) {
+          await delay(1100);
+        }
+      }
+
+      // Summarize results
+      const summary = {
+        totalProcessed: results.length,
+        valid: results.filter(r => r.validationResult.isValid).length,
+        invalid: results.filter(r => !r.validationResult.isValid).length,
+        bypassed: results.filter(r => r.validationResult.bypassed).length,
+        addressUpdatesRequired: results.filter(r => r.addressComparison?.requiresApproval).length,
+        autoUpdated: results.filter(r => r.validationResult.isValid && !r.validationResult.bypassed && !r.addressComparison?.requiresApproval).length,
+      };
+
+      res.json({
+        message: "Bulk VAT validation complete",
+        summary,
+        results
+      });
+    } catch (error) {
+      console.error("Error during bulk VAT validation:", error instanceof Error ? error.message : error);
+      res.status(500).json({ 
+        error: "Failed to complete bulk VAT validation",
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // POST /api/vat/approve-address-update - Approve an address update from HMRC
+  app.post("/api/vat/approve-address-update", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { clientServiceId, useHmrcAddress } = req.body;
+      
+      if (!clientServiceId) {
+        return res.status(400).json({ message: "clientServiceId is required" });
+      }
+
+      const clientService = await storage.getClientServiceById(clientServiceId);
+      if (!clientService) {
+        return res.status(404).json({ message: "Client service not found" });
+      }
+
+      const udfValues = (clientService.udfValues || {}) as Record<string, any>;
+      const validationData = udfValues[`${VAT_UDF_FIELD_ID}_validation`];
+      
+      if (!validationData) {
+        return res.status(400).json({ message: "No validation data found for this client service" });
+      }
+
+      if (useHmrcAddress) {
+        // Update to HMRC address
+        let hmrcFullAddress = '';
+        if (validationData.address) {
+          hmrcFullAddress = validationData.address;
+          if (validationData.postcode) {
+            hmrcFullAddress += '\n' + validationData.postcode;
+          }
+        }
+
+        const updatedUdfValues = {
+          ...udfValues,
+          [`${VAT_UDF_FIELD_ID}_validation`]: {
+            ...validationData,
+            pendingAddressUpdate: false,
+            addressApprovedAt: new Date().toISOString(),
+          },
+          [VAT_ADDRESS_UDF_FIELD_ID]: hmrcFullAddress,
+        };
+        await storage.updateClientService(clientServiceId, { udfValues: updatedUdfValues });
+        
+        res.json({ 
+          success: true, 
+          message: "Address updated to HMRC address",
+          newAddress: hmrcFullAddress
+        });
+      } else {
+        // Keep existing address, just clear the pending flag
+        const updatedUdfValues = {
+          ...udfValues,
+          [`${VAT_UDF_FIELD_ID}_validation`]: {
+            ...validationData,
+            pendingAddressUpdate: false,
+            addressRejectedAt: new Date().toISOString(),
+          },
+        };
+        await storage.updateClientService(clientServiceId, { udfValues: updatedUdfValues });
+        
+        res.json({ 
+          success: true, 
+          message: "Existing address kept"
+        });
+      }
+    } catch (error) {
+      console.error("Error approving address update:", error instanceof Error ? error.message : error);
+      res.status(500).json({ 
+        error: "Failed to approve address update",
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
   // ==================================================
   // SERVICE ASSIGNMENTS API ROUTES
   // ==================================================

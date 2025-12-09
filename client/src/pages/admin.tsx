@@ -10,6 +10,7 @@ import UploadModal from "@/components/upload-modal";
 import SettingsModal from "@/components/settings-modal";
 import UserManagementModal from "@/components/user-management-modal";
 import ScheduledServicesTab from "@/components/scheduled-services-tab";
+import BulkVatValidation from "@/components/BulkVatValidation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -1166,6 +1167,11 @@ export default function Admin() {
               </Card>
             </div>
           )}
+
+          {/* Bulk VAT Validation Section */}
+          <div className="mt-8">
+            <BulkVatValidation />
+          </div>
             </TabsContent>
             
             <TabsContent value="scheduled-services">

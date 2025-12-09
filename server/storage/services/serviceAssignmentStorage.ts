@@ -488,6 +488,47 @@ export class ServiceAssignmentStorage extends BaseStorage {
     return results as any;
   }
 
+  async getActiveVatClientServicesWithClientData(vatServiceIds: string[]): Promise<Array<{
+    id: string;
+    clientId: string;
+    serviceId: string;
+    udfValues: any;
+    clientName: string;
+    serviceName: string;
+  }>> {
+    if (vatServiceIds.length === 0) {
+      return [];
+    }
+
+    const results = await db
+      .select({
+        id: clientServices.id,
+        clientId: clientServices.clientId,
+        serviceId: clientServices.serviceId,
+        udfValues: clientServices.udfValues,
+        clientName: clients.name,
+        serviceName: services.name,
+      })
+      .from(clientServices)
+      .innerJoin(clients, eq(clientServices.clientId, clients.id))
+      .innerJoin(services, eq(clientServices.serviceId, services.id))
+      .where(
+        and(
+          eq(clientServices.isActive, true),
+          inArray(clientServices.serviceId, vatServiceIds)
+        )
+      );
+    
+    return results.map(r => ({
+      id: r.id,
+      clientId: r.clientId,
+      serviceId: r.serviceId,
+      udfValues: r.udfValues,
+      clientName: r.clientName || 'Unknown',
+      serviceName: r.serviceName || 'Unknown',
+    }));
+  }
+
   async createClientService(clientServiceData: InsertClientService): Promise<ClientService> {
     // Note: This implementation requires access to storage methods.
     // In the full implementation, these would need to be injected or accessed differently.

@@ -138,6 +138,10 @@ export function applyServicesFacade<TBase extends Constructor<ServicesFacadeDeps
       return this.serviceAssignmentStorage.getClientServicesByServiceId(serviceId);
     }
 
+    async getActiveVatClientServicesWithClientData(vatServiceIds: string[]) {
+      return this.serviceAssignmentStorage.getActiveVatClientServicesWithClientData(vatServiceIds);
+    }
+
     async createClientService(service: any) {
       return this.serviceAssignmentStorage.createClientService(service);
     }
