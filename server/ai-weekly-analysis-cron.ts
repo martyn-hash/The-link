@@ -1,0 +1,250 @@
+import * as cron from "node-cron";
+import OpenAI from "openai";
+import { storage } from "./storage";
+import type { AggregatedFailure } from "@shared/schema/ai-interactions/types";
+
+let cronJob: ReturnType<typeof cron.schedule> | null = null;
+
+let openaiClient: OpenAI | null = null;
+
+function getOpenAIClient(): OpenAI {
+  if (!openaiClient) {
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+  return openaiClient;
+}
+
+function redactPII(text: string): string {
+  let redacted = text;
+  redacted = redacted.replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, '[EMAIL]');
+  redacted = redacted.replace(/\b\d{5,}\b/g, '[NUMBER]');
+  redacted = redacted.replace(/£\s?\d+(?:,\d{3})*(?:\.\d{2})?/g, '[AMOUNT]');
+  redacted = redacted.replace(/\$\s?\d+(?:,\d{3})*(?:\.\d{2})?/g, '[AMOUNT]');
+  redacted = redacted.replace(/\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b/g, '[PHONE]');
+  redacted = redacted.replace(/\b\d{5}[-.\s]?\d{6}\b/g, '[PHONE]');
+  return redacted;
+}
+
+function redactAggregatedFailures(failures: AggregatedFailure[]): AggregatedFailure[] {
+  return failures.map(f => ({
+    ...f,
+    pattern: redactPII(f.pattern),
+    examples: f.examples.map(ex => redactPII(ex))
+  }));
+}
+
+export interface WeeklyAnalysisResult {
+  summary: string;
+  recommendations: Array<{
+    priority: 'high' | 'medium' | 'low';
+    category: string;
+    description: string;
+    suggestedAction: string;
+  }>;
+  patternAnalysis: Array<{
+    pattern: string;
+    frequency: number;
+    possibleIntent: string;
+    suggestedImprovement: string;
+  }>;
+  newFunctionSuggestions: Array<{
+    name: string;
+    description: string;
+    parameters: string[];
+    justification: string;
+  }>;
+}
+
+export async function runWeeklyAnalysis(): Promise<WeeklyAnalysisResult | null> {
+  console.log("[AIWeeklyAnalysis] Starting weekly analysis...");
+  
+  const aiStorage = storage.aiInteractionStorage;
+  
+  const now = new Date();
+  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  
+  const stats = await aiStorage.getInteractionStats(weekAgo, now);
+  
+  console.log("[AIWeeklyAnalysis] Stats:", stats);
+  
+  if (stats.total === 0) {
+    console.log("[AIWeeklyAnalysis] No interactions to analyze");
+    return null;
+  }
+  
+  const aggregatedFailures = await aiStorage.aggregateFailedInteractions(weekAgo, now);
+  const redactedFailures = redactAggregatedFailures(aggregatedFailures);
+  
+  console.log("[AIWeeklyAnalysis] Aggregated failures:", redactedFailures.length);
+  
+  if (redactedFailures.length === 0 && stats.failed === 0 && stats.clarificationNeeded === 0) {
+    console.log("[AIWeeklyAnalysis] No failures to analyze, success rate is good");
+    
+    const insight = await aiStorage.createInsight({
+      weekStartDate: weekAgo,
+      weekEndDate: now,
+      totalInteractions: stats.total,
+      successfulInteractions: stats.success,
+      failedInteractions: stats.failed,
+      partialInteractions: stats.partial,
+      clarificationNeededCount: stats.clarificationNeeded,
+      topFailurePatterns: [],
+      recommendations: [],
+      rawAnalysis: { message: "No significant failures to analyze" },
+      status: 'completed'
+    });
+    
+    console.log("[AIWeeklyAnalysis] Created insight:", insight.id);
+    return null;
+  }
+  
+  try {
+    const openai = getOpenAIClient();
+    
+    const analysisPrompt = `You are an AI system analyst. Analyze the following failed AI interactions from a practice management system and provide actionable recommendations.
+
+## Weekly Stats
+- Total interactions: ${stats.total}
+- Successful: ${stats.success} (${((stats.success / stats.total) * 100).toFixed(1)}%)
+- Failed: ${stats.failed} (${((stats.failed / stats.total) * 100).toFixed(1)}%)
+- Partial (fallback messages): ${stats.partial} (${((stats.partial / stats.total) * 100).toFixed(1)}%)
+- Needed clarification: ${stats.clarificationNeeded} (${((stats.clarificationNeeded / stats.total) * 100).toFixed(1)}%)
+
+## Aggregated Failure Patterns (grouped by similarity)
+${redactedFailures.map((f, i) => `
+### Pattern ${i + 1}: "${f.pattern}"
+- Occurrences: ${f.count}
+- Detected intent: ${f.intentDetected || 'Unknown'}
+- Example requests: ${f.examples.slice(0, 3).map(e => `"${e}"`).join(', ')}
+`).join('\n')}
+
+## Current System Capabilities
+The AI assistant can currently:
+- Navigate to clients, projects, people, contacts
+- Create reminders and tasks
+- Search for entities
+- Start calls and send SMS
+- Navigate to various views (dashboard, invoices, etc.)
+
+## Your Analysis Task
+Provide a JSON response with:
+1. A summary of the key issues
+2. Prioritized recommendations (high/medium/low)
+3. Pattern analysis explaining likely user intent
+4. Suggestions for new functions that could address common failures
+
+Respond ONLY with valid JSON matching this structure:
+{
+  "summary": "Brief summary of issues found",
+  "recommendations": [
+    {
+      "priority": "high|medium|low",
+      "category": "category name",
+      "description": "what the issue is",
+      "suggestedAction": "what to do about it"
+    }
+  ],
+  "patternAnalysis": [
+    {
+      "pattern": "the pattern",
+      "frequency": number,
+      "possibleIntent": "what user probably wanted",
+      "suggestedImprovement": "how to handle this better"
+    }
+  ],
+  "newFunctionSuggestions": [
+    {
+      "name": "function_name",
+      "description": "what it does",
+      "parameters": ["param1", "param2"],
+      "justification": "why this would help"
+    }
+  ]
+}`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: "You are an AI system analyst. Always respond with valid JSON only." },
+        { role: "user", content: analysisPrompt }
+      ],
+      max_tokens: 2000,
+      response_format: { type: "json_object" }
+    });
+    
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error("No response from OpenAI");
+    }
+    
+    const analysis: WeeklyAnalysisResult = JSON.parse(content);
+    
+    console.log("[AIWeeklyAnalysis] Analysis complete:", analysis.summary);
+    
+    const insight = await aiStorage.createInsight({
+      weekStartDate: weekAgo,
+      weekEndDate: now,
+      totalInteractions: stats.total,
+      successfulInteractions: stats.success,
+      failedInteractions: stats.failed,
+      partialInteractions: stats.partial,
+      clarificationNeededCount: stats.clarificationNeeded,
+      topFailurePatterns: redactedFailures,
+      recommendations: analysis.recommendations,
+      rawAnalysis: analysis,
+      status: 'completed'
+    });
+    
+    console.log("[AIWeeklyAnalysis] Created insight:", insight.id);
+    
+    return analysis;
+    
+  } catch (error: any) {
+    console.error("[AIWeeklyAnalysis] Error during analysis:", error);
+    
+    await aiStorage.createInsight({
+      weekStartDate: weekAgo,
+      weekEndDate: now,
+      totalInteractions: stats.total,
+      successfulInteractions: stats.success,
+      failedInteractions: stats.failed,
+      partialInteractions: stats.partial,
+      clarificationNeededCount: stats.clarificationNeeded,
+      topFailurePatterns: redactedFailures,
+      recommendations: [],
+      rawAnalysis: { error: error.message },
+      status: 'failed'
+    });
+    
+    throw error;
+  }
+}
+
+export function startAIWeeklyAnalysisCron(): void {
+  if (cronJob) {
+    console.log("[AIWeeklyAnalysis] Cron job already running");
+    return;
+  }
+
+  cronJob = cron.schedule("0 6 * * 1", async () => {
+    try {
+      await runWeeklyAnalysis();
+    } catch (error) {
+      console.error("[AIWeeklyAnalysis] Cron job error:", error);
+    }
+  }, {
+    timezone: "Europe/London"
+  });
+
+  console.log("[AIWeeklyAnalysis] Weekly analysis cron job started (runs Mondays at 06:00 UK time)");
+}
+
+export function stopAIWeeklyAnalysisCron(): void {
+  if (cronJob) {
+    cronJob.stop();
+    cronJob = null;
+    console.log("[AIWeeklyAnalysis] Cron job stopped");
+  }
+}
