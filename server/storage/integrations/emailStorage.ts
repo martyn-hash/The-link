@@ -1,5 +1,5 @@
 import { db } from "../../db";
-import { eq, and, or, desc, isNull, lt, sql } from "drizzle-orm";
+import { eq, and, or, desc, isNull, lt, sql, asc } from "drizzle-orm";
 import {
   graphWebhookSubscriptions,
   graphSyncState,
@@ -11,6 +11,8 @@ import {
   clientDomainAllowlist,
   emailAttachments,
   emailMessageAttachments,
+  inboxes,
+  userInboxAccess,
   users,
   type GraphWebhookSubscription,
   type InsertGraphWebhookSubscription,
@@ -32,6 +34,10 @@ import {
   type InsertEmailAttachment,
   type EmailMessageAttachment,
   type InsertEmailMessageAttachment,
+  type Inbox,
+  type InsertInbox,
+  type UserInboxAccess,
+  type InsertUserInboxAccess,
 } from "@shared/schema";
 
 export class EmailStorage {
@@ -621,5 +627,247 @@ export class EmailStorage {
     });
     
     return url;
+  }
+
+  // ========== INBOX MANAGEMENT ==========
+
+  async createInbox(inbox: InsertInbox): Promise<Inbox> {
+    const [created] = await db
+      .insert(inboxes)
+      .values(inbox)
+      .returning();
+    return created;
+  }
+
+  async getInboxById(id: string): Promise<Inbox | undefined> {
+    const result = await db
+      .select()
+      .from(inboxes)
+      .where(eq(inboxes.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getInboxByEmailAddress(emailAddress: string): Promise<Inbox | undefined> {
+    const result = await db
+      .select()
+      .from(inboxes)
+      .where(eq(inboxes.emailAddress, emailAddress.toLowerCase()))
+      .limit(1);
+    return result[0];
+  }
+
+  async getAllInboxes(): Promise<Inbox[]> {
+    return await db
+      .select()
+      .from(inboxes)
+      .orderBy(asc(inboxes.displayName), asc(inboxes.emailAddress));
+  }
+
+  async getActiveInboxes(): Promise<Inbox[]> {
+    return await db
+      .select()
+      .from(inboxes)
+      .where(eq(inboxes.isActive, true))
+      .orderBy(asc(inboxes.displayName), asc(inboxes.emailAddress));
+  }
+
+  async getInboxesByType(inboxType: string): Promise<Inbox[]> {
+    return await db
+      .select()
+      .from(inboxes)
+      .where(eq(inboxes.inboxType, inboxType))
+      .orderBy(asc(inboxes.emailAddress));
+  }
+
+  async getInboxByLinkedUserId(userId: string): Promise<Inbox | undefined> {
+    const result = await db
+      .select()
+      .from(inboxes)
+      .where(eq(inboxes.linkedUserId, userId))
+      .limit(1);
+    return result[0];
+  }
+
+  async updateInbox(id: string, updates: Partial<InsertInbox>): Promise<Inbox> {
+    const [updated] = await db
+      .update(inboxes)
+      .set({
+        ...updates,
+        updatedAt: new Date()
+      })
+      .where(eq(inboxes.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteInbox(id: string): Promise<void> {
+    await db.delete(inboxes).where(eq(inboxes.id, id));
+  }
+
+  async upsertInboxForUser(userId: string, emailAddress: string, displayName?: string): Promise<Inbox> {
+    const existing = await this.getInboxByEmailAddress(emailAddress);
+    
+    if (existing) {
+      if (!existing.linkedUserId) {
+        return await this.updateInbox(existing.id, { linkedUserId: userId });
+      }
+      return existing;
+    }
+    
+    return await this.createInbox({
+      emailAddress: emailAddress.toLowerCase(),
+      displayName: displayName || emailAddress,
+      inboxType: 'user',
+      linkedUserId: userId,
+      isActive: true,
+    });
+  }
+
+  // ========== USER INBOX ACCESS ==========
+
+  async createUserInboxAccess(access: InsertUserInboxAccess): Promise<UserInboxAccess> {
+    const [created] = await db
+      .insert(userInboxAccess)
+      .values(access)
+      .returning();
+    return created;
+  }
+
+  async getUserInboxAccessById(id: string): Promise<UserInboxAccess | undefined> {
+    const result = await db
+      .select()
+      .from(userInboxAccess)
+      .where(eq(userInboxAccess.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getUserInboxAccessByUserAndInbox(userId: string, inboxId: string): Promise<UserInboxAccess | undefined> {
+    const result = await db
+      .select()
+      .from(userInboxAccess)
+      .where(
+        and(
+          eq(userInboxAccess.userId, userId),
+          eq(userInboxAccess.inboxId, inboxId)
+        )
+      )
+      .limit(1);
+    return result[0];
+  }
+
+  async getInboxAccessByUserId(userId: string): Promise<(UserInboxAccess & { inbox: Inbox })[]> {
+    const result = await db
+      .select({
+        id: userInboxAccess.id,
+        userId: userInboxAccess.userId,
+        inboxId: userInboxAccess.inboxId,
+        accessLevel: userInboxAccess.accessLevel,
+        grantedBy: userInboxAccess.grantedBy,
+        grantedAt: userInboxAccess.grantedAt,
+        createdAt: userInboxAccess.createdAt,
+        inbox: inboxes,
+      })
+      .from(userInboxAccess)
+      .innerJoin(inboxes, eq(userInboxAccess.inboxId, inboxes.id))
+      .where(eq(userInboxAccess.userId, userId))
+      .orderBy(asc(inboxes.emailAddress));
+    
+    return result.map(r => ({
+      id: r.id,
+      userId: r.userId,
+      inboxId: r.inboxId,
+      accessLevel: r.accessLevel,
+      grantedBy: r.grantedBy,
+      grantedAt: r.grantedAt,
+      createdAt: r.createdAt,
+      inbox: r.inbox,
+    }));
+  }
+
+  async getInboxAccessByInboxId(inboxId: string): Promise<(UserInboxAccess & { user: { id: string; email: string | null; firstName: string | null; lastName: string | null } })[]> {
+    const result = await db
+      .select({
+        id: userInboxAccess.id,
+        userId: userInboxAccess.userId,
+        inboxId: userInboxAccess.inboxId,
+        accessLevel: userInboxAccess.accessLevel,
+        grantedBy: userInboxAccess.grantedBy,
+        grantedAt: userInboxAccess.grantedAt,
+        createdAt: userInboxAccess.createdAt,
+        user: {
+          id: users.id,
+          email: users.email,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        },
+      })
+      .from(userInboxAccess)
+      .innerJoin(users, eq(userInboxAccess.userId, users.id))
+      .where(eq(userInboxAccess.inboxId, inboxId))
+      .orderBy(asc(users.firstName), asc(users.lastName));
+    
+    return result;
+  }
+
+  async updateUserInboxAccess(id: string, updates: Partial<InsertUserInboxAccess>): Promise<UserInboxAccess> {
+    const [updated] = await db
+      .update(userInboxAccess)
+      .set(updates)
+      .where(eq(userInboxAccess.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteUserInboxAccess(id: string): Promise<void> {
+    await db.delete(userInboxAccess).where(eq(userInboxAccess.id, id));
+  }
+
+  async deleteUserInboxAccessByUserAndInbox(userId: string, inboxId: string): Promise<void> {
+    await db.delete(userInboxAccess).where(
+      and(
+        eq(userInboxAccess.userId, userId),
+        eq(userInboxAccess.inboxId, inboxId)
+      )
+    );
+  }
+
+  async grantInboxAccess(userId: string, inboxId: string, accessLevel: string, grantedBy: string): Promise<UserInboxAccess> {
+    const existing = await this.getUserInboxAccessByUserAndInbox(userId, inboxId);
+    
+    if (existing) {
+      return await this.updateUserInboxAccess(existing.id, { accessLevel, grantedBy });
+    }
+    
+    return await this.createUserInboxAccess({
+      userId,
+      inboxId,
+      accessLevel,
+      grantedBy,
+    });
+  }
+
+  async revokeInboxAccess(userId: string, inboxId: string): Promise<void> {
+    await this.deleteUserInboxAccessByUserAndInbox(userId, inboxId);
+  }
+
+  async getUserAccessibleInboxes(userId: string): Promise<Inbox[]> {
+    const accessRecords = await this.getInboxAccessByUserId(userId);
+    return accessRecords.map(a => a.inbox);
+  }
+
+  async canUserAccessInbox(userId: string, inboxId: string): Promise<boolean> {
+    const access = await this.getUserInboxAccessByUserAndInbox(userId, inboxId);
+    return !!access;
+  }
+
+  async ensureUserHasOwnInboxAccess(userId: string, userEmail: string): Promise<void> {
+    const inbox = await this.upsertInboxForUser(userId, userEmail);
+    const hasAccess = await this.canUserAccessInbox(userId, inbox.id);
+    
+    if (!hasAccess) {
+      await this.grantInboxAccess(userId, inbox.id, 'full', userId);
+    }
   }
 }

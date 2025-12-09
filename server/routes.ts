@@ -125,7 +125,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerInternalTaskRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin);
   registerMessageRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, verifyMessageAttachmentAccess, verifyThreadAccess);
   registerIntegrationRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin);
-  registerEmailRoutes(app, isAuthenticated, resolveEffectiveUser);
+  registerEmailRoutes(app, isAuthenticated, resolveEffectiveUser, requireSuperAdmin);
   registerSuperAdminRoutes(app, isAuthenticated, resolveEffectiveUser, requireSuperAdmin);
   registerNotificationRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin, requireManager);
   registerSignatureRoutes(app, isAuthenticated, resolveEffectiveUser);

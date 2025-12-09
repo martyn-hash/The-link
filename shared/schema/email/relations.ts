@@ -8,6 +8,8 @@ import {
   emailMessageAttachments,
   graphWebhookSubscriptions,
   graphSyncState,
+  inboxes,
+  userInboxAccess,
 } from "./tables";
 
 import { users } from "../users/tables";
@@ -86,5 +88,30 @@ export const graphSyncStateRelations = relations(graphSyncState, ({ one }) => ({
   user: one(users, {
     fields: [graphSyncState.userId],
     references: [users.id],
+  }),
+}));
+
+export const inboxesRelations = relations(inboxes, ({ one, many }) => ({
+  linkedUser: one(users, {
+    fields: [inboxes.linkedUserId],
+    references: [users.id],
+  }),
+  userAccess: many(userInboxAccess),
+}));
+
+export const userInboxAccessRelations = relations(userInboxAccess, ({ one }) => ({
+  user: one(users, {
+    fields: [userInboxAccess.userId],
+    references: [users.id],
+    relationName: "userAccess",
+  }),
+  inbox: one(inboxes, {
+    fields: [userInboxAccess.inboxId],
+    references: [inboxes.id],
+  }),
+  grantedByUser: one(users, {
+    fields: [userInboxAccess.grantedBy],
+    references: [users.id],
+    relationName: "grantedByUser",
   }),
 }));

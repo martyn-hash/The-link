@@ -36,6 +36,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
@@ -55,9 +62,12 @@ import {
   XCircle,
   Save,
   AlertTriangle,
+  Inbox,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
-import type { User, UserSession } from "@shared/schema";
+import type { User, UserSession, Inbox as InboxType, UserInboxAccess } from "@shared/schema";
 
 const passwordFormSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters"),
@@ -105,6 +115,25 @@ export default function UserDetailPage() {
     queryKey: ["/api/super-admin/activity-logs", { userId }],
     enabled: !!userId && !!currentUser?.superAdmin,
   });
+
+  // Inbox access queries
+  const { data: userInboxAccess, isLoading: inboxAccessLoading } = useQuery<(UserInboxAccess & { inbox: InboxType })[]>({
+    queryKey: ["/api/users", userId, "inbox-access"],
+    queryFn: async () => {
+      const res = await fetch(`/api/users/${userId}/inbox-access`);
+      if (!res.ok) throw new Error("Failed to fetch inbox access");
+      return res.json();
+    },
+    enabled: !!userId && !!currentUser?.superAdmin,
+  });
+
+  const { data: allInboxes, isLoading: allInboxesLoading } = useQuery<InboxType[]>({
+    queryKey: ["/api/inboxes"],
+    enabled: !!currentUser?.superAdmin,
+  });
+
+  const [selectedInboxId, setSelectedInboxId] = useState<string>("");
+  const [selectedAccessLevel, setSelectedAccessLevel] = useState<string>("read");
 
   useEffect(() => {
     if (targetUser) {
@@ -156,6 +185,40 @@ export default function UserDetailPage() {
         description: "Password updated successfully",
       });
       passwordForm.reset();
+    },
+    onError: (error: any) => {
+      showFriendlyError({ error });
+    },
+  });
+
+  const grantInboxAccessMutation = useMutation({
+    mutationFn: async (data: { inboxId: string; accessLevel: string }) => {
+      return await apiRequest("POST", `/api/users/${userId}/inbox-access`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "inbox-access"] });
+      toast({
+        title: "Success",
+        description: "Inbox access granted successfully",
+      });
+      setSelectedInboxId("");
+      setSelectedAccessLevel("read");
+    },
+    onError: (error: any) => {
+      showFriendlyError({ error });
+    },
+  });
+
+  const revokeInboxAccessMutation = useMutation({
+    mutationFn: async (inboxId: string) => {
+      return await apiRequest("DELETE", `/api/users/${userId}/inbox-access/${inboxId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "inbox-access"] });
+      toast({
+        title: "Success",
+        description: "Inbox access revoked successfully",
+      });
     },
     onError: (error: any) => {
       showFriendlyError({ error });
@@ -555,6 +618,154 @@ export default function UserDetailPage() {
               </Form>
             </CardContent>
           </Card>
+
+          {currentUser?.superAdmin && (
+            <Card data-testid="card-inbox-access">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Inbox className="w-5 h-5" />
+                  Inbox Access
+                </CardTitle>
+                <CardDescription>
+                  Manage which email inboxes this user can access
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <Select value={selectedInboxId} onValueChange={setSelectedInboxId}>
+                    <SelectTrigger className="flex-1" data-testid="select-inbox">
+                      <SelectValue placeholder="Select an inbox..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allInboxesLoading ? (
+                        <SelectItem value="_loading" disabled>Loading inboxes...</SelectItem>
+                      ) : allInboxes && allInboxes.length > 0 ? (
+                        allInboxes
+                          .filter(inbox => !userInboxAccess?.some(access => access.inboxId === inbox.id))
+                          .map(inbox => (
+                            <SelectItem key={inbox.id} value={inbox.id}>
+                              <span className="flex items-center gap-2">
+                                {inbox.displayName || inbox.emailAddress}
+                                <span className="text-muted-foreground text-xs">
+                                  ({inbox.inboxType})
+                                </span>
+                              </span>
+                            </SelectItem>
+                          ))
+                      ) : (
+                        <SelectItem value="_none" disabled>No inboxes available</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  
+                  <Select value={selectedAccessLevel} onValueChange={setSelectedAccessLevel}>
+                    <SelectTrigger className="w-[140px]" data-testid="select-access-level">
+                      <SelectValue placeholder="Access level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="read">Read</SelectItem>
+                      <SelectItem value="write">Write</SelectItem>
+                      <SelectItem value="full">Full</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  <Button
+                    onClick={() => {
+                      if (selectedInboxId) {
+                        grantInboxAccessMutation.mutate({
+                          inboxId: selectedInboxId,
+                          accessLevel: selectedAccessLevel,
+                        });
+                      }
+                    }}
+                    disabled={!selectedInboxId || grantInboxAccessMutation.isPending}
+                    data-testid="button-grant-access"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    {grantInboxAccessMutation.isPending ? "Granting..." : "Grant Access"}
+                  </Button>
+                </div>
+
+                {inboxAccessLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : userInboxAccess && userInboxAccess.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Inbox</TableHead>
+                          <TableHead>Type</TableHead>
+                          <TableHead>Access Level</TableHead>
+                          <TableHead>Granted</TableHead>
+                          <TableHead className="w-[100px]">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {userInboxAccess.map((access) => {
+                          const isOwnInbox = access.inbox.linkedUserId === userId;
+                          return (
+                            <TableRow key={access.id} data-testid={`row-inbox-${access.id}`}>
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  <Mail className="w-4 h-4 text-muted-foreground" />
+                                  <div>
+                                    <div className="font-medium">
+                                      {access.inbox.displayName || access.inbox.emailAddress}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {access.inbox.emailAddress}
+                                    </div>
+                                  </div>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant={access.inbox.inboxType === 'user' ? 'default' : 'secondary'}>
+                                  {access.inbox.inboxType}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline">{access.accessLevel}</Badge>
+                              </TableCell>
+                              <TableCell>
+                                {access.grantedAt 
+                                  ? formatDistanceToNow(new Date(access.grantedAt), { addSuffix: true })
+                                  : "Unknown"
+                                }
+                              </TableCell>
+                              <TableCell>
+                                {isOwnInbox ? (
+                                  <span className="text-xs text-muted-foreground">Own inbox</span>
+                                ) : (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => revokeInboxAccessMutation.mutate(access.inboxId)}
+                                    disabled={revokeInboxAccessMutation.isPending}
+                                    data-testid={`button-revoke-${access.id}`}
+                                  >
+                                    <Trash2 className="w-4 h-4 text-destructive" />
+                                  </Button>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Inbox className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No inbox access configured for this user</p>
+                    <p className="text-sm mt-2">Grant access to inboxes using the form above</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
           {currentUser?.superAdmin && (
             <Card data-testid="card-login-history">

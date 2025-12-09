@@ -8,6 +8,8 @@ import {
   emailMessageAttachments,
   graphWebhookSubscriptions,
   graphSyncState,
+  inboxes,
+  userInboxAccess,
 } from "./tables";
 
 export const insertEmailMessageSchema = createInsertSchema(emailMessages).omit({
@@ -49,4 +51,16 @@ export const insertGraphSyncStateSchema = createInsertSchema(graphSyncState).omi
   id: true,
   createdAt: true,
   updatedAt: true,
+});
+
+export const insertInboxSchema = createInsertSchema(inboxes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUserInboxAccessSchema = createInsertSchema(userInboxAccess).omit({
+  id: true,
+  createdAt: true,
+  grantedAt: true,
 });

@@ -167,3 +167,35 @@ export const graphSyncState = pgTable("graph_sync_state", {
   index("idx_graph_sync_state_user_id").on(table.userId),
   index("idx_graph_sync_state_last_sync").on(table.lastSyncAt),
 ]);
+
+export const inboxes = pgTable("inboxes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  emailAddress: varchar("email_address").notNull().unique(),
+  displayName: varchar("display_name"),
+  inboxType: varchar("inbox_type").notNull().default("user"),
+  linkedUserId: varchar("linked_user_id").references(() => users.id, { onDelete: "set null" }),
+  azureUserId: varchar("azure_user_id"),
+  isActive: boolean("is_active").default(true),
+  lastSyncAt: timestamp("last_sync_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_inboxes_email_address").on(table.emailAddress),
+  index("idx_inboxes_linked_user_id").on(table.linkedUserId),
+  index("idx_inboxes_inbox_type").on(table.inboxType),
+  index("idx_inboxes_is_active").on(table.isActive),
+]);
+
+export const userInboxAccess = pgTable("user_inbox_access", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  inboxId: varchar("inbox_id").notNull().references(() => inboxes.id, { onDelete: "cascade" }),
+  accessLevel: varchar("access_level").notNull().default("read"),
+  grantedBy: varchar("granted_by").references(() => users.id, { onDelete: "set null" }),
+  grantedAt: timestamp("granted_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  unique("unique_user_inbox_access").on(table.userId, table.inboxId),
+  index("idx_user_inbox_access_user_id").on(table.userId),
+  index("idx_user_inbox_access_inbox_id").on(table.inboxId),
+]);

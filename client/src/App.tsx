@@ -86,6 +86,7 @@ const SignPage = lazy(() => import("@/pages/sign"));
 const SignatureRequestsPage = lazy(() => import("@/pages/signature-requests"));
 const SignatureRequestBuilder = lazy(() => import("@/pages/signature-request-builder"));
 const QueryResponsePage = lazy(() => import("@/pages/query-response"));
+const InboxManagement = lazy(() => import("@/pages/inbox-management"));
 
 function PageLoader() {
   return (
@@ -200,6 +201,7 @@ function Router() {
         <Route path="/settings/project-types/:id" component={ProjectTypeDetail} />
         <Route path="/users" component={Users} />
         <Route path="/users/:id" component={UserDetail} />
+        <Route path="/inbox-management" component={InboxManagement} />
         <Route path="/services" component={ServiceAssignments} />
         <Route path="/admin/service-config" component={Services} />
         <Route path="/scheduled-services" component={ScheduledServices} />

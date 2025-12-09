@@ -304,6 +304,98 @@ export function applyIntegrationsFacade<TBase extends Constructor<IntegrationsFa
     }
 
     // ============================================================================
+    // INBOX MANAGEMENT - EmailStorage (17 methods)
+    // ============================================================================
+
+    async createInbox(inbox: any) {
+      return this.emailStorage.createInbox(inbox);
+    }
+
+    async getInboxById(id: string) {
+      return this.emailStorage.getInboxById(id);
+    }
+
+    async getInboxByEmailAddress(emailAddress: string) {
+      return this.emailStorage.getInboxByEmailAddress(emailAddress);
+    }
+
+    async getAllInboxes() {
+      return this.emailStorage.getAllInboxes();
+    }
+
+    async getActiveInboxes() {
+      return this.emailStorage.getActiveInboxes();
+    }
+
+    async getInboxesByType(inboxType: string) {
+      return this.emailStorage.getInboxesByType(inboxType);
+    }
+
+    async getInboxByLinkedUserId(userId: string) {
+      return this.emailStorage.getInboxByLinkedUserId(userId);
+    }
+
+    async updateInbox(id: string, updates: any) {
+      return this.emailStorage.updateInbox(id, updates);
+    }
+
+    async deleteInbox(id: string) {
+      return this.emailStorage.deleteInbox(id);
+    }
+
+    async upsertInboxForUser(userId: string, emailAddress: string, displayName?: string) {
+      return this.emailStorage.upsertInboxForUser(userId, emailAddress, displayName);
+    }
+
+    async createUserInboxAccess(access: any) {
+      return this.emailStorage.createUserInboxAccess(access);
+    }
+
+    async getUserInboxAccessById(id: string) {
+      return this.emailStorage.getUserInboxAccessById(id);
+    }
+
+    async getUserInboxAccessByUserAndInbox(userId: string, inboxId: string) {
+      return this.emailStorage.getUserInboxAccessByUserAndInbox(userId, inboxId);
+    }
+
+    async getInboxAccessByUserId(userId: string) {
+      return this.emailStorage.getInboxAccessByUserId(userId);
+    }
+
+    async getInboxAccessByInboxId(inboxId: string) {
+      return this.emailStorage.getInboxAccessByInboxId(inboxId);
+    }
+
+    async updateUserInboxAccess(id: string, updates: any) {
+      return this.emailStorage.updateUserInboxAccess(id, updates);
+    }
+
+    async deleteUserInboxAccess(id: string) {
+      return this.emailStorage.deleteUserInboxAccess(id);
+    }
+
+    async grantInboxAccess(userId: string, inboxId: string, accessLevel: string, grantedBy: string) {
+      return this.emailStorage.grantInboxAccess(userId, inboxId, accessLevel, grantedBy);
+    }
+
+    async revokeInboxAccess(userId: string, inboxId: string) {
+      return this.emailStorage.revokeInboxAccess(userId, inboxId);
+    }
+
+    async getUserAccessibleInboxes(userId: string) {
+      return this.emailStorage.getUserAccessibleInboxes(userId);
+    }
+
+    async canUserAccessInbox(userId: string, inboxId: string) {
+      return this.emailStorage.canUserAccessInbox(userId, inboxId);
+    }
+
+    async ensureUserHasOwnInboxAccess(userId: string, userEmail: string) {
+      return this.emailStorage.ensureUserHasOwnInboxAccess(userId, userEmail);
+    }
+
+    // ============================================================================
     // SMS TEMPLATES - SmsTemplateStorage (6 methods)
     // ============================================================================
 

@@ -10,6 +10,7 @@ import {
   createReplyToMessage,
   createReplyAllToMessage,
 } from "../utils/applicationGraphClient";
+import { insertInboxSchema, insertUserInboxAccessSchema } from "@shared/schema";
 
 /**
  * Email Routes
@@ -36,7 +37,8 @@ const replyToEmailSchema = z.object({
 export function registerEmailRoutes(
   app: Express,
   isAuthenticated: any,
-  resolveEffectiveUser: any
+  resolveEffectiveUser: any,
+  requireSuperAdmin: any
 ) {
   /**
    * POST /api/emails/:messageId/reply
@@ -657,6 +659,358 @@ export function registerEmailRoutes(
         message: "Failed to list tenant users",
         error: error.message
       });
+    }
+  });
+
+  // ========== INBOX MANAGEMENT ROUTES ==========
+
+  /**
+   * GET /api/inboxes
+   * Get all inboxes (super admin only)
+   */
+  app.get('/api/inboxes', isAuthenticated, resolveEffectiveUser, requireSuperAdmin, async (req: any, res: any) => {
+    try {
+      const allInboxes = await storage.getAllInboxes();
+      res.json(allInboxes);
+    } catch (error: any) {
+      console.error('[Get Inboxes] Error:', error);
+      res.status(500).json({ message: "Failed to fetch inboxes", error: error.message });
+    }
+  });
+
+  /**
+   * GET /api/inboxes/:id
+   * Get a specific inbox by ID
+   */
+  app.get('/api/inboxes/:id', isAuthenticated, resolveEffectiveUser, requireSuperAdmin, async (req: any, res: any) => {
+    try {
+      const inbox = await storage.getInboxById(req.params.id);
+      if (!inbox) {
+        return res.status(404).json({ message: "Inbox not found" });
+      }
+
+      res.json(inbox);
+    } catch (error: any) {
+      console.error('[Get Inbox] Error:', error);
+      res.status(500).json({ message: "Failed to fetch inbox", error: error.message });
+    }
+  });
+
+  /**
+   * POST /api/inboxes
+   * Create a new inbox (super admin only)
+   * Used for adding shared mailboxes like payroll@company.com
+   */
+  app.post('/api/inboxes', isAuthenticated, resolveEffectiveUser, requireSuperAdmin, async (req: any, res: any) => {
+    try {
+      const createInboxSchema = z.object({
+        emailAddress: z.string().email("Invalid email address"),
+        displayName: z.string().optional(),
+        inboxType: z.enum(['user', 'shared', 'functional']).optional().default('shared'),
+        azureUserId: z.string().optional(),
+      });
+
+      const validation = createInboxSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({
+          message: "Invalid request data",
+          errors: validation.error.errors
+        });
+      }
+
+      const { emailAddress, displayName, inboxType, azureUserId } = validation.data;
+
+      // Check if inbox already exists
+      const existing = await storage.getInboxByEmailAddress(emailAddress);
+      if (existing) {
+        return res.status(400).json({ message: "An inbox with this email address already exists" });
+      }
+
+      const inbox = await storage.createInbox({
+        emailAddress: emailAddress.toLowerCase(),
+        displayName: displayName || emailAddress,
+        inboxType,
+        azureUserId,
+        isActive: true,
+      });
+
+      res.status(201).json(inbox);
+    } catch (error: any) {
+      console.error('[Create Inbox] Error:', error);
+      res.status(500).json({ message: "Failed to create inbox", error: error.message });
+    }
+  });
+
+  /**
+   * PATCH /api/inboxes/:id
+   * Update an inbox (super admin only)
+   */
+  app.patch('/api/inboxes/:id', isAuthenticated, resolveEffectiveUser, requireSuperAdmin, async (req: any, res: any) => {
+    try {
+      const inbox = await storage.getInboxById(req.params.id);
+      if (!inbox) {
+        return res.status(404).json({ message: "Inbox not found" });
+      }
+
+      const updateInboxSchema = z.object({
+        displayName: z.string().optional(),
+        inboxType: z.enum(['user', 'shared', 'functional']).optional(),
+        azureUserId: z.string().optional().nullable(),
+        isActive: z.boolean().optional(),
+      });
+
+      const validation = updateInboxSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({
+          message: "Invalid request data",
+          errors: validation.error.errors
+        });
+      }
+
+      const updated = await storage.updateInbox(req.params.id, validation.data);
+      res.json(updated);
+    } catch (error: any) {
+      console.error('[Update Inbox] Error:', error);
+      res.status(500).json({ message: "Failed to update inbox", error: error.message });
+    }
+  });
+
+  /**
+   * DELETE /api/inboxes/:id
+   * Delete an inbox (super admin only)
+   */
+  app.delete('/api/inboxes/:id', isAuthenticated, resolveEffectiveUser, requireSuperAdmin, async (req: any, res: any) => {
+    try {
+      const inbox = await storage.getInboxById(req.params.id);
+      if (!inbox) {
+        return res.status(404).json({ message: "Inbox not found" });
+      }
+
+      // Prevent deletion of user-linked inboxes
+      if (inbox.linkedUserId) {
+        return res.status(400).json({ 
+          message: "Cannot delete an inbox linked to a user. Remove the user link first." 
+        });
+      }
+
+      await storage.deleteInbox(req.params.id);
+      res.json({ success: true, message: "Inbox deleted" });
+    } catch (error: any) {
+      console.error('[Delete Inbox] Error:', error);
+      res.status(500).json({ message: "Failed to delete inbox", error: error.message });
+    }
+  });
+
+  /**
+   * GET /api/inboxes/:id/access
+   * Get all users with access to a specific inbox
+   */
+  app.get('/api/inboxes/:id/access', isAuthenticated, resolveEffectiveUser, requireSuperAdmin, async (req: any, res: any) => {
+    try {
+      const inbox = await storage.getInboxById(req.params.id);
+      if (!inbox) {
+        return res.status(404).json({ message: "Inbox not found" });
+      }
+
+      const accessRecords = await storage.getInboxAccessByInboxId(req.params.id);
+      res.json(accessRecords);
+    } catch (error: any) {
+      console.error('[Get Inbox Access] Error:', error);
+      res.status(500).json({ message: "Failed to fetch inbox access", error: error.message });
+    }
+  });
+
+  // ========== USER INBOX ACCESS ROUTES ==========
+
+  /**
+   * GET /api/users/:userId/inbox-access
+   * Get all inboxes a user has access to
+   * Users can view their own inbox access, super admins can view anyone's
+   */
+  app.get('/api/users/:userId/inbox-access', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { userId } = req.params;
+      const currentUserId = req.user!.effectiveUserId;
+
+      // Users can view their own inbox access
+      if (currentUserId === userId) {
+        const accessRecords = await storage.getInboxAccessByUserId(userId);
+        return res.json(accessRecords);
+      }
+
+      // For viewing other users' inbox access, require super admin
+      const currentUser = await storage.getUser(currentUserId);
+      if (!currentUser?.superAdmin) {
+        return res.status(403).json({ message: "Super admin access required to view other users' inbox access" });
+      }
+
+      const accessRecords = await storage.getInboxAccessByUserId(userId);
+      res.json(accessRecords);
+    } catch (error: any) {
+      console.error('[Get User Inbox Access] Error:', error);
+      res.status(500).json({ message: "Failed to fetch user inbox access", error: error.message });
+    }
+  });
+
+  /**
+   * POST /api/users/:userId/inbox-access
+   * Grant a user access to an inbox (super admin only)
+   */
+  app.post('/api/users/:userId/inbox-access', isAuthenticated, resolveEffectiveUser, requireSuperAdmin, async (req: any, res: any) => {
+    try {
+      const { userId } = req.params;
+      const grantedById = req.user!.effectiveUserId;
+
+      const grantAccessSchema = z.object({
+        inboxId: z.string().min(1, "Inbox ID is required"),
+        accessLevel: z.enum(['read', 'write', 'full']).optional().default('read'),
+      });
+
+      const validation = grantAccessSchema.safeParse(req.body);
+      if (!validation.success) {
+        return res.status(400).json({
+          message: "Invalid request data",
+          errors: validation.error.errors
+        });
+      }
+
+      const { inboxId, accessLevel } = validation.data;
+
+      // Verify user exists
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Verify inbox exists
+      const inbox = await storage.getInboxById(inboxId);
+      if (!inbox) {
+        return res.status(404).json({ message: "Inbox not found" });
+      }
+
+      // Check if access already exists
+      const existing = await storage.getUserInboxAccessByUserAndInbox(userId, inboxId);
+      if (existing) {
+        // Update existing access
+        const updated = await storage.updateUserInboxAccess(existing.id, { accessLevel, grantedBy: grantedById });
+        return res.json({ ...updated, inbox });
+      }
+
+      // Create new access
+      const access = await storage.grantInboxAccess(userId, inboxId, accessLevel, grantedById);
+      res.status(201).json({ ...access, inbox });
+    } catch (error: any) {
+      console.error('[Grant Inbox Access] Error:', error);
+      res.status(500).json({ message: "Failed to grant inbox access", error: error.message });
+    }
+  });
+
+  /**
+   * DELETE /api/users/:userId/inbox-access/:inboxId
+   * Revoke a user's access to an inbox (super admin only)
+   */
+  app.delete('/api/users/:userId/inbox-access/:inboxId', isAuthenticated, resolveEffectiveUser, requireSuperAdmin, async (req: any, res: any) => {
+    try {
+      const { userId, inboxId } = req.params;
+
+      // Verify the access exists
+      const access = await storage.getUserInboxAccessByUserAndInbox(userId, inboxId);
+      if (!access) {
+        return res.status(404).json({ message: "Inbox access not found" });
+      }
+
+      // Check if this is the user's own inbox - don't allow revoking self-access
+      const inbox = await storage.getInboxById(inboxId);
+      if (inbox?.linkedUserId === userId) {
+        return res.status(400).json({ 
+          message: "Cannot revoke a user's access to their own inbox" 
+        });
+      }
+
+      await storage.revokeInboxAccess(userId, inboxId);
+      res.json({ success: true, message: "Inbox access revoked" });
+    } catch (error: any) {
+      console.error('[Revoke Inbox Access] Error:', error);
+      res.status(500).json({ message: "Failed to revoke inbox access", error: error.message });
+    }
+  });
+
+  /**
+   * GET /api/my-inboxes
+   * Get the current user's accessible inboxes
+   */
+  app.get('/api/my-inboxes', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const accessRecords = await storage.getInboxAccessByUserId(userId);
+      res.json(accessRecords);
+    } catch (error: any) {
+      console.error('[Get My Inboxes] Error:', error);
+      res.status(500).json({ message: "Failed to fetch your inboxes", error: error.message });
+    }
+  });
+
+  /**
+   * POST /api/inboxes/sync-users
+   * Sync inboxes with all users (create inbox records for users who don't have one)
+   * Super admin only
+   */
+  app.post('/api/inboxes/sync-users', isAuthenticated, resolveEffectiveUser, requireSuperAdmin, async (req: any, res: any) => {
+    try {
+      // Get all users with email addresses
+      const users = await storage.getAllUsers();
+      let created = 0;
+      let skipped = 0;
+      let accessGranted = 0;
+
+      for (const user of users) {
+        if (!user.email) {
+          skipped++;
+          continue;
+        }
+
+        // Check if inbox already exists for this user
+        const existingInbox = await storage.getInboxByEmailAddress(user.email);
+        
+        if (!existingInbox) {
+          // Create inbox for user
+          const inbox = await storage.createInbox({
+            emailAddress: user.email.toLowerCase(),
+            displayName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+            inboxType: 'user',
+            linkedUserId: user.id,
+            isActive: true,
+          });
+          
+          // Grant user access to their own inbox
+          await storage.grantInboxAccess(user.id, inbox.id, 'full', req.user.effectiveUserId);
+          created++;
+          accessGranted++;
+        } else {
+          // Check if user has access to their inbox
+          const hasAccess = await storage.canUserAccessInbox(user.id, existingInbox.id);
+          if (!hasAccess) {
+            await storage.grantInboxAccess(user.id, existingInbox.id, 'full', req.user.effectiveUserId);
+            accessGranted++;
+          }
+          
+          // Update linked user if not set
+          if (!existingInbox.linkedUserId) {
+            await storage.updateInbox(existingInbox.id, { linkedUserId: user.id });
+          }
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Synced inboxes for ${users.length} users`,
+        created,
+        skipped,
+        accessGranted,
+      });
+    } catch (error: any) {
+      console.error('[Sync User Inboxes] Error:', error);
+      res.status(500).json({ message: "Failed to sync user inboxes", error: error.message });
     }
   });
 }

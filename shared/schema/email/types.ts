@@ -8,6 +8,8 @@ import {
   emailMessageAttachments,
   graphWebhookSubscriptions,
   graphSyncState,
+  inboxes,
+  userInboxAccess,
 } from "./tables";
 import {
   insertEmailMessageSchema,
@@ -18,6 +20,8 @@ import {
   insertEmailMessageAttachmentSchema,
   insertGraphWebhookSubscriptionSchema,
   insertGraphSyncStateSchema,
+  insertInboxSchema,
+  insertUserInboxAccessSchema,
 } from "./schemas";
 
 export type EmailMessage = typeof emailMessages.$inferSelect;
@@ -43,3 +47,9 @@ export type InsertGraphWebhookSubscription = z.infer<typeof insertGraphWebhookSu
 
 export type GraphSyncState = typeof graphSyncState.$inferSelect;
 export type InsertGraphSyncState = z.infer<typeof insertGraphSyncStateSchema>;
+
+export type Inbox = typeof inboxes.$inferSelect;
+export type InsertInbox = z.infer<typeof insertInboxSchema>;
+
+export type UserInboxAccess = typeof userInboxAccess.$inferSelect;
+export type InsertUserInboxAccess = z.infer<typeof insertUserInboxAccessSchema>;
