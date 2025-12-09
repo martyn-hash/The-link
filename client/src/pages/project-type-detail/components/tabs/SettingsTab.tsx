@@ -408,6 +408,27 @@ export function SettingsTab({
                               This message will be sent to the AI agent to guide the conversation.
                             </p>
                           </div>
+
+                          <div className="space-y-2">
+                            <Label>Variables (comma-separated)</Label>
+                            <Input
+                              value={webhook.variables || ''}
+                              onChange={(e) => handleUpdateWebhook(webhook.id, { variables: e.target.value })}
+                              placeholder="e.g., name, number of transactions, due date"
+                              data-testid={`input-webhook-variables-${webhook.id}`}
+                            />
+                            {webhook.variables && webhook.variables.trim() && (
+                              <div className="p-2 bg-muted/50 rounded text-xs font-mono">
+                                <span className="text-muted-foreground">Appended to webhook: </span>
+                                {webhook.variables.split(',').map(v => 
+                                  `{${v.trim().toLowerCase().replace(/\s+/g, '')}}`
+                                ).join(', ')}
+                              </div>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                              Enter variable names separated by commas. They will be converted to bracketed format (e.g., "due date" becomes {'{duedate}'}).
+                            </p>
+                          </div>
                         </div>
                       ))}
                     </div>

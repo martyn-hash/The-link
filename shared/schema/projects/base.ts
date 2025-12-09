@@ -7,6 +7,7 @@ export interface DialoraOutboundWebhook {
   url: string;
   messageTemplate: string;
   active: boolean;
+  variables?: string;
 }
 
 export interface DialoraSettings {
