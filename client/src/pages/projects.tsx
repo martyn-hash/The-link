@@ -184,10 +184,13 @@ export default function Projects() {
         onSearchClick={() => state.setMobileSearchOpen(true)} 
       />
 
-      <SuperSearch
-        isOpen={state.mobileSearchOpen}
-        onOpenChange={(open) => state.setMobileSearchOpen(open)}
-      />
+      {/* Mobile-only search modal */}
+      <div className="md:hidden">
+        <SuperSearch
+          isOpen={state.mobileSearchOpen}
+          onOpenChange={(open) => state.setMobileSearchOpen(open)}
+        />
+      </div>
 
       <FilterPanel
         open={state.filterPanelOpen}
