@@ -37,18 +37,32 @@ export function TaskActionCard({ functionCall, onComplete, onDismiss }: ActionCa
     }
     return '';
   });
+  const [dueTime, setDueTime] = useState(() => {
+    if (args.dueDate) {
+      try {
+        const date = new Date(args.dueDate as string);
+        if (!isNaN(date.getTime())) return format(date, 'HH:mm');
+      } catch {}
+    }
+    return '';
+  });
   const [isEditing, setIsEditing] = useState(false);
 
   const { data: users } = useQuery<UserType[]>({ queryKey: ['/api/users/for-messaging'] });
-  const { data: taskTypes } = useQuery<{ id: string; name: string }[]>({ queryKey: ['/api/task-types'] });
+  const { data: taskTypes } = useQuery<{ id: string; name: string }[]>({ queryKey: ['/api/internal-task-types'] });
   
-  const matchedTaskType = taskTypes?.find(t => 
+  // Add fallback "AI Created" type if no task types exist
+  const fallbackTaskType = { id: 'ai-created-fallback', name: 'AI Created' };
+  const availableTaskTypes = (taskTypes && taskTypes.length > 0) ? taskTypes : [fallbackTaskType];
+  
+  const matchedTaskType = availableTaskTypes.find(t => 
     t.name.toLowerCase() === suggestedTaskTypeName?.toLowerCase() ||
     t.name.toLowerCase().includes(suggestedTaskTypeName?.toLowerCase() || '') ||
     (suggestedTaskTypeName?.toLowerCase() || '').includes(t.name.toLowerCase())
   );
   
-  const effectiveTaskTypeId = taskTypeId || (matchedTaskType?.id ?? '');
+  // Default to first available type if no match found
+  const effectiveTaskTypeId = taskTypeId || matchedTaskType?.id || availableTaskTypes[0]?.id || '';
 
   const matchedAssignee = users?.find(u => {
     const assigneeName = (args.assigneeName as string || '').toLowerCase();
@@ -65,14 +79,22 @@ export function TaskActionCard({ functionCall, onComplete, onDismiss }: ActionCa
       if (!isValid) throw new Error('Please fill in all required fields');
       if (!effectiveTaskTypeId) throw new Error('Please select a task type');
       
+      // Combine date and time into ISO datetime
+      let dueDateTimeStr = dueDate || undefined;
+      if (dueDate && dueTime) {
+        dueDateTimeStr = `${dueDate}T${dueTime}:00`;
+      } else if (dueDate) {
+        dueDateTimeStr = `${dueDate}T09:00:00`; // Default to 9am if no time specified
+      }
+      
       return await apiRequest('POST', '/api/internal-tasks', {
         title: title.trim(),
         description: description?.trim() || undefined,
-        taskTypeId: effectiveTaskTypeId,
+        taskTypeId: effectiveTaskTypeId === 'ai-created-fallback' ? undefined : effectiveTaskTypeId,
         priority,
         status: 'open',
         assignedTo: effectiveAssigneeId,
-        dueDate: dueDate || undefined,
+        dueDate: dueDateTimeStr,
       });
     },
     onSuccess: () => {
@@ -92,7 +114,7 @@ export function TaskActionCard({ functionCall, onComplete, onDismiss }: ActionCa
     ? `${matchedAssignee.firstName} ${matchedAssignee.lastName}` 
     : args.assigneeName as string || 'Unassigned';
     
-  const taskTypeName = taskTypes?.find(t => t.id === effectiveTaskTypeId)?.name 
+  const taskTypeName = availableTaskTypes.find(t => t.id === effectiveTaskTypeId)?.name 
     || (suggestedTaskTypeName ? `${suggestedTaskTypeName} (suggested)` : 'Not selected');
     
   const handleTaskTypeChange = (value: string) => {
@@ -138,7 +160,7 @@ export function TaskActionCard({ functionCall, onComplete, onDismiss }: ActionCa
                   <SelectValue placeholder="Select type..." />
                 </SelectTrigger>
                 <SelectContent className="z-[100]">
-                  {taskTypes?.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+                  {availableTaskTypes.map(t => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -155,7 +177,7 @@ export function TaskActionCard({ functionCall, onComplete, onDismiss }: ActionCa
               </Select>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <div>
               <Label className="text-xs text-muted-foreground">Assignee</Label>
               <Select value={effectiveAssigneeId} onValueChange={setAssigneeId}>
@@ -168,6 +190,10 @@ export function TaskActionCard({ functionCall, onComplete, onDismiss }: ActionCa
             <div>
               <Label className="text-xs text-muted-foreground">Due Date</Label>
               <Input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} className="h-8 text-sm" data-testid="input-task-due-date" />
+            </div>
+            <div>
+              <Label className="text-xs text-muted-foreground">Due Time</Label>
+              <Input type="time" value={dueTime} onChange={e => setDueTime(e.target.value)} className="h-8 text-sm" data-testid="input-task-due-time" />
             </div>
           </div>
         </div>
@@ -185,7 +211,7 @@ export function TaskActionCard({ functionCall, onComplete, onDismiss }: ActionCa
               priority === 'medium' && "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
               priority === 'low' && "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
             )}>{priority}</span>
-            {dueDate && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{format(new Date(dueDate), 'd MMM')}</span>}
+            {dueDate && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{format(new Date(dueDate), 'd MMM')}{dueTime && ` @ ${dueTime}`}</span>}
           </div>
         </div>
       )}

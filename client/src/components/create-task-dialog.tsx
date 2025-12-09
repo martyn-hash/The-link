@@ -50,11 +50,12 @@ import EntitySearch, { type SelectedEntity } from "@/components/entity-search";
 const taskFormSchema = z.object({
   title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
-  taskTypeId: z.string().uuid("Please select a task type"),
+  taskTypeId: z.string().min(1, "Please select a task type"),
   priority: z.enum(["low", "medium", "high", "urgent"]),
   status: z.enum(["open", "in_progress", "closed"]),
-  assignedToId: z.string().uuid("Please select an assignee"),
+  assignedToId: z.string().min(1, "Please select an assignee"),
   dueDate: z.string().min(1, "Due date is required"),
+  dueTime: z.string().optional(),
 });
 
 type TaskFormData = z.infer<typeof taskFormSchema>;
@@ -136,6 +137,7 @@ export function CreateTaskDialog({
       status: defaultValues?.status || "open",
       assignedToId: defaultValues?.assignedToId || "",
       dueDate: defaultValues?.dueDate || "",
+      dueTime: defaultValues?.dueTime || "",
     },
   });
 
@@ -149,6 +151,7 @@ export function CreateTaskDialog({
       status: defaultValues?.status || "open",
       assignedToId: defaultValues?.assignedToId || "",
       dueDate: defaultValues?.dueDate || "",
+      dueTime: defaultValues?.dueTime || "",
     });
   }, [defaultValues, form]);
 
@@ -237,6 +240,14 @@ export function CreateTaskDialog({
   // Create task mutation
   const createTaskMutation = useMutation({
     mutationFn: async (data: TaskFormData) => {
+      // Combine date and time into ISO datetime
+      let dueDateTimeStr = data.dueDate;
+      if (data.dueDate && data.dueTime) {
+        dueDateTimeStr = `${data.dueDate}T${data.dueTime}:00`;
+      } else if (data.dueDate) {
+        dueDateTimeStr = `${data.dueDate}T09:00:00`; // Default to 9am if no time specified
+      }
+      
       // Create the task
       const task = await apiRequest("POST", "/api/internal-tasks", {
         title: data.title,
@@ -245,7 +256,7 @@ export function CreateTaskDialog({
         priority: data.priority,
         status: data.status,
         assignedTo: data.assignedToId, // Backend expects 'assignedTo' not 'assignedToId'
-        dueDate: data.dueDate,
+        dueDate: dueDateTimeStr,
         // createdBy will be added by the server from authenticated user
       });
 
@@ -476,24 +487,43 @@ export function CreateTaskDialog({
                     />
                   </div>
 
-                  {/* Due Date */}
-                  <FormField
-                    control={form.control}
-                    name="dueDate"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Due Date</FormLabel>
-                        <FormControl>
-                          <Input
-                            {...field}
-                            type="date"
-                            data-testid="input-task-due-date"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {/* Due Date and Time */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="dueDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Due Date</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              type="date"
+                              data-testid="input-task-due-date"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="dueTime"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Due Time</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              type="time"
+                              data-testid="input-task-due-time"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
                 </div>
               </div>
             </CollapsibleContent>
