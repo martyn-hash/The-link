@@ -46,6 +46,8 @@ export interface ProjectsContentProps {
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
   setTasksAssigneeFilter: (assignee: string) => void;
+  setTasksDateFromFilter: (date: Date | undefined) => void;
+  setTasksDateToFilter: (date: Date | undefined) => void;
   setTasksSearchQuery: (query: string) => void;
   setTasksReassignMode: (mode: boolean) => void;
   handleRefresh: () => Promise<void>;
