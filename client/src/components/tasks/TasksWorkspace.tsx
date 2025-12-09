@@ -625,9 +625,11 @@ interface TasksWorkspaceProps {
   ownershipFilter: OwnershipFilter;
   statusFilter: string;
   priorityFilter: string;
+  assigneeFilter?: string;
   onOwnershipFilterChange: (value: OwnershipFilter) => void;
   onStatusFilterChange: (value: string) => void;
   onPriorityFilterChange: (value: string) => void;
+  onAssigneeFilterChange?: (value: string) => void;
 }
 
 export function TasksWorkspace({ 
@@ -635,9 +637,11 @@ export function TasksWorkspace({
   ownershipFilter,
   statusFilter,
   priorityFilter,
+  assigneeFilter = "all",
   onOwnershipFilterChange,
   onStatusFilterChange,
   onPriorityFilterChange,
+  onAssigneeFilterChange,
 }: TasksWorkspaceProps) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -691,17 +695,30 @@ export function TasksWorkspace({
     queryKey: ["/api/users"],
   });
 
+  // Derive effective assignee filter based on ownership mode to prevent stale state leakage
+  const effectiveAssigneeFilter = useMemo(() => {
+    // In "assigned" mode, assignee filter is not applicable - always treat as "all"
+    if (ownershipFilter === "assigned") return "all";
+    return assigneeFilter;
+  }, [ownershipFilter, assigneeFilter]);
+
   const buildQueryParams = useCallback(() => {
     const params = new URLSearchParams();
     if (statusFilter !== "all") params.append("status", statusFilter);
     if (priorityFilter !== "all") params.append("priority", priorityFilter);
+    // Only include assignee filter when applicable (derived from effectiveAssigneeFilter)
+    if (effectiveAssigneeFilter !== "all") params.append("assigneeId", effectiveAssigneeFilter);
     return params.toString();
-  }, [statusFilter, priorityFilter]);
+  }, [statusFilter, priorityFilter, effectiveAssigneeFilter]);
 
   const { data: assignedData, isLoading: isLoadingAssigned } = useQuery<InternalTaskWithRelations[]>({
     queryKey: ['/api/internal-tasks/assigned', user?.id, statusFilter, priorityFilter],
     queryFn: async () => {
-      const queryString = buildQueryParams();
+      // For "assigned" mode, build params without assignee (effectiveAssigneeFilter is already "all")
+      const params = new URLSearchParams();
+      if (statusFilter !== "all") params.append("status", statusFilter);
+      if (priorityFilter !== "all") params.append("priority", priorityFilter);
+      const queryString = params.toString();
       const url = `/api/internal-tasks/assigned/${user?.id}${queryString ? `?${queryString}` : ''}`;
       const response = await fetch(url, { credentials: 'include' });
       if (!response.ok) throw new Error('Failed to fetch assigned tasks');
@@ -711,7 +728,7 @@ export function TasksWorkspace({
   });
 
   const { data: createdData, isLoading: isLoadingCreated } = useQuery<InternalTaskWithRelations[]>({
-    queryKey: ['/api/internal-tasks/created', user?.id, statusFilter, priorityFilter],
+    queryKey: ['/api/internal-tasks/created', user?.id, statusFilter, priorityFilter, effectiveAssigneeFilter],
     queryFn: async () => {
       const queryString = buildQueryParams();
       const url = `/api/internal-tasks/created/${user?.id}${queryString ? `?${queryString}` : ''}`;
@@ -723,7 +740,7 @@ export function TasksWorkspace({
   });
 
   const { data: allData, isLoading: isLoadingAll } = useQuery<InternalTaskWithRelations[]>({
-    queryKey: ['/api/internal-tasks', statusFilter, priorityFilter],
+    queryKey: ['/api/internal-tasks', statusFilter, priorityFilter, effectiveAssigneeFilter],
     queryFn: async () => {
       const queryString = buildQueryParams();
       const url = `/api/internal-tasks${queryString ? `?${queryString}` : ''}`;

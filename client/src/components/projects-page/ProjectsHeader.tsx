@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
@@ -41,11 +42,13 @@ export interface ProjectsHeaderProps {
   tasksOwnershipFilter: OwnershipFilter;
   tasksStatusFilter: string;
   tasksPriorityFilter: string;
+  tasksAssigneeFilter: string;
   tasksActiveFilterCount: number;
   canSeeAllTasks?: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
+  setTasksAssigneeFilter: (assignee: string) => void;
   clearTasksFilters: () => void;
   handleManualViewModeChange: (mode: ViewMode) => void;
   handleLoadSavedView: (view: ProjectView) => void;
@@ -74,11 +77,13 @@ export function ProjectsHeader({
   tasksOwnershipFilter,
   tasksStatusFilter,
   tasksPriorityFilter,
+  tasksAssigneeFilter,
   tasksActiveFilterCount,
   canSeeAllTasks = false,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
+  setTasksAssigneeFilter,
   clearTasksFilters,
   handleManualViewModeChange,
   handleLoadSavedView,
@@ -114,11 +119,13 @@ export function ProjectsHeader({
           tasksOwnershipFilter={tasksOwnershipFilter}
           tasksStatusFilter={tasksStatusFilter}
           tasksPriorityFilter={tasksPriorityFilter}
+          tasksAssigneeFilter={tasksAssigneeFilter}
           tasksActiveFilterCount={tasksActiveFilterCount}
           canSeeAllTasks={canSeeAllTasks}
           setTasksOwnershipFilter={setTasksOwnershipFilter}
           setTasksStatusFilter={setTasksStatusFilter}
           setTasksPriorityFilter={setTasksPriorityFilter}
+          setTasksAssigneeFilter={setTasksAssigneeFilter}
           clearTasksFilters={clearTasksFilters}
           handleManualViewModeChange={handleManualViewModeChange}
           handleLoadSavedView={handleLoadSavedView}
@@ -142,11 +149,13 @@ export function ProjectsHeader({
           tasksOwnershipFilter={tasksOwnershipFilter}
           tasksStatusFilter={tasksStatusFilter}
           tasksPriorityFilter={tasksPriorityFilter}
+          tasksAssigneeFilter={tasksAssigneeFilter}
           tasksActiveFilterCount={tasksActiveFilterCount}
           canSeeAllTasks={canSeeAllTasks}
           setTasksOwnershipFilter={setTasksOwnershipFilter}
           setTasksStatusFilter={setTasksStatusFilter}
           setTasksPriorityFilter={setTasksPriorityFilter}
+          setTasksAssigneeFilter={setTasksAssigneeFilter}
           clearTasksFilters={clearTasksFilters}
           handleManualViewModeChange={handleManualViewModeChange}
           handleLoadSavedView={handleLoadSavedView}
@@ -258,11 +267,13 @@ interface DesktopToolbarProps {
   tasksOwnershipFilter: OwnershipFilter;
   tasksStatusFilter: string;
   tasksPriorityFilter: string;
+  tasksAssigneeFilter: string;
   tasksActiveFilterCount: number;
   canSeeAllTasks?: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
+  setTasksAssigneeFilter: (assignee: string) => void;
   clearTasksFilters: () => void;
   handleManualViewModeChange: (mode: ViewMode) => void;
   handleLoadSavedView: (view: ProjectView) => void;
@@ -287,11 +298,13 @@ function DesktopToolbar({
   tasksOwnershipFilter,
   tasksStatusFilter,
   tasksPriorityFilter,
+  tasksAssigneeFilter,
   tasksActiveFilterCount,
   canSeeAllTasks = false,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
+  setTasksAssigneeFilter,
   clearTasksFilters,
   handleManualViewModeChange,
   handleLoadSavedView,
@@ -409,11 +422,13 @@ function DesktopToolbar({
           tasksOwnershipFilter={tasksOwnershipFilter}
           tasksStatusFilter={tasksStatusFilter}
           tasksPriorityFilter={tasksPriorityFilter}
+          tasksAssigneeFilter={tasksAssigneeFilter}
           tasksActiveFilterCount={tasksActiveFilterCount}
           canSeeAllTasks={canSeeAllTasks}
           setTasksOwnershipFilter={setTasksOwnershipFilter}
           setTasksStatusFilter={setTasksStatusFilter}
           setTasksPriorityFilter={setTasksPriorityFilter}
+          setTasksAssigneeFilter={setTasksAssigneeFilter}
           clearTasksFilters={clearTasksFilters}
         />
       )}
@@ -430,11 +445,13 @@ interface MobileToolbarProps {
   tasksOwnershipFilter: OwnershipFilter;
   tasksStatusFilter: string;
   tasksPriorityFilter: string;
+  tasksAssigneeFilter: string;
   tasksActiveFilterCount: number;
   canSeeAllTasks?: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
+  setTasksAssigneeFilter: (assignee: string) => void;
   clearTasksFilters: () => void;
   handleManualViewModeChange: (mode: ViewMode) => void;
   handleLoadSavedView: (view: ProjectView) => void;
@@ -455,11 +472,13 @@ function MobileToolbar({
   tasksOwnershipFilter,
   tasksStatusFilter,
   tasksPriorityFilter,
+  tasksAssigneeFilter,
   tasksActiveFilterCount,
   canSeeAllTasks = false,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
+  setTasksAssigneeFilter,
   clearTasksFilters,
   handleManualViewModeChange,
   handleLoadSavedView,
@@ -534,11 +553,13 @@ function MobileToolbar({
           tasksOwnershipFilter={tasksOwnershipFilter}
           tasksStatusFilter={tasksStatusFilter}
           tasksPriorityFilter={tasksPriorityFilter}
+          tasksAssigneeFilter={tasksAssigneeFilter}
           tasksActiveFilterCount={tasksActiveFilterCount}
           canSeeAllTasks={canSeeAllTasks}
           setTasksOwnershipFilter={setTasksOwnershipFilter}
           setTasksStatusFilter={setTasksStatusFilter}
           setTasksPriorityFilter={setTasksPriorityFilter}
+          setTasksAssigneeFilter={setTasksAssigneeFilter}
           clearTasksFilters={clearTasksFilters}
         />
       )}
@@ -551,11 +572,13 @@ interface TasksToolbarProps {
   tasksOwnershipFilter: OwnershipFilter;
   tasksStatusFilter: string;
   tasksPriorityFilter: string;
+  tasksAssigneeFilter: string;
   tasksActiveFilterCount: number;
   canSeeAllTasks?: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
+  setTasksAssigneeFilter: (assignee: string) => void;
   clearTasksFilters: () => void;
 }
 
@@ -564,11 +587,13 @@ function TasksToolbar({
   tasksOwnershipFilter,
   tasksStatusFilter,
   tasksPriorityFilter,
+  tasksAssigneeFilter,
   tasksActiveFilterCount,
   canSeeAllTasks = false,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
+  setTasksAssigneeFilter,
   clearTasksFilters,
 }: TasksToolbarProps) {
   const [filterOpen, setFilterOpen] = useState(false);
@@ -606,11 +631,13 @@ function TasksToolbar({
               tasksOwnershipFilter={tasksOwnershipFilter}
               tasksStatusFilter={tasksStatusFilter}
               tasksPriorityFilter={tasksPriorityFilter}
+              tasksAssigneeFilter={tasksAssigneeFilter}
               tasksActiveFilterCount={tasksActiveFilterCount}
               canSeeAllTasks={canSeeAllTasks}
               setTasksOwnershipFilter={setTasksOwnershipFilter}
               setTasksStatusFilter={setTasksStatusFilter}
               setTasksPriorityFilter={setTasksPriorityFilter}
+              setTasksAssigneeFilter={setTasksAssigneeFilter}
               clearTasksFilters={clearTasksFilters}
             />
           </PopoverContent>
@@ -654,11 +681,13 @@ function TasksToolbar({
             tasksOwnershipFilter={tasksOwnershipFilter}
             tasksStatusFilter={tasksStatusFilter}
             tasksPriorityFilter={tasksPriorityFilter}
+            tasksAssigneeFilter={tasksAssigneeFilter}
             tasksActiveFilterCount={tasksActiveFilterCount}
             canSeeAllTasks={canSeeAllTasks}
             setTasksOwnershipFilter={setTasksOwnershipFilter}
             setTasksStatusFilter={setTasksStatusFilter}
             setTasksPriorityFilter={setTasksPriorityFilter}
+            setTasksAssigneeFilter={setTasksAssigneeFilter}
             clearTasksFilters={clearTasksFilters}
           />
         </PopoverContent>
@@ -671,11 +700,13 @@ interface TasksFilterContentProps {
   tasksOwnershipFilter: OwnershipFilter;
   tasksStatusFilter: string;
   tasksPriorityFilter: string;
+  tasksAssigneeFilter: string;
   tasksActiveFilterCount: number;
   canSeeAllTasks?: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
+  setTasksAssigneeFilter: (assignee: string) => void;
   clearTasksFilters: () => void;
 }
 
@@ -683,13 +714,18 @@ function TasksFilterContent({
   tasksOwnershipFilter,
   tasksStatusFilter,
   tasksPriorityFilter,
+  tasksAssigneeFilter,
   tasksActiveFilterCount,
   canSeeAllTasks = false,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
+  setTasksAssigneeFilter,
   clearTasksFilters,
 }: TasksFilterContentProps) {
+  const { data: users } = useQuery<Array<{ id: string; firstName: string; lastName: string }>>({ 
+    queryKey: ['/api/users/for-messaging'] 
+  });
   return (
     <div className="space-y-4">
       <div>
@@ -736,6 +772,24 @@ function TasksFilterContent({
           </SelectContent>
         </Select>
       </div>
+      {tasksOwnershipFilter !== "assigned" && (
+        <div>
+          <Label className="text-sm font-medium">Assignee</Label>
+          <Select value={tasksAssigneeFilter} onValueChange={setTasksAssigneeFilter}>
+            <SelectTrigger className="mt-1" data-testid="select-assignee-filter">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Assignees</SelectItem>
+              {users?.map((user) => (
+                <SelectItem key={user.id} value={user.id}>
+                  {user.firstName} {user.lastName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
       {tasksActiveFilterCount > 0 && (
         <Button 
           variant="ghost" 

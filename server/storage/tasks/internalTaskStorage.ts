@@ -18,7 +18,7 @@ import {
   type InsertTaskDocument,
   type User
 } from "@shared/schema";
-import { eq, desc, and, inArray } from "drizzle-orm";
+import { eq, desc, and, inArray, ne, or, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 export class InternalTaskStorage {
@@ -38,13 +38,17 @@ export class InternalTaskStorage {
     return task;
   }
 
-  async getInternalTasksByAssignee(assigneeId: string, filters?: { status?: string; priority?: string }): Promise<InternalTask[]> {
+  async getInternalTasksByAssignee(assigneeId: string, filters?: { status?: string; priority?: string; assigneeId?: string }): Promise<InternalTask[]> {
     const conditions: any[] = [eq(internalTasks.assignedTo, assigneeId)];
     if (filters?.status) {
       conditions.push(eq(internalTasks.status, filters.status as any));
     }
     if (filters?.priority) {
       conditions.push(eq(internalTasks.priority, filters.priority as any));
+    }
+    // Additional assignee filter (for narrowing down within the "assigned" view)
+    if (filters?.assigneeId) {
+      conditions.push(eq(internalTasks.assignedTo, filters.assigneeId));
     }
     
     const assigneeAlias = alias(users, 'assignee');
@@ -72,13 +76,21 @@ export class InternalTaskStorage {
     })) as any;
   }
 
-  async getInternalTasksByCreator(creatorId: string, filters?: { status?: string; priority?: string }): Promise<InternalTask[]> {
-    const conditions: any[] = [eq(internalTasks.createdBy, creatorId)];
+  async getInternalTasksByCreator(creatorId: string, filters?: { status?: string; priority?: string; assigneeId?: string }): Promise<InternalTask[]> {
+    const conditions: any[] = [
+      eq(internalTasks.createdBy, creatorId),
+      // Exclude tasks where the creator assigned it to themselves (self-assigned tasks)
+      or(ne(internalTasks.assignedTo, creatorId), isNull(internalTasks.assignedTo))
+    ];
     if (filters?.status) {
       conditions.push(eq(internalTasks.status, filters.status as any));
     }
     if (filters?.priority) {
       conditions.push(eq(internalTasks.priority, filters.priority as any));
+    }
+    // Additional assignee filter (for filtering tasks created for a specific person)
+    if (filters?.assigneeId) {
+      conditions.push(eq(internalTasks.assignedTo, filters.assigneeId));
     }
     
     const assigneeAlias = alias(users, 'assignee');

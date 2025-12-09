@@ -155,6 +155,7 @@ export function registerInternalTaskRoutes(
       const filters: any = {};
       if (req.query.status) filters.status = req.query.status as string;
       if (req.query.priority) filters.priority = req.query.priority as string;
+      if (req.query.assigneeId) filters.assigneeId = req.query.assigneeId as string;
 
       // Use the requested user ID to fetch their tasks (not the current user's)
       const tasks = await storage.getInternalTasksByAssignee(requestedUserId, filters);
@@ -179,6 +180,7 @@ export function registerInternalTaskRoutes(
       const filters: any = {};
       if (req.query.status) filters.status = req.query.status as string;
       if (req.query.priority) filters.priority = req.query.priority as string;
+      if (req.query.assigneeId) filters.assigneeId = req.query.assigneeId as string;
 
       const tasks = await storage.getInternalTasksByCreator(actualUserId, filters);
       const tasksWithConnections = await addConnectionsToTasks(tasks);

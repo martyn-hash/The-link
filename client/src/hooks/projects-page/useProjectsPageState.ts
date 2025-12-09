@@ -41,16 +41,27 @@ export function useProjectsPageState() {
   const [tasksOwnershipFilter, setTasksOwnershipFilter] = useState<OwnershipFilter>("assigned");
   const [tasksStatusFilter, setTasksStatusFilter] = useState("open");
   const [tasksPriorityFilter, setTasksPriorityFilter] = useState("all");
+  const [tasksAssigneeFilter, setTasksAssigneeFilter] = useState("all");
 
   const tasksActiveFilterCount = (tasksOwnershipFilter !== "assigned" ? 1 : 0) + 
     (tasksStatusFilter !== "open" ? 1 : 0) + 
-    (tasksPriorityFilter !== "all" ? 1 : 0);
+    (tasksPriorityFilter !== "all" ? 1 : 0) +
+    // Only count assignee filter when not in "assigned" mode (since it's hidden in that mode)
+    (tasksOwnershipFilter !== "assigned" && tasksAssigneeFilter !== "all" ? 1 : 0);
 
   const clearTasksFilters = useCallback(() => {
     setTasksOwnershipFilter("assigned");
     setTasksStatusFilter("open");
     setTasksPriorityFilter("all");
+    setTasksAssigneeFilter("all");
   }, []);
+
+  // Reset assignee filter when switching to "assigned" mode (since it's not applicable)
+  useEffect(() => {
+    if (tasksOwnershipFilter === "assigned" && tasksAssigneeFilter !== "all") {
+      setTasksAssigneeFilter("all");
+    }
+  }, [tasksOwnershipFilter, tasksAssigneeFilter]);
 
   const [serviceFilter, setServiceFilter] = useState("all");
   const [taskAssigneeFilter, setTaskAssigneeFilter] = useState("all");
@@ -555,6 +566,8 @@ export function useProjectsPageState() {
     setTasksStatusFilter,
     tasksPriorityFilter,
     setTasksPriorityFilter,
+    tasksAssigneeFilter,
+    setTasksAssigneeFilter,
     tasksActiveFilterCount,
     clearTasksFilters,
 

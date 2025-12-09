@@ -87,16 +87,21 @@ A dedicated workspace mode for email communications, accessible via toggle along
 Key files: `client/src/components/comms/CommsWorkspace.tsx`, `client/src/components/projects-page/ProjectsContent.tsx`, `server/routes/emails.ts`, `server/routes/superAdmin.ts`
 
 ### Tasks Filter Ownership Permission (December 2025)
-Tasks page filter button supports filtering by ownership with permission-based visibility.
+Tasks page filter button supports filtering by ownership with permission-based visibility, plus assignee filtering for granular control.
 
-- **Filter Options**: Three ownership filter values:
+- **Ownership Filter Options**: Three values:
   - "My tasks / reminders" - Tasks assigned to the current user
-  - "Created by me - for others" - Tasks created by user but assigned to others
+  - "Created by me - for others" - Tasks created by user but assigned to others (excludes self-assigned)
   - "All (can see all tasks)" - View all tasks (requires permission)
+- **Assignee Filter**: 
+  - Only visible when ownership is "Created by me - for others" or "All"
+  - Hidden in "My tasks / reminders" mode (already filtered to current user)
+  - Auto-resets to "All Assignees" when switching to "assigned" mode
+  - Server-side filtering via `assigneeId` query parameter for efficiency
 - **canSeeAllTasks Permission**: Boolean field on users table; only users with this flag set to true can see and use the "All" filter option
-- **Security**: Permission defaults to false; admins must explicitly grant access
+- **State Synchronization**: Uses `effectiveAssigneeFilter` derived value to prevent stale state from leaking into query keys when switching ownership modes
 
-Key files: `client/src/components/projects-page/ProjectsHeader.tsx`, `shared/schema/users/tables.ts`, `migrations/0011_add_can_see_all_tasks.sql`
+Key files: `client/src/components/projects-page/ProjectsHeader.tsx`, `client/src/components/tasks/TasksWorkspace.tsx`, `client/src/hooks/projects-page/useProjectsPageState.ts`, `server/storage/tasks/internalTaskStorage.ts`, `server/routes/internalTasks.ts`
 
 ### System Design
 PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) handles object storage with secure signed URLs. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control; the client portal uses passwordless email verification. The system is multi-tenant and designed for modularity, with extensive database indexing. Key features include automated project management, advanced communication tools (push notifications, internal tasks, email threading via Microsoft Graph, multi-channel client notifications with AI assistance, RingCentral VoIP with automatic transcription), UK eIDAS-compliant electronic signatures, comprehensive workflow and status management with Kanban views, and Bookkeeping Queries. It also includes an AI Audio Transcription service, client value notifications with AI-assisted drafting, Zapier integration via webhooks, and an enhanced data import system. A friendly error handling system replaces technical errors with user-friendly messages. A scheduled notifications calendar provides comprehensive management of automated notifications, with stage-aware suppression. A resilient project scheduling orchestrator ensures robustness against server restarts and outages.

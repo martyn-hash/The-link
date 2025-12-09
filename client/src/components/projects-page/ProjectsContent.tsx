@@ -37,9 +37,11 @@ export interface ProjectsContentProps {
   tasksOwnershipFilter: OwnershipFilter;
   tasksStatusFilter: string;
   tasksPriorityFilter: string;
+  tasksAssigneeFilter: string;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
+  setTasksAssigneeFilter: (assignee: string) => void;
   handleRefresh: () => Promise<void>;
   handleManualViewModeChange: (mode: ViewMode) => void;
   handleCalendarEventClick: (event: any) => void;
@@ -358,9 +360,11 @@ export function ProjectsContent({
   tasksOwnershipFilter,
   tasksStatusFilter,
   tasksPriorityFilter,
+  tasksAssigneeFilter,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
+  setTasksAssigneeFilter,
   handleRefresh,
   handleManualViewModeChange,
   handleCalendarEventClick,
@@ -447,9 +451,11 @@ export function ProjectsContent({
           ownershipFilter={tasksOwnershipFilter}
           statusFilter={tasksStatusFilter}
           priorityFilter={tasksPriorityFilter}
+          assigneeFilter={tasksAssigneeFilter}
           onOwnershipFilterChange={setTasksOwnershipFilter}
           onStatusFilterChange={setTasksStatusFilter}
           onPriorityFilterChange={setTasksPriorityFilter}
+          onAssigneeFilterChange={setTasksAssigneeFilter}
         />
       </main>
     );

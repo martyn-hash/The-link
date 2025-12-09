@@ -83,11 +83,13 @@ export default function Projects() {
           tasksOwnershipFilter={state.tasksOwnershipFilter}
           tasksStatusFilter={state.tasksStatusFilter}
           tasksPriorityFilter={state.tasksPriorityFilter}
+          tasksAssigneeFilter={state.tasksAssigneeFilter}
           tasksActiveFilterCount={state.tasksActiveFilterCount}
           canSeeAllTasks={state.user?.canSeeAllTasks || false}
           setTasksOwnershipFilter={state.setTasksOwnershipFilter}
           setTasksStatusFilter={state.setTasksStatusFilter}
           setTasksPriorityFilter={state.setTasksPriorityFilter}
+          setTasksAssigneeFilter={state.setTasksAssigneeFilter}
           clearTasksFilters={state.clearTasksFilters}
           handleManualViewModeChange={state.handleManualViewModeChange}
           handleLoadSavedView={state.handleLoadSavedView}
@@ -122,9 +124,11 @@ export default function Projects() {
           tasksOwnershipFilter={state.tasksOwnershipFilter}
           tasksStatusFilter={state.tasksStatusFilter}
           tasksPriorityFilter={state.tasksPriorityFilter}
+          tasksAssigneeFilter={state.tasksAssigneeFilter}
           setTasksOwnershipFilter={state.setTasksOwnershipFilter}
           setTasksStatusFilter={state.setTasksStatusFilter}
           setTasksPriorityFilter={state.setTasksPriorityFilter}
+          setTasksAssigneeFilter={state.setTasksAssigneeFilter}
           handleRefresh={state.handleRefresh}
           handleManualViewModeChange={state.handleManualViewModeChange}
           handleCalendarEventClick={state.handleCalendarEventClick}
