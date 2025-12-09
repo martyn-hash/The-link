@@ -66,14 +66,18 @@ export async function registerObjectRoutes(
       });
 
       const objectPath = `/objects/${objectName}`;
-      const baseUrl = process.env.BASE_URL || 'https://flow.growth.accountants';
-      const permanentUrl = `${baseUrl}${objectPath}`;
+      
+      // Build absolute URL from request host (works in both dev and production)
+      // This ensures emails sent externally have working image URLs
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+      const host = req.headers['x-forwarded-host'] || req.headers.host || req.get('host');
+      const imageUrl = `${protocol}://${host}${objectPath}`;
 
       console.log(`[Inline Image Upload] User ${req.user?.id} uploaded image: ${objectPath} (${(buffer.length / 1024).toFixed(1)} KB)`);
 
       res.json({
         success: true,
-        url: permanentUrl,
+        url: imageUrl,
         objectPath,
         size: buffer.length,
         contentType: `image/${imageType}`,
@@ -100,8 +104,12 @@ export async function registerObjectRoutes(
     const portalUserId = req.portalUser?.id;
     const objectPath = req.path;
 
+    console.log(`[Object Access] Checking access - Staff: ${userId || 'none'}, Portal: ${portalUserId || 'none'}, Path: ${objectPath}`);
+
     try {
       const { hasAccess } = await verifyAttachmentAccess(userId, portalUserId, objectPath);
+
+      console.log(`[Object Access] Result - hasAccess: ${hasAccess}, Path: ${objectPath}`);
 
       if (!hasAccess) {
         console.log(`[Access Denied] Staff: ${userId || 'none'}, Portal: ${portalUserId || 'none'}, Path: ${objectPath}`);
