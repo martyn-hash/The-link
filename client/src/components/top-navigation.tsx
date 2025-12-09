@@ -195,21 +195,9 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                           </div>
                         </Link>
                       </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <Link href="/client-requests" className="w-full">
-                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-client-requests-menu">
-                            <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center shrink-0">
-                              <ClipboardList className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-foreground text-sm">Client Requests</div>
-                            </div>
-                          </div>
-                        </Link>
-                      </DropdownMenuItem>
                     </div>
 
-                    {/* Column 3: E-Signatures, Internal Tasks */}
+                    {/* Column 3: E-Signatures, Client Requests */}
                     <div className="space-y-1">
                       <DropdownMenuItem asChild>
                         <Link href="/signature-requests" className="w-full">
@@ -224,13 +212,13 @@ export default function TopNavigation({ user, onMobileSearchClick }: TopNavigati
                         </Link>
                       </DropdownMenuItem>
                       <DropdownMenuItem asChild>
-                        <Link href="/internal-tasks" className="w-full">
-                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-internal-tasks-menu">
-                            <div className="w-8 h-8 rounded-lg bg-teal-100 dark:bg-teal-900 flex items-center justify-center shrink-0">
-                              <List className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                        <Link href="/client-requests" className="w-full">
+                          <div className="flex items-center gap-3 w-full px-3 py-2 rounded-md hover:bg-accent/50 transition-colors" data-testid="link-client-requests-menu">
+                            <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center shrink-0">
+                              <ClipboardList className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium text-foreground text-sm">Internal Tasks</div>
+                              <div className="font-medium text-foreground text-sm">Client Requests</div>
                             </div>
                           </div>
                         </Link>
