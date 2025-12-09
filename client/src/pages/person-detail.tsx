@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useToast } from "@/hooks/use-toast";
 import type { Person, Client, ClientPerson, ClientPortalUser, PeopleService } from "@shared/schema";
 import { useActivityTracker } from "@/lib/activityTracker";
-import { EditPersonModal, UpdatePersonData } from "@/components/EditPersonModal";
+import { EditPersonModal, type UpdatePersonData } from "@/components/EditPersonModal";
 
 type PersonWithDetails = Person & {
   relatedCompanies: Array<ClientPerson & { client: Client }>;

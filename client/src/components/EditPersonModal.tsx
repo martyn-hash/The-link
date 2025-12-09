@@ -71,9 +71,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
 import AddressLookup from "@/components/address-lookup";
 import type { Person } from "@shared/schema";
-import { updatePersonSchema, UpdatePersonData } from "@/pages/client-detail/utils/types";
+import { updatePersonSchema, type UpdatePersonData } from "@/pages/client-detail/utils/types";
 
-export { updatePersonSchema, UpdatePersonData };
+export { updatePersonSchema };
+export type { UpdatePersonData };
 
 const TITLES = [
   { value: "Mr", label: "Mr" },
