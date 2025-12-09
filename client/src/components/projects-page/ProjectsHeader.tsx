@@ -42,6 +42,7 @@ export interface ProjectsHeaderProps {
   tasksPriorityFilter: string;
   tasksFilterOpen: boolean;
   tasksActiveFilterCount: number;
+  canSeeAllTasks?: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
@@ -76,6 +77,7 @@ export function ProjectsHeader({
   tasksPriorityFilter,
   tasksFilterOpen,
   tasksActiveFilterCount,
+  canSeeAllTasks = false,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
@@ -117,6 +119,7 @@ export function ProjectsHeader({
           tasksPriorityFilter={tasksPriorityFilter}
           tasksFilterOpen={tasksFilterOpen}
           tasksActiveFilterCount={tasksActiveFilterCount}
+          canSeeAllTasks={canSeeAllTasks}
           setTasksOwnershipFilter={setTasksOwnershipFilter}
           setTasksStatusFilter={setTasksStatusFilter}
           setTasksPriorityFilter={setTasksPriorityFilter}
@@ -146,6 +149,7 @@ export function ProjectsHeader({
           tasksPriorityFilter={tasksPriorityFilter}
           tasksFilterOpen={tasksFilterOpen}
           tasksActiveFilterCount={tasksActiveFilterCount}
+          canSeeAllTasks={canSeeAllTasks}
           setTasksOwnershipFilter={setTasksOwnershipFilter}
           setTasksStatusFilter={setTasksStatusFilter}
           setTasksPriorityFilter={setTasksPriorityFilter}
@@ -263,6 +267,7 @@ interface DesktopToolbarProps {
   tasksPriorityFilter: string;
   tasksFilterOpen: boolean;
   tasksActiveFilterCount: number;
+  canSeeAllTasks?: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
@@ -293,6 +298,7 @@ function DesktopToolbar({
   tasksPriorityFilter,
   tasksFilterOpen,
   tasksActiveFilterCount,
+  canSeeAllTasks = false,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
@@ -416,6 +422,7 @@ function DesktopToolbar({
           tasksPriorityFilter={tasksPriorityFilter}
           tasksFilterOpen={tasksFilterOpen}
           tasksActiveFilterCount={tasksActiveFilterCount}
+          canSeeAllTasks={canSeeAllTasks}
           setTasksOwnershipFilter={setTasksOwnershipFilter}
           setTasksStatusFilter={setTasksStatusFilter}
           setTasksPriorityFilter={setTasksPriorityFilter}
@@ -438,6 +445,7 @@ interface MobileToolbarProps {
   tasksPriorityFilter: string;
   tasksFilterOpen: boolean;
   tasksActiveFilterCount: number;
+  canSeeAllTasks?: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
@@ -464,6 +472,7 @@ function MobileToolbar({
   tasksPriorityFilter,
   tasksFilterOpen,
   tasksActiveFilterCount,
+  canSeeAllTasks = false,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
@@ -544,6 +553,7 @@ function MobileToolbar({
           tasksPriorityFilter={tasksPriorityFilter}
           tasksFilterOpen={tasksFilterOpen}
           tasksActiveFilterCount={tasksActiveFilterCount}
+          canSeeAllTasks={canSeeAllTasks}
           setTasksOwnershipFilter={setTasksOwnershipFilter}
           setTasksStatusFilter={setTasksStatusFilter}
           setTasksPriorityFilter={setTasksPriorityFilter}
@@ -562,6 +572,7 @@ interface TasksToolbarProps {
   tasksPriorityFilter: string;
   tasksFilterOpen: boolean;
   tasksActiveFilterCount: number;
+  canSeeAllTasks?: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
@@ -576,6 +587,7 @@ function TasksToolbar({
   tasksPriorityFilter,
   tasksFilterOpen,
   tasksActiveFilterCount,
+  canSeeAllTasks = false,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
@@ -616,6 +628,7 @@ function TasksToolbar({
               tasksStatusFilter={tasksStatusFilter}
               tasksPriorityFilter={tasksPriorityFilter}
               tasksActiveFilterCount={tasksActiveFilterCount}
+              canSeeAllTasks={canSeeAllTasks}
               setTasksOwnershipFilter={setTasksOwnershipFilter}
               setTasksStatusFilter={setTasksStatusFilter}
               setTasksPriorityFilter={setTasksPriorityFilter}
@@ -663,6 +676,7 @@ function TasksToolbar({
             tasksStatusFilter={tasksStatusFilter}
             tasksPriorityFilter={tasksPriorityFilter}
             tasksActiveFilterCount={tasksActiveFilterCount}
+            canSeeAllTasks={canSeeAllTasks}
             setTasksOwnershipFilter={setTasksOwnershipFilter}
             setTasksStatusFilter={setTasksStatusFilter}
             setTasksPriorityFilter={setTasksPriorityFilter}
@@ -679,6 +693,7 @@ interface TasksFilterContentProps {
   tasksStatusFilter: string;
   tasksPriorityFilter: string;
   tasksActiveFilterCount: number;
+  canSeeAllTasks?: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
@@ -690,6 +705,7 @@ function TasksFilterContent({
   tasksStatusFilter,
   tasksPriorityFilter,
   tasksActiveFilterCount,
+  canSeeAllTasks = false,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
@@ -704,9 +720,11 @@ function TasksFilterContent({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="assigned">Assigned to Me</SelectItem>
-            <SelectItem value="created">Created by Me</SelectItem>
-            <SelectItem value="all">All Team Items</SelectItem>
+            <SelectItem value="assigned">My tasks / reminders</SelectItem>
+            <SelectItem value="created">Created by me - for others</SelectItem>
+            {canSeeAllTasks && (
+              <SelectItem value="all">All (can see all tasks)</SelectItem>
+            )}
           </SelectContent>
         </Select>
       </div>

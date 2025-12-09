@@ -85,6 +85,7 @@ export default function Projects() {
           tasksPriorityFilter={state.tasksPriorityFilter}
           tasksFilterOpen={state.tasksFilterOpen}
           tasksActiveFilterCount={state.tasksActiveFilterCount}
+          canSeeAllTasks={state.user?.canSeeAllTasks || false}
           setTasksOwnershipFilter={state.setTasksOwnershipFilter}
           setTasksStatusFilter={state.setTasksStatusFilter}
           setTasksPriorityFilter={state.setTasksPriorityFilter}
