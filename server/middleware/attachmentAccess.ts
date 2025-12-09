@@ -109,6 +109,20 @@ export async function verifyAttachmentAccess(
   objectPath: string
 ): Promise<{ hasAccess: boolean; clientId?: string }> {
   try {
+    // Check for inline images - these are embedded in email bodies and accessible to any authenticated user
+    if (objectPath.includes('inline-images/')) {
+      // Staff users can access inline images
+      if (userId) {
+        return { hasAccess: true };
+      }
+      // Portal users can also access inline images (they may receive emails with embedded images)
+      if (portalUserId) {
+        return { hasAccess: true };
+      }
+      // No authentication - deny access
+      return { hasAccess: false };
+    }
+
     // First, check if this attachment is linked to a message
     const [message] = await db
       .select({
