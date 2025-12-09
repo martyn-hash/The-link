@@ -42,18 +42,27 @@ export function useProjectsPageState() {
   const [tasksStatusFilter, setTasksStatusFilter] = useState("open");
   const [tasksPriorityFilter, setTasksPriorityFilter] = useState("all");
   const [tasksAssigneeFilter, setTasksAssigneeFilter] = useState("all");
+  const [tasksDateFromFilter, setTasksDateFromFilter] = useState<Date | undefined>(undefined);
+  const [tasksDateToFilter, setTasksDateToFilter] = useState<Date | undefined>(undefined);
+  const [tasksSearchQuery, setTasksSearchQuery] = useState("");
+  const [tasksReassignMode, setTasksReassignMode] = useState(false);
 
   const tasksActiveFilterCount = (tasksOwnershipFilter !== "assigned" ? 1 : 0) + 
     (tasksStatusFilter !== "open" ? 1 : 0) + 
     (tasksPriorityFilter !== "all" ? 1 : 0) +
     // Only count assignee filter when not in "assigned" mode (since it's hidden in that mode)
-    (tasksOwnershipFilter !== "assigned" && tasksAssigneeFilter !== "all" ? 1 : 0);
+    (tasksOwnershipFilter !== "assigned" && tasksAssigneeFilter !== "all" ? 1 : 0) +
+    (tasksDateFromFilter ? 1 : 0) +
+    (tasksDateToFilter ? 1 : 0);
 
   const clearTasksFilters = useCallback(() => {
     setTasksOwnershipFilter("assigned");
     setTasksStatusFilter("open");
     setTasksPriorityFilter("all");
     setTasksAssigneeFilter("all");
+    setTasksDateFromFilter(undefined);
+    setTasksDateToFilter(undefined);
+    setTasksSearchQuery("");
   }, []);
 
   // Reset assignee filter when switching to "assigned" mode (since it's not applicable)
@@ -568,6 +577,14 @@ export function useProjectsPageState() {
     setTasksPriorityFilter,
     tasksAssigneeFilter,
     setTasksAssigneeFilter,
+    tasksDateFromFilter,
+    setTasksDateFromFilter,
+    tasksDateToFilter,
+    setTasksDateToFilter,
+    tasksSearchQuery,
+    setTasksSearchQuery,
+    tasksReassignMode,
+    setTasksReassignMode,
     tasksActiveFilterCount,
     clearTasksFilters,
 

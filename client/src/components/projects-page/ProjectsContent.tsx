@@ -38,10 +38,16 @@ export interface ProjectsContentProps {
   tasksStatusFilter: string;
   tasksPriorityFilter: string;
   tasksAssigneeFilter: string;
+  tasksDateFromFilter?: Date;
+  tasksDateToFilter?: Date;
+  tasksSearchQuery: string;
+  tasksReassignMode: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
   setTasksAssigneeFilter: (assignee: string) => void;
+  setTasksSearchQuery: (query: string) => void;
+  setTasksReassignMode: (mode: boolean) => void;
   handleRefresh: () => Promise<void>;
   handleManualViewModeChange: (mode: ViewMode) => void;
   handleCalendarEventClick: (event: any) => void;
@@ -361,10 +367,16 @@ export function ProjectsContent({
   tasksStatusFilter,
   tasksPriorityFilter,
   tasksAssigneeFilter,
+  tasksDateFromFilter,
+  tasksDateToFilter,
+  tasksSearchQuery,
+  tasksReassignMode,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
   setTasksAssigneeFilter,
+  setTasksSearchQuery,
+  setTasksReassignMode,
   handleRefresh,
   handleManualViewModeChange,
   handleCalendarEventClick,
@@ -452,10 +464,16 @@ export function ProjectsContent({
           statusFilter={tasksStatusFilter}
           priorityFilter={tasksPriorityFilter}
           assigneeFilter={tasksAssigneeFilter}
+          dateFromFilter={tasksDateFromFilter}
+          dateToFilter={tasksDateToFilter}
+          searchQuery={tasksSearchQuery}
+          reassignMode={tasksReassignMode}
           onOwnershipFilterChange={setTasksOwnershipFilter}
           onStatusFilterChange={setTasksStatusFilter}
           onPriorityFilterChange={setTasksPriorityFilter}
           onAssigneeFilterChange={setTasksAssigneeFilter}
+          onSearchQueryChange={setTasksSearchQuery}
+          onReassignModeChange={setTasksReassignMode}
         />
       </main>
     );

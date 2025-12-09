@@ -60,7 +60,10 @@ import {
   Building2,
   FolderKanban,
   User as UserIcon,
+  AlertTriangle,
+  UserCog,
 } from "lucide-react";
+import { isPast, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import type { InternalTask, TaskType, User, Client, Project, Person } from "@shared/schema";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { CreateReminderDialog } from "@/components/create-reminder-dialog";
@@ -188,6 +191,12 @@ interface ColumnFilterState {
   dueDate: string;
 }
 
+function isOverdue(dueDate: Date | string | null, status: string): boolean {
+  if (!dueDate || status === "closed") return false;
+  const dateObj = typeof dueDate === 'string' ? new Date(dueDate) : dueDate;
+  return isPast(startOfDay(dateObj)) && startOfDay(dateObj) < startOfDay(new Date());
+}
+
 interface TaskRowProps {
   task: InternalTaskWithRelations;
   selected: boolean;
@@ -196,27 +205,34 @@ interface TaskRowProps {
   isMobile?: boolean;
   showLinkedEntities?: boolean;
   showAssignee?: boolean;
+  reassignMode?: boolean;
+  isCompleting?: boolean;
 }
 
-function TaskRow({ task, selected, onSelect, onViewClick, isMobile, showLinkedEntities = true, showAssignee = true }: TaskRowProps) {
+function TaskRow({ task, selected, onSelect, onViewClick, isMobile, showLinkedEntities = true, showAssignee = true, reassignMode = false, isCompleting = false }: TaskRowProps) {
   const truncateDescription = (text: string | null, maxLength: number = 50) => {
     if (!text) return '-';
     return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
   };
 
   const colWidths = showAssignee ? COLUMN_WIDTHS : COLUMN_WIDTHS_NO_ASSIGNEE;
+  const overdue = isOverdue(task.dueDate, task.status);
 
   return (
-    <TableRow data-testid={`row-task-${task.id}`}>
+    <TableRow 
+      data-testid={`row-task-${task.id}`}
+      className={`${overdue ? 'bg-red-50/50 dark:bg-red-900/10' : ''} ${isCompleting ? 'opacity-50' : ''}`}
+    >
       <TableCell className={colWidths.checkbox}>
         <Checkbox
-          checked={selected}
+          checked={reassignMode ? selected : task.status === "closed"}
           onCheckedChange={onSelect}
+          disabled={isCompleting || (!reassignMode && task.status === "closed")}
           data-testid={`checkbox-task-${task.id}`}
         />
       </TableCell>
       <TableCell className={`font-medium ${colWidths.title}`}>
-        <span className="truncate block" data-testid={`text-title-${task.id}`}>
+        <span className={`truncate block ${task.status === "closed" ? 'line-through text-muted-foreground' : ''}`} data-testid={`text-title-${task.id}`}>
           {task.title}
         </span>
       </TableCell>
@@ -251,9 +267,15 @@ function TaskRow({ task, selected, onSelect, onViewClick, isMobile, showLinkedEn
       )}
       {!isMobile && (
         <TableCell className={`text-sm ${colWidths.dueDate}`}>
-          <span data-testid={`text-duedate-${task.id}`}>
-            {formatDate(task.dueDate)}
-          </span>
+          <div className="flex items-center gap-1">
+            {overdue && <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />}
+            <span 
+              className={overdue ? 'text-red-600 dark:text-red-400 font-medium' : ''} 
+              data-testid={`text-duedate-${task.id}`}
+            >
+              {formatDate(task.dueDate)}
+            </span>
+          </div>
         </TableCell>
       )}
       <TableCell className={`text-right ${colWidths.actions}`}>
@@ -279,29 +301,36 @@ interface ReminderRowProps {
   isMobile?: boolean;
   showLinkedEntities?: boolean;
   showAssignee?: boolean;
+  reassignMode?: boolean;
+  isCompleting?: boolean;
 }
 
-function ReminderRow({ reminder, selected, onSelect, onViewClick, isMobile, showLinkedEntities = true, showAssignee = true }: ReminderRowProps) {
+function ReminderRow({ reminder, selected, onSelect, onViewClick, isMobile, showLinkedEntities = true, showAssignee = true, reassignMode = false, isCompleting = false }: ReminderRowProps) {
   const truncateDescription = (text: string | null, maxLength: number = 50) => {
     if (!text) return '-';
     return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
   };
 
   const colWidths = showAssignee ? COLUMN_WIDTHS : COLUMN_WIDTHS_NO_ASSIGNEE;
+  const overdue = isOverdue(reminder.dueDate, reminder.status);
 
   return (
-    <TableRow data-testid={`row-reminder-${reminder.id}`}>
+    <TableRow 
+      data-testid={`row-reminder-${reminder.id}`}
+      className={`${overdue ? 'bg-red-50/50 dark:bg-red-900/10' : ''} ${isCompleting ? 'opacity-50' : ''}`}
+    >
       <TableCell className={colWidths.checkbox}>
         <Checkbox
-          checked={selected}
+          checked={reassignMode ? selected : reminder.status === "closed"}
           onCheckedChange={onSelect}
+          disabled={isCompleting || (!reassignMode && reminder.status === "closed")}
           data-testid={`checkbox-reminder-${reminder.id}`}
         />
       </TableCell>
       <TableCell className={`font-medium ${colWidths.title}`}>
         <div className="flex items-center gap-2">
           <Bell className="h-4 w-4 text-amber-500 flex-shrink-0" />
-          <span className="truncate" data-testid={`text-title-${reminder.id}`}>
+          <span className={`truncate ${reminder.status === "closed" ? 'line-through text-muted-foreground' : ''}`} data-testid={`text-title-${reminder.id}`}>
             {reminder.title}
           </span>
         </div>
@@ -332,9 +361,15 @@ function ReminderRow({ reminder, selected, onSelect, onViewClick, isMobile, show
       )}
       {!isMobile && (
         <TableCell className={`text-sm ${colWidths.dueDate}`}>
-          <span data-testid={`text-duedate-${reminder.id}`}>
-            {formatDate(reminder.dueDate)}
-          </span>
+          <div className="flex items-center gap-1">
+            {overdue && <AlertTriangle className="h-4 w-4 text-red-500 flex-shrink-0" />}
+            <span 
+              className={overdue ? 'text-red-600 dark:text-red-400 font-medium' : ''} 
+              data-testid={`text-duedate-${reminder.id}`}
+            >
+              {formatDate(reminder.dueDate)}
+            </span>
+          </div>
         </TableCell>
       )}
       <TableCell className={`text-right ${colWidths.actions}`}>
@@ -369,10 +404,9 @@ interface TasksSectionProps {
   isMobile?: boolean;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
-  filters: ColumnFilterState;
-  onFilterChange: (field: keyof ColumnFilterState, value: string) => void;
-  showFilters?: boolean;
   showAssignee?: boolean;
+  reassignMode?: boolean;
+  completingIds?: string[];
 }
 
 function TasksSection({
@@ -392,13 +426,11 @@ function TasksSection({
   isMobile = false,
   isCollapsed = false,
   onToggleCollapse,
-  filters,
-  onFilterChange,
-  showFilters = true,
   showAssignee = true,
+  reassignMode = false,
+  completingIds = [],
 }: TasksSectionProps) {
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
-  const hasActiveFilters = filters.title || filters.description || (showAssignee && filters.assignee) || filters.dueDate;
   const colWidths = showAssignee ? COLUMN_WIDTHS : COLUMN_WIDTHS_NO_ASSIGNEE;
 
   return (
@@ -411,12 +443,6 @@ function TasksSection({
           <Badge variant="secondary" className="ml-1">
             {totalCount}
           </Badge>
-          {hasActiveFilters && (
-            <Badge variant="outline" className="ml-1 text-xs bg-blue-50 dark:bg-blue-900/20">
-              <Filter className="h-3 w-3 mr-1" />
-              Filtered
-            </Badge>
-          )}
         </h4>
         <div className="flex items-center gap-2">
           {/* Collapse button - only for Tasks section */}
@@ -475,16 +501,12 @@ function TasksSection({
           ) : items.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground text-sm">
               No {isReminders ? 'reminders' : 'tasks'} found
-              {hasActiveFilters && (
-                <span className="block mt-1 text-xs">Try adjusting your column filters</span>
-              )}
             </div>
           ) : (
             <>
               <div className={isExpanded ? "max-h-[60vh] overflow-y-auto" : ""}>
                 <Table>
                   <TableHeader>
-                    {/* Column Headers Row */}
                     <TableRow>
                       <TableHead className={colWidths.checkbox}></TableHead>
                       <TableHead className={colWidths.title}>{isReminders ? 'Reminder' : 'Task'}</TableHead>
@@ -495,53 +517,6 @@ function TasksSection({
                       {!isMobile && <TableHead className={colWidths.dueDate}>Due Date</TableHead>}
                       <TableHead className={`text-right ${colWidths.actions}`}>Actions</TableHead>
                     </TableRow>
-                    {/* Filter Row */}
-                    {showFilters && !isMobile && (
-                      <TableRow className="bg-muted/30">
-                        <TableHead className={colWidths.checkbox}></TableHead>
-                        <TableHead className={colWidths.title}>
-                          <Input
-                            placeholder="Filter..."
-                            value={filters.title}
-                            onChange={(e) => onFilterChange('title', e.target.value)}
-                            className="h-7 text-xs"
-                            data-testid={`filter-title-${isReminders ? 'reminders' : 'tasks'}`}
-                          />
-                        </TableHead>
-                        <TableHead className={colWidths.description}>
-                          <Input
-                            placeholder="Filter..."
-                            value={filters.description}
-                            onChange={(e) => onFilterChange('description', e.target.value)}
-                            className="h-7 text-xs"
-                            data-testid={`filter-description-${isReminders ? 'reminders' : 'tasks'}`}
-                          />
-                        </TableHead>
-                        <TableHead className={colWidths.status}></TableHead>
-                        <TableHead className={colWidths.linkedEntities}></TableHead>
-                        {showAssignee && (
-                          <TableHead className={colWidths.assignee}>
-                            <Input
-                              placeholder="Filter..."
-                              value={filters.assignee}
-                              onChange={(e) => onFilterChange('assignee', e.target.value)}
-                              className="h-7 text-xs"
-                              data-testid={`filter-assignee-${isReminders ? 'reminders' : 'tasks'}`}
-                            />
-                          </TableHead>
-                        )}
-                        <TableHead className={colWidths.dueDate}>
-                          <Input
-                            type="date"
-                            value={filters.dueDate}
-                            onChange={(e) => onFilterChange('dueDate', e.target.value)}
-                            className="h-7 text-xs"
-                            data-testid={`filter-duedate-${isReminders ? 'reminders' : 'tasks'}`}
-                          />
-                        </TableHead>
-                        <TableHead className={colWidths.actions}></TableHead>
-                      </TableRow>
-                    )}
                   </TableHeader>
                   <TableBody>
                     {items.map((item) => (
@@ -555,6 +530,8 @@ function TasksSection({
                           isMobile={isMobile}
                           showLinkedEntities={!isMobile}
                           showAssignee={showAssignee}
+                          reassignMode={reassignMode}
+                          isCompleting={completingIds.includes(item.id)}
                         />
                       ) : (
                         <TaskRow
@@ -566,6 +543,8 @@ function TasksSection({
                           isMobile={isMobile}
                           showLinkedEntities={!isMobile}
                           showAssignee={showAssignee}
+                          reassignMode={reassignMode}
+                          isCompleting={completingIds.includes(item.id)}
                         />
                       )
                     ))}
@@ -626,10 +605,16 @@ interface TasksWorkspaceProps {
   statusFilter: string;
   priorityFilter: string;
   assigneeFilter?: string;
+  dateFromFilter?: Date;
+  dateToFilter?: Date;
+  searchQuery?: string;
+  reassignMode?: boolean;
   onOwnershipFilterChange: (value: OwnershipFilter) => void;
   onStatusFilterChange: (value: string) => void;
   onPriorityFilterChange: (value: string) => void;
   onAssigneeFilterChange?: (value: string) => void;
+  onSearchQueryChange?: (value: string) => void;
+  onReassignModeChange?: (value: boolean) => void;
 }
 
 export function TasksWorkspace({ 
@@ -638,10 +623,16 @@ export function TasksWorkspace({
   statusFilter,
   priorityFilter,
   assigneeFilter = "all",
+  dateFromFilter,
+  dateToFilter,
+  searchQuery = "",
+  reassignMode = false,
   onOwnershipFilterChange,
   onStatusFilterChange,
   onPriorityFilterChange,
   onAssigneeFilterChange,
+  onSearchQueryChange,
+  onReassignModeChange,
 }: TasksWorkspaceProps) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -667,29 +658,7 @@ export function TasksWorkspace({
   
   const [tasksCollapsed, setTasksCollapsed] = useState(false);
   
-  const [tasksFilters, setTasksFilters] = useState<ColumnFilterState>({
-    title: '',
-    description: '',
-    assignee: '',
-    dueDate: '',
-  });
-  
-  const [remindersFilters, setRemindersFilters] = useState<ColumnFilterState>({
-    title: '',
-    description: '',
-    assignee: '',
-    dueDate: '',
-  });
-  
-  const handleTasksFilterChange = useCallback((field: keyof ColumnFilterState, value: string) => {
-    setTasksFilters(prev => ({ ...prev, [field]: value }));
-    setTasksPage(1);
-  }, []);
-  
-  const handleRemindersFilterChange = useCallback((field: keyof ColumnFilterState, value: string) => {
-    setRemindersFilters(prev => ({ ...prev, [field]: value }));
-    setRemindersPage(1);
-  }, []);
+  const [completingIds, setCompletingIds] = useState<string[]>([]);
 
   const { data: staff = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -759,48 +728,59 @@ export function TasksWorkspace({
     : ownershipFilter === "created" ? createdData 
     : allData;
 
-  const applyColumnFilters = useCallback((items: InternalTaskWithRelations[], filters: ColumnFilterState) => {
+  const applyFilters = useCallback((items: InternalTaskWithRelations[]) => {
     return items.filter(item => {
-      if (filters.title && !item.title.toLowerCase().includes(filters.title.toLowerCase())) {
-        return false;
-      }
-      if (filters.description) {
-        if (!item.description || !item.description.toLowerCase().includes(filters.description.toLowerCase())) {
+      // Search query filter - searches title, description, and linked entities
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const titleMatch = item.title.toLowerCase().includes(query);
+        const descMatch = item.description?.toLowerCase().includes(query);
+        
+        // Check linked entities
+        let linkedMatch = false;
+        if (item.connections) {
+          linkedMatch = item.connections.some(conn => {
+            if (conn.client?.name?.toLowerCase().includes(query)) return true;
+            if (conn.project?.description?.toLowerCase().includes(query)) return true;
+            if (conn.person) {
+              const personName = `${conn.person.firstName} ${conn.person.lastName}`.toLowerCase();
+              if (personName.includes(query)) return true;
+            }
+            return false;
+          });
+        }
+        
+        if (!titleMatch && !descMatch && !linkedMatch) {
           return false;
         }
       }
-      if (filters.assignee) {
-        if (!item.assignee) {
+      
+      // Date range filter
+      if (dateFromFilter || dateToFilter) {
+        if (!item.dueDate) return false;
+        const itemDate = new Date(item.dueDate);
+        
+        if (dateFromFilter && itemDate < startOfDay(dateFromFilter)) {
           return false;
         }
-        const assigneeName = `${item.assignee.firstName} ${item.assignee.lastName}`.toLowerCase();
-        if (!assigneeName.includes(filters.assignee.toLowerCase())) {
-          return false;
-        }
-      }
-      if (filters.dueDate) {
-        if (!item.dueDate) {
-          return false;
-        }
-        const filterDate = new Date(filters.dueDate).toDateString();
-        const itemDate = new Date(item.dueDate).toDateString();
-        if (filterDate !== itemDate) {
+        if (dateToFilter && itemDate > endOfDay(dateToFilter)) {
           return false;
         }
       }
+      
       return true;
     });
-  }, []);
+  }, [searchQuery, dateFromFilter, dateToFilter]);
 
   const allTasks = useMemo(() => {
     const tasks = (rawData || []).filter(t => !t.isQuickReminder);
-    return applyColumnFilters(tasks, tasksFilters);
-  }, [rawData, tasksFilters, applyColumnFilters]);
+    return applyFilters(tasks);
+  }, [rawData, applyFilters]);
 
   const allReminders = useMemo(() => {
     const reminders = (rawData || []).filter(t => t.isQuickReminder === true);
-    return applyColumnFilters(reminders, remindersFilters);
-  }, [rawData, remindersFilters, applyColumnFilters]);
+    return applyFilters(reminders);
+  }, [rawData, applyFilters]);
 
   const paginatedTasks = useMemo(() => {
     if (tasksExpanded) return allTasks;
@@ -822,19 +802,53 @@ export function TasksWorkspace({
     setSelectedReminders([]);
   };
 
+  const quickCompleteMutation = useMutation({
+    mutationFn: async (taskId: string) => {
+      setCompletingIds(prev => [...prev, taskId]);
+      return await apiRequest("PATCH", `/api/internal-tasks/${taskId}`, {
+        status: "closed",
+      });
+    },
+    onSuccess: (_, taskId) => {
+      setCompletingIds(prev => prev.filter(id => id !== taskId));
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.startsWith('/api/internal-tasks');
+        }
+      });
+      toast({
+        title: "Item completed",
+        description: "The item has been marked as closed.",
+      });
+    },
+    onError: (error: Error, taskId) => {
+      setCompletingIds(prev => prev.filter(id => id !== taskId));
+      showFriendlyError({ error: error.message || "Failed to complete item" });
+    },
+  });
+
   const handleSelectTask = (id: string, checked: boolean) => {
-    if (checked) {
-      setSelectedTasks([...selectedTasks, id]);
-    } else {
-      setSelectedTasks(selectedTasks.filter(t => t !== id));
+    if (reassignMode) {
+      if (checked) {
+        setSelectedTasks([...selectedTasks, id]);
+      } else {
+        setSelectedTasks(selectedTasks.filter(t => t !== id));
+      }
+    } else if (checked) {
+      quickCompleteMutation.mutate(id);
     }
   };
 
   const handleSelectReminder = (id: string, checked: boolean) => {
-    if (checked) {
-      setSelectedReminders([...selectedReminders, id]);
-    } else {
-      setSelectedReminders(selectedReminders.filter(r => r !== id));
+    if (reassignMode) {
+      if (checked) {
+        setSelectedReminders([...selectedReminders, id]);
+      } else {
+        setSelectedReminders(selectedReminders.filter(r => r !== id));
+      }
+    } else if (checked) {
+      quickCompleteMutation.mutate(id);
     }
   };
 
@@ -910,28 +924,48 @@ export function TasksWorkspace({
 
   return (
     <div className={className}>
-      {/* Bulk Actions Bar */}
-      {totalSelected > 0 && (
-        <div className="mb-4 p-3 bg-muted rounded-lg flex items-center justify-between" data-testid="bulk-actions-bar">
+      {/* Header Row with Search and Reassign button */}
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search tasks, reminders, clients, projects..."
+            value={searchQuery}
+            onChange={(e) => onSearchQueryChange?.(e.target.value)}
+            className="pl-9"
+            data-testid="input-tasks-search"
+          />
+        </div>
+        {!reassignMode && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onReassignModeChange?.(true)}
+            data-testid="button-enter-reassign-mode"
+          >
+            <UserCog className="h-4 w-4 mr-2" />
+            Reassign
+          </Button>
+        )}
+      </div>
+
+      {/* Bulk Actions Bar - Always shown in reassign mode */}
+      {reassignMode && (
+        <div className="mb-4 p-3 bg-primary/10 border border-primary/20 rounded-lg flex items-center justify-between" data-testid="bulk-actions-bar">
           <span className="text-sm font-medium">
-            {totalSelected} item{totalSelected !== 1 ? 's' : ''} selected
+            {totalSelected > 0 
+              ? `${totalSelected} item${totalSelected !== 1 ? 's' : ''} selected for reassignment`
+              : "Select items to reassign"
+            }
           </span>
           <div className="flex items-center gap-2">
             <Button
-              variant="outline"
+              variant="default"
               size="sm"
               onClick={() => setBulkReassignOpen(true)}
               data-testid="button-bulk-reassign"
             >
-              Reassign
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setBulkStatusOpen(true)}
-              data-testid="button-bulk-status"
-            >
-              Change Status
+              Reassign Selected
             </Button>
             <Button
               variant="ghost"
@@ -939,10 +973,11 @@ export function TasksWorkspace({
               onClick={() => {
                 setSelectedTasks([]);
                 setSelectedReminders([]);
+                onReassignModeChange?.(false);
               }}
-              data-testid="button-clear-selection"
+              data-testid="button-cancel-reassign"
             >
-              Clear
+              Cancel
             </Button>
           </div>
         </div>
@@ -967,9 +1002,9 @@ export function TasksWorkspace({
           isMobile={isMobile}
           isCollapsed={tasksCollapsed}
           onToggleCollapse={() => setTasksCollapsed(!tasksCollapsed)}
-          filters={tasksFilters}
-          onFilterChange={handleTasksFilterChange}
           showAssignee={ownershipFilter !== "assigned"}
+          reassignMode={reassignMode}
+          completingIds={completingIds}
         />
 
         {/* Visual separator between Tasks and Reminders */}
@@ -990,9 +1025,9 @@ export function TasksWorkspace({
           isLoading={isLoading && !remindersExpanded}
           isReminders={true}
           isMobile={isMobile}
-          filters={remindersFilters}
-          onFilterChange={handleRemindersFilterChange}
           showAssignee={ownershipFilter !== "assigned"}
+          reassignMode={reassignMode}
+          completingIds={completingIds}
         />
       </div>
 

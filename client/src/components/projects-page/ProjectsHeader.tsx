@@ -15,7 +15,10 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Filter, Plus, X, Calendar as CalendarIcon, Minimize2, Maximize2, ClipboardList, FolderKanban, Bookmark, Mail } from "lucide-react";
+import { Filter, Plus, X, Calendar as CalendarIcon, Minimize2, Maximize2, ClipboardList, FolderKanban, Bookmark, Mail, Users } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { Input } from "@/components/ui/input";
+import { format } from "date-fns";
 import LayoutsMenu from "@/components/LayoutsMenu";
 import ViewMegaMenu from "@/components/ViewMegaMenu";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
@@ -43,12 +46,20 @@ export interface ProjectsHeaderProps {
   tasksStatusFilter: string;
   tasksPriorityFilter: string;
   tasksAssigneeFilter: string;
+  tasksDateFromFilter: Date | undefined;
+  tasksDateToFilter: Date | undefined;
+  tasksSearchQuery: string;
   tasksActiveFilterCount: number;
   canSeeAllTasks?: boolean;
+  tasksReassignMode: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
   setTasksAssigneeFilter: (assignee: string) => void;
+  setTasksDateFromFilter: (date: Date | undefined) => void;
+  setTasksDateToFilter: (date: Date | undefined) => void;
+  setTasksSearchQuery: (query: string) => void;
+  setTasksReassignMode: (mode: boolean) => void;
   clearTasksFilters: () => void;
   handleManualViewModeChange: (mode: ViewMode) => void;
   handleLoadSavedView: (view: ProjectView) => void;
@@ -78,12 +89,20 @@ export function ProjectsHeader({
   tasksStatusFilter,
   tasksPriorityFilter,
   tasksAssigneeFilter,
+  tasksDateFromFilter,
+  tasksDateToFilter,
+  tasksSearchQuery,
   tasksActiveFilterCount,
   canSeeAllTasks = false,
+  tasksReassignMode,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
   setTasksAssigneeFilter,
+  setTasksDateFromFilter,
+  setTasksDateToFilter,
+  setTasksSearchQuery,
+  setTasksReassignMode,
   clearTasksFilters,
   handleManualViewModeChange,
   handleLoadSavedView,
@@ -120,12 +139,18 @@ export function ProjectsHeader({
           tasksStatusFilter={tasksStatusFilter}
           tasksPriorityFilter={tasksPriorityFilter}
           tasksAssigneeFilter={tasksAssigneeFilter}
+          tasksDateFromFilter={tasksDateFromFilter}
+          tasksDateToFilter={tasksDateToFilter}
           tasksActiveFilterCount={tasksActiveFilterCount}
           canSeeAllTasks={canSeeAllTasks}
+          tasksReassignMode={tasksReassignMode}
           setTasksOwnershipFilter={setTasksOwnershipFilter}
           setTasksStatusFilter={setTasksStatusFilter}
           setTasksPriorityFilter={setTasksPriorityFilter}
           setTasksAssigneeFilter={setTasksAssigneeFilter}
+          setTasksDateFromFilter={setTasksDateFromFilter}
+          setTasksDateToFilter={setTasksDateToFilter}
+          setTasksReassignMode={setTasksReassignMode}
           clearTasksFilters={clearTasksFilters}
           handleManualViewModeChange={handleManualViewModeChange}
           handleLoadSavedView={handleLoadSavedView}
@@ -150,12 +175,18 @@ export function ProjectsHeader({
           tasksStatusFilter={tasksStatusFilter}
           tasksPriorityFilter={tasksPriorityFilter}
           tasksAssigneeFilter={tasksAssigneeFilter}
+          tasksDateFromFilter={tasksDateFromFilter}
+          tasksDateToFilter={tasksDateToFilter}
           tasksActiveFilterCount={tasksActiveFilterCount}
           canSeeAllTasks={canSeeAllTasks}
+          tasksReassignMode={tasksReassignMode}
           setTasksOwnershipFilter={setTasksOwnershipFilter}
           setTasksStatusFilter={setTasksStatusFilter}
           setTasksPriorityFilter={setTasksPriorityFilter}
           setTasksAssigneeFilter={setTasksAssigneeFilter}
+          setTasksDateFromFilter={setTasksDateFromFilter}
+          setTasksDateToFilter={setTasksDateToFilter}
+          setTasksReassignMode={setTasksReassignMode}
           clearTasksFilters={clearTasksFilters}
           handleManualViewModeChange={handleManualViewModeChange}
           handleLoadSavedView={handleLoadSavedView}
@@ -268,12 +299,18 @@ interface DesktopToolbarProps {
   tasksStatusFilter: string;
   tasksPriorityFilter: string;
   tasksAssigneeFilter: string;
+  tasksDateFromFilter: Date | undefined;
+  tasksDateToFilter: Date | undefined;
   tasksActiveFilterCount: number;
   canSeeAllTasks?: boolean;
+  tasksReassignMode: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
   setTasksAssigneeFilter: (assignee: string) => void;
+  setTasksDateFromFilter: (date: Date | undefined) => void;
+  setTasksDateToFilter: (date: Date | undefined) => void;
+  setTasksReassignMode: (mode: boolean) => void;
   clearTasksFilters: () => void;
   handleManualViewModeChange: (mode: ViewMode) => void;
   handleLoadSavedView: (view: ProjectView) => void;
@@ -299,12 +336,18 @@ function DesktopToolbar({
   tasksStatusFilter,
   tasksPriorityFilter,
   tasksAssigneeFilter,
+  tasksDateFromFilter,
+  tasksDateToFilter,
   tasksActiveFilterCount,
   canSeeAllTasks = false,
+  tasksReassignMode,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
   setTasksAssigneeFilter,
+  setTasksDateFromFilter,
+  setTasksDateToFilter,
+  setTasksReassignMode,
   clearTasksFilters,
   handleManualViewModeChange,
   handleLoadSavedView,
@@ -423,12 +466,18 @@ function DesktopToolbar({
           tasksStatusFilter={tasksStatusFilter}
           tasksPriorityFilter={tasksPriorityFilter}
           tasksAssigneeFilter={tasksAssigneeFilter}
+          tasksDateFromFilter={tasksDateFromFilter}
+          tasksDateToFilter={tasksDateToFilter}
           tasksActiveFilterCount={tasksActiveFilterCount}
           canSeeAllTasks={canSeeAllTasks}
+          tasksReassignMode={tasksReassignMode}
           setTasksOwnershipFilter={setTasksOwnershipFilter}
           setTasksStatusFilter={setTasksStatusFilter}
           setTasksPriorityFilter={setTasksPriorityFilter}
           setTasksAssigneeFilter={setTasksAssigneeFilter}
+          setTasksDateFromFilter={setTasksDateFromFilter}
+          setTasksDateToFilter={setTasksDateToFilter}
+          setTasksReassignMode={setTasksReassignMode}
           clearTasksFilters={clearTasksFilters}
         />
       )}
@@ -446,12 +495,18 @@ interface MobileToolbarProps {
   tasksStatusFilter: string;
   tasksPriorityFilter: string;
   tasksAssigneeFilter: string;
+  tasksDateFromFilter: Date | undefined;
+  tasksDateToFilter: Date | undefined;
   tasksActiveFilterCount: number;
   canSeeAllTasks?: boolean;
+  tasksReassignMode: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
   setTasksAssigneeFilter: (assignee: string) => void;
+  setTasksDateFromFilter: (date: Date | undefined) => void;
+  setTasksDateToFilter: (date: Date | undefined) => void;
+  setTasksReassignMode: (mode: boolean) => void;
   clearTasksFilters: () => void;
   handleManualViewModeChange: (mode: ViewMode) => void;
   handleLoadSavedView: (view: ProjectView) => void;
@@ -473,12 +528,18 @@ function MobileToolbar({
   tasksStatusFilter,
   tasksPriorityFilter,
   tasksAssigneeFilter,
+  tasksDateFromFilter,
+  tasksDateToFilter,
   tasksActiveFilterCount,
   canSeeAllTasks = false,
+  tasksReassignMode,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
   setTasksAssigneeFilter,
+  setTasksDateFromFilter,
+  setTasksDateToFilter,
+  setTasksReassignMode,
   clearTasksFilters,
   handleManualViewModeChange,
   handleLoadSavedView,
@@ -554,12 +615,18 @@ function MobileToolbar({
           tasksStatusFilter={tasksStatusFilter}
           tasksPriorityFilter={tasksPriorityFilter}
           tasksAssigneeFilter={tasksAssigneeFilter}
+          tasksDateFromFilter={tasksDateFromFilter}
+          tasksDateToFilter={tasksDateToFilter}
           tasksActiveFilterCount={tasksActiveFilterCount}
           canSeeAllTasks={canSeeAllTasks}
+          tasksReassignMode={tasksReassignMode}
           setTasksOwnershipFilter={setTasksOwnershipFilter}
           setTasksStatusFilter={setTasksStatusFilter}
           setTasksPriorityFilter={setTasksPriorityFilter}
           setTasksAssigneeFilter={setTasksAssigneeFilter}
+          setTasksDateFromFilter={setTasksDateFromFilter}
+          setTasksDateToFilter={setTasksDateToFilter}
+          setTasksReassignMode={setTasksReassignMode}
           clearTasksFilters={clearTasksFilters}
         />
       )}
@@ -573,12 +640,18 @@ interface TasksToolbarProps {
   tasksStatusFilter: string;
   tasksPriorityFilter: string;
   tasksAssigneeFilter: string;
+  tasksDateFromFilter: Date | undefined;
+  tasksDateToFilter: Date | undefined;
   tasksActiveFilterCount: number;
   canSeeAllTasks?: boolean;
+  tasksReassignMode: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
   setTasksAssigneeFilter: (assignee: string) => void;
+  setTasksDateFromFilter: (date: Date | undefined) => void;
+  setTasksDateToFilter: (date: Date | undefined) => void;
+  setTasksReassignMode: (mode: boolean) => void;
   clearTasksFilters: () => void;
 }
 
@@ -588,12 +661,18 @@ function TasksToolbar({
   tasksStatusFilter,
   tasksPriorityFilter,
   tasksAssigneeFilter,
+  tasksDateFromFilter,
+  tasksDateToFilter,
   tasksActiveFilterCount,
   canSeeAllTasks = false,
+  tasksReassignMode,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
   setTasksAssigneeFilter,
+  setTasksDateFromFilter,
+  setTasksDateToFilter,
+  setTasksReassignMode,
   clearTasksFilters,
 }: TasksToolbarProps) {
   const [filterOpen, setFilterOpen] = useState(false);
@@ -626,18 +705,22 @@ function TasksToolbar({
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-72" align="end">
+          <PopoverContent className="w-80" align="end">
             <TasksFilterContent
               tasksOwnershipFilter={tasksOwnershipFilter}
               tasksStatusFilter={tasksStatusFilter}
               tasksPriorityFilter={tasksPriorityFilter}
               tasksAssigneeFilter={tasksAssigneeFilter}
+              tasksDateFromFilter={tasksDateFromFilter}
+              tasksDateToFilter={tasksDateToFilter}
               tasksActiveFilterCount={tasksActiveFilterCount}
               canSeeAllTasks={canSeeAllTasks}
               setTasksOwnershipFilter={setTasksOwnershipFilter}
               setTasksStatusFilter={setTasksStatusFilter}
               setTasksPriorityFilter={setTasksPriorityFilter}
               setTasksAssigneeFilter={setTasksAssigneeFilter}
+              setTasksDateFromFilter={setTasksDateFromFilter}
+              setTasksDateToFilter={setTasksDateToFilter}
               clearTasksFilters={clearTasksFilters}
             />
           </PopoverContent>
@@ -664,6 +747,15 @@ function TasksToolbar({
           </Button>
         }
       />
+      <Button
+        variant={tasksReassignMode ? "default" : "outline"}
+        size="sm"
+        onClick={() => setTasksReassignMode(!tasksReassignMode)}
+        data-testid="button-reassign-mode"
+      >
+        <Users className="h-4 w-4 mr-2" />
+        {tasksReassignMode ? "Exit Reassign" : "Reassign"}
+      </Button>
       <Popover open={filterOpen} onOpenChange={setFilterOpen}>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="relative" data-testid="button-tasks-filters">
@@ -676,18 +768,22 @@ function TasksToolbar({
             )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-72" align="end">
+        <PopoverContent className="w-80" align="end">
           <TasksFilterContent
             tasksOwnershipFilter={tasksOwnershipFilter}
             tasksStatusFilter={tasksStatusFilter}
             tasksPriorityFilter={tasksPriorityFilter}
             tasksAssigneeFilter={tasksAssigneeFilter}
+            tasksDateFromFilter={tasksDateFromFilter}
+            tasksDateToFilter={tasksDateToFilter}
             tasksActiveFilterCount={tasksActiveFilterCount}
             canSeeAllTasks={canSeeAllTasks}
             setTasksOwnershipFilter={setTasksOwnershipFilter}
             setTasksStatusFilter={setTasksStatusFilter}
             setTasksPriorityFilter={setTasksPriorityFilter}
             setTasksAssigneeFilter={setTasksAssigneeFilter}
+            setTasksDateFromFilter={setTasksDateFromFilter}
+            setTasksDateToFilter={setTasksDateToFilter}
             clearTasksFilters={clearTasksFilters}
           />
         </PopoverContent>
@@ -701,12 +797,16 @@ interface TasksFilterContentProps {
   tasksStatusFilter: string;
   tasksPriorityFilter: string;
   tasksAssigneeFilter: string;
+  tasksDateFromFilter: Date | undefined;
+  tasksDateToFilter: Date | undefined;
   tasksActiveFilterCount: number;
   canSeeAllTasks?: boolean;
   setTasksOwnershipFilter: (filter: OwnershipFilter) => void;
   setTasksStatusFilter: (status: string) => void;
   setTasksPriorityFilter: (priority: string) => void;
   setTasksAssigneeFilter: (assignee: string) => void;
+  setTasksDateFromFilter: (date: Date | undefined) => void;
+  setTasksDateToFilter: (date: Date | undefined) => void;
   clearTasksFilters: () => void;
 }
 
@@ -715,17 +815,24 @@ function TasksFilterContent({
   tasksStatusFilter,
   tasksPriorityFilter,
   tasksAssigneeFilter,
+  tasksDateFromFilter,
+  tasksDateToFilter,
   tasksActiveFilterCount,
   canSeeAllTasks = false,
   setTasksOwnershipFilter,
   setTasksStatusFilter,
   setTasksPriorityFilter,
   setTasksAssigneeFilter,
+  setTasksDateFromFilter,
+  setTasksDateToFilter,
   clearTasksFilters,
 }: TasksFilterContentProps) {
   const { data: users } = useQuery<Array<{ id: string; firstName: string; lastName: string }>>({ 
     queryKey: ['/api/users/for-messaging'] 
   });
+  const [dateFromOpen, setDateFromOpen] = useState(false);
+  const [dateToOpen, setDateToOpen] = useState(false);
+  
   return (
     <div className="space-y-4">
       <div>
@@ -790,6 +897,89 @@ function TasksFilterContent({
           </Select>
         </div>
       )}
+      <div>
+        <Label className="text-sm font-medium">Due Date Range</Label>
+        <div className="grid grid-cols-2 gap-2 mt-1">
+          <Popover open={dateFromOpen} onOpenChange={setDateFromOpen}>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="justify-start text-left font-normal h-9"
+                data-testid="button-date-from"
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {tasksDateFromFilter ? format(tasksDateFromFilter, "MMM d") : "From"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={tasksDateFromFilter}
+                onSelect={(date) => {
+                  setTasksDateFromFilter(date);
+                  setDateFromOpen(false);
+                }}
+                initialFocus
+              />
+              {tasksDateFromFilter && (
+                <div className="p-2 border-t">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => {
+                      setTasksDateFromFilter(undefined);
+                      setDateFromOpen(false);
+                    }}
+                    className="w-full"
+                  >
+                    Clear
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+          <Popover open={dateToOpen} onOpenChange={setDateToOpen}>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="justify-start text-left font-normal h-9"
+                data-testid="button-date-to"
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {tasksDateToFilter ? format(tasksDateToFilter, "MMM d") : "To"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={tasksDateToFilter}
+                onSelect={(date) => {
+                  setTasksDateToFilter(date);
+                  setDateToOpen(false);
+                }}
+                initialFocus
+              />
+              {tasksDateToFilter && (
+                <div className="p-2 border-t">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => {
+                      setTasksDateToFilter(undefined);
+                      setDateToOpen(false);
+                    }}
+                    className="w-full"
+                  >
+                    Clear
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
       {tasksActiveFilterCount > 0 && (
         <Button 
           variant="ghost" 
