@@ -108,13 +108,14 @@ Drag-and-drop pivot table builder for dynamic project data analysis with 4 drop 
 
 - **Drop Zones**: Rows, Columns, Values (for field headers), and Filters (for individual values)
 - **Drag-and-Drop**: Uses @dnd-kit library for intuitive field placement
-- **Field Library**: Left panel shows available fields; used fields are visually indicated
+- **Field Library**: Left panel shows 21 available fields; used fields are visually indicated
+- **Available Fields**: Client, Project Type, Status, Service Owner, Assigned To, Due Month, Target Month, Year, Quarter, Days to Target, Project Month, Is Archived, Service, Priority, Is Benched, Inactive, Completion Status, Bookkeeper, Client Manager, Created Month
 - **Aggregation**: Supports Count, Sum, Average, Max, Min aggregators for Values
 - **Filters**: Drag individual field values (e.g., "Draft", "Active") to Filters zone to filter data
 - **Saveable Views**: Pivots saved as project_views with viewMode="pivot" and pivotConfig storing rows, cols, vals, aggregatorName, valueFilter
 - **View Mega Menu**: Pivots column displayed alongside Lists, Kanbans, Calendars, Dashboards
 - **State Management**: pivotConfig properly clears when switching to non-pivot views or leaving projects workspace
-- **PivotBuilder Remounting**: Uses key={`pivot-${currentSavedViewId || 'unsaved'}`} to ensure clean state on view transitions
+- **Layout**: Pivot table renders above the drop zones for immediate visibility of results
 
 Key files: `client/src/components/PivotBuilder.tsx`, `client/src/components/PivotTableView.tsx`, `client/src/hooks/projects-page/useViewManagement.ts`, `client/src/hooks/projects-page/useProjectsPageState.ts`, `shared/schema/users/tables.ts`
 
