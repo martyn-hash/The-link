@@ -11,13 +11,12 @@ export function registerProjectAssigneesRoutes(
   app.get("/api/projects/:projectId/assignees", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const { projectId } = req.params;
-      const effectiveUser = req.effectiveUser;
+      const effectiveUser = req.user?.effectiveUser;
+      const effectiveUserId = req.user?.effectiveUserId;
       
-      if (!effectiveUser) {
+      if (!effectiveUser || !effectiveUserId) {
         return res.status(401).json({ message: "Not authenticated" });
       }
-      
-      const effectiveUserId = effectiveUser.id;
 
       if (!projectId || typeof projectId !== 'string') {
         return res.status(400).json({ message: "Valid project ID is required" });
