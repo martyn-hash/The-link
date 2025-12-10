@@ -13,7 +13,7 @@ import DashboardBuilder from "@/components/dashboard-builder";
 import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
 import { CalendarView } from "@/components/calendar";
-const PivotTableView = lazy(() => import("@/components/PivotTableView"));
+const PivotBuilder = lazy(() => import("@/components/PivotBuilder"));
 import { TasksWorkspace, type OwnershipFilter } from "@/components/tasks/TasksWorkspace";
 import { CommsWorkspace } from "@/components/comms/CommsWorkspace";
 import type { ViewMode, WorkspaceMode, Dashboard, Widget, CalendarSettings, CustomDateRange, DynamicDateFilter, PivotConfig } from "@/types/projects-page";
@@ -282,7 +282,7 @@ function ViewContent({
   if (viewMode === "pivot") {
     return (
       <Suspense fallback={<LoadingState />}>
-        <PivotTableView
+        <PivotBuilder
           projects={filteredProjects}
           pivotConfig={pivotConfig}
           onPivotConfigChange={onPivotConfigChange}
