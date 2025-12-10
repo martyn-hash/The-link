@@ -11,7 +11,7 @@
 
 ### December 10, 2025 - Stage 1 Bug Fixes
 
-#### 1.1 Notify Button Fix - COMPLETED
+#### 1.1 Notify Button Fix - COMPLETED ✅
 **Root Cause:** The `/api/projects/:projectId/assignees` route was using `req.effectiveUser` directly, but the `resolveEffectiveUser` middleware sets the effective user on `req.user.effectiveUser`. This caused the route to fail silently (no user found) and return an empty array.
 
 **Fix Applied:**
@@ -23,7 +23,7 @@
 - `server/routes/projects/assignees.ts` - Fixed middleware property access
 - `client/src/components/queries/QueriesTab.tsx` - Added loading state
 
-#### 1.2 Cancel All Pending Button Fix - COMPLETED
+#### 1.2 Cancel All Pending Button Fix - COMPLETED ✅
 **Root Cause:** Two issues identified:
 1. TokenIds could contain null/undefined values, causing the array filter to fail
 2. AlertDialog backdrop clicks were propagating to parent Kanban modal elements
@@ -37,6 +37,63 @@
 **Files Modified:**
 - `client/src/components/queries/ScheduledRemindersPanel.tsx`
 
+### December 10, 2025 - Stage 2 Enhanced Filtering - COMPLETED ✅
+
+#### 2.1 Description Search Filter - COMPLETED ✅
+- Added debounced search input (300ms) for filtering queries by description or query text
+- Case-insensitive search across description and ourQuery fields
+- Clear button to reset search
+- Result count display when filtering
+
+#### 2.2 Money In/Out Filter - COMPLETED ✅
+- Added dropdown filter for transaction direction
+- Options: All Amounts, Money In, Money Out
+- Visual indicators with green/red colors
+
+**Files Modified:**
+- `client/src/components/queries/QueriesTab.tsx`
+
+### December 10, 2025 - Stage 3 Query Grouping - COMPLETED ✅
+
+#### 3.1 Database Schema - COMPLETED ✅
+- Created `query_groups` table with id, projectId, groupName, description, createdById, createdAt
+- Added `groupId` foreign key to `bookkeeping_queries` table
+- Added proper indexes for performance
+
+#### 3.2 Manual Grouping Feature - COMPLETED ✅
+- "Group Selected" button when queries are selected
+- Create group dialog with name and optional description
+- Add/remove queries from groups via dropdown menu
+- Visual badge indicators showing group membership
+
+#### 3.3 Client Response Page Grouping - COMPLETED ✅
+- Group badges visible on client response page
+- Queries organized by group visually
+
+#### 3.4 Group Filter Dropdown - COMPLETED ✅
+- Filter dropdown appears when groups exist
+- Options: All Groups, Ungrouped, [Individual group names]
+- Filters queries in real-time
+
+#### 3.5 HTML Email Table Grouping - COMPLETED ✅
+- Email table organizes queries by group with visual headers
+- Blue highlighted header rows for each group showing name and count
+- Ungrouped queries appear at the end
+
+**Files Modified:**
+- `shared/schema/queries/tables.ts` - Schema changes
+- `shared/schema/queries/types.ts` - TypeScript types
+- `server/storage/queries/queryStorage.ts` - Storage functions
+- `server/routes/queries.ts` - API routes and email generation
+- `client/src/components/queries/QueriesTab.tsx` - UI components
+- `client/src/pages/query-response.tsx` - Client page
+
+#### 3.6 Kanban Modal Scroll Enhancement - COMPLETED ✅
+- Increased QueriesForm max-height from 300px to 50vh for better visibility
+
+**Files Modified:**
+- `client/src/components/change-status/QueriesForm.tsx`
+
 ---
 
 ## Executive Summary
@@ -47,6 +104,7 @@ This document outlines the implementation plan for improving the Bookkeeping Que
 2. **Enhanced Filtering** - Allow staff to quickly find and manage related queries
 3. **Notification Improvements** - Fix existing bugs and add assignee notification when clients respond
 4. **Bug Fixes** - Address issues with the Notify button and Cancel All Pending button in Kanban modal
+5. **Auto-Suggest Answers** - Surface previously answered similar queries to avoid asking clients the same questions
 
 ---
 
@@ -601,7 +659,300 @@ interface AutoGroupApplyRequest {
 
 ---
 
-## Stage 5: Notification Improvements (Priority: Medium)
+## Stage 5: Auto-Suggest Answers (Priority: High) - NEW
+
+### Overview
+
+When a bookkeeper creates a query for a transaction, the system should check if similar transactions have been queried and answered before. If a match is found, surface the previous answer to the staff member so they can either:
+- Use the existing answer (avoiding unnecessary client contact)
+- Learn from how similar queries were resolved previously
+
+This reduces client fatigue by not asking about the same supplier/transaction type multiple times.
+
+### 5.1 Database Schema Changes
+
+**New Table: `query_answer_history`**
+```sql
+CREATE TABLE query_answer_history (
+  id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id VARCHAR NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  client_id VARCHAR REFERENCES clients(id) ON DELETE SET NULL,
+  project_id VARCHAR REFERENCES projects(id) ON DELETE SET NULL,
+  
+  -- Matching fields
+  description_prefix VARCHAR(100) NOT NULL,  -- First N characters of normalized description
+  money_direction VARCHAR(10),  -- 'in', 'out', or null for either
+  
+  -- Answer details
+  answer_text TEXT NOT NULL,
+  answered_by_type VARCHAR(20) NOT NULL,  -- 'staff' or 'client'
+  answered_by_id VARCHAR,
+  answered_at TIMESTAMP NOT NULL,
+  
+  -- Original query reference
+  source_query_id VARCHAR NOT NULL REFERENCES bookkeeping_queries(id) ON DELETE CASCADE,
+  
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_query_answer_history_company_prefix ON query_answer_history(company_id, description_prefix);
+CREATE INDEX idx_query_answer_history_client_prefix ON query_answer_history(client_id, description_prefix);
+```
+
+**Add Setting for Match Threshold:**
+```sql
+-- Add to company_settings or bookkeeping_settings
+ALTER TABLE company_settings ADD COLUMN query_suggestion_prefix_length INTEGER DEFAULT 10;
+ALTER TABLE company_settings ADD COLUMN query_suggestion_enabled BOOLEAN DEFAULT true;
+```
+
+**Drizzle Schema:**
+```typescript
+export const queryAnswerHistory = pgTable("query_answer_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  companyId: varchar("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
+  clientId: varchar("client_id").references(() => clients.id, { onDelete: "set null" }),
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: "set null" }),
+  
+  descriptionPrefix: varchar("description_prefix", { length: 100 }).notNull(),
+  moneyDirection: varchar("money_direction", { length: 10 }),
+  
+  answerText: text("answer_text").notNull(),
+  answeredByType: varchar("answered_by_type", { length: 20 }).notNull(),
+  answeredById: varchar("answered_by_id"),
+  answeredAt: timestamp("answered_at").notNull(),
+  
+  sourceQueryId: varchar("source_query_id").notNull().references(() => bookkeepingQueries.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_query_answer_history_company_prefix").on(table.companyId, table.descriptionPrefix),
+  index("idx_query_answer_history_client_prefix").on(table.clientId, table.descriptionPrefix),
+]);
+```
+
+**Estimated Effort:** 3-4 hours
+
+---
+
+### 5.2 Matching Algorithm
+
+**Normalization Function:**
+```typescript
+function normalizeDescription(description: string): string {
+  return description
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')  // Remove special characters
+    .replace(/\s+/g, ' ')         // Normalize whitespace
+    .trim();
+}
+
+function getDescriptionPrefix(description: string, prefixLength: number): string {
+  const normalized = normalizeDescription(description);
+  return normalized.substring(0, Math.min(prefixLength, normalized.length));
+}
+```
+
+**Matching Logic:**
+1. When viewing a query, compute its description prefix
+2. Search `query_answer_history` for matching prefixes
+3. Optionally filter by money direction (in/out) for more precise matches
+4. Score results by:
+   - Same client > same company
+   - More recent answers > older answers
+   - Exact prefix match > partial match
+
+**Configuration Options (Admin Settings):**
+- `querySuggestionPrefixLength`: Number of characters to match (default: 10)
+- `querySuggestionEnabled`: Enable/disable feature (default: true)
+- `querySuggestionScope`: 'company' | 'client' | 'both' (default: 'both')
+- `querySuggestionMatchDirection`: Match money in/out direction (default: false)
+
+**Estimated Effort:** 4-6 hours
+
+---
+
+### 5.3 Backend API
+
+```typescript
+// GET /api/projects/:projectId/queries/:queryId/suggestions
+// Returns suggested answers for a specific query
+interface QuerySuggestionsResponse {
+  suggestions: {
+    id: string;
+    answerText: string;
+    answeredByType: 'staff' | 'client';
+    answeredByName?: string;
+    answeredAt: string;
+    matchScore: number;  // 0-100, higher = better match
+    sourceDescription: string;  // Original transaction description
+    sourceQueryText?: string;  // Original query question
+    clientName?: string;  // For cross-client matches
+  }[];
+  matchedPrefix: string;
+  settings: {
+    prefixLength: number;
+  };
+}
+
+// POST /api/queries/:queryId/apply-suggestion
+// Copy a suggested answer to the query
+interface ApplySuggestionRequest {
+  suggestionId: string;
+  answerText: string;  // May be edited by staff
+}
+
+// POST /api/admin/query-suggestion-settings
+// Update suggestion settings
+interface UpdateSuggestionSettingsRequest {
+  prefixLength?: number;
+  enabled?: boolean;
+  scope?: 'company' | 'client' | 'both';
+  matchDirection?: boolean;
+}
+```
+
+**Auto-Record Answers:**
+When a query is answered (by staff or client), automatically create a record in `query_answer_history`:
+```typescript
+// In the answer submission logic:
+await storage.createQueryAnswerHistory({
+  companyId: project.companyId,
+  clientId: project.clientId,
+  projectId: project.id,
+  descriptionPrefix: getDescriptionPrefix(query.description, settings.prefixLength),
+  moneyDirection: query.moneyIn ? 'in' : query.moneyOut ? 'out' : null,
+  answerText: response.answer,
+  answeredByType: isStaff ? 'staff' : 'client',
+  answeredById: userId,
+  answeredAt: new Date(),
+  sourceQueryId: query.id,
+});
+```
+
+**Estimated Effort:** 6-8 hours
+
+---
+
+### 5.4 Frontend UI
+
+**UI Design - Suggestion Icon in Table:**
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ ☐ │ Date      │ Description          │ In     │ Out    │ Query         │ Act│
+├──────────────────────────────────────────────────────────────────────────────┤
+│ ☐ │ 15 Nov    │ Barclays Interest    │ £12.50 │ -      │ What is this? │ ✨ │
+│ ☐ │ 18 Nov    │ Amazon Purchase      │ -      │ £45.00 │ What is this? │    │
+│ ☐ │ 22 Nov    │ Barclays Transfer    │ £500   │ -      │ What is this? │ ✨ │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+✨ = Suggestion available (magic wand or lightbulb icon)
+```
+
+**Suggestion Panel (on click of icon):**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  💡 Similar Query Found                                         │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Transaction: Barclays Interest - £12.50                        │
+│                                                                 │
+│  Previously Asked: "What is this bank interest payment?"        │
+│                                                                 │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │  Previous Answer (from ABC Ltd, 2 months ago):             ││
+│  │                                                             ││
+│  │  "This is monthly interest from our business account.      ││
+│  │   Please categorise as bank interest income."              ││
+│  │                                                             ││
+│  │                                         [Use This Answer]  ││
+│  └─────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│  Match Confidence: 95% (same description prefix)                │
+│  Answer provided by: Client (Sarah Smith)                       │
+│                                                                 │
+│  [Mark as Not Relevant]              [Close]                    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Use Answer Flow:**
+1. Click "Use This Answer" → opens answer input pre-filled with text
+2. Staff can edit before saving
+3. Answer is applied to the query
+4. Query status changes to "answered_by_staff"
+
+**Batch Suggestions View:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Auto-Suggested Answers                          [Review All]   │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  We found 3 queries with potential answers from history:        │
+│                                                                 │
+│  ✨ Barclays Interest (£12.50) - 95% match                      │
+│  ✨ Barclays Transfer (£500.00) - 92% match                     │
+│  ✨ Amazon Web Services (£150.00) - 88% match                   │
+│                                                                 │
+│  [Review & Apply Suggestions]                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Estimated Effort:** 10-12 hours
+
+---
+
+### 5.5 Admin Settings Page
+
+**Location:** Company Settings > Bookkeeping
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Query Answer Suggestions                                       │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  ☑ Enable auto-suggestions for bookkeeping queries              │
+│                                                                 │
+│  Matching Settings:                                             │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │ Minimum characters to match: [10 ▼]                        ││
+│  │                                                             ││
+│  │ The system will compare the first N characters of          ││
+│  │ transaction descriptions to find similar past queries.     ││
+│  │                                                             ││
+│  │ Options: 5, 8, 10, 15, 20 characters                        ││
+│  └─────────────────────────────────────────────────────────────┘│
+│                                                                 │
+│  Suggestion Scope:                                              │
+│  ○ Same client only                                             │
+│  ○ Same company only                                            │
+│  ● Both (prefer same client, fallback to company)               │
+│                                                                 │
+│  ☐ Match money direction (in/out)                               │
+│    Only suggest answers from queries with the same              │
+│    transaction direction                                        │
+│                                                                 │
+│  [Save Settings]                                                │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Estimated Effort:** 4-6 hours
+
+---
+
+### 5.6 Total Estimated Effort for Stage 5
+
+| Component | Hours |
+|-----------|-------|
+| Database schema | 3-4 |
+| Matching algorithm | 4-6 |
+| Backend API | 6-8 |
+| Frontend UI | 10-12 |
+| Admin settings | 4-6 |
+| Testing & refinement | 6-8 |
+| **Total** | **33-44 hours** |
+
+---
+
+## Stage 6: Notification Improvements (Priority: Medium)
 
 ### 5.1 Notify Assignees When Client Answers Queries
 

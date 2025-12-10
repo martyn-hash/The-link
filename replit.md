@@ -1,149 +1,36 @@
 # The Link - CRM & Project Management Application
 
 ## Overview
-The Link is a full-stack CRM and project management application for accounting and bookkeeping firms. It automates recurring service delivery, streamlines client relationship management, and provides a secure client portal. Key features include intelligent scheduling, automated project generation, Companies House integration, and a mobile-first user experience. The application aims to enhance efficiency and client satisfaction through automation, compliance, and robust access controls within a multi-tenant architecture. It focuses on business vision, market potential, and project ambitions to improve firm operations and client engagement.
+The Link is a full-stack CRM and project management application designed for accounting and bookkeeping firms. Its primary purpose is to automate recurring service delivery, streamline client relationship management, and provide a secure client portal. The application aims to enhance efficiency and client satisfaction through features like intelligent scheduling, automated project generation, Companies House integration, and a mobile-first user experience, all within a multi-tenant architecture. It focuses on improving firm operations and client engagement, recognizing market potential and ambitious project goals.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
-### Development Login
-- URL: Root page `/`, use the "Passwords" tab
-- Credentials: `admin@example.com` / `admin123`
-
 ## System Architecture
 
 ### UI/UX
-The application features a modern SaaS aesthetic inspired by Linear, Stripe, and Notion, using a specific brand palette and DM Sans font. Design principles emphasize increased spacing, soft modern shadows, and consistent 1rem border-radius. Components are modernized, mobile-first, responsive, and follow a consistent Phase 3 layout with standardized header blocks, body regions, and tab-based layouts. Data-heavy pages use full-width layouts, while detail/form pages remain centered.
+The application's UI/UX is inspired by modern SaaS platforms like Linear, Stripe, and Notion, utilizing a specific brand palette and DM Sans font. Design principles emphasize increased spacing, soft modern shadows, and consistent 1rem border-radius. Components are mobile-first, responsive, and adhere to a consistent Phase 3 layout with standardized header blocks, body regions, and tab-based designs. Full-width layouts are used for data-heavy pages, while detail and form pages remain centered.
 
 ### Technical Implementation
-The frontend uses React, TypeScript, Wouter for routing, TanStack Query for server state, and shadcn/ui with Tailwind CSS for styling. The backend is an Express.js server in TypeScript, providing a modular RESTful API with middleware for authentication, authorization, and validation. It handles service mapping, project creation, sophisticated scheduling with UTC normalization, and comprehensive audit trails. A nightly scheduler automates project generation. The backend storage layer uses 52 domain-focused modules with a facade pattern.
+The frontend is built with React, TypeScript, Wouter for routing, TanStack Query for server state management, and `shadcn/ui` with Tailwind CSS for styling. The backend is an Express.js server in TypeScript, providing a modular RESTful API with middleware for authentication, authorization, and validation. It handles service mapping, project creation, sophisticated scheduling with UTC normalization, and comprehensive audit trails. A nightly scheduler automates project generation. The backend storage layer employs 52 domain-focused modules using a facade pattern. Performance optimizations include batch operations and optimistic updates for stage changes, background prefetching, and state persistence for list view settings.
 
-### Backend Route Architecture
-Routes are organized into modular files in `server/routes/` covering core functionalities such as authentication, user management, client and people management, project and service management, document handling, communication tools, configuration, and administrative tasks.
-
-### Stage Change Optimization
-The stage change flow has been optimized to reduce database operations and achieve sub-300ms response times through batch operations, optimized validation, frontend optimistic updates, and caching.
-
-### Client Also Has Filter
-A dynamic filter allows users to filter projects based on whether the same client has other active projects of specified types, enabling prioritization of work for clients with multiple service needs.
-
-### List View Settings Persistence
-Ensures consistent display of columns, pagination, and sort settings in project management list views through defensive validation and state management.
-
-- **Per-View Column Preferences**: Saved views now store column visibility, order, and widths alongside filters. When loading a saved list view, the column preferences are restored automatically.
-- **Unique viewType Isolation**: The main projects list uses `viewType="projects-list"` to prevent column preference conflicts with other table components.
-- **Robust Validation**: Column preferences are validated to require the 'client' column and at least 3 visible columns. Invalid/corrupted preferences fallback to defaults.
-
-Key files: `client/src/components/task-list.tsx`, `client/src/hooks/projects-page/useViewManagement.ts`, `client/src/hooks/projects-page/useProjectsPageState.ts`
-
-### Background Prefetch Optimization
-Improves perceived performance by preloading data for secondary views during browser idle time using `requestIdleCallback`.
-
-### RingCentral VoIP Integration
-Full VoIP phone system integration enabling staff to make and receive calls directly from the CRM with automatic call logging and AI-powered transcription, including a three-tier fallback for transcription services (RingSense, RingCentral Speech-to-Text, OpenAI Whisper).
-
-### AI Magic Call/SMS Integration
-Provides natural language voice calling and SMS capabilities through an AI Magic assistant, allowing users to initiate communications using conversational commands with fuzzy contact matching and disambiguation.
-
-### Email Image Paste Feature
-Enables pasting and dragging images directly into email composition areas, with automatic upload to object storage and embedding via permanent URLs.
-
-### SMS Templates Feature (December 2025)
-Reusable SMS message templates with variable support for personalization. Admins create templates at `/sms-templates`; staff select them when composing SMS messages.
-
-- **Variable Support**: Three variables available:
-  - `{firstName}` - Recipient's first name (from person.firstName field)
-  - `{userFirstName}` - Sender's first name (from user profile)
-  - `{calendlyLink}` - Sender's Calendly booking link (from user profile)
-- **Auto-Substitution**: Variables replaced when template selected; updates when recipient changes
-- **Placeholder Alerts**: Contextual warnings for missing data (no recipient, incomplete user profile)
-- **Audit Trail**: Template ID captured when sending SMS for tracking
-
-Key files: `client/src/pages/sms-templates.tsx`, `client/src/components/SmsTemplatePicker.tsx`, `client/src/pages/client-detail/components/communications/dialogs/SMSDialog.tsx`
-
-### Shared Outlook Inbox Access (December 2025)
-System for accessing shared Outlook inboxes (like payroll@growth.accountants) and allowing managers to access staff inboxes via Microsoft Graph API application permissions.
-
-- **Global Inbox Registry**: Super admins manage a central registry of all available inboxes (both user-linked and shared mailboxes) at `/inbox-management`
-- **User Inbox Access**: Super admins grant users access to specific inboxes via the user-detail page. Users can only access inboxes explicitly granted to them
-- **Access Levels**: Three levels available - `read`, `write`, `full`
-- **Auto-Population**: When users log in, their personal inbox is automatically added to the registry if not already present
-- **My Inboxes**: Users can view their accessible inboxes via `/api/my-inboxes` endpoint
-
-Key files: `shared/schema/email/tables.ts`, `server/storage/integrations/emailStorage.ts`, `server/routes/emails.ts`, `client/src/pages/inbox-management.tsx`, `client/src/pages/user-detail.tsx`
-
-### Comms Workspace (December 2025)
-A dedicated workspace mode for email communications, accessible via toggle alongside Projects/Tasks in the main navigation.
-
-- **Feature Flag**: Controlled by `emailModuleActive` company setting (super admin toggle at `/company-settings`)
-- **Public Settings API**: `GET /api/company-settings` returns feature flags for all authenticated users
-- **Inbox Selector**: Users see only inboxes they've been granted access to
-- **2-Column Layout**: Left column for inbox list, right column for email view (top) and AI Assist (bottom)
-- **Email Fetching**: `GET /api/comms/inbox/:inboxId/messages` and `GET /api/comms/inbox/:inboxId/messages/:messageId` query Microsoft Graph API directly with access control and feature flag checks
-- **Multi-Select Inbox Assignment**: `POST /api/users/:userId/inbox-access/bulk` allows granting access to multiple inboxes at once with validation
-- **Person Matching**: Only emails from/to contacts matching CRM person records are displayed (planned)
-- **AI Assist Panel**: Context-aware briefing notes and suggested replies powered by OpenAI (planned)
-
-Key files: `client/src/components/comms/CommsWorkspace.tsx`, `client/src/components/projects-page/ProjectsContent.tsx`, `server/routes/emails.ts`, `server/routes/superAdmin.ts`
-
-### Tasks Filter Ownership Permission (December 2025)
-Tasks page filter button supports filtering by ownership with permission-based visibility, plus assignee filtering for granular control.
-
-- **Ownership Filter Options**: Three values:
-  - "My tasks / reminders" - Tasks assigned to the current user
-  - "Created by me - for others" - Tasks created by user but assigned to others (excludes self-assigned)
-  - "All (can see all tasks)" - View all tasks (requires permission)
-- **Assignee Filter**: 
-  - Only visible when ownership is "Created by me - for others" or "All"
-  - Hidden in "My tasks / reminders" mode (already filtered to current user)
-  - Auto-resets to "All Assignees" when switching to "assigned" mode
-  - Server-side filtering via `assigneeId` query parameter for efficiency
-- **canSeeAllTasks Permission**: Boolean field on users table; only users with this flag set to true can see and use the "All" filter option
-- **State Synchronization**: Uses `effectiveAssigneeFilter` derived value to prevent stale state from leaking into query keys when switching ownership modes
-
-Key files: `client/src/components/projects-page/ProjectsHeader.tsx`, `client/src/components/tasks/TasksWorkspace.tsx`, `client/src/hooks/projects-page/useProjectsPageState.ts`, `server/storage/tasks/internalTaskStorage.ts`, `server/routes/internalTasks.ts`
-
-### Bookkeeping Query Grouping (December 2025)
-Allows staff to group related transactions together (e.g., all queries for the same supplier/customer) to reduce client overwhelm and organize queries logically.
-
-- **Group Creation**: Select multiple queries in the Queries tab and click "Group Selected" to create a named group
-- **Group Naming**: Groups have a name and optional description for context
-- **Visual Indicators**: Grouped queries display a Badge with Folder icon and group name in both staff and client views
-- **Client Experience**: Client response page shows group badges so clients understand related transactions
-- **Group Management API**: Full CRUD at `/api/projects/:projectId/query-groups` with endpoints for adding/removing queries
-
-Key files: `shared/schema/queries/tables.ts`, `server/storage/queries/queryStorage.ts`, `server/routes/queries.ts`, `client/src/components/queries/QueriesTab.tsx`, `client/src/pages/query-response.tsx`
-
-### Pivot Table Views (December 2025)
-Drag-and-drop pivot table builder for dynamic project data analysis with 4 drop zones.
-
-- **Drop Zones**: Rows, Columns, Values (for field headers), and Filters (for individual values)
-- **Drag-and-Drop**: Uses @dnd-kit library for intuitive field placement
-- **Field Library**: Left panel shows 21 available fields; used fields are visually indicated
-- **Available Fields**: Client, Project Type, Status, Service Owner, Assigned To, Due Month, Target Month, Year, Quarter, Days to Target, Project Month, Is Archived, Service, Priority, Is Benched, Inactive, Completion Status, Bookkeeper, Client Manager, Created Month
-- **Aggregation**: Supports Count, Sum, Average, Max, Min aggregators for Values
-- **Filters**: Drag individual field values (e.g., "Draft", "Active") to Filters zone to filter data
-- **Saveable Views**: Pivots saved as project_views with viewMode="pivot" and pivotConfig storing rows, cols, vals, aggregatorName, valueFilter
-- **View Mega Menu**: Pivots column displayed alongside Lists, Kanbans, Calendars, Dashboards
-- **State Management**: pivotConfig properly clears when switching to non-pivot views or leaving projects workspace
-- **Layout**: Pivot table renders above the drop zones for immediate visibility of results
-
-Key files: `client/src/components/PivotBuilder.tsx`, `client/src/components/PivotTableView.tsx`, `client/src/hooks/projects-page/useViewManagement.ts`, `client/src/hooks/projects-page/useProjectsPageState.ts`, `shared/schema/users/tables.ts`
+### Feature Specifications
+The system includes advanced communication tools like RingCentral VoIP integration with AI transcription, AI Magic Call/SMS for natural language interactions, email image pasting, and a new SMS Templates feature with variable support. It supports shared Outlook inbox access via Microsoft Graph API with granular permissions and a dedicated Comms Workspace for email management. Project management features include a dynamic "Client Also Has" filter, Tasks filter ownership permissions, and Bookkeeping Query Grouping. For data analysis, a drag-and-drop Pivot Table builder is available.
 
 ### System Design
-PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) handles object storage with secure signed URLs. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control; the client portal uses passwordless email verification. The system is multi-tenant and designed for modularity, with extensive database indexing. Key features include automated project management, advanced communication tools (push notifications, internal tasks, email threading via Microsoft Graph, multi-channel client notifications with AI assistance, RingCentral VoIP with automatic transcription), UK eIDAS-compliant electronic signatures, comprehensive workflow and status management with Kanban views, and Bookkeeping Queries. It also includes an AI Audio Transcription service, client value notifications with AI-assisted drafting, Zapier integration via webhooks, and an enhanced data import system. A friendly error handling system replaces technical errors with user-friendly messages. A scheduled notifications calendar provides comprehensive management of automated notifications, with stage-aware suppression. A resilient project scheduling orchestrator ensures robustness against server restarts and outages.
+The application uses PostgreSQL (Neon) with Drizzle ORM for data persistence, employing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) manages object storage with secure signed URLs. Authentication for staff uses Replit Auth (OIDC) with session-based, role-based access control, while the client portal uses passwordless email verification. The multi-tenant system emphasizes modularity, extensive database indexing, and a resilient project scheduling orchestrator. Additional features include UK eIDAS-compliant electronic signatures, workflow and status management with Kanban views, AI Audio Transcription, AI-assisted client value notifications, Zapier integration, and an enhanced data import system. A user-friendly error handling system replaces technical errors.
 
 ## External Dependencies
 
 ### Third-Party Services
--   **Companies House API**: For UK company data integration.
--   **Microsoft Graph API**: For tenant-wide email and calendar access.
--   **RingCentral**: For VoIP phone system integration.
--   **SendGrid**: For transactional email delivery.
--   **VoodooSMS**: For client SMS delivery.
--   **Dialora.ai**: For AI-powered voice call reminders via webhook.
--   **OpenAI API**: Whisper for audio transcription, GPT-4o-mini for AI text processing, and function-calling for AI Magic Assistant.
--   **Replit Platform Services**: For object storage, authentication, and deployment.
+-   **Companies House API**: UK company data integration.
+-   **Microsoft Graph API**: Email and calendar access.
+-   **RingCentral**: VoIP phone system.
+-   **SendGrid**: Transactional email.
+-   **VoodooSMS**: Client SMS delivery.
+-   **Dialora.ai**: AI-powered voice call reminders.
+-   **OpenAI API**: Audio transcription (Whisper), AI text processing (GPT-4o-mini), and AI Magic Assistant.
+-   **Replit Platform Services**: Object storage, authentication, and deployment.
 
 ### Frontend Libraries
 -   **UI Components**: `@radix-ui/*`, `@dnd-kit/*`, `@tiptap/*`, `react-hook-form` with `zod`, `sonner`.
