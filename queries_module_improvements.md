@@ -94,6 +94,43 @@
 **Files Modified:**
 - `client/src/components/change-status/QueriesForm.tsx`
 
+### December 10, 2025 - Stage 4 Auto-Grouping Algorithm - COMPLETED ✅
+
+#### 4.1 Backend Auto-Group Endpoints - COMPLETED ✅
+- POST `/api/projects/:projectId/queries/auto-group/propose` - Analyzes ungrouped queries by prefix matching
+- POST `/api/projects/:projectId/queries/auto-group/apply` - Bulk creates groups from accepted proposals
+- Normalization: lowercase, special chars removed, whitespace normalized before prefix matching
+- Returns proposals with matchedPrefix, proposedName, queryIds, and query details
+
+#### 4.2 Prefix Length Selector UI - COMPLETED ✅
+- Dialog opens when "Auto-Group" button clicked
+- Number stepper with +/- buttons for prefix length (range: 3-20, default: 6)
+- "Find Groups" button triggers analysis
+
+#### 4.3 Auto-Group Review Dialog - COMPLETED ✅
+- Shows all proposals with:
+  - Per-group checkbox to include/exclude entire group
+  - Editable group name input
+  - Badge showing selected/total query count
+  - Expandable list of queries with individual checkboxes
+- Unique key generation: `${matchedPrefix}_${firstQueryId}` for stable React keys and state management
+- State synchronization between selectedProposals, proposalNames, and proposalQuerySelections
+
+#### 4.4 Bulk Group Creation - COMPLETED ✅
+- "Create Groups" button builds payload from live state
+- Only includes selected groups with their selected queries
+- Uses edited names if provided, otherwise proposed names
+- Cache invalidation for both queries and query-groups
+
+**Key Technical Decisions:**
+- Unique key derivation prevents state collision when multiple proposals share similar prefixes
+- Proposal state uses three separate maps for maximum flexibility in editing
+- Auto-Group button only visible when 2+ ungrouped queries exist
+
+**Files Modified:**
+- `server/routes/queries.ts` - Backend endpoints
+- `client/src/components/queries/QueriesTab.tsx` - Frontend UI and state management
+
 ---
 
 ## Executive Summary
