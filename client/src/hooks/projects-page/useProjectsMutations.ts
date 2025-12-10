@@ -9,12 +9,14 @@ interface SaveViewData {
   filters: string;
   viewMode: "list" | "kanban" | "calendar" | "pivot";
   calendarSettings?: CalendarSettings;
+  pivotConfig?: string;
 }
 
 interface UpdateViewData {
   id: string;
   filters: string;
   viewMode: "list" | "kanban" | "calendar" | "pivot";
+  pivotConfig?: string;
 }
 
 interface SaveDashboardData {

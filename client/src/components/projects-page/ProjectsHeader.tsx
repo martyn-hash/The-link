@@ -376,6 +376,7 @@ function DesktopToolbar({
             onLoadListView={handleLoadSavedView}
             onLoadKanbanView={handleLoadSavedView}
             onLoadCalendarView={handleLoadSavedView}
+            onLoadPivotView={handleLoadSavedView}
             onLoadDashboard={handleLoadDashboard}
             onSaveNewView={() => setSaveViewDialogOpen(true)}
             onUpdateCurrentView={handleUpdateCurrentView}
@@ -566,6 +567,7 @@ function MobileToolbar({
             onLoadListView={handleLoadSavedView}
             onLoadKanbanView={handleLoadSavedView}
             onLoadCalendarView={handleLoadSavedView}
+            onLoadPivotView={handleLoadSavedView}
             onLoadDashboard={handleLoadDashboard}
             onSaveNewView={() => setSaveViewDialogOpen(true)}
             onUpdateCurrentView={handleUpdateCurrentView}

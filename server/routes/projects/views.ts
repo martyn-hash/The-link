@@ -76,11 +76,12 @@ export function registerProjectViewsRoutes(
         return res.status(404).json({ message: "Project view not found or access denied" });
       }
 
-      const { name, filters, viewMode } = req.body;
+      const { name, filters, viewMode, pivotConfig } = req.body;
       const updates: any = {};
       if (name !== undefined) updates.name = name;
       if (filters !== undefined) updates.filters = filters;
       if (viewMode !== undefined) updates.viewMode = viewMode;
+      if (pivotConfig !== undefined) updates.pivotConfig = pivotConfig;
 
       const updatedView = await storage.updateProjectView(req.params.id, updates);
       res.json(updatedView);

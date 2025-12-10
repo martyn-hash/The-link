@@ -300,7 +300,9 @@ export function useProjectsPageState() {
     setListSortOrder,
     setItemsPerPage,
     setCurrentPage: filtering.setCurrentPage,
-  }), [dashboardManagement, filtering.setCurrentPage]);
+    // Pivot settings
+    setPivotConfig,
+  }), [dashboardManagement, filtering.setCurrentPage, setPivotConfig]);
 
   const viewManagement = useViewManagement(
     {
@@ -388,6 +390,7 @@ export function useProjectsPageState() {
       filters: JSON.stringify(filtersToSave),
       viewMode: viewMode === "dashboard" ? "list" : (viewMode === "pivot" ? "pivot" : viewMode),
       calendarSettings: viewMode === "calendar" ? calendarSettings : undefined,
+      pivotConfig: viewMode === "pivot" && pivotConfig ? JSON.stringify(pivotConfig) : undefined,
     });
   }, [
     newViewName,
@@ -406,6 +409,7 @@ export function useProjectsPageState() {
     listSortBy,
     listSortOrder,
     itemsPerPage,
+    pivotConfig,
     mutations.saveViewMutation,
     toast,
   ]);
@@ -460,6 +464,7 @@ export function useProjectsPageState() {
       id: currentSavedViewId,
       filters: JSON.stringify(filtersToSave),
       viewMode: viewMode === "dashboard" ? "list" : (viewMode === "pivot" ? "pivot" : viewMode),
+      pivotConfig: viewMode === "pivot" && pivotConfig ? JSON.stringify(pivotConfig) : undefined,
     });
   }, [
     currentSavedViewId,
@@ -479,6 +484,7 @@ export function useProjectsPageState() {
     listSortBy,
     listSortOrder,
     itemsPerPage,
+    pivotConfig,
     mutations.updateViewMutation,
   ]);
 

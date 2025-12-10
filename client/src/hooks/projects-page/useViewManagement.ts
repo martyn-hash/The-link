@@ -12,7 +12,8 @@ import type {
   ProjectFilters,
   DynamicDateFilter,
   ScheduleStatusFilter,
-  ServiceOption
+  ServiceOption,
+  PivotConfig
 } from "@/types/projects-page";
 
 interface UseViewManagementParams {
@@ -64,6 +65,8 @@ interface ViewManagementState {
   setListSortOrder: (value: "asc" | "desc") => void;
   setItemsPerPage: (value: number) => void;
   setCurrentPage: (value: number | ((prev: number) => number)) => void;
+  // Pivot settings
+  setPivotConfig: (config: PivotConfig | null) => void;
 }
 
 export function useViewManagement(
@@ -130,9 +133,11 @@ export function useViewManagement(
       if (view.viewMode === "kanban") {
         stateSetters.setViewMode("kanban");
         stateSetters.setCalendarSettings(undefined);
+        stateSetters.setPivotConfig(null);
       } else if (view.viewMode === "list") {
         stateSetters.setViewMode("list");
         stateSetters.setCalendarSettings(undefined);
+        stateSetters.setPivotConfig(null);
         // Always reset to first page when loading a list view to avoid stale pagination
         stateSetters.setCurrentPage(1);
         // Restore list view settings (sorting and pagination)
@@ -167,6 +172,7 @@ export function useViewManagement(
         }
       } else if (view.viewMode === "calendar") {
         stateSetters.setViewMode("calendar");
+        stateSetters.setPivotConfig(null);
         if (filters.calendarSettings) {
           stateSetters.setCalendarSettings({
             calendarViewType: filters.calendarSettings.calendarViewType || "month",
@@ -177,6 +183,20 @@ export function useViewManagement(
           });
         } else {
           stateSetters.setCalendarSettings(undefined);
+        }
+      } else if (view.viewMode === "pivot") {
+        stateSetters.setViewMode("pivot");
+        // Load pivotConfig if available
+        if (view.pivotConfig) {
+          try {
+            const parsedPivotConfig = typeof view.pivotConfig === 'string' 
+              ? JSON.parse(view.pivotConfig) 
+              : view.pivotConfig;
+            stateSetters.setPivotConfig(parsedPivotConfig);
+          } catch (error) {
+            console.warn("Failed to parse pivot config:", error);
+            stateSetters.setPivotConfig(null);
+          }
         }
       }
       

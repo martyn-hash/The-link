@@ -139,6 +139,9 @@ function DraggableFieldChip({
     opacity: isDragging ? 0.5 : 1,
   };
 
+  // Chips in zones (with onRemove) use lighter styling than library chips
+  const inZone = !!onRemove;
+  
   return (
     <div
       ref={setNodeRef}
@@ -147,16 +150,21 @@ function DraggableFieldChip({
       {...attributes}
       className={`
         inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium
-        ${isUsed ? "bg-primary/20 border-primary/40" : "bg-accent border-border"}
+        ${inZone 
+          ? "bg-primary/15 border-primary/30 text-foreground" 
+          : isUsed 
+            ? "bg-primary/10 border-primary/30" 
+            : "bg-muted border-border"
+        }
         border cursor-grab active:cursor-grabbing
-        hover:bg-accent/80 transition-colors select-none
+        hover:bg-primary/20 transition-colors select-none
         ${isDragging ? "shadow-lg ring-2 ring-primary" : ""}
       `}
       data-testid={`field-chip-${id}`}
     >
       <GripVertical className="h-3 w-3 text-muted-foreground" />
       <span>{label}</span>
-      {isUsed && <span className="text-xs text-primary">●</span>}
+      {isUsed && !inZone && <span className="text-xs text-primary">●</span>}
       {onRemove && (
         <button
           onClick={(e) => {
@@ -564,8 +572,14 @@ export default function PivotBuilder({
     return used;
   }, [layout.rows, layout.columns, layout.values]);
 
+  // Track the last applied config to detect changes from saved views
+  const [lastAppliedConfigJson, setLastAppliedConfigJson] = useState<string | null>(null);
+  
   useEffect(() => {
-    if (pivotConfig && !initialized) {
+    const currentConfigJson = pivotConfig ? JSON.stringify(pivotConfig) : null;
+    
+    // Apply config when it changes from outside (loading a saved view)
+    if (pivotConfig && currentConfigJson !== lastAppliedConfigJson) {
       setLayout({
         rows: pivotConfig.rows || [],
         columns: pivotConfig.cols || [],
@@ -573,11 +587,23 @@ export default function PivotBuilder({
         filters: pivotConfig.valueFilter || {},
         aggregatorName: pivotConfig.aggregatorName || "Count",
       });
+      setLastAppliedConfigJson(currentConfigJson);
+      setInitialized(true);
+    } else if (!pivotConfig && lastAppliedConfigJson !== null) {
+      // Reset to default when pivotConfig is cleared (switching away from saved pivot)
+      setLayout({
+        rows: [],
+        columns: [],
+        values: [],
+        filters: {},
+        aggregatorName: "Count",
+      });
+      setLastAppliedConfigJson(null);
       setInitialized(true);
     } else if (!initialized) {
       setInitialized(true);
     }
-  }, [pivotConfig, initialized]);
+  }, [pivotConfig, initialized, lastAppliedConfigJson]);
 
   const customCollisionDetection: CollisionDetection = useCallback((args) => {
     const intersections = rectIntersection(args);
@@ -898,7 +924,7 @@ export default function PivotBuilder({
 
         <DragOverlay>
           {activeId && (
-            <div className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary text-primary-foreground shadow-lg">
+            <div className="px-3 py-1.5 rounded-md text-sm font-medium bg-primary/20 border border-primary/40 text-foreground shadow-lg">
               {activeId.includes(":") ? activeId.split(":").pop() : activeId}
             </div>
           )}
