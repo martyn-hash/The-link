@@ -103,6 +103,17 @@ Tasks page filter button supports filtering by ownership with permission-based v
 
 Key files: `client/src/components/projects-page/ProjectsHeader.tsx`, `client/src/components/tasks/TasksWorkspace.tsx`, `client/src/hooks/projects-page/useProjectsPageState.ts`, `server/storage/tasks/internalTaskStorage.ts`, `server/routes/internalTasks.ts`
 
+### Bookkeeping Query Grouping (December 2025)
+Allows staff to group related transactions together (e.g., all queries for the same supplier/customer) to reduce client overwhelm and organize queries logically.
+
+- **Group Creation**: Select multiple queries in the Queries tab and click "Group Selected" to create a named group
+- **Group Naming**: Groups have a name and optional description for context
+- **Visual Indicators**: Grouped queries display a Badge with Folder icon and group name in both staff and client views
+- **Client Experience**: Client response page shows group badges so clients understand related transactions
+- **Group Management API**: Full CRUD at `/api/projects/:projectId/query-groups` with endpoints for adding/removing queries
+
+Key files: `shared/schema/queries/tables.ts`, `server/storage/queries/queryStorage.ts`, `server/routes/queries.ts`, `client/src/components/queries/QueriesTab.tsx`, `client/src/pages/query-response.tsx`
+
 ### Pivot Table Views (December 2025)
 Drag-and-drop pivot table builder for dynamic project data analysis with 4 drop zones.
 
