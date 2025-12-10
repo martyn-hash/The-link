@@ -2226,4 +2226,182 @@ ${tableHtml}
       res.status(500).json({ message: "Failed to remove queries from group" });
     }
   });
+
+  // ==================== AUTO-GROUPING ====================
+
+  // POST /api/projects/:projectId/queries/auto-group/propose - Analyze and propose auto-groupings
+  app.post("/api/projects/:projectId/queries/auto-group/propose", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramProjectIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ message: "Invalid parameters", errors: paramValidation.errors });
+      }
+
+      const bodySchema = z.object({
+        prefixLength: z.number().min(3).max(20).default(6),
+      });
+      const bodyResult = bodySchema.safeParse(req.body);
+      if (!bodyResult.success) {
+        return res.status(400).json({ message: "Invalid request body", errors: bodyResult.error.flatten().fieldErrors });
+      }
+
+      const { projectId } = req.params;
+      const { prefixLength } = bodyResult.data;
+
+      // Fetch all ungrouped queries for this project
+      const allQueries = await storage.getQueriesByProjectId(projectId);
+      const ungroupedQueries = allQueries.filter((q: { groupId?: string | null }) => !q.groupId);
+
+      if (ungroupedQueries.length === 0) {
+        return res.json({ proposals: [], ungroupableCount: 0 });
+      }
+
+      // Normalize description function
+      const normalizeDescription = (desc: string): string => {
+        return desc
+          .toLowerCase()
+          .replace(/[^a-z0-9\s]/g, '') // Remove special chars
+          .replace(/\s+/g, ' ')        // Normalize whitespace
+          .trim();
+      };
+
+      // Extract group name from prefix
+      const extractGroupName = (prefix: string): string => {
+        return prefix
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ')
+          .trim();
+      };
+
+      // Define query type for normalized queries
+      interface NormalizedQuery {
+        id: string;
+        description: string | null;
+        transactionDate: Date | string | null;
+        moneyIn: string | null;
+        moneyOut: string | null;
+        normalizedDesc: string;
+      }
+
+      // Map queries with normalized descriptions
+      const normalizedQueries: NormalizedQuery[] = ungroupedQueries.map((q: any) => ({
+        id: q.id,
+        description: q.description,
+        transactionDate: q.transactionDate,
+        moneyIn: q.moneyIn,
+        moneyOut: q.moneyOut,
+        normalizedDesc: normalizeDescription(q.description || "")
+      }));
+
+      // Group by prefix of specified length
+      const prefixGroups: Record<string, NormalizedQuery[]> = {};
+      
+      for (const query of normalizedQueries) {
+        if (!query.normalizedDesc || query.normalizedDesc.length < prefixLength) continue;
+        
+        const prefix = query.normalizedDesc.substring(0, prefixLength);
+        
+        if (!prefixGroups[prefix]) {
+          prefixGroups[prefix] = [];
+        }
+        prefixGroups[prefix].push(query);
+      }
+
+      // Filter to groups with at least 2 queries (meaningful groups)
+      const MIN_GROUP_SIZE = 2;
+      const validGroups: { prefix: string; queries: NormalizedQuery[] }[] = [];
+      
+      for (const prefix of Object.keys(prefixGroups)) {
+        const queries = prefixGroups[prefix];
+        if (queries.length >= MIN_GROUP_SIZE) {
+          validGroups.push({ prefix, queries });
+        }
+      }
+
+      // Sort by group size (largest first)
+      validGroups.sort((a, b) => b.queries.length - a.queries.length);
+
+      // Build proposals
+      const proposals = validGroups.map(group => ({
+        proposedName: extractGroupName(group.prefix),
+        matchedPrefix: group.prefix,
+        queryIds: group.queries.map((q: NormalizedQuery) => q.id),
+        queries: group.queries.map((q: NormalizedQuery) => ({
+          id: q.id,
+          description: q.description,
+          transactionDate: q.transactionDate,
+          moneyIn: q.moneyIn,
+          moneyOut: q.moneyOut,
+        })),
+      }));
+
+      // Count queries that couldn't be grouped
+      const groupedQueryIds = new Set(proposals.flatMap(p => p.queryIds));
+      const ungroupableCount = ungroupedQueries.length - groupedQueryIds.size;
+
+      res.json({ proposals, ungroupableCount });
+    } catch (error) {
+      console.error("Error generating auto-group proposals:", error);
+      res.status(500).json({ message: "Failed to generate auto-group proposals" });
+    }
+  });
+
+  // POST /api/projects/:projectId/queries/auto-group/apply - Create multiple groups from proposals
+  app.post("/api/projects/:projectId/queries/auto-group/apply", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramProjectIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ message: "Invalid parameters", errors: paramValidation.errors });
+      }
+
+      const bodySchema = z.object({
+        groups: z.array(z.object({
+          groupName: z.string().min(1),
+          description: z.string().optional(),
+          queryIds: z.array(z.string()).min(1),
+        })).min(1),
+      });
+      const bodyResult = bodySchema.safeParse(req.body);
+      if (!bodyResult.success) {
+        return res.status(400).json({ message: "Invalid request body", errors: bodyResult.error.flatten().fieldErrors });
+      }
+
+      const { projectId } = req.params;
+      const { groups } = bodyResult.data;
+      const userId = req.user?.effectiveUserId || req.user?.claims?.sub;
+
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const createdGroups = [];
+
+      for (const groupData of groups) {
+        // Create the group
+        const group = await storage.createQueryGroup({
+          projectId,
+          groupName: groupData.groupName,
+          description: groupData.description,
+          createdById: userId,
+        });
+
+        // Assign queries to the group
+        await storage.assignQueriesToGroup(groupData.queryIds, group.id);
+
+        // Fetch the full group with queries
+        const fullGroup = await storage.getQueryGroupById(group.id);
+        createdGroups.push(fullGroup);
+      }
+
+      res.status(201).json({ 
+        success: true, 
+        createdCount: createdGroups.length, 
+        groups: createdGroups 
+      });
+    } catch (error) {
+      console.error("Error applying auto-group proposals:", error);
+      res.status(500).json({ message: "Failed to apply auto-group proposals" });
+    }
+  });
 }

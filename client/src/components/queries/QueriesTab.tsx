@@ -86,6 +86,9 @@ import {
   FolderPlus,
   Folder,
   FolderMinus,
+  Wand2,
+  Minus,
+  ChevronUp,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -267,6 +270,21 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [groupDescription, setGroupDescription] = useState("");
+
+  // Auto-group state
+  const [isAutoGroupDialogOpen, setIsAutoGroupDialogOpen] = useState(false);
+  const [autoGroupPrefixLength, setAutoGroupPrefixLength] = useState(6);
+  const [isAutoGroupReviewOpen, setIsAutoGroupReviewOpen] = useState(false);
+  const [autoGroupProposals, setAutoGroupProposals] = useState<{
+    proposedName: string;
+    matchedPrefix: string;
+    queryIds: string[];
+    queries: { id: string; description: string | null; transactionDate: string | null; moneyIn: string | null; moneyOut: string | null }[];
+  }[]>([]);
+  const [selectedProposals, setSelectedProposals] = useState<Record<string, boolean>>({});
+  const [proposalNames, setProposalNames] = useState<Record<string, string>>({});
+  const [proposalQuerySelections, setProposalQuerySelections] = useState<Record<string, Set<string>>>({});
+  const [autoGroupUngroupableCount, setAutoGroupUngroupableCount] = useState(0);
 
   const { data: queries, isLoading } = useQuery<BookkeepingQueryWithRelations[]>({
     queryKey: ['/api/projects', projectId, 'queries'],
@@ -512,6 +530,120 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
       description: trimmedDescription,
       queryIds: selectedQueries,
     });
+  };
+
+  // Auto-group propose mutation
+  const autoGroupProposeMutation = useMutation({
+    mutationFn: async (prefixLength: number) => {
+      return apiRequest('POST', `/api/projects/${projectId}/queries/auto-group/propose`, { prefixLength });
+    },
+    onSuccess: (data: { proposals: typeof autoGroupProposals; ungroupableCount: number }) => {
+      setAutoGroupProposals(data.proposals);
+      setAutoGroupUngroupableCount(data.ungroupableCount);
+      
+      // Initialize selection state - all proposals selected by default, all queries within selected
+      // Use matchedPrefix + first queryId for guaranteed unique key
+      const initialSelections: Record<string, boolean> = {};
+      const initialNames: Record<string, string> = {};
+      const initialQuerySelections: Record<string, Set<string>> = {};
+      
+      data.proposals.forEach((proposal) => {
+        const key = `${proposal.matchedPrefix}_${proposal.queryIds[0]}`; // Unique key: prefix + first query ID
+        initialSelections[key] = true;
+        initialNames[key] = proposal.proposedName;
+        initialQuerySelections[key] = new Set(proposal.queryIds);
+      });
+      
+      setSelectedProposals(initialSelections);
+      setProposalNames(initialNames);
+      setProposalQuerySelections(initialQuerySelections);
+      
+      setIsAutoGroupDialogOpen(false);
+      setIsAutoGroupReviewOpen(true);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to analyze queries for grouping.", variant: "destructive" });
+    },
+  });
+
+  // Auto-group apply mutation
+  const autoGroupApplyMutation = useMutation({
+    mutationFn: async (groups: { groupName: string; description?: string; queryIds: string[] }[]) => {
+      return apiRequest('POST', `/api/projects/${projectId}/queries/auto-group/apply`, { groups });
+    },
+    onSuccess: (data: { createdCount: number }) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'query-groups'] });
+      setIsAutoGroupReviewOpen(false);
+      setAutoGroupProposals([]);
+      toast({ 
+        title: "Groups created", 
+        description: `Successfully created ${data.createdCount} group${data.createdCount !== 1 ? 's' : ''}.` 
+      });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to create groups.", variant: "destructive" });
+    },
+  });
+
+  // Calculate ungrouped query count
+  const ungroupedQueryCount = useMemo(() => {
+    return queries?.filter(q => !q.groupId).length || 0;
+  }, [queries]);
+
+  // Handle auto-group flow
+  const handleAutoGroupStart = () => {
+    setAutoGroupPrefixLength(6);
+    setIsAutoGroupDialogOpen(true);
+  };
+
+  const handleAutoGroupPropose = () => {
+    autoGroupProposeMutation.mutate(autoGroupPrefixLength);
+  };
+
+  const handleAutoGroupApply = () => {
+    const groupsToCreate: { groupName: string; description?: string; queryIds: string[] }[] = [];
+    
+    autoGroupProposals.forEach((proposal) => {
+      const key = `${proposal.matchedPrefix}_${proposal.queryIds[0]}`; // Unique key: prefix + first query ID
+      if (selectedProposals[key]) {
+        const selectedQueryIds = proposalQuerySelections[key];
+        if (selectedQueryIds && selectedQueryIds.size > 0) {
+          groupsToCreate.push({
+            groupName: proposalNames[key] || proposal.proposedName,
+            queryIds: Array.from(selectedQueryIds),
+          });
+        }
+      }
+    });
+
+    if (groupsToCreate.length === 0) {
+      toast({ title: "No groups selected", description: "Please select at least one group to create.", variant: "destructive" });
+      return;
+    }
+
+    autoGroupApplyMutation.mutate(groupsToCreate);
+  };
+
+  const toggleProposalSelection = (key: string) => {
+    setSelectedProposals(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const toggleQueryInProposal = (proposalKey: string, queryId: string) => {
+    setProposalQuerySelections(prev => {
+      const current = prev[proposalKey] || new Set();
+      const next = new Set(current);
+      if (next.has(queryId)) {
+        next.delete(queryId);
+      } else {
+        next.add(queryId);
+      }
+      return { ...prev, [proposalKey]: next };
+    });
+  };
+
+  const updateProposalName = (key: string, name: string) => {
+    setProposalNames(prev => ({ ...prev, [key]: name }));
   };
 
   // Inline VAT toggle mutation
@@ -1320,6 +1452,20 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                 Group Selected ({selectedQueries.length})
               </Button>
             </div>
+          )}
+          
+          {/* Auto-Group Button - shows when there are ungrouped queries */}
+          {ungroupedQueryCount >= 2 && (
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleAutoGroupStart}
+              disabled={autoGroupProposeMutation.isPending}
+              data-testid="button-auto-group"
+            >
+              <Wand2 className="w-4 h-4 mr-2" />
+              Auto-Group ({ungroupedQueryCount} ungrouped)
+            </Button>
           )}
         </div>
 
@@ -2460,6 +2606,203 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
               data-testid="button-create-group"
             >
               {createGroupMutation.isPending ? "Creating..." : "Create Group"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Auto-Group Prefix Length Dialog */}
+      <Dialog open={isAutoGroupDialogOpen} onOpenChange={setIsAutoGroupDialogOpen}>
+        <DialogContent className="sm:max-w-md" data-testid="dialog-auto-group-settings">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wand2 className="w-5 h-5" />
+              Auto-Group Settings
+            </DialogTitle>
+            <DialogDescription>
+              Choose how many characters at the start of transaction descriptions to match when grouping.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-6">
+            <label className="text-sm font-medium mb-3 block">
+              Match first characters:
+            </label>
+            <div className="flex items-center justify-center gap-4">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setAutoGroupPrefixLength(prev => Math.max(3, prev - 1))}
+                disabled={autoGroupPrefixLength <= 3}
+                data-testid="button-prefix-decrease"
+              >
+                <Minus className="w-4 h-4" />
+              </Button>
+              
+              <div className="w-20 text-center">
+                <span className="text-4xl font-bold" data-testid="text-prefix-length">
+                  {autoGroupPrefixLength}
+                </span>
+              </div>
+              
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => setAutoGroupPrefixLength(prev => Math.min(20, prev + 1))}
+                disabled={autoGroupPrefixLength >= 20}
+                data-testid="button-prefix-increase"
+              >
+                <ChevronUp className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            <p className="text-sm text-muted-foreground text-center mt-4">
+              Lower numbers create broader groups, higher numbers create more specific groups.
+            </p>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAutoGroupDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleAutoGroupPropose}
+              disabled={autoGroupProposeMutation.isPending}
+              data-testid="button-analyze-groups"
+            >
+              {autoGroupProposeMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                "Find Groups"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Auto-Group Review Dialog */}
+      <Dialog open={isAutoGroupReviewOpen} onOpenChange={setIsAutoGroupReviewOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-hidden flex flex-col" data-testid="dialog-auto-group-review">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wand2 className="w-5 h-5" />
+              Proposed Groupings
+            </DialogTitle>
+            <DialogDescription>
+              {autoGroupProposals.length > 0 ? (
+                <>Found {autoGroupProposals.length} potential group{autoGroupProposals.length !== 1 ? 's' : ''} 
+                {autoGroupUngroupableCount > 0 && ` (${autoGroupUngroupableCount} queries couldn't be grouped)`}</>
+              ) : (
+                "No groups could be created with the current settings."
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto py-4 space-y-4">
+            {autoGroupProposals.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Folder className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>No common patterns found.</p>
+                <p className="text-sm mt-2">Try adjusting the character match length.</p>
+              </div>
+            ) : (
+              autoGroupProposals.map((proposal, idx) => {
+                const key = `${proposal.matchedPrefix}_${proposal.queryIds[0]}`; // Unique key: prefix + first query ID
+                const isSelected = selectedProposals[key];
+                const selectedCount = proposalQuerySelections[key]?.size || 0;
+                
+                return (
+                  <div 
+                    key={key}
+                    className={cn(
+                      "border rounded-lg overflow-hidden transition-all",
+                      isSelected ? "border-primary bg-primary/5" : "border-muted opacity-60"
+                    )}
+                    data-testid={`proposal-group-${idx}`}
+                  >
+                    <div 
+                      className="p-3 flex items-center gap-3 cursor-pointer hover:bg-muted/50"
+                      onClick={() => toggleProposalSelection(key)}
+                    >
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleProposalSelection(key)}
+                        data-testid={`checkbox-proposal-${idx}`}
+                      />
+                      <div className="flex-1">
+                        <Input
+                          value={proposalNames[key] || proposal.proposedName}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            updateProposalName(key, e.target.value);
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className="font-medium"
+                          data-testid={`input-proposal-name-${idx}`}
+                        />
+                      </div>
+                      <Badge variant="secondary">
+                        {selectedCount} / {proposal.queries.length}
+                      </Badge>
+                    </div>
+                    
+                    {isSelected && (
+                      <div className="px-3 pb-3 space-y-1 max-h-48 overflow-y-auto bg-muted/30">
+                        {proposal.queries.map((query) => {
+                          const isQuerySelected = proposalQuerySelections[key]?.has(query.id);
+                          return (
+                            <div 
+                              key={query.id}
+                              className={cn(
+                                "flex items-center gap-2 p-2 rounded text-sm",
+                                isQuerySelected ? "bg-background" : "opacity-50"
+                              )}
+                            >
+                              <Checkbox
+                                checked={isQuerySelected}
+                                onCheckedChange={() => toggleQueryInProposal(key, query.id)}
+                                data-testid={`checkbox-query-${query.id}`}
+                              />
+                              <span className="flex-1 truncate">
+                                {query.description || "No description"}
+                              </span>
+                              {query.moneyIn && (
+                                <span className="text-green-600 font-medium">+£{query.moneyIn}</span>
+                              )}
+                              {query.moneyOut && (
+                                <span className="text-red-600 font-medium">-£{query.moneyOut}</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+          
+          <DialogFooter className="border-t pt-4">
+            <Button variant="outline" onClick={() => setIsAutoGroupReviewOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleAutoGroupApply}
+              disabled={autoGroupApplyMutation.isPending || !Object.values(selectedProposals).some(v => v)}
+              data-testid="button-create-selected-groups"
+            >
+              {autoGroupApplyMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                `Create ${Object.values(selectedProposals).filter(v => v).length} Group${Object.values(selectedProposals).filter(v => v).length !== 1 ? 's' : ''}`
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
