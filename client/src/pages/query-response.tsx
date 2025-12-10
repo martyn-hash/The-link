@@ -157,7 +157,6 @@ export default function QueryResponsePage() {
   const { token } = useParams<{ token: string }>();
   const { toast } = useToast();
   const [responses, setResponses] = useState<Record<string, QueryResponse>>({});
-  const [currentIndex, setCurrentIndex] = useState(0);
   const [isPulsing, setIsPulsing] = useState(false);
   const [filterMode, setFilterMode] = useState<'all' | 'unanswered'>('all');
   const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
@@ -264,12 +263,7 @@ export default function QueryResponsePage() {
     };
   }, []);
 
-  // Pulse animation when swiping between cards
-  useEffect(() => {
-    setIsPulsing(true);
-    const timer = setTimeout(() => setIsPulsing(false), 400);
-    return () => clearTimeout(timer);
-  }, [currentIndex]);
+  // Pulse animation when swiping between cards (triggered by currentItemId change)
 
   // Sanitize attachments to ensure they have all required fields
   const sanitizeAttachments = (attachments: QueryAttachment[] | null | undefined): QueryAttachment[] => {
@@ -318,16 +312,160 @@ export default function QueryResponsePage() {
     return !!(response?.clientResponse?.trim() || (response?.attachments && response.attachments.length > 0));
   }, [responses]);
 
+  // Simple approach: Track which item ID we're viewing, and keep it visible regardless of filter
+  const [currentItemId, setCurrentItemId] = useState<string | null>(null);
+  
+  // Check if there are any unanswered items
+  const hasUnansweredItems = useMemo(() => {
+    return allDisplayItems.some(item => !isItemAnswered(item));
+  }, [allDisplayItems, isItemAnswered]);
+  
   // Filter display items based on filter mode
+  // Include current item while editing, but show empty state when ALL items are answered
   const displayItems = useMemo(() => {
     if (filterMode === 'all') return allDisplayItems;
-    return allDisplayItems.filter(item => !isItemAnswered(item));
-  }, [allDisplayItems, filterMode, isItemAnswered]);
+    
+    // If all items are answered, return empty array to show "All queries answered" state
+    if (!hasUnansweredItems) return [];
+    
+    // In unanswered mode, show unanswered items + current item (to prevent disappearing while typing)
+    return allDisplayItems.filter(item => 
+      !isItemAnswered(item) || item.primaryQueryId === currentItemId
+    );
+  }, [allDisplayItems, filterMode, isItemAnswered, currentItemId, hasUnansweredItems]);
 
-  // Count of unanswered items
+  // Count of unanswered items (real-time for accurate display in filter buttons)
   const unansweredCount = useMemo(() => {
     return allDisplayItems.filter(item => !isItemAnswered(item)).length;
   }, [allDisplayItems, isItemAnswered]);
+  
+  // Find the current item's index in the display list
+  const currentIndex = useMemo(() => {
+    if (!currentItemId) return 0;
+    const idx = displayItems.findIndex(item => item.primaryQueryId === currentItemId);
+    return idx >= 0 ? idx : 0;
+  }, [displayItems, currentItemId]);
+  
+  // Pulse animation when navigating between cards
+  useEffect(() => {
+    setIsPulsing(true);
+    const timer = setTimeout(() => setIsPulsing(false), 400);
+    return () => clearTimeout(timer);
+  }, [currentItemId]);
+  
+  // Initialize currentItemId when data loads or filter changes
+  useEffect(() => {
+    if (displayItems.length > 0 && !currentItemId) {
+      setCurrentItemId(displayItems[0].primaryQueryId);
+    }
+  }, [displayItems, currentItemId]);
+  
+  // Track filter mode changes to intelligently update current item
+  const prevFilterModeRef = useRef(filterMode);
+  
+  useEffect(() => {
+    const prevMode = prevFilterModeRef.current;
+    prevFilterModeRef.current = filterMode;
+    
+    // Only update on actual filter change, not on every render
+    if (prevMode === filterMode) return;
+    
+    if (filterMode === 'all') {
+      // Switching to "all" mode - try to keep current position if item exists
+      if (currentItemId) {
+        const existsInAll = allDisplayItems.some(item => item.primaryQueryId === currentItemId);
+        if (existsInAll) return; // Keep current position
+      }
+      // Fall back to first item
+      if (allDisplayItems.length > 0) {
+        setCurrentItemId(allDisplayItems[0].primaryQueryId);
+      }
+    } else {
+      // Switching to "unanswered" mode
+      // If current item is unanswered, keep it
+      if (currentItemId) {
+        const currentItem = allDisplayItems.find(item => item.primaryQueryId === currentItemId);
+        if (currentItem && !isItemAnswered(currentItem)) return; // Keep current position
+      }
+      // Otherwise, find first unanswered
+      const firstUnanswered = allDisplayItems.find(item => !isItemAnswered(item));
+      if (firstUnanswered) {
+        setCurrentItemId(firstUnanswered.primaryQueryId);
+      } else {
+        // No unanswered items remain - set to null for empty state
+        setCurrentItemId(null);
+      }
+    }
+  }, [filterMode, allDisplayItems, currentItemId, isItemAnswered]);
+  
+  // Navigation helpers - navigate by finding next/prev unanswered item in sequence
+  const navigateNext = useCallback(() => {
+    // Guard: Don't navigate when in empty state
+    if (displayItems.length === 0) return;
+    
+    if (filterMode === 'unanswered') {
+      // Find current item's position in the full list
+      const currentAllIdx = allDisplayItems.findIndex(item => item.primaryQueryId === currentItemId);
+      if (currentAllIdx === -1) return; // Guard: current item not found
+      
+      // Look for the next unanswered item AFTER current position
+      for (let i = currentAllIdx + 1; i < allDisplayItems.length; i++) {
+        if (!isItemAnswered(allDisplayItems[i])) {
+          setCurrentItemId(allDisplayItems[i].primaryQueryId);
+          return;
+        }
+      }
+      
+      // No more unanswered items after current - wrap to find first unanswered before current
+      for (let i = 0; i < currentAllIdx; i++) {
+        if (!isItemAnswered(allDisplayItems[i])) {
+          setCurrentItemId(allDisplayItems[i].primaryQueryId);
+          return;
+        }
+      }
+      
+      // All items are answered - stay on current item
+    } else {
+      // In "all" mode, just move to next index
+      if (currentIndex < displayItems.length - 1) {
+        setCurrentItemId(displayItems[currentIndex + 1].primaryQueryId);
+      }
+    }
+  }, [allDisplayItems, displayItems, currentIndex, currentItemId, filterMode, isItemAnswered]);
+  
+  const navigatePrev = useCallback(() => {
+    // Guard: Don't navigate when in empty state
+    if (displayItems.length === 0) return;
+    
+    if (filterMode === 'unanswered') {
+      // Find current item's position in the full list
+      const currentAllIdx = allDisplayItems.findIndex(item => item.primaryQueryId === currentItemId);
+      if (currentAllIdx === -1) return; // Guard: current item not found
+      
+      // Look for the prev unanswered item BEFORE current position
+      for (let i = currentAllIdx - 1; i >= 0; i--) {
+        if (!isItemAnswered(allDisplayItems[i])) {
+          setCurrentItemId(allDisplayItems[i].primaryQueryId);
+          return;
+        }
+      }
+      
+      // No more unanswered items before current - wrap to find last unanswered after current
+      for (let i = allDisplayItems.length - 1; i > currentAllIdx; i--) {
+        if (!isItemAnswered(allDisplayItems[i])) {
+          setCurrentItemId(allDisplayItems[i].primaryQueryId);
+          return;
+        }
+      }
+      
+      // All items are answered - stay on current item
+    } else {
+      // In "all" mode, just move to prev index
+      if (currentIndex > 0) {
+        setCurrentItemId(displayItems[currentIndex - 1].primaryQueryId);
+      }
+    }
+  }, [allDisplayItems, displayItems, currentIndex, currentItemId, filterMode, isItemAnswered]);
 
   // Swipe handlers - now work with display items instead of individual queries
   const displayItemCount = displayItems.length;
@@ -339,12 +477,12 @@ export default function QueryResponsePage() {
   const swipeHandlers = useSwipeable({
     onSwipedLeft: () => {
       if (allowSwipeRef.current && currentIndex < displayItemCount - 1) {
-        setCurrentIndex(prev => prev + 1);
+        navigateNext();
       }
     },
     onSwipedRight: () => {
       if (allowSwipeRef.current && currentIndex > 0) {
-        setCurrentIndex(prev => prev - 1);
+        navigatePrev();
       }
     },
     onSwiping: (e) => {
@@ -488,9 +626,9 @@ export default function QueryResponsePage() {
   };
 
   const handleSubmit = () => {
-    // Check for unanswered display items and provide specific, friendly feedback
-    const unansweredItems: { index: number; name: string }[] = [];
-    displayItems.forEach((item, index) => {
+    // Check for unanswered display items - always check ALL items regardless of current filter
+    const unansweredItems: { index: number; name: string; item: DisplayItem }[] = [];
+    allDisplayItems.forEach((item, index) => {
       const primaryResponse = responses[item.primaryQueryId];
       const hasResponse = primaryResponse?.clientResponse?.trim();
       const hasAttachments = (primaryResponse?.attachments?.length ?? 0) > 0;
@@ -498,44 +636,60 @@ export default function QueryResponsePage() {
         const name = item.type === 'group' 
           ? item.groupName || 'Group'
           : item.queries[0]?.description || item.queries[0]?.ourQuery?.slice(0, 30) || 'Transaction';
-        unansweredItems.push({ index: index + 1, name });
+        unansweredItems.push({ index: index + 1, name, item });
       }
     });
 
     if (unansweredItems.length > 0) {
+      const firstUnansweredItem = unansweredItems[0].item;
       if (unansweredItems.length === 1) {
         const q = unansweredItems[0];
         toast({
           title: "Almost there! One more answer needed",
           description: `Please answer "${q.name}" before submitting.`,
         });
-        setCurrentIndex(q.index - 1);
+        setCurrentItemId(firstUnansweredItem.primaryQueryId);
+        setFilterMode('all'); // Switch to all mode to show the item
       } else if (unansweredItems.length <= 3) {
         toast({
           title: `${unansweredItems.length} more answers needed`,
           description: `Please answer all items before submitting.`,
         });
-        setCurrentIndex(unansweredItems[0].index - 1);
+        setCurrentItemId(firstUnansweredItem.primaryQueryId);
+        setFilterMode('all'); // Switch to all mode to show the item
       } else {
         toast({
           title: `${unansweredItems.length} more answers needed`,
           description: `Please answer all items before submitting.`,
         });
-        setCurrentIndex(unansweredItems[0].index - 1);
+        setCurrentItemId(firstUnansweredItem.primaryQueryId);
+        setFilterMode('all'); // Switch to all mode to show the item
       }
       return;
     }
 
-    // Build response array, copying group responses to all queries in the group
+    // Build response array from ALL items, copying group responses to all queries in the group
+    // Use responses object for group responses, but also check original query data for any responses
+    // that may not have been visited (pre-populated from server)
     const responseArray: QueryResponse[] = [];
-    for (const item of displayItems) {
+    for (const item of allDisplayItems) {
       const primaryResponse = responses[item.primaryQueryId];
       for (const query of item.queries) {
+        // Get the response from state if available, otherwise use empty defaults
+        const existingQueryResponse = responses[query.id];
+        const isPrimary = query.id === item.primaryQueryId;
+        
         responseArray.push({
           queryId: query.id,
-          clientResponse: primaryResponse?.clientResponse || '',
-          hasVat: primaryResponse?.hasVat ?? null,
-          attachments: query.id === item.primaryQueryId ? primaryResponse?.attachments : undefined,
+          // For non-primary queries in group, use primary response; otherwise use query's own response
+          clientResponse: isPrimary 
+            ? (primaryResponse?.clientResponse || existingQueryResponse?.clientResponse || '')
+            : (primaryResponse?.clientResponse || ''),
+          hasVat: isPrimary 
+            ? (primaryResponse?.hasVat ?? existingQueryResponse?.hasVat ?? null)
+            : (primaryResponse?.hasVat ?? null),
+          // Only include attachments for primary query
+          attachments: isPrimary ? (primaryResponse?.attachments || existingQueryResponse?.attachments || []) : undefined,
         });
       }
     }
@@ -984,7 +1138,7 @@ export default function QueryResponsePage() {
               size="sm"
               onClick={() => {
                 setFilterMode('all');
-                setCurrentIndex(0);
+                // Reset to first item will happen via useEffect on filterMode change
               }}
               className="h-8 text-xs"
               data-testid="button-filter-all"
@@ -996,7 +1150,7 @@ export default function QueryResponsePage() {
               size="sm"
               onClick={() => {
                 setFilterMode('unanswered');
-                setCurrentIndex(0);
+                // Reset to first item will happen via useEffect on filterMode change
               }}
               className="h-8 text-xs"
               data-testid="button-filter-unanswered"
@@ -1011,7 +1165,7 @@ export default function QueryResponsePage() {
               <div className="flex items-center justify-between gap-4">
                 <Button
                   variant="outline"
-                  onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
+                  onClick={navigatePrev}
                   disabled={currentIndex === 0}
                   className="h-12 px-6 text-base"
                   data-testid="button-previous"
@@ -1037,7 +1191,7 @@ export default function QueryResponsePage() {
                 
                 {currentIndex < displayItemCount - 1 ? (
                   <Button
-                    onClick={() => setCurrentIndex(prev => Math.min(displayItemCount - 1, prev + 1))}
+                    onClick={navigateNext}
                     className="h-12 px-6 text-base"
                     data-testid="button-next"
                   >
