@@ -373,50 +373,48 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
         </div>
         
         {canCancelAll && (
-          <div onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-destructive hover:text-destructive"
-                  data-testid="button-cancel-all-reminders"
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:text-destructive"
+                data-testid="button-cancel-all-reminders"
+              >
+                <XCircle className="h-4 w-4 mr-1" />
+                Cancel All Pending
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Cancel All Reminders?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will cancel all {pendingReminders.length} pending reminders for this query link.
+                  The client will no longer receive automated follow-ups.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Keep Reminders</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    if (tokenIds[0]) {
+                      cancelAllMutation.mutate(tokenIds[0]);
+                    } else {
+                      toast({
+                        title: 'Error',
+                        description: 'Unable to cancel reminders: token not found.',
+                        variant: 'destructive',
+                      });
+                    }
+                  }}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  disabled={cancelAllMutation.isPending}
                 >
-                  <XCircle className="h-4 w-4 mr-1" />
-                  Cancel All Pending
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Cancel All Reminders?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will cancel all {pendingReminders.length} pending reminders for this query link.
-                    The client will no longer receive automated follow-ups.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Keep Reminders</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => {
-                      if (tokenIds[0]) {
-                        cancelAllMutation.mutate(tokenIds[0]);
-                      } else {
-                        toast({
-                          title: 'Error',
-                          description: 'Unable to cancel reminders: token not found.',
-                          variant: 'destructive',
-                        });
-                      }
-                    }}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    disabled={cancelAllMutation.isPending}
-                  >
-                    {cancelAllMutation.isPending ? 'Cancelling...' : 'Cancel All'}
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
+                  {cancelAllMutation.isPending ? 'Cancelling...' : 'Cancel All'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         )}
       </div>
 
