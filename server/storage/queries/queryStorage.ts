@@ -500,7 +500,7 @@ export class QueryStorage extends BaseStorage {
       return [];
     }
 
-    // Find matching answer history entries
+    // Find matching answer history entries - SECURITY: filter by clientId to ensure tenant isolation
     const results = await db
       .select({
         history: queryAnswerHistory,
@@ -513,6 +513,7 @@ export class QueryStorage extends BaseStorage {
       .leftJoin(bookkeepingQueries, eq(queryAnswerHistory.sourceQueryId, bookkeepingQueries.id))
       .where(
         and(
+          eq(queryAnswerHistory.clientId, clientId),
           like(queryAnswerHistory.descriptionPrefix, `${descriptionPrefix}%`),
           ne(queryAnswerHistory.sourceQueryId, queryId)
         )
