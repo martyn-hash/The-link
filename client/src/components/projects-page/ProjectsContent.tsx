@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -12,7 +13,7 @@ import DashboardBuilder from "@/components/dashboard-builder";
 import KanbanBoard from "@/components/kanban-board";
 import TaskList from "@/components/task-list";
 import { CalendarView } from "@/components/calendar";
-import PivotTableView from "@/components/PivotTableView";
+const PivotTableView = lazy(() => import("@/components/PivotTableView"));
 import { TasksWorkspace, type OwnershipFilter } from "@/components/tasks/TasksWorkspace";
 import { CommsWorkspace } from "@/components/comms/CommsWorkspace";
 import type { ViewMode, WorkspaceMode, Dashboard, Widget, CalendarSettings, CustomDateRange, DynamicDateFilter, PivotConfig } from "@/types/projects-page";
@@ -280,11 +281,13 @@ function ViewContent({
 
   if (viewMode === "pivot") {
     return (
-      <PivotTableView
-        projects={filteredProjects}
-        pivotConfig={pivotConfig}
-        onPivotConfigChange={onPivotConfigChange}
-      />
+      <Suspense fallback={<LoadingState />}>
+        <PivotTableView
+          projects={filteredProjects}
+          pivotConfig={pivotConfig}
+          onPivotConfigChange={onPivotConfigChange}
+        />
+      </Suspense>
     );
   }
 
