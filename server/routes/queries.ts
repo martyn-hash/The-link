@@ -138,7 +138,7 @@ export function registerQueryRoutes(
 
   // POST /api/projects/:projectId/queries/notify-assignees - Notify project assignees about query status
   const notifyAssigneesSchema = z.object({
-    userIds: z.array(z.string().uuid()),
+    userIds: z.array(z.string().min(1)),
     message: z.string().min(1),
   });
 
