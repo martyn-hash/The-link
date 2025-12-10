@@ -12,27 +12,27 @@
 ### December 10, 2025 - Stage 1 Bug Fixes
 
 #### 1.1 Notify Button Fix - COMPLETED
-**Root Cause:** The Notify dialog was showing "No project assignees found" immediately when opened because there was no loading state. The data was still being fetched when the dialog rendered.
+**Root Cause:** The `/api/projects/:projectId/assignees` route was using `req.effectiveUser` directly, but the `resolveEffectiveUser` middleware sets the effective user on `req.user.effectiveUser`. This caused the route to fail silently (no user found) and return an empty array.
 
 **Fix Applied:**
-1. Added `isLoading: isLoadingAssignees` to the project assignees query (line 268)
-2. Added loading skeleton UI when `isLoadingAssignees` is true (lines 1999-2003)
-3. Added `data-testid` attributes for testing
+1. Changed `req.effectiveUser` to `req.user?.effectiveUser` in the assignees route
+2. Changed `req.effectiveUserId` to `req.user?.effectiveUserId` for consistency
+3. Added loading skeleton UI when data is still being fetched (in QueriesTab.tsx)
 
 **Files Modified:**
-- `client/src/components/queries/QueriesTab.tsx`
+- `server/routes/projects/assignees.ts` - Fixed middleware property access
+- `client/src/components/queries/QueriesTab.tsx` - Added loading state
 
 #### 1.2 Cancel All Pending Button Fix - COMPLETED
 **Root Cause:** Two issues identified:
 1. TokenIds could contain null/undefined values, causing the array filter to fail
-2. Nested AlertDialog inside the Kanban modal Dialog caused event propagation issues
+2. AlertDialog backdrop clicks were propagating to parent Kanban modal elements
 
 **Fix Applied:**
-1. Added proper type guard filter for tokenIds: `.filter((id): id is string => !!id)` (line 347)
-2. Added `canCancelAll` computed value that checks `tokenIds.length > 0` (line 349)
-3. Added `e.stopPropagation()` to prevent click events from bubbling up to parent modal
+1. Added proper type guard filter for tokenIds: `.filter((id): id is string => !!id)`
+2. Added `canCancelAll` computed value that checks `tokenIds.length > 0`
+3. Wrapped AlertDialog in a div with `onPointerDown` and `onClick` stopPropagation handlers
 4. Added proper null check before calling mutation
-5. Added loading state to the Cancel All button
 
 **Files Modified:**
 - `client/src/components/queries/ScheduledRemindersPanel.tsx`
