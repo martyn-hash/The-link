@@ -159,6 +159,7 @@ export default function QueryResponsePage() {
   const [responses, setResponses] = useState<Record<string, QueryResponse>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPulsing, setIsPulsing] = useState(false);
+  const [filterMode, setFilterMode] = useState<'all' | 'unanswered'>('all');
   const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState<Record<string, boolean>>({});
@@ -306,10 +307,27 @@ export default function QueryResponsePage() {
   }, [data]);
 
   // Group queries for display - groups become single display items
-  const displayItems = useMemo(() => {
+  const allDisplayItems = useMemo(() => {
     if (!data?.queries) return [];
     return groupQueriesForDisplay(data.queries);
   }, [data?.queries]);
+
+  // Helper to check if an item is answered (has text response OR attachments)
+  const isItemAnswered = useCallback((item: DisplayItem) => {
+    const response = responses[item.primaryQueryId];
+    return !!(response?.clientResponse?.trim() || (response?.attachments && response.attachments.length > 0));
+  }, [responses]);
+
+  // Filter display items based on filter mode
+  const displayItems = useMemo(() => {
+    if (filterMode === 'all') return allDisplayItems;
+    return allDisplayItems.filter(item => !isItemAnswered(item));
+  }, [allDisplayItems, filterMode, isItemAnswered]);
+
+  // Count of unanswered items
+  const unansweredCount = useMemo(() => {
+    return allDisplayItems.filter(item => !isItemAnswered(item)).length;
+  }, [allDisplayItems, isItemAnswered]);
 
   // Swipe handlers - now work with display items instead of individual queries
   const displayItemCount = displayItems.length;
@@ -733,13 +751,6 @@ export default function QueryResponsePage() {
               <CardContent className="pt-3 pb-3 px-3 space-y-3">
                 {currentDisplayItem.type === 'group' ? (
                   <>
-                    {/* Group header */}
-                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                      <p className="text-sm font-medium text-amber-800">
-                        Please provide one response for all {currentDisplayItem.queries.length} transactions below:
-                      </p>
-                    </div>
-                    
                     {/* List of transactions in the group */}
                     <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-2 bg-slate-50">
                       {currentDisplayItem.queries.map((query, idx) => (
@@ -961,51 +972,108 @@ export default function QueryResponsePage() {
       </main>
 
       {/* Footer navigation - simplified for mobile */}
-      {viewMode === 'cards' && currentDisplayItem && (
-        <footer className="shrink-0 bg-white border-t py-3 px-4 safe-area-pb">
-          <div className="max-w-4xl mx-auto">
-            <div className="flex items-center justify-between gap-4">
-              <Button
-                variant="outline"
-                onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
-                disabled={currentIndex === 0}
-                className="h-12 px-6 text-base"
-                data-testid="button-previous"
-              >
-                <ArrowLeft className="w-5 h-5 mr-2" />
-                Back
-              </Button>
-              
-              {/* Simple count display */}
-              <div className="flex flex-col items-center">
-                <span 
-                  className={cn(
-                    "text-lg font-semibold transition-all duration-300",
-                    isPulsing && "scale-125 text-primary"
-                  )}
-                >
-                  {currentIndex + 1} / {displayItemCount}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {answeredDisplayItemCount} answered
-                </span>
-              </div>
-              
-              {currentIndex < displayItemCount - 1 ? (
+      {viewMode === 'cards' && (
+        <footer className="shrink-0 bg-white border-t safe-area-pb">
+          {/* Filter toggle row */}
+          <div className="flex justify-center gap-2 py-2 px-4 border-b bg-slate-50">
+            <Button
+              variant={filterMode === 'all' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => {
+                setFilterMode('all');
+                setCurrentIndex(0);
+              }}
+              className="h-8 text-xs"
+              data-testid="button-filter-all"
+            >
+              Show All ({allDisplayItems.length})
+            </Button>
+            <Button
+              variant={filterMode === 'unanswered' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => {
+                setFilterMode('unanswered');
+                setCurrentIndex(0);
+              }}
+              className="h-8 text-xs"
+              data-testid="button-filter-unanswered"
+            >
+              Unanswered ({unansweredCount})
+            </Button>
+          </div>
+          
+          {/* Navigation row */}
+          {currentDisplayItem ? (
+            <div className="max-w-4xl mx-auto py-3 px-4">
+              <div className="flex items-center justify-between gap-4">
                 <Button
-                  onClick={() => setCurrentIndex(prev => Math.min(displayItemCount - 1, prev + 1))}
+                  variant="outline"
+                  onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
+                  disabled={currentIndex === 0}
                   className="h-12 px-6 text-base"
-                  data-testid="button-next"
+                  data-testid="button-previous"
                 >
-                  Next
-                  <ArrowRight className="w-5 h-5 ml-2" />
+                  <ArrowLeft className="w-5 h-5 mr-2" />
+                  Back
                 </Button>
-              ) : (
+                
+                {/* Simple count display */}
+                <div className="flex flex-col items-center">
+                  <span 
+                    className={cn(
+                      "text-lg font-semibold transition-all duration-300",
+                      isPulsing && "scale-125 text-primary"
+                    )}
+                  >
+                    {currentIndex + 1} / {displayItemCount}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {answeredDisplayItemCount} answered
+                  </span>
+                </div>
+                
+                {currentIndex < displayItemCount - 1 ? (
+                  <Button
+                    onClick={() => setCurrentIndex(prev => Math.min(displayItemCount - 1, prev + 1))}
+                    className="h-12 px-6 text-base"
+                    data-testid="button-next"
+                  >
+                    Next
+                    <ArrowRight className="w-5 h-5 ml-2" />
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={submitMutation.isPending}
+                    className="h-12 px-6 text-base bg-green-600 hover:bg-green-700"
+                    data-testid="button-submit"
+                  >
+                    {submitMutation.isPending ? (
+                      <>
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-5 h-5 mr-2" />
+                        Submit
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="max-w-4xl mx-auto py-4 px-4 text-center">
+              <p className="text-muted-foreground mb-3">
+                {filterMode === 'unanswered' ? 'All queries answered!' : 'No queries to display'}
+              </p>
+              {filterMode === 'unanswered' && (
                 <Button
                   onClick={handleSubmit}
                   disabled={submitMutation.isPending}
-                  className="h-12 px-6 text-base bg-green-600 hover:bg-green-700"
-                  data-testid="button-submit"
+                  className="bg-green-600 hover:bg-green-700"
+                  data-testid="button-submit-all-done"
                 >
                   {submitMutation.isPending ? (
                     <>
@@ -1015,13 +1083,13 @@ export default function QueryResponsePage() {
                   ) : (
                     <>
                       <Send className="w-5 h-5 mr-2" />
-                      Submit
+                      Submit All Responses
                     </>
                   )}
                 </Button>
               )}
             </div>
-          </div>
+          )}
         </footer>
       )}
 
@@ -1335,12 +1403,7 @@ function DisplayItemCard({
         <div className="px-4 pb-4 space-y-4 border-t">
           {isGroup && (
             <>
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mt-4">
-                <p className="text-sm font-medium text-amber-800">
-                  Please provide one response for all {item.queries.length} transactions below:
-                </p>
-              </div>
-              <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-2 bg-slate-50">
+              <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-2 bg-slate-50 mt-4">
                 {item.queries.map((query, idx) => (
                   <div key={query.id} className="flex items-center gap-3 p-2 bg-white rounded border text-sm">
                     <span className="text-xs text-muted-foreground w-5">{idx + 1}.</span>
