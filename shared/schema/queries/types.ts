@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { bookkeepingQueries, queryResponseTokens, scheduledQueryReminders, queryGroups } from './tables';
+import { bookkeepingQueries, queryResponseTokens, scheduledQueryReminders, queryGroups, queryAnswerHistory } from './tables';
 import {
   insertBookkeepingQuerySchema,
   updateBookkeepingQuerySchema,
@@ -58,3 +58,19 @@ export type ReminderChannel = 'email' | 'sms' | 'voice';
 
 // Reminder status type
 export type ReminderStatus = 'pending' | 'sent' | 'failed' | 'cancelled' | 'skipped';
+
+// Query Answer History types (for auto-suggest feature)
+export type QueryAnswerHistory = typeof queryAnswerHistory.$inferSelect;
+
+export type AnsweredByType = 'staff' | 'client';
+
+export interface QuerySuggestion {
+  id: string;
+  answerText: string;
+  answeredByType: AnsweredByType;
+  answeredAt: Date;
+  sourceQueryId: string;
+  sourceQueryDescription?: string;
+  matchScore: number;
+  isFromSameClient: boolean;
+}

@@ -1,7 +1,8 @@
 import { relations } from 'drizzle-orm';
-import { bookkeepingQueries, queryResponseTokens, scheduledQueryReminders, queryGroups } from './tables';
+import { bookkeepingQueries, queryResponseTokens, scheduledQueryReminders, queryGroups, queryAnswerHistory } from './tables';
 import { users } from '../users/tables';
 import { projects } from '../projects/tables';
+import { clients } from '../clients/tables';
 
 export const queryGroupsRelations = relations(queryGroups, ({ one, many }) => ({
   project: one(projects, {
@@ -68,5 +69,25 @@ export const scheduledQueryRemindersRelations = relations(scheduledQueryReminder
     fields: [scheduledQueryReminders.cancelledById],
     references: [users.id],
     relationName: "reminderCancelledBy",
+  }),
+}));
+
+export const queryAnswerHistoryRelations = relations(queryAnswerHistory, ({ one }) => ({
+  client: one(clients, {
+    fields: [queryAnswerHistory.clientId],
+    references: [clients.id],
+  }),
+  project: one(projects, {
+    fields: [queryAnswerHistory.projectId],
+    references: [projects.id],
+  }),
+  answeredBy: one(users, {
+    fields: [queryAnswerHistory.answeredById],
+    references: [users.id],
+    relationName: "answerHistoryAnsweredBy",
+  }),
+  sourceQuery: one(bookkeepingQueries, {
+    fields: [queryAnswerHistory.sourceQueryId],
+    references: [bookkeepingQueries.id],
   }),
 }));

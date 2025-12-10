@@ -2,6 +2,7 @@ import { pgTable, varchar, text, timestamp, boolean, index, decimal, integer, js
 import { sql } from 'drizzle-orm';
 import { users } from '../users/tables';
 import { projects } from '../projects/tables';
+import { clients } from '../clients/tables';
 import { queryStatusEnum } from '../enums';
 
 // Reminder channel enum (email, sms, voice)
@@ -9,6 +10,9 @@ export const reminderChannelEnum = pgEnum('reminder_channel', ['email', 'sms', '
 
 // Reminder status enum
 export const reminderStatusEnum = pgEnum('reminder_status', ['pending', 'sent', 'failed', 'cancelled', 'skipped']);
+
+// Answered by type enum (for suggestion history)
+export const answeredByTypeEnum = pgEnum('answered_by_type', ['staff', 'client']);
 
 export interface QueryAttachment {
   objectPath: string;
@@ -104,4 +108,23 @@ export const scheduledQueryReminders = pgTable("scheduled_query_reminders", {
   index("idx_scheduled_query_reminders_project_id").on(table.projectId),
   index("idx_scheduled_query_reminders_scheduled_at").on(table.scheduledAt),
   index("idx_scheduled_query_reminders_status").on(table.status),
+]);
+
+// Query answer history for auto-suggest feature
+export const queryAnswerHistory = pgTable("query_answer_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: "set null" }),
+  descriptionPrefix: varchar("description_prefix", { length: 100 }).notNull(),
+  moneyDirection: varchar("money_direction", { length: 10 }),
+  answerText: text("answer_text").notNull(),
+  answeredByType: answeredByTypeEnum("answered_by_type").notNull(),
+  answeredById: varchar("answered_by_id").references(() => users.id),
+  answeredAt: timestamp("answered_at").notNull(),
+  sourceQueryId: varchar("source_query_id").notNull().references(() => bookkeepingQueries.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_query_answer_history_client_prefix").on(table.clientId, table.descriptionPrefix),
+  index("idx_query_answer_history_prefix").on(table.descriptionPrefix),
+  index("idx_query_answer_history_source_query").on(table.sourceQueryId),
 ]);
