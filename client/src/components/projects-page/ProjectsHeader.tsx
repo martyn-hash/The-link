@@ -417,7 +417,7 @@ function DesktopToolbar({
             </>
           )}
           
-          {(viewMode === "list" || viewMode === "kanban" || viewMode === "calendar") && (
+          {(viewMode === "list" || viewMode === "kanban" || viewMode === "calendar" || viewMode === "pivot") && (
             <Button
               variant="outline"
               onClick={() => setFilterPanelOpen(true)}
@@ -574,7 +574,7 @@ function MobileToolbar({
             isMobileIconOnly={true}
           />
           
-          {(viewMode === "list" || viewMode === "kanban" || viewMode === "calendar") && (
+          {(viewMode === "list" || viewMode === "kanban" || viewMode === "calendar" || viewMode === "pivot") && (
             <Button
               variant="outline"
               onClick={() => setFilterPanelOpen(true)}

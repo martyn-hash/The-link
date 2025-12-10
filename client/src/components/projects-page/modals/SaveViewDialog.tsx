@@ -32,7 +32,7 @@ export function SaveViewDialog({
   onSave,
   isSaving,
 }: SaveViewDialogProps) {
-  const viewModeLabel = viewMode === "list" ? "List" : viewMode === "calendar" ? "Calendar" : viewMode === "kanban" ? "Kanban" : "Dashboard";
+  const viewModeLabel = viewMode === "list" ? "List" : viewMode === "calendar" ? "Calendar" : viewMode === "kanban" ? "Kanban" : viewMode === "pivot" ? "Pivot" : "Dashboard";
 
   const handleClose = (openState: boolean) => {
     if (!openState) {

@@ -91,6 +91,8 @@ function transformProjectsForPivot(
       );
     };
 
+    const createdDate = project.createdAt ? new Date(project.createdAt) : null;
+    
     return {
       Client: project.client?.name || "Unknown",
       "Project Type": project.projectType?.name || "Unknown",
@@ -110,6 +112,20 @@ function transformProjectsForPivot(
       "Days to Target": getDaysToTarget() ?? 0,
       "Project Month": project.projectMonth || "N/A",
       "Is Archived": project.archived ? "Yes" : "No",
+      Service: project.projectType?.service?.name || "No Service",
+      Priority: project.priority ? project.priority.charAt(0).toUpperCase() + project.priority.slice(1) : "Medium",
+      "Is Benched": project.isBenched ? "Yes" : "No",
+      Inactive: project.inactive ? "Yes" : "No",
+      "Completion Status": project.completionStatus || "In Progress",
+      Bookkeeper: project.bookkeeper
+        ? `${project.bookkeeper.firstName || ""} ${project.bookkeeper.lastName || ""}`.trim() ||
+          "Unassigned"
+        : "Unassigned",
+      "Client Manager": project.clientManager
+        ? `${project.clientManager.firstName || ""} ${project.clientManager.lastName || ""}`.trim() ||
+          "Unassigned"
+        : "Unassigned",
+      "Created Month": createdDate ? format(createdDate, "MMM yyyy") : "N/A",
       Count: 1,
     };
   });
@@ -818,42 +834,6 @@ export default function PivotBuilder({
           </div>
 
           <div className="col-span-9 space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <DropZone
-                id="rows"
-                label="Rows"
-                icon={Rows3}
-                items={layout.rows}
-                onRemoveItem={removeFromRows}
-                placeholder="Drop fields here for row grouping"
-              />
-              <DropZone
-                id="columns"
-                label="Columns"
-                icon={Columns3}
-                items={layout.columns}
-                onRemoveItem={removeFromColumns}
-                placeholder="Drop fields here for column headers"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <ValuesZone
-                items={layout.values}
-                onRemoveItem={removeFromValues}
-                aggregatorName={layout.aggregatorName}
-                onAggregatorChange={(value) =>
-                  setLayout((prev) => ({ ...prev, aggregatorName: value }))
-                }
-              />
-
-              <FilterZone
-                filters={layout.filters}
-                onRemoveFilter={removeFilter}
-                onRemoveFilterValue={removeFilterValue}
-              />
-            </div>
-
             {canShowPivot ? (
               <div
                 className="pivot-table-output border rounded-lg p-4 bg-card overflow-auto"
@@ -919,6 +899,42 @@ export default function PivotBuilder({
                 </p>
               </div>
             )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <DropZone
+                id="rows"
+                label="Rows"
+                icon={Rows3}
+                items={layout.rows}
+                onRemoveItem={removeFromRows}
+                placeholder="Drop fields here for row grouping"
+              />
+              <DropZone
+                id="columns"
+                label="Columns"
+                icon={Columns3}
+                items={layout.columns}
+                onRemoveItem={removeFromColumns}
+                placeholder="Drop fields here for column headers"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <ValuesZone
+                items={layout.values}
+                onRemoveItem={removeFromValues}
+                aggregatorName={layout.aggregatorName}
+                onAggregatorChange={(value) =>
+                  setLayout((prev) => ({ ...prev, aggregatorName: value }))
+                }
+              />
+
+              <FilterZone
+                filters={layout.filters}
+                onRemoveFilter={removeFilter}
+                onRemoveFilterValue={removeFilterValue}
+              />
+            </div>
           </div>
         </div>
 
