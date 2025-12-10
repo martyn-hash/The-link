@@ -120,11 +120,13 @@ function DraggableFieldChip({
   label,
   zone,
   onRemove,
+  isUsed,
 }: {
   id: string;
   label: string;
   zone?: string;
   onRemove?: () => void;
+  isUsed?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
@@ -145,7 +147,8 @@ function DraggableFieldChip({
       {...attributes}
       className={`
         inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium
-        bg-accent border border-border cursor-grab active:cursor-grabbing
+        ${isUsed ? "bg-primary/20 border-primary/40" : "bg-accent border-border"}
+        border cursor-grab active:cursor-grabbing
         hover:bg-accent/80 transition-colors select-none
         ${isDragging ? "shadow-lg ring-2 ring-primary" : ""}
       `}
@@ -153,6 +156,7 @@ function DraggableFieldChip({
     >
       <GripVertical className="h-3 w-3 text-muted-foreground" />
       <span>{label}</span>
+      {isUsed && <span className="text-xs text-primary">●</span>}
       {onRemove && (
         <button
           onClick={(e) => {
@@ -430,8 +434,6 @@ function FieldLibrary({
     });
   };
 
-  const availableFields = fields.filter((f) => !usedFields.has(f.id));
-
   return (
     <div
       className="bg-card border rounded-lg p-4"
@@ -441,12 +443,14 @@ function FieldLibrary({
         Available Fields
       </h3>
       <div className="space-y-2">
-        {availableFields.length === 0 ? (
+        {fields.length === 0 && (
           <p className="text-xs text-muted-foreground italic">
-            All fields are in use
+            No fields available
           </p>
-        ) : (
-          availableFields.map((field) => (
+        )}
+        {fields.map((field) => {
+          const isUsed = usedFields.has(field.id);
+          return (
             <Collapsible
               key={field.id}
               open={expandedFields.has(field.id)}
@@ -454,7 +458,7 @@ function FieldLibrary({
             >
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <DraggableFieldChip id={field.id} label={field.label} />
+                  <DraggableFieldChip id={field.id} label={field.label} isUsed={isUsed} />
                   {field.values.length > 0 && (
                     <CollapsibleTrigger asChild>
                       <Button
@@ -490,8 +494,8 @@ function FieldLibrary({
                 </CollapsibleContent>
               </div>
             </Collapsible>
-          ))
-        )}
+          );
+        })}
       </div>
     </div>
   );
@@ -861,7 +865,7 @@ export default function PivotBuilder({
                     font-weight: 600;
                     background: hsl(var(--muted)) !important;
                   }
-                  .pvtAxisContainer, .pvtVals, .pvtRenderers, .pvtOutput {
+                  .pvtAxisContainer, .pvtVals, .pvtRenderers {
                     display: none !important;
                   }
                   .pvtTable {
