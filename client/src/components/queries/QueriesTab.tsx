@@ -502,10 +502,14 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   };
 
   const handleCreateGroup = () => {
-    if (!groupName.trim() || selectedQueries.length === 0) return;
+    const trimmedName = groupName.trim();
+    const trimmedDescription = groupDescription.trim();
+    
+    if (!trimmedName || !trimmedDescription || selectedQueries.length === 0) return;
+    
     createGroupMutation.mutate({
-      groupName: groupName.trim(),
-      description: groupDescription.trim() || undefined,
+      groupName: trimmedName,
+      description: trimmedDescription,
       queryIds: selectedQueries,
     });
   };
@@ -2425,15 +2429,18 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
             
             <div className="space-y-2">
               <label htmlFor="groupDescription" className="text-sm font-medium">
-                Description <span className="text-muted-foreground">(optional)</span>
+                Client Question <span className="text-red-500">*</span>
               </label>
               <Input
                 id="groupDescription"
-                placeholder="Brief description of this group"
+                placeholder="What are these? And do they carry VAT?"
                 value={groupDescription}
                 onChange={(e) => setGroupDescription(e.target.value)}
                 data-testid="input-group-description"
               />
+              <p className="text-xs text-muted-foreground">
+                This is the question your client will see. Make it clear and friendly.
+              </p>
             </div>
 
             <div className="p-3 bg-muted rounded-lg">
@@ -2449,7 +2456,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
             </Button>
             <Button 
               onClick={handleCreateGroup}
-              disabled={!groupName.trim() || createGroupMutation.isPending}
+              disabled={!groupName.trim() || !groupDescription.trim() || createGroupMutation.isPending}
               data-testid="button-create-group"
             >
               {createGroupMutation.isPending ? "Creating..." : "Create Group"}

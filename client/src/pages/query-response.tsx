@@ -92,6 +92,13 @@ interface QueryResponse {
 
 type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error';
 
+const CARD_BACKGROUND_COLORS = [
+  'bg-blue-50/70',
+  'bg-green-50/70',
+  'bg-amber-50/70',
+  'bg-rose-50/70',
+];
+
 interface DisplayItem {
   type: 'single' | 'group';
   id: string;
@@ -151,6 +158,7 @@ export default function QueryResponsePage() {
   const { toast } = useToast();
   const [responses, setResponses] = useState<Record<string, QueryResponse>>({});
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isPulsing, setIsPulsing] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState<Record<string, boolean>>({});
@@ -254,6 +262,13 @@ export default function QueryResponsePage() {
       Object.values(saveTimeouts.current).forEach(clearTimeout);
     };
   }, []);
+
+  // Pulse animation when swiping between cards
+  useEffect(() => {
+    setIsPulsing(true);
+    const timer = setTimeout(() => setIsPulsing(false), 400);
+    return () => clearTimeout(timer);
+  }, [currentIndex]);
 
   // Sanitize attachments to ensure they have all required fields
   const sanitizeAttachments = (attachments: QueryAttachment[] | null | undefined): QueryAttachment[] => {
@@ -680,11 +695,23 @@ export default function QueryResponsePage() {
 
         {viewMode === 'cards' && currentDisplayItem ? (
           <div className="space-y-3" {...swipeHandlers}>
-            <Card className="overflow-hidden touch-pan-y" data-testid={`query-card-${currentDisplayItem.id}`}>
-              <CardHeader className="bg-slate-50 border-b py-2 px-3">
+            <Card 
+              className={cn(
+                "overflow-hidden touch-pan-y transition-colors duration-300",
+                CARD_BACKGROUND_COLORS[currentIndex % CARD_BACKGROUND_COLORS.length]
+              )} 
+              data-testid={`query-card-${currentDisplayItem.id}`}
+            >
+              <CardHeader className="border-b py-2 px-3 bg-white/50">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-xs">
+                    <Badge 
+                      variant="outline" 
+                      className={cn(
+                        "text-xs transition-all duration-300",
+                        isPulsing && "scale-125 bg-primary text-primary-foreground animate-pulse"
+                      )}
+                    >
                       {currentIndex + 1} of {displayItemCount}
                     </Badge>
                     {currentDisplayItem.type === 'group' && (
@@ -732,11 +759,13 @@ export default function QueryResponsePage() {
                       ))}
                     </div>
                     
-                    {/* Common query for the group */}
+                    {/* Common query for the group - use group description if available */}
                     <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                       <div className="flex items-start gap-2">
                         <HelpCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                        <p className="text-sm text-blue-700">{currentDisplayItem.queries[0]?.ourQuery}</p>
+                        <p className="text-sm text-blue-700">
+                          {currentDisplayItem.groupDescription?.trim() || currentDisplayItem.queries[0]?.ourQuery}
+                        </p>
                       </div>
                     </div>
                   </>
