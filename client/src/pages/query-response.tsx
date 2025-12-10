@@ -332,21 +332,37 @@ export default function QueryResponsePage() {
   // Swipe handlers - now work with display items instead of individual queries
   const displayItemCount = displayItems.length;
   const totalQueryCount = data?.queries?.length || 0;
+  
+  // Ref to track if we should allow swipe (disabled when inside input/textarea)
+  const allowSwipeRef = useRef(true);
+  
   const swipeHandlers = useSwipeable({
     onSwipedLeft: () => {
-      if (currentIndex < displayItemCount - 1) {
+      if (allowSwipeRef.current && currentIndex < displayItemCount - 1) {
         setCurrentIndex(prev => prev + 1);
       }
     },
     onSwipedRight: () => {
-      if (currentIndex > 0) {
+      if (allowSwipeRef.current && currentIndex > 0) {
         setCurrentIndex(prev => prev - 1);
       }
     },
-    preventScrollOnSwipe: true,
+    onSwiping: (e) => {
+      // Check if swiping started on an input element
+      const target = e.event.target as HTMLElement;
+      if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.closest('textarea, input')) {
+        allowSwipeRef.current = false;
+      }
+    },
+    onTouchStartOrOnMouseDown: (e) => {
+      // Reset swipe allowance on new touch/click
+      const target = e.event.target as HTMLElement;
+      allowSwipeRef.current = !(target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || target.closest('textarea, input'));
+    },
+    preventScrollOnSwipe: false, // Allow normal scroll behavior
     trackMouse: false,
     trackTouch: true,
-    delta: 50,
+    delta: 80, // Increase threshold to avoid accidental triggers
   });
 
   const updateResponse = (queryId: string, field: 'clientResponse' | 'hasVat', value: string | boolean | null) => {
@@ -783,36 +799,23 @@ export default function QueryResponsePage() {
                   </>
                 ) : (
                   <>
-                    {/* Single query display */}
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                      {currentDisplayItem.queries[0]?.date && (
-                        <div className="flex items-center gap-1.5">
-                          <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-                          <span className="font-medium">{formatDate(currentDisplayItem.queries[0].date)}</span>
+                    {/* Single query display - same layout as grouped for consistency */}
+                    <div className="space-y-2 border rounded-lg p-2 bg-slate-50">
+                      <div className="flex items-center gap-3 p-2 bg-white rounded border text-sm">
+                        <div className="flex-1 min-w-0">
+                          <p className="truncate">{currentDisplayItem.queries[0]?.description || 'Transaction'}</p>
+                          <div className="flex gap-3 text-xs text-muted-foreground">
+                            {currentDisplayItem.queries[0]?.date && (
+                              <span>{formatDate(currentDisplayItem.queries[0].date)}</span>
+                            )}
+                            {formatAmount(currentDisplayItem.queries[0]?.moneyIn ?? null, currentDisplayItem.queries[0]?.moneyOut ?? null) && (
+                              <span className={formatAmount(currentDisplayItem.queries[0]?.moneyIn ?? null, currentDisplayItem.queries[0]?.moneyOut ?? null)?.type === 'in' ? 'text-green-600' : 'text-red-600'}>
+                                {formatAmount(currentDisplayItem.queries[0]?.moneyIn ?? null, currentDisplayItem.queries[0]?.moneyOut ?? null)?.amount}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      )}
-                      {formatAmount(currentDisplayItem.queries[0]?.moneyIn ?? null, currentDisplayItem.queries[0]?.moneyOut ?? null) && (
-                        <div className="flex items-center gap-1.5">
-                          <PoundSterling className="w-3.5 h-3.5 text-muted-foreground" />
-                          <span className={cn(
-                            "font-medium",
-                            formatAmount(currentDisplayItem.queries[0]?.moneyIn ?? null, currentDisplayItem.queries[0]?.moneyOut ?? null)?.type === 'in' 
-                              ? "text-green-600" 
-                              : "text-red-600"
-                          )}>
-                            {formatAmount(currentDisplayItem.queries[0]?.moneyIn ?? null, currentDisplayItem.queries[0]?.moneyOut ?? null)?.amount}
-                            <span className="text-xs text-muted-foreground ml-1">
-                              ({formatAmount(currentDisplayItem.queries[0]?.moneyIn ?? null, currentDisplayItem.queries[0]?.moneyOut ?? null)?.type})
-                            </span>
-                          </span>
-                        </div>
-                      )}
-                      {currentDisplayItem.queries[0]?.description && (
-                        <div className="flex items-center gap-1.5 w-full">
-                          <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-muted-foreground truncate">{currentDisplayItem.queries[0].description}</span>
-                        </div>
-                      )}
+                      </div>
                     </div>
 
                     <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
