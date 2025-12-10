@@ -771,6 +771,71 @@ export function registerQueryRoutes(
       const borderColor = '#d0d7de';
       const cellStyle = `border:1px solid ${borderColor}; padding:8px; font-size:13px;`;
       const headerStyle = `border:1px solid ${borderColor}; padding:8px; font-weight:bold; font-size:13px; background-color:#f6f8fa;`;
+      const groupHeaderStyle = `border:1px solid ${borderColor}; padding:10px 8px; font-weight:bold; font-size:14px; background-color:#e0f2fe; color:#0369a1;`;
+      
+      // Organize queries by group
+      const groupedQueries = new Map<string | null, typeof queries>();
+      const groupNames = new Map<string | null, string>();
+      
+      for (const q of queries) {
+        const groupId = (q as any).group?.id || null;
+        const groupName = (q as any).group?.groupName || 'Ungrouped';
+        
+        if (!groupedQueries.has(groupId)) {
+          groupedQueries.set(groupId, []);
+          groupNames.set(groupId, groupName);
+        }
+        groupedQueries.get(groupId)!.push(q);
+      }
+      
+      // Check if we have any groups (excluding ungrouped)
+      const hasGroups = Array.from(groupedQueries.keys()).some(k => k !== null);
+      
+      // Generate table rows with group headers if groups exist
+      let rowIndex = 0;
+      const generateQueryRows = (queriesList: typeof queries) => {
+        return queriesList.map((q) => {
+          const row = `
+  <tr${rowIndex % 2 === 1 ? ' style="background-color:#f8fafc;"' : ''}>
+    <td align="left" style="${cellStyle} color:#475569;">${formatDate(q.date)}</td>
+    <td align="left" style="${cellStyle} color:#475569;">${q.description || ''}</td>
+    <td align="right" style="${cellStyle} color:#16a34a;">${q.moneyIn ? formatCurrency(q.moneyIn) : '-'}</td>
+    <td align="right" style="${cellStyle} color:#dc2626;">${q.moneyOut ? formatCurrency(q.moneyOut) : '-'}</td>
+    <td align="left" style="${cellStyle} color:#1e293b; font-weight:500;">${q.ourQuery || ''}</td>
+  </tr>`;
+          rowIndex++;
+          return row;
+        }).join('');
+      };
+      
+      let tableBody = '';
+      if (hasGroups) {
+        // Sort groups: named groups first (alphabetically), then ungrouped at the end
+        const sortedGroupIds = Array.from(groupedQueries.keys()).sort((a, b) => {
+          if (a === null) return 1;
+          if (b === null) return -1;
+          return (groupNames.get(a) || '').localeCompare(groupNames.get(b) || '');
+        });
+        
+        for (const groupId of sortedGroupIds) {
+          const groupQueries = groupedQueries.get(groupId)!;
+          const groupName = groupNames.get(groupId) || 'Ungrouped';
+          
+          // Add group header row
+          tableBody += `
+  <tr>
+    <td colspan="5" align="left" style="${groupHeaderStyle}">
+      📁 ${groupName} (${groupQueries.length} ${groupQueries.length === 1 ? 'query' : 'queries'})
+    </td>
+  </tr>`;
+          
+          // Add query rows for this group
+          tableBody += generateQueryRows(groupQueries);
+        }
+      } else {
+        // No groups, just render all queries
+        tableBody = generateQueryRows(queries);
+      }
       
       const queriesTableHtml = `
 <table border="1" cellpadding="0" cellspacing="0" bordercolor="${borderColor}" style="border-collapse:collapse; mso-table-lspace:0pt; mso-table-rspace:0pt; width:100%; font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin:16px 0; border:1px solid ${borderColor};">
@@ -781,15 +846,7 @@ export function registerQueryRoutes(
     <th align="right" style="${headerStyle} color:#dc2626;">Money Out</th>
     <th align="left" style="${headerStyle} color:#334155;">Our Query</th>
   </tr>
-  ${queries.map((q, i) => `
-  <tr${i % 2 === 1 ? ' style="background-color:#f8fafc;"' : ''}>
-    <td align="left" style="${cellStyle} color:#475569;">${formatDate(q.date)}</td>
-    <td align="left" style="${cellStyle} color:#475569;">${q.description || ''}</td>
-    <td align="right" style="${cellStyle} color:#16a34a;">${q.moneyIn ? formatCurrency(q.moneyIn) : '-'}</td>
-    <td align="right" style="${cellStyle} color:#dc2626;">${q.moneyOut ? formatCurrency(q.moneyOut) : '-'}</td>
-    <td align="left" style="${cellStyle} color:#1e293b; font-weight:500;">${q.ourQuery || ''}</td>
-  </tr>
-  `).join('')}
+  ${tableBody}
 </table>`;
 
       // Build the email content in separate parts for protected HTML handling

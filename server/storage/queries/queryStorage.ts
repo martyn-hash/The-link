@@ -40,14 +40,16 @@ export class QueryStorage extends BaseStorage {
     return queries;
   }
 
-  async getQueryById(id: string): Promise<BookkeepingQueryWithRelations | undefined> {
+  async getQueryById(id: string): Promise<(BookkeepingQueryWithRelations & { group?: QueryGroup }) | undefined> {
     const [query] = await db
       .select({
         query: bookkeepingQueries,
         createdBy: users,
+        group: queryGroups,
       })
       .from(bookkeepingQueries)
       .leftJoin(users, eq(bookkeepingQueries.createdById, users.id))
+      .leftJoin(queryGroups, eq(bookkeepingQueries.groupId, queryGroups.id))
       .where(eq(bookkeepingQueries.id, id));
 
     if (!query) return undefined;
@@ -55,6 +57,7 @@ export class QueryStorage extends BaseStorage {
     return {
       ...query.query,
       createdBy: query.createdBy || undefined,
+      group: query.group || undefined,
     };
   }
 

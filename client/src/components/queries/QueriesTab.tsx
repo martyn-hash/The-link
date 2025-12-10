@@ -185,6 +185,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState<string>("");
   const [amountFilter, setAmountFilter] = useState<"all" | "in" | "out">("all");
+  const [groupFilter, setGroupFilter] = useState<string>("all");
   const [activeSubTab, setActiveSubTab] = useState<"queries" | "reminders">("queries");
   
   // Debounce search term using useEffect with proper cleanup
@@ -800,6 +801,21 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     setIsEmailDialogOpen(false);
   };
 
+  // Get unique groups from queries for the filter dropdown
+  const uniqueGroups = useMemo(() => {
+    const groups: { id: string; name: string }[] = [];
+    const seenIds = new Set<string>();
+    
+    (queries || []).forEach(q => {
+      if (q.group && q.group.id && !seenIds.has(q.group.id)) {
+        seenIds.add(q.group.id);
+        groups.push({ id: q.group.id, name: q.group.groupName });
+      }
+    });
+    
+    return groups.sort((a, b) => a.name.localeCompare(b.name));
+  }, [queries]);
+
   const filteredQueries = useMemo(() => {
     let result = queries || [];
     
@@ -824,11 +840,18 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
       result = result.filter(q => q.moneyOut && parseFloat(q.moneyOut) > 0);
     }
     
+    // Group filter
+    if (groupFilter === "ungrouped") {
+      result = result.filter(q => !q.groupId);
+    } else if (groupFilter !== "all") {
+      result = result.filter(q => q.groupId === groupFilter);
+    }
+    
     return result;
-  }, [queries, filterStatus, debouncedSearchTerm, amountFilter]);
+  }, [queries, filterStatus, debouncedSearchTerm, amountFilter, groupFilter]);
   
   // Check if any filters are active
-  const hasActiveFilters = filterStatus !== "all" || debouncedSearchTerm.trim() !== "" || amountFilter !== "all";
+  const hasActiveFilters = filterStatus !== "all" || debouncedSearchTerm.trim() !== "" || amountFilter !== "all" || groupFilter !== "all";
   
   // Clear all filters
   const clearAllFilters = useCallback(() => {
@@ -836,6 +859,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     setSearchTerm("");
     setDebouncedSearchTerm("");
     setAmountFilter("all");
+    setGroupFilter("all");
   }, []);
 
   if (isLoading) {
@@ -1159,6 +1183,25 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                 </SelectItem>
               </SelectContent>
             </Select>
+            
+            {/* Group Filter */}
+            {uniqueGroups.length > 0 && (
+              <Select value={groupFilter} onValueChange={setGroupFilter}>
+                <SelectTrigger className="w-full sm:w-[160px]" data-testid="select-filter-group">
+                  <Folder className="w-4 h-4 mr-2 text-muted-foreground" />
+                  <SelectValue placeholder="Filter by group" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Groups</SelectItem>
+                  <SelectItem value="ungrouped">Ungrouped</SelectItem>
+                  {uniqueGroups.map(group => (
+                    <SelectItem key={group.id} value={group.id}>
+                      {group.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
             
             {/* Search Input */}
             <div className="relative flex-1 min-w-[200px]">
