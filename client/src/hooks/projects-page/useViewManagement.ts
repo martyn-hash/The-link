@@ -186,17 +186,23 @@ export function useViewManagement(
         }
       } else if (view.viewMode === "pivot") {
         stateSetters.setViewMode("pivot");
-        // Load pivotConfig if available
-        if (view.pivotConfig) {
+        // Load pivotConfig if available (check for non-empty string)
+        if (view.pivotConfig && typeof view.pivotConfig === 'string' && view.pivotConfig.trim() !== '') {
           try {
-            const parsedPivotConfig = typeof view.pivotConfig === 'string' 
-              ? JSON.parse(view.pivotConfig) 
-              : view.pivotConfig;
-            stateSetters.setPivotConfig(parsedPivotConfig);
+            const parsedPivotConfig = JSON.parse(view.pivotConfig);
+            // Validate that parsed config has actual content
+            if (parsedPivotConfig && (parsedPivotConfig.rows?.length || parsedPivotConfig.cols?.length || parsedPivotConfig.vals?.length)) {
+              stateSetters.setPivotConfig(parsedPivotConfig);
+            } else {
+              stateSetters.setPivotConfig(null);
+            }
           } catch (error) {
             console.warn("Failed to parse pivot config:", error);
             stateSetters.setPivotConfig(null);
           }
+        } else {
+          // Ensure pivot config is reset if saved view has no pivot config
+          stateSetters.setPivotConfig(null);
         }
       }
       
@@ -221,6 +227,7 @@ export function useViewManagement(
       stateSetters.setDashboardEditMode(false);
       stateSetters.setCurrentSavedViewId(null);
       stateSetters.setViewMode("dashboard");
+      stateSetters.setPivotConfig(null);
       stateSetters.setDashboardDescription(dashboard.description || "");
       stateSetters.setDashboardIsHomescreen(dashboard.isHomescreenDashboard || false);
       stateSetters.setDashboardVisibility(dashboard.visibility || "private");
@@ -291,6 +298,7 @@ export function useViewManagement(
     stateSetters.setServiceDueDateFilter("all");
     stateSetters.setClientHasProjectTypeIds([]);
     stateSetters.setCurrentSavedViewId(null);
+    stateSetters.setPivotConfig(null);
     stateSetters.setViewMode("list");
     
     setLocation('/?view=all');
@@ -304,6 +312,10 @@ export function useViewManagement(
   const handleManualViewModeChange = useCallback((mode: ViewMode) => {
     stateSetters.setCurrentSavedViewId(null);
     stateSetters.setViewMode(mode);
+    // Clear pivot config when manually switching away from pivot view
+    if (mode !== "pivot") {
+      stateSetters.setPivotConfig(null);
+    }
   }, [stateSetters]);
 
   useEffect(() => {

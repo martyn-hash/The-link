@@ -567,6 +567,15 @@ export function useProjectsPageState() {
     return view?.name || null;
   }, [currentSavedViewId, projectsData.savedViews]);
 
+  // Wrapper for workspace mode changes that clears pivot config when leaving projects
+  const handleWorkspaceModeChange = useCallback((mode: WorkspaceMode) => {
+    // Clear pivot config BEFORE setting workspace mode to prevent stale state from rendering
+    if (mode !== "projects") {
+      setPivotConfig(null);
+    }
+    setWorkspaceMode(mode);
+  }, []);
+
   return {
     user,
     authLoading,
@@ -577,7 +586,7 @@ export function useProjectsPageState() {
     isManagerOrAdmin,
 
     workspaceMode,
-    setWorkspaceMode,
+    setWorkspaceMode: handleWorkspaceModeChange,
     viewMode,
     setViewMode,
     mobileSearchOpen,

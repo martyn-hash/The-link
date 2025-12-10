@@ -176,6 +176,9 @@ export default function Projects() {
           listSortBy={state.listSortBy}
           listSortOrder={state.listSortOrder}
           onListSortChange={state.handleListSortChange}
+          pivotConfig={state.pivotConfig}
+          onPivotConfigChange={state.onPivotConfigChange}
+          currentSavedViewId={state.currentSavedViewId}
         />
       </main>
 

@@ -87,6 +87,7 @@ export interface ProjectsContentProps {
   // Pivot table settings
   pivotConfig?: PivotConfig | null;
   onPivotConfigChange?: (config: PivotConfig) => void;
+  currentSavedViewId?: string | null;
 }
 
 function LoadingState() {
@@ -225,6 +226,7 @@ interface ViewContentProps {
   // Pivot table settings
   pivotConfig?: PivotConfig | null;
   onPivotConfigChange?: (config: PivotConfig) => void;
+  currentSavedViewId?: string | null;
 }
 
 function ViewContent({
@@ -274,15 +276,20 @@ function ViewContent({
   onListSortChange,
   pivotConfig,
   onPivotConfigChange,
+  currentSavedViewId,
 }: ViewContentProps) {
   if (projectsLoading || (isManagerOrAdmin && usersLoading)) {
     return <LoadingState />;
   }
 
   if (viewMode === "pivot") {
+    // Use key to force remount when switching between saved views or returning to unsaved
+    // This ensures internal layout state resets properly
+    const pivotKey = `pivot-${currentSavedViewId || 'unsaved'}`;
     return (
       <Suspense fallback={<LoadingState />}>
         <PivotBuilder
+          key={pivotKey}
           projects={filteredProjects}
           pivotConfig={pivotConfig}
           onPivotConfigChange={onPivotConfigChange}
@@ -434,6 +441,7 @@ export function ProjectsContent({
   onListSortChange,
   pivotConfig,
   onPivotConfigChange,
+  currentSavedViewId,
 }: ProjectsContentProps) {
   const viewContentProps = {
     viewMode,
@@ -482,6 +490,7 @@ export function ProjectsContent({
     onListSortChange,
     pivotConfig,
     onPivotConfigChange,
+    currentSavedViewId,
   };
 
   if (workspaceMode === "tasks") {

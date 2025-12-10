@@ -590,7 +590,7 @@ export default function PivotBuilder({
       setLastAppliedConfigJson(currentConfigJson);
       setInitialized(true);
     } else if (!pivotConfig && lastAppliedConfigJson !== null) {
-      // Reset to default when pivotConfig is cleared (switching away from saved pivot)
+      // Reset to default when pivotConfig is cleared (e.g., switching away from saved pivot)
       setLayout({
         rows: [],
         columns: [],
