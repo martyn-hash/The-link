@@ -658,7 +658,7 @@ export default function QueryResponsePage() {
   const primaryQueryId = currentDisplayItem?.primaryQueryId;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex flex-col overflow-x-hidden">
       {/* Compact header */}
       <header className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-3 py-2">
@@ -694,12 +694,13 @@ export default function QueryResponsePage() {
         </div>
 
         {viewMode === 'cards' && currentDisplayItem ? (
-          <div className="space-y-3" {...swipeHandlers}>
+          <div className="space-y-3 overflow-x-hidden" {...swipeHandlers}>
             <Card 
               className={cn(
-                "overflow-hidden touch-pan-y transition-colors duration-300",
+                "overflow-hidden transition-colors duration-300",
                 CARD_BACKGROUND_COLORS[currentIndex % CARD_BACKGROUND_COLORS.length]
-              )} 
+              )}
+              style={{ touchAction: 'pan-y' }} 
               data-testid={`query-card-${currentDisplayItem.id}`}
             >
               <CardHeader className="border-b py-2 px-3 bg-white/50">
@@ -959,74 +960,62 @@ export default function QueryResponsePage() {
         )}
       </main>
 
-      {/* Sticky footer navigation with compact progress - cards view only */}
+      {/* Sticky footer navigation - simplified for mobile */}
       {viewMode === 'cards' && currentDisplayItem && (
-        <footer className="sticky bottom-0 bg-white border-t py-2 px-3 safe-area-pb">
+        <footer className="sticky bottom-0 bg-white border-t py-3 px-4 safe-area-pb">
           <div className="max-w-4xl mx-auto">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-4">
               <Button
                 variant="outline"
-                size="sm"
                 onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
                 disabled={currentIndex === 0}
-                className="h-9"
+                className="h-12 px-6 text-base"
                 data-testid="button-previous"
               >
-                <ArrowLeft className="w-4 h-4 mr-1" />
-                Previous
+                <ArrowLeft className="w-5 h-5 mr-2" />
+                Back
               </Button>
               
-              {/* Compact progress dots with count - now based on display items */}
-              <div className="flex items-center gap-1.5">
-                <div className="flex gap-1">
-                  {displayItems.map((item, idx) => (
-                    <button
-                      key={item.id}
-                      onClick={() => setCurrentIndex(idx)}
-                      className={cn(
-                        "w-2 h-2 rounded-full transition-colors",
-                        idx === currentIndex 
-                          ? "bg-primary" 
-                          : responses[item.primaryQueryId]?.clientResponse?.trim()
-                            ? "bg-green-500"
-                            : "bg-slate-300"
-                      )}
-                      data-testid={`dot-${idx}`}
-                    />
-                  ))}
-                </div>
-                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                  {answeredDisplayItemCount}/{displayItemCount}
+              {/* Simple count display */}
+              <div className="flex flex-col items-center">
+                <span 
+                  className={cn(
+                    "text-lg font-semibold transition-all duration-300",
+                    isPulsing && "scale-125 text-primary"
+                  )}
+                >
+                  {currentIndex + 1} / {displayItemCount}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {answeredDisplayItemCount} answered
                 </span>
               </div>
               
               {currentIndex < displayItemCount - 1 ? (
                 <Button
-                  size="sm"
                   onClick={() => setCurrentIndex(prev => Math.min(displayItemCount - 1, prev + 1))}
-                  className="h-9"
+                  className="h-12 px-6 text-base"
                   data-testid="button-next"
                 >
                   Next
-                  <ArrowRight className="w-4 h-4 ml-1" />
+                  <ArrowRight className="w-5 h-5 ml-2" />
                 </Button>
               ) : (
                 <Button
-                  size="sm"
                   onClick={handleSubmit}
                   disabled={submitMutation.isPending}
-                  className="h-9 bg-green-600 hover:bg-green-700"
+                  className="h-12 px-6 text-base bg-green-600 hover:bg-green-700"
                   data-testid="button-submit"
                 >
                   {submitMutation.isPending ? (
                     <>
-                      <Loader2 className="w-4 h-4 mr-1 animate-spin" />
-                      Submitting...
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      Sending...
                     </>
                   ) : (
                     <>
-                      <Send className="w-4 h-4 mr-1" />
-                      Submit All
+                      <Send className="w-5 h-5 mr-2" />
+                      Submit
                     </>
                   )}
                 </Button>
