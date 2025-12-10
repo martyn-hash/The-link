@@ -872,6 +872,7 @@ export default function PivotBuilder({
                   data={filteredPivotData}
                   rows={layout.rows}
                   cols={layout.columns}
+                  vals={layout.values}
                   aggregatorName={layout.aggregatorName}
                   rendererName="Table"
                   renderers={TableRenderers}
