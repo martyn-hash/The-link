@@ -95,7 +95,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import type { BookkeepingQueryWithRelations, User } from "@shared/schema";
+import type { BookkeepingQueryWithRelations, User, QuerySuggestion } from "@shared/schema";
 import { QueryBulkImport, type ParsedQuery } from "./QueryBulkImport";
 import { EmailDialog } from "@/pages/client-detail/components/communications/dialogs/EmailDialog";
 import { ScheduledRemindersPanel } from "./ScheduledRemindersPanel";
@@ -286,6 +286,10 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   const [proposalQuerySelections, setProposalQuerySelections] = useState<Record<string, Set<string>>>({});
   const [autoGroupUngroupableCount, setAutoGroupUngroupableCount] = useState(0);
 
+  // Auto-suggest answers state
+  const [suggestionQueryId, setSuggestionQueryId] = useState<string | null>(null);
+  const [isSuggestionPopoverOpen, setIsSuggestionPopoverOpen] = useState(false);
+
   const { data: queries, isLoading } = useQuery<BookkeepingQueryWithRelations[]>({
     queryKey: ['/api/projects', projectId, 'queries'],
   });
@@ -335,6 +339,14 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   }[]>({
     queryKey: ['/api/projects', projectId, 'queries', 'tokens'],
     enabled: showActiveTokens,
+  });
+
+  // Query for suggestions (only fetch when a query is selected for suggestions)
+  const { data: suggestionsData, isLoading: isLoadingSuggestions } = useQuery<{
+    suggestions: QuerySuggestion[];
+  }>({
+    queryKey: ['/api/queries', suggestionQueryId, 'suggestions'],
+    enabled: !!suggestionQueryId && isSuggestionPopoverOpen,
   });
 
   const extendTokenMutation = useMutation({
@@ -1607,6 +1619,17 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                               Respond
                             </DropdownMenuItem>
                             <DropdownMenuItem 
+                              onClick={() => {
+                                setSuggestionQueryId(query.id);
+                                setIsSuggestionPopoverOpen(true);
+                              }}
+                              disabled={!query.description || query.status === 'resolved'}
+                              data-testid={`button-suggest-${query.id}`}
+                            >
+                              <Wand2 className="w-4 h-4 mr-2" />
+                              Suggest Answer
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
                               onClick={() => handlePrepareEmail([query.id])}
                               disabled={query.status === 'sent_to_client' || query.status === 'resolved' || !clientId || pendingReminderCount > 0}
                             >
@@ -1720,6 +1743,16 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                         <DropdownMenuItem onClick={() => handleEditQuery(query)}>
                           <MessageSquare className="w-4 h-4 mr-2" />
                           Respond
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => {
+                            setSuggestionQueryId(query.id);
+                            setIsSuggestionPopoverOpen(true);
+                          }}
+                          disabled={!query.description || query.status === 'resolved'}
+                        >
+                          <Wand2 className="w-4 h-4 mr-2" />
+                          Suggest Answer
                         </DropdownMenuItem>
                         <DropdownMenuItem 
                           onClick={() => handlePrepareEmail([query.id])}
@@ -2803,6 +2836,108 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
               ) : (
                 `Create ${Object.values(selectedProposals).filter(v => v).length} Group${Object.values(selectedProposals).filter(v => v).length !== 1 ? 's' : ''}`
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Auto-Suggest Answers Dialog */}
+      <Dialog open={isSuggestionPopoverOpen} onOpenChange={(open) => {
+        setIsSuggestionPopoverOpen(open);
+        if (!open) setSuggestionQueryId(null);
+      }}>
+        <DialogContent className="max-w-lg" data-testid="dialog-suggestions">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wand2 className="w-5 h-5" />
+              Suggested Answers
+            </DialogTitle>
+            <DialogDescription>
+              Based on similar transactions that have been answered before
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+            {isLoadingSuggestions ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : !suggestionsData?.suggestions?.length ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Wand2 className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>No suggestions found</p>
+                <p className="text-sm mt-2">Similar transactions haven't been answered yet.</p>
+              </div>
+            ) : (
+              suggestionsData.suggestions.map((suggestion, idx) => (
+                <div 
+                  key={suggestion.id}
+                  className={cn(
+                    "border rounded-lg p-4 space-y-2 hover:border-primary/50 transition-colors",
+                    suggestion.isFromSameClient && "border-green-200 bg-green-50/50 dark:border-green-900 dark:bg-green-950/20"
+                  )}
+                  data-testid={`suggestion-card-${idx}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{suggestion.answerText}</p>
+                      {suggestion.sourceQueryDescription && (
+                        <p className="text-xs text-muted-foreground mt-1 truncate">
+                          From: "{suggestion.sourceQueryDescription}"
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <Badge variant={suggestion.isFromSameClient ? "default" : "secondary"} className="text-xs">
+                        {suggestion.isFromSameClient ? "Same Client" : "Other Client"}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>
+                      Answered by {suggestion.answeredByType === 'client' ? 'client' : 'staff'} • {format(new Date(suggestion.answeredAt), 'dd MMM yyyy')}
+                    </span>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (suggestionQueryId) {
+                          updateMutation.mutate({
+                            id: suggestionQueryId,
+                            clientResponse: suggestion.answerText,
+                            status: 'answered_by_staff',
+                          });
+                          setIsSuggestionPopoverOpen(false);
+                          setSuggestionQueryId(null);
+                          toast({
+                            title: "Suggestion applied",
+                            description: "The suggested answer has been applied to the query.",
+                          });
+                        }
+                      }}
+                      disabled={updateMutation.isPending}
+                      data-testid={`button-apply-suggestion-${idx}`}
+                    >
+                      {updateMutation.isPending ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        "Use This Answer"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setIsSuggestionPopoverOpen(false);
+                setSuggestionQueryId(null);
+              }}
+            >
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
