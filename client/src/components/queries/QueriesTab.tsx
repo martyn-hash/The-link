@@ -902,9 +902,9 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   }
 
   return (
-    <>
-      <Tabs value={activeSubTab} onValueChange={(v) => setActiveSubTab(v as "queries" | "reminders")} className="w-full">
-        <Card className="relative">
+    <div className="flex flex-col h-full overflow-hidden">
+      <Tabs value={activeSubTab} onValueChange={(v) => setActiveSubTab(v as "queries" | "reminders")} className="w-full flex flex-col flex-1 min-h-0">
+        <Card className="relative flex flex-col flex-1 min-h-0">
           <CardHeader className="pb-3">
             <div className="flex flex-col gap-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -1160,8 +1160,8 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
           )}
             
           {/* Queries Tab Content */}
-          <TabsContent value="queries" className="mt-0">
-            <CardContent className="pt-0">
+          <TabsContent value="queries" className="mt-0 flex-1 min-h-0 overflow-hidden">
+            <CardContent className="pt-0 h-full overflow-y-auto">
         {/* Filters and Bulk Actions */}
         <div className="flex flex-col gap-4 mb-4">
           <div className="flex flex-col sm:flex-row gap-3">
@@ -1714,8 +1714,8 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
               </TabsContent>
               
           {/* Scheduled Reminders Tab Content */}
-          <TabsContent value="reminders" className="mt-0">
-            <CardContent className="pt-0">
+          <TabsContent value="reminders" className="mt-0 flex-1 min-h-0 overflow-hidden">
+            <CardContent className="pt-0 h-full overflow-y-auto">
               <ScheduledRemindersPanel projectId={projectId} />
             </CardContent>
           </TabsContent>
@@ -2457,6 +2457,6 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 }
