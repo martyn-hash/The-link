@@ -559,6 +559,8 @@ export default function PivotBuilder({
       "Quarter",
       "Project Month",
       "Is Archived",
+      "Completion Status",
+      "Is Benched",
     ];
 
     fieldLabels.forEach((label) => {
