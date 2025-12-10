@@ -791,11 +791,12 @@ export function registerQueryRoutes(
       // Check if we have any groups (excluding ungrouped)
       const hasGroups = Array.from(groupedQueries.keys()).some(k => k !== null);
       
-      // Generate table rows with group headers if groups exist
+      // Generate table rows - groups get a single summary row, ungrouped get individual rows
       let rowIndex = 0;
-      const generateQueryRows = (queriesList: typeof queries) => {
-        return queriesList.map((q) => {
-          const row = `
+      
+      // Generate individual query rows (for ungrouped queries only)
+      const generateQueryRow = (q: typeof queries[0]) => {
+        const row = `
   <tr${rowIndex % 2 === 1 ? ' style="background-color:#f8fafc;"' : ''}>
     <td align="left" style="${cellStyle} color:#475569;">${formatDate(q.date)}</td>
     <td align="left" style="${cellStyle} color:#475569;">${q.description || ''}</td>
@@ -803,9 +804,33 @@ export function registerQueryRoutes(
     <td align="right" style="${cellStyle} color:#dc2626;">${q.moneyOut ? formatCurrency(q.moneyOut) : '-'}</td>
     <td align="left" style="${cellStyle} color:#1e293b; font-weight:500;">${q.ourQuery || ''}</td>
   </tr>`;
-          rowIndex++;
-          return row;
-        }).join('');
+        rowIndex++;
+        return row;
+      };
+      
+      // Generate a summary row for a group (1 row per group, not individual transactions)
+      const generateGroupSummaryRow = (groupName: string, groupQueries: typeof queries) => {
+        // Calculate total money in/out for the group
+        let totalIn = 0;
+        let totalOut = 0;
+        for (const q of groupQueries) {
+          if (q.moneyIn) totalIn += parseFloat(q.moneyIn) || 0;
+          if (q.moneyOut) totalOut += parseFloat(q.moneyOut) || 0;
+        }
+        
+        // Get first query to show the common query question
+        const firstQuery = groupQueries[0];
+        
+        const row = `
+  <tr${rowIndex % 2 === 1 ? ' style="background-color:#f8fafc;"' : ''}>
+    <td align="left" style="${cellStyle} color:#475569;">-</td>
+    <td align="left" style="${cellStyle} color:#0369a1; font-weight:600;">📁 ${groupQueries.length} transactions for ${groupName}</td>
+    <td align="right" style="${cellStyle} color:#16a34a;">${totalIn > 0 ? formatCurrency(String(totalIn)) : '-'}</td>
+    <td align="right" style="${cellStyle} color:#dc2626;">${totalOut > 0 ? formatCurrency(String(totalOut)) : '-'}</td>
+    <td align="left" style="${cellStyle} color:#1e293b; font-weight:500;">${firstQuery?.ourQuery || ''}</td>
+  </tr>`;
+        rowIndex++;
+        return row;
       };
       
       let tableBody = '';
@@ -821,20 +846,21 @@ export function registerQueryRoutes(
           const groupQueries = groupedQueries.get(groupId)!;
           const groupName = groupNames.get(groupId) || 'Ungrouped';
           
-          // Add group header row
-          tableBody += `
-  <tr>
-    <td colspan="5" align="left" style="${groupHeaderStyle}">
-      📁 ${groupName} (${groupQueries.length} ${groupQueries.length === 1 ? 'query' : 'queries'})
-    </td>
-  </tr>`;
-          
-          // Add query rows for this group
-          tableBody += generateQueryRows(groupQueries);
+          if (groupId !== null) {
+            // For grouped queries: show ONE summary row (not individual transactions)
+            tableBody += generateGroupSummaryRow(groupName, groupQueries);
+          } else {
+            // For ungrouped queries: show individual rows
+            for (const q of groupQueries) {
+              tableBody += generateQueryRow(q);
+            }
+          }
         }
       } else {
-        // No groups, just render all queries
-        tableBody = generateQueryRows(queries);
+        // No groups, just render all queries individually
+        for (const q of queries) {
+          tableBody += generateQueryRow(q);
+        }
       }
       
       const queriesTableHtml = `

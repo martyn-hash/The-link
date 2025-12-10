@@ -85,6 +85,7 @@ import {
   ArrowDownUp,
   FolderPlus,
   Folder,
+  FolderMinus,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -452,6 +453,24 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to create group.", variant: "destructive" });
+    },
+  });
+
+  // Remove query from group mutation
+  const removeFromGroupMutation = useMutation({
+    mutationFn: async ({ groupId, queryId }: { groupId: string; queryId: string }) => {
+      return apiRequest('DELETE', `/api/query-groups/${groupId}/queries`, { queryIds: [queryId] });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'query-groups'] });
+      toast({ 
+        title: "Removed from group", 
+        description: "Query has been removed from its group." 
+      });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to remove query from group.", variant: "destructive" });
     },
   });
 
@@ -1451,6 +1470,15 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                               <CheckCircle className="w-4 h-4 mr-2" />
                               Mark Resolved
                             </DropdownMenuItem>
+                            {query.group && (
+                              <DropdownMenuItem 
+                                onClick={() => removeFromGroupMutation.mutate({ groupId: query.group!.id, queryId: query.id })}
+                                disabled={removeFromGroupMutation.isPending}
+                              >
+                                <FolderMinus className="w-4 h-4 mr-2" />
+                                Remove from Group
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuItem 
                               onClick={() => deleteMutation.mutate(query.id)}
                               className="text-destructive"
@@ -1557,6 +1585,15 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                           <CheckCircle className="w-4 h-4 mr-2" />
                           Mark Resolved
                         </DropdownMenuItem>
+                        {query.group && (
+                          <DropdownMenuItem 
+                            onClick={() => removeFromGroupMutation.mutate({ groupId: query.group!.id, queryId: query.id })}
+                            disabled={removeFromGroupMutation.isPending}
+                          >
+                            <FolderMinus className="w-4 h-4 mr-2" />
+                            Remove from Group
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem 
                           onClick={() => deleteMutation.mutate(query.id)}
                           className="text-destructive"

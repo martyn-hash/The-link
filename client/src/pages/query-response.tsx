@@ -92,6 +92,60 @@ interface QueryResponse {
 
 type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error';
 
+interface DisplayItem {
+  type: 'single' | 'group';
+  id: string;
+  groupName?: string;
+  groupDescription?: string | null;
+  queries: Query[];
+  primaryQueryId: string;
+}
+
+function groupQueriesForDisplay(queries: Query[]): DisplayItem[] {
+  const groupedMap = new Map<string | null, Query[]>();
+  
+  for (const query of queries) {
+    const key = query.groupId;
+    if (!groupedMap.has(key)) {
+      groupedMap.set(key, []);
+    }
+    groupedMap.get(key)!.push(query);
+  }
+  
+  const displayItems: DisplayItem[] = [];
+  
+  const sortedKeys = Array.from(groupedMap.keys()).sort((a, b) => {
+    if (a === null) return 1;
+    if (b === null) return -1;
+    return 0;
+  });
+  
+  for (const key of sortedKeys) {
+    const groupQueries = groupedMap.get(key)!;
+    if (key === null) {
+      for (const query of groupQueries) {
+        displayItems.push({
+          type: 'single',
+          id: query.id,
+          queries: [query],
+          primaryQueryId: query.id,
+        });
+      }
+    } else {
+      displayItems.push({
+        type: 'group',
+        id: key,
+        groupName: groupQueries[0].group?.groupName || 'Group',
+        groupDescription: groupQueries[0].group?.description,
+        queries: groupQueries,
+        primaryQueryId: groupQueries[0].id,
+      });
+    }
+  }
+  
+  return displayItems;
+}
+
 export default function QueryResponsePage() {
   const { token } = useParams<{ token: string }>();
   const { toast } = useToast();
@@ -236,11 +290,18 @@ export default function QueryResponsePage() {
     }
   }, [data]);
 
-  // Swipe handlers - must be called before any early returns to satisfy React hooks rules
-  const totalCount = data?.queries?.length || 0;
+  // Group queries for display - groups become single display items
+  const displayItems = useMemo(() => {
+    if (!data?.queries) return [];
+    return groupQueriesForDisplay(data.queries);
+  }, [data?.queries]);
+
+  // Swipe handlers - now work with display items instead of individual queries
+  const displayItemCount = displayItems.length;
+  const totalQueryCount = data?.queries?.length || 0;
   const swipeHandlers = useSwipeable({
     onSwipedLeft: () => {
-      if (currentIndex < totalCount - 1) {
+      if (currentIndex < displayItemCount - 1) {
         setCurrentIndex(prev => prev + 1);
       }
     },
@@ -378,53 +439,68 @@ export default function QueryResponsePage() {
   };
 
   const handleSubmit = () => {
-    // Check for unanswered queries and provide specific, friendly feedback
-    const unansweredQueries: { index: number; description: string }[] = [];
-    data?.queries.forEach((query, index) => {
-      const response = responses[query.id];
-      const hasResponse = response?.clientResponse?.trim();
-      const hasAttachments = (response?.attachments?.length ?? 0) > 0;
+    // Check for unanswered display items and provide specific, friendly feedback
+    const unansweredItems: { index: number; name: string }[] = [];
+    displayItems.forEach((item, index) => {
+      const primaryResponse = responses[item.primaryQueryId];
+      const hasResponse = primaryResponse?.clientResponse?.trim();
+      const hasAttachments = (primaryResponse?.attachments?.length ?? 0) > 0;
       if (!hasResponse && !hasAttachments) {
-        unansweredQueries.push({
-          index: index + 1,
-          description: query.description || query.ourQuery?.slice(0, 30) || 'Transaction'
-        });
+        const name = item.type === 'group' 
+          ? item.groupName || 'Group'
+          : item.queries[0]?.description || item.queries[0]?.ourQuery?.slice(0, 30) || 'Transaction';
+        unansweredItems.push({ index: index + 1, name });
       }
     });
 
-    if (unansweredQueries.length > 0) {
-      if (unansweredQueries.length === 1) {
-        const q = unansweredQueries[0];
+    if (unansweredItems.length > 0) {
+      if (unansweredItems.length === 1) {
+        const q = unansweredItems[0];
         toast({
           title: "Almost there! One more answer needed",
-          description: `Please answer Query ${q.index} (${q.description}) before submitting.`,
+          description: `Please answer "${q.name}" before submitting.`,
         });
-        // Navigate to the unanswered query
         setCurrentIndex(q.index - 1);
-      } else if (unansweredQueries.length <= 3) {
-        const queryNumbers = unansweredQueries.map(q => q.index).join(', ');
+      } else if (unansweredItems.length <= 3) {
         toast({
-          title: `${unansweredQueries.length} more answers needed`,
-          description: `Please answer Queries ${queryNumbers} before submitting.`,
+          title: `${unansweredItems.length} more answers needed`,
+          description: `Please answer all items before submitting.`,
         });
-        // Navigate to the first unanswered query
-        setCurrentIndex(unansweredQueries[0].index - 1);
+        setCurrentIndex(unansweredItems[0].index - 1);
       } else {
         toast({
-          title: `${unansweredQueries.length} more answers needed`,
-          description: `Please answer all queries before submitting. Let's start with Query ${unansweredQueries[0].index}.`,
+          title: `${unansweredItems.length} more answers needed`,
+          description: `Please answer all items before submitting.`,
         });
-        setCurrentIndex(unansweredQueries[0].index - 1);
+        setCurrentIndex(unansweredItems[0].index - 1);
       }
       return;
     }
 
-    const responseArray = Object.values(responses);
+    // Build response array, copying group responses to all queries in the group
+    const responseArray: QueryResponse[] = [];
+    for (const item of displayItems) {
+      const primaryResponse = responses[item.primaryQueryId];
+      for (const query of item.queries) {
+        responseArray.push({
+          queryId: query.id,
+          clientResponse: primaryResponse?.clientResponse || '',
+          hasVat: primaryResponse?.hasVat ?? null,
+          attachments: query.id === item.primaryQueryId ? primaryResponse?.attachments : undefined,
+        });
+      }
+    }
     submitMutation.mutate(responseArray);
   };
 
   const answeredCount = Object.values(responses).filter(r => r.clientResponse?.trim()).length;
-  const progress = totalCount > 0 ? (answeredCount / totalCount) * 100 : 0;
+  const progress = totalQueryCount > 0 ? (answeredCount / totalQueryCount) * 100 : 0;
+  
+  // Count display items that have been answered (for groups, check if the primary query has a response)
+  const answeredDisplayItemCount = displayItems.filter(item => {
+    const primaryResponse = responses[item.primaryQueryId];
+    return primaryResponse?.clientResponse?.trim() || (primaryResponse?.attachments?.length ?? 0) > 0;
+  }).length;
 
   const formatDate = (date: string | null) => {
     if (!date) return null;
@@ -563,7 +639,8 @@ export default function QueryResponsePage() {
     );
   }
 
-  const currentQuery = data.queries[currentIndex];
+  const currentDisplayItem = displayItems[currentIndex];
+  const primaryQueryId = currentDisplayItem?.primaryQueryId;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex flex-col">
@@ -601,23 +678,23 @@ export default function QueryResponsePage() {
           </Button>
         </div>
 
-        {viewMode === 'cards' ? (
+        {viewMode === 'cards' && currentDisplayItem ? (
           <div className="space-y-3" {...swipeHandlers}>
-            <Card className="overflow-hidden touch-pan-y" data-testid={`query-card-${currentQuery.id}`}>
+            <Card className="overflow-hidden touch-pan-y" data-testid={`query-card-${currentDisplayItem.id}`}>
               <CardHeader className="bg-slate-50 border-b py-2 px-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className="text-xs">
-                      Query {currentIndex + 1} of {totalCount}
+                      {currentIndex + 1} of {displayItemCount}
                     </Badge>
-                    {currentQuery.group && (
+                    {currentDisplayItem.type === 'group' && (
                       <Badge variant="secondary" className="text-xs gap-1">
                         <Folder className="w-3 h-3" />
-                        {currentQuery.group.groupName}
+                        {currentDisplayItem.groupName} ({currentDisplayItem.queries.length})
                       </Badge>
                     )}
                   </div>
-                  {responses[currentQuery.id]?.clientResponse?.trim() && (
+                  {responses[primaryQueryId]?.clientResponse?.trim() && (
                     <Badge variant="default" className="bg-green-600 text-xs py-0">
                       <CheckCircle2 className="w-3 h-3 mr-1" />
                       Answered
@@ -626,43 +703,85 @@ export default function QueryResponsePage() {
                 </div>
               </CardHeader>
               <CardContent className="pt-3 pb-3 px-3 space-y-3">
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-                  {currentQuery.date && (
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="font-medium">{formatDate(currentQuery.date)}</span>
+                {currentDisplayItem.type === 'group' ? (
+                  <>
+                    {/* Group header */}
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                      <p className="text-sm font-medium text-amber-800">
+                        Please provide one response for all {currentDisplayItem.queries.length} transactions below:
+                      </p>
                     </div>
-                  )}
-                  {formatAmount(currentQuery.moneyIn, currentQuery.moneyOut) && (
-                    <div className="flex items-center gap-1.5">
-                      <PoundSterling className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className={cn(
-                        "font-medium",
-                        formatAmount(currentQuery.moneyIn, currentQuery.moneyOut)?.type === 'in' 
-                          ? "text-green-600" 
-                          : "text-red-600"
-                      )}>
-                        {formatAmount(currentQuery.moneyIn, currentQuery.moneyOut)?.amount}
-                        <span className="text-xs text-muted-foreground ml-1">
-                          ({formatAmount(currentQuery.moneyIn, currentQuery.moneyOut)?.type})
-                        </span>
-                      </span>
+                    
+                    {/* List of transactions in the group */}
+                    <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-2 bg-slate-50">
+                      {currentDisplayItem.queries.map((query, idx) => (
+                        <div key={query.id} className="flex items-center gap-3 p-2 bg-white rounded border text-sm">
+                          <span className="text-xs text-muted-foreground w-5">{idx + 1}.</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="truncate">{query.description || 'Transaction'}</p>
+                            <div className="flex gap-3 text-xs text-muted-foreground">
+                              {query.date && <span>{formatDate(query.date)}</span>}
+                              {formatAmount(query.moneyIn, query.moneyOut) && (
+                                <span className={formatAmount(query.moneyIn, query.moneyOut)?.type === 'in' ? 'text-green-600' : 'text-red-600'}>
+                                  {formatAmount(query.moneyIn, query.moneyOut)?.amount}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  )}
-                  {currentQuery.description && (
-                    <div className="flex items-center gap-1.5 w-full">
-                      <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                      <span className="text-muted-foreground truncate">{currentQuery.description}</span>
+                    
+                    {/* Common query for the group */}
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <HelpCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                        <p className="text-sm text-blue-700">{currentDisplayItem.queries[0]?.ourQuery}</p>
+                      </div>
                     </div>
-                  )}
-                </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Single query display */}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+                      {currentDisplayItem.queries[0]?.date && (
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="w-3.5 h-3.5 text-muted-foreground" />
+                          <span className="font-medium">{formatDate(currentDisplayItem.queries[0].date)}</span>
+                        </div>
+                      )}
+                      {formatAmount(currentDisplayItem.queries[0]?.moneyIn ?? null, currentDisplayItem.queries[0]?.moneyOut ?? null) && (
+                        <div className="flex items-center gap-1.5">
+                          <PoundSterling className="w-3.5 h-3.5 text-muted-foreground" />
+                          <span className={cn(
+                            "font-medium",
+                            formatAmount(currentDisplayItem.queries[0]?.moneyIn ?? null, currentDisplayItem.queries[0]?.moneyOut ?? null)?.type === 'in' 
+                              ? "text-green-600" 
+                              : "text-red-600"
+                          )}>
+                            {formatAmount(currentDisplayItem.queries[0]?.moneyIn ?? null, currentDisplayItem.queries[0]?.moneyOut ?? null)?.amount}
+                            <span className="text-xs text-muted-foreground ml-1">
+                              ({formatAmount(currentDisplayItem.queries[0]?.moneyIn ?? null, currentDisplayItem.queries[0]?.moneyOut ?? null)?.type})
+                            </span>
+                          </span>
+                        </div>
+                      )}
+                      {currentDisplayItem.queries[0]?.description && (
+                        <div className="flex items-center gap-1.5 w-full">
+                          <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                          <span className="text-muted-foreground truncate">{currentDisplayItem.queries[0].description}</span>
+                        </div>
+                      )}
+                    </div>
 
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-start gap-2">
-                    <HelpCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                    <p className="text-sm text-blue-700">{currentQuery.ourQuery}</p>
-                  </div>
-                </div>
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-start gap-2">
+                        <HelpCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                        <p className="text-sm text-blue-700">{currentDisplayItem.queries[0]?.ourQuery}</p>
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
@@ -670,23 +789,23 @@ export default function QueryResponsePage() {
                       <MessageSquare className="w-3.5 h-3.5" />
                       Your Response
                     </label>
-                    <SaveStatusIndicator queryId={currentQuery.id} />
+                    <SaveStatusIndicator queryId={primaryQueryId} />
                   </div>
                   <Textarea
-                    value={responses[currentQuery.id]?.clientResponse || ''}
-                    onChange={(e) => updateResponse(currentQuery.id, 'clientResponse', e.target.value)}
+                    value={responses[primaryQueryId]?.clientResponse || ''}
+                    onChange={(e) => updateResponse(primaryQueryId, 'clientResponse', e.target.value)}
                     placeholder="Type your answer here..."
                     className="min-h-[80px] resize-none text-sm"
-                    data-testid={`textarea-response-${currentQuery.id}`}
+                    data-testid={`textarea-response-${primaryQueryId}`}
                   />
                 </div>
 
                 <div className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded-lg">
                   <label className="text-sm font-medium">Includes VAT?</label>
                   <Switch
-                    checked={responses[currentQuery.id]?.hasVat || false}
-                    onCheckedChange={(checked) => updateResponse(currentQuery.id, 'hasVat', checked)}
-                    data-testid={`switch-vat-${currentQuery.id}`}
+                    checked={responses[primaryQueryId]?.hasVat || false}
+                    onCheckedChange={(checked) => updateResponse(primaryQueryId, 'hasVat', checked)}
+                    data-testid={`switch-vat-${primaryQueryId}`}
                   />
                 </div>
 
@@ -697,9 +816,9 @@ export default function QueryResponsePage() {
                     <span className="text-xs text-muted-foreground font-normal">(optional)</span>
                   </label>
                   
-                  {(responses[currentQuery.id]?.attachments?.length ?? 0) > 0 && (
+                  {(responses[primaryQueryId]?.attachments?.length ?? 0) > 0 && (
                     <div className="space-y-2 mb-3">
-                      {responses[currentQuery.id]?.attachments?.map((attachment) => (
+                      {responses[primaryQueryId]?.attachments?.map((attachment) => (
                         <div 
                           key={attachment.objectPath}
                           className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg border"
@@ -713,7 +832,7 @@ export default function QueryResponsePage() {
                             variant="ghost"
                             size="icon"
                             className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
-                            onClick={() => removeAttachment(currentQuery.id, attachment.objectPath)}
+                            onClick={() => removeAttachment(primaryQueryId, attachment.objectPath)}
                             data-testid={`button-remove-attachment-${attachment.objectPath}`}
                           >
                             <X className="w-4 h-4" />
@@ -731,20 +850,20 @@ export default function QueryResponsePage() {
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) {
-                          handleFileUpload(currentQuery.id, file);
+                          handleFileUpload(primaryQueryId, file);
                           e.target.value = '';
                         }
                       }}
-                      disabled={uploadingFiles[currentQuery.id]}
-                      data-testid={`input-file-${currentQuery.id}`}
+                      disabled={uploadingFiles[primaryQueryId]}
+                      data-testid={`input-file-${primaryQueryId}`}
                     />
                     <div className={cn(
                       "flex items-center justify-center gap-2 py-2 px-3 border-2 border-dashed rounded-lg transition-colors text-sm",
-                      uploadingFiles[currentQuery.id] 
+                      uploadingFiles[primaryQueryId] 
                         ? "bg-slate-100 border-slate-300 cursor-wait"
                         : "border-slate-300 hover:border-primary hover:bg-slate-50"
                     )}>
-                      {uploadingFiles[currentQuery.id] ? (
+                      {uploadingFiles[primaryQueryId] ? (
                         <>
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
                           <span className="text-muted-foreground">Uploading...</span>
@@ -767,19 +886,19 @@ export default function QueryResponsePage() {
             </Card>
           </div>
         ) : (
-          /* List view */
+          /* List view - now shows display items (groups as single items) */
           <div className="space-y-4">
-            {data.queries.map((query, index) => (
-              <QueryListItem
-                key={query.id}
-                query={query}
+            {displayItems.map((item, index) => (
+              <DisplayItemCard
+                key={item.id}
+                item={item}
                 index={index}
-                response={responses[query.id]}
+                responses={responses}
                 onUpdateResponse={updateResponse}
                 onFileUpload={handleFileUpload}
                 onRemoveAttachment={removeAttachment}
-                isUploading={uploadingFiles[query.id] || false}
-                saveStatus={saveStatus[query.id]}
+                uploadingFiles={uploadingFiles}
+                saveStatus={saveStatus}
                 formatDate={formatDate}
                 formatAmount={formatAmount}
                 formatFileSize={formatFileSize}
@@ -802,7 +921,7 @@ export default function QueryResponsePage() {
                 ) : (
                   <>
                     <Send className="w-5 h-5 mr-2" />
-                    Submit All Responses ({answeredCount}/{totalCount})
+                    Submit All Responses ({answeredDisplayItemCount}/{displayItemCount})
                   </>
                 )}
               </Button>
@@ -812,7 +931,7 @@ export default function QueryResponsePage() {
       </main>
 
       {/* Sticky footer navigation with compact progress - cards view only */}
-      {viewMode === 'cards' && (
+      {viewMode === 'cards' && currentDisplayItem && (
         <footer className="sticky bottom-0 bg-white border-t py-2 px-3 safe-area-pb">
           <div className="max-w-4xl mx-auto">
             <div className="flex items-center justify-between gap-2">
@@ -828,18 +947,18 @@ export default function QueryResponsePage() {
                 Previous
               </Button>
               
-              {/* Compact progress dots with count */}
+              {/* Compact progress dots with count - now based on display items */}
               <div className="flex items-center gap-1.5">
                 <div className="flex gap-1">
-                  {data.queries.map((_, idx) => (
+                  {displayItems.map((item, idx) => (
                     <button
-                      key={idx}
+                      key={item.id}
                       onClick={() => setCurrentIndex(idx)}
                       className={cn(
                         "w-2 h-2 rounded-full transition-colors",
                         idx === currentIndex 
                           ? "bg-primary" 
-                          : responses[data.queries[idx].id]?.clientResponse?.trim()
+                          : responses[item.primaryQueryId]?.clientResponse?.trim()
                             ? "bg-green-500"
                             : "bg-slate-300"
                       )}
@@ -848,14 +967,14 @@ export default function QueryResponsePage() {
                   ))}
                 </div>
                 <span className="text-xs text-muted-foreground whitespace-nowrap">
-                  {answeredCount}/{totalCount}
+                  {answeredDisplayItemCount}/{displayItemCount}
                 </span>
               </div>
               
-              {currentIndex < totalCount - 1 ? (
+              {currentIndex < displayItemCount - 1 ? (
                 <Button
                   size="sm"
-                  onClick={() => setCurrentIndex(prev => Math.min(totalCount - 1, prev + 1))}
+                  onClick={() => setCurrentIndex(prev => Math.min(displayItemCount - 1, prev + 1))}
                   className="h-9"
                   data-testid="button-next"
                 >
@@ -1090,6 +1209,247 @@ function QueryListItem({
                   : "border-slate-300 hover:border-primary hover:bg-slate-50"
               )}>
                 {isUploading ? (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <span className="text-muted-foreground">Uploading...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-3 h-3 text-muted-foreground" />
+                    <span className="text-muted-foreground">Upload file</span>
+                  </>
+                )}
+              </div>
+            </label>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+interface DisplayItemCardProps {
+  item: DisplayItem;
+  index: number;
+  responses: Record<string, QueryResponse>;
+  onUpdateResponse: (queryId: string, field: 'clientResponse' | 'hasVat', value: string | boolean | null) => void;
+  onFileUpload: (queryId: string, file: File) => void;
+  onRemoveAttachment: (queryId: string, objectPath: string) => void;
+  uploadingFiles: Record<string, boolean>;
+  saveStatus: Record<string, SaveStatus>;
+  formatDate: (date: string | null) => string | null;
+  formatAmount: (moneyIn: string | null, moneyOut: string | null) => { amount: string; type: 'in' | 'out' } | null;
+  formatFileSize: (bytes: number) => string;
+  getFileIcon: (fileType: string) => JSX.Element;
+}
+
+function DisplayItemCard({
+  item,
+  index,
+  responses,
+  onUpdateResponse,
+  onFileUpload,
+  onRemoveAttachment,
+  uploadingFiles,
+  saveStatus,
+  formatDate,
+  formatAmount,
+  formatFileSize,
+  getFileIcon,
+}: DisplayItemCardProps) {
+  const [isExpanded, setIsExpanded] = useState(true);
+  const primaryQueryId = item.primaryQueryId;
+  const response = responses[primaryQueryId];
+  const isAnswered = response?.clientResponse?.trim();
+  const isGroup = item.type === 'group';
+
+  return (
+    <Card 
+      className={cn(
+        "overflow-hidden transition-all",
+        isAnswered && "border-green-200 bg-green-50/30"
+      )}
+      data-testid={`display-item-${item.id}`}
+    >
+      <button
+        onClick={() => setIsExpanded(!isExpanded)}
+        className="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors"
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div className={cn(
+            "w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-medium",
+            isAnswered ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-600"
+          )}>
+            {isAnswered ? <CheckCircle2 className="w-4 h-4" /> : index + 1}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 mb-0.5">
+              {isGroup ? (
+                <>
+                  <Badge variant="secondary" className="text-xs gap-1">
+                    <Folder className="w-3 h-3" />
+                    {item.groupName}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    ({item.queries.length} transactions)
+                  </span>
+                </>
+              ) : (
+                <p className="font-medium truncate">{item.queries[0]?.description || 'Transaction Query'}</p>
+              )}
+            </div>
+            {!isGroup && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                {item.queries[0]?.date && <span>{formatDate(item.queries[0].date)}</span>}
+                {formatAmount(item.queries[0]?.moneyIn ?? null, item.queries[0]?.moneyOut ?? null) && (
+                  <span className={formatAmount(item.queries[0]?.moneyIn ?? null, item.queries[0]?.moneyOut ?? null)?.type === 'in' ? 'text-green-600' : 'text-red-600'}>
+                    {formatAmount(item.queries[0]?.moneyIn ?? null, item.queries[0]?.moneyOut ?? null)?.amount}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+        {isExpanded ? <ChevronUp className="w-5 h-5 text-muted-foreground" /> : <ChevronDown className="w-5 h-5 text-muted-foreground" />}
+      </button>
+      
+      {isExpanded && (
+        <div className="px-4 pb-4 space-y-4 border-t">
+          {isGroup && (
+            <>
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mt-4">
+                <p className="text-sm font-medium text-amber-800">
+                  Please provide one response for all {item.queries.length} transactions below:
+                </p>
+              </div>
+              <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-2 bg-slate-50">
+                {item.queries.map((query, idx) => (
+                  <div key={query.id} className="flex items-center gap-3 p-2 bg-white rounded border text-sm">
+                    <span className="text-xs text-muted-foreground w-5">{idx + 1}.</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate">{query.description || 'Transaction'}</p>
+                      <div className="flex gap-3 text-xs text-muted-foreground">
+                        {query.date && <span>{formatDate(query.date)}</span>}
+                        {formatAmount(query.moneyIn, query.moneyOut) && (
+                          <span className={formatAmount(query.moneyIn, query.moneyOut)?.type === 'in' ? 'text-green-600' : 'text-red-600'}>
+                            {formatAmount(query.moneyIn, query.moneyOut)?.amount}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg mt-4">
+            <div className="flex items-start gap-2">
+              <HelpCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+              <p className="text-sm text-blue-700">{item.queries[0]?.ourQuery}</p>
+            </div>
+          </div>
+          
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-sm font-medium">Your Response</label>
+              {saveStatus[primaryQueryId] && (
+                <div className="flex items-center gap-1.5 text-xs">
+                  {saveStatus[primaryQueryId] === 'saving' && (
+                    <span className="flex items-center gap-1 text-muted-foreground animate-pulse">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Saving...
+                    </span>
+                  )}
+                  {saveStatus[primaryQueryId] === 'saved' && (
+                    <span className="flex items-center gap-1 text-green-600">
+                      <Cloud className="w-3 h-3" />
+                      Saved
+                    </span>
+                  )}
+                  {saveStatus[primaryQueryId] === 'unsaved' && (
+                    <span className="flex items-center gap-1 text-amber-600">
+                      <CloudOff className="w-3 h-3" />
+                      Unsaved
+                    </span>
+                  )}
+                  {saveStatus[primaryQueryId] === 'error' && (
+                    <span className="flex items-center gap-1 text-red-600">
+                      <AlertCircle className="w-3 h-3" />
+                      Save failed
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+            <Textarea
+              value={response?.clientResponse || ''}
+              onChange={(e) => onUpdateResponse(primaryQueryId, 'clientResponse', e.target.value)}
+              placeholder="Type your answer here..."
+              className="min-h-[80px] text-sm"
+              data-testid={`textarea-list-response-${primaryQueryId}`}
+            />
+          </div>
+          
+          <div className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded-lg">
+            <label className="text-sm font-medium">Includes VAT?</label>
+            <Switch
+              checked={response?.hasVat || false}
+              onCheckedChange={(checked) => onUpdateResponse(primaryQueryId, 'hasVat', checked)}
+              data-testid={`switch-list-vat-${primaryQueryId}`}
+            />
+          </div>
+
+          <div className="border-t pt-3">
+            <label className="text-sm font-medium flex items-center gap-2 mb-2">
+              <Paperclip className="w-3 h-3" />
+              Attachments
+            </label>
+            
+            {(response?.attachments?.length ?? 0) > 0 && (
+              <div className="space-y-1 mb-2">
+                {response?.attachments?.map((attachment) => (
+                  <div 
+                    key={attachment.objectPath}
+                    className="flex items-center gap-2 p-2 bg-slate-50 rounded border text-sm"
+                  >
+                    {getFileIcon(attachment.fileType)}
+                    <span className="flex-1 truncate">{attachment.fileName}</span>
+                    <span className="text-xs text-muted-foreground">{formatFileSize(attachment.fileSize)}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 text-red-500 hover:text-red-600"
+                      onClick={() => onRemoveAttachment(primaryQueryId, attachment.objectPath)}
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <label className="cursor-pointer block">
+              <input
+                type="file"
+                className="hidden"
+                accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    onFileUpload(primaryQueryId, file);
+                    e.target.value = '';
+                  }
+                }}
+                disabled={uploadingFiles[primaryQueryId]}
+              />
+              <div className={cn(
+                "flex items-center justify-center gap-2 p-2 border border-dashed rounded text-sm transition-colors",
+                uploadingFiles[primaryQueryId] 
+                  ? "bg-slate-100 border-slate-300 cursor-wait"
+                  : "border-slate-300 hover:border-primary hover:bg-slate-50"
+              )}>
+                {uploadingFiles[primaryQueryId] ? (
                   <>
                     <Loader2 className="w-3 h-3 animate-spin" />
                     <span className="text-muted-foreground">Uploading...</span>
