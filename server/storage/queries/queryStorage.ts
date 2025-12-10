@@ -4,13 +4,17 @@ import {
   users,
   projects,
   queryGroups,
+  queryAnswerHistory,
 } from '@shared/schema';
-import { eq, and, desc, inArray, sql } from 'drizzle-orm';
+import { eq, and, desc, inArray, sql, like, or, ne } from 'drizzle-orm';
 import type {
   BookkeepingQuery,
   InsertBookkeepingQuery,
   UpdateBookkeepingQuery,
   BookkeepingQueryWithRelations,
+  QuerySuggestion,
+  AnsweredByType,
+  QueryAnswerHistory,
 } from '@shared/schema';
 import { BaseStorage } from '../base/BaseStorage.js';
 
@@ -434,5 +438,202 @@ export class QueryStorage extends BaseStorage {
       createdBy: r.createdBy as any,
       group: r.group || undefined,
     }));
+  }
+
+  // ============================================
+  // Query Answer History (Auto-Suggest Feature)
+  // ============================================
+
+  private normalizeDescription(description: string): string {
+    return description
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  async recordQueryAnswer(data: {
+    clientId: string;
+    projectId: string;
+    description: string;
+    moneyDirection: 'in' | 'out' | null;
+    answerText: string;
+    answeredByType: AnsweredByType;
+    answeredById?: string;
+    answeredAt: Date;
+    sourceQueryId: string;
+    prefixLength?: number;
+  }): Promise<QueryAnswerHistory> {
+    const normalizedDesc = this.normalizeDescription(data.description);
+    const prefixLength = data.prefixLength || 10;
+    const descriptionPrefix = normalizedDesc.substring(0, prefixLength);
+
+    const [record] = await db.insert(queryAnswerHistory).values({
+      clientId: data.clientId,
+      projectId: data.projectId,
+      descriptionPrefix,
+      moneyDirection: data.moneyDirection,
+      answerText: data.answerText,
+      answeredByType: data.answeredByType,
+      answeredById: data.answeredById,
+      answeredAt: data.answeredAt,
+      sourceQueryId: data.sourceQueryId,
+    }).returning();
+
+    return record;
+  }
+
+  async getSuggestionsForQuery(params: {
+    queryId: string;
+    clientId: string;
+    description: string;
+    moneyDirection: 'in' | 'out' | null;
+    prefixLength?: number;
+    limit?: number;
+  }): Promise<QuerySuggestion[]> {
+    const { queryId, clientId, description, moneyDirection, prefixLength = 10, limit = 5 } = params;
+    
+    const normalizedDesc = this.normalizeDescription(description);
+    const descriptionPrefix = normalizedDesc.substring(0, prefixLength);
+
+    if (!descriptionPrefix || descriptionPrefix.length < 3) {
+      return [];
+    }
+
+    // Find matching answer history entries
+    const results = await db
+      .select({
+        history: queryAnswerHistory,
+        sourceQuery: {
+          id: bookkeepingQueries.id,
+          description: bookkeepingQueries.description,
+        },
+      })
+      .from(queryAnswerHistory)
+      .leftJoin(bookkeepingQueries, eq(queryAnswerHistory.sourceQueryId, bookkeepingQueries.id))
+      .where(
+        and(
+          like(queryAnswerHistory.descriptionPrefix, `${descriptionPrefix}%`),
+          ne(queryAnswerHistory.sourceQueryId, queryId)
+        )
+      )
+      .orderBy(desc(queryAnswerHistory.answeredAt))
+      .limit(limit * 2);
+
+    // Score and filter results
+    const suggestions: QuerySuggestion[] = results.map((r) => {
+      const isFromSameClient = r.history.clientId === clientId;
+      const moneyMatch = !moneyDirection || !r.history.moneyDirection || 
+        r.history.moneyDirection === moneyDirection;
+      
+      // Calculate match score
+      let matchScore = 0;
+      if (isFromSameClient) matchScore += 50;
+      if (moneyMatch) matchScore += 20;
+      
+      // Prefix match length bonus
+      const historyPrefix = r.history.descriptionPrefix;
+      const commonLength = this.getCommonPrefixLength(descriptionPrefix, historyPrefix);
+      matchScore += commonLength * 3;
+
+      // Recency bonus (answers from last 90 days get bonus)
+      const daysSinceAnswer = (Date.now() - new Date(r.history.answeredAt).getTime()) / (1000 * 60 * 60 * 24);
+      if (daysSinceAnswer < 90) {
+        matchScore += Math.max(0, 10 - Math.floor(daysSinceAnswer / 10));
+      }
+
+      return {
+        id: r.history.id,
+        answerText: r.history.answerText,
+        answeredByType: r.history.answeredByType as AnsweredByType,
+        answeredAt: new Date(r.history.answeredAt),
+        sourceQueryId: r.history.sourceQueryId,
+        sourceQueryDescription: r.sourceQuery?.description || undefined,
+        matchScore,
+        isFromSameClient,
+      };
+    });
+
+    // Sort by score and return top results
+    return suggestions
+      .sort((a, b) => b.matchScore - a.matchScore)
+      .slice(0, limit);
+  }
+
+  private getCommonPrefixLength(a: string, b: string): number {
+    let i = 0;
+    while (i < a.length && i < b.length && a[i] === b[i]) {
+      i++;
+    }
+    return i;
+  }
+
+  async getQueryWithClient(queryId: string): Promise<{ query: BookkeepingQuery; clientId: string; projectId: string } | null> {
+    const [result] = await db
+      .select({
+        query: bookkeepingQueries,
+        clientId: projects.clientId,
+        projectId: projects.id,
+      })
+      .from(bookkeepingQueries)
+      .innerJoin(projects, eq(bookkeepingQueries.projectId, projects.id))
+      .where(eq(bookkeepingQueries.id, queryId));
+
+    if (!result) return null;
+
+    return {
+      query: result.query,
+      clientId: result.clientId,
+      projectId: result.projectId,
+    };
+  }
+
+  async hasSuggestionsForQueries(queryIds: string[], prefixLength = 10): Promise<Map<string, boolean>> {
+    const result = new Map<string, boolean>();
+    
+    if (queryIds.length === 0) return result;
+
+    // Get queries with their descriptions
+    const queries = await db
+      .select({
+        id: bookkeepingQueries.id,
+        description: bookkeepingQueries.description,
+        clientId: projects.clientId,
+      })
+      .from(bookkeepingQueries)
+      .innerJoin(projects, eq(bookkeepingQueries.projectId, projects.id))
+      .where(inArray(bookkeepingQueries.id, queryIds));
+
+    // Check each query for suggestions
+    for (const query of queries) {
+      if (!query.description) {
+        result.set(query.id, false);
+        continue;
+      }
+
+      const normalizedDesc = this.normalizeDescription(query.description);
+      const descriptionPrefix = normalizedDesc.substring(0, prefixLength);
+
+      if (descriptionPrefix.length < 3) {
+        result.set(query.id, false);
+        continue;
+      }
+
+      // Check if there are matching answers
+      const [match] = await db
+        .select({ id: queryAnswerHistory.id })
+        .from(queryAnswerHistory)
+        .where(
+          and(
+            like(queryAnswerHistory.descriptionPrefix, `${descriptionPrefix}%`),
+            ne(queryAnswerHistory.sourceQueryId, query.id)
+          )
+        )
+        .limit(1);
+
+      result.set(query.id, !!match);
+    }
+
+    return result;
   }
 }
