@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { bookkeepingQueries, queryResponseTokens, scheduledQueryReminders } from './tables';
+import { bookkeepingQueries, queryResponseTokens, scheduledQueryReminders, queryGroups } from './tables';
 import {
   insertBookkeepingQuerySchema,
   updateBookkeepingQuerySchema,
@@ -19,11 +19,15 @@ export type InsertBookkeepingQuery = z.infer<typeof insertBookkeepingQuerySchema
 export type UpdateBookkeepingQuery = z.infer<typeof updateBookkeepingQuerySchema>;
 export type BulkCreateQueries = z.infer<typeof bulkCreateQueriesSchema>;
 
+// Query Group type
+export type QueryGroup = typeof queryGroups.$inferSelect;
+
 export type BookkeepingQueryWithRelations = BookkeepingQuery & {
   createdBy?: User;
   answeredBy?: User;
   resolvedBy?: User;
   project?: Project;
+  group?: QueryGroup | null;
 };
 
 export type QueryResponseToken = typeof queryResponseTokens.$inferSelect;

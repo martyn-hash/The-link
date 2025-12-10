@@ -68,7 +68,7 @@ export function QueriesForm({
             <p className="text-xs">Click the button below to add a query</p>
           </div>
         ) : (
-          <div className="space-y-3 max-h-[300px] overflow-y-auto">
+          <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-2">
             {pendingQueries.map((query, index) => (
               <div 
                 key={query.id} 
