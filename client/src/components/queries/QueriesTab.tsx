@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -80,6 +80,9 @@ import {
   Bell,
   AlertTriangle,
   Loader2,
+  Search,
+  X,
+  ArrowDownUp,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -177,7 +180,24 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingQuery, setEditingQuery] = useState<BookkeepingQueryWithRelations | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState<string>("");
+  const [amountFilter, setAmountFilter] = useState<"all" | "in" | "out">("all");
   const [activeSubTab, setActiveSubTab] = useState<"queries" | "reminders">("queries");
+  
+  // Debounce search term using useEffect with proper cleanup
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300);
+    
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm]);
+  
+  const clearSearch = useCallback(() => {
+    setSearchTerm("");
+    setDebouncedSearchTerm("");
+  }, []);
   
   // Email dialog state
   const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
@@ -715,10 +735,43 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     setIsEmailDialogOpen(false);
   };
 
-  const filteredQueries = queries?.filter(q => {
-    if (filterStatus === "all") return true;
-    return q.status === filterStatus;
-  }) || [];
+  const filteredQueries = useMemo(() => {
+    let result = queries || [];
+    
+    // Status filter
+    if (filterStatus !== "all") {
+      result = result.filter(q => q.status === filterStatus);
+    }
+    
+    // Description search (case-insensitive)
+    if (debouncedSearchTerm.trim()) {
+      const term = debouncedSearchTerm.toLowerCase();
+      result = result.filter(q => 
+        q.description?.toLowerCase().includes(term) ||
+        q.ourQuery?.toLowerCase().includes(term)
+      );
+    }
+    
+    // Amount filter (money in/out)
+    if (amountFilter === "in") {
+      result = result.filter(q => q.moneyIn && parseFloat(q.moneyIn) > 0);
+    } else if (amountFilter === "out") {
+      result = result.filter(q => q.moneyOut && parseFloat(q.moneyOut) > 0);
+    }
+    
+    return result;
+  }, [queries, filterStatus, debouncedSearchTerm, amountFilter]);
+  
+  // Check if any filters are active
+  const hasActiveFilters = filterStatus !== "all" || debouncedSearchTerm.trim() !== "" || amountFilter !== "all";
+  
+  // Clear all filters
+  const clearAllFilters = useCallback(() => {
+    setFilterStatus("all");
+    setSearchTerm("");
+    setDebouncedSearchTerm("");
+    setAmountFilter("all");
+  }, []);
 
   if (isLoading) {
     return (
@@ -1002,21 +1055,94 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
           <TabsContent value="queries" className="mt-0">
             <CardContent className="pt-0">
         {/* Filters and Bulk Actions */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-4">
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-[180px]" data-testid="select-filter-status">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="open">Open</SelectItem>
-              <SelectItem value="answered_by_staff">Staff Answered</SelectItem>
-              <SelectItem value="sent_to_client">Sent to Client</SelectItem>
-              <SelectItem value="answered_by_client">Client Answered</SelectItem>
-              <SelectItem value="resolved">Resolved</SelectItem>
-            </SelectContent>
-          </Select>
-
+        <div className="flex flex-col gap-4 mb-4">
+          <div className="flex flex-col sm:flex-row gap-3">
+            {/* Status Filter */}
+            <Select value={filterStatus} onValueChange={setFilterStatus}>
+              <SelectTrigger className="w-full sm:w-[160px]" data-testid="select-filter-status">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="open">Open</SelectItem>
+                <SelectItem value="answered_by_staff">Staff Answered</SelectItem>
+                <SelectItem value="sent_to_client">Sent to Client</SelectItem>
+                <SelectItem value="answered_by_client">Client Answered</SelectItem>
+                <SelectItem value="resolved">Resolved</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            {/* Amount Filter */}
+            <Select value={amountFilter} onValueChange={(v) => setAmountFilter(v as "all" | "in" | "out")}>
+              <SelectTrigger className="w-full sm:w-[140px]" data-testid="select-filter-amount">
+                <ArrowDownUp className="w-4 h-4 mr-2 text-muted-foreground" />
+                <SelectValue placeholder="Amount" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Amounts</SelectItem>
+                <SelectItem value="in">
+                  <span className="flex items-center gap-2">
+                    <ArrowDownLeft className="w-3 h-3 text-green-600" />
+                    Money In
+                  </span>
+                </SelectItem>
+                <SelectItem value="out">
+                  <span className="flex items-center gap-2">
+                    <ArrowUpRight className="w-3 h-3 text-red-600" />
+                    Money Out
+                  </span>
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            
+            {/* Search Input */}
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search descriptions..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 pr-9"
+                data-testid="input-search-queries"
+              />
+              {searchTerm && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                  onClick={clearSearch}
+                  data-testid="button-clear-search"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+          
+          {/* Filter Results Summary */}
+          {hasActiveFilters && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">
+                Showing {filteredQueries.length} of {queries?.length || 0} queries
+                {debouncedSearchTerm && (
+                  <span className="ml-1">
+                    matching "<span className="font-medium">{debouncedSearchTerm}</span>"
+                  </span>
+                )}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-xs"
+                onClick={clearAllFilters}
+                data-testid="button-clear-all-filters"
+              >
+                Clear all filters
+              </Button>
+            </div>
+          )}
+          
+          {/* Bulk Actions */}
           {selectedQueries.length > 0 && (
             <div className="flex gap-2 items-center">
               <TooltipProvider>
@@ -1076,11 +1202,21 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
           <div className="text-center py-8" data-testid="section-empty-queries">
             <MessageSquare className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
             <p className="text-muted-foreground mb-2">No queries found</p>
-            <p className="text-sm text-muted-foreground">
-              {filterStatus === "all" 
-                ? "Add your first query to get started."
-                : "No queries match the current filter."}
+            <p className="text-sm text-muted-foreground mb-4">
+              {hasActiveFilters 
+                ? "No queries match your current filters."
+                : "Add your first query to get started."}
             </p>
+            {hasActiveFilters && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={clearAllFilters}
+                data-testid="button-clear-filters-empty"
+              >
+                Clear all filters
+              </Button>
+            )}
           </div>
         ) : (
           <>
