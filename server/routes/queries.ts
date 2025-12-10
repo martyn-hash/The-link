@@ -472,6 +472,36 @@ export function registerQueryRoutes(
       }
 
       const query = await storage.updateQuery(id, validationResult.data, userId);
+
+      // Record answer history when query is resolved with a client response
+      if (validationResult.data.status === 'resolved' && query.clientResponse && query.description) {
+        try {
+          const queryData = await storage.getQueryWithClient(id);
+          if (queryData) {
+            let moneyDirection: 'in' | 'out' | null = null;
+            if (query.moneyIn && parseFloat(query.moneyIn) > 0) {
+              moneyDirection = 'in';
+            } else if (query.moneyOut && parseFloat(query.moneyOut) > 0) {
+              moneyDirection = 'out';
+            }
+
+            await storage.recordQueryAnswer({
+              clientId: queryData.clientId,
+              projectId: queryData.projectId,
+              description: query.description,
+              moneyDirection,
+              answerText: query.clientResponse,
+              answeredByType: 'staff',
+              answeredById: userId,
+              answeredAt: new Date(),
+              sourceQueryId: id,
+            });
+          }
+        } catch (historyError) {
+          console.error("Error recording query answer history:", historyError);
+        }
+      }
+
       res.json(query);
     } catch (error) {
       console.error("Error updating query:", error);
@@ -1623,6 +1653,34 @@ ${emailSignoff}`;
           
           await storage.updateQuery(response.queryId, updateData);
           updatedCount++;
+
+          // Record client answer in history for auto-suggestions
+          if (response.clientResponse) {
+            try {
+              const queryData = await storage.getQueryWithClient(response.queryId);
+              if (queryData && queryData.query.description) {
+                let moneyDirection: 'in' | 'out' | null = null;
+                if (queryData.query.moneyIn && parseFloat(queryData.query.moneyIn) > 0) {
+                  moneyDirection = 'in';
+                } else if (queryData.query.moneyOut && parseFloat(queryData.query.moneyOut) > 0) {
+                  moneyDirection = 'out';
+                }
+
+                await storage.recordQueryAnswer({
+                  clientId: queryData.clientId,
+                  projectId: queryData.projectId,
+                  description: queryData.query.description,
+                  moneyDirection,
+                  answerText: response.clientResponse,
+                  answeredByType: 'client',
+                  answeredAt: new Date(),
+                  sourceQueryId: response.queryId,
+                });
+              }
+            } catch (historyError) {
+              console.error("Error recording client answer history:", historyError);
+            }
+          }
         }
       }
 
