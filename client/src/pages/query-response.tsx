@@ -658,9 +658,9 @@ export default function QueryResponsePage() {
   const primaryQueryId = currentDisplayItem?.primaryQueryId;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex flex-col overflow-x-hidden">
+    <div className="h-[100dvh] bg-gradient-to-br from-slate-50 to-slate-100 flex flex-col overflow-hidden">
       {/* Compact header */}
-      <header className="bg-white border-b sticky top-0 z-10">
+      <header className="bg-white border-b shrink-0">
         <div className="max-w-4xl mx-auto px-3 py-2">
           <div className="flex items-center justify-between">
             <img src={logoPath} alt="Logo" className="h-7" />
@@ -672,7 +672,7 @@ export default function QueryResponsePage() {
         </div>
       </header>
 
-      <main className="flex-1 max-w-4xl mx-auto px-3 py-3 w-full">
+      <main className="flex-1 min-h-0 overflow-y-auto max-w-4xl mx-auto px-3 py-3 w-full">
         {/* View mode toggle - desktop only */}
         <div className="hidden sm:flex justify-end gap-2 mb-3">
           <Button
@@ -960,9 +960,9 @@ export default function QueryResponsePage() {
         )}
       </main>
 
-      {/* Sticky footer navigation - simplified for mobile */}
+      {/* Footer navigation - simplified for mobile */}
       {viewMode === 'cards' && currentDisplayItem && (
-        <footer className="sticky bottom-0 bg-white border-t py-3 px-4 safe-area-pb">
+        <footer className="shrink-0 bg-white border-t py-3 px-4 safe-area-pb">
           <div className="max-w-4xl mx-auto">
             <div className="flex items-center justify-between gap-4">
               <Button
