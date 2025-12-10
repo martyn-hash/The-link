@@ -103,6 +103,21 @@ Tasks page filter button supports filtering by ownership with permission-based v
 
 Key files: `client/src/components/projects-page/ProjectsHeader.tsx`, `client/src/components/tasks/TasksWorkspace.tsx`, `client/src/hooks/projects-page/useProjectsPageState.ts`, `server/storage/tasks/internalTaskStorage.ts`, `server/routes/internalTasks.ts`
 
+### Pivot Table Views (December 2025)
+Drag-and-drop pivot table builder for dynamic project data analysis with 4 drop zones.
+
+- **Drop Zones**: Rows, Columns, Values (for field headers), and Filters (for individual values)
+- **Drag-and-Drop**: Uses @dnd-kit library for intuitive field placement
+- **Field Library**: Left panel shows available fields; used fields are visually indicated
+- **Aggregation**: Supports Count, Sum, Average, Max, Min aggregators for Values
+- **Filters**: Drag individual field values (e.g., "Draft", "Active") to Filters zone to filter data
+- **Saveable Views**: Pivots saved as project_views with viewMode="pivot" and pivotConfig storing rows, cols, vals, aggregatorName, valueFilter
+- **View Mega Menu**: Pivots column displayed alongside Lists, Kanbans, Calendars, Dashboards
+- **State Management**: pivotConfig properly clears when switching to non-pivot views or leaving projects workspace
+- **PivotBuilder Remounting**: Uses key={`pivot-${currentSavedViewId || 'unsaved'}`} to ensure clean state on view transitions
+
+Key files: `client/src/components/PivotBuilder.tsx`, `client/src/components/PivotTableView.tsx`, `client/src/hooks/projects-page/useViewManagement.ts`, `client/src/hooks/projects-page/useProjectsPageState.ts`, `shared/schema/users/tables.ts`
+
 ### System Design
 PostgreSQL (Neon) with Drizzle ORM is the primary database, utilizing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) handles object storage with secure signed URLs. Staff authentication uses Replit Auth (OIDC) with session-based, role-based access control; the client portal uses passwordless email verification. The system is multi-tenant and designed for modularity, with extensive database indexing. Key features include automated project management, advanced communication tools (push notifications, internal tasks, email threading via Microsoft Graph, multi-channel client notifications with AI assistance, RingCentral VoIP with automatic transcription), UK eIDAS-compliant electronic signatures, comprehensive workflow and status management with Kanban views, and Bookkeeping Queries. It also includes an AI Audio Transcription service, client value notifications with AI-assisted drafting, Zapier integration via webhooks, and an enhanced data import system. A friendly error handling system replaces technical errors with user-friendly messages. A scheduled notifications calendar provides comprehensive management of automated notifications, with stage-aware suppression. A resilient project scheduling orchestrator ensures robustness against server restarts and outages.
 
