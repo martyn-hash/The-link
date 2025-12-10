@@ -1,8 +1,41 @@
 # Queries Module Improvements Plan
 
 **Created:** December 10, 2025  
-**Status:** Planning  
-**Priority:** High
+**Status:** In Progress  
+**Priority:** High  
+**Last Updated:** December 10, 2025
+
+---
+
+## Progress Log
+
+### December 10, 2025 - Stage 1 Bug Fixes
+
+#### 1.1 Notify Button Fix - COMPLETED
+**Root Cause:** The Notify dialog was showing "No project assignees found" immediately when opened because there was no loading state. The data was still being fetched when the dialog rendered.
+
+**Fix Applied:**
+1. Added `isLoading: isLoadingAssignees` to the project assignees query (line 268)
+2. Added loading skeleton UI when `isLoadingAssignees` is true (lines 1999-2003)
+3. Added `data-testid` attributes for testing
+
+**Files Modified:**
+- `client/src/components/queries/QueriesTab.tsx`
+
+#### 1.2 Cancel All Pending Button Fix - COMPLETED
+**Root Cause:** Two issues identified:
+1. TokenIds could contain null/undefined values, causing the array filter to fail
+2. Nested AlertDialog inside the Kanban modal Dialog caused event propagation issues
+
+**Fix Applied:**
+1. Added proper type guard filter for tokenIds: `.filter((id): id is string => !!id)` (line 347)
+2. Added `canCancelAll` computed value that checks `tokenIds.length > 0` (line 349)
+3. Added `e.stopPropagation()` to prevent click events from bubbling up to parent modal
+4. Added proper null check before calling mutation
+5. Added loading state to the Cancel All button
+
+**Files Modified:**
+- `client/src/components/queries/ScheduledRemindersPanel.tsx`
 
 ---
 

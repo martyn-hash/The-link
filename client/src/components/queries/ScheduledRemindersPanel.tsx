@@ -340,8 +340,10 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
   const pendingReminders = reminders.filter(r => r.status === 'pending');
   const sentReminders = reminders.filter(r => r.status === 'sent');
 
-  const tokenIds = Array.from(new Set(reminders.map(r => r.tokenId)));
+  // Filter out any null/undefined tokenIds and get unique tokens
+  const tokenIds = Array.from(new Set(reminders.map(r => r.tokenId).filter((id): id is string => !!id)));
   const hasMultipleTokens = tokenIds.length > 1;
+  const canCancelAll = !hasMultipleTokens && pendingReminders.length > 0 && tokenIds.length > 0;
 
   return (
     <div data-testid="scheduled-reminders-panel">
@@ -370,7 +372,7 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
           </Button>
         </div>
         
-        {!hasMultipleTokens && pendingReminders.length > 0 && (
+        {canCancelAll && (
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button
@@ -378,12 +380,13 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
                 size="sm"
                 className="text-destructive hover:text-destructive"
                 data-testid="button-cancel-all-reminders"
+                onClick={(e) => e.stopPropagation()}
               >
                 <XCircle className="h-4 w-4 mr-1" />
                 Cancel All Pending
               </Button>
             </AlertDialogTrigger>
-            <AlertDialogContent>
+            <AlertDialogContent onClick={(e) => e.stopPropagation()}>
               <AlertDialogHeader>
                 <AlertDialogTitle>Cancel All Reminders?</AlertDialogTitle>
                 <AlertDialogDescription>
@@ -392,12 +395,24 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Keep Reminders</AlertDialogCancel>
+                <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Keep Reminders</AlertDialogCancel>
                 <AlertDialogAction
-                  onClick={() => cancelAllMutation.mutate(tokenIds[0])}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (tokenIds[0]) {
+                      cancelAllMutation.mutate(tokenIds[0]);
+                    } else {
+                      toast({
+                        title: 'Error',
+                        description: 'Unable to cancel reminders: token not found.',
+                        variant: 'destructive',
+                      });
+                    }
+                  }}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  disabled={cancelAllMutation.isPending}
                 >
-                  Cancel All
+                  {cancelAllMutation.isPending ? 'Cancelling...' : 'Cancel All'}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

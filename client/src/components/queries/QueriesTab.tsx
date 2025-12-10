@@ -262,7 +262,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   const pendingReminderCount = scheduledReminders?.filter(r => r.status === 'pending').length || 0;
 
   // Query for project assignees (for notify functionality)
-  const { data: projectAssignees } = useQuery<{
+  const { data: projectAssignees, isLoading: isLoadingAssignees } = useQuery<{
     id: string;
     projectId: string;
     userId: string;
@@ -1993,7 +1993,12 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
             {/* Assignee Selection */}
             <div>
               <label className="text-sm font-medium mb-2 block">Select Assignees to Notify</label>
-              {projectAssignees && projectAssignees.length > 0 ? (
+              {isLoadingAssignees ? (
+                <div className="space-y-2 border rounded-lg p-2" data-testid="assignees-loading">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              ) : projectAssignees && projectAssignees.length > 0 ? (
                 <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-2">
                   {projectAssignees.map((assignee) => (
                     <div 
@@ -2006,6 +2011,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                             : [...prev, assignee.userId]
                         );
                       }}
+                      data-testid={`assignee-row-${assignee.userId}`}
                     >
                       <Checkbox 
                         checked={selectedAssignees.includes(assignee.userId)}
@@ -2028,7 +2034,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-4 text-muted-foreground text-sm border rounded-lg">
+                <div className="text-center py-4 text-muted-foreground text-sm border rounded-lg" data-testid="no-assignees-found">
                   No project assignees found
                 </div>
               )}
