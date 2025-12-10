@@ -297,6 +297,57 @@ export function registerQueryRoutes(
     }
   });
 
+  // GET /api/queries/:id/suggestions - Get auto-suggested answers for a query
+  app.get("/api/queries/:id/suggestions", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid path parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      const { id } = req.params;
+      const prefixLength = parseInt(req.query.prefixLength as string) || 10;
+      const limit = parseInt(req.query.limit as string) || 5;
+
+      // Get query with client info
+      const queryData = await storage.getQueryWithClient(id);
+      if (!queryData) {
+        return res.status(404).json({ message: "Query not found" });
+      }
+
+      const { query, clientId } = queryData;
+      
+      if (!query.description) {
+        return res.json({ suggestions: [], message: "Query has no description" });
+      }
+
+      // Determine money direction
+      let moneyDirection: 'in' | 'out' | null = null;
+      if (query.moneyIn && parseFloat(query.moneyIn) > 0) {
+        moneyDirection = 'in';
+      } else if (query.moneyOut && parseFloat(query.moneyOut) > 0) {
+        moneyDirection = 'out';
+      }
+
+      const suggestions = await storage.getSuggestionsForQuery({
+        queryId: id,
+        clientId,
+        description: query.description,
+        moneyDirection,
+        prefixLength,
+        limit,
+      });
+
+      res.json({ suggestions });
+    } catch (error) {
+      console.error("Error fetching query suggestions:", error);
+      res.status(500).json({ message: "Failed to fetch query suggestions" });
+    }
+  });
+
   // POST /api/projects/:projectId/queries - Create a new query for a project
   app.post("/api/projects/:projectId/queries", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
