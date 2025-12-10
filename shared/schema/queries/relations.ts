@@ -1,12 +1,29 @@
 import { relations } from 'drizzle-orm';
-import { bookkeepingQueries, queryResponseTokens, scheduledQueryReminders } from './tables';
+import { bookkeepingQueries, queryResponseTokens, scheduledQueryReminders, queryGroups } from './tables';
 import { users } from '../users/tables';
 import { projects } from '../projects/tables';
+
+export const queryGroupsRelations = relations(queryGroups, ({ one, many }) => ({
+  project: one(projects, {
+    fields: [queryGroups.projectId],
+    references: [projects.id],
+  }),
+  createdBy: one(users, {
+    fields: [queryGroups.createdById],
+    references: [users.id],
+    relationName: "queryGroupCreatedBy",
+  }),
+  queries: many(bookkeepingQueries),
+}));
 
 export const bookkeepingQueriesRelations = relations(bookkeepingQueries, ({ one }) => ({
   project: one(projects, {
     fields: [bookkeepingQueries.projectId],
     references: [projects.id],
+  }),
+  group: one(queryGroups, {
+    fields: [bookkeepingQueries.groupId],
+    references: [queryGroups.id],
   }),
   createdBy: one(users, {
     fields: [bookkeepingQueries.createdById],

@@ -18,9 +18,21 @@ export interface QueryAttachment {
   uploadedAt: string;
 }
 
+export const queryGroups = pgTable("query_groups", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  groupName: varchar("group_name", { length: 255 }).notNull(),
+  description: text("description"),
+  createdById: varchar("created_by_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_query_groups_project_id").on(table.projectId),
+]);
+
 export const bookkeepingQueries = pgTable("bookkeeping_queries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  groupId: varchar("group_id").references(() => queryGroups.id, { onDelete: "set null" }),
   date: timestamp("date"),
   description: text("description"),
   moneyIn: decimal("money_in", { precision: 12, scale: 2 }),
@@ -43,6 +55,7 @@ export const bookkeepingQueries = pgTable("bookkeeping_queries", {
   index("idx_bookkeeping_queries_status").on(table.status),
   index("idx_bookkeeping_queries_created_by_id").on(table.createdById),
   index("idx_bookkeeping_queries_sent_to_client_at").on(table.sentToClientAt),
+  index("idx_bookkeeping_queries_group_id").on(table.groupId),
 ]);
 
 export const queryResponseTokens = pgTable("query_response_tokens", {

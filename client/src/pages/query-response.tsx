@@ -39,6 +39,7 @@ import {
   Cloud,
   CloudOff,
   Check,
+  Folder,
 } from "lucide-react";
 
 interface QueryAttachment {
@@ -47,6 +48,12 @@ interface QueryAttachment {
   fileType: string;
   fileSize: number;
   uploadedAt: string;
+}
+
+interface QueryGroup {
+  id: string;
+  groupName: string;
+  description: string | null;
 }
 
 interface Query {
@@ -60,6 +67,8 @@ interface Query {
   clientResponse: string | null;
   clientAttachments: QueryAttachment[] | null;
   status: string;
+  groupId: string | null;
+  group: QueryGroup | null;
 }
 
 interface TokenData {
@@ -597,9 +606,17 @@ export default function QueryResponsePage() {
             <Card className="overflow-hidden touch-pan-y" data-testid={`query-card-${currentQuery.id}`}>
               <CardHeader className="bg-slate-50 border-b py-2 px-3">
                 <div className="flex items-center justify-between">
-                  <Badge variant="outline" className="text-xs">
-                    Query {currentIndex + 1} of {totalCount}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">
+                      Query {currentIndex + 1} of {totalCount}
+                    </Badge>
+                    {currentQuery.group && (
+                      <Badge variant="secondary" className="text-xs gap-1">
+                        <Folder className="w-3 h-3" />
+                        {currentQuery.group.groupName}
+                      </Badge>
+                    )}
+                  </div>
                   {responses[currentQuery.id]?.clientResponse?.trim() && (
                     <Badge variant="default" className="bg-green-600 text-xs py-0">
                       <CheckCircle2 className="w-3 h-3 mr-1" />
@@ -936,7 +953,15 @@ function QueryListItem({
             {isAnswered ? <CheckCircle2 className="w-4 h-4" /> : index + 1}
           </div>
           <div className="min-w-0">
-            <p className="font-medium truncate">{query.description || 'Transaction Query'}</p>
+            <div className="flex items-center gap-2 mb-0.5">
+              <p className="font-medium truncate">{query.description || 'Transaction Query'}</p>
+              {query.group && (
+                <Badge variant="secondary" className="text-xs gap-1 shrink-0">
+                  <Folder className="w-3 h-3" />
+                  {query.group.groupName}
+                </Badge>
+              )}
+            </div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               {query.date && <span>{formatDate(query.date)}</span>}
               {amountInfo && (

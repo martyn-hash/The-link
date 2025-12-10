@@ -3,6 +3,7 @@ import {
   bookkeepingQueries,
   users,
   projects,
+  queryGroups,
 } from '@shared/schema';
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import type {
@@ -12,6 +13,20 @@ import type {
   BookkeepingQueryWithRelations,
 } from '@shared/schema';
 import { BaseStorage } from '../base/BaseStorage.js';
+
+export interface QueryGroup {
+  id: string;
+  projectId: string;
+  groupName: string;
+  description: string | null;
+  createdById: string;
+  createdAt: Date | null;
+}
+
+export interface QueryGroupWithQueries extends QueryGroup {
+  queries: BookkeepingQuery[];
+  createdBy?: { id: string; firstName: string | null; lastName: string | null };
+}
 
 export class QueryStorage extends BaseStorage {
   async createQuery(data: InsertBookkeepingQuery): Promise<BookkeepingQuery> {
@@ -43,7 +58,7 @@ export class QueryStorage extends BaseStorage {
     };
   }
 
-  async getQueriesByProjectId(projectId: string): Promise<BookkeepingQueryWithRelations[]> {
+  async getQueriesByProjectId(projectId: string): Promise<(BookkeepingQueryWithRelations & { group?: QueryGroup })[]> {
     const results = await db
       .select({
         query: bookkeepingQueries,
@@ -53,15 +68,18 @@ export class QueryStorage extends BaseStorage {
           lastName: users.lastName,
           email: users.email,
         },
+        group: queryGroups,
       })
       .from(bookkeepingQueries)
       .leftJoin(users, eq(bookkeepingQueries.createdById, users.id))
+      .leftJoin(queryGroups, eq(bookkeepingQueries.groupId, queryGroups.id))
       .where(eq(bookkeepingQueries.projectId, projectId))
       .orderBy(desc(bookkeepingQueries.createdAt));
 
     return results.map((r) => ({
       ...r.query,
       createdBy: r.createdBy as any,
+      group: r.group || undefined,
     }));
   }
 
@@ -275,5 +293,143 @@ export class QueryStorage extends BaseStorage {
     }
 
     return stats;
+  }
+
+  // Query Group methods
+  async createQueryGroup(data: {
+    projectId: string;
+    groupName: string;
+    description?: string;
+    createdById: string;
+  }): Promise<QueryGroup> {
+    const [group] = await db.insert(queryGroups).values(data as any).returning();
+    return group;
+  }
+
+  async getQueryGroupById(id: string): Promise<QueryGroupWithQueries | undefined> {
+    const [group] = await db
+      .select({
+        group: queryGroups,
+        createdBy: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        },
+      })
+      .from(queryGroups)
+      .leftJoin(users, eq(queryGroups.createdById, users.id))
+      .where(eq(queryGroups.id, id));
+
+    if (!group) return undefined;
+
+    const queries = await db
+      .select()
+      .from(bookkeepingQueries)
+      .where(eq(bookkeepingQueries.groupId, id))
+      .orderBy(desc(bookkeepingQueries.date));
+
+    return {
+      ...group.group,
+      queries,
+      createdBy: group.createdBy || undefined,
+    };
+  }
+
+  async getQueryGroupsByProjectId(projectId: string): Promise<QueryGroupWithQueries[]> {
+    const groups = await db
+      .select({
+        group: queryGroups,
+        createdBy: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+        },
+      })
+      .from(queryGroups)
+      .leftJoin(users, eq(queryGroups.createdById, users.id))
+      .where(eq(queryGroups.projectId, projectId))
+      .orderBy(desc(queryGroups.createdAt));
+
+    const result: QueryGroupWithQueries[] = [];
+    
+    for (const g of groups) {
+      const queries = await db
+        .select()
+        .from(bookkeepingQueries)
+        .where(eq(bookkeepingQueries.groupId, g.group.id))
+        .orderBy(desc(bookkeepingQueries.date));
+
+      result.push({
+        ...g.group,
+        queries,
+        createdBy: g.createdBy || undefined,
+      });
+    }
+
+    return result;
+  }
+
+  async updateQueryGroup(id: string, data: {
+    groupName?: string;
+    description?: string;
+  }): Promise<QueryGroup | undefined> {
+    const [updated] = await db
+      .update(queryGroups)
+      .set(data)
+      .where(eq(queryGroups.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteQueryGroup(id: string): Promise<boolean> {
+    const result = await db.delete(queryGroups).where(eq(queryGroups.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  async assignQueriesToGroup(queryIds: string[], groupId: string): Promise<number> {
+    if (queryIds.length === 0) return 0;
+
+    const result = await db
+      .update(bookkeepingQueries)
+      .set({ groupId })
+      .where(inArray(bookkeepingQueries.id, queryIds));
+
+    return result.rowCount || 0;
+  }
+
+  async removeQueriesFromGroup(queryIds: string[]): Promise<number> {
+    if (queryIds.length === 0) return 0;
+
+    const result = await db
+      .update(bookkeepingQueries)
+      .set({ groupId: null })
+      .where(inArray(bookkeepingQueries.id, queryIds));
+
+    return result.rowCount || 0;
+  }
+
+  async getQueriesWithGroups(projectId: string): Promise<(BookkeepingQueryWithRelations & { group?: QueryGroup })[]> {
+    const results = await db
+      .select({
+        query: bookkeepingQueries,
+        createdBy: {
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          email: users.email,
+        },
+        group: queryGroups,
+      })
+      .from(bookkeepingQueries)
+      .leftJoin(users, eq(bookkeepingQueries.createdById, users.id))
+      .leftJoin(queryGroups, eq(bookkeepingQueries.groupId, queryGroups.id))
+      .where(eq(bookkeepingQueries.projectId, projectId))
+      .orderBy(desc(bookkeepingQueries.createdAt));
+
+    return results.map((r) => ({
+      ...r.query,
+      createdBy: r.createdBy as any,
+      group: r.group || undefined,
+    }));
   }
 }

@@ -1,6 +1,23 @@
 import { createInsertSchema } from 'drizzle-zod';
 import { z } from 'zod';
-import { bookkeepingQueries, queryResponseTokens, scheduledQueryReminders } from './tables';
+import { bookkeepingQueries, queryResponseTokens, scheduledQueryReminders, queryGroups } from './tables';
+
+// Query Groups schemas
+export const insertQueryGroupSchema = createInsertSchema(queryGroups).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const createQueryGroupSchema = z.object({
+  groupName: z.string().min(1, "Group name is required").max(255),
+  description: z.string().optional(),
+  queryIds: z.array(z.string()).min(1, "At least one query is required"),
+});
+
+export const updateQueryGroupSchema = z.object({
+  groupName: z.string().min(1).max(255).optional(),
+  description: z.string().optional(),
+});
 
 const baseInsertSchema = createInsertSchema(bookkeepingQueries).omit({
   id: true,

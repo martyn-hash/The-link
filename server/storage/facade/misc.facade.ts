@@ -304,6 +304,42 @@ export function applyMiscFacade<TBase extends Constructor<MiscFacadeDeps>>(Base:
     }
 
     // ============================================================================
+    // QUERY GROUP OPERATIONS - QueryStorage (8 methods)
+    // ============================================================================
+
+    async createQueryGroup(data: { projectId: string; groupName: string; description?: string; createdById: string }) {
+      return this.queryStorage.createQueryGroup(data);
+    }
+
+    async getQueryGroupById(id: string) {
+      return this.queryStorage.getQueryGroupById(id);
+    }
+
+    async getQueryGroupsByProjectId(projectId: string) {
+      return this.queryStorage.getQueryGroupsByProjectId(projectId);
+    }
+
+    async updateQueryGroup(id: string, data: { groupName?: string; description?: string }) {
+      return this.queryStorage.updateQueryGroup(id, data);
+    }
+
+    async deleteQueryGroup(id: string) {
+      return this.queryStorage.deleteQueryGroup(id);
+    }
+
+    async assignQueriesToGroup(queryIds: string[], groupId: string) {
+      return this.queryStorage.assignQueriesToGroup(queryIds, groupId);
+    }
+
+    async removeQueriesFromGroup(queryIds: string[]) {
+      return this.queryStorage.removeQueriesFromGroup(queryIds);
+    }
+
+    async getQueriesWithGroups(projectId: string) {
+      return this.queryStorage.getQueriesWithGroups(projectId);
+    }
+
+    // ============================================================================
     // QUERY TOKEN OPERATIONS - QueryTokenStorage (12 methods)
     // ============================================================================
 

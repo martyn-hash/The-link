@@ -2,6 +2,7 @@ import { db } from '../../db.js';
 import {
   queryResponseTokens,
   bookkeepingQueries,
+  queryGroups,
   users,
   projects,
 } from '@shared/schema';
@@ -170,16 +171,29 @@ export class QueryTokenStorage extends BaseStorage {
     return { valid: true, tokenData };
   }
 
-  async getQueriesForToken(token: string): Promise<BookkeepingQuery[]> {
+  async getQueriesForToken(token: string): Promise<(BookkeepingQuery & { group?: { id: string; groupName: string; description: string | null } })[]> {
     const tokenData = await this.getTokenByValue(token);
     if (!tokenData || !tokenData.queryIds || tokenData.queryIds.length === 0) {
       return [];
     }
 
-    return db
-      .select()
+    const results = await db
+      .select({
+        query: bookkeepingQueries,
+        group: {
+          id: queryGroups.id,
+          groupName: queryGroups.groupName,
+          description: queryGroups.description,
+        },
+      })
       .from(bookkeepingQueries)
+      .leftJoin(queryGroups, eq(bookkeepingQueries.groupId, queryGroups.id))
       .where(inArray(bookkeepingQueries.id, tokenData.queryIds));
+
+    return results.map(r => ({
+      ...r.query,
+      group: r.group?.id ? r.group : undefined,
+    }));
   }
 
   async cleanupExpiredTokens(): Promise<number> {

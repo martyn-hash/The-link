@@ -9,6 +9,8 @@ import {
   insertBookkeepingQuerySchema,
   updateBookkeepingQuerySchema,
   sendToClientSchema,
+  createQueryGroupSchema,
+  updateQueryGroupSchema,
   type QueryAttachment,
 } from "@shared/schema";
 import { sendBookkeepingQueryEmail } from "../emailService";
@@ -1136,6 +1138,12 @@ ${emailSignoff}`;
           clientResponse: q.clientResponse,
           clientAttachments: q.clientAttachments,
           status: q.status,
+          groupId: q.groupId,
+          group: q.group ? {
+            id: q.group.id,
+            groupName: q.group.groupName,
+            description: q.group.description,
+          } : null,
         })),
       });
     } catch (error) {
@@ -1951,6 +1959,188 @@ ${tableHtml}
     } catch (error) {
       console.error("[Dialora Webhook] Error processing call status:", error);
       res.status(500).json({ message: "Error processing webhook" });
+    }
+  });
+
+  // ==================== QUERY GROUPS ====================
+
+  // GET /api/projects/:projectId/query-groups - Get all query groups for a project
+  app.get("/api/projects/:projectId/query-groups", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramProjectIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ message: "Invalid parameters", errors: paramValidation.errors });
+      }
+
+      const { projectId } = req.params;
+      const groups = await storage.getQueryGroupsByProjectId(projectId);
+      res.json(groups);
+    } catch (error) {
+      console.error("Error fetching query groups:", error);
+      res.status(500).json({ message: "Failed to fetch query groups" });
+    }
+  });
+
+  // POST /api/projects/:projectId/query-groups - Create a new query group
+  app.post("/api/projects/:projectId/query-groups", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramProjectIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({ message: "Invalid parameters", errors: paramValidation.errors });
+      }
+
+      const bodyResult = createQueryGroupSchema.safeParse(req.body);
+      if (!bodyResult.success) {
+        return res.status(400).json({ message: "Invalid request body", errors: bodyResult.error.flatten().fieldErrors });
+      }
+
+      const { projectId } = req.params;
+      const { groupName, description, queryIds } = bodyResult.data;
+      const userId = req.user?.effectiveUserId || req.user?.claims?.sub;
+
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      // Create the group
+      const group = await storage.createQueryGroup({
+        projectId,
+        groupName,
+        description,
+        createdById: userId,
+      });
+
+      // Assign queries to the group
+      if (queryIds.length > 0) {
+        await storage.assignQueriesToGroup(queryIds, group.id);
+      }
+
+      // Fetch the full group with queries
+      const fullGroup = await storage.getQueryGroupById(group.id);
+      res.status(201).json(fullGroup);
+    } catch (error) {
+      console.error("Error creating query group:", error);
+      res.status(500).json({ message: "Failed to create query group" });
+    }
+  });
+
+  // GET /api/query-groups/:groupId - Get a specific query group
+  app.get("/api/query-groups/:groupId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { groupId } = req.params;
+      if (!groupId) {
+        return res.status(400).json({ message: "Group ID is required" });
+      }
+
+      const group = await storage.getQueryGroupById(groupId);
+      if (!group) {
+        return res.status(404).json({ message: "Query group not found" });
+      }
+
+      res.json(group);
+    } catch (error) {
+      console.error("Error fetching query group:", error);
+      res.status(500).json({ message: "Failed to fetch query group" });
+    }
+  });
+
+  // PATCH /api/query-groups/:groupId - Update a query group
+  app.patch("/api/query-groups/:groupId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { groupId } = req.params;
+      if (!groupId) {
+        return res.status(400).json({ message: "Group ID is required" });
+      }
+
+      const bodyResult = updateQueryGroupSchema.safeParse(req.body);
+      if (!bodyResult.success) {
+        return res.status(400).json({ message: "Invalid request body", errors: bodyResult.error.flatten().fieldErrors });
+      }
+
+      const updated = await storage.updateQueryGroup(groupId, bodyResult.data);
+      if (!updated) {
+        return res.status(404).json({ message: "Query group not found" });
+      }
+
+      const fullGroup = await storage.getQueryGroupById(groupId);
+      res.json(fullGroup);
+    } catch (error) {
+      console.error("Error updating query group:", error);
+      res.status(500).json({ message: "Failed to update query group" });
+    }
+  });
+
+  // DELETE /api/query-groups/:groupId - Delete a query group (queries remain, just unlinked)
+  app.delete("/api/query-groups/:groupId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { groupId } = req.params;
+      if (!groupId) {
+        return res.status(400).json({ message: "Group ID is required" });
+      }
+
+      const deleted = await storage.deleteQueryGroup(groupId);
+      if (!deleted) {
+        return res.status(404).json({ message: "Query group not found" });
+      }
+
+      res.json({ success: true, message: "Query group deleted" });
+    } catch (error) {
+      console.error("Error deleting query group:", error);
+      res.status(500).json({ message: "Failed to delete query group" });
+    }
+  });
+
+  // POST /api/query-groups/:groupId/queries - Add queries to a group
+  app.post("/api/query-groups/:groupId/queries", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { groupId } = req.params;
+      if (!groupId) {
+        return res.status(400).json({ message: "Group ID is required" });
+      }
+
+      const bodySchema = z.object({
+        queryIds: z.array(z.string()).min(1, "At least one query ID is required"),
+      });
+      const bodyResult = bodySchema.safeParse(req.body);
+      if (!bodyResult.success) {
+        return res.status(400).json({ message: "Invalid request body", errors: bodyResult.error.flatten().fieldErrors });
+      }
+
+      const { queryIds } = bodyResult.data;
+      const count = await storage.assignQueriesToGroup(queryIds, groupId);
+
+      const fullGroup = await storage.getQueryGroupById(groupId);
+      res.json({ success: true, assignedCount: count, group: fullGroup });
+    } catch (error) {
+      console.error("Error adding queries to group:", error);
+      res.status(500).json({ message: "Failed to add queries to group" });
+    }
+  });
+
+  // DELETE /api/query-groups/:groupId/queries - Remove queries from a group
+  app.delete("/api/query-groups/:groupId/queries", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { groupId } = req.params;
+      if (!groupId) {
+        return res.status(400).json({ message: "Group ID is required" });
+      }
+
+      const bodySchema = z.object({
+        queryIds: z.array(z.string()).min(1, "At least one query ID is required"),
+      });
+      const bodyResult = bodySchema.safeParse(req.body);
+      if (!bodyResult.success) {
+        return res.status(400).json({ message: "Invalid request body", errors: bodyResult.error.flatten().fieldErrors });
+      }
+
+      const { queryIds } = bodyResult.data;
+      const count = await storage.removeQueriesFromGroup(queryIds);
+
+      const fullGroup = await storage.getQueryGroupById(groupId);
+      res.json({ success: true, removedCount: count, group: fullGroup });
+    } catch (error) {
+      console.error("Error removing queries from group:", error);
+      res.status(500).json({ message: "Failed to remove queries from group" });
     }
   });
 }

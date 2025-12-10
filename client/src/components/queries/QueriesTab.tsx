@@ -83,6 +83,8 @@ import {
   Search,
   X,
   ArrowDownUp,
+  FolderPlus,
+  Folder,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -258,6 +260,11 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   // Notify Assignees dialog state
   const [isNotifyDialogOpen, setIsNotifyDialogOpen] = useState(false);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  
+  // Group creation state
+  const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [groupDescription, setGroupDescription] = useState("");
 
   const { data: queries, isLoading } = useQuery<BookkeepingQueryWithRelations[]>({
     queryKey: ['/api/projects', projectId, 'queries'],
@@ -424,6 +431,64 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
       toast({ title: "Error", description: "Failed to update queries.", variant: "destructive" });
     },
   });
+
+  // Create query group mutation
+  const createGroupMutation = useMutation({
+    mutationFn: async (data: { groupName: string; description?: string; queryIds: string[] }) => {
+      return apiRequest('POST', `/api/projects/${projectId}/query-groups`, data);
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'query-groups'] });
+      setSelectedQueries([]);
+      setIsGroupDialogOpen(false);
+      setGroupName("");
+      setGroupDescription("");
+      toast({ 
+        title: "Group created", 
+        description: `"${variables.groupName}" created with ${variables.queryIds.length} queries.` 
+      });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to create group.", variant: "destructive" });
+    },
+  });
+
+  // Handle group creation dialog opening
+  const handleOpenGroupDialog = () => {
+    if (selectedQueries.length === 0) return;
+    
+    // Try to auto-suggest a group name based on common description prefix
+    const selectedQueryData = queries?.filter(q => selectedQueries.includes(q.id)) || [];
+    const descriptions = selectedQueryData.map(q => q.description?.toLowerCase() || "").filter(Boolean);
+    
+    if (descriptions.length > 1) {
+      // Find common prefix
+      let commonPrefix = descriptions[0];
+      for (let i = 1; i < descriptions.length; i++) {
+        while (descriptions[i].indexOf(commonPrefix) !== 0 && commonPrefix.length > 0) {
+          commonPrefix = commonPrefix.slice(0, -1);
+        }
+      }
+      // Clean up and capitalize
+      if (commonPrefix.length >= 4) {
+        const words = commonPrefix.trim().split(' ').filter(w => w.length > 0);
+        const suggestedName = words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        setGroupName(suggestedName);
+      }
+    }
+    
+    setIsGroupDialogOpen(true);
+  };
+
+  const handleCreateGroup = () => {
+    if (!groupName.trim() || selectedQueries.length === 0) return;
+    createGroupMutation.mutate({
+      groupName: groupName.trim(),
+      description: groupDescription.trim() || undefined,
+      queryIds: selectedQueries,
+    });
+  };
 
   // Inline VAT toggle mutation
   const toggleVatMutation = useMutation({
@@ -1178,6 +1243,16 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                 <CheckCircle className="w-4 h-4 mr-2" />
                 Mark Resolved ({selectedQueries.length})
               </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleOpenGroupDialog}
+                disabled={createGroupMutation.isPending}
+                data-testid="button-group-selected"
+              >
+                <FolderPlus className="w-4 h-4 mr-2" />
+                Group Selected ({selectedQueries.length})
+              </Button>
             </div>
           )}
         </div>
@@ -1255,9 +1330,33 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                         {query.date ? format(new Date(query.date), 'dd MMM') : '-'}
                       </TableCell>
                       <TableCell className="max-w-xs">
-                        <p className="truncate text-sm" data-testid={`text-description-${query.id}`}>
-                          {query.description || '-'}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm flex-1" data-testid={`text-description-${query.id}`}>
+                            {query.description || '-'}
+                          </p>
+                          {query.group && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Badge 
+                                    variant="outline" 
+                                    className="text-xs flex-shrink-0 gap-1 cursor-default"
+                                    data-testid={`badge-group-${query.id}`}
+                                  >
+                                    <Folder className="w-3 h-3" />
+                                    {query.group.groupName}
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Grouped: {query.group.groupName}</p>
+                                  {query.group.description && (
+                                    <p className="text-muted-foreground">{query.group.description}</p>
+                                  )}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <AmountDisplay moneyIn={query.moneyIn} moneyOut={query.moneyOut} />
@@ -1365,9 +1464,19 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                           </p>
                         )}
                         
-                        {/* Status and VAT row */}
+                        {/* Status, Group and VAT row */}
                         <div className="flex flex-wrap items-center gap-3 mt-2">
                           <QueryStatusBadge status={query.status as QueryStatus} />
+                          {query.group && (
+                            <Badge 
+                              variant="outline" 
+                              className="text-xs gap-1"
+                              data-testid={`badge-group-mobile-${query.id}`}
+                            >
+                              <Folder className="w-3 h-3" />
+                              {query.group.groupName}
+                            </Badge>
+                          )}
                           <div className="flex items-center gap-1.5 text-xs">
                             <span className="text-muted-foreground">VAT:</span>
                             <Switch
@@ -1970,6 +2079,12 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-sm font-semibold text-muted-foreground">Query {index + 1}</span>
                         <QueryStatusBadge status={query.status as QueryStatus} />
+                        {query.group && (
+                          <Badge variant="outline" className="text-xs gap-1">
+                            <Folder className="w-3 h-3" />
+                            {query.group.groupName}
+                          </Badge>
+                        )}
                       </div>
                       {/* Transaction details */}
                       <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground mb-2">
@@ -2190,6 +2305,74 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
               data-testid="button-send-notifications"
             >
               {notifyAssigneesMutation.isPending ? "Sending..." : `Notify ${selectedAssignees.length > 0 ? `(${selectedAssignees.length})` : ''}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Group Dialog */}
+      <Dialog open={isGroupDialogOpen} onOpenChange={(open) => {
+        setIsGroupDialogOpen(open);
+        if (!open) {
+          setGroupName("");
+          setGroupDescription("");
+        }
+      }}>
+        <DialogContent className="sm:max-w-md" data-testid="dialog-create-group">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Folder className="w-5 h-5" />
+              Create Query Group
+            </DialogTitle>
+            <DialogDescription>
+              Group {selectedQueries.length} selected queries together. Grouped queries will be shown as a single item to clients.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="groupName" className="text-sm font-medium">
+                Group Name <span className="text-red-500">*</span>
+              </label>
+              <Input
+                id="groupName"
+                placeholder="e.g., Barclays Bank, Amazon Purchases"
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                data-testid="input-group-name"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label htmlFor="groupDescription" className="text-sm font-medium">
+                Description <span className="text-muted-foreground">(optional)</span>
+              </label>
+              <Input
+                id="groupDescription"
+                placeholder="Brief description of this group"
+                value={groupDescription}
+                onChange={(e) => setGroupDescription(e.target.value)}
+                data-testid="input-group-description"
+              />
+            </div>
+
+            <div className="p-3 bg-muted rounded-lg">
+              <p className="text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">{selectedQueries.length}</span> queries will be added to this group
+              </p>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsGroupDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleCreateGroup}
+              disabled={!groupName.trim() || createGroupMutation.isPending}
+              data-testid="button-create-group"
+            >
+              {createGroupMutation.isPending ? "Creating..." : "Create Group"}
             </Button>
           </DialogFooter>
         </DialogContent>
