@@ -83,29 +83,61 @@ export function SendToClientDialog({
     return queries.filter(q => selectedQueryIds.includes(q.id));
   }, [queries, selectedQueryIds]);
 
-  // People with email addresses
-  const peopleWithEmail = useMemo(() => {
+  // Build list of all email options for all people (each email is a separate option)
+  const emailOptions = useMemo(() => {
     if (!clientPeople) return [];
-    return clientPeople
-      .filter((cp: any) => {
-        const email = cp.person?.primaryEmail || cp.person?.email;
-        return email && email.trim() !== '';
-      })
-      .map((cp: any) => ({
-        id: cp.person.id,
-        fullName: cp.person.fullName || `${cp.person.firstName || ''} ${cp.person.lastName || ''}`.trim(),
-        email: cp.person.primaryEmail || cp.person.email,
-        role: cp.role || null,
-      }));
+    const options: Array<{
+      id: string;
+      personId: string;
+      fullName: string;
+      email: string;
+      role: string | null;
+      isPrimary: boolean;
+    }> = [];
+    
+    clientPeople.forEach((cp: any) => {
+      const person = cp.person;
+      if (!person) return;
+      
+      const fullName = person.fullName || `${person.firstName || ''} ${person.lastName || ''}`.trim();
+      const role = cp.role || null;
+      
+      // Collect all unique emails for this person
+      const emails: Array<{ email: string; isPrimary: boolean }> = [];
+      
+      if (person.primaryEmail?.trim()) {
+        emails.push({ email: person.primaryEmail.trim(), isPrimary: true });
+      }
+      if (person.email?.trim() && !emails.some(e => e.email.toLowerCase() === person.email.trim().toLowerCase())) {
+        emails.push({ email: person.email.trim(), isPrimary: !person.primaryEmail });
+      }
+      if (person.email2?.trim() && !emails.some(e => e.email.toLowerCase() === person.email2.trim().toLowerCase())) {
+        emails.push({ email: person.email2.trim(), isPrimary: false });
+      }
+      
+      // Create an option for each email
+      emails.forEach((emailObj, idx) => {
+        options.push({
+          id: `${person.id}-${idx}`,
+          personId: person.id,
+          fullName,
+          email: emailObj.email,
+          role,
+          isPrimary: emailObj.isPrimary,
+        });
+      });
+    });
+    
+    return options;
   }, [clientPeople]);
 
-  // Auto-select first available recipient
-  const handleRecipientChange = (personId: string) => {
-    setSelectedRecipientId(personId);
-    const person = peopleWithEmail.find(p => p.id === personId);
-    if (person) {
-      setRecipientEmail(person.email);
-      setRecipientName(person.fullName);
+  // Handle selecting an email option
+  const handleRecipientChange = (optionId: string) => {
+    setSelectedRecipientId(optionId);
+    const option = emailOptions.find(o => o.id === optionId);
+    if (option) {
+      setRecipientEmail(option.email);
+      setRecipientName(option.fullName);
       setUseCustomEmail(false);
     }
   };
@@ -200,17 +232,23 @@ export function SendToClientDialog({
           <div className="space-y-3">
             <Label className="text-sm font-medium">Recipient</Label>
             
-            {peopleWithEmail.length > 0 && !useCustomEmail ? (
+            {emailOptions.length > 0 && !useCustomEmail ? (
               <Select value={selectedRecipientId} onValueChange={handleRecipientChange}>
                 <SelectTrigger data-testid="select-recipient">
-                  <SelectValue placeholder="Select a contact..." />
+                  <SelectValue placeholder="Select a contact email..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {peopleWithEmail.map((person) => (
-                    <SelectItem key={person.id} value={person.id}>
+                  {emailOptions.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
                       <div className="flex items-center gap-2">
-                        <span>{person.fullName}</span>
-                        <span className="text-muted-foreground text-xs">({person.email})</span>
+                        <span className="font-medium">{option.fullName}</span>
+                        <span className="text-muted-foreground">—</span>
+                        <span className="text-muted-foreground">{option.email}</span>
+                        {option.isPrimary && (
+                          <Badge variant="secondary" className="text-xs py-0">
+                            Primary
+                          </Badge>
+                        )}
                       </div>
                     </SelectItem>
                   ))}
@@ -218,7 +256,7 @@ export function SendToClientDialog({
               </Select>
             ) : (
               <div className="space-y-2">
-                {peopleWithEmail.length === 0 && !useCustomEmail && (
+                {emailOptions.length === 0 && !useCustomEmail && (
                   <p className="text-sm text-muted-foreground mb-2">
                     No contacts with email addresses found for this client. Enter an email address below.
                   </p>
@@ -240,7 +278,7 @@ export function SendToClientDialog({
               </div>
             )}
 
-            {peopleWithEmail.length > 0 && (
+            {emailOptions.length > 0 && (
               <div className="flex items-center gap-2">
                 <Checkbox
                   id="use-custom-email"

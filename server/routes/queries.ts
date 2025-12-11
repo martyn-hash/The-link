@@ -706,6 +706,29 @@ export function registerQueryRoutes(
         }
       }
 
+      // Get project and client details for the email (needed before token creation for assignees)
+      const project = await storage.getProject(projectId);
+      const client = project ? await storage.getClientById(project.clientId) : null;
+      const sender = await storage.getUser(userId);
+
+      // Collect project assignees for automatic notifications
+      const effectiveNotifyUserIds: string[] = [];
+      if (project) {
+        if (project.currentAssigneeId) effectiveNotifyUserIds.push(project.currentAssigneeId);
+        if (project.bookkeeperId) effectiveNotifyUserIds.push(project.bookkeeperId);
+        if (project.clientManagerId) effectiveNotifyUserIds.push(project.clientManagerId);
+        if (project.projectOwnerId) effectiveNotifyUserIds.push(project.projectOwnerId);
+        
+        // Also get stageRoleAssignee if available
+        const projectWithRelations = project as any;
+        if (projectWithRelations.stageRoleAssignee?.id) {
+          effectiveNotifyUserIds.push(projectWithRelations.stageRoleAssignee.id);
+        }
+      }
+      // Remove duplicates
+      const uniqueNotifyUserIds = Array.from(new Set(effectiveNotifyUserIds));
+      console.log(`[Query Send-to-Client] Auto-adding ${uniqueNotifyUserIds.length} project assignees to notifications`);
+
       // Calculate expiry date
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + expiryDays);
@@ -719,15 +742,11 @@ export function registerQueryRoutes(
         recipientName: recipientName || null,
         queryCount: queryIds.length,
         queryIds,
+        notifyOnResponseUserIds: uniqueNotifyUserIds.length > 0 ? uniqueNotifyUserIds : null,
       });
 
       // Mark queries as sent to client
       await storage.markQueriesAsSentToClient(queryIds);
-
-      // Get project and client details for the email
-      const project = await storage.getProject(projectId);
-      const client = project ? await storage.getClientById(project.clientId) : null;
-      const sender = await storage.getUser(userId);
       
       // Get the queries for the email
       const queriesForEmail = await Promise.all(
@@ -828,6 +847,30 @@ export function registerQueryRoutes(
       const client = project ? await storage.getClientById(project.clientId) : null;
       const sender = await storage.getUser(userId);
       
+      // Collect project assignees for notifications (if not explicitly provided)
+      // Automatically include project assignees: currentAssignee, bookkeeper, clientManager, projectOwner
+      let effectiveNotifyUserIds: string[] = notifyOnResponseUserIds || [];
+      
+      if (project) {
+        const assigneeIds: string[] = [];
+        if (project.currentAssigneeId) assigneeIds.push(project.currentAssigneeId);
+        if (project.bookkeeperId) assigneeIds.push(project.bookkeeperId);
+        if (project.clientManagerId) assigneeIds.push(project.clientManagerId);
+        if (project.projectOwnerId) assigneeIds.push(project.projectOwnerId);
+        
+        // Also get stageRoleAssignee if available
+        const projectWithRelations = project as any;
+        if (projectWithRelations.stageRoleAssignee?.id) {
+          assigneeIds.push(projectWithRelations.stageRoleAssignee.id);
+        }
+        
+        // Merge with provided user IDs, removing duplicates
+        const allIds = [...(notifyOnResponseUserIds || []), ...assigneeIds];
+        effectiveNotifyUserIds = Array.from(new Set(allIds));
+        
+        console.log(`[Query Send] Auto-adding ${assigneeIds.length} project assignees to notifications. Total: ${effectiveNotifyUserIds.length}`);
+      }
+      
       // Get project type to check if Voice AI is available
       let voiceAiAvailable = false;
       if (project?.projectTypeId) {
@@ -861,7 +904,7 @@ export function registerQueryRoutes(
           recipientName: null,
           queryCount: queryIds.length,
           queryIds,
-          notifyOnResponseUserIds: notifyOnResponseUserIds || null,
+          notifyOnResponseUserIds: effectiveNotifyUserIds.length > 0 ? effectiveNotifyUserIds : null,
         });
 
         // Build the response URL with proper domain handling
