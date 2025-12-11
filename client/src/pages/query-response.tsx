@@ -3,6 +3,7 @@ import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useSwipeable } from "react-swipeable";
+import confetti from "canvas-confetti";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -40,6 +41,8 @@ import {
   CloudOff,
   Check,
   Folder,
+  PartyPopper,
+  Sparkles,
 } from "lucide-react";
 
 interface QueryAttachment {
@@ -163,8 +166,43 @@ export default function QueryResponsePage() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState<Record<string, boolean>>({});
   const [saveStatus, setSaveStatus] = useState<Record<string, SaveStatus>>({});
+  const [showCelebration, setShowCelebration] = useState(false);
+  const [showWelcomeBack, setShowWelcomeBack] = useState(false);
+  const hasTriggeredConfetti = useRef(false);
+  const hasDismissedCelebration = useRef(false);
   const saveTimeouts = useRef<Record<string, NodeJS.Timeout>>({});
   const DEBOUNCE_MS = 1500; // Auto-save after 1.5 seconds of no typing
+
+  const triggerConfetti = useCallback(() => {
+    if (hasTriggeredConfetti.current) return;
+    hasTriggeredConfetti.current = true;
+    
+    const duration = 3000;
+    const animationEnd = Date.now() + duration;
+    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
+
+    function randomInRange(min: number, max: number) {
+      return Math.random() * (max - min) + min;
+    }
+
+    const interval: any = setInterval(function() {
+      const timeLeft = animationEnd - Date.now();
+      if (timeLeft <= 0) {
+        return clearInterval(interval);
+      }
+      const particleCount = 50 * (timeLeft / duration);
+      confetti({
+        ...defaults,
+        particleCount,
+        origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
+      });
+      confetti({
+        ...defaults,
+        particleCount,
+        origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
+      });
+    }, 250);
+  }, []);
 
   const { data, isLoading, error, isError } = useQuery<TokenData>({
     queryKey: ['/api/query-response', token],
@@ -283,6 +321,8 @@ export default function QueryResponsePage() {
     if (data?.queries) {
       const initialResponses: Record<string, QueryResponse> = {};
       const initialSaveStatus: Record<string, SaveStatus> = {};
+      let hasSavedResponses = false;
+      
       data.queries.forEach(q => {
         initialResponses[q.id] = {
           queryId: q.id,
@@ -290,13 +330,18 @@ export default function QueryResponsePage() {
           hasVat: q.hasVat,
           attachments: sanitizeAttachments(q.clientAttachments),
         };
-        // If there's already a response saved, mark it as saved
         if (q.clientResponse || q.clientAttachments?.length) {
           initialSaveStatus[q.id] = 'saved';
+          hasSavedResponses = true;
         }
       });
       setResponses(initialResponses);
       setSaveStatus(initialSaveStatus);
+      
+      if (hasSavedResponses) {
+        setShowWelcomeBack(true);
+        setTimeout(() => setShowWelcomeBack(false), 4000);
+      }
     }
   }, [data]);
 
@@ -305,6 +350,25 @@ export default function QueryResponsePage() {
     if (!data?.queries) return [];
     return groupQueriesForDisplay(data.queries);
   }, [data?.queries]);
+
+  const allQueriesAnswered = useMemo(() => {
+    if (allDisplayItems.length === 0) return false;
+    return allDisplayItems.every(item => {
+      const response = responses[item.primaryQueryId];
+      return !!(response?.clientResponse?.trim() || (response?.attachments && response.attachments.length > 0));
+    });
+  }, [allDisplayItems, responses]);
+
+  useEffect(() => {
+    if (allQueriesAnswered && allDisplayItems.length > 0 && !showCelebration && !isSubmitted && !hasDismissedCelebration.current) {
+      setShowCelebration(true);
+      triggerConfetti();
+    }
+    if (!allQueriesAnswered) {
+      hasDismissedCelebration.current = false;
+      hasTriggeredConfetti.current = false;
+    }
+  }, [allQueriesAnswered, allDisplayItems.length, showCelebration, isSubmitted, triggerConfetti]);
 
   // Helper to check if an item is answered (has text response OR attachments)
   const isItemAnswered = useCallback((item: DisplayItem) => {
@@ -767,6 +831,17 @@ export default function QueryResponsePage() {
   // Count of saved responses for progress display
   const savedCount = Object.values(saveStatus).filter(s => s === 'saved').length;
 
+  // Global save status for header display - must be before early returns
+  const globalSaveStatus = useMemo(() => {
+    const statuses = Object.values(saveStatus);
+    if (statuses.length === 0) return null;
+    if (statuses.some(s => s === 'error')) return 'error';
+    if (statuses.some(s => s === 'saving')) return 'saving';
+    if (statuses.some(s => s === 'unsaved')) return 'unsaved';
+    if (statuses.every(s => s === 'saved')) return 'saved';
+    return null;
+  }, [saveStatus]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
@@ -845,22 +920,116 @@ export default function QueryResponsePage() {
   const currentDisplayItem = displayItems[currentIndex];
   const primaryQueryId = currentDisplayItem?.primaryQueryId;
 
+  if (showCelebration && !isSubmitted) {
+    return (
+      <div className="h-[100dvh] bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 flex flex-col items-center justify-center p-4 overflow-hidden">
+        <div className="text-center max-w-md mx-auto">
+          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 mx-auto mb-6 flex items-center justify-center shadow-lg animate-bounce">
+            <PartyPopper className="w-12 h-12 text-white" />
+          </div>
+          
+          <h1 className="text-3xl font-bold text-green-800 mb-3">
+            Amazing Work!
+          </h1>
+          
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <Sparkles className="w-5 h-5 text-yellow-500" />
+            <p className="text-lg text-green-700">
+              You've answered all {allDisplayItems.length} {allDisplayItems.length === 1 ? 'query' : 'queries'}!
+            </p>
+            <Sparkles className="w-5 h-5 text-yellow-500" />
+          </div>
+          
+          <div className="bg-white/80 backdrop-blur rounded-xl p-4 mb-6 border border-green-200 shadow-sm">
+            <div className="flex items-center justify-center gap-2 text-green-600 mb-2">
+              <Cloud className="w-4 h-4" />
+              <span className="text-sm font-medium">All your answers are safely saved</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Your progress is automatically saved to the cloud. You won't lose anything!
+            </p>
+          </div>
+          
+          <Button
+            onClick={handleSubmit}
+            disabled={submitMutation.isPending}
+            size="lg"
+            className="w-full h-14 text-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg"
+            data-testid="button-submit-celebration"
+          >
+            {submitMutation.isPending ? (
+              <>
+                <Loader2 className="w-6 h-6 mr-2 animate-spin" />
+                Submitting...
+              </>
+            ) : (
+              <>
+                <Send className="w-6 h-6 mr-2" />
+                Submit All Responses
+              </>
+            )}
+          </Button>
+          
+          <button
+            onClick={() => {
+              setShowCelebration(false);
+              hasDismissedCelebration.current = true;
+            }}
+            className="mt-4 text-sm text-muted-foreground hover:text-foreground underline"
+            data-testid="button-review-answers"
+          >
+            Wait, let me review my answers first
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-[100dvh] bg-gradient-to-br from-slate-50 to-slate-100 flex flex-col overflow-hidden">
-      {/* Compact header */}
+      {/* Welcome back toast */}
+      {showWelcomeBack && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-2 fade-in duration-300">
+          <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2 shadow-lg flex items-center gap-2">
+            <Cloud className="w-4 h-4 text-green-600" />
+            <span className="text-sm text-green-700 font-medium">Welcome back! Your progress is saved</span>
+          </div>
+        </div>
+      )}
+
+      {/* Compact header with global save status */}
       <header className="bg-white border-b shrink-0">
         <div className="max-w-4xl mx-auto px-3 py-2">
           <div className="flex items-center justify-between">
             <img src={logoPath} alt="Logo" className="h-7" />
-            <div className="text-right">
-              <p className="text-xs font-medium">{data.clientName}</p>
-              <p className="text-[10px] text-muted-foreground">{data.projectDescription}</p>
+            <div className="flex items-center gap-3">
+              {globalSaveStatus && (
+                <div className={cn(
+                  "flex items-center gap-1.5 text-xs px-2 py-1 rounded-full",
+                  globalSaveStatus === 'saved' && "bg-green-50 text-green-600",
+                  globalSaveStatus === 'saving' && "bg-blue-50 text-blue-600",
+                  globalSaveStatus === 'unsaved' && "bg-amber-50 text-amber-600",
+                  globalSaveStatus === 'error' && "bg-red-50 text-red-600"
+                )}>
+                  {globalSaveStatus === 'saved' && <><Cloud className="w-3 h-3" /> Saved</>}
+                  {globalSaveStatus === 'saving' && <><Loader2 className="w-3 h-3 animate-spin" /> Saving...</>}
+                  {globalSaveStatus === 'unsaved' && <><CloudOff className="w-3 h-3" /> Unsaved</>}
+                  {globalSaveStatus === 'error' && <><AlertCircle className="w-3 h-3" /> Error</>}
+                </div>
+              )}
+              <div className="text-right">
+                <p className="text-xs font-medium">{data.clientName}</p>
+                <p className="text-[10px] text-muted-foreground">{data.projectDescription}</p>
+              </div>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="flex-1 min-h-0 overflow-y-auto max-w-4xl mx-auto px-3 py-3 w-full">
+      <main className={cn(
+        "flex-1 min-h-0 max-w-4xl mx-auto px-3 py-3 w-full flex flex-col",
+        viewMode === 'cards' ? "overflow-hidden" : "overflow-y-auto"
+      )}>
         {/* View mode toggle - desktop only */}
         <div className="hidden sm:flex justify-end gap-2 mb-3">
           <Button
@@ -882,16 +1051,16 @@ export default function QueryResponsePage() {
         </div>
 
         {viewMode === 'cards' && currentDisplayItem ? (
-          <div className="space-y-3 overflow-x-hidden" {...swipeHandlers}>
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden" {...swipeHandlers}>
             <Card 
               className={cn(
-                "overflow-hidden transition-colors duration-300",
+                "flex-1 flex flex-col min-h-0 overflow-hidden transition-colors duration-300",
                 CARD_BACKGROUND_COLORS[currentIndex % CARD_BACKGROUND_COLORS.length]
               )}
               style={{ touchAction: 'pan-y' }} 
               data-testid={`query-card-${currentDisplayItem.id}`}
             >
-              <CardHeader className="border-b py-2 px-3 bg-white/50">
+              <CardHeader className="border-b py-2 px-3 bg-white/50 shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Badge 
@@ -918,11 +1087,11 @@ export default function QueryResponsePage() {
                   )}
                 </div>
               </CardHeader>
-              <CardContent className="pt-3 pb-3 px-3 space-y-3">
+              <CardContent className="flex-1 min-h-0 overflow-y-auto pt-3 pb-3 px-3 space-y-3">
                 {currentDisplayItem.type === 'group' ? (
                   <>
-                    {/* List of transactions in the group */}
-                    <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-2 bg-slate-50">
+                    {/* List of transactions in the group - scrollable */}
+                    <div className="space-y-2 max-h-32 overflow-y-auto border rounded-lg p-2 bg-slate-50 overscroll-contain touch-pan-y">
                       {currentDisplayItem.queries.map((query, idx) => (
                         <div key={query.id} className="flex items-center gap-3 p-2 bg-white rounded border text-sm">
                           <span className="text-xs text-muted-foreground w-5">{idx + 1}.</span>
