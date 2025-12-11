@@ -563,7 +563,7 @@ export function registerQueryRoutes(
     }
   });
 
-  // DELETE /api/queries/:id - Delete a query
+  // DELETE /api/queries/:id - Soft delete a query
   app.delete("/api/queries/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const paramValidation = validateParams(paramUuidSchema, req.params);
@@ -574,6 +574,11 @@ export function registerQueryRoutes(
         });
       }
 
+      const userId = req.effectiveUser?.id || req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
       const { id } = req.params;
       
       const existingQuery = await storage.getQueryById(id);
@@ -581,11 +586,36 @@ export function registerQueryRoutes(
         return res.status(404).json({ message: "Query not found" });
       }
 
-      await storage.deleteQuery(id);
+      await storage.softDeleteQuery(id, userId);
       res.json({ message: "Query deleted successfully" });
     } catch (error) {
       console.error("Error deleting query:", error);
       res.status(500).json({ message: "Failed to delete query" });
+    }
+  });
+
+  // POST /api/queries/bulk-delete - Soft delete multiple queries
+  app.post("/api/queries/bulk-delete", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.effectiveUser?.id || req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const { ids } = req.body;
+      
+      if (!ids || !Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ message: "Query IDs are required" });
+      }
+
+      const deletedCount = await storage.softDeleteQueries(ids, userId);
+      res.json({ 
+        message: `Deleted ${deletedCount} queries`,
+        deletedCount 
+      });
+    } catch (error) {
+      console.error("Error bulk deleting queries:", error);
+      res.status(500).json({ message: "Failed to delete queries" });
     }
   });
 
