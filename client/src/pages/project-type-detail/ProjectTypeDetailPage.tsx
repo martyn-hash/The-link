@@ -8,7 +8,7 @@ import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Settings, Layers, List, ShieldCheck, Bell } from "lucide-react";
+import { Settings, Layers, List, ShieldCheck, Bell, BookOpen } from "lucide-react";
 
 import type { EditingStage, EditingReason, EditingStageApproval, EditingStageApprovalField } from "./utils/types";
 import { SYSTEM_ROLE_OPTIONS } from "./utils/constants";
@@ -18,7 +18,8 @@ import {
   KanbanStagesTab, 
   ChangeReasonsTab, 
   StageApprovalsTab, 
-  NotificationsTab 
+  NotificationsTab,
+  FieldLibraryTab,
 } from "./components/tabs";
 import { 
   useProjectTypeQueries,
@@ -400,18 +401,22 @@ export default function ProjectTypeDetail() {
         <div className="flex-1 overflow-auto">
           <Tabs defaultValue="stages" className="h-full">
             <div className="border-b border-border bg-card px-6">
-              <TabsList className="grid w-full max-w-3xl grid-cols-5">
+              <TabsList className="grid w-full max-w-4xl grid-cols-6">
                 <TabsTrigger value="stages" className="flex items-center" data-testid="tab-stages">
                   <Layers className="w-4 h-4 mr-2" />
-                  Kanban Stages
+                  Stages
                 </TabsTrigger>
                 <TabsTrigger value="reasons" className="flex items-center" data-testid="tab-reasons">
                   <List className="w-4 h-4 mr-2" />
-                  Change Reasons
+                  Reasons
                 </TabsTrigger>
                 <TabsTrigger value="approvals" className="flex items-center" data-testid="tab-approvals">
                   <ShieldCheck className="w-4 h-4 mr-2" />
-                  Stage Approvals
+                  Approvals
+                </TabsTrigger>
+                <TabsTrigger value="field-library" className="flex items-center" data-testid="tab-field-library">
+                  <BookOpen className="w-4 h-4 mr-2" />
+                  Field Library
                 </TabsTrigger>
                 <TabsTrigger value="notifications" className="flex items-center" data-testid="tab-notifications">
                   <Bell className="w-4 h-4 mr-2" />
@@ -482,6 +487,8 @@ export default function ProjectTypeDetail() {
               approvalFieldMutations={{ createApprovalFieldMutation, updateApprovalFieldMutation, deleteApprovalFieldMutation }}
               onStageApprovalSubmit={handleStageApprovalSubmit}
             />
+
+            <FieldLibraryTab projectTypeId={projectTypeId!} />
             
             <NotificationsTab
               projectType={projectType}

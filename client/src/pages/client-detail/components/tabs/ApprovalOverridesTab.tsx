@@ -138,7 +138,8 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
   });
 
   const { data: libraryFields } = useQuery<ApprovalFieldLibrary[]>({
-    queryKey: ["/api/config/approval-field-library"],
+    queryKey: ["/api/project-types", selectedProjectTypeId, "approval-field-library"],
+    enabled: !!selectedProjectTypeId,
   });
 
   const { data: stageApprovals } = useQuery<StageApproval[]>({
