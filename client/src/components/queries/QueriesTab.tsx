@@ -99,6 +99,7 @@ import {
   Wand2,
   Minus,
   ChevronUp,
+  Lightbulb,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -1706,9 +1707,26 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                         />
                       </TableCell>
                       <TableCell className="max-w-xs">
-                        <p className="truncate font-medium text-sm" data-testid={`text-query-${query.id}`}>
-                          {query.ourQuery}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="truncate font-medium text-sm flex-1" data-testid={`text-query-${query.id}`}>
+                            {query.ourQuery}
+                          </p>
+                          {query.hasSuggestionMatch && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Lightbulb 
+                                    className="w-4 h-4 text-yellow-500 flex-shrink-0" 
+                                    data-testid={`icon-suggestion-${query.id}`}
+                                  />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Matching answer available - click Suggest Answer</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
                         {query.clientResponse && (
                           <p className="text-xs text-muted-foreground truncate mt-1">
                             Response: {query.clientResponse}
@@ -1821,9 +1839,23 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                         )}
                         
                         {/* Query */}
-                        <p className="font-medium" data-testid={`text-query-mobile-${query.id}`}>
-                          {query.ourQuery}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium flex-1" data-testid={`text-query-mobile-${query.id}`}>
+                            {query.ourQuery}
+                          </p>
+                          {query.hasSuggestionMatch && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Lightbulb className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Matching answer available</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
                         {query.clientResponse && (
                           <p className="text-sm text-muted-foreground mt-1">
                             Response: {query.clientResponse}
