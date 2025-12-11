@@ -765,52 +765,43 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     },
   });
 
-  // Bulk import handler
+  // Bulk import handler - uses single batch API call for speed
   const handleBulkImport = async (parsedQueries: ParsedQuery[]) => {
     setIsImporting(true);
-    setImportProgress({ current: 0, total: parsedQueries.length });
-    
-    let successCount = 0;
-    let failCount = 0;
     
     try {
-      for (let i = 0; i < parsedQueries.length; i++) {
-        const query = parsedQueries[i];
-        try {
-          await apiRequest('POST', `/api/projects/${projectId}/queries`, {
-            ourQuery: query.ourQuery || "Please clarify this transaction",
-            description: query.description || undefined,
-            date: query.date ? query.date.toISOString() : undefined,
-            moneyIn: query.moneyIn || undefined,
-            moneyOut: query.moneyOut || undefined,
-          });
-          successCount++;
-        } catch (error) {
-          failCount++;
-          console.error("Failed to create query:", error);
-        }
-        setImportProgress({ current: i + 1, total: parsedQueries.length });
-      }
+      // Format all queries for the bulk endpoint
+      const queriesData = parsedQueries.map(query => ({
+        ourQuery: query.ourQuery || "Please clarify this transaction",
+        description: query.description || undefined,
+        date: query.date ? query.date.toISOString() : undefined,
+        moneyIn: query.moneyIn || undefined,
+        moneyOut: query.moneyOut || undefined,
+      }));
+      
+      // Single batch request - much faster than sequential
+      await apiRequest('POST', `/api/projects/${projectId}/queries/bulk`, {
+        queries: queriesData
+      });
       
       // Refresh data
       await queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
+      await queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries', 'stats'] });
       await queryClient.invalidateQueries({ queryKey: ['/api/queries/counts'] });
       
-      if (failCount === 0) {
-        toast({ 
-          title: "Import complete", 
-          description: `Successfully imported ${successCount} queries.` 
-        });
-      } else {
-        toast({ 
-          title: "Import partially complete", 
-          description: `Imported ${successCount} queries, ${failCount} failed.`,
-          variant: "destructive" 
-        });
-      }
+      toast({ 
+        title: "Import complete", 
+        description: `Successfully imported ${parsedQueries.length} queries.` 
+      });
+    } catch (error) {
+      console.error("Failed to import queries:", error);
+      toast({ 
+        title: "Import failed", 
+        description: "There was a problem importing the queries. Please try again.",
+        variant: "destructive" 
+      });
     } finally {
       setIsImporting(false);
-      setImportProgress({ current: 0, total: 0 });
     }
   };
 
