@@ -170,40 +170,88 @@ export function QueryBulkImport({ onImport, trigger }: QueryBulkImportProps) {
 
   const parseDate = (value: string): Date | null => {
     if (!value || !value.trim()) return null;
-
-    const formats = [
-      /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
-      /^(\d{1,2})\/(\d{1,2})\/(\d{2})$/,
-      /^(\d{4})-(\d{2})-(\d{2})$/,
-      /^(\d{1,2})-(\d{1,2})-(\d{4})$/,
+    
+    const input = value.trim();
+    
+    const monthNames: Record<string, number> = {
+      'january': 1, 'jan': 1,
+      'february': 2, 'feb': 2,
+      'march': 3, 'mar': 3,
+      'april': 4, 'apr': 4,
+      'may': 5,
+      'june': 6, 'jun': 6,
+      'july': 7, 'jul': 7,
+      'august': 8, 'aug': 8,
+      'september': 9, 'sep': 9, 'sept': 9,
+      'october': 10, 'oct': 10,
+      'november': 11, 'nov': 11,
+      'december': 12, 'dec': 12,
+    };
+    
+    const parseYear = (y: string): number => {
+      const num = parseInt(y);
+      if (y.length === 2) {
+        return num < 50 ? 2000 + num : 1900 + num;
+      }
+      return num;
+    };
+    
+    const createDate = (day: number, month: number, year: number): Date | null => {
+      if (day < 1 || day > 31 || month < 1 || month > 12) return null;
+      const date = new Date(year, month - 1, day);
+      if (isNaN(date.getTime())) return null;
+      if (date.getDate() !== day || date.getMonth() !== month - 1) return null;
+      return date;
+    };
+    
+    const patterns: Array<{ regex: RegExp; extract: (m: RegExpMatchArray) => { day: number; month: number; year: number } | null }> = [
+      { regex: /^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/, extract: (m) => ({ day: parseInt(m[1]), month: parseInt(m[2]), year: parseYear(m[3]) }) },
+      { regex: /^(\d{1,2})-(\d{1,2})-(\d{2,4})$/, extract: (m) => ({ day: parseInt(m[1]), month: parseInt(m[2]), year: parseYear(m[3]) }) },
+      { regex: /^(\d{1,2})\.(\d{1,2})\.(\d{2,4})$/, extract: (m) => ({ day: parseInt(m[1]), month: parseInt(m[2]), year: parseYear(m[3]) }) },
+      { regex: /^(\d{4})-(\d{1,2})-(\d{1,2})$/, extract: (m) => ({ day: parseInt(m[3]), month: parseInt(m[2]), year: parseInt(m[1]) }) },
+      { regex: /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/, extract: (m) => ({ day: parseInt(m[3]), month: parseInt(m[2]), year: parseInt(m[1]) }) },
+      { regex: /^(\d{1,2})\s+([a-zA-Z]+)\s+(\d{2,4})$/, extract: (m) => {
+        const month = monthNames[m[2].toLowerCase()];
+        return month ? { day: parseInt(m[1]), month, year: parseYear(m[3]) } : null;
+      }},
+      { regex: /^(\d{1,2})-([a-zA-Z]+)-(\d{2,4})$/, extract: (m) => {
+        const month = monthNames[m[2].toLowerCase()];
+        return month ? { day: parseInt(m[1]), month, year: parseYear(m[3]) } : null;
+      }},
+      { regex: /^(\d{1,2})\/([a-zA-Z]+)\/(\d{2,4})$/, extract: (m) => {
+        const month = monthNames[m[2].toLowerCase()];
+        return month ? { day: parseInt(m[1]), month, year: parseYear(m[3]) } : null;
+      }},
+      { regex: /^([a-zA-Z]+)\s+(\d{1,2}),?\s+(\d{2,4})$/, extract: (m) => {
+        const month = monthNames[m[1].toLowerCase()];
+        return month ? { day: parseInt(m[2]), month, year: parseYear(m[3]) } : null;
+      }},
+      { regex: /^([a-zA-Z]+)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{2,4})$/, extract: (m) => {
+        const month = monthNames[m[1].toLowerCase()];
+        return month ? { day: parseInt(m[2]), month, year: parseYear(m[3]) } : null;
+      }},
+      { regex: /^(\d{1,2})(?:st|nd|rd|th)?\s+([a-zA-Z]+)\s+(\d{2,4})$/, extract: (m) => {
+        const month = monthNames[m[2].toLowerCase()];
+        return month ? { day: parseInt(m[1]), month, year: parseYear(m[3]) } : null;
+      }},
+      { regex: /^(\d{1,2})(?:st|nd|rd|th)?-([a-zA-Z]+)-(\d{2,4})$/i, extract: (m) => {
+        const month = monthNames[m[2].toLowerCase()];
+        return month ? { day: parseInt(m[1]), month, year: parseYear(m[3]) } : null;
+      }},
     ];
-
-    for (const format of formats) {
-      const match = value.trim().match(format);
+    
+    for (const { regex, extract } of patterns) {
+      const match = input.match(regex);
       if (match) {
-        let day: number, month: number, year: number;
-
-        if (format === formats[2]) {
-          year = parseInt(match[1]);
-          month = parseInt(match[2]);
-          day = parseInt(match[3]);
-        } else {
-          day = parseInt(match[1]);
-          month = parseInt(match[2]);
-          year = parseInt(match[3]);
-          if (year < 100) {
-            year += year < 50 ? 2000 : 1900;
-          }
-        }
-
-        const date = new Date(year, month - 1, day);
-        if (!isNaN(date.getTime())) {
-          return date;
+        const parts = extract(match);
+        if (parts) {
+          const date = createDate(parts.day, parts.month, parts.year);
+          if (date) return date;
         }
       }
     }
-
-    const parsed = new Date(value);
+    
+    const parsed = new Date(input);
     return isNaN(parsed.getTime()) ? null : parsed;
   };
 
