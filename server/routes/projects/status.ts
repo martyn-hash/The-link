@@ -89,15 +89,162 @@ export function registerProjectStatusRoutes(
       }
       
       const projectTypeId = project.projectTypeId;
+      const clientId = project.clientId;
       
       const config = await getStageConfigForProjectType(projectTypeId);
       
-      const enhancedStages = config.stages.map(stage => ({
+      // Check for client-specific approval overrides (binary: use either standard OR custom)
+      // Map: stageId -> override (the override specifies which custom approval to use for that stage)
+      let stageOverridesMap: Map<string, any> = new Map();
+      if (clientId) {
+        const overrides = await storage.getOverridesByClient(clientId);
+        // Only include overrides for this project type
+        for (const override of overrides) {
+          if (override.projectTypeId === projectTypeId) {
+            stageOverridesMap.set(override.stageId, override);
+          }
+        }
+      }
+      
+      // Resolve approvals: replace standard approvals with custom ones where override exists
+      let resolvedApprovals = [...config.stageApprovals];
+      let resolvedApprovalFields = [...config.stageApprovalFields];
+      let resolvedStages = [...config.stages];
+      let resolvedReasons = [...config.reasons];
+      
+      if (stageOverridesMap.size > 0) {
+        // Get unique override approval IDs
+        const overrideApprovalIds = Array.from(new Set(
+          Array.from(stageOverridesMap.values()).map(o => o.overrideApprovalId)
+        ));
+        
+        // Fetch override approvals and their fields in parallel
+        const [overrideApprovals, overrideFieldsArrays] = await Promise.all([
+          Promise.all(overrideApprovalIds.map(id => storage.getStageApprovalById(id))),
+          Promise.all(overrideApprovalIds.map(id => storage.getStageApprovalFieldsByApprovalId(id))),
+        ]);
+        
+        // Create lookup for override approvals and fields
+        const overrideApprovalLookup = new Map<string, any>();
+        overrideApprovals.filter(Boolean).forEach(a => overrideApprovalLookup.set(a!.id, a));
+        
+        // Collect IDs of original approvals being replaced (to filter out their fields)
+        const originalApprovalIdsToRemove = new Set<string>();
+        
+        // Track which override approvals we need to add to the list
+        const overrideApprovalsToAdd = new Map<string, any>();
+        
+        // Track stage -> override approval mapping for reason updates
+        const stageToOverrideApprovalMap = new Map<string, string>();
+        
+        // Update stages to point to override approvals where applicable
+        resolvedStages = config.stages.map(stage => {
+          const override = stageOverridesMap.get(stage.id);
+          if (override && overrideApprovalLookup.has(override.overrideApprovalId)) {
+            // Track stage -> override mapping
+            stageToOverrideApprovalMap.set(stage.id, override.overrideApprovalId);
+            
+            // Track original approval to remove its fields
+            if (stage.stageApprovalId) {
+              originalApprovalIdsToRemove.add(stage.stageApprovalId);
+            }
+            
+            // Track override approval to add
+            const overrideApproval = overrideApprovalLookup.get(override.overrideApprovalId);
+            overrideApprovalsToAdd.set(overrideApproval.id, {
+              ...overrideApproval,
+              _isOverride: true,
+              _originalStageId: stage.id,
+            });
+            
+            // Return stage with updated stageApprovalId pointing to override
+            return {
+              ...stage,
+              stageApprovalId: override.overrideApprovalId,
+              _hasOverride: true,
+              _originalApprovalId: stage.stageApprovalId || null,
+            };
+          }
+          return stage;
+        });
+        
+        // Note: Reasons are NOT modified - they keep their original stageApprovalId.
+        // The frontend should resolve the effective approval based on the target stage:
+        // - If the stage has a stageApprovalId (possibly overridden), use it
+        // - Otherwise, fall back to the reason's stageApprovalId
+        // This preserves the binary override contract: stages with overrides use their override,
+        // stages without overrides use the standard approval from the reason.
+        
+        // Build resolved approvals list:
+        // 1. Keep standard approvals that aren't fully replaced
+        // 2. Add override approvals
+        const approvalIdsInResult = new Set<string>();
+        
+        // First add standard approvals that aren't being removed
+        // Note: Reasons are never modified, so always check if they reference the approval
+        resolvedApprovals = config.stageApprovals.filter(approval => {
+          if (originalApprovalIdsToRemove.has(approval.id)) {
+            // Check if this approval is still referenced by any non-overridden stage
+            const stillReferencedByStage = resolvedStages.some(s => 
+              s.stageApprovalId === approval.id && !(s as any)._hasOverride
+            );
+            // Reasons are never overridden - they always reference the original approval
+            // So if any reason references this approval, keep it
+            const stillReferencedByReason = resolvedReasons.some(r => 
+              r.stageApprovalId === approval.id
+            );
+            
+            if (!stillReferencedByStage && !stillReferencedByReason) {
+              return false; // Fully replaced, remove it
+            }
+          }
+          approvalIdsInResult.add(approval.id);
+          return true;
+        });
+        
+        // Add override approvals that aren't already in the list
+        for (const [approvalId, approval] of Array.from(overrideApprovalsToAdd.entries())) {
+          if (!approvalIdsInResult.has(approvalId)) {
+            resolvedApprovals.push(approval);
+            approvalIdsInResult.add(approvalId);
+          }
+        }
+        
+        // Resolve approval fields:
+        // 1. Filter out fields for approvals that were fully removed
+        // 2. Add fields for override approvals
+        const fieldsFromRemovedApprovals = new Set<string>();
+        for (const field of config.stageApprovalFields) {
+          if (originalApprovalIdsToRemove.has(field.stageApprovalId)) {
+            // Only remove if the approval was fully removed
+            if (!approvalIdsInResult.has(field.stageApprovalId)) {
+              fieldsFromRemovedApprovals.add(field.id);
+            }
+          }
+        }
+        
+        resolvedApprovalFields = config.stageApprovalFields.filter(
+          field => !fieldsFromRemovedApprovals.has(field.id)
+        );
+        
+        // Add override approval fields
+        const existingFieldIds = new Set(resolvedApprovalFields.map(f => f.id));
+        for (const fields of overrideFieldsArrays) {
+          for (const field of fields) {
+            if (!existingFieldIds.has(field.id)) {
+              resolvedApprovalFields.push(field);
+              existingFieldIds.add(field.id);
+            }
+          }
+        }
+      }
+      
+      const enhancedStages = resolvedStages.map(stage => ({
         ...stage,
         validReasonIds: Array.from(config.stageReasonMap.get(stage.id) || []),
       }));
       
-      const enhancedReasons = config.reasons.map(reason => ({
+      const enhancedReasons = resolvedReasons.map(reason => ({
         ...reason,
         customFields: config.reasonCustomFieldsMap.get(reason.id) || [],
       }));
@@ -107,8 +254,9 @@ export function registerProjectStatusRoutes(
         currentStatus: project.currentStatus,
         stages: enhancedStages,
         reasons: enhancedReasons,
-        stageApprovals: config.stageApprovals,
-        stageApprovalFields: config.stageApprovalFields,
+        stageApprovals: resolvedApprovals,
+        stageApprovalFields: resolvedApprovalFields,
+        hasClientOverrides: stageOverridesMap.size > 0,
       });
     } catch (error) {
       console.error("Error fetching stage change config:", error instanceof Error ? error.message : error);
@@ -203,7 +351,19 @@ export function registerProjectStatusRoutes(
         }
       }
 
-      const effectiveApprovalId = changeReason.stageApprovalId || targetStage.stageApprovalId;
+      // Check for client-specific approval override for this stage
+      // Binary override: if client has an override for this stage, use it instead of standard
+      let effectiveApprovalId = targetStage.stageApprovalId || changeReason.stageApprovalId;
+      
+      if (project.clientId) {
+        const clientOverrides = await storage.getOverridesByClient(project.clientId);
+        const stageOverride = clientOverrides.find(o => 
+          o.projectTypeId === project.projectTypeId && o.stageId === targetStage.id
+        );
+        if (stageOverride) {
+          effectiveApprovalId = stageOverride.overrideApprovalId;
+        }
+      }
       
       if (effectiveApprovalId) {
         const existingResponses = await storage.getStageApprovalResponsesByProjectId(updateData.projectId);
