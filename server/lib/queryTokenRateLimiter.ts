@@ -166,6 +166,20 @@ export function validateAttachmentObjectPath(objectPath: string): boolean {
     return false;
   }
 
+  // Path should not contain path traversal attempts
+  if (objectPath.includes('..') || objectPath.includes('//')) {
+    return false;
+  }
+
+  // Allow paths from object storage (start with /objects/)
+  // These are returned by the Replit object storage service
+  if (objectPath.startsWith('/objects/')) {
+    // Validate the rest of the path contains only safe characters
+    const restOfPath = objectPath.slice(9); // Remove '/objects/'
+    const safePattern = /^[a-zA-Z0-9._/-]+$/;
+    return safePattern.test(restOfPath) && objectPath.length < 500;
+  }
+
   // Object paths from our ObjectStorageService follow a specific pattern
   // They should start with our private directory and contain a UUID-like filename
   const validPathPattern = /^\.private\/[a-zA-Z0-9_-]+\/[a-f0-9-]{36}\.[a-zA-Z0-9]+$/;
@@ -173,18 +187,12 @@ export function validateAttachmentObjectPath(objectPath: string): boolean {
   
   // Also allow simpler patterns used by the current implementation
   const simplePattern = /^[a-zA-Z0-9._/-]+$/;
-  
-  // Path should not contain path traversal attempts
-  if (objectPath.includes('..') || objectPath.includes('//')) {
-    return false;
-  }
 
-  // Path should not be absolute
+  // Path should match expected patterns (non-absolute paths)
   if (objectPath.startsWith('/')) {
     return false;
   }
 
-  // Path should match expected patterns
   return simplePattern.test(objectPath) && objectPath.length < 500;
 }
 

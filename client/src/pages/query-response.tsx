@@ -275,6 +275,11 @@ export default function QueryResponsePage() {
     onError: (error: Error, { queryId }) => {
       setSaveStatus(prev => ({ ...prev, [queryId]: 'error' }));
       console.error('Auto-save failed:', error.message);
+      toast({
+        variant: "destructive",
+        title: "Couldn't save your response",
+        description: "Please check your connection and try again. Your changes may not be saved.",
+      });
     },
   });
 
@@ -359,16 +364,44 @@ export default function QueryResponsePage() {
     });
   }, [allDisplayItems, responses]);
 
+  // Track if user has started answering (to prevent celebration on initial load)
+  const hasUserStartedAnswering = useRef(false);
+  
+  // Reset celebration dismissal flag when not all queries are answered
+  // Celebration is now triggered explicitly by navigation, not automatically by auto-save
   useEffect(() => {
-    if (allQueriesAnswered && allDisplayItems.length > 0 && !showCelebration && !isSubmitted && !hasDismissedCelebration.current) {
-      setShowCelebration(true);
-      triggerConfetti();
-    }
     if (!allQueriesAnswered) {
       hasDismissedCelebration.current = false;
       hasTriggeredConfetti.current = false;
     }
-  }, [allQueriesAnswered, allDisplayItems.length, showCelebration, isSubmitted, triggerConfetti]);
+  }, [allQueriesAnswered]);
+  
+  // Function to show celebration screen with confetti
+  const showCelebrationScreen = useCallback(() => {
+    if (allQueriesAnswered && allDisplayItems.length > 0 && !isSubmitted && !hasDismissedCelebration.current) {
+      setShowCelebration(true);
+      triggerConfetti();
+    }
+  }, [allQueriesAnswered, allDisplayItems.length, isSubmitted, triggerConfetti]);
+  
+  // Track when all queries become answered after user interaction
+  // This handles the case where user is on the last item and types/uploads
+  const prevAllAnswered = useRef(allQueriesAnswered);
+  useEffect(() => {
+    // Detect transition from not-all-answered to all-answered
+    if (allQueriesAnswered && !prevAllAnswered.current && hasUserStartedAnswering.current) {
+      // User just completed all queries - show celebration after a brief delay
+      // This delay prevents it from firing mid-typing; celebration shows once typing stops
+      const timer = setTimeout(() => {
+        if (!hasDismissedCelebration.current && !isSubmitted) {
+          setShowCelebration(true);
+          triggerConfetti();
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+    prevAllAnswered.current = allQueriesAnswered;
+  }, [allQueriesAnswered, isSubmitted, triggerConfetti]);
 
   // Helper to check if an item is answered (has text response OR attachments)
   const isItemAnswered = useCallback((item: DisplayItem) => {
@@ -488,14 +521,18 @@ export default function QueryResponsePage() {
         }
       }
       
-      // All items are answered - stay on current item
+      // All items are answered - show celebration if eligible
+      showCelebrationScreen();
     } else {
       // In "all" mode, just move to next index
       if (currentIndex < displayItems.length - 1) {
         setCurrentItemId(displayItems[currentIndex + 1].primaryQueryId);
+      } else {
+        // On the last item - check if all are answered and show celebration
+        showCelebrationScreen();
       }
     }
-  }, [allDisplayItems, displayItems, currentIndex, currentItemId, filterMode, isItemAnswered]);
+  }, [allDisplayItems, displayItems, currentIndex, currentItemId, filterMode, isItemAnswered, showCelebrationScreen]);
   
   const navigatePrev = useCallback(() => {
     // Guard: Don't navigate when in empty state
@@ -568,6 +605,7 @@ export default function QueryResponsePage() {
   });
 
   const updateResponse = (queryId: string, field: 'clientResponse' | 'hasVat', value: string | boolean | null) => {
+    hasUserStartedAnswering.current = true;
     setResponses(prev => {
       const updated = {
         ...prev,
@@ -583,6 +621,7 @@ export default function QueryResponsePage() {
   };
 
   const addAttachment = (queryId: string, attachment: QueryAttachment) => {
+    hasUserStartedAnswering.current = true;
     setResponses(prev => {
       const updated = {
         ...prev,
@@ -986,7 +1025,7 @@ export default function QueryResponsePage() {
   }
 
   return (
-    <div className="h-[100dvh] bg-gradient-to-br from-slate-50 to-slate-100 flex flex-col overflow-hidden">
+    <div className="h-[100dvh] bg-gradient-to-br from-slate-50 to-slate-100 flex flex-col overflow-hidden fixed inset-0 overscroll-none touch-none">
       {/* Welcome back toast */}
       {showWelcomeBack && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-2 fade-in duration-300">
@@ -1087,7 +1126,7 @@ export default function QueryResponsePage() {
                   )}
                 </div>
               </CardHeader>
-              <CardContent className="flex-1 min-h-0 overflow-y-auto pt-3 pb-3 px-3 space-y-3">
+              <CardContent className="flex-1 min-h-0 overflow-y-auto pt-3 pb-3 px-3 space-y-3 touch-pan-y overscroll-contain">
                 {currentDisplayItem.type === 'group' ? (
                   <>
                     {/* List of transactions in the group - scrollable */}
