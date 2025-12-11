@@ -16,6 +16,10 @@ import {
   insertStageApprovalFieldSchema,
   updateStageApprovalFieldSchema,
   insertStageApprovalResponseSchema,
+  insertApprovalFieldLibrarySchema,
+  updateApprovalFieldLibrarySchema,
+  insertClientStageApprovalOverrideSchema,
+  updateClientStageApprovalOverrideSchema,
 } from "@shared/schema";
 import { stageConfigCache } from "../utils/ttlCache";
 
@@ -1059,6 +1063,257 @@ export function registerConfigRoutes(
     } catch (error) {
       console.error("Error setting fallback user:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to set fallback user" });
+    }
+  });
+
+  // ============================================================================
+  // APPROVAL FIELD LIBRARY ROUTES
+  // ============================================================================
+
+  app.get("/api/project-types/:projectTypeId/approval-field-library", isAuthenticated, async (req, res) => {
+    try {
+      const { projectTypeId } = req.params;
+      const includeUsage = req.query.includeUsage === 'true';
+      
+      if (includeUsage) {
+        const fieldsWithUsage = await storage.getLibraryFieldsWithUsage(projectTypeId);
+        res.json(fieldsWithUsage);
+      } else {
+        const fields = await storage.getLibraryFieldsByProjectType(projectTypeId);
+        res.json(fields);
+      }
+    } catch (error) {
+      console.error("Error fetching approval field library:", error);
+      res.status(500).json({ message: "Failed to fetch approval field library" });
+    }
+  });
+
+  app.post("/api/project-types/:projectTypeId/approval-field-library", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const { projectTypeId } = req.params;
+      const fieldData = insertApprovalFieldLibrarySchema.parse({
+        ...req.body,
+        projectTypeId
+      });
+      
+      const field = await storage.createLibraryField(fieldData);
+      res.status(201).json(field);
+    } catch (error) {
+      console.error("Error creating library field:", error);
+      
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: (error as any).issues
+        });
+      }
+      
+      if (error instanceof Error && error.message.includes('already exists')) {
+        return res.status(409).json({ message: error.message });
+      }
+      
+      res.status(400).json({ message: "Failed to create library field" });
+    }
+  });
+
+  app.get("/api/approval-field-library/:id", isAuthenticated, async (req, res) => {
+    try {
+      const field = await storage.getLibraryFieldById(req.params.id);
+      if (!field) {
+        return res.status(404).json({ message: "Library field not found" });
+      }
+      res.json(field);
+    } catch (error) {
+      console.error("Error fetching library field:", error);
+      res.status(500).json({ message: "Failed to fetch library field" });
+    }
+  });
+
+  app.patch("/api/approval-field-library/:id", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const updateData = updateApprovalFieldLibrarySchema.parse(req.body);
+      const field = await storage.updateLibraryField(req.params.id, updateData);
+      res.json(field);
+    } catch (error) {
+      console.error("Error updating library field:", error);
+      
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: (error as any).issues
+        });
+      }
+      
+      if (error instanceof Error && error.message.includes('not found')) {
+        return res.status(404).json({ message: "Library field not found" });
+      }
+      
+      if (error instanceof Error && error.message.includes('already exists')) {
+        return res.status(409).json({ message: error.message });
+      }
+      
+      res.status(400).json({ message: "Failed to update library field" });
+    }
+  });
+
+  app.delete("/api/approval-field-library/:id", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteLibraryField(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting library field:", error);
+      
+      if (error instanceof Error && error.message.includes('not found')) {
+        return res.status(404).json({ message: "Library field not found" });
+      }
+      
+      if (error instanceof Error && error.message.includes('Cannot delete')) {
+        return res.status(409).json({ message: error.message });
+      }
+      
+      res.status(400).json({ message: "Failed to delete library field" });
+    }
+  });
+
+  app.get("/api/approval-field-library/:id/usage", isAuthenticated, async (req, res) => {
+    try {
+      const usageCount = await storage.getLibraryFieldUsageCount(req.params.id);
+      const approvals = await storage.getApprovalsUsingLibraryField(req.params.id);
+      res.json({ usageCount, approvals });
+    } catch (error) {
+      console.error("Error fetching library field usage:", error);
+      res.status(500).json({ message: "Failed to fetch library field usage" });
+    }
+  });
+
+  app.post("/api/stage-approvals/:approvalId/fields/from-library", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const { approvalId } = req.params;
+      const { libraryFieldId, order, isRequired } = req.body;
+      
+      if (!libraryFieldId) {
+        return res.status(400).json({ message: "libraryFieldId is required" });
+      }
+      
+      const libraryField = await storage.getLibraryFieldById(libraryFieldId);
+      if (!libraryField) {
+        return res.status(404).json({ message: "Library field not found" });
+      }
+      
+      const approval = await storage.getStageApprovalById(approvalId);
+      if (!approval) {
+        return res.status(404).json({ message: "Stage approval not found" });
+      }
+      
+      const fieldData = insertStageApprovalFieldSchema.parse({
+        stageApprovalId: approvalId,
+        libraryFieldId,
+        fieldName: libraryField.fieldName,
+        fieldType: libraryField.fieldType,
+        description: libraryField.description,
+        placeholder: libraryField.placeholder,
+        expectedValueBoolean: libraryField.expectedValueBoolean,
+        comparisonType: libraryField.comparisonType,
+        expectedValueNumber: libraryField.expectedValueNumber,
+        dateComparisonType: libraryField.dateComparisonType,
+        expectedDate: libraryField.expectedDate,
+        expectedDateEnd: libraryField.expectedDateEnd,
+        options: libraryField.options,
+        order: order ?? 0,
+        isRequired: isRequired ?? false,
+      });
+      
+      const field = await storage.createStageApprovalField(fieldData);
+      invalidateStageConfigCache(approval.projectTypeId);
+      res.status(201).json(field);
+    } catch (error) {
+      console.error("Error creating field from library:", error);
+      
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: (error as any).issues
+        });
+      }
+      
+      res.status(400).json({ message: "Failed to create field from library" });
+    }
+  });
+
+  // ============================================================================
+  // CLIENT STAGE APPROVAL OVERRIDE ROUTES
+  // ============================================================================
+
+  app.get("/api/clients/:clientId/approval-overrides", isAuthenticated, async (req, res) => {
+    try {
+      const overrides = await storage.getOverridesByClient(req.params.clientId);
+      res.json(overrides);
+    } catch (error) {
+      console.error("Error fetching client approval overrides:", error);
+      res.status(500).json({ message: "Failed to fetch client approval overrides" });
+    }
+  });
+
+  app.post("/api/clients/:clientId/approval-overrides", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const { clientId } = req.params;
+      const overrideData = insertClientStageApprovalOverrideSchema.parse({
+        ...req.body,
+        clientId
+      });
+      
+      const override = await storage.createClientApprovalOverride(overrideData);
+      res.status(201).json(override);
+    } catch (error) {
+      console.error("Error creating client approval override:", error);
+      
+      if (error instanceof Error && error.name === 'ZodError') {
+        return res.status(400).json({
+          message: "Validation failed",
+          errors: (error as any).issues
+        });
+      }
+      
+      if (error instanceof Error && error.message.includes('already exists')) {
+        return res.status(409).json({ message: error.message });
+      }
+      
+      res.status(400).json({ message: "Failed to create client approval override" });
+    }
+  });
+
+  app.delete("/api/clients/:clientId/approval-overrides/:overrideId", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteClientApprovalOverride(req.params.overrideId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting client approval override:", error);
+      
+      if (error instanceof Error && error.message.includes('not found')) {
+        return res.status(404).json({ message: "Override not found" });
+      }
+      
+      res.status(400).json({ message: "Failed to delete client approval override" });
+    }
+  });
+
+  app.get("/api/project-types/:projectTypeId/client-overrides", isAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const overrides = await storage.getOverridesByProjectType(req.params.projectTypeId);
+      res.json(overrides);
+    } catch (error) {
+      console.error("Error fetching client overrides for project type:", error);
+      res.status(500).json({ message: "Failed to fetch client overrides" });
+    }
+  });
+
+  app.get("/api/stage-approvals/:approvalId/resolved-fields", isAuthenticated, async (req, res) => {
+    try {
+      const fields = await storage.getResolvedApprovalFields(req.params.approvalId);
+      res.json(fields);
+    } catch (error) {
+      console.error("Error fetching resolved approval fields:", error);
+      res.status(500).json({ message: "Failed to fetch resolved approval fields" });
     }
   });
 }
