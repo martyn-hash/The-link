@@ -384,24 +384,8 @@ export default function QueryResponsePage() {
     }
   }, [allQueriesAnswered, allDisplayItems.length, isSubmitted, triggerConfetti]);
   
-  // Track when all queries become answered after user interaction
-  // This handles the case where user is on the last item and types/uploads
-  const prevAllAnswered = useRef(allQueriesAnswered);
-  useEffect(() => {
-    // Detect transition from not-all-answered to all-answered
-    if (allQueriesAnswered && !prevAllAnswered.current && hasUserStartedAnswering.current) {
-      // User just completed all queries - show celebration after a brief delay
-      // This delay prevents it from firing mid-typing; celebration shows once typing stops
-      const timer = setTimeout(() => {
-        if (!hasDismissedCelebration.current && !isSubmitted) {
-          setShowCelebration(true);
-          triggerConfetti();
-        }
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-    prevAllAnswered.current = allQueriesAnswered;
-  }, [allQueriesAnswered, isSubmitted, triggerConfetti]);
+  // Celebration is now triggered ONLY by explicit user action (Next button click)
+  // via showCelebrationScreen() in navigateNext - no auto-trigger on typing
 
   // Helper to check if an item is answered (has text response OR attachments)
   const isItemAnswered = useCallback((item: DisplayItem) => {
