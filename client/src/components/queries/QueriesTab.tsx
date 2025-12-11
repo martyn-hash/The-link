@@ -1752,10 +1752,48 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                         )}
                       </TableCell>
                       <TableCell>
-                        <QueryStatusBadge status={query.status as QueryStatus} />
+                        <div className="flex items-center gap-2">
+                          <QueryStatusBadge status={query.status as QueryStatus} />
+                          {query.clientAttachments && (query.clientAttachments as any[]).length > 0 && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Badge variant="secondary" className="text-xs gap-1">
+                                    <Paperclip className="w-3 h-3" />
+                                    {(query.clientAttachments as any[]).length}
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>{(query.clientAttachments as any[]).length} file(s) attached</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <DropdownMenu>
+                        <div className="flex items-center justify-end gap-1">
+                          {(query.clientResponse || (query.clientAttachments && (query.clientAttachments as any[]).length > 0)) && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleEditQuery(query)}
+                                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                                    data-testid={`button-view-${query.id}`}
+                                  >
+                                    <Eye className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>View response</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                          <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm" data-testid={`button-actions-${query.id}`}>
                               <MoreHorizontal className="w-4 h-4" />
@@ -1763,8 +1801,17 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => handleEditQuery(query)}>
-                              <MessageSquare className="w-4 h-4 mr-2" />
-                              Respond
+                              {query.clientResponse || (query.clientAttachments && (query.clientAttachments as any[]).length > 0) ? (
+                                <>
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  View Response
+                                </>
+                              ) : (
+                                <>
+                                  <MessageSquare className="w-4 h-4 mr-2" />
+                                  Respond
+                                </>
+                              )}
                             </DropdownMenuItem>
                             <DropdownMenuItem 
                               onClick={() => {
@@ -1819,6 +1866,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1890,9 +1938,15 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                           </p>
                         )}
                         
-                        {/* Status, Group and VAT row */}
+                        {/* Status, Group, Attachments and VAT row */}
                         <div className="flex flex-wrap items-center gap-3 mt-2">
                           <QueryStatusBadge status={query.status as QueryStatus} />
+                          {query.clientAttachments && (query.clientAttachments as any[]).length > 0 && (
+                            <Badge variant="secondary" className="text-xs gap-1">
+                              <Paperclip className="w-3 h-3" />
+                              {(query.clientAttachments as any[]).length}
+                            </Badge>
+                          )}
                           {query.group && (
                             <Badge 
                               variant="outline" 
@@ -1915,17 +1969,38 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                         </div>
                       </div>
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm">
-                          <MoreHorizontal className="w-4 h-4" />
+                    <div className="flex items-center gap-1">
+                      {(query.clientResponse || (query.clientAttachments && (query.clientAttachments as any[]).length > 0)) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditQuery(query)}
+                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                          data-testid={`button-view-mobile-${query.id}`}
+                        >
+                          <Eye className="w-4 h-4" />
                         </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEditQuery(query)}>
-                          <MessageSquare className="w-4 h-4 mr-2" />
-                          Respond
-                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleEditQuery(query)}>
+                            {query.clientResponse || (query.clientAttachments && (query.clientAttachments as any[]).length > 0) ? (
+                              <>
+                                <Eye className="w-4 h-4 mr-2" />
+                                View Response
+                              </>
+                            ) : (
+                              <>
+                                <MessageSquare className="w-4 h-4 mr-2" />
+                                Respond
+                              </>
+                            )}
+                          </DropdownMenuItem>
                         <DropdownMenuItem 
                           onClick={() => {
                             setSuggestionQueryId(query.id);
@@ -1968,15 +2043,16 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                             </DropdownMenuItem>
                           </>
                         )}
-                        <DropdownMenuItem 
-                          onClick={() => deleteMutation.mutate(query.id)}
-                          className="text-destructive"
-                        >
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                          <DropdownMenuItem 
+                            onClick={() => deleteMutation.mutate(query.id)}
+                            className="text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 </div>
               ))}
