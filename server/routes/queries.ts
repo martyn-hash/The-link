@@ -1694,24 +1694,68 @@ ${emailSignoff}`;
       await storage.markQueryTokenCompleted(tokenData.id);
 
       // Send notifications to assigned users if configured
+      let notificationStats = { requested: 0, sent: 0, failed: 0, skipped: 0 };
+      
       if (tokenData.notifyOnResponseUserIds && tokenData.notifyOnResponseUserIds.length > 0) {
+        notificationStats.requested = tokenData.notifyOnResponseUserIds.length;
+        console.log(`[Query Notification] Processing ${notificationStats.requested} notification(s) for token ${tokenData.id}`);
+        
         try {
+          // Get project and client info for the notification
           const project = await storage.getProject(tokenData.projectId);
-          const client = project ? await storage.getClientById(project.clientId) : null;
+          let clientName: string | null = null;
+          let clientId: string | null = null;
           
-          for (const userId of tokenData.notifyOnResponseUserIds) {
-            try {
-              const user = await storage.getUser(userId);
-              if (user?.email) {
-                // Send notification email
-                const { getUncachableSendGridClient } = await import('../sendgridService');
-                const { client: sgClient, fromEmail } = await getUncachableSendGridClient();
+          if (project) {
+            clientId = project.clientId;
+            const client = await storage.getClientById(project.clientId);
+            clientName = client?.name || null;
+          }
+          
+          const projectName = project?.description || 'Query Responses';
+          console.log(`[Query Notification] Project: ${projectName}, Client: ${clientName || 'Unknown'}`);
+          
+          // Build view URL - use project-only URL if clientId is missing
+          const baseUrl = process.env.APP_URL || 'https://thelink.replit.app';
+          const viewUrl = clientId 
+            ? `${baseUrl}/clients/${clientId}/projects/${tokenData.projectId}`
+            : `${baseUrl}/projects/${tokenData.projectId}`;
+          
+          // Try to initialize SendGrid
+          let sgClient: any = null;
+          let fromEmail: string = '';
+          
+          try {
+            const { getUncachableSendGridClient } = await import('../sendgridService');
+            const sgResult = await getUncachableSendGridClient();
+            sgClient = sgResult.client;
+            fromEmail = sgResult.fromEmail;
+          } catch (sgInitError) {
+            console.error("[Query Notification] SendGrid not configured, skipping notifications:", sgInitError);
+            notificationStats.skipped = notificationStats.requested;
+          }
+          
+          if (sgClient && fromEmail) {
+            for (const userId of tokenData.notifyOnResponseUserIds) {
+              try {
+                const user = await storage.getUser(userId);
+                if (!user) {
+                  console.warn(`[Query Notification] User ${userId} not found, skipping`);
+                  notificationStats.skipped++;
+                  continue;
+                }
                 
-                const subject = `Client Responded: ${project?.description || 'Query Responses'}`;
+                if (!user.email) {
+                  console.warn(`[Query Notification] User ${userId} has no email, skipping`);
+                  notificationStats.skipped++;
+                  continue;
+                }
+                
+                const subject = `Client Responded: ${projectName}`;
                 const html = `
                   <p>Hi ${user.firstName || 'Team Member'},</p>
-                  <p>The client has submitted their responses to ${updatedCount} ${updatedCount === 1 ? 'query' : 'queries'} for <strong>${project?.description || 'the project'}</strong>${client ? ` (${client.name})` : ''}.</p>
-                  <p><a href="${process.env.APP_URL || 'https://thelink.replit.app'}/clients/${project?.clientId}/projects/${tokenData.projectId}">View Responses</a></p>
+                  <p>The client has submitted their responses to ${updatedCount} ${updatedCount === 1 ? 'query' : 'queries'} for <strong>${projectName}</strong>${clientName ? ` (${clientName})` : ''}.</p>
+                  <p><a href="${viewUrl}">View Responses</a></p>
                   <p>Best regards,<br/>The Link</p>
                 `;
                 
@@ -1721,20 +1765,27 @@ ${emailSignoff}`;
                   subject,
                   html,
                 });
-                console.log(`[Query Notification] Sent response notification to ${user.email} for project ${tokenData.projectId}`);
+                
+                console.log(`[Query Notification] Sent response notification to ${user.email}`);
+                notificationStats.sent++;
+              } catch (userNotifyError) {
+                console.error(`[Query Notification] Failed to notify user ${userId}:`, userNotifyError);
+                notificationStats.failed++;
               }
-            } catch (userNotifyError) {
-              console.error(`[Query Notification] Failed to notify user ${userId}:`, userNotifyError);
             }
           }
+          
+          console.log(`[Query Notification] Completed: ${notificationStats.sent} sent, ${notificationStats.failed} failed, ${notificationStats.skipped} skipped`);
         } catch (notifyError) {
-          console.error("[Query Notification] Failed to send response notifications:", notifyError);
+          console.error("[Query Notification] Failed to initialize notifications:", notifyError);
+          notificationStats.skipped = notificationStats.requested;
         }
       }
 
       res.json({
         message: "Responses submitted successfully",
         updatedCount,
+        notifications: notificationStats.requested > 0 ? notificationStats : undefined,
       });
     } catch (error) {
       console.error("Error submitting client responses:", error);

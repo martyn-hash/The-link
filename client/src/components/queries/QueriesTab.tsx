@@ -266,6 +266,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   // Notify Assignees dialog state
   const [isNotifyDialogOpen, setIsNotifyDialogOpen] = useState(false);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
+  const [customNotifyMessage, setCustomNotifyMessage] = useState("");
   
   // Group creation state
   const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false);
@@ -2526,7 +2527,10 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
       {/* Notify Assignees Dialog */}
       <Dialog open={isNotifyDialogOpen} onOpenChange={(open) => {
         setIsNotifyDialogOpen(open);
-        if (!open) setSelectedAssignees([]);
+        if (!open) {
+          setSelectedAssignees([]);
+          setCustomNotifyMessage("");
+        }
       }}>
         <DialogContent className="sm:max-w-lg" data-testid="dialog-notify-assignees">
           <DialogHeader>
@@ -2612,6 +2616,21 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                 </div>
               )}
             </div>
+
+            {/* Custom Message */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium block">Custom Message (optional)</label>
+              <Textarea
+                placeholder="Add a custom message to the notification..."
+                value={customNotifyMessage}
+                onChange={(e) => setCustomNotifyMessage(e.target.value)}
+                rows={3}
+                data-testid="input-notify-custom-message"
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave blank to use the default status summary message.
+              </p>
+            </div>
           </div>
           
           <DialogFooter>
@@ -2620,7 +2639,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
             </Button>
             <Button 
               onClick={() => {
-                const message = `Query status update${clientName ? ` for ${clientName}` : ''}: ${stats?.open || 0} open, ${stats?.answeredByClient || 0} awaiting review, ${stats?.resolved || 0} resolved.`;
+                const message = customNotifyMessage.trim() || `Query status update${clientName ? ` for ${clientName}` : ''}: ${stats?.open || 0} open, ${stats?.answeredByClient || 0} awaiting review, ${stats?.resolved || 0} resolved.`;
                 notifyAssigneesMutation.mutate({ userIds: selectedAssignees, message });
               }}
               disabled={selectedAssignees.length === 0 || notifyAssigneesMutation.isPending}
