@@ -639,6 +639,45 @@ export class QueryStorage extends BaseStorage {
     };
   }
 
+  async checkSuggestionMatchesForDescriptions(params: {
+    descriptions: string[];
+    clientId: string;
+    prefixLength?: number;
+  }): Promise<boolean[]> {
+    const { descriptions, clientId, prefixLength = 10 } = params;
+    const results: boolean[] = [];
+
+    for (const description of descriptions) {
+      if (!description) {
+        results.push(false);
+        continue;
+      }
+
+      const normalizedDesc = this.normalizeDescription(description);
+      const descriptionPrefix = normalizedDesc.substring(0, prefixLength);
+
+      if (descriptionPrefix.length < 3) {
+        results.push(false);
+        continue;
+      }
+
+      const [match] = await db
+        .select({ id: queryAnswerHistory.id })
+        .from(queryAnswerHistory)
+        .where(
+          and(
+            eq(queryAnswerHistory.clientId, clientId),
+            like(queryAnswerHistory.descriptionPrefix, `${descriptionPrefix}%`)
+          )
+        )
+        .limit(1);
+
+      results.push(!!match);
+    }
+
+    return results;
+  }
+
   async hasSuggestionsForQueries(queryIds: string[], prefixLength = 10): Promise<Map<string, boolean>> {
     const result = new Map<string, boolean>();
     

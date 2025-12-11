@@ -409,6 +409,12 @@ export function registerQueryRoutes(
         return res.status(400).json({ message: "queries must be an array" });
       }
 
+      // Get the project's clientId for suggestion matching
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found" });
+      }
+
       const queriesData = req.body.queries.map((q: any) => ({
         ...q,
         projectId,
@@ -431,7 +437,22 @@ export function registerQueryRoutes(
       }
 
       const validData = validationResults.map((r: any) => r.data);
-      const queries = await storage.createQueries(validData);
+      
+      // Check for suggestion matches based on descriptions
+      const descriptions = validData.map((q: any) => q.description || '');
+      const suggestionMatches = await storage.checkSuggestionMatchesForDescriptions({
+        descriptions,
+        clientId: project.clientId,
+        prefixLength: 10,
+      });
+      
+      // Set hasSuggestionMatch flag for each query
+      const dataWithSuggestions = validData.map((q: any, idx: number) => ({
+        ...q,
+        hasSuggestionMatch: suggestionMatches[idx] || false,
+      }));
+      
+      const queries = await storage.createQueries(dataWithSuggestions);
       res.status(201).json(queries);
     } catch (error) {
       console.error("Error creating bulk queries:", error);
