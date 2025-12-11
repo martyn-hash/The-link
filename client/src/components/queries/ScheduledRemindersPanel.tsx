@@ -178,8 +178,8 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
   });
 
   const cancelAllMutation = useMutation({
-    mutationFn: async (tokenId: string) => {
-      return apiRequest('POST', `/api/query-tokens/${tokenId}/cancel-reminders`);
+    mutationFn: async (tokenIds: string[]) => {
+      return apiRequest('POST', `/api/query-tokens/batch-cancel-reminders`, { tokenIds });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'query-reminders'] });
@@ -340,10 +340,11 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
   const pendingReminders = reminders.filter(r => r.status === 'pending');
   const sentReminders = reminders.filter(r => r.status === 'sent');
 
-  // Filter out any null/undefined tokenIds and get unique tokens
-  const tokenIds = Array.from(new Set(reminders.map(r => r.tokenId).filter((id): id is string => !!id)));
-  const hasMultipleTokens = tokenIds.length > 1;
-  const canCancelAll = !hasMultipleTokens && pendingReminders.length > 0 && tokenIds.length > 0;
+  // Get unique token IDs from pending reminders only (so we can cancel pending ones)
+  const pendingTokenIds = Array.from(new Set(pendingReminders.map(r => r.tokenId).filter((id): id is string => !!id)));
+  // Show Cancel All button if there are pending reminders, regardless of how many tokens they belong to
+  // If there's exactly one token, we cancel all its reminders. If multiple, we could cancel them all too.
+  const canCancelAll = pendingReminders.length > 0 && pendingTokenIds.length > 0;
 
   return (
     <div data-testid="scheduled-reminders-panel">
@@ -389,7 +390,7 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
               <AlertDialogHeader>
                 <AlertDialogTitle>Cancel All Reminders?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  This will cancel all {pendingReminders.length} pending reminders for this query link.
+                  This will cancel all {pendingReminders.length} pending reminder{pendingReminders.length !== 1 ? 's' : ''}.
                   The client will no longer receive automated follow-ups.
                 </AlertDialogDescription>
               </AlertDialogHeader>
@@ -397,15 +398,16 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
                 <AlertDialogCancel>Keep Reminders</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={() => {
-                    if (tokenIds[0]) {
-                      cancelAllMutation.mutate(tokenIds[0]);
-                    } else {
+                    if (pendingTokenIds.length === 0) {
                       toast({
                         title: 'Error',
-                        description: 'Unable to cancel reminders: token not found.',
+                        description: 'Unable to cancel reminders: no tokens found.',
                         variant: 'destructive',
                       });
+                      return;
                     }
+                    // Cancel all pending reminders across all tokens in a single batch call
+                    cancelAllMutation.mutate(pendingTokenIds);
                   }}
                   className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   disabled={cancelAllMutation.isPending}

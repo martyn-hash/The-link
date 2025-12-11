@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Mail, Paperclip, Sparkles, Mic, Eye, Edit3, Lock, Clock, Phone, MessageSquare, Users } from "lucide-react";
 import { ReminderScheduleEditor } from "@/components/reminders/ReminderScheduleEditor";
@@ -39,9 +39,11 @@ interface EmailAttachment {
 }
 
 interface RecipientInfo {
+  id: string; // Composite key: personId-emailIndex for uniqueness
   personId: string;
   fullName: string;
   email: string;
+  emailLabel?: string; // "Primary", "Alternative", "Secondary"
   phone?: string | null;
   role?: string | null;
 }
@@ -108,15 +110,81 @@ export function EmailDialog({
   const [activeTab, setActiveTab] = useState<'compose' | 'scheduling'>('compose');
   const [hasVisitedSchedulingTab, setHasVisitedSchedulingTab] = useState(false);
   
-  // Multiple recipient selection - initialize with AI-suggested recipients if provided
-  const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(
-    new Set(initialValues?.recipientIds || [])
-  );
+  // Multiple recipient selection - start empty, will be populated by useEffect after peopleWithEmail is ready
+  const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(new Set());
   
   // AI prompt state
   const [aiPrompt, setAiPrompt] = useState("");
   const [isRefining, setIsRefining] = useState(false);
   const [showPromptModal, setShowPromptModal] = useState(false);
+  
+  // Build the final email content for sending (combines intro + protected HTML + signoff)
+  const getFinalEmailContent = useCallback(() => {
+    if (hasProtectedHtml) {
+      return `${emailIntro}\n\n${protectedHtml}\n\n${emailSignoff}`;
+    }
+    return emailContent;
+  }, [hasProtectedHtml, emailIntro, protectedHtml, emailSignoff, emailContent]);
+  
+  // Build list of all email options for all people (each email is a separate selectable option)
+  const peopleWithEmail: RecipientInfo[] = useMemo(() => (clientPeople || [])
+    .flatMap((cp: any) => {
+      const person = cp.person;
+      if (!person) return [];
+      
+      const fullName = person.fullName || `${person.firstName || ''} ${person.lastName || ''}`.trim();
+      const role = cp.role || null;
+      const phone = person.primaryPhone || person.telephone || person.mobile || null;
+      
+      // Collect all unique emails for this person with labels
+      const emails: Array<{ email: string; label: string }> = [];
+      const seenEmails = new Set<string>();
+      
+      // Primary email (check both primaryEmail and email fields)
+      if (person.primaryEmail?.trim()) {
+        const email = person.primaryEmail.trim().toLowerCase();
+        if (!seenEmails.has(email)) {
+          seenEmails.add(email);
+          emails.push({ email: person.primaryEmail.trim(), label: 'Primary' });
+        }
+      }
+      
+      // Alternative email (the 'email' field when primaryEmail exists, or as primary fallback)
+      if (person.email?.trim()) {
+        const email = person.email.trim().toLowerCase();
+        if (!seenEmails.has(email)) {
+          seenEmails.add(email);
+          emails.push({ email: person.email.trim(), label: person.primaryEmail ? 'Alternative' : 'Primary' });
+        }
+      }
+      
+      // Secondary email (email2 field)
+      if (person.email2?.trim()) {
+        const email = person.email2.trim().toLowerCase();
+        if (!seenEmails.has(email)) {
+          seenEmails.add(email);
+          emails.push({ email: person.email2.trim(), label: 'Secondary' });
+        }
+      }
+      
+      // Create a RecipientInfo entry for each email
+      return emails.map((emailObj, idx) => ({
+        id: `${person.id}-${idx}`,
+        personId: person.id,
+        fullName,
+        email: emailObj.email,
+        emailLabel: emailObj.label,
+        phone,
+        role,
+      }));
+    }), [clientPeople]);
+  
+  // Helper to convert legacy personId to the primary email's composite id
+  const personIdToCompositeId = useCallback((personId: string): string | null => {
+    // Find the first (primary) email entry for this person
+    const entry = peopleWithEmail.find(p => p.personId === personId);
+    return entry?.id || null;
+  }, [peopleWithEmail]);
 
   // Sync state from initialValues when props change (needed for async-prepared content like queries)
   useEffect(() => {
@@ -133,37 +201,29 @@ export function EmailDialog({
       } else if (initialValues.content) {
         setEmailContent(initialValues.content);
       }
-      if (initialValues.recipientIds && initialValues.recipientIds.length > 0) {
-        setSelectedRecipients(new Set(initialValues.recipientIds));
+      // Convert legacy personIds to composite ids if needed
+      if (initialValues.recipientIds && initialValues.recipientIds.length > 0 && peopleWithEmail.length > 0) {
+        const convertedIds = new Set<string>();
+        for (const id of initialValues.recipientIds) {
+          // Check if this ID is already a composite id (contains '-')
+          if (id.includes('-') && peopleWithEmail.some(p => p.id === id)) {
+            convertedIds.add(id);
+          } else {
+            // Legacy personId - convert to primary email's composite id
+            const compositeId = personIdToCompositeId(id);
+            if (compositeId) {
+              convertedIds.add(compositeId);
+            }
+          }
+        }
+        setSelectedRecipients(convertedIds);
       }
     }
-  }, [isOpen, initialValues?.subject, initialValues?.content, initialValues?.recipientIds, initialValues?.protectedHtml, initialValues?.emailIntro, initialValues?.emailSignoff]);
-  
-  // Build the final email content for sending (combines intro + protected HTML + signoff)
-  const getFinalEmailContent = useCallback(() => {
-    if (hasProtectedHtml) {
-      return `${emailIntro}\n\n${protectedHtml}\n\n${emailSignoff}`;
-    }
-    return emailContent;
-  }, [hasProtectedHtml, emailIntro, protectedHtml, emailSignoff, emailContent]);
-  
-  // Filter to only show people with email addresses (check primaryEmail first, fallback to email)
-  const peopleWithEmail: RecipientInfo[] = (clientPeople || [])
-    .filter((cp: any) => {
-      const email = cp.person?.primaryEmail || cp.person?.email;
-      return email && email.trim() !== '';
-    })
-    .map((cp: any) => ({
-      personId: cp.person.id,
-      fullName: cp.person.fullName || `${cp.person.firstName || ''} ${cp.person.lastName || ''}`.trim(),
-      email: cp.person.primaryEmail || cp.person.email,
-      phone: cp.person.primaryPhone || cp.person.telephone || cp.person.mobile || null,
-      role: cp.role || null,
-    }));
+  }, [isOpen, initialValues?.subject, initialValues?.content, initialValues?.recipientIds, initialValues?.protectedHtml, initialValues?.emailIntro, initialValues?.emailSignoff, peopleWithEmail, personIdToCompositeId]);
   
   // Calculate channel availability based on selected recipients
   const getChannelAvailability = useCallback(() => {
-    const selectedPeople = peopleWithEmail.filter(p => selectedRecipients.has(p.personId));
+    const selectedPeople = peopleWithEmail.filter(p => selectedRecipients.has(p.id));
     const totalSelected = selectedPeople.length;
     const withPhone = selectedPeople.filter(p => p.phone && p.phone.trim() !== '').length;
     const withEmail = totalSelected; // All selected have email (filtered above)
@@ -214,7 +274,7 @@ export function EmailDialog({
   const getRecipientFirstNames = (): string => {
     // Use selected recipients if any, otherwise fall back to all available recipients
     const recipientsToUse = selectedRecipients.size > 0 
-      ? peopleWithEmail.filter(r => selectedRecipients.has(r.personId))
+      ? peopleWithEmail.filter(r => selectedRecipients.has(r.id))
       : peopleWithEmail;
     
     const names = recipientsToUse
@@ -264,13 +324,13 @@ export function EmailDialog({
     clientCompany: clientCompany || undefined,
   });
 
-  // Toggle a single recipient
-  const toggleRecipient = (personId: string) => {
+  // Toggle a single recipient (now using composite id for email-level selection)
+  const toggleRecipient = (id: string) => {
     const newSet = new Set(selectedRecipients);
-    if (newSet.has(personId)) {
-      newSet.delete(personId);
+    if (newSet.has(id)) {
+      newSet.delete(id);
     } else {
-      newSet.add(personId);
+      newSet.add(id);
     }
     setSelectedRecipients(newSet);
   };
@@ -280,7 +340,7 @@ export function EmailDialog({
     if (selectedRecipients.size === peopleWithEmail.length) {
       setSelectedRecipients(new Set());
     } else {
-      setSelectedRecipients(new Set(peopleWithEmail.map(r => r.personId)));
+      setSelectedRecipients(new Set(peopleWithEmail.map(r => r.id)));
     }
   };
 
@@ -386,7 +446,7 @@ export function EmailDialog({
 
     // Get selected recipients with their emails
     const recipients = peopleWithEmail
-      .filter(r => selectedRecipients.has(r.personId))
+      .filter(r => selectedRecipients.has(r.id))
       .map(r => ({ email: r.email, personId: r.personId }));
 
     if (recipients.length === 0) {
@@ -569,20 +629,25 @@ export function EmailDialog({
                     ) : (
                       <div className="space-y-1 max-h-40 overflow-y-auto">
                         {peopleWithEmail.map((recipient) => (
-                          <div key={recipient.personId} className="flex items-center gap-2">
+                          <div key={recipient.id} className="flex items-center gap-2">
                             <Checkbox
-                              id={`recipient-${recipient.personId}`}
-                              checked={selectedRecipients.has(recipient.personId)}
-                              onCheckedChange={() => toggleRecipient(recipient.personId)}
-                              data-testid={`checkbox-recipient-${recipient.personId}`}
+                              id={`recipient-${recipient.id}`}
+                              checked={selectedRecipients.has(recipient.id)}
+                              onCheckedChange={() => toggleRecipient(recipient.id)}
+                              data-testid={`checkbox-recipient-${recipient.id}`}
                               className="h-3.5 w-3.5"
                             />
                             <label
-                              htmlFor={`recipient-${recipient.personId}`}
+                              htmlFor={`recipient-${recipient.id}`}
                               className="text-xs cursor-pointer flex-1 flex flex-col truncate"
                             >
                               <div className="flex items-center gap-1">
                                 <span className="font-medium truncate">{formatPersonName(recipient.fullName)}</span>
+                                {recipient.emailLabel && (
+                                  <Badge variant={recipient.emailLabel === 'Primary' ? 'default' : 'outline'} className="text-[10px] px-1 py-0 h-4">
+                                    {recipient.emailLabel}
+                                  </Badge>
+                                )}
                                 {recipient.role && (
                                   <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
                                     {formatRole(recipient.role)}
@@ -837,8 +902,8 @@ export function EmailDialog({
                           <Users className="h-3 w-3" />
                           <span>
                             Sending to: {selectedRecipients.size > 0 
-                              ? Array.from(selectedRecipients).slice(0, 3).map(id => {
-                                  const person = peopleWithEmail.find(p => p.personId === id);
+                              ? Array.from(selectedRecipients).slice(0, 3).map(recipientId => {
+                                  const person = peopleWithEmail.find(p => p.id === recipientId);
                                   return person?.fullName?.split(' ')[0] || person?.email?.split('@')[0] || 'Unknown';
                                 }).join(', ') + (selectedRecipients.size > 3 ? ` +${selectedRecipients.size - 3} more` : '')
                               : 'No recipients selected'}
@@ -853,7 +918,7 @@ export function EmailDialog({
                         expiryDays={queryEmailOptions.expiryDays}
                         recipientPhone={queryEmailOptions.recipientPhone}
                         recipientEmail={selectedRecipients.size > 0 
-                          ? peopleWithEmail.find(p => selectedRecipients.has(p.personId))?.email 
+                          ? peopleWithEmail.find(p => selectedRecipients.has(p.id))?.email 
                           : undefined}
                         channelAvailability={channelAvailability}
                         expiryDate={queryEmailOptions.expiryDate}
@@ -917,20 +982,25 @@ export function EmailDialog({
                       ) : (
                         <div className="space-y-1 max-h-40 overflow-y-auto">
                           {peopleWithEmail.map((recipient) => (
-                            <div key={recipient.personId} className="flex items-center gap-2">
+                            <div key={recipient.id} className="flex items-center gap-2">
                               <Checkbox
-                                id={`recipient-standard-${recipient.personId}`}
-                                checked={selectedRecipients.has(recipient.personId)}
-                                onCheckedChange={() => toggleRecipient(recipient.personId)}
-                                data-testid={`checkbox-recipient-standard-${recipient.personId}`}
+                                id={`recipient-standard-${recipient.id}`}
+                                checked={selectedRecipients.has(recipient.id)}
+                                onCheckedChange={() => toggleRecipient(recipient.id)}
+                                data-testid={`checkbox-recipient-standard-${recipient.id}`}
                                 className="h-3.5 w-3.5"
                               />
                               <label
-                                htmlFor={`recipient-standard-${recipient.personId}`}
+                                htmlFor={`recipient-standard-${recipient.id}`}
                                 className="text-xs cursor-pointer flex-1 flex flex-col truncate"
                               >
                                 <div className="flex items-center gap-1">
                                   <span className="font-medium truncate">{formatPersonName(recipient.fullName)}</span>
+                                  {recipient.emailLabel && (
+                                    <Badge variant={recipient.emailLabel === 'Primary' ? 'default' : 'outline'} className="text-[10px] px-1 py-0 h-4">
+                                      {recipient.emailLabel}
+                                    </Badge>
+                                  )}
                                   {recipient.role && (
                                     <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
                                       {formatRole(recipient.role)}

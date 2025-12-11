@@ -2219,6 +2219,31 @@ ${tableHtml}
     }
   });
 
+  // Cancel all pending reminders for multiple tokens (batch cancel)
+  const batchCancelRemindersSchema = z.object({ tokenIds: z.array(z.string().uuid()) });
+  
+  app.post("/api/query-tokens/batch-cancel-reminders", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const data = batchCancelRemindersSchema.parse(req.body);
+      
+      const { cancelAllRemindersForToken } = await import('../services/queryReminderService');
+      let totalCancelled = 0;
+      
+      for (const tokenId of data.tokenIds) {
+        const count = await cancelAllRemindersForToken(tokenId, req.user?.id);
+        totalCancelled += count;
+      }
+      
+      res.json({ success: true, cancelledCount: totalCancelled });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid request", errors: error.errors });
+      }
+      console.error("Error batch cancelling reminders:", error);
+      res.status(500).json({ message: "Failed to cancel reminders" });
+    }
+  });
+
   // Schedule reminders for a query token
   const scheduleRemindersSchema = z.object({
     reminders: z.array(z.object({
