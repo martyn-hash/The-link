@@ -36,6 +36,14 @@ const paramProjectTypeIdSchema = z.object({
   projectTypeId: z.string().min(1, "Project type ID is required").uuid("Invalid project type ID format")
 });
 
+// Request body validation for client approval override creation
+const createClientOverrideRequestSchema = z.object({
+  projectTypeId: z.string().uuid("Invalid project type ID"),
+  stageId: z.string().uuid("Invalid stage ID"),
+  approvalName: z.string().min(1, "Approval name is required").max(255),
+  approvalDescription: z.string().optional(),
+});
+
 // Helper function for parameter validation
 const validateParams = <T>(schema: z.ZodSchema<T>, params: any): { success: true; data: T } | { success: false; errors: any[] } => {
   const result = schema.safeParse(params);
@@ -1257,13 +1265,17 @@ export function registerConfigRoutes(
   app.post("/api/clients/:clientId/approval-overrides", isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const { clientId } = req.params;
-      const { projectTypeId, stageId, approvalName, approvalDescription } = req.body;
       
-      if (!projectTypeId || !stageId || !approvalName) {
+      // Validate request body
+      const bodyResult = createClientOverrideRequestSchema.safeParse(req.body);
+      if (!bodyResult.success) {
         return res.status(400).json({ 
-          message: "Missing required fields: projectTypeId, stageId, and approvalName are required" 
+          message: "Validation failed",
+          errors: bodyResult.error.issues 
         });
       }
+      
+      const { projectTypeId, stageId, approvalName, approvalDescription } = bodyResult.data;
       
       // Check if override already exists
       const existingOverrides = await storage.getOverridesByClient(clientId);

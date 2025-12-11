@@ -145,9 +145,14 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
     queryKey: ["/api/config/stage-approvals"],
   });
 
+  const expandedOverride = useMemo(() => 
+    overrides?.find(o => o.id === expandedOverrideId),
+    [overrides, expandedOverrideId]
+  );
+
   const { data: resolvedFields } = useQuery<any[]>({
-    queryKey: ["/api/config/client-approval-overrides", expandedOverrideId, "resolved-fields"],
-    enabled: !!expandedOverrideId,
+    queryKey: ["/api/stage-approvals", expandedOverride?.overrideApprovalId, "resolved-fields"],
+    enabled: !!expandedOverride?.overrideApprovalId,
   });
 
   const stagesWithApprovals = useMemo(() => {
@@ -212,7 +217,9 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/config/client-approval-overrides", expandedOverrideId, "resolved-fields"] });
+      if (expandedOverride?.overrideApprovalId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/stage-approvals", expandedOverride.overrideApprovalId, "resolved-fields"] });
+      }
       setIsAddingField(false);
       setEditingField(null);
       toast({ title: "Field added" });
@@ -227,7 +234,9 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
       await apiRequest("DELETE", `/api/config/stage-approval-fields/${fieldId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/config/client-approval-overrides", expandedOverrideId, "resolved-fields"] });
+      if (expandedOverride?.overrideApprovalId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/stage-approvals", expandedOverride.overrideApprovalId, "resolved-fields"] });
+      }
       toast({ title: "Field removed" });
     },
     onError: (error: Error) => {
