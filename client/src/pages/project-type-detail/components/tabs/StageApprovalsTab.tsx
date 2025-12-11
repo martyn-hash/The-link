@@ -1,3 +1,8 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { showFriendlyError } from "@/lib/friendlyErrors";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -5,14 +10,33 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TabsContent } from "@/components/ui/tabs";
-import { Plus, Edit2, Trash2, Save, X, ShieldCheck } from "lucide-react";
-import type { StageApproval, StageApprovalField } from "@shared/schema";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Plus, Edit2, Trash2, Save, X, ShieldCheck, Library } from "lucide-react";
+import type { StageApproval, StageApprovalField, ApprovalFieldLibrary } from "@shared/schema";
 import type { EditingStageApproval, EditingStageApprovalField } from "../../utils/types";
 import { DEFAULT_STAGE_APPROVAL } from "../../utils/constants";
 import { ApprovalFieldForm } from "../fields";
 import type { useStageApprovalMutations, useApprovalFieldMutations } from "../../hooks";
 
+const FIELD_TYPE_LABELS: Record<string, string> = {
+  boolean: "Yes/No",
+  number: "Number",
+  short_text: "Short Text",
+  long_text: "Long Text",
+  single_select: "Single Select",
+  multi_select: "Multi Select",
+  date: "Date",
+};
+
 interface StageApprovalsTabProps {
+  projectTypeId: string;
   stageApprovals: StageApproval[] | undefined;
   stageApprovalsLoading: boolean;
   allStageApprovalFields: StageApprovalField[] | undefined;
@@ -30,6 +54,7 @@ interface StageApprovalsTabProps {
 }
 
 export function StageApprovalsTab({
+  projectTypeId,
   stageApprovals,
   stageApprovalsLoading,
   allStageApprovalFields,
@@ -45,8 +70,46 @@ export function StageApprovalsTab({
   approvalFieldMutations,
   onStageApprovalSubmit,
 }: StageApprovalsTabProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [showLibraryPicker, setShowLibraryPicker] = useState(false);
+  
   const { createStageApprovalMutation, updateStageApprovalMutation, deleteStageApprovalMutation } = stageApprovalMutations;
   const { createApprovalFieldMutation, updateApprovalFieldMutation, deleteApprovalFieldMutation } = approvalFieldMutations;
+
+  const { data: libraryFields } = useQuery<ApprovalFieldLibrary[]>({
+    queryKey: ["/api/project-types", projectTypeId, "approval-field-library"],
+    enabled: !!projectTypeId,
+  });
+
+  const addFromLibraryMutation = useMutation({
+    mutationFn: async (data: { stageApprovalId: string; libraryFieldId: string; order: number }) => {
+      const res = await apiRequest("POST", `/api/stage-approvals/${data.stageApprovalId}/fields/from-library`, {
+        libraryFieldId: data.libraryFieldId,
+        order: data.order,
+        isRequired: true,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/config/stage-approval-fields"] });
+      setShowLibraryPicker(false);
+      toast({ title: "Field added from library" });
+    },
+    onError: (error: Error) => {
+      showFriendlyError({ error });
+    },
+  });
+
+  const handleAddFromLibrary = (libraryField: ApprovalFieldLibrary) => {
+    if (!editingStageApproval?.id) return;
+    const existingFieldsCount = allStageApprovalFields?.filter(f => f.stageApprovalId === editingStageApproval.id).length || 0;
+    addFromLibraryMutation.mutate({
+      stageApprovalId: editingStageApproval.id,
+      libraryFieldId: libraryField.id,
+      order: existingFieldsCount,
+    });
+  };
 
   const handleAddApproval = () => {
     setEditingStageApproval(DEFAULT_STAGE_APPROVAL);
@@ -179,19 +242,33 @@ export function StageApprovalsTab({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label>Approval Fields</Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setIsAddingApprovalField(true);
-                      setEditingStageApprovalField(null);
-                    }}
-                    data-testid="button-add-approval-field"
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    Add Approval Field
-                  </Button>
+                  <div className="flex gap-2">
+                    {libraryFields && libraryFields.length > 0 && editingStageApproval?.id && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowLibraryPicker(true)}
+                        data-testid="button-add-from-library"
+                      >
+                        <Library className="w-4 h-4 mr-2" />
+                        From Library
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setIsAddingApprovalField(true);
+                        setEditingStageApprovalField(null);
+                      }}
+                      data-testid="button-add-approval-field"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Custom Field
+                    </Button>
+                  </div>
                 </div>
                 
                 <div className="border rounded-md p-3 max-h-48 overflow-y-auto">
@@ -204,9 +281,17 @@ export function StageApprovalsTab({
                           .map((field) => (
                             <div key={field.id} className="flex items-center justify-between p-2 border rounded">
                               <div className="flex-1">
-                                <div className="text-sm font-medium">{field.fieldName}</div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium">{field.fieldName}</span>
+                                  {field.libraryFieldId && (
+                                    <Badge variant="outline" className="text-xs bg-blue-50">
+                                      <Library className="w-3 h-3 mr-1" />
+                                      Library
+                                    </Badge>
+                                  )}
+                                </div>
                                 <div className="text-xs text-muted-foreground">
-                                  Type: {field.fieldType} {field.isRequired && "(Required)"}
+                                  {FIELD_TYPE_LABELS[field.fieldType] || field.fieldType} {field.isRequired && "• Required"}
                                 </div>
                               </div>
                               <div className="flex items-center space-x-1">
@@ -297,6 +382,43 @@ export function StageApprovalsTab({
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={showLibraryPicker} onOpenChange={setShowLibraryPicker}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Field from Library</DialogTitle>
+            <DialogDescription>
+              Select a field from the shared library. Using library fields enables cross-client analytics.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-2 max-h-96 overflow-y-auto">
+            {libraryFields && libraryFields.length > 0 ? (
+              libraryFields.map((field) => (
+                <div
+                  key={field.id}
+                  className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer"
+                  onClick={() => handleAddFromLibrary(field)}
+                  data-testid={`library-field-${field.id}`}
+                >
+                  <div>
+                    <p className="font-medium text-sm">{field.fieldName}</p>
+                    <p className="text-xs text-muted-foreground">{field.description}</p>
+                  </div>
+                  <Badge variant="outline">
+                    {FIELD_TYPE_LABELS[field.fieldType] || field.fieldType}
+                  </Badge>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <Library className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No library fields available yet.</p>
+                <p className="text-xs mt-1">Add fields to the library in the Field Library tab.</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </TabsContent>
   );
 }

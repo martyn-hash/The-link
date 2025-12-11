@@ -42,6 +42,7 @@ const createClientOverrideRequestSchema = z.object({
   stageId: z.string().uuid("Invalid stage ID"),
   approvalName: z.string().min(1, "Approval name is required").max(255),
   approvalDescription: z.string().optional(),
+  copyFromStandard: z.boolean().optional().default(false),
 });
 
 // Helper function for parameter validation
@@ -1275,7 +1276,7 @@ export function registerConfigRoutes(
         });
       }
       
-      const { projectTypeId, stageId, approvalName, approvalDescription } = bodyResult.data;
+      const { projectTypeId, stageId, approvalName, approvalDescription, copyFromStandard } = bodyResult.data;
       
       // Check if override already exists
       const existingOverrides = await storage.getOverridesByClient(clientId);
@@ -1292,6 +1293,38 @@ export function registerConfigRoutes(
         name: approvalName,
         description: approvalDescription || null,
       });
+      
+      // If copyFromStandard is true, copy fields from the standard approval
+      if (copyFromStandard) {
+        // Get the standard approval for this stage
+        const stages = await storage.getAllKanbanStages();
+        const stage = stages.find((s: { id: string }) => s.id === stageId);
+        if (stage?.stageApprovalId) {
+          // Get the fields from the standard approval
+          const standardFields = await storage.getStageApprovalFieldsByApprovalId(stage.stageApprovalId);
+          
+          // Copy each field to the new approval
+          for (const field of standardFields) {
+            await storage.createStageApprovalField({
+              stageApprovalId: stageApproval.id,
+              fieldName: field.fieldName,
+              fieldType: field.fieldType,
+              description: field.description,
+              placeholder: field.placeholder,
+              isRequired: field.isRequired ?? true,
+              order: field.order,
+              expectedValueBoolean: field.expectedValueBoolean,
+              comparisonType: field.comparisonType,
+              expectedValueNumber: field.expectedValueNumber,
+              dateComparisonType: field.dateComparisonType,
+              expectedDate: field.expectedDate,
+              expectedDateEnd: field.expectedDateEnd,
+              options: field.options,
+              libraryFieldId: field.libraryFieldId,
+            });
+          }
+        }
+      }
       
       // Create the override pointing to the new approval
       const overrideData = {

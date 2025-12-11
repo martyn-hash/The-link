@@ -472,6 +472,7 @@ export default function ProjectTypeDetail() {
             />
 
             <StageApprovalsTab
+              projectTypeId={projectTypeId!}
               stageApprovals={stageApprovals}
               stageApprovalsLoading={stageApprovalsLoading}
               allStageApprovalFields={allStageApprovalFields}

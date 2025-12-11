@@ -113,6 +113,7 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
   const [isCreatingOverride, setIsCreatingOverride] = useState(false);
   const [newApprovalName, setNewApprovalName] = useState("");
   const [newApprovalDescription, setNewApprovalDescription] = useState("");
+  const [copyFromStandard, setCopyFromStandard] = useState(true);
   const [deleteOverrideId, setDeleteOverrideId] = useState<string | null>(null);
   
   const [expandedOverrideId, setExpandedOverrideId] = useState<string | null>(null);
@@ -174,18 +175,23 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
       stageId: string;
       approvalName: string;
       approvalDescription?: string;
+      copyFromStandard?: boolean;
     }) => {
       const res = await apiRequest("POST", `/api/clients/${clientId}/approval-overrides`, data);
       return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "approval-overrides"] });
       setIsCreatingOverride(false);
       setNewApprovalName("");
       setNewApprovalDescription("");
+      setCopyFromStandard(true);
       setSelectedProjectTypeId("");
       setSelectedStageId("");
-      toast({ title: "Custom approval created", description: "You can now add fields to this approval." });
+      const message = variables.copyFromStandard 
+        ? "Custom approval created with fields copied from standard."
+        : "Custom approval created. You can now add fields.";
+      toast({ title: "Custom approval created", description: message });
     },
     onError: (error: Error) => {
       showFriendlyError({ error });
@@ -256,6 +262,7 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
       stageId: selectedStageId,
       approvalName: newApprovalName.trim(),
       approvalDescription: newApprovalDescription.trim() || undefined,
+      copyFromStandard,
     });
   };
 
@@ -522,6 +529,25 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
                 placeholder="Describe the purpose of this custom approval"
                 data-testid="textarea-approval-description"
               />
+            </div>
+
+            <Separator />
+
+            <div className="flex items-center space-x-3">
+              <Switch
+                id="copy-from-standard"
+                checked={copyFromStandard}
+                onCheckedChange={setCopyFromStandard}
+                data-testid="switch-copy-from-standard"
+              />
+              <div className="space-y-0.5">
+                <Label htmlFor="copy-from-standard" className="font-medium cursor-pointer">
+                  Copy fields from standard approval
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Start with the same fields as the standard approval, then customize as needed.
+                </p>
+              </div>
             </div>
           </div>
           <DialogFooter>
