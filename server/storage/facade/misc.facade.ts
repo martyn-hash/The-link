@@ -339,6 +339,32 @@ export function applyMiscFacade<TBase extends Constructor<MiscFacadeDeps>>(Base:
       return this.queryStorage.getQueriesWithGroups(projectId);
     }
 
+    async recordQueryAnswer(data: {
+      clientId: string;
+      projectId: string;
+      description: string;
+      moneyDirection: 'in' | 'out' | null;
+      answerText: string;
+      answeredByType: 'staff' | 'client';
+      answeredAt: Date;
+      sourceQueryId: string;
+    }) {
+      return this.queryStorage.recordQueryAnswer(data);
+    }
+
+    async getSuggestionsForQuery(params: {
+      clientId: string;
+      description: string;
+      moneyDirection?: 'in' | 'out' | null;
+      limit?: number;
+    }) {
+      return this.queryStorage.getSuggestionsForQuery(params);
+    }
+
+    async getQueryWithClient(queryId: string) {
+      return this.queryStorage.getQueryWithClient(queryId);
+    }
+
     // ============================================================================
     // QUERY TOKEN OPERATIONS - QueryTokenStorage (12 methods)
     // ============================================================================
