@@ -292,6 +292,13 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   const [suggestionQueryId, setSuggestionQueryId] = useState<string | null>(null);
   const [isSuggestionPopoverOpen, setIsSuggestionPopoverOpen] = useState(false);
 
+  // Staff group answer state
+  const [isGroupAnswerDialogOpen, setIsGroupAnswerDialogOpen] = useState(false);
+  const [groupAnswerGroupId, setGroupAnswerGroupId] = useState<string | null>(null);
+  const [groupAnswerGroupName, setGroupAnswerGroupName] = useState("");
+  const [groupAnswerText, setGroupAnswerText] = useState("");
+  const [groupAnswerStatus, setGroupAnswerStatus] = useState<QueryStatus>("answered_by_staff");
+
   const { data: queries, isLoading } = useQuery<BookkeepingQueryWithRelations[]>({
     queryKey: ['/api/projects', projectId, 'queries'],
   });
@@ -503,6 +510,38 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to remove query from group.", variant: "destructive" });
+    },
+  });
+
+  // Staff group answer mutation - update all queries in a group with the same answer
+  const groupAnswerMutation = useMutation({
+    mutationFn: async ({ groupId, clientResponse, status }: { groupId: string; clientResponse: string; status: QueryStatus }) => {
+      // Get all query IDs in this group
+      const groupQueries = queries?.filter(q => q.groupId === groupId) || [];
+      if (groupQueries.length === 0) {
+        throw new Error("No queries found in this group");
+      }
+      // Update all queries in the group using bulk status update endpoint, then patch each for the response
+      const updatePromises = groupQueries.map(q => 
+        apiRequest('PATCH', `/api/queries/${q.id}`, { clientResponse, status })
+      );
+      return Promise.all(updatePromises);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/queries/counts'] });
+      setIsGroupAnswerDialogOpen(false);
+      setGroupAnswerGroupId(null);
+      setGroupAnswerGroupName("");
+      setGroupAnswerText("");
+      setGroupAnswerStatus("answered_by_staff");
+      toast({ 
+        title: "Group answered", 
+        description: "All queries in the group have been updated with your answer." 
+      });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to answer group queries.", variant: "destructive" });
     },
   });
 
@@ -772,6 +811,25 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
       status: editQueryStatus,
       clientResponse: editQueryResponse.trim() || undefined,
       comment: editQueryComment.trim() || undefined,
+    });
+  };
+
+  // Handle opening the group answer dialog for staff to answer all queries in a group
+  const handleOpenGroupAnswer = (groupId: string, groupName: string) => {
+    setGroupAnswerGroupId(groupId);
+    setGroupAnswerGroupName(groupName);
+    setGroupAnswerText("");
+    setGroupAnswerStatus("answered_by_staff");
+    setIsGroupAnswerDialogOpen(true);
+  };
+
+  // Submit group answer
+  const handleSubmitGroupAnswer = () => {
+    if (!groupAnswerGroupId || !groupAnswerText.trim()) return;
+    groupAnswerMutation.mutate({
+      groupId: groupAnswerGroupId,
+      clientResponse: groupAnswerText.trim(),
+      status: groupAnswerStatus,
     });
   };
 
@@ -1653,13 +1711,23 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                               Mark Resolved
                             </DropdownMenuItem>
                             {query.group && (
-                              <DropdownMenuItem 
-                                onClick={() => removeFromGroupMutation.mutate({ groupId: query.group!.id, queryId: query.id })}
-                                disabled={removeFromGroupMutation.isPending}
-                              >
-                                <FolderMinus className="w-4 h-4 mr-2" />
-                                Remove from Group
-                              </DropdownMenuItem>
+                              <>
+                                <DropdownMenuItem 
+                                  onClick={() => handleOpenGroupAnswer(query.group!.id, query.group!.groupName)}
+                                  disabled={groupAnswerMutation.isPending}
+                                  data-testid={`button-answer-group-${query.id}`}
+                                >
+                                  <MessageSquare className="w-4 h-4 mr-2" />
+                                  Answer Group
+                                </DropdownMenuItem>
+                                <DropdownMenuItem 
+                                  onClick={() => removeFromGroupMutation.mutate({ groupId: query.group!.id, queryId: query.id })}
+                                  disabled={removeFromGroupMutation.isPending}
+                                >
+                                  <FolderMinus className="w-4 h-4 mr-2" />
+                                  Remove from Group
+                                </DropdownMenuItem>
+                              </>
                             )}
                             <DropdownMenuItem 
                               onClick={() => deleteMutation.mutate(query.id)}
@@ -1778,13 +1846,22 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                           Mark Resolved
                         </DropdownMenuItem>
                         {query.group && (
-                          <DropdownMenuItem 
-                            onClick={() => removeFromGroupMutation.mutate({ groupId: query.group!.id, queryId: query.id })}
-                            disabled={removeFromGroupMutation.isPending}
-                          >
-                            <FolderMinus className="w-4 h-4 mr-2" />
-                            Remove from Group
-                          </DropdownMenuItem>
+                          <>
+                            <DropdownMenuItem 
+                              onClick={() => handleOpenGroupAnswer(query.group!.id, query.group!.groupName)}
+                              disabled={groupAnswerMutation.isPending}
+                            >
+                              <MessageSquare className="w-4 h-4 mr-2" />
+                              Answer Group
+                            </DropdownMenuItem>
+                            <DropdownMenuItem 
+                              onClick={() => removeFromGroupMutation.mutate({ groupId: query.group!.id, queryId: query.id })}
+                              disabled={removeFromGroupMutation.isPending}
+                            >
+                              <FolderMinus className="w-4 h-4 mr-2" />
+                              Remove from Group
+                            </DropdownMenuItem>
+                          </>
                         )}
                         <DropdownMenuItem 
                           onClick={() => deleteMutation.mutate(query.id)}
@@ -2648,6 +2725,90 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
               data-testid="button-send-notifications"
             >
               {notifyAssigneesMutation.isPending ? "Sending..." : `Notify ${selectedAssignees.length > 0 ? `(${selectedAssignees.length})` : ''}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Staff Group Answer Dialog */}
+      <Dialog open={isGroupAnswerDialogOpen} onOpenChange={(open) => {
+        setIsGroupAnswerDialogOpen(open);
+        if (!open) {
+          setGroupAnswerGroupId(null);
+          setGroupAnswerGroupName("");
+          setGroupAnswerText("");
+          setGroupAnswerStatus("answered_by_staff");
+        }
+      }}>
+        <DialogContent className="sm:max-w-lg" data-testid="dialog-group-answer">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="w-5 h-5" />
+              Answer Group: {groupAnswerGroupName}
+            </DialogTitle>
+            <DialogDescription>
+              Provide an answer that will be applied to all {queries?.filter(q => q.groupId === groupAnswerGroupId).length || 0} queries in this group.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4 space-y-4">
+            <div className="space-y-2">
+              <label htmlFor="groupAnswerText" className="text-sm font-medium">
+                Answer <span className="text-red-500">*</span>
+              </label>
+              <Textarea
+                id="groupAnswerText"
+                placeholder="Enter your answer for all queries in this group..."
+                value={groupAnswerText}
+                onChange={(e) => setGroupAnswerText(e.target.value)}
+                rows={4}
+                data-testid="input-group-answer-text"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label htmlFor="groupAnswerStatus" className="text-sm font-medium">
+                Set Status
+              </label>
+              <Select value={groupAnswerStatus} onValueChange={(value) => setGroupAnswerStatus(value as QueryStatus)}>
+                <SelectTrigger data-testid="select-group-answer-status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="answered_by_staff">Staff Answered</SelectItem>
+                  <SelectItem value="resolved">Resolved</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Preview of queries in this group */}
+            {groupAnswerGroupId && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium block">Queries in this group</label>
+                <div className="max-h-40 overflow-y-auto border rounded-lg p-2 space-y-2">
+                  {queries?.filter(q => q.groupId === groupAnswerGroupId).map((query) => (
+                    <div key={query.id} className="text-sm p-2 bg-muted/50 rounded">
+                      <p className="font-medium truncate">{query.ourQuery}</p>
+                      {query.description && (
+                        <p className="text-muted-foreground text-xs truncate">{query.description}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsGroupAnswerDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSubmitGroupAnswer}
+              disabled={!groupAnswerText.trim() || groupAnswerMutation.isPending}
+              data-testid="button-submit-group-answer"
+            >
+              {groupAnswerMutation.isPending ? "Saving..." : "Apply Answer to Group"}
             </Button>
           </DialogFooter>
         </DialogContent>
