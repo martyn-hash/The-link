@@ -79,7 +79,9 @@ export function useStageChangeConfig({
     selectedReason: ReasonWithCustomFields | undefined,
     selectedStage: StageWithReasons | undefined
   ): string | null => {
-    return selectedReason?.stageApprovalId || selectedStage?.stageApprovalId || null;
+    // Prioritize stage's stageApprovalId (which may be client-overridden) over reason's
+    // This matches the backend logic for client-specific approval overrides
+    return selectedStage?.stageApprovalId || selectedReason?.stageApprovalId || null;
   };
 
   const getTargetStageApproval = (effectiveApprovalId: string | null): StageApproval | null => {

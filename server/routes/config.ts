@@ -1254,13 +1254,41 @@ export function registerConfigRoutes(
     }
   });
 
-  app.post("/api/clients/:clientId/approval-overrides", isAuthenticated, requireAdmin, async (req, res) => {
+  app.post("/api/clients/:clientId/approval-overrides", isAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const { clientId } = req.params;
-      const overrideData = insertClientStageApprovalOverrideSchema.parse({
-        ...req.body,
-        clientId
+      const { projectTypeId, stageId, approvalName, approvalDescription } = req.body;
+      
+      if (!projectTypeId || !stageId || !approvalName) {
+        return res.status(400).json({ 
+          message: "Missing required fields: projectTypeId, stageId, and approvalName are required" 
+        });
+      }
+      
+      // Check if override already exists
+      const existingOverrides = await storage.getOverridesByClient(clientId);
+      const existing = existingOverrides.find(o => 
+        o.projectTypeId === projectTypeId && o.stageId === stageId
+      );
+      if (existing) {
+        return res.status(409).json({ message: "Override already exists for this stage" });
+      }
+      
+      // Create a new StageApproval for this override
+      const stageApproval = await storage.createStageApproval({
+        projectTypeId,
+        name: approvalName,
+        description: approvalDescription || null,
       });
+      
+      // Create the override pointing to the new approval
+      const overrideData = {
+        clientId,
+        projectTypeId,
+        stageId,
+        overrideApprovalId: stageApproval.id,
+        createdByUserId: req.user?.effectiveUserId || req.user?.replitId || null,
+      };
       
       const override = await storage.createClientApprovalOverride(overrideData);
       res.status(201).json(override);

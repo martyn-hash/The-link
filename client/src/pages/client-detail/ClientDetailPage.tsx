@@ -22,6 +22,7 @@ import {
   OverviewTab, 
   TasksTab,
   ServicesTab,
+  ApprovalOverridesTab,
 } from "./components/tabs";
 import { useClientData, useClientMutations, useCompanyConnections } from "./hooks";
 import { ClientHeader } from "./components/ClientHeader";
@@ -182,7 +183,7 @@ export default function ClientDetail() {
           />
 
           <SwipeableTabsWrapper
-            tabs={["overview", "services", "projects", "communications", "chronology", "documents", "tasks", "risk", "qc"]}
+            tabs={["overview", "services", "projects", "communications", "chronology", "documents", "tasks", "approvals", "risk", "qc"]}
             currentTab={activeTab}
             onTabChange={setActiveTab}
             enabled={isMobile}
@@ -262,6 +263,10 @@ export default function ClientDetail() {
               isMobile={isMobile}
               onNewClientRequest={() => setIsNewRequestDialogOpen(true)}
             />
+          </TabsContent>
+
+          <TabsContent value="approvals" className="space-y-6 mt-6">
+            <ApprovalOverridesTab clientId={id!} />
           </TabsContent>
 
           <TabsContent value="risk" className="space-y-6 mt-6">

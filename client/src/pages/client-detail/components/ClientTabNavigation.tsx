@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const TAB_LIST = ["overview", "services", "projects", "communications", "chronology", "documents", "tasks", "risk"] as const;
+const TAB_LIST = ["overview", "services", "projects", "communications", "chronology", "documents", "tasks", "approvals", "risk"] as const;
 
 type TabValue = typeof TAB_LIST[number];
 
@@ -75,7 +75,7 @@ export function ClientTabNavigation({
     <>
       {/* Desktop Tabs - Grid Layout */}
       <div className="hidden md:block w-full">
-        <TabsList className="grid w-full grid-cols-8 gap-1 h-auto">
+        <TabsList className="grid w-full grid-cols-9 gap-1 h-auto">
           <TabsTrigger value="overview" data-testid="tab-overview" className="text-sm py-2">Overview</TabsTrigger>
           <TabsTrigger value="services" data-testid="tab-services" className="text-sm py-2">Services</TabsTrigger>
           <TabsTrigger value="projects" data-testid="tab-projects" className="text-sm py-2">Projects</TabsTrigger>
@@ -83,6 +83,7 @@ export function ClientTabNavigation({
           <TabsTrigger value="chronology" data-testid="tab-chronology" className="text-sm py-2">History</TabsTrigger>
           <TabsTrigger value="documents" data-testid="tab-documents" className="text-sm py-2">Docs</TabsTrigger>
           <TabsTrigger value="tasks" data-testid="tab-tasks" className="text-sm py-2">Tasks</TabsTrigger>
+          <TabsTrigger value="approvals" data-testid="tab-approvals" className="text-sm py-2">Approvals</TabsTrigger>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -155,6 +156,7 @@ export function ClientTabNavigation({
             <MobileTabTrigger value="chronology" label="History" testId="tab-chronology" />
             <MobileTabTrigger value="documents" label="Docs" testId="tab-documents" />
             <MobileTabTrigger value="tasks" label="Tasks" testId="tab-tasks" />
+            <MobileTabTrigger value="approvals" label="Approvals" testId="tab-approvals" />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
@@ -205,6 +207,7 @@ export function ClientTabNavigation({
             {activeTab === "chronology" && "History"}
             {activeTab === "documents" && "Documents"}
             {activeTab === "tasks" && "Tasks"}
+            {activeTab === "approvals" && "Approval Overrides"}
             {activeTab === "risk" && (riskView === "risk" ? "Risk Assessment" : "Notifications")}
           </h2>
         </div>
