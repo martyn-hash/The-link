@@ -54,12 +54,16 @@ export const bookkeepingQueries = pgTable("bookkeeping_queries", {
   createdAt: timestamp("created_at").defaultNow(),
   answeredAt: timestamp("answered_at"),
   resolvedAt: timestamp("resolved_at"),
+  deletedAt: timestamp("deleted_at"),
+  deletedById: varchar("deleted_by_id").references(() => users.id),
+  hasSuggestionMatch: boolean("has_suggestion_match").default(false),
 }, (table) => [
   index("idx_bookkeeping_queries_project_id").on(table.projectId),
   index("idx_bookkeeping_queries_status").on(table.status),
   index("idx_bookkeeping_queries_created_by_id").on(table.createdById),
   index("idx_bookkeeping_queries_sent_to_client_at").on(table.sentToClientAt),
   index("idx_bookkeeping_queries_group_id").on(table.groupId),
+  index("idx_bookkeeping_queries_deleted_at").on(table.deletedAt),
 ]);
 
 export const queryResponseTokens = pgTable("query_response_tokens", {
