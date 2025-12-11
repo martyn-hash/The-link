@@ -127,4 +127,20 @@ export async function registerObjectRoutes(
       return res.status(500).json({ message: 'Error accessing file' });
     }
   });
+
+  app.get("/api/object-storage/download-url", isAuthenticated, async (req: any, res: any) => {
+    try {
+      const { objectPath } = req.query;
+      
+      if (!objectPath || typeof objectPath !== 'string') {
+        return res.status(400).json({ message: 'objectPath query parameter is required' });
+      }
+
+      const url = await ObjectStorageService.generateSignedUrl(objectPath, 900);
+      res.json({ url });
+    } catch (error) {
+      console.error("Error generating download URL:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to generate download URL" });
+    }
+  });
 }
