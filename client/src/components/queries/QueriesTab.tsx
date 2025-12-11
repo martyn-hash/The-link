@@ -25,6 +25,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -299,6 +309,9 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   const [groupAnswerText, setGroupAnswerText] = useState("");
   const [groupAnswerStatus, setGroupAnswerStatus] = useState<QueryStatus>("answered_by_staff");
 
+  // Delete confirmation state
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+
   const { data: queries, isLoading } = useQuery<BookkeepingQueryWithRelations[]>({
     queryKey: ['/api/projects', projectId, 'queries'],
   });
@@ -447,11 +460,32 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries', 'stats'] });
       queryClient.invalidateQueries({ queryKey: ['/api/queries/counts'] });
       toast({ title: "Query deleted", description: "Query has been removed." });
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to delete query.", variant: "destructive" });
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      return apiRequest('POST', '/api/queries/bulk-delete', { ids });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries', 'stats'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/queries/counts'] });
+      setSelectedQueries([]);
+      setIsDeleteConfirmOpen(false);
+      toast({ 
+        title: "Queries deleted", 
+        description: `${variables.length} queries have been removed.` 
+      });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to delete queries.", variant: "destructive" });
     },
   });
 
@@ -1543,6 +1577,17 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
               >
                 <FolderPlus className="w-4 h-4 mr-2" />
                 Group Selected ({selectedQueries.length})
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setIsDeleteConfirmOpen(true)}
+                disabled={bulkDeleteMutation.isPending}
+                className="text-destructive hover:text-destructive"
+                data-testid="button-delete-selected"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete ({selectedQueries.length})
               </Button>
             </div>
           )}
@@ -2813,6 +2858,32 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteConfirmOpen} onOpenChange={setIsDeleteConfirmOpen}>
+        <AlertDialogContent data-testid="dialog-delete-confirm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Trash2 className="w-5 h-5 text-destructive" />
+              Delete Queries
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedQueries.length} selected {selectedQueries.length === 1 ? 'query' : 'queries'}? 
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => bulkDeleteMutation.mutate(selectedQueries)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              {bulkDeleteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Create Group Dialog */}
       <Dialog open={isGroupDialogOpen} onOpenChange={(open) => {
