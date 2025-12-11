@@ -75,8 +75,8 @@ export class QueryTokenStorage extends BaseStorage {
       .orderBy(sql`${queryResponseTokens.createdAt} DESC`);
   }
 
-  async markTokenAccessed(tokenId: string): Promise<void> {
-    await db
+  async markTokenAccessed(tokenId: string): Promise<{ isFirstAccess: boolean }> {
+    const result = await db
       .update(queryResponseTokens)
       .set({ accessedAt: new Date() })
       .where(
@@ -84,7 +84,11 @@ export class QueryTokenStorage extends BaseStorage {
           eq(queryResponseTokens.id, tokenId),
           sql`${queryResponseTokens.accessedAt} IS NULL`
         )
-      );
+      )
+      .returning({ id: queryResponseTokens.id });
+    
+    // If a row was returned, this was the first access (the update matched the IS NULL condition)
+    return { isFirstAccess: result.length > 0 };
   }
 
   async markTokenCompleted(tokenId: string): Promise<void> {

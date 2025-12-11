@@ -1366,8 +1366,8 @@ ${emailSignoff}`;
       
       const tokenData = validation.tokenData!;
       
-      // Mark token as accessed on first view
-      await storage.markQueryTokenAccessed(tokenData.id);
+      // Mark token as accessed on first view - returns whether this was actually the first access
+      const { isFirstAccess } = await storage.markQueryTokenAccessed(tokenData.id);
 
       // Get the queries for this token
       const queries = await storage.getQueriesForToken(token);
@@ -1377,9 +1377,78 @@ ${emailSignoff}`;
       
       // Get client details for display
       let clientName = null;
+      let clientId: string | null = null;
       if (project) {
+        clientId = project.clientId;
         const client = await storage.getClientById(project.clientId);
-        clientName = client?.name;
+        clientName = client?.name || null;
+      }
+
+      // On first access: send notifications and create chronology entry
+      if (isFirstAccess) {
+        const projectName = project?.description || 'Bookkeeping Queries';
+        
+        // Create chronology entry for "Client opened queries"
+        try {
+          await storage.createChronologyEntry({
+            projectId: tokenData.projectId,
+            entryType: 'queries',
+            toStatus: 'no_change',
+            changedById: null,
+            notes: `Client opened queries - ${projectName}`,
+          });
+          console.log(`[Query Access] Created chronology entry for client opening queries`);
+        } catch (chronologyError) {
+          console.error("[Query Access] Failed to create chronology entry:", chronologyError);
+        }
+        
+        // Send notifications to opted-in staff
+        if (tokenData.notifyOnResponseUserIds && tokenData.notifyOnResponseUserIds.length > 0) {
+          console.log(`[Query Access] Sending open notification to ${tokenData.notifyOnResponseUserIds.length} user(s)`);
+          
+          try {
+            const baseUrl = process.env.APP_URL || 'https://thelink.replit.app';
+            const viewUrl = clientId 
+              ? `${baseUrl}/clients/${clientId}/projects/${tokenData.projectId}`
+              : `${baseUrl}/projects/${tokenData.projectId}`;
+            
+            const { getUncachableSendGridClient } = await import('../sendgridService');
+            const sgResult = await getUncachableSendGridClient();
+            const sgClient = sgResult.client;
+            const fromEmail = sgResult.fromEmail;
+            
+            if (sgClient && fromEmail) {
+              for (const userId of tokenData.notifyOnResponseUserIds) {
+                try {
+                  const user = await storage.getUser(userId);
+                  if (!user?.email) continue;
+                  
+                  const subject = `Client Opened Queries: ${projectName}`;
+                  const html = `
+                    <p>Hi ${user.firstName || 'Team Member'},</p>
+                    <p>The client${clientName ? ` (${clientName})` : ''} has just opened their bookkeeping queries for <strong>${projectName}</strong>.</p>
+                    <p>You'll receive another notification when they submit their responses.</p>
+                    <p><a href="${viewUrl}">View Project</a></p>
+                    <p>Best regards,<br/>The Link</p>
+                  `;
+                  
+                  await sgClient.send({
+                    to: user.email,
+                    from: fromEmail,
+                    subject,
+                    html,
+                  });
+                  
+                  console.log(`[Query Access] Sent open notification to ${user.email}`);
+                } catch (userNotifyError) {
+                  console.error(`[Query Access] Failed to notify user ${userId}:`, userNotifyError);
+                }
+              }
+            }
+          } catch (notifyError) {
+            console.error("[Query Access] Failed to send open notifications:", notifyError);
+          }
+        }
       }
 
       res.json({
@@ -1787,28 +1856,42 @@ ${emailSignoff}`;
       // Mark the token as completed
       await storage.markQueryTokenCompleted(tokenData.id);
 
+      // Get project and client info for chronology and notifications
+      const project = await storage.getProject(tokenData.projectId);
+      let clientName: string | null = null;
+      let clientId: string | null = null;
+      
+      if (project) {
+        clientId = project.clientId;
+        const client = await storage.getClientById(project.clientId);
+        clientName = client?.name || null;
+      }
+      
+      const projectName = project?.description || 'Bookkeeping Queries';
+      
+      // Create chronology entry for "Client submitted queries"
+      try {
+        await storage.createChronologyEntry({
+          projectId: tokenData.projectId,
+          entryType: 'queries',
+          toStatus: 'no_change',
+          changedById: null,
+          notes: `Client submitted queries - ${projectName}`,
+        });
+        console.log(`[Query Submit] Created chronology entry for client submitting queries`);
+      } catch (chronologyError) {
+        console.error("[Query Submit] Failed to create chronology entry:", chronologyError);
+      }
+
       // Send notifications to assigned users if configured
       let notificationStats = { requested: 0, sent: 0, failed: 0, skipped: 0 };
       
       if (tokenData.notifyOnResponseUserIds && tokenData.notifyOnResponseUserIds.length > 0) {
         notificationStats.requested = tokenData.notifyOnResponseUserIds.length;
         console.log(`[Query Notification] Processing ${notificationStats.requested} notification(s) for token ${tokenData.id}`);
+        console.log(`[Query Notification] Project: ${projectName}, Client: ${clientName || 'Unknown'}`);
         
         try {
-          // Get project and client info for the notification
-          const project = await storage.getProject(tokenData.projectId);
-          let clientName: string | null = null;
-          let clientId: string | null = null;
-          
-          if (project) {
-            clientId = project.clientId;
-            const client = await storage.getClientById(project.clientId);
-            clientName = client?.name || null;
-          }
-          
-          const projectName = project?.description || 'Query Responses';
-          console.log(`[Query Notification] Project: ${projectName}, Client: ${clientName || 'Unknown'}`);
-          
           // Build view URL - use project-only URL if clientId is missing
           const baseUrl = process.env.APP_URL || 'https://thelink.replit.app';
           const viewUrl = clientId 
