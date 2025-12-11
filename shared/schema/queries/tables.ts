@@ -74,6 +74,7 @@ export const queryResponseTokens = pgTable("query_response_tokens", {
   recipientName: varchar("recipient_name", { length: 255 }),
   queryCount: integer("query_count").notNull(),
   queryIds: text("query_ids").array(),
+  notifyOnResponseUserIds: text("notify_on_response_user_ids").array(),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_query_response_tokens_token").on(table.token),

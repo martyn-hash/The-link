@@ -738,10 +738,15 @@ export function registerQueryRoutes(
         return res.status(401).json({ message: "User not authenticated" });
       }
 
-      const { queryIds, expiryDays, includeOnlineLink = true } = req.body;
+      const { queryIds, expiryDays, includeOnlineLink = true, notifyOnResponseUserIds } = req.body;
       
       if (!queryIds || !Array.isArray(queryIds) || queryIds.length === 0) {
         return res.status(400).json({ message: "queryIds is required and must be a non-empty array" });
+      }
+      
+      // Validate notifyOnResponseUserIds if provided
+      if (notifyOnResponseUserIds && (!Array.isArray(notifyOnResponseUserIds) || notifyOnResponseUserIds.some((id: any) => typeof id !== 'string'))) {
+        return res.status(400).json({ message: "notifyOnResponseUserIds must be an array of strings" });
       }
       
       // Validate expiryDays if link is included
@@ -805,6 +810,7 @@ export function registerQueryRoutes(
           recipientName: null,
           queryCount: queryIds.length,
           queryIds,
+          notifyOnResponseUserIds: notifyOnResponseUserIds || null,
         });
 
         // Build the response URL with proper domain handling
@@ -1686,6 +1692,45 @@ ${emailSignoff}`;
 
       // Mark the token as completed
       await storage.markQueryTokenCompleted(tokenData.id);
+
+      // Send notifications to assigned users if configured
+      if (tokenData.notifyOnResponseUserIds && tokenData.notifyOnResponseUserIds.length > 0) {
+        try {
+          const project = await storage.getProject(tokenData.projectId);
+          const client = project ? await storage.getClientById(project.clientId) : null;
+          
+          for (const userId of tokenData.notifyOnResponseUserIds) {
+            try {
+              const user = await storage.getUser(userId);
+              if (user?.email) {
+                // Send notification email
+                const { getUncachableSendGridClient } = await import('../sendgridService');
+                const { client: sgClient, fromEmail } = await getUncachableSendGridClient();
+                
+                const subject = `Client Responded: ${project?.description || 'Query Responses'}`;
+                const html = `
+                  <p>Hi ${user.firstName || 'Team Member'},</p>
+                  <p>The client has submitted their responses to ${updatedCount} ${updatedCount === 1 ? 'query' : 'queries'} for <strong>${project?.description || 'the project'}</strong>${client ? ` (${client.name})` : ''}.</p>
+                  <p><a href="${process.env.APP_URL || 'https://thelink.replit.app'}/clients/${project?.clientId}/projects/${tokenData.projectId}">View Responses</a></p>
+                  <p>Best regards,<br/>The Link</p>
+                `;
+                
+                await sgClient.send({
+                  to: user.email,
+                  from: fromEmail,
+                  subject,
+                  html,
+                });
+                console.log(`[Query Notification] Sent response notification to ${user.email} for project ${tokenData.projectId}`);
+              }
+            } catch (userNotifyError) {
+              console.error(`[Query Notification] Failed to notify user ${userId}:`, userNotifyError);
+            }
+          }
+        } catch (notifyError) {
+          console.error("[Query Notification] Failed to send response notifications:", notifyError);
+        }
+      }
 
       res.json({
         message: "Responses submitted successfully",

@@ -227,6 +227,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   const [sendOptionsQueryIds, setSendOptionsQueryIds] = useState<string[]>([]);
   const [includeOnlineLink, setIncludeOnlineLink] = useState(true);
   const [linkExpiryDays, setLinkExpiryDays] = useState(3);
+  const [notifyOnResponseUserIds, setNotifyOnResponseUserIds] = useState<string[]>([]);
   
   // Token management state
   const [showActiveTokens, setShowActiveTokens] = useState(false);
@@ -798,6 +799,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     setSendOptionsQueryIds(queryIds);
     setIncludeOnlineLink(true);
     setLinkExpiryDays(3);
+    setNotifyOnResponseUserIds([]);
     setIsSendOptionsOpen(true);
   };
 
@@ -808,13 +810,17 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     
     try {
       // Only include expiryDays if online link is requested
-      const requestBody: { queryIds: string[]; includeOnlineLink: boolean; expiryDays?: number } = {
+      const requestBody: { queryIds: string[]; includeOnlineLink: boolean; expiryDays?: number; notifyOnResponseUserIds?: string[] } = {
         queryIds: sendOptionsQueryIds,
         includeOnlineLink,
       };
       
       if (includeOnlineLink) {
         requestBody.expiryDays = linkExpiryDays;
+        // Include notify on response user IDs only when online link is included
+        if (notifyOnResponseUserIds.length > 0) {
+          requestBody.notifyOnResponseUserIds = notifyOnResponseUserIds;
+        }
       }
       
       const response = await apiRequest('POST', `/api/projects/${projectId}/queries/prepare-email`, requestBody);
@@ -2249,26 +2255,79 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
 
             {/* Link Expiry Days (only shown if online link is included) */}
             {includeOnlineLink && (
-              <div className="pl-7 space-y-2">
-                <label className="text-sm font-medium">Link valid for</label>
-                <Select 
-                  value={String(linkExpiryDays)} 
-                  onValueChange={(val) => setLinkExpiryDays(Number(val))}
-                >
-                  <SelectTrigger className="w-full" data-testid="select-link-expiry">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">1 day</SelectItem>
-                    <SelectItem value="3">3 days</SelectItem>
-                    <SelectItem value="7">7 days</SelectItem>
-                    <SelectItem value="14">14 days</SelectItem>
-                    <SelectItem value="30">30 days</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  The link will expire after this period
-                </p>
+              <div className="pl-7 space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Link valid for</label>
+                  <Select 
+                    value={String(linkExpiryDays)} 
+                    onValueChange={(val) => setLinkExpiryDays(Number(val))}
+                  >
+                    <SelectTrigger className="w-full" data-testid="select-link-expiry">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1 day</SelectItem>
+                      <SelectItem value="3">3 days</SelectItem>
+                      <SelectItem value="7">7 days</SelectItem>
+                      <SelectItem value="14">14 days</SelectItem>
+                      <SelectItem value="30">30 days</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    The link will expire after this period
+                  </p>
+                </div>
+
+                {/* Notify on Response Section */}
+                <div className="space-y-2 border-t pt-4">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <Bell className="w-4 h-4" />
+                    Notify when client responds
+                  </label>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Selected team members will receive an email when the client submits their responses
+                  </p>
+                  {isLoadingAssignees ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Loading team members...
+                    </div>
+                  ) : !projectAssignees || projectAssignees.length === 0 ? (
+                    <p className="text-xs text-muted-foreground italic">
+                      No team members assigned to this project
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {projectAssignees.map((assignee) => (
+                        <div key={assignee.userId} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`notify-${assignee.userId}`}
+                            checked={notifyOnResponseUserIds.includes(assignee.userId)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setNotifyOnResponseUserIds([...notifyOnResponseUserIds, assignee.userId]);
+                              } else {
+                                setNotifyOnResponseUserIds(notifyOnResponseUserIds.filter(id => id !== assignee.userId));
+                              }
+                            }}
+                            data-testid={`checkbox-notify-${assignee.userId}`}
+                          />
+                          <label 
+                            htmlFor={`notify-${assignee.userId}`}
+                            className="text-sm cursor-pointer"
+                          >
+                            {assignee.user.firstName} {assignee.user.lastName}
+                            {assignee.role && (
+                              <span className="text-muted-foreground ml-1">
+                                ({assignee.role.name})
+                              </span>
+                            )}
+                          </label>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
