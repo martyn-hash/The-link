@@ -299,6 +299,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   }[]>([]);
   const [selectedProposals, setSelectedProposals] = useState<Record<string, boolean>>({});
   const [proposalNames, setProposalNames] = useState<Record<string, string>>({});
+  const [proposalDescriptions, setProposalDescriptions] = useState<Record<string, string>>({});
   const [proposalQuerySelections, setProposalQuerySelections] = useState<Record<string, Set<string>>>({});
   const [autoGroupUngroupableCount, setAutoGroupUngroupableCount] = useState(0);
 
@@ -636,17 +637,20 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
       // Use matchedPrefix + first queryId for guaranteed unique key
       const initialSelections: Record<string, boolean> = {};
       const initialNames: Record<string, string> = {};
+      const initialDescriptions: Record<string, string> = {};
       const initialQuerySelections: Record<string, Set<string>> = {};
       
       data.proposals.forEach((proposal) => {
         const key = `${proposal.matchedPrefix}_${proposal.queryIds[0]}`; // Unique key: prefix + first query ID
         initialSelections[key] = true;
         initialNames[key] = proposal.proposedName;
+        initialDescriptions[key] = "";
         initialQuerySelections[key] = new Set(proposal.queryIds);
       });
       
       setSelectedProposals(initialSelections);
       setProposalNames(initialNames);
+      setProposalDescriptions(initialDescriptions);
       setProposalQuerySelections(initialQuerySelections);
       
       setIsAutoGroupDialogOpen(false);
@@ -694,19 +698,33 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
 
   const handleAutoGroupApply = () => {
     const groupsToCreate: { groupName: string; description?: string; queryIds: string[] }[] = [];
+    const emptyNameGroups: string[] = [];
     
     autoGroupProposals.forEach((proposal) => {
       const key = `${proposal.matchedPrefix}_${proposal.queryIds[0]}`; // Unique key: prefix + first query ID
       if (selectedProposals[key]) {
         const selectedQueryIds = proposalQuerySelections[key];
         if (selectedQueryIds && selectedQueryIds.size > 0) {
-          groupsToCreate.push({
-            groupName: proposalNames[key] || proposal.proposedName,
-            queryIds: Array.from(selectedQueryIds),
-          });
+          const groupName = (proposalNames[key] ?? proposal.proposedName).trim();
+          const description = proposalDescriptions[key]?.trim() || undefined;
+          
+          if (!groupName) {
+            emptyNameGroups.push(proposal.proposedName);
+          } else {
+            groupsToCreate.push({
+              groupName,
+              description,
+              queryIds: Array.from(selectedQueryIds),
+            });
+          }
         }
       }
     });
+
+    if (emptyNameGroups.length > 0) {
+      toast({ title: "Group name required", description: "Please provide a name for all selected groups.", variant: "destructive" });
+      return;
+    }
 
     if (groupsToCreate.length === 0) {
       toast({ title: "No groups selected", description: "Please select at least one group to create.", variant: "destructive" });
@@ -3297,29 +3315,45 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                     data-testid={`proposal-group-${idx}`}
                   >
                     <div 
-                      className="p-3 flex items-center gap-3 cursor-pointer hover:bg-muted/50"
-                      onClick={() => toggleProposalSelection(key)}
+                      className="p-3 space-y-2"
                     >
-                      <Checkbox
-                        checked={isSelected}
-                        onCheckedChange={() => toggleProposalSelection(key)}
-                        data-testid={`checkbox-proposal-${idx}`}
-                      />
-                      <div className="flex-1">
-                        <Input
-                          value={proposalNames[key] || proposal.proposedName}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            updateProposalName(key, e.target.value);
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                          className="font-medium"
-                          data-testid={`input-proposal-name-${idx}`}
+                      <div className="flex items-center gap-3 cursor-pointer hover:bg-muted/50 rounded -m-1 p-1" onClick={() => toggleProposalSelection(key)}>
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleProposalSelection(key)}
+                          data-testid={`checkbox-proposal-${idx}`}
                         />
+                        <div className="flex-1">
+                          <Input
+                            value={proposalNames[key] ?? proposal.proposedName}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              updateProposalName(key, e.target.value);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="font-medium"
+                            placeholder="Group name"
+                            data-testid={`input-proposal-name-${idx}`}
+                          />
+                        </div>
+                        <Badge variant="secondary">
+                          {selectedCount} / {proposal.queries.length}
+                        </Badge>
                       </div>
-                      <Badge variant="secondary">
-                        {selectedCount} / {proposal.queries.length}
-                      </Badge>
+                      {isSelected && (
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <Textarea
+                            value={proposalDescriptions[key] ?? ""}
+                            onChange={(e) => {
+                              setProposalDescriptions(prev => ({ ...prev, [key]: e.target.value }));
+                            }}
+                            placeholder="Question for client (shown to client instead of individual queries)"
+                            className="text-sm resize-none"
+                            rows={2}
+                            data-testid={`input-proposal-description-${idx}`}
+                          />
+                        </div>
+                      )}
                     </div>
                     
                     {isSelected && (
