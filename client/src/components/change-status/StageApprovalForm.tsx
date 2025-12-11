@@ -6,12 +6,24 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
 import { 
   AlertCircle, 
   CheckCircle, 
   ChevronDown, 
   ChevronUp, 
-  Equal 
+  Equal,
+  Calendar as CalendarIcon,
 } from "lucide-react";
 import {
   Form,
@@ -22,6 +34,7 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
+import { cn } from "@/lib/utils";
 import type { StageApprovalField } from "@shared/schema";
 
 interface StageApprovalFormProps {
@@ -56,6 +69,44 @@ const getComparisonIcon = (
       return <ChevronUp className="h-4 w-4" />;
     default:
       return null;
+  }
+};
+
+const formatDateComparisonType = (
+  comparisonType: "before" | "after" | "between" | "exact"
+): string => {
+  switch (comparisonType) {
+    case "before":
+      return "before";
+    case "after":
+      return "after";
+    case "between":
+      return "between";
+    case "exact":
+      return "exactly on";
+    default:
+      return comparisonType;
+  }
+};
+
+const formatFieldTypeBadge = (fieldType: string): string => {
+  switch (fieldType) {
+    case "boolean":
+      return "Yes/No";
+    case "number":
+      return "Number";
+    case "short_text":
+      return "Short Text";
+    case "long_text":
+      return "Long Text";
+    case "single_select":
+      return "Single Select";
+    case "multi_select":
+      return "Multi Select";
+    case "date":
+      return "Date";
+    default:
+      return fieldType;
   }
 };
 
@@ -97,7 +148,7 @@ export function StageApprovalForm({
                           )}
                         </div>
                         <Badge variant="outline" className="text-xs">
-                          {field.fieldType}
+                          {formatFieldTypeBadge(field.fieldType)}
                         </Badge>
                       </div>
 
@@ -206,6 +257,90 @@ export function StageApprovalForm({
                             <FormMessage />
                           </div>
                         )}
+
+                      {field.fieldType === "short_text" && (
+                        <div className="space-y-3">
+                          <FormControl>
+                            <Input
+                              {...formField}
+                              maxLength={255}
+                              placeholder={field.placeholder || "Enter text..."}
+                              data-testid={`input-short-text-approval-${field.id}`}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </div>
+                      )}
+
+                      {field.fieldType === "single_select" &&
+                        field.options &&
+                        field.options.length > 0 && (
+                          <div className="space-y-3">
+                            <FormControl>
+                              <Select
+                                onValueChange={formField.onChange}
+                                value={formField.value || ""}
+                              >
+                                <SelectTrigger data-testid={`select-approval-${field.id}`}>
+                                  <SelectValue placeholder={field.placeholder || "Select an option..."} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {field.options.map((option: string) => (
+                                    <SelectItem key={option} value={option}>
+                                      {option}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </FormControl>
+                            <FormMessage />
+                          </div>
+                        )}
+
+                      {field.fieldType === "date" && (
+                        <div className="space-y-3">
+                          {field.dateComparisonType && field.expectedDate && (
+                            <FormDescription className="flex items-center gap-2">
+                              <CalendarIcon className="h-4 w-4" />
+                              Date must be {formatDateComparisonType(field.dateComparisonType)}{" "}
+                              <strong>{format(new Date(field.expectedDate), "PP")}</strong>
+                              {field.dateComparisonType === "between" && field.expectedDateEnd && (
+                                <> and <strong>{format(new Date(field.expectedDateEnd), "PP")}</strong></>
+                              )}
+                            </FormDescription>
+                          )}
+                          <FormControl>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  className={cn(
+                                    "w-full justify-start text-left font-normal",
+                                    !formField.value && "text-muted-foreground"
+                                  )}
+                                  data-testid={`date-approval-${field.id}`}
+                                >
+                                  <CalendarIcon className="mr-2 h-4 w-4" />
+                                  {formField.value ? (
+                                    format(new Date(formField.value), "PPP")
+                                  ) : (
+                                    <span>{field.placeholder || "Pick a date"}</span>
+                                  )}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                  mode="single"
+                                  selected={formField.value ? new Date(formField.value) : undefined}
+                                  onSelect={(date) => formField.onChange(date?.toISOString())}
+                                  initialFocus
+                                />
+                              </PopoverContent>
+                            </Popover>
+                          </FormControl>
+                          <FormMessage />
+                        </div>
+                      )}
                     </div>
                   </FormItem>
                 )}
