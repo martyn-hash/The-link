@@ -158,14 +158,27 @@ const baseApprovalFieldLibrarySchema = createInsertSchema(approvalFieldLibrary).
   createdAt: true,
 });
 
+// Library fields only need to validate that select types have options
+// They don't need expectedValue validation since they're templates, not concrete approval fields
+function validateLibraryFieldType(data: { fieldType?: string | null; options?: string[] | null }): boolean {
+  if (!data.fieldType) return true;
+  switch (data.fieldType) {
+    case 'multi_select':
+    case 'single_select':
+      return data.options !== null && data.options !== undefined && Array.isArray(data.options) && data.options.length > 0;
+    default:
+      return true;
+  }
+}
+
 export const insertApprovalFieldLibrarySchema = baseApprovalFieldLibrarySchema.refine(
-  (data) => validateStageApprovalFieldType(data),
-  { message: "Field type specific validation failed", path: ["fieldType"] }
+  (data) => validateLibraryFieldType(data),
+  { message: "Select fields require at least one option", path: ["options"] }
 );
 
 export const updateApprovalFieldLibrarySchema = baseApprovalFieldLibrarySchema.partial().refine(
-  (data) => validateStageApprovalFieldType(data),
-  { message: "Field type specific validation failed", path: ["fieldType"] }
+  (data) => validateLibraryFieldType(data),
+  { message: "Select fields require at least one option", path: ["options"] }
 );
 
 export const insertClientStageApprovalOverrideSchema = createInsertSchema(clientStageApprovalOverrides).omit({
