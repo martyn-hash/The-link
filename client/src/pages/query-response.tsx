@@ -377,12 +377,13 @@ export default function QueryResponsePage() {
   }, [allQueriesAnswered]);
   
   // Function to show celebration screen with confetti
+  // Called by navigateNext when no more unanswered items remain - trust the caller
   const showCelebrationScreen = useCallback(() => {
-    if (allQueriesAnswered && allDisplayItems.length > 0 && !isSubmitted && !hasDismissedCelebration.current) {
+    if (allDisplayItems.length > 0 && !isSubmitted && !hasDismissedCelebration.current) {
       setShowCelebration(true);
       triggerConfetti();
     }
-  }, [allQueriesAnswered, allDisplayItems.length, isSubmitted, triggerConfetti]);
+  }, [allDisplayItems.length, isSubmitted, triggerConfetti]);
   
   // Celebration is now triggered ONLY by explicit user action (Next button click)
   // via showCelebrationScreen() in navigateNext - no auto-trigger on typing
@@ -1021,20 +1022,6 @@ export default function QueryResponsePage() {
           <div className="flex items-center justify-between">
             <img src={logoPath} alt="Logo" className="h-7" />
             <div className="flex items-center gap-3">
-              {globalSaveStatus && (
-                <div className={cn(
-                  "flex items-center gap-1.5 text-xs px-2 py-1 rounded-full",
-                  globalSaveStatus === 'saved' && "bg-green-50 text-green-600",
-                  globalSaveStatus === 'saving' && "bg-blue-50 text-blue-600",
-                  globalSaveStatus === 'unsaved' && "bg-amber-50 text-amber-600",
-                  globalSaveStatus === 'error' && "bg-red-50 text-red-600"
-                )}>
-                  {globalSaveStatus === 'saved' && <><Cloud className="w-3 h-3" /> Saved</>}
-                  {globalSaveStatus === 'saving' && <><Loader2 className="w-3 h-3 animate-spin" /> Saving...</>}
-                  {globalSaveStatus === 'unsaved' && <><CloudOff className="w-3 h-3" /> Unsaved</>}
-                  {globalSaveStatus === 'error' && <><AlertCircle className="w-3 h-3" /> Error</>}
-                </div>
-              )}
               <div className="text-right">
                 <p className="text-xs font-medium">{data.clientName}</p>
                 <p className="text-[10px] text-muted-foreground">{data.projectDescription}</p>
