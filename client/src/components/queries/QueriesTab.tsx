@@ -250,6 +250,9 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   // Import loading state
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
+  
+  // File preview state
+  const [previewFile, setPreviewFile] = useState<{ fileName: string; fileType: string; url: string } | null>(null);
 
   // Add Query form state
   const [newQueryText, setNewQueryText] = useState("");
@@ -2412,48 +2415,80 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                 </label>
                 {editingQuery?.clientAttachments && (editingQuery.clientAttachments as any[]).length > 0 ? (
                   <div className="space-y-2">
-                    {(editingQuery.clientAttachments as any[]).map((attachment: any) => (
-                      <div 
-                        key={attachment.objectPath}
-                        className="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                      >
-                        {attachment.fileType?.startsWith('image/') ? (
-                          <Image className="w-5 h-5 text-blue-500" />
-                        ) : (
-                          <FileText className="w-5 h-5 text-orange-500" />
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{attachment.fileName}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {attachment.fileSize < 1024 
-                              ? `${attachment.fileSize} B` 
-                              : attachment.fileSize < 1024 * 1024 
-                                ? `${(attachment.fileSize / 1024).toFixed(1)} KB`
-                                : `${(attachment.fileSize / (1024 * 1024)).toFixed(1)} MB`
-                            }
-                          </p>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={async () => {
-                            try {
-                              const response = await fetch(`/api/object-storage/download-url?objectPath=${encodeURIComponent(attachment.objectPath)}`);
-                              if (response.ok) {
-                                const { url } = await response.json();
-                                window.open(url, '_blank');
-                              }
-                            } catch (error) {
-                              toast({ title: "Download failed", description: "Could not download the file.", variant: "destructive" });
-                            }
-                          }}
-                          data-testid={`button-download-${attachment.objectPath}`}
+                    {(editingQuery.clientAttachments as any[]).map((attachment: any) => {
+                      const isPreviewable = attachment.fileType?.startsWith('image/') || attachment.fileType === 'application/pdf';
+                      return (
+                        <div 
+                          key={attachment.objectPath}
+                          className="flex items-center gap-2 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg border hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                         >
-                          <Download className="w-4 h-4 mr-1" />
-                          Download
-                        </Button>
-                      </div>
-                    ))}
+                          {attachment.fileType?.startsWith('image/') ? (
+                            <Image className="w-5 h-5 text-blue-500" />
+                          ) : attachment.fileType === 'application/pdf' ? (
+                            <FileText className="w-5 h-5 text-red-500" />
+                          ) : (
+                            <FileText className="w-5 h-5 text-orange-500" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{attachment.fileName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {attachment.fileSize < 1024 
+                                ? `${attachment.fileSize} B` 
+                                : attachment.fileSize < 1024 * 1024 
+                                  ? `${(attachment.fileSize / 1024).toFixed(1)} KB`
+                                  : `${(attachment.fileSize / (1024 * 1024)).toFixed(1)} MB`
+                              }
+                            </p>
+                          </div>
+                          <div className="flex gap-1">
+                            {isPreviewable && (
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={async () => {
+                                  try {
+                                    const response = await fetch(`/api/object-storage/download-url?objectPath=${encodeURIComponent(attachment.objectPath)}`);
+                                    if (response.ok) {
+                                      const { url } = await response.json();
+                                      setPreviewFile({
+                                        fileName: attachment.fileName,
+                                        fileType: attachment.fileType,
+                                        url
+                                      });
+                                    }
+                                  } catch (error) {
+                                    toast({ title: "Preview failed", description: "Could not load file preview.", variant: "destructive" });
+                                  }
+                                }}
+                                data-testid={`button-preview-${attachment.objectPath}`}
+                              >
+                                <Eye className="w-4 h-4 mr-1" />
+                                View
+                              </Button>
+                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={async () => {
+                                try {
+                                  const response = await fetch(`/api/object-storage/download-url?objectPath=${encodeURIComponent(attachment.objectPath)}`);
+                                  if (response.ok) {
+                                    const { url } = await response.json();
+                                    window.open(url, '_blank');
+                                  }
+                                } catch (error) {
+                                  toast({ title: "Download failed", description: "Could not download the file.", variant: "destructive" });
+                                }
+                              }}
+                              data-testid={`button-download-${attachment.objectPath}`}
+                            >
+                              <Download className="w-4 h-4 mr-1" />
+                              Download
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="p-6 border-2 border-dashed rounded-lg text-center text-muted-foreground">
@@ -2475,6 +2510,57 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
               data-testid="button-save-edit"
             >
               Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* File Preview Dialog */}
+      <Dialog open={!!previewFile} onOpenChange={(open) => !open && setPreviewFile(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col" data-testid="dialog-file-preview">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {previewFile?.fileType?.startsWith('image/') ? (
+                <Image className="w-5 h-5 text-blue-500" />
+              ) : (
+                <FileText className="w-5 h-5 text-red-500" />
+              )}
+              {previewFile?.fileName}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-auto bg-slate-100 dark:bg-slate-900 rounded-lg">
+            {previewFile?.fileType?.startsWith('image/') && (
+              <div className="flex items-center justify-center p-4">
+                <img 
+                  src={previewFile.url} 
+                  alt={previewFile.fileName}
+                  className="max-w-full max-h-[60vh] object-contain rounded"
+                  data-testid="img-preview"
+                />
+              </div>
+            )}
+            {previewFile?.fileType === 'application/pdf' && (
+              <iframe
+                src={previewFile.url}
+                className="w-full h-[60vh] border-0"
+                title={previewFile.fileName}
+                data-testid="iframe-pdf-preview"
+              />
+            )}
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setPreviewFile(null)}>
+              Close
+            </Button>
+            <Button 
+              onClick={() => {
+                if (previewFile?.url) {
+                  window.open(previewFile.url, '_blank');
+                }
+              }}
+            >
+              <Download className="w-4 h-4 mr-1" />
+              Download
             </Button>
           </DialogFooter>
         </DialogContent>
