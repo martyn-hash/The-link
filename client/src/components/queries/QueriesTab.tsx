@@ -1407,7 +1407,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                     <>
                       <p className="font-medium text-foreground">Importing queries...</p>
                       <p className="text-sm text-muted-foreground mt-1">
-                        {importProgress.current} of {importProgress.total} complete
+                        Please wait
                       </p>
                     </>
                   )}
@@ -1723,14 +1723,23 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                           {query.hasSuggestionMatch && (
                             <TooltipProvider>
                               <Tooltip>
-                                <TooltipTrigger>
-                                  <Lightbulb 
-                                    className="w-4 h-4 text-yellow-500 flex-shrink-0" 
-                                    data-testid={`icon-suggestion-${query.id}`}
-                                  />
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSuggestionQueryId(query.id);
+                                      setIsSuggestionPopoverOpen(true);
+                                    }}
+                                    className="p-1 hover:bg-yellow-100 dark:hover:bg-yellow-900/30 rounded transition-colors"
+                                    data-testid={`button-suggestion-${query.id}`}
+                                  >
+                                    <Lightbulb 
+                                      className="w-5 h-5 text-yellow-500 flex-shrink-0" 
+                                    />
+                                  </button>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  <p>Matching answer available - click Suggest Answer</p>
+                                  <p>Click to see matching answer</p>
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
@@ -1855,11 +1864,21 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                           {query.hasSuggestionMatch && (
                             <TooltipProvider>
                               <Tooltip>
-                                <TooltipTrigger>
-                                  <Lightbulb className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSuggestionQueryId(query.id);
+                                      setIsSuggestionPopoverOpen(true);
+                                    }}
+                                    className="p-1 hover:bg-yellow-100 dark:hover:bg-yellow-900/30 rounded transition-colors"
+                                    data-testid={`button-suggestion-mobile-${query.id}`}
+                                  >
+                                    <Lightbulb className="w-5 h-5 text-yellow-500 flex-shrink-0" />
+                                  </button>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  <p>Matching answer available</p>
+                                  <p>Click to see matching answer</p>
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>

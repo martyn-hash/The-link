@@ -458,12 +458,12 @@ export function QueryBulkImport({ onImport, trigger }: QueryBulkImportProps) {
           )}
 
           {step === "preview" && (
-            <ScrollArea className="flex-1 min-h-0 max-h-[400px]">
-              <div className="space-y-2 pr-4">
+            <div className="h-[400px] overflow-y-auto border rounded-lg p-2">
+              <div className="space-y-2">
                 {parsedQueries.map((query, index) => (
                   <div
                     key={index}
-                    className="border rounded-lg p-3 text-sm space-y-1 group relative"
+                    className="border rounded-lg p-3 text-sm space-y-1 relative pr-10"
                     data-testid={`preview-query-${index}`}
                   >
                     <button
@@ -471,7 +471,7 @@ export function QueryBulkImport({ onImport, trigger }: QueryBulkImportProps) {
                       onClick={() => {
                         setParsedQueries(prev => prev.filter((_, i) => i !== index));
                       }}
-                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-100 rounded text-red-500"
+                      className="absolute top-2 right-2 p-1 hover:bg-red-100 dark:hover:bg-red-900/30 rounded text-red-500"
                       data-testid={`button-delete-preview-${index}`}
                     >
                       <X className="w-4 h-4" />
@@ -498,7 +498,7 @@ export function QueryBulkImport({ onImport, trigger }: QueryBulkImportProps) {
                   </div>
                 ))}
               </div>
-            </ScrollArea>
+            </div>
           )}
 
           <DialogFooter className="flex gap-2">
