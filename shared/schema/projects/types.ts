@@ -14,6 +14,8 @@ import {
   projectSchedulingHistory,
   schedulingRunLogs,
   schedulingExceptions,
+  approvalFieldLibrary,
+  clientStageApprovalOverrides,
 } from './tables';
 
 export type { DialoraSettings, DialoraOutboundWebhook, DialoraVariableMapping } from './base';
@@ -39,6 +41,10 @@ import {
   insertProjectSchedulingHistorySchema,
   insertSchedulingRunLogSchema,
   insertSchedulingExceptionSchema,
+  insertApprovalFieldLibrarySchema,
+  updateApprovalFieldLibrarySchema,
+  insertClientStageApprovalOverrideSchema,
+  updateClientStageApprovalOverrideSchema,
   completeProjectSchema,
   updateProjectStatusSchema,
   csvProjectSchema,
@@ -94,6 +100,14 @@ export type InsertSchedulingRunLog = z.infer<typeof insertSchedulingRunLogSchema
 
 export type SchedulingException = typeof schedulingExceptions.$inferSelect;
 export type InsertSchedulingException = z.infer<typeof insertSchedulingExceptionSchema>;
+
+export type ApprovalFieldLibrary = typeof approvalFieldLibrary.$inferSelect;
+export type InsertApprovalFieldLibrary = z.infer<typeof insertApprovalFieldLibrarySchema>;
+export type UpdateApprovalFieldLibrary = z.infer<typeof updateApprovalFieldLibrarySchema>;
+
+export type ClientStageApprovalOverride = typeof clientStageApprovalOverrides.$inferSelect;
+export type InsertClientStageApprovalOverride = z.infer<typeof insertClientStageApprovalOverrideSchema>;
+export type UpdateClientStageApprovalOverride = z.infer<typeof updateClientStageApprovalOverrideSchema>;
 
 export type CompleteProject = z.infer<typeof completeProjectSchema>;
 export type UpdateProjectStatus = z.infer<typeof updateProjectStatusSchema>;

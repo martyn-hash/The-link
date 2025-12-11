@@ -2,7 +2,7 @@ import { pgTable, varchar, text, timestamp, boolean, index, unique, jsonb, integ
 import { sql } from 'drizzle-orm';
 import { users } from '../users/tables';
 import { clients } from '../clients/tables';
-import { inactiveReasonEnum, benchReasonEnum, stageApprovalFieldTypeEnum, comparisonTypeEnum, customFieldTypeEnum } from '../enums';
+import { inactiveReasonEnum, benchReasonEnum, stageApprovalFieldTypeEnum, comparisonTypeEnum, customFieldTypeEnum, dateComparisonTypeEnum } from '../enums';
 import { services, workRoles, clientServices, peopleServices } from '../services/tables';
 import { projectTypes } from './base';
 
@@ -82,6 +82,7 @@ export const stageApprovals = pgTable("stage_approvals", {
 export const stageApprovalFields = pgTable("stage_approval_fields", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   stageApprovalId: varchar("stage_approval_id").notNull().references(() => stageApprovals.id, { onDelete: "cascade" }),
+  libraryFieldId: varchar("library_field_id"),
   fieldName: varchar("field_name").notNull(),
   description: text("description"),
   fieldType: stageApprovalFieldTypeEnum("field_type").notNull(),
@@ -91,10 +92,14 @@ export const stageApprovalFields = pgTable("stage_approval_fields", {
   expectedValueBoolean: boolean("expected_value_boolean"),
   comparisonType: comparisonTypeEnum("comparison_type"),
   expectedValueNumber: integer("expected_value_number"),
+  dateComparisonType: dateComparisonTypeEnum("date_comparison_type"),
+  expectedDate: timestamp("expected_date"),
+  expectedDateEnd: timestamp("expected_date_end"),
   options: text("options").array(),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_stage_approval_fields_stage_approval_id").on(table.stageApprovalId),
+  index("idx_stage_approval_fields_library_field_id").on(table.libraryFieldId),
   check("check_boolean_field_validation", sql`
     (field_type != 'boolean' OR expected_value_boolean IS NOT NULL)
   `),
@@ -104,8 +109,8 @@ export const stageApprovalFields = pgTable("stage_approval_fields", {
   check("check_multi_select_field_validation", sql`
     (field_type != 'multi_select' OR (options IS NOT NULL AND array_length(options, 1) > 0 AND options <> ARRAY[]::text[]))
   `),
-  check("check_long_text_field_validation", sql`
-    (field_type != 'long_text' OR (expected_value_boolean IS NULL AND comparison_type IS NULL AND expected_value_number IS NULL AND options IS NULL))
+  check("check_single_select_field_validation", sql`
+    (field_type != 'single_select' OR (options IS NOT NULL AND array_length(options, 1) > 0 AND options <> ARRAY[]::text[]))
   `),
 ]);
 
@@ -115,19 +120,16 @@ export const stageApprovalResponses = pgTable("stage_approval_responses", {
   fieldId: varchar("field_id").notNull().references(() => stageApprovalFields.id, { onDelete: "cascade" }),
   valueBoolean: boolean("value_boolean"),
   valueNumber: integer("value_number"),
+  valueShortText: varchar("value_short_text", { length: 255 }),
   valueLongText: text("value_long_text"),
+  valueSingleSelect: varchar("value_single_select"),
   valueMultiSelect: text("value_multi_select").array(),
+  valueDate: timestamp("value_date"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_stage_approval_responses_project_id").on(table.projectId),
   index("idx_stage_approval_responses_field_id").on(table.fieldId),
   unique("unique_project_field_response").on(table.projectId, table.fieldId),
-  check("check_single_value_populated", sql`
-    (value_boolean IS NOT NULL AND value_number IS NULL AND value_long_text IS NULL AND value_multi_select IS NULL) OR
-    (value_boolean IS NULL AND value_number IS NOT NULL AND value_long_text IS NULL AND value_multi_select IS NULL) OR
-    (value_boolean IS NULL AND value_number IS NULL AND value_long_text IS NOT NULL AND value_multi_select IS NULL) OR
-    (value_boolean IS NULL AND value_number IS NULL AND value_long_text IS NULL AND value_multi_select IS NOT NULL)
-  `),
 ]);
 
 export const kanbanStages = pgTable("kanban_stages", {
@@ -288,4 +290,43 @@ export const schedulingExceptions = pgTable("scheduling_exceptions", {
   index("idx_scheduling_exceptions_error_type").on(table.errorType),
   index("idx_scheduling_exceptions_resolved").on(table.resolved),
   index("idx_scheduling_exceptions_created_at").on(table.createdAt),
+]);
+
+export const approvalFieldLibrary = pgTable("approval_field_library", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  projectTypeId: varchar("project_type_id").notNull().references(() => projectTypes.id, { onDelete: "cascade" }),
+  fieldName: varchar("field_name").notNull(),
+  fieldType: stageApprovalFieldTypeEnum("field_type").notNull(),
+  description: text("description"),
+  placeholder: varchar("placeholder"),
+  expectedValueBoolean: boolean("expected_value_boolean"),
+  comparisonType: comparisonTypeEnum("comparison_type"),
+  expectedValueNumber: integer("expected_value_number"),
+  dateComparisonType: dateComparisonTypeEnum("date_comparison_type"),
+  expectedDate: timestamp("expected_date"),
+  expectedDateEnd: timestamp("expected_date_end"),
+  options: text("options").array(),
+  isCommonlyRequired: boolean("is_commonly_required").default(false),
+  usageHint: text("usage_hint"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_approval_field_library_project_type_id").on(table.projectTypeId),
+  index("idx_approval_field_library_field_type").on(table.fieldType),
+  unique("unique_library_field_name_per_type").on(table.projectTypeId, table.fieldName),
+]);
+
+export const clientStageApprovalOverrides = pgTable("client_stage_approval_overrides", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  projectTypeId: varchar("project_type_id").notNull().references(() => projectTypes.id, { onDelete: "cascade" }),
+  stageId: varchar("stage_id").notNull().references(() => kanbanStages.id, { onDelete: "cascade" }),
+  overrideApprovalId: varchar("override_approval_id").notNull().references(() => stageApprovals.id, { onDelete: "cascade" }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+}, (table) => [
+  index("idx_client_overrides_client_id").on(table.clientId),
+  index("idx_client_overrides_project_type_id").on(table.projectTypeId),
+  index("idx_client_overrides_stage_id").on(table.stageId),
+  unique("unique_client_stage_override").on(table.clientId, table.projectTypeId, table.stageId),
 ]);

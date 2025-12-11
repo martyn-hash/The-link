@@ -33,9 +33,11 @@ export const nationalityEnum = pgEnum("nationality", [
 
 export const customFieldTypeEnum = pgEnum("custom_field_type", ["boolean", "number", "short_text", "long_text", "multi_select"]);
 
-export const stageApprovalFieldTypeEnum = pgEnum("stage_approval_field_type", ["boolean", "number", "long_text", "multi_select"]);
+export const stageApprovalFieldTypeEnum = pgEnum("stage_approval_field_type", ["boolean", "number", "short_text", "long_text", "single_select", "multi_select", "date"]);
 
 export const comparisonTypeEnum = pgEnum("comparison_type", ["equal_to", "less_than", "greater_than"]);
+
+export const dateComparisonTypeEnum = pgEnum("date_comparison_type", ["before", "after", "between", "exact"]);
 
 export const udfTypeEnum = pgEnum("udf_type", ["number", "date", "boolean", "short_text"]);
 

@@ -7,7 +7,9 @@ import {
   ProjectTypesStorage, 
   ProjectStagesStorage, 
   ProjectApprovalsStorage,
-  ProjectSchedulingStorage
+  ProjectSchedulingStorage,
+  ApprovalFieldLibraryStorage,
+  ClientApprovalOverrideStorage
 } from '../projects/index.js';
 import { StageChangeNotificationStorage } from '../notifications/index.js';
 
@@ -18,6 +20,8 @@ export interface ProjectsFacadeDeps {
   projectStagesStorage: ProjectStagesStorage;
   projectApprovalsStorage: ProjectApprovalsStorage;
   projectSchedulingStorage: ProjectSchedulingStorage;
+  approvalFieldLibraryStorage: ApprovalFieldLibraryStorage;
+  clientApprovalOverrideStorage: ClientApprovalOverrideStorage;
   stageChangeNotificationStorage: StageChangeNotificationStorage;
 }
 
@@ -395,6 +399,78 @@ export function applyProjectsFacade<TBase extends Constructor<ProjectsFacadeDeps
 
     async validateStageApprovalResponses(approvalId: string, responses: any[]) {
       return this.projectApprovalsStorage.validateStageApprovalResponses(approvalId, responses);
+    }
+
+    // ============================================================================
+    // ApprovalFieldLibraryStorage methods (8 methods)
+    // ============================================================================
+
+    async getLibraryFieldsByProjectType(projectTypeId: string) {
+      return this.approvalFieldLibraryStorage.getLibraryFieldsByProjectType(projectTypeId);
+    }
+
+    async getLibraryFieldById(id: string) {
+      return this.approvalFieldLibraryStorage.getLibraryFieldById(id);
+    }
+
+    async createLibraryField(field: any) {
+      return this.approvalFieldLibraryStorage.createLibraryField(field);
+    }
+
+    async updateLibraryField(id: string, updates: any) {
+      return this.approvalFieldLibraryStorage.updateLibraryField(id, updates);
+    }
+
+    async deleteLibraryField(id: string) {
+      return this.approvalFieldLibraryStorage.deleteLibraryField(id);
+    }
+
+    async getLibraryFieldUsageCount(id: string) {
+      return this.approvalFieldLibraryStorage.getLibraryFieldUsageCount(id);
+    }
+
+    async getApprovalsUsingLibraryField(id: string) {
+      return this.approvalFieldLibraryStorage.getApprovalsUsingLibraryField(id);
+    }
+
+    async getLibraryFieldsWithUsage(projectTypeId: string) {
+      return this.approvalFieldLibraryStorage.getLibraryFieldsWithUsage(projectTypeId);
+    }
+
+    // ============================================================================
+    // ClientApprovalOverrideStorage methods (8 methods)
+    // ============================================================================
+
+    async getClientOverride(clientId: string, projectTypeId: string, stageId: string) {
+      return this.clientApprovalOverrideStorage.getClientOverride(clientId, projectTypeId, stageId);
+    }
+
+    async getOverridesByClient(clientId: string) {
+      return this.clientApprovalOverrideStorage.getOverridesByClient(clientId);
+    }
+
+    async getOverridesByProjectType(projectTypeId: string) {
+      return this.clientApprovalOverrideStorage.getOverridesByProjectType(projectTypeId);
+    }
+
+    async createClientApprovalOverride(override: any) {
+      return this.clientApprovalOverrideStorage.createOverride(override);
+    }
+
+    async updateClientApprovalOverride(id: string, updates: any) {
+      return this.clientApprovalOverrideStorage.updateOverride(id, updates);
+    }
+
+    async deleteClientApprovalOverride(id: string) {
+      return this.clientApprovalOverrideStorage.deleteOverride(id);
+    }
+
+    async getClientOverridesForProject(clientId: string, projectTypeId: string) {
+      return this.clientApprovalOverrideStorage.getClientOverridesForProject(clientId, projectTypeId);
+    }
+
+    async getClientApprovalOverrideById(id: string) {
+      return this.clientApprovalOverrideStorage.getOverrideById(id);
     }
   };
 }

@@ -20,6 +20,8 @@ import {
   ProjectStagesStorage, 
   ProjectApprovalsStorage,
   ProjectSchedulingStorage,
+  ApprovalFieldLibraryStorage,
+  ClientApprovalOverrideStorage,
   getProjectTypeByName,
   validateStageReasonMapping,
   validateRequiredFields,
@@ -147,6 +149,8 @@ class StorageBase {
   public readonly projectStagesStorage: ProjectStagesStorage;
   public readonly projectApprovalsStorage: ProjectApprovalsStorage;
   public readonly projectSchedulingStorage: ProjectSchedulingStorage;
+  public readonly approvalFieldLibraryStorage: ApprovalFieldLibraryStorage;
+  public readonly clientApprovalOverrideStorage: ClientApprovalOverrideStorage;
   public readonly stageChangeNotificationStorage: StageChangeNotificationStorage;
   public readonly serviceStorage: ServiceStorage;
   public readonly workRoleStorage: WorkRoleStorage;
@@ -217,6 +221,8 @@ class StorageBase {
     this.projectStagesStorage = new ProjectStagesStorage();
     this.projectApprovalsStorage = new ProjectApprovalsStorage();
     this.projectSchedulingStorage = new ProjectSchedulingStorage();
+    this.approvalFieldLibraryStorage = new ApprovalFieldLibraryStorage();
+    this.clientApprovalOverrideStorage = new ClientApprovalOverrideStorage();
     
     // Initialize services domain storages
     this.serviceStorage = new ServiceStorage();

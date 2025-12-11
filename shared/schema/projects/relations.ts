@@ -21,6 +21,8 @@ import {
   reasonCustomFields,
   reasonFieldResponses,
   schedulingRunLogs,
+  approvalFieldLibrary,
+  clientStageApprovalOverrides,
 } from './tables';
 import { users } from '../users/tables';
 import { clients } from '../clients/tables';
@@ -92,6 +94,8 @@ export const projectTypesRelations = relations(projectTypes, ({ one, many }) => 
   changeReasons: many(changeReasons),
   stageApprovals: many(stageApprovals),
   projects: many(projects),
+  approvalFieldLibrary: many(approvalFieldLibrary),
+  clientApprovalOverrides: many(clientStageApprovalOverrides),
 }));
 
 export const kanbanStagesRelations = relations(kanbanStages, ({ one, many }) => ({
@@ -153,6 +157,10 @@ export const stageApprovalFieldsRelations = relations(stageApprovalFields, ({ on
     fields: [stageApprovalFields.stageApprovalId],
     references: [stageApprovals.id],
   }),
+  libraryField: one(approvalFieldLibrary, {
+    fields: [stageApprovalFields.libraryFieldId],
+    references: [approvalFieldLibrary.id],
+  }),
   responses: many(stageApprovalResponses),
 }));
 
@@ -202,3 +210,34 @@ export const reasonFieldResponsesRelations = relations(reasonFieldResponses, ({ 
 }));
 
 export const schedulingRunLogsRelations = relations(schedulingRunLogs, () => ({}));
+
+export const approvalFieldLibraryRelations = relations(approvalFieldLibrary, ({ one, many }) => ({
+  projectType: one(projectTypes, {
+    fields: [approvalFieldLibrary.projectTypeId],
+    references: [projectTypes.id],
+  }),
+  stageApprovalFields: many(stageApprovalFields),
+}));
+
+export const clientStageApprovalOverridesRelations = relations(clientStageApprovalOverrides, ({ one }) => ({
+  client: one(clients, {
+    fields: [clientStageApprovalOverrides.clientId],
+    references: [clients.id],
+  }),
+  projectType: one(projectTypes, {
+    fields: [clientStageApprovalOverrides.projectTypeId],
+    references: [projectTypes.id],
+  }),
+  stage: one(kanbanStages, {
+    fields: [clientStageApprovalOverrides.stageId],
+    references: [kanbanStages.id],
+  }),
+  overrideApproval: one(stageApprovals, {
+    fields: [clientStageApprovalOverrides.overrideApprovalId],
+    references: [stageApprovals.id],
+  }),
+  createdByUser: one(users, {
+    fields: [clientStageApprovalOverrides.createdByUserId],
+    references: [users.id],
+  }),
+}));

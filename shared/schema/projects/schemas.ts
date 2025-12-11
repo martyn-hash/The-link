@@ -15,6 +15,8 @@ import {
   projectSchedulingHistory,
   schedulingRunLogs,
   schedulingExceptions,
+  approvalFieldLibrary,
+  clientStageApprovalOverrides,
 } from './tables';
 
 export const insertProjectSchema = createInsertSchema(projects).omit({
@@ -81,26 +83,7 @@ const baseStageApprovalFieldSchema = createInsertSchema(stageApprovalFields).omi
   createdAt: true,
 });
 
-export const insertStageApprovalFieldSchema = baseStageApprovalFieldSchema.refine((data) => {
-  switch (data.fieldType) {
-    case 'boolean':
-      return data.expectedValueBoolean !== null && data.expectedValueBoolean !== undefined;
-    case 'number':
-      return data.comparisonType !== null && data.comparisonType !== undefined &&
-             data.expectedValueNumber !== null && data.expectedValueNumber !== undefined;
-    case 'multi_select':
-      return data.options !== null && data.options !== undefined && Array.isArray(data.options) && data.options.length > 0;
-    case 'long_text':
-      return true;
-    default:
-      return true;
-  }
-}, {
-  message: "Field type specific validation failed",
-  path: ["fieldType"],
-});
-
-export const updateStageApprovalFieldSchema = baseStageApprovalFieldSchema.partial().refine((data) => {
+function validateStageApprovalFieldType(data: { fieldType?: string | null; expectedValueBoolean?: boolean | null; comparisonType?: string | null; expectedValueNumber?: number | null; options?: string[] | null }): boolean {
   if (!data.fieldType) return true;
   switch (data.fieldType) {
     case 'boolean':
@@ -109,16 +92,26 @@ export const updateStageApprovalFieldSchema = baseStageApprovalFieldSchema.parti
       return data.comparisonType !== null && data.comparisonType !== undefined &&
              data.expectedValueNumber !== null && data.expectedValueNumber !== undefined;
     case 'multi_select':
+    case 'single_select':
       return data.options !== null && data.options !== undefined && Array.isArray(data.options) && data.options.length > 0;
     case 'long_text':
+    case 'short_text':
+    case 'date':
       return true;
     default:
       return true;
   }
-}, {
-  message: "Field type specific validation failed",
-  path: ["fieldType"],
-});
+}
+
+export const insertStageApprovalFieldSchema = baseStageApprovalFieldSchema.refine(
+  (data) => validateStageApprovalFieldType(data),
+  { message: "Field type specific validation failed", path: ["fieldType"] }
+);
+
+export const updateStageApprovalFieldSchema = baseStageApprovalFieldSchema.partial().refine(
+  (data) => validateStageApprovalFieldType(data),
+  { message: "Field type specific validation failed", path: ["fieldType"] }
+);
 
 export const insertStageApprovalResponseSchema = createInsertSchema(stageApprovalResponses).omit({
   id: true,
@@ -159,6 +152,28 @@ export const insertSchedulingExceptionSchema = createInsertSchema(schedulingExce
   id: true,
   createdAt: true,
 });
+
+const baseApprovalFieldLibrarySchema = createInsertSchema(approvalFieldLibrary).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertApprovalFieldLibrarySchema = baseApprovalFieldLibrarySchema.refine(
+  (data) => validateStageApprovalFieldType(data),
+  { message: "Field type specific validation failed", path: ["fieldType"] }
+);
+
+export const updateApprovalFieldLibrarySchema = baseApprovalFieldLibrarySchema.partial().refine(
+  (data) => validateStageApprovalFieldType(data),
+  { message: "Field type specific validation failed", path: ["fieldType"] }
+);
+
+export const insertClientStageApprovalOverrideSchema = createInsertSchema(clientStageApprovalOverrides).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const updateClientStageApprovalOverrideSchema = insertClientStageApprovalOverrideSchema.partial();
 
 export const completeProjectSchema = z.object({
   chronologyNotes: z.string().optional(),
