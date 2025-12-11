@@ -279,10 +279,6 @@ export function applyMiscFacade<TBase extends Constructor<MiscFacadeDeps>>(Base:
       return this.queryStorage.updateQuery(id, query, userId);
     }
 
-    async deleteQuery(id: string) {
-      return this.queryStorage.deleteQuery(id);
-    }
-
     async deleteQueriesByProjectId(projectId: string) {
       return this.queryStorage.deleteQueriesByProjectId(projectId);
     }
@@ -301,6 +297,22 @@ export function applyMiscFacade<TBase extends Constructor<MiscFacadeDeps>>(Base:
 
     async getQueryStatsByProjectId(projectId: string) {
       return this.queryStorage.getQueryStatsByProjectId(projectId);
+    }
+
+    async softDeleteQuery(id: string, deletedById: string) {
+      return this.queryStorage.softDeleteQuery(id, deletedById);
+    }
+
+    async softDeleteQueries(ids: string[], deletedById: string) {
+      return this.queryStorage.softDeleteQueries(ids, deletedById);
+    }
+
+    async checkSuggestionMatchesForDescriptions(params: {
+      descriptions: string[];
+      clientId: string;
+      prefixLength?: number;
+    }) {
+      return this.queryStorage.checkSuggestionMatchesForDescriptions(params);
     }
 
     // ============================================================================
@@ -353,9 +365,11 @@ export function applyMiscFacade<TBase extends Constructor<MiscFacadeDeps>>(Base:
     }
 
     async getSuggestionsForQuery(params: {
+      queryId: string;
       clientId: string;
       description: string;
-      moneyDirection?: 'in' | 'out' | null;
+      moneyDirection: 'in' | 'out' | null;
+      prefixLength?: number;
       limit?: number;
     }) {
       return this.queryStorage.getSuggestionsForQuery(params);
