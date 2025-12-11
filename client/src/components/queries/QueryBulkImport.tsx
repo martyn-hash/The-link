@@ -458,14 +458,24 @@ export function QueryBulkImport({ onImport, trigger }: QueryBulkImportProps) {
           )}
 
           {step === "preview" && (
-            <ScrollArea className="flex-1 min-h-0">
-              <div className="space-y-2">
-                {parsedQueries.slice(0, 10).map((query, index) => (
+            <ScrollArea className="flex-1 min-h-0 max-h-[400px]">
+              <div className="space-y-2 pr-4">
+                {parsedQueries.map((query, index) => (
                   <div
                     key={index}
-                    className="border rounded-lg p-3 text-sm space-y-1"
+                    className="border rounded-lg p-3 text-sm space-y-1 group relative"
                     data-testid={`preview-query-${index}`}
                   >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setParsedQueries(prev => prev.filter((_, i) => i !== index));
+                      }}
+                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-red-100 rounded text-red-500"
+                      data-testid={`button-delete-preview-${index}`}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                     <div className="flex gap-4 text-muted-foreground">
                       {query.date && (
                         <span>{query.date.toLocaleDateString("en-GB")}</span>
@@ -487,11 +497,6 @@ export function QueryBulkImport({ onImport, trigger }: QueryBulkImportProps) {
                     )}
                   </div>
                 ))}
-                {parsedQueries.length > 10 && (
-                  <p className="text-center text-muted-foreground py-2">
-                    ...and {parsedQueries.length - 10} more queries
-                  </p>
-                )}
               </div>
             </ScrollArea>
           )}
