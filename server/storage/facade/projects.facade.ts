@@ -384,6 +384,10 @@ export function applyProjectsFacade<TBase extends Constructor<ProjectsFacadeDeps
       return this.projectApprovalsStorage.deleteStageApprovalField(id);
     }
 
+    async getResolvedApprovalFields(approvalId: string) {
+      return this.projectApprovalsStorage.getResolvedApprovalFields(approvalId);
+    }
+
     // Stage approval responses (4 methods)
     async createStageApprovalResponse(response: any) {
       return this.projectApprovalsStorage.createStageApprovalResponse(response);
