@@ -579,14 +579,17 @@ export function EmailDialog({
                             />
                             <label
                               htmlFor={`recipient-${recipient.personId}`}
-                              className="text-xs cursor-pointer flex-1 flex items-center gap-1 truncate"
+                              className="text-xs cursor-pointer flex-1 flex flex-col truncate"
                             >
-                              <span className="font-medium truncate">{formatPersonName(recipient.fullName)}</span>
-                              {recipient.role && (
-                                <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
-                                  {formatRole(recipient.role)}
-                                </Badge>
-                              )}
+                              <div className="flex items-center gap-1">
+                                <span className="font-medium truncate">{formatPersonName(recipient.fullName)}</span>
+                                {recipient.role && (
+                                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                                    {formatRole(recipient.role)}
+                                  </Badge>
+                                )}
+                              </div>
+                              <span className="text-muted-foreground truncate">{recipient.email}</span>
                               {/* Channel icons */}
                               {isQueryEmailMode && (
                                 <div className="flex items-center gap-0.5 ml-auto shrink-0">
@@ -924,14 +927,17 @@ export function EmailDialog({
                               />
                               <label
                                 htmlFor={`recipient-standard-${recipient.personId}`}
-                                className="text-xs cursor-pointer flex-1 flex items-center gap-1 truncate"
+                                className="text-xs cursor-pointer flex-1 flex flex-col truncate"
                               >
-                                <span className="font-medium truncate">{formatPersonName(recipient.fullName)}</span>
-                                {recipient.role && (
-                                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
-                                    {formatRole(recipient.role)}
-                                  </Badge>
-                                )}
+                                <div className="flex items-center gap-1">
+                                  <span className="font-medium truncate">{formatPersonName(recipient.fullName)}</span>
+                                  {recipient.role && (
+                                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4">
+                                      {formatRole(recipient.role)}
+                                    </Badge>
+                                  )}
+                                </div>
+                                <span className="text-muted-foreground truncate">{recipient.email}</span>
                               </label>
                             </div>
                           ))}

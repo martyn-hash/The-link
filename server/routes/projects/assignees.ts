@@ -75,6 +75,32 @@ export function registerProjectAssigneesRoutes(
         });
       }
 
+      if (project.projectOwnerId && project.projectOwner && !assigneeMap.has(project.projectOwnerId)) {
+        const { passwordHash, ...sanitizedUser } = project.projectOwner;
+        assigneeMap.set(project.projectOwnerId, {
+          id: `${projectId}-owner-${project.projectOwnerId}`,
+          projectId,
+          userId: project.projectOwnerId,
+          roleId: null,
+          user: sanitizedUser,
+          role: { id: 'project_owner', name: 'Project Owner' },
+        });
+      }
+
+      // Add stage role assignee if available
+      const projectWithStageAssignee = project as any;
+      if (projectWithStageAssignee.stageRoleAssignee && !assigneeMap.has(projectWithStageAssignee.stageRoleAssignee.id)) {
+        const { passwordHash, ...sanitizedUser } = projectWithStageAssignee.stageRoleAssignee;
+        assigneeMap.set(projectWithStageAssignee.stageRoleAssignee.id, {
+          id: `${projectId}-stage-${projectWithStageAssignee.stageRoleAssignee.id}`,
+          projectId,
+          userId: projectWithStageAssignee.stageRoleAssignee.id,
+          roleId: null,
+          user: sanitizedUser,
+          role: { id: 'stage_assignee', name: 'Stage Assignee' },
+        });
+      }
+
       res.json(Array.from(assigneeMap.values()));
     } catch (error) {
       console.error("Error fetching project assignees:", error);

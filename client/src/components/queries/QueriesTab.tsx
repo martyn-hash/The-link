@@ -723,10 +723,28 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
       const next = new Set(current);
       if (next.has(queryId)) {
         next.delete(queryId);
+        // If last query was removed, also uncheck the proposal itself
+        if (next.size === 0) {
+          setSelectedProposals(prevProposals => ({ ...prevProposals, [proposalKey]: false }));
+        }
       } else {
         next.add(queryId);
       }
       return { ...prev, [proposalKey]: next };
+    });
+  };
+
+  const toggleAllQueriesInProposal = (proposalKey: string, allQueryIds: string[]) => {
+    setProposalQuerySelections(prev => {
+      const current = prev[proposalKey] || new Set();
+      const allSelected = allQueryIds.every(id => current.has(id));
+      if (allSelected) {
+        // Deselect all queries - also uncheck the proposal itself
+        setSelectedProposals(prevProposals => ({ ...prevProposals, [proposalKey]: false }));
+        return { ...prev, [proposalKey]: new Set() };
+      } else {
+        return { ...prev, [proposalKey]: new Set(allQueryIds) };
+      }
     });
   };
 
@@ -3091,12 +3109,18 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                 const isSelected = selectedProposals[key];
                 const selectedCount = proposalQuerySelections[key]?.size || 0;
                 
+                // Auto-hide groups when all queries are deselected
+                if (selectedCount === 0 && !isSelected) {
+                  return null;
+                }
+                
                 return (
                   <div 
                     key={key}
                     className={cn(
                       "border rounded-lg overflow-hidden transition-all",
-                      isSelected ? "border-primary bg-primary/5" : "border-muted opacity-60"
+                      isSelected ? "border-primary bg-primary/5" : "border-muted opacity-60",
+                      selectedCount === 0 && "opacity-40 border-dashed"
                     )}
                     data-testid={`proposal-group-${idx}`}
                   >
@@ -3128,6 +3152,19 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                     
                     {isSelected && (
                       <div className="px-3 pb-3 space-y-1 max-h-48 overflow-y-auto bg-muted/30">
+                        <div 
+                          className="flex items-center gap-2 p-2 rounded text-sm bg-muted/50 cursor-pointer hover:bg-muted/70 border-b mb-1"
+                          onClick={() => toggleAllQueriesInProposal(key, proposal.queryIds)}
+                        >
+                          <Checkbox
+                            checked={selectedCount === proposal.queries.length}
+                            onCheckedChange={() => toggleAllQueriesInProposal(key, proposal.queryIds)}
+                            data-testid={`checkbox-group-all-${idx}`}
+                          />
+                          <span className="flex-1 text-muted-foreground font-medium">
+                            {selectedCount === proposal.queries.length ? 'Deselect All' : 'Select All'} ({proposal.queries.length})
+                          </span>
+                        </div>
                         {proposal.queries.map((query) => {
                           const isQuerySelected = proposalQuerySelections[key]?.has(query.id);
                           return (
