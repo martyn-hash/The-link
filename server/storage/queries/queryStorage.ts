@@ -6,7 +6,7 @@ import {
   queryGroups,
   queryAnswerHistory,
 } from '@shared/schema';
-import { eq, and, desc, inArray, sql, like, or, ne } from 'drizzle-orm';
+import { eq, and, desc, inArray, sql, like, or, ne, isNull } from 'drizzle-orm';
 import type {
   BookkeepingQuery,
   InsertBookkeepingQuery,
@@ -54,7 +54,10 @@ export class QueryStorage extends BaseStorage {
       .from(bookkeepingQueries)
       .leftJoin(users, eq(bookkeepingQueries.createdById, users.id))
       .leftJoin(queryGroups, eq(bookkeepingQueries.groupId, queryGroups.id))
-      .where(eq(bookkeepingQueries.id, id));
+      .where(and(
+        eq(bookkeepingQueries.id, id),
+        isNull(bookkeepingQueries.deletedAt)
+      ));
 
     if (!query) return undefined;
 
@@ -80,7 +83,10 @@ export class QueryStorage extends BaseStorage {
       .from(bookkeepingQueries)
       .leftJoin(users, eq(bookkeepingQueries.createdById, users.id))
       .leftJoin(queryGroups, eq(bookkeepingQueries.groupId, queryGroups.id))
-      .where(eq(bookkeepingQueries.projectId, projectId))
+      .where(and(
+        eq(bookkeepingQueries.projectId, projectId),
+        isNull(bookkeepingQueries.deletedAt)
+      ))
       .orderBy(desc(bookkeepingQueries.createdAt));
 
     return results.map((r) => ({
@@ -94,7 +100,10 @@ export class QueryStorage extends BaseStorage {
     const [result] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(bookkeepingQueries)
-      .where(eq(bookkeepingQueries.projectId, projectId));
+      .where(and(
+        eq(bookkeepingQueries.projectId, projectId),
+        isNull(bookkeepingQueries.deletedAt)
+      ));
     return result?.count || 0;
   }
 
@@ -105,7 +114,8 @@ export class QueryStorage extends BaseStorage {
       .where(
         and(
           eq(bookkeepingQueries.projectId, projectId),
-          inArray(bookkeepingQueries.status, ['open', 'sent_to_client'])
+          inArray(bookkeepingQueries.status, ['open', 'sent_to_client']),
+          isNull(bookkeepingQueries.deletedAt)
         )
       );
     return result?.count || 0;
@@ -127,7 +137,8 @@ export class QueryStorage extends BaseStorage {
       .where(
         and(
           inArray(bookkeepingQueries.projectId, projectIds),
-          inArray(bookkeepingQueries.status, ['open', 'sent_to_client'])
+          inArray(bookkeepingQueries.status, ['open', 'sent_to_client']),
+          isNull(bookkeepingQueries.deletedAt)
         )
       )
       .groupBy(bookkeepingQueries.projectId);
@@ -179,14 +190,40 @@ export class QueryStorage extends BaseStorage {
     return query;
   }
 
-  async deleteQuery(id: string): Promise<void> {
+  async softDeleteQuery(id: string, deletedById: string): Promise<void> {
     const result = await db
-      .delete(bookkeepingQueries)
-      .where(eq(bookkeepingQueries.id, id));
+      .update(bookkeepingQueries)
+      .set({
+        deletedAt: new Date(),
+        deletedById,
+        groupId: null,
+      })
+      .where(and(
+        eq(bookkeepingQueries.id, id),
+        isNull(bookkeepingQueries.deletedAt)
+      ));
 
     if (result.rowCount === 0) {
-      throw new Error(`Query with ID '${id}' not found`);
+      throw new Error(`Query with ID '${id}' not found or already deleted`);
     }
+  }
+
+  async softDeleteQueries(ids: string[], deletedById: string): Promise<number> {
+    if (ids.length === 0) return 0;
+
+    const result = await db
+      .update(bookkeepingQueries)
+      .set({
+        deletedAt: new Date(),
+        deletedById,
+        groupId: null,
+      })
+      .where(and(
+        inArray(bookkeepingQueries.id, ids),
+        isNull(bookkeepingQueries.deletedAt)
+      ));
+
+    return result.rowCount || 0;
   }
 
   async deleteQueriesByProjectId(projectId: string): Promise<number> {
@@ -251,7 +288,8 @@ export class QueryStorage extends BaseStorage {
       .where(
         and(
           eq(bookkeepingQueries.projectId, projectId),
-          eq(bookkeepingQueries.status, status)
+          eq(bookkeepingQueries.status, status),
+          isNull(bookkeepingQueries.deletedAt)
         )
       )
       .orderBy(desc(bookkeepingQueries.createdAt));
@@ -268,7 +306,10 @@ export class QueryStorage extends BaseStorage {
     const queries = await db
       .select({ status: bookkeepingQueries.status })
       .from(bookkeepingQueries)
-      .where(eq(bookkeepingQueries.projectId, projectId));
+      .where(and(
+        eq(bookkeepingQueries.projectId, projectId),
+        isNull(bookkeepingQueries.deletedAt)
+      ));
 
     const stats = {
       total: queries.length,
@@ -332,7 +373,10 @@ export class QueryStorage extends BaseStorage {
     const queries = await db
       .select()
       .from(bookkeepingQueries)
-      .where(eq(bookkeepingQueries.groupId, id))
+      .where(and(
+        eq(bookkeepingQueries.groupId, id),
+        isNull(bookkeepingQueries.deletedAt)
+      ))
       .orderBy(desc(bookkeepingQueries.date));
 
     return {
@@ -363,7 +407,10 @@ export class QueryStorage extends BaseStorage {
       const queries = await db
         .select()
         .from(bookkeepingQueries)
-        .where(eq(bookkeepingQueries.groupId, g.group.id))
+        .where(and(
+          eq(bookkeepingQueries.groupId, g.group.id),
+          isNull(bookkeepingQueries.deletedAt)
+        ))
         .orderBy(desc(bookkeepingQueries.date));
 
       result.push({
@@ -430,7 +477,10 @@ export class QueryStorage extends BaseStorage {
       .from(bookkeepingQueries)
       .leftJoin(users, eq(bookkeepingQueries.createdById, users.id))
       .leftJoin(queryGroups, eq(bookkeepingQueries.groupId, queryGroups.id))
-      .where(eq(bookkeepingQueries.projectId, projectId))
+      .where(and(
+        eq(bookkeepingQueries.projectId, projectId),
+        isNull(bookkeepingQueries.deletedAt)
+      ))
       .orderBy(desc(bookkeepingQueries.createdAt));
 
     return results.map((r) => ({
