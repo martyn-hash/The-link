@@ -1117,6 +1117,22 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
               <Users className="w-4 h-4 mr-2" />
               Notify
             </Button>
+            {/* Auto-Group button - shows when there are ungrouped queries */}
+            {ungroupedQueryCount >= 2 && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={handleAutoGroupStart}
+                disabled={autoGroupProposeMutation.isPending}
+                data-testid="button-auto-group"
+              >
+                <Wand2 className="w-4 h-4 mr-2" />
+                Auto-Group
+                <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-xs">
+                  {ungroupedQueryCount}
+                </Badge>
+              </Button>
+            )}
             <QueryBulkImport 
               onImport={handleBulkImport}
               trigger={
@@ -1378,7 +1394,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
             )}
             
             {/* Search Input */}
-            <div className="relative flex-1 min-w-[200px]">
+            <div className="relative w-[200px] sm:w-[240px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
                 placeholder="Search descriptions..."
@@ -1471,20 +1487,6 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                 Group Selected ({selectedQueries.length})
               </Button>
             </div>
-          )}
-          
-          {/* Auto-Group Button - shows when there are ungrouped queries */}
-          {ungroupedQueryCount >= 2 && (
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={handleAutoGroupStart}
-              disabled={autoGroupProposeMutation.isPending}
-              data-testid="button-auto-group"
-            >
-              <Wand2 className="w-4 h-4 mr-2" />
-              Auto-Group ({ungroupedQueryCount} ungrouped)
-            </Button>
           )}
         </div>
 
