@@ -321,7 +321,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   
   const pendingReminderCount = scheduledReminders?.filter(r => r.status === 'pending').length || 0;
 
-  // Query for project assignees (for notify functionality)
+  // Query for project assignees (for notify functionality in Send Options and Notify dialogs)
   const { data: projectAssignees, isLoading: isLoadingAssignees } = useQuery<{
     id: string;
     projectId: string;
@@ -331,7 +331,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     role: { id: string; name: string } | null;
   }[]>({
     queryKey: ['/api/projects', projectId, 'assignees'],
-    enabled: isNotifyDialogOpen,
+    enabled: isSendOptionsOpen || isNotifyDialogOpen,
   });
 
   // Query for active tokens (only fetch when expanded)
