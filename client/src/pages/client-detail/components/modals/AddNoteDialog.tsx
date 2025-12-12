@@ -132,6 +132,8 @@ export function AddNoteDialog({
     onClose();
     form.reset();
     setAttachments([]);
+    setShowAiPrompt(false);
+    setAiPrompt("");
   };
 
   const handleDiscardDraft = () => {
