@@ -586,10 +586,97 @@ Preview what month would be assigned for a new project
 
 ## Edge Cases & Considerations
 
-### Client Leaving
-- Archive their projects
-- Capacity automatically frees up (no action needed)
-- Dashboard will show reduced load in future months
+### Documents Not Ready by Suggested Start Date
+
+When a project's `suggestedStartDate` approaches but it's still in "Gather Documents" stage:
+
+```
+ESCALATION TIMELINE
+
+14 days before suggestedStartDate:
+├── WARNING notification to client manager
+├── "ABC Ltd accounts scheduled to start in 14 days - documents still outstanding"
+└── Project flagged with amber indicator on dashboard
+
+7 days before suggestedStartDate:
+├── ESCALATION to manager/partner
+├── More prominent warning on dashboard
+└── Consider automated chase to client
+
+On suggestedStartDate (docs still missing):
+├── Project does NOT auto-release (no documents = can't work)
+├── Status changes to "Delayed Start"
+├── System logs the delay for reporting
+└── Client manager presented with options:
+    ├── REQUEST NEW MONTH: Push to next available slot (capacity permitting)
+    ├── FORCE START: Begin with incomplete docs (not recommended, requires override)
+    └── MARK BLOCKED: Explicitly flag as waiting on client with reason
+```
+
+**Key Principle:** No documents = no release. The scheduled date is a *target*, not an automatic trigger if prerequisites aren't met.
+
+### Client Leaving - Impact on Capacity
+
+When a client leaves (projects archived):
+
+```
+IMMEDIATE EFFECT:
+├── Their scheduled projects are archived/cancelled
+├── Capacity for their scheduled months is freed up
+└── No automatic redistribution of other projects (Option A)
+
+VISIBILITY:
+├── Dashboard shows reduced load in affected months
+├── Example: "April now at 1.8 / 2.4 (75%) - capacity available"
+└── Monthly capacity report highlights the change
+
+NATURAL REBALANCING:
+├── New clients joining will be scheduled into freed capacity
+├── Algorithm sees lower utilisation and suggests those months
+└── Over time, gaps fill naturally without manual intervention
+```
+
+### New Client Joining - Scheduling Into Available Capacity
+
+When a new client joins:
+
+```
+CALCULATION PROCESS:
+1. Determine year end and due date
+2. Calculate flexible window (earliest start to latest target)
+3. Query CURRENT capacity for client manager across that window
+   └── Includes all existing scheduled projects (including those from former clients)
+4. Factor in weight of new client
+5. Find month with lowest utilisation after adding this client
+6. Assign that month as suggestedStartDate
+
+NATURAL EFFECT:
+├── If a client recently left, their months show lower utilisation
+├── New clients are more likely to be scheduled into those gaps
+└── System self-heals without explicit rebalancing
+```
+
+### Optional: Periodic Rebalancing Report
+
+While we use "Lock once assigned" (Option A), a quarterly review report could identify optimisation opportunities:
+
+```
+QUARTERLY REBALANCING REPORT
+
+Summary: Q2 2025 capacity distribution has shifted due to client churn
+
+Months now OVER capacity:
+├── September 2025: 3.2 / 2.4 (133%) - 2 clients joined with Sept year ends
+└── Suggestion: Move DEF Ltd (weight 1.0) to August (currently 85%)
+
+Months now UNDER capacity:
+├── July 2025: 1.6 / 2.4 (67%) - XYZ Ltd left
+└── Suggestion: Pull forward GHI Ltd from August if client agrees
+
+[View Details] [Dismiss] [Apply Suggestions]
+```
+
+This would be a manual review process, not automatic redistribution.
 
 ### Urgent/Priority Clients
 - Some clients may need to be processed immediately regardless of capacity
