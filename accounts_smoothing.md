@@ -489,35 +489,99 @@ This tells the client manager:
 - **Provisional work**: This MIGHT come in April, or might slip to later months
 - **Realistic planning**: Focus on confirmed utilization, treat provisional as "possible upside"
 
-### Default Target Calculation
+### Staff Capacity Settings
 
-If no explicit capacity target is set:
+Each service owner can have their capacity explicitly set, overriding the default calculation.
+
+```typescript
+// New table: staff_service_capacity
+export const staffServiceCapacity = pgTable("staff_service_capacity", {
+  id: varchar("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  serviceId: varchar("service_id").notNull().references(() => services.id),
+  
+  // Capacity can be set as annual OR monthly (system converts as needed)
+  annualCapacity: decimal("annual_capacity", { precision: 5, scale: 2 }),
+  // Total weighted units this person can handle per year for this service
+  
+  monthlyCapacity: decimal("monthly_capacity", { precision: 4, scale: 2 }),
+  // Alternative: set monthly directly (annualCapacity / 12 if not set)
+  
+  capacityNotes: text("capacity_notes"),
+  // Optional explanation: "Part-time", "Also handles X", etc.
+  
+  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedBy: varchar("updated_by").references(() => users.id),
+});
+```
+
+**Example: Same clients, different capacity**
+
+| Staff Member | Owned Weight | Capacity Setting | Monthly Target | Why |
+|--------------|--------------|------------------|----------------|-----|
+| Mrs Experienced | 28.5 | Annual: 36.0 | 3.0/month | Fast, efficient |
+| Mr No Experience | 28.5 | Annual: 24.0 | 2.0/month | Still learning |
+| Ms Average | 28.5 | (not set) | 2.375/month | Default: 28.5/12 |
+
+### Capacity Calculation Logic
 
 ```
-FUNCTION calculateDefaultTarget(userId):
+FUNCTION getMonthlyCapacity(userId, serviceId):
     
-    1. GET all client_services 
-       WHERE serviceOwnerId = userId
-       AND service.enableComplexityWeighting = TRUE
-       AND client.status = 'active'
+    1. CHECK staff_service_capacity for explicit setting
+       IF monthlyCapacity set: RETURN monthlyCapacity
+       IF annualCapacity set: RETURN annualCapacity / 12
     
-    2. SUM all client_services.complexityWeight
-    
-    3. DIVIDE by 12
-    
-    RETURN monthlyTarget
+    2. IF no explicit setting, calculate default:
+       a. GET all client_services 
+          WHERE serviceOwnerId = userId
+          AND serviceId = serviceId
+          AND client.status = 'active'
+       b. SUM all client_services.complexityWeight
+       c. RETURN sum / 12
 ```
 
 **Example calculation:**
 ```
-Jane's owned services (where enableComplexityWeighting = TRUE):
-├── ABC Ltd Annual Accounts: 1.5
-├── DEF Ltd Annual Accounts: 1.0
-├── GHI Ltd Annual Accounts: 0.5
-├── ... (21 more clients)
-└── Total: 28.5
+Jane's capacity for "Annual Accounts" service:
 
-Monthly target: 28.5 / 12 = 2.375 ≈ 2.4 weighted units
+Option A - Explicit setting exists:
+├── staff_service_capacity.annualCapacity = 36.0
+└── Monthly target: 36.0 / 12 = 3.0 weighted units
+
+Option B - No explicit setting (default):
+├── Owned client_services total weight: 28.5
+└── Monthly target: 28.5 / 12 = 2.375 weighted units
+```
+
+### Capacity Settings UI
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ Staff Capacity Settings                                              │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│ Staff Member: [Jane Smith ▼]                                        │
+│ Service: [Annual Accounts ▼]                                        │
+│                                                                      │
+│ ┌─────────────────────────────────────────────────────────────────┐ │
+│ │ Current workload (owned clients):                               │ │
+│ │ 24 clients, total weight: 28.5                                  │ │
+│ │ Default monthly target: 2.375 units                             │ │
+│ └─────────────────────────────────────────────────────────────────┘ │
+│                                                                      │
+│ Capacity override:                                                   │
+│ ○ Use default (weight / 12)                                         │
+│ ● Set explicitly:                                                    │
+│                                                                      │
+│   Annual capacity: [36.0] units/year                                │
+│   OR                                                                 │
+│   Monthly capacity: [3.0] units/month                               │
+│                                                                      │
+│ Notes: [Experienced, handles complex work efficiently_____]         │
+│                                                                      │
+│ [Save] [Cancel]                                                      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -774,12 +838,16 @@ NIGHTLY JOB: Capacity Forecast Warnings
 
 ## Integration with Project Types
 
-### Identifying Smoothable Project Types
+### Linking Services to Project Types
 
-Not all project types should be smoothed (VAT returns have fixed deadlines). Add a flag to `projectTypes`:
+A project type used for smoothable work must be linked to a service that has complexity weighting enabled:
 
 ```typescript
 // Add to projectTypes table
+linkedServiceId: varchar("linked_service_id").references(() => services.id),
+// Links this project type to a service (e.g., "Annual Accounts" service)
+// Required when enableWorkloadSmoothing = TRUE
+
 enableWorkloadSmoothing: boolean("enable_workload_smoothing").default(false),
 // Only annual accounts and similar flexible work should be smoothed
 
@@ -788,26 +856,117 @@ smoothingLeadTimeDays: integer("smoothing_lead_time_days").default(60),
 
 smoothingSafetyBufferDays: integer("smoothing_safety_buffer_days").default(14),
 // Days before due date to use as the latest target
+
+// Stage trigger references (required when smoothing enabled)
+preWorkStageId: varchar("pre_work_stage_id").references(() => projectTypeStages.id),
+// Stage where docs are gathered - triggers PROVISIONAL scheduling
+
+readyQueueStageId: varchar("ready_queue_stage_id").references(() => projectTypeStages.id),
+// Stage where work waits - triggers CONFIRMED scheduling
+
+mainWorkStageId: varchar("main_work_stage_id").references(() => projectTypeStages.id),
+// Stage when active work begins - triggers IN_PROGRESS status
+
+// Activation status
+smoothingConfigComplete: boolean("smoothing_config_complete").default(false),
+// System-calculated: TRUE only when all required settings are configured
+```
+
+### Activation Validation
+
+A smoothing-enabled project type cannot be used until configuration is complete:
+
+```
+FUNCTION validateSmoothingConfig(projectType):
+    
+    errors = []
+    
+    1. IF enableWorkloadSmoothing = FALSE:
+       → RETURN valid (not a smoothing project type)
+    
+    2. CHECK linkedServiceId:
+       a. IF null: errors.push("Must link to a service")
+       b. IF service.enableComplexityWeighting = FALSE:
+          errors.push("Linked service must have complexity weighting enabled")
+    
+    3. CHECK stage triggers:
+       a. IF preWorkStageId null: errors.push("Pre-work stage required")
+       b. IF readyQueueStageId null: errors.push("Ready queue stage required")
+       c. IF mainWorkStageId null: errors.push("Main work stage required")
+    
+    4. CHECK stage order:
+       a. preWorkStage.order < readyQueueStage.order < mainWorkStage.order
+       b. IF not in order: errors.push("Stages must be in sequential order")
+    
+    5. UPDATE smoothingConfigComplete = (errors.length === 0)
+    
+    RETURN { valid: errors.length === 0, errors }
 ```
 
 ### Project Type Configuration UI
 
-In the project type settings, add a section:
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Project Type: Annual Accounts                                            │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│ Workload Smoothing Settings                                              │
+│ ═══════════════════════════                                              │
+│                                                                          │
+│ ☑ Enable workload smoothing for this project type                       │
+│                                                                          │
+│ ┌─────────────────────────────────────────────────────────────────────┐ │
+│ │ ⚠ Configuration Incomplete - 2 issues to resolve                   │ │
+│ └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                          │
+│ Linked Service: [Annual Accounts ▼] ✓                                   │
+│   └── Service has complexity weighting enabled ✓                        │
+│                                                                          │
+│ Timing Settings:                                                         │
+│   Minimum lead time: [60] days after year end                           │
+│   Safety buffer: [14] days before due date                              │
+│                                                                          │
+│ Stage Triggers:                                                          │
+│   Pre-work stage:    [Gather Documents ▼] ✓                             │
+│     → Provisional schedule calculated when project enters               │
+│                                                                          │
+│   Ready queue stage: [Ready to Start ▼] ✓                               │
+│     → Confirmed schedule calculated, work held until start date         │
+│                                                                          │
+│   Main work stage:   [-- Select --    ▼] ✗ Required                    │
+│     → Work begins, schedule status set to "in progress"                 │
+│                                                                          │
+│ ┌─────────────────────────────────────────────────────────────────────┐ │
+│ │ Status: ⚠ Cannot create projects until configuration complete       │ │
+│ └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Project Creation Validation
+
+When creating a project using a smoothing-enabled project type:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ Workload Smoothing Settings                                  │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│ ☑ Enable workload smoothing for this project type           │
-│                                                              │
-│ Minimum lead time: [60] days after year end                 │
-│                                                              │
-│ Safety buffer: [14] days before due date                    │
-│                                                              │
-│ Pre-work stage: [Document Collection ▼]                     │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+FUNCTION validateProjectCreation(projectTypeId, clientId):
+    
+    projectType = getProjectType(projectTypeId)
+    
+    1. IF projectType.enableWorkloadSmoothing = TRUE:
+       a. IF projectType.smoothingConfigComplete = FALSE:
+          → REJECT: "Project type configuration incomplete"
+       
+       b. GET client_service WHERE clientId AND serviceId = projectType.linkedServiceId
+          IF not found:
+          → REJECT: "Client doesn't have this service assigned"
+          
+       c. GET serviceOwner from client_service
+          IF serviceOwner has no capacity setting AND no owned services:
+          → WARN: "No capacity target set for service owner"
+    
+    2. IF all checks pass:
+       → ALLOW creation
+       → Calculate provisional schedule immediately
 ```
 
 ---
