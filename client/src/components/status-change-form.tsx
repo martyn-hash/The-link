@@ -1,6 +1,7 @@
-import { useState, useEffect, type ChangeEvent } from "react";
+import { useState, useEffect, useRef, type ChangeEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useDraftAutoSave } from "@/hooks/useDraftAutoSave";
 import { apiRequest } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertCircle, Loader2, X, FileText, Paperclip } from "lucide-react";
+import { AlertCircle, Loader2, X, FileText, Paperclip, Save } from "lucide-react";
 import StageApprovalModal from "@/components/StageApprovalModal";
 import { TiptapEditor } from "@/components/TiptapEditor";
 import { StageChangeNotificationModal } from "./stage-change-notification-modal";
@@ -77,6 +78,24 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
   const [customFieldResponses, setCustomFieldResponses] = useState<Record<string, any>>({});
+
+  const draftRestoredRef = useRef(false);
+  const { savedContent, hasDraft, saveDraft, clearDraft, lastSavedAt } = useDraftAutoSave({
+    key: `stage-change-${project.id}`,
+  });
+
+  useEffect(() => {
+    if (hasDraft && savedContent && !draftRestoredRef.current) {
+      setNotesHtml(savedContent);
+      draftRestoredRef.current = true;
+    }
+  }, [hasDraft, savedContent]);
+
+  useEffect(() => {
+    if (notesHtml) {
+      saveDraft(notesHtml);
+    }
+  }, [notesHtml, saveDraft]);
   
   // Stage approval modal state
   const [showApprovalModal, setShowApprovalModal] = useState(false);
@@ -236,6 +255,8 @@ export default function StatusChangeForm({ project, user, onStatusUpdated }: Sta
       setShowApprovalModal(false);
       setTargetStageApproval(null);
       setTargetStageApprovalFields([]);
+      clearDraft();
+      draftRestoredRef.current = false;
       
       // If there's a notification preview, show the modal AFTER confirming stage change
       // Closing this modal will NOT affect the stage change

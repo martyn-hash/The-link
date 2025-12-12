@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useDraftAutoSave } from "@/hooks/useDraftAutoSave";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,16 @@ export function ProjectProgressNotes({ projectId, clientId, clientPeople = [] }:
   const [isSendingSMS, setIsSendingSMS] = useState(false);
   const [viewingNote, setViewingNote] = useState<any>(null);
   const [emailContent, setEmailContent] = useState("");
+  const emailDraftRestoredRef = useRef(false);
+  const smsDraftRestoredRef = useRef(false);
+
+  const emailDraft = useDraftAutoSave({
+    key: `project-email-${projectId}`,
+  });
+
+  const smsDraft = useDraftAutoSave({
+    key: `project-sms-${projectId}`,
+  });
 
   // Fetch project communications
   const { data: communications = [], isLoading } = useQuery<any[]>({
@@ -96,6 +107,61 @@ export function ProjectProgressNotes({ projectId, clientId, clientPeople = [] }:
     },
   });
 
+  // Watch form values for auto-save
+  const emailSubject = emailForm.watch('subject');
+  const emailPersonId = emailForm.watch('personId');
+  const smsMessage = smsForm.watch('message');
+  const smsPersonId = smsForm.watch('personId');
+
+  // Restore email draft when dialog opens
+  useEffect(() => {
+    if (isSendingEmail && emailDraft.hasDraft && !emailDraftRestoredRef.current) {
+      if (emailDraft.savedContent) {
+        setEmailContent(emailDraft.savedContent);
+      }
+      if (emailDraft.additionalFields?.subject) {
+        emailForm.setValue('subject', emailDraft.additionalFields.subject);
+      }
+      if (emailDraft.additionalFields?.personId) {
+        emailForm.setValue('personId', emailDraft.additionalFields.personId);
+      }
+      emailDraftRestoredRef.current = true;
+    }
+    if (!isSendingEmail) {
+      emailDraftRestoredRef.current = false;
+    }
+  }, [isSendingEmail, emailDraft.hasDraft, emailDraft.savedContent, emailDraft.additionalFields, emailForm]);
+
+  // Restore SMS draft when dialog opens
+  useEffect(() => {
+    if (isSendingSMS && smsDraft.hasDraft && !smsDraftRestoredRef.current) {
+      if (smsDraft.savedContent) {
+        smsForm.setValue('message', smsDraft.savedContent);
+      }
+      if (smsDraft.additionalFields?.personId) {
+        smsForm.setValue('personId', smsDraft.additionalFields.personId);
+      }
+      smsDraftRestoredRef.current = true;
+    }
+    if (!isSendingSMS) {
+      smsDraftRestoredRef.current = false;
+    }
+  }, [isSendingSMS, smsDraft.hasDraft, smsDraft.savedContent, smsDraft.additionalFields, smsForm]);
+
+  // Save email draft as user types
+  useEffect(() => {
+    if (isSendingEmail && (emailContent || emailSubject)) {
+      emailDraft.saveDraft(emailContent, { subject: emailSubject, personId: emailPersonId });
+    }
+  }, [isSendingEmail, emailContent, emailSubject, emailPersonId, emailDraft]);
+
+  // Save SMS draft as user types
+  useEffect(() => {
+    if (isSendingSMS && smsMessage) {
+      smsDraft.saveDraft(smsMessage, { personId: smsPersonId });
+    }
+  }, [isSendingSMS, smsMessage, smsPersonId, smsDraft]);
+
   // Add communication mutation
   const addCommunicationMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -135,6 +201,7 @@ export function ProjectProgressNotes({ projectId, clientId, clientPeople = [] }:
       setIsSendingEmail(false);
       emailForm.reset();
       setEmailContent("");
+      emailDraft.clearDraft();
     },
     onError: (error: any) => {
       showFriendlyError({ error });
@@ -159,6 +226,7 @@ export function ProjectProgressNotes({ projectId, clientId, clientPeople = [] }:
       });
       setIsSendingSMS(false);
       smsForm.reset();
+      smsDraft.clearDraft();
     },
     onError: (error: any) => {
       showFriendlyError({ error });
@@ -557,22 +625,29 @@ export function ProjectProgressNotes({ projectId, clientId, clientPeople = [] }:
                 />
               </div>
 
-              <div className="flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsSendingEmail(false)}
-                  data-testid="button-cancel-email"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={sendEmailMutation.isPending}
-                  data-testid="button-send-email"
-                >
-                  {sendEmailMutation.isPending ? "Sending..." : "Send Email"}
-                </Button>
+              <div className="flex items-center justify-between">
+                {emailDraft.lastSavedAt && (
+                  <span className="text-xs text-muted-foreground" data-testid="email-draft-indicator">
+                    Draft saved
+                  </span>
+                )}
+                <div className="flex gap-2 ml-auto">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsSendingEmail(false)}
+                    data-testid="button-cancel-email"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={sendEmailMutation.isPending}
+                    data-testid="button-send-email"
+                  >
+                    {sendEmailMutation.isPending ? "Sending..." : "Send Email"}
+                  </Button>
+                </div>
               </div>
             </form>
           </Form>
@@ -638,22 +713,29 @@ export function ProjectProgressNotes({ projectId, clientId, clientPeople = [] }:
                 )}
               />
 
-              <div className="flex justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsSendingSMS(false)}
-                  data-testid="button-cancel-sms"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={sendSmsMutation.isPending}
-                  data-testid="button-send-sms-submit"
-                >
-                  {sendSmsMutation.isPending ? "Sending..." : "Send SMS"}
-                </Button>
+              <div className="flex items-center justify-between">
+                {smsDraft.lastSavedAt && (
+                  <span className="text-xs text-muted-foreground" data-testid="sms-draft-indicator">
+                    Draft saved
+                  </span>
+                )}
+                <div className="flex gap-2 ml-auto">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsSendingSMS(false)}
+                    data-testid="button-cancel-sms"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={sendSmsMutation.isPending}
+                    data-testid="button-send-sms-submit"
+                  >
+                    {sendSmsMutation.isPending ? "Sending..." : "Send SMS"}
+                  </Button>
+                </div>
               </div>
             </form>
           </Form>

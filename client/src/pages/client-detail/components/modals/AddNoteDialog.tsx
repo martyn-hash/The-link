@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Form,
@@ -22,9 +23,10 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
+import { useDraftAutoSave } from "@/hooks/useDraftAutoSave";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
-import { Paperclip, X, Loader2, FileText, Image as ImageIcon } from "lucide-react";
+import { Paperclip, X, Loader2, FileText, Image as ImageIcon, Save } from "lucide-react";
 
 const addNoteSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -58,6 +60,12 @@ export function AddNoteDialog({
   const { toast } = useToast();
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [draftRestored, setDraftRestored] = useState(false);
+
+  const draftKey = projectId ? `note-${clientId}-${projectId}` : `note-${clientId}`;
+  const { savedContent, additionalFields, hasDraft, saveDraft, clearDraft, lastSavedAt } = useDraftAutoSave({
+    key: draftKey,
+  });
 
   const form = useForm<AddNoteFormValues>({
     resolver: zodResolver(addNoteSchema),
@@ -67,6 +75,35 @@ export function AddNoteDialog({
     },
   });
 
+  useEffect(() => {
+    if (isOpen && hasDraft && savedContent && !draftRestored) {
+      form.setValue('content', savedContent);
+      if (additionalFields?.title) {
+        form.setValue('title', additionalFields.title);
+      }
+      setDraftRestored(true);
+      toast({
+        title: "Draft restored",
+        description: "Your previous draft has been restored.",
+      });
+    }
+  }, [isOpen, hasDraft, savedContent, additionalFields, form, draftRestored, toast]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setDraftRestored(false);
+    }
+  }, [isOpen]);
+
+  const watchedContent = form.watch('content');
+  const watchedTitle = form.watch('title');
+
+  useEffect(() => {
+    if (isOpen && (watchedContent || watchedTitle)) {
+      saveDraft(watchedContent, { title: watchedTitle });
+    }
+  }, [watchedContent, watchedTitle, isOpen, saveDraft]);
+
   const addNoteMutation = useMutation({
     mutationFn: (data: any) => apiRequest('POST', `/api/clients/${clientId}/notes`, data),
     onSuccess: () => {
@@ -74,6 +111,7 @@ export function AddNoteDialog({
         queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'notes'] });
       }
       queryClient.invalidateQueries({ queryKey: ['/api/clients', clientId, 'notes'] });
+      clearDraft();
       handleClose();
       toast({
         title: "Note added",
@@ -89,6 +127,13 @@ export function AddNoteDialog({
     onClose();
     form.reset();
     setAttachments([]);
+  };
+
+  const handleDiscardDraft = () => {
+    clearDraft();
+    form.reset();
+    setAttachments([]);
+    setDraftRestored(false);
   };
 
   const onSubmit = (values: AddNoteFormValues) => {
@@ -169,7 +214,18 @@ export function AddNoteDialog({
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add Note</DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle>Add Note</DialogTitle>
+            {lastSavedAt && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Save className="w-3 h-3" />
+                Draft saved
+              </span>
+            )}
+          </div>
+          <DialogDescription className="sr-only">
+            Create a new note for this client
+          </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
