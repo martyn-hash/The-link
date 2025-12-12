@@ -1,6 +1,8 @@
 import { WebhookStorage } from '../webhooks/index.js';
 import { QboStorage, QcStorage } from '../qbo/index.js';
 import { QueryStorage, QueryTokenStorage, ScheduledReminderStorage } from '../queries/index.js';
+import { AuditChangelogStorage } from '../audit/index.js';
+import type { InsertAuditChangelog } from '@shared/schema';
 
 export interface MiscFacadeDeps {
   webhookStorage: WebhookStorage;
@@ -9,6 +11,7 @@ export interface MiscFacadeDeps {
   queryStorage: QueryStorage;
   queryTokenStorage: QueryTokenStorage;
   scheduledReminderStorage: ScheduledReminderStorage;
+  auditChangelogStorage: AuditChangelogStorage;
 }
 
 type Constructor<T = {}> = new (...args: any[]) => T;
@@ -493,6 +496,22 @@ export function applyMiscFacade<TBase extends Constructor<MiscFacadeDeps>>(Base:
 
     async deleteAllQueryRemindersForToken(tokenId: string) {
       return this.scheduledReminderStorage.deleteAllForToken(tokenId);
+    }
+
+    // ============================================================================
+    // AUDIT CHANGELOG OPERATIONS - AuditChangelogStorage (3 methods)
+    // ============================================================================
+
+    async createAuditChangelogEntry(entry: InsertAuditChangelog) {
+      return this.auditChangelogStorage.createChangelogEntry(entry);
+    }
+
+    async getAuditChangelogByEntity(entityType: string, entityId: string) {
+      return this.auditChangelogStorage.getChangelogByEntity(entityType, entityId);
+    }
+
+    async getAuditChangelogById(id: string) {
+      return this.auditChangelogStorage.getChangelogById(id);
     }
   };
 }

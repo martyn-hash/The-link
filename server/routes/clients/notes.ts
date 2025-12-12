@@ -126,7 +126,7 @@ export function registerClientNotesRoutes(
         }
 
         const { noteId } = paramValidation.data;
-        const changelog = await (storage as any).auditChangelogStorage.getChangelogByEntity('client_note', noteId);
+        const changelog = await storage.getAuditChangelogByEntity('client_note', noteId);
         res.json(changelog);
       } catch (error) {
         console.error(
@@ -253,7 +253,7 @@ export function registerClientNotesRoutes(
         };
 
         try {
-          await (storage as any).auditChangelogStorage.createChangelogEntry({
+          await storage.createAuditChangelogEntry({
             entityType: 'client_note',
             entityId: noteId,
             changeType: 'edit',
