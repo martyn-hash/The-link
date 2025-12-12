@@ -902,6 +902,7 @@ export default function ProjectDetail() {
             <NotesTab 
               clientId={project.clientId}
               projectId={project.id}
+              projectTypeId={project.projectTypeId}
               mode="project"
             />
           </TabsContent>
@@ -1048,6 +1049,7 @@ export default function ProjectDetail() {
                 <NotesTab 
                   clientId={project.clientId}
                   projectId={project.id}
+                  projectTypeId={project.projectTypeId}
                   mode="project"
                 />
               </TabsContent>

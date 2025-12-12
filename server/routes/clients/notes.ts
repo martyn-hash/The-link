@@ -39,7 +39,8 @@ export function registerClientNotesRoutes(
 
         const { clientId } = paramValidation.data;
         const filter = req.query.filter as string | undefined;
-        const notes = await storage.getClientNotesByClientId(clientId, filter);
+        const filterType = req.query.filterType as 'project' | 'projectType' | undefined;
+        const notes = await storage.getClientNotesByClientId(clientId, filter, filterType);
         res.json(notes);
       } catch (error) {
         console.error(

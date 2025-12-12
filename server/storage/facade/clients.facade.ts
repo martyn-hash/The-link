@@ -123,8 +123,8 @@ export function applyClientsFacade<TBase extends Constructor<ClientsFacadeDeps>>
       return this.clientNotesStorage.getClientNoteById(id);
     }
 
-    async getClientNotesByClientId(clientId: string, filter?: 'all' | 'client-only' | string) {
-      return this.clientNotesStorage.getClientNotesByClientId(clientId, filter);
+    async getClientNotesByClientId(clientId: string, filter?: 'all' | 'client-only' | string, filterType?: 'project' | 'projectType') {
+      return this.clientNotesStorage.getClientNotesByClientId(clientId, filter, filterType);
     }
 
     async getClientNotesByProjectId(projectId: string) {

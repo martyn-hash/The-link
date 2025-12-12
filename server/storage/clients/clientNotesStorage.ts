@@ -1,6 +1,6 @@
 import { BaseStorage } from '../base/BaseStorage.js';
 import { db } from '../../db.js';
-import { clientNotes, users, projects } from '@shared/schema';
+import { clientNotes, users, projects, projectTypes } from '@shared/schema';
 import { eq, and, desc, or, isNull } from 'drizzle-orm';
 import type {
   ClientNote,
@@ -18,6 +18,8 @@ export interface ClientNoteWithRelations extends ClientNote {
   project?: {
     id: string;
     description: string | null;
+    projectTypeId: string;
+    projectTypeName: string | null;
   } | null;
 }
 
@@ -39,11 +41,14 @@ export class ClientNotesStorage extends BaseStorage {
         project: {
           id: projects.id,
           description: projects.description,
+          projectTypeId: projects.projectTypeId,
         },
+        projectTypeName: projectTypes.name,
       })
       .from(clientNotes)
       .leftJoin(users, eq(clientNotes.createdByUserId, users.id))
       .leftJoin(projects, eq(clientNotes.projectId, projects.id))
+      .leftJoin(projectTypes, eq(projects.projectTypeId, projectTypes.id))
       .where(eq(clientNotes.id, id))
       .limit(1);
 
@@ -53,13 +58,17 @@ export class ClientNotesStorage extends BaseStorage {
     return {
       ...row.note,
       createdByUser: row.user,
-      project: row.project,
+      project: row.project ? {
+        ...row.project,
+        projectTypeName: row.projectTypeName,
+      } : null,
     };
   }
 
   async getClientNotesByClientId(
     clientId: string,
-    filter?: 'all' | 'client-only' | string
+    filter?: 'all' | 'client-only' | string,
+    filterType?: 'project' | 'projectType'
   ): Promise<ClientNoteWithRelations[]> {
     let whereCondition;
 
@@ -69,10 +78,19 @@ export class ClientNotesStorage extends BaseStorage {
         isNull(clientNotes.projectId)
       );
     } else if (filter && filter !== 'all') {
-      whereCondition = and(
-        eq(clientNotes.clientId, clientId),
-        eq(clientNotes.projectId, filter)
-      );
+      if (filterType === 'projectType') {
+        // Filter by project type ID - need inner join to filter
+        whereCondition = and(
+          eq(clientNotes.clientId, clientId),
+          eq(projects.projectTypeId, filter)
+        );
+      } else {
+        // Filter by specific project ID (legacy behavior)
+        whereCondition = and(
+          eq(clientNotes.clientId, clientId),
+          eq(clientNotes.projectId, filter)
+        );
+      }
     } else {
       whereCondition = eq(clientNotes.clientId, clientId);
     }
@@ -88,18 +106,24 @@ export class ClientNotesStorage extends BaseStorage {
         project: {
           id: projects.id,
           description: projects.description,
+          projectTypeId: projects.projectTypeId,
         },
+        projectTypeName: projectTypes.name,
       })
       .from(clientNotes)
       .leftJoin(users, eq(clientNotes.createdByUserId, users.id))
       .leftJoin(projects, eq(clientNotes.projectId, projects.id))
+      .leftJoin(projectTypes, eq(projects.projectTypeId, projectTypes.id))
       .where(whereCondition)
       .orderBy(desc(clientNotes.createdAt));
 
     return result.map((row) => ({
       ...row.note,
       createdByUser: row.user,
-      project: row.project,
+      project: row.project ? {
+        ...row.project,
+        projectTypeName: row.projectTypeName,
+      } : null,
     }));
   }
 
@@ -115,18 +139,24 @@ export class ClientNotesStorage extends BaseStorage {
         project: {
           id: projects.id,
           description: projects.description,
+          projectTypeId: projects.projectTypeId,
         },
+        projectTypeName: projectTypes.name,
       })
       .from(clientNotes)
       .leftJoin(users, eq(clientNotes.createdByUserId, users.id))
       .leftJoin(projects, eq(clientNotes.projectId, projects.id))
+      .leftJoin(projectTypes, eq(projects.projectTypeId, projectTypes.id))
       .where(eq(clientNotes.projectId, projectId))
       .orderBy(desc(clientNotes.createdAt));
 
     return result.map((row) => ({
       ...row.note,
       createdByUser: row.user,
-      project: row.project,
+      project: row.project ? {
+        ...row.project,
+        projectTypeName: row.projectTypeName,
+      } : null,
     }));
   }
 

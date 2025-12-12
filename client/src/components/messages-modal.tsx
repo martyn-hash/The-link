@@ -96,6 +96,7 @@ export function MessagesModal({
               <NotesTab 
                 clientId={project.clientId}
                 projectId={projectId}
+                projectTypeId={project?.projectTypeId}
                 mode="project"
               />
             )}
