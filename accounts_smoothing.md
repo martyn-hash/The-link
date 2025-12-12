@@ -485,6 +485,167 @@ FUNCTION calculateDefaultTarget(userId):
 
 ---
 
+## Capacity Tolerance Zones
+
+When capacity is exceeded, the system uses tolerance zones to determine whether to auto-assign or require human input.
+
+### Tolerance Thresholds
+
+| Zone | Utilization | System Behaviour |
+|------|-------------|------------------|
+| **Green** | 0-100% | Auto-assign, no warnings |
+| **Amber** | 100-120% | Auto-assign with warning flag |
+| **Red** | 120-150% | Requires human approval to proceed |
+| **Critical** | 150%+ | System refuses - escalates to management |
+
+### How Assignment Works With Tolerances
+
+```
+FUNCTION assignWithToleranceCheck(project, clientManager, availableMonths):
+    
+    1. SORT availableMonths by utilization (lowest first)
+    
+    2. FOR each month in availableMonths:
+        a. CALCULATE utilizationIfAssigned
+        b. IF utilizationIfAssigned <= 100%:
+           → AUTO-ASSIGN (Green zone)
+           → RETURN success
+        c. IF utilizationIfAssigned <= 120%:
+           → AUTO-ASSIGN with warning flag (Amber zone)
+           → NOTIFY client manager of capacity pressure
+           → RETURN success with warning
+    
+    3. IF no Green/Amber months available:
+        a. FIND lowest Red zone option (120-150%)
+        b. PAUSE assignment
+        c. PRESENT options to client manager:
+           ├── [Approve assignment to {month}] - will exceed by X%
+           ├── [Request deadline extension from client]
+           ├── [Reassign to different staff member]
+           └── [Escalate to partner for resource review]
+        d. AWAIT human decision
+    
+    4. IF all options exceed 150% (Critical):
+        a. REFUSE automatic assignment
+        b. ESCALATE to partner/management immediately
+        c. FLAG as "Resource Crisis - requires intervention"
+```
+
+### Approval Workflow for Red Zone
+
+When human approval is required:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ ⚠ Capacity Approval Required                                           │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│ ABC Ltd documents have been received and need scheduling.               │
+│                                                                          │
+│ Due date: 30 September 2025                                             │
+│ Weight: 1.5 (Moderate complexity)                                       │
+│                                                                          │
+│ Available options:                                                       │
+│ ┌─────────────────────────────────────────────────────────────────────┐ │
+│ │ July 2025                                                           │ │
+│ │ Current: 2.6 / 2.4 (108%)                                          │ │
+│ │ After adding ABC Ltd: 4.1 / 2.4 (171%) ← CRITICAL                  │ │
+│ └─────────────────────────────────────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────────────────────────────────────┐ │
+│ │ August 2025                                                         │ │
+│ │ Current: 2.2 / 2.4 (92%)                                           │ │
+│ │ After adding ABC Ltd: 3.7 / 2.4 (154%) ← CRITICAL                  │ │
+│ └─────────────────────────────────────────────────────────────────────┘ │
+│ ┌─────────────────────────────────────────────────────────────────────┐ │
+│ │ September 2025                                                      │ │
+│ │ Current: 1.8 / 2.4 (75%)                                           │ │
+│ │ After adding ABC Ltd: 3.3 / 2.4 (138%) ← RED (approval needed)     │ │
+│ └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                          │
+│ [Approve September] [Request Extension] [Reassign Staff] [Escalate]    │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Dynamic Threshold Relaxation
+
+As due date approaches, thresholds can automatically relax to prioritise deadline compliance:
+
+| Days to Due Date | Amber Threshold | Red Threshold | Critical |
+|------------------|-----------------|---------------|----------|
+| 90+ days | 120% | 150% | 150%+ |
+| 60-90 days | 130% | 160% | 160%+ |
+| 30-60 days | 140% | 170% | 170%+ |
+| <30 days | 150% | 180% | 180%+ |
+
+**Rationale:** When a deadline is imminent, it's better to be overloaded than to miss a statutory deadline. The system relaxes constraints while still flagging the pressure.
+
+### Cross-Staff Balancing Suggestions
+
+When one staff member is overloaded but others have capacity:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 💡 Alternative Option Available                                         │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│ Jane Smith's August is at 145% capacity.                                │
+│                                                                          │
+│ Tom Brown has capacity in August (72%).                                 │
+│                                                                          │
+│ Consider reassigning one of these clients to Tom:                       │
+│ • DEF Ltd (weight 1.0) - similar to Tom's existing portfolio           │
+│ • GHI Ltd (weight 0.5) - straightforward accounts                      │
+│                                                                          │
+│ [View Tom's Portfolio] [Suggest Reassignment] [Dismiss]                 │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Configurable Tolerance Settings
+
+Thresholds can be adjusted per firm:
+
+```typescript
+// Add to smoothing_settings table
+export const smoothingSettings = pgTable("smoothing_settings", {
+  id: varchar("id").primaryKey(),
+  settingKey: varchar("setting_key").notNull().unique(),
+  settingValue: jsonb("setting_value").notNull(),
+  description: text("description"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Example configuration:
+// { key: "green_max_percent", value: 100, description: "Auto-assign up to this %" }
+// { key: "amber_max_percent", value: 120, description: "Auto-assign with warning up to this %" }
+// { key: "red_max_percent", value: 150, description: "Requires approval up to this %" }
+// { key: "enable_dynamic_relaxation", value: true, description: "Relax thresholds near due date" }
+// { key: "enable_cross_staff_suggestions", value: true, description: "Suggest rebalancing across staff" }
+```
+
+### Early Warning System
+
+The system should warn before problems occur:
+
+```
+NIGHTLY JOB: Capacity Forecast Warnings
+
+1. FOR each client manager:
+   a. LOOK at next 3 months of CONFIRMED + PROVISIONAL work
+   b. IF any month exceeds amber threshold:
+      → WARN: "July is forecast at 125% - consider chasing outstanding docs"
+   c. IF multiple months exceed red threshold:
+      → ESCALATE: "Q3 capacity crisis forecast - resource review needed"
+
+2. FOR each project in "Gather Documents":
+   a. IF provisionally scheduled month is already > 100% AND docs not received:
+      → WARN: "ABC Ltd docs still outstanding - their month is filling up"
+      → Prompt to chase client or consider alternative months
+```
+
+---
+
 ## Integration with Project Types
 
 ### Identifying Smoothable Project Types
