@@ -1,5 +1,37 @@
 # Accounts Workflow Smoothing - Implementation Document
 
+## Quick Reference Summary
+
+**Purpose:** Intelligently distribute annual accounts work across months to eliminate peaks and troughs.
+
+**Key Data Points:**
+- Complexity weight: Stored on `client_services` mapping (0.5-2.0 scale, default 1.0)
+- Service owner: Defined per client-service in `client_services.serviceOwnerId`
+- Capacity target: `staff_service_capacity.annualCapacity / 12` OR `SUM(client_services.complexityWeight) / 12`
+
+**Two-Phase Scheduling:**
+1. **Provisional** (project created) → Best guess based on current capacity
+2. **Confirmed** (docs received) → Recalculated based on real-time capacity
+
+**Tolerance Zones:**
+| Zone | Utilization | Behaviour |
+|------|-------------|-----------|
+| Green | 0-100% | Auto-assign |
+| Amber | 100-120% | Auto-assign with warning |
+| Red | 120-150% | Human approval required |
+| Critical | 150%+ | Escalate to management |
+
+**Auto-Rebalancing:** Before declaring capacity breached, system moves flexible work (60+ days slack) to make room.
+
+**Stage Triggers (Project Type Settings):**
+- `preWorkStageId` → Triggers provisional scheduling
+- `readyQueueStageId` → Triggers confirmed scheduling  
+- `mainWorkStageId` → Triggers "in progress" status
+
+**Implementation MVP: ~15-20 days** (Phases 1-3, 5-6 basic)
+
+---
+
 ## Overview
 
 This feature provides intelligent workload distribution for annual accounts and similar periodic work. It addresses the common accounting practice problem of peaks and troughs in workload by analysing capacity and automatically suggesting optimal months for work completion.
@@ -83,7 +115,34 @@ complexityWeight: decimal("complexity_weight", { precision: 3, scale: 2 }).defau
 // Range: 0.50 to 2.00
 // Weight for THIS specific client-service combination
 // Only relevant when service.enableComplexityWeighting = TRUE
+// DEFAULT: 1.00 - used for legacy data or if not explicitly set
 ```
+
+### Default Complexity Weight Handling
+
+**Critical rule:** If `complexityWeight` is null, undefined, or missing (legacy data, system glitch), **always default to 1.00**.
+
+```
+FUNCTION getComplexityWeight(clientServiceId):
+    
+    weight = clientService.complexityWeight
+    
+    IF weight IS NULL OR weight IS UNDEFINED:
+        RETURN 1.00  // Safe default for legacy/missing data
+    
+    IF weight < 0.50:
+        RETURN 0.50  // Minimum floor
+    
+    IF weight > 2.00:
+        RETURN 2.00  // Maximum ceiling
+    
+    RETURN weight
+```
+
+This ensures:
+- Legacy data without complexity scores still works (treated as "standard" complexity)
+- System glitches don't break calculations
+- All capacity calculations have valid weights
 
 **Why at service level?**
 - Same client might have simple accounts (0.5) but complex payroll (1.5)
@@ -1086,6 +1145,256 @@ When adding a new client, show capacity impact:
 
 ---
 
+## Dedicated Capacity Scheduling View
+
+This is a **standalone view separate from standard project views**, designed specifically for capacity planning and scheduling analysis.
+
+### Purpose
+
+Unlike the main project kanban/list views which focus on individual project status, this view provides:
+- **Macro-level capacity visibility** across time periods
+- **Heatmap visualisation** of workload distribution
+- **Multi-dimensional filtering** by service, service owner, time period
+- **Planning tools** for identifying capacity issues before they occur
+
+### Access Point
+
+Add to main navigation:
+```
+Reports → Capacity Planning
+```
+Or as a dedicated section:
+```
+Capacity → Scheduling View
+```
+
+### View Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│ CAPACITY SCHEDULING VIEW                                                             │
+├─────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                      │
+│ ┌──────────────────────────────── FILTERS ────────────────────────────────────────┐ │
+│ │                                                                                  │ │
+│ │ Service: [Annual Accounts ▼] [All Services]                                     │ │
+│ │                                                                                  │ │
+│ │ Service Owner(s): [☑ Jane Smith] [☑ Tom Brown] [☐ Sarah Lee] [Select All]      │ │
+│ │                                                                                  │ │
+│ │ Time Period: [Apr 2025 ▼] to [Mar 2026 ▼]  [This Year] [Next 6 Months] [Custom]│ │
+│ │                                                                                  │ │
+│ │ View Mode: ● Heatmap Timeline  ○ Table View  ○ Chart View                       │ │
+│ │                                                                                  │ │
+│ │ Show: [☑ Confirmed] [☑ Provisional] [☑ In Progress]                            │ │
+│ │                                                                                  │ │
+│ └──────────────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                      │
+│ ┌───────────────────────── HEATMAP TIMELINE ──────────────────────────────────────┐ │
+│ │                                                                                  │ │
+│ │ Colour Key: ░ <50%  ▒ 50-80%  ▓ 80-100%  █ 100-120%  ▐ >120%                   │ │
+│ │                                                                                  │ │
+│ │              Apr    May    Jun    Jul    Aug    Sep    Oct    Nov    Dec        │ │
+│ │ ┌──────────┼──────┼──────┼──────┼──────┼──────┼──────┼──────┼──────┼──────┐    │ │
+│ │ │Jane Smith│  ▓   │  █   │  ▒   │  ▒   │  ▓   │  ▐   │  ▓   │  ░   │  ▒   │    │ │
+│ │ │  (2.4/m) │ 2.2  │ 2.8  │ 1.6  │ 1.4  │ 2.1  │ 3.2  │ 2.3  │ 0.8  │ 1.5  │    │ │
+│ │ │          │ 92%  │117%  │ 67%  │ 58%  │ 88%  │133%  │ 96%  │ 33%  │ 63%  │    │ │
+│ │ ├──────────┼──────┼──────┼──────┼──────┼──────┼──────┼──────┼──────┼──────┤    │ │
+│ │ │Tom Brown │  ▒   │  ▓   │  ▓   │  █   │  ▒   │  ▓   │  ▒   │  ▓   │  ▓   │    │ │
+│ │ │  (2.0/m) │ 1.4  │ 1.8  │ 1.9  │ 2.4  │ 1.2  │ 1.8  │ 1.5  │ 1.7  │ 1.9  │    │ │
+│ │ │          │ 70%  │ 90%  │ 95%  │120%  │ 60%  │ 90%  │ 75%  │ 85%  │ 95%  │    │ │
+│ │ ├──────────┼──────┼──────┼──────┼──────┼──────┼──────┼──────┼──────┼──────┤    │ │
+│ │ │FIRM TOTAL│  ▓   │  ▓   │  ▒   │  ▒   │  ▒   │  █   │  ▓   │  ▒   │  ▒   │    │ │
+│ │ │  (4.4/m) │ 3.6  │ 4.6  │ 3.5  │ 3.8  │ 3.3  │ 5.0  │ 3.8  │ 2.5  │ 3.4  │    │ │
+│ │ │          │ 82%  │105%  │ 80%  │ 86%  │ 75%  │114%  │ 86%  │ 57%  │ 77%  │    │ │
+│ │ └──────────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┴──────┘    │ │
+│ │                                                                                  │ │
+│ │ Click any cell to see detailed breakdown →                                      │ │
+│ │                                                                                  │ │
+│ └──────────────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                      │
+│ ┌───────────────────────── CELL DETAIL (September - Jane Smith) ──────────────────┐ │
+│ │                                                                                  │ │
+│ │ September 2025 - Jane Smith                            Capacity: 3.2 / 2.4 (133%)│ │
+│ │                                                                                  │ │
+│ │ ┌────────────────────── CONFIRMED (2.5 weight) ──────────────────────────────┐  │ │
+│ │ │                                                                            │  │ │
+│ │ │ Client          │ Weight │ Due Date   │ Status         │ Start Date       │  │ │
+│ │ │ ─────────────────────────────────────────────────────────────────────────  │  │ │
+│ │ │ ABC Ltd         │ 1.5    │ 30 Sep 25  │ Ready to Start │ 01 Sep 25        │  │ │
+│ │ │ DEF Ltd         │ 1.0    │ 31 Oct 25  │ Ready to Start │ 15 Sep 25        │  │ │
+│ │ └────────────────────────────────────────────────────────────────────────────┘  │ │
+│ │                                                                                  │ │
+│ │ ┌────────────────────── PROVISIONAL (0.7 weight) ────────────────────────────┐  │ │
+│ │ │                                                                            │  │ │
+│ │ │ Client          │ Weight │ Due Date   │ Docs Status    │ Days Waiting     │  │ │
+│ │ │ ─────────────────────────────────────────────────────────────────────────  │  │ │
+│ │ │ GHI Ltd         │ 0.7    │ 30 Nov 25  │ Chasing        │ 14 days          │  │ │
+│ │ └────────────────────────────────────────────────────────────────────────────┘  │ │
+│ │                                                                                  │ │
+│ │ ⚠ September is OVER CAPACITY by 33%                                            │ │
+│ │                                                                                  │ │
+│ │ Suggested actions:                                                              │ │
+│ │ • DEF Ltd could be moved to October (currently 96%) - has slack until Oct 31   │ │
+│ │ • Consider reassigning ABC Ltd to Tom Brown (September at 90%)                  │ │
+│ │                                                                                  │ │
+│ │ [Move DEF Ltd to Oct] [Suggest Reassignment] [Override & Accept]                │ │
+│ │                                                                                  │ │
+│ └──────────────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                      │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Filter Options Detail
+
+#### Service Filter
+```typescript
+// Options:
+// - "All Services" - shows all smoothable services combined
+// - Individual services where enableComplexityWeighting = TRUE
+// 
+// When filtered by service, only shows capacity for that service type
+```
+
+#### Service Owner Filter
+```typescript
+// Multi-select checkbox list of all staff who:
+// - Have at least one client_service where they are serviceOwnerId
+// - AND that service has enableComplexityWeighting = TRUE
+//
+// Quick buttons:
+// - "Select All" / "Clear All"
+// - "My Team" (if hierarchies exist)
+// - "Just Me" (quick filter to current user)
+```
+
+#### Time Period Filter
+```typescript
+// Preset ranges:
+// - "This Year" (current calendar/financial year)
+// - "Next 6 Months" (rolling from today)
+// - "Next 12 Months" (rolling from today)
+// - "Custom" (date pickers for start/end month)
+//
+// Minimum: 3 months (below this, heatmap loses value)
+// Maximum: 24 months (beyond this, data becomes speculative)
+```
+
+#### View Mode Options
+
+**Heatmap Timeline** (Default)
+- Visual grid with colour-coded capacity cells
+- Best for quick identification of problem months
+- Click cells for detailed drilldown
+
+**Table View**
+- Traditional tabular format
+- Better for detailed analysis
+- Sortable columns
+- Export to Excel capability
+
+**Chart View**
+- Bar/line chart of capacity over time
+- Overlay confirmed vs provisional
+- Good for presentations/reporting
+
+#### Show Filters
+```typescript
+// Checkboxes to include/exclude:
+// - ☑ Confirmed (scheduleStatus = 'confirmed')
+// - ☑ Provisional (scheduleStatus = 'provisional')  
+// - ☑ In Progress (scheduleStatus = 'in_progress')
+// - ☐ Completed (scheduleStatus = 'completed') - usually hidden
+//
+// When "Provisional" unchecked, shows only committed workload
+// Useful for realistic near-term planning
+```
+
+### Data Model for View
+
+```typescript
+// API response structure for capacity grid
+interface CapacityGridData {
+  filters: {
+    serviceId: string | null;
+    serviceOwnerIds: string[];
+    startMonth: string; // "YYYY-MM"
+    endMonth: string;
+    includeConfirmed: boolean;
+    includeProvisional: boolean;
+    includeInProgress: boolean;
+  };
+  
+  serviceOwners: Array<{
+    userId: string;
+    userName: string;
+    monthlyCapacity: number; // Their target capacity per month
+  }>;
+  
+  months: Array<{
+    yearMonth: string; // "YYYY-MM"
+    
+    // Per service owner
+    byOwner: Record<string, {
+      confirmedWeight: number;
+      confirmedCount: number;
+      provisionalWeight: number;
+      provisionalCount: number;
+      inProgressWeight: number;
+      inProgressCount: number;
+      totalWeight: number;
+      utilizationPercent: number;
+      capacityZone: 'green' | 'amber' | 'red' | 'critical';
+    }>;
+    
+    // Firm totals
+    firmTotal: {
+      confirmedWeight: number;
+      provisionalWeight: number;
+      inProgressWeight: number;
+      totalWeight: number;
+      targetCapacity: number;
+      utilizationPercent: number;
+    };
+  }>;
+  
+  // For drilldown
+  projectsByMonth: Record<string, Record<string, Array<{
+    projectId: string;
+    clientName: string;
+    weight: number;
+    dueDate: string;
+    scheduleStatus: string;
+    suggestedStartDate: string | null;
+    confirmedScheduledMonth: string | null;
+    provisionalScheduledMonth: string | null;
+    currentStage: string;
+  }>>>;
+}
+```
+
+### Interaction Behaviours
+
+**Hover on Cell**
+- Shows tooltip with quick stats
+- "Jane Smith - September: 3.2/2.4 (133%) - 3 projects"
+
+**Click on Cell**
+- Opens detailed breakdown panel (as shown above)
+- Lists all projects scheduled for that month/owner
+- Shows suggested actions if over capacity
+
+**Drag Project (Future Enhancement)**
+- Drag a project from one month to another
+- System validates: capacity impact, due date constraints
+- If valid, updates schedule with confirmation
+
+**Export Options**
+- "Export to CSV" - raw data for analysis
+- "Export to PDF" - formatted report for management
+- "Print View" - optimised for printing
+
+---
+
 ## API Endpoints
 
 ### Capacity Endpoints
@@ -1121,31 +1430,489 @@ Preview what month would be assigned for a new project
 
 ---
 
-## Implementation Phases
+## Implementation Plan
 
-### Phase 1: Foundation
-1. Add `complexityWeight` field to clients table
-2. Add scheduling fields to projects table (`scheduledMonth`, `suggestedStartDate`, `schedulingLocked`)
-3. Create `capacityTargets` table
-4. Build basic capacity calculation functions
+### Prerequisites Checklist
 
-### Phase 2: Algorithm
-1. Implement the optimal month calculation algorithm
-2. Add smoothing settings to project types
-3. Integrate automatic month assignment on project creation
-4. Add pre-work stage configuration to kanban stages
+Before starting implementation, ensure these exist:
+- [ ] `services` table exists with service definitions
+- [ ] `client_services` mapping table exists
+- [ ] `project_types` table with stage references
+- [ ] `project_type_stages` (or `kanban_stages`) table
+- [ ] User management with staff roles
 
-### Phase 3: Visibility
-1. Build capacity heatmap dashboard component
-2. Add timeline view to project detail page
-3. Create client complexity selector UI
-4. Add capacity warnings on new client creation
+---
 
-### Phase 4: Refinement
-1. Add capacity target overrides (for holidays, part-time, etc.)
-2. Build smoothing snapshots for historical tracking
-3. Add reporting on distribution quality over time
-4. Consider future Option B: periodic rebalancing suggestions
+### Phase 1: Data Model Foundation
+
+**Duration:** 2-3 days
+
+**1.1 Add fields to `services` table**
+```typescript
+enableComplexityWeighting: boolean("enable_complexity_weighting").default(false)
+```
+
+**1.2 Add fields to `client_services` table**
+```typescript
+serviceOwnerId: varchar("service_owner_id").references(() => users.id)
+complexityWeight: decimal("complexity_weight", { precision: 3, scale: 2 }).default("1.00")
+```
+
+**1.3 Add fields to `projects` table**
+```typescript
+scheduleStatus: varchar("schedule_status") // 'provisional' | 'confirmed' | 'in_progress' | 'completed' | 'delayed'
+provisionalScheduledMonth: varchar("provisional_scheduled_month") // "YYYY-MM"
+confirmedScheduledMonth: varchar("confirmed_scheduled_month") // "YYYY-MM"
+suggestedStartDate: timestamp("suggested_start_date")
+schedulingNotes: text("scheduling_notes")
+originalScheduledMonth: varchar("original_scheduled_month")
+delayReason: varchar("delay_reason")
+schedulingLocked: boolean("scheduling_locked").default(false)
+lastAutoMovedAt: timestamp("last_auto_moved_at")
+autoMoveCount: integer("auto_move_count").default(0)
+```
+
+**1.4 Add fields to `project_types` table**
+```typescript
+linkedServiceId: varchar("linked_service_id").references(() => services.id)
+enableWorkloadSmoothing: boolean("enable_workload_smoothing").default(false)
+smoothingLeadTimeDays: integer("smoothing_lead_time_days").default(60)
+smoothingSafetyBufferDays: integer("smoothing_safety_buffer_days").default(14)
+preWorkStageId: varchar("pre_work_stage_id").references(() => projectTypeStages.id)
+readyQueueStageId: varchar("ready_queue_stage_id").references(() => projectTypeStages.id)
+mainWorkStageId: varchar("main_work_stage_id").references(() => projectTypeStages.id)
+smoothingConfigComplete: boolean("smoothing_config_complete").default(false)
+```
+
+**1.5 Create new tables**
+- `staff_service_capacity` - Staff capacity settings per service
+- `capacity_targets` - Monthly override targets
+- `smoothing_settings` - Firm-wide configuration
+- `smoothing_snapshots` - Historical tracking
+- `scheduler_config` - Scheduler settings
+
+**1.6 Run database migrations**
+
+**Deliverables:**
+- [ ] All schema changes applied
+- [ ] Migration scripts tested
+- [ ] Rollback scripts prepared
+
+---
+
+### Phase 2: Core Capacity Logic
+
+**Duration:** 3-4 days
+
+**2.1 Complexity weight functions**
+```typescript
+// File: server/services/smoothing/complexity.ts
+getComplexityWeight(clientServiceId): number  // With default 1.0 fallback
+validateComplexityWeight(weight): number      // Clamp to 0.5-2.0 range
+```
+
+**2.2 Capacity calculation functions**
+```typescript
+// File: server/services/smoothing/capacity.ts
+getMonthlyCapacity(userId, serviceId): number  // Get target (explicit or default)
+calculateCurrentLoad(userId, yearMonth): { confirmed, provisional, total }
+calculateUtilization(userId, yearMonth): { percent, zone }
+getCapacityForDateRange(userId, startMonth, endMonth): CapacityGridData
+```
+
+**2.3 Staff capacity settings CRUD**
+```typescript
+// File: server/services/smoothing/staffCapacity.ts
+getStaffCapacity(userId, serviceId): StaffServiceCapacity | null
+setStaffCapacity(userId, serviceId, capacity): void
+deleteStaffCapacity(userId, serviceId): void
+getDefaultCapacity(userId, serviceId): number  // Sum of weights / 12
+```
+
+**Deliverables:**
+- [ ] All capacity functions implemented with tests
+- [ ] Default fallback logic for missing complexity weights
+- [ ] Capacity calculation tested with sample data
+
+---
+
+### Phase 3: Scheduling Algorithm
+
+**Duration:** 4-5 days
+
+**3.1 Provisional scheduling (on project creation)**
+```typescript
+// File: server/services/smoothing/scheduling.ts
+assignProvisionalMonth(project, serviceOwnerId): ProvisionalResult
+// - Calculate flexible window
+// - Find optimal month based on current capacity
+// - Assign provisionalScheduledMonth
+// - Set scheduleStatus = 'provisional'
+```
+
+**3.2 Confirmed scheduling (when docs received)**
+```typescript
+confirmScheduledMonth(project, serviceOwnerId): ConfirmResult
+// - Recalculate based on current real-time capacity
+// - Try auto-rebalancing if over capacity
+// - Set confirmedScheduledMonth and suggestedStartDate
+// - Set scheduleStatus = 'confirmed'
+```
+
+**3.3 Auto-rebalancing logic**
+```typescript
+attemptAutoRebalance(targetMonth, requiredCapacity): RebalanceResult
+// - Find moveable projects in targetMonth
+// - Move up to 3 projects to make room
+// - Return success/failure with moves made
+```
+
+**3.4 Tolerance zone enforcement**
+```typescript
+evaluateCapacityZone(utilizationPercent, daysToDeadline): Zone
+// - Apply dynamic threshold relaxation
+// - Return zone: 'green' | 'amber' | 'red' | 'critical'
+
+getApprovalRequirement(zone): ApprovalType
+// - Return 'auto' | 'warning' | 'approval_required' | 'refused'
+```
+
+**3.5 Integration with project creation**
+```typescript
+// Modify project creation flow:
+// 1. Validate project type smoothing config
+// 2. Get service owner from client_services
+// 3. Call assignProvisionalMonth()
+// 4. Save project with provisional schedule
+```
+
+**3.6 Integration with stage transitions**
+```typescript
+// When project moves to readyQueueStage:
+// 1. Call confirmScheduledMonth()
+// 2. Update project with confirmed schedule
+// 3. Trigger notifications if capacity warning
+```
+
+**Deliverables:**
+- [ ] Provisional scheduling working on project creation
+- [ ] Confirmed scheduling on stage transition
+- [ ] Auto-rebalancing tested with various scenarios
+- [ ] Tolerance zones correctly applied
+
+---
+
+### Phase 4: Nightly Scheduler
+
+**Duration:** 2-3 days
+
+**4.1 Scheduler job implementation**
+```typescript
+// File: server/jobs/schedulerJob.ts
+// Runs nightly at configured time (default 02:00)
+
+async function runSchedulerJob():
+  // 1. Release ready work
+  releaseReadyProjects()
+  
+  // 2. Generate warnings
+  generateAtRiskWarnings()
+  generateCriticalEscalations()
+  
+  // 3. Capacity forecast warnings
+  generateCapacityForecastWarnings()
+```
+
+**4.2 Work release logic**
+```typescript
+releaseReadyProjects():
+// - Find projects in ready_queue where suggestedStartDate <= today
+// - Move to main_work stage
+// - Notify assignees
+// - Log transitions
+```
+
+**4.3 Warning generation**
+```typescript
+generateAtRiskWarnings():
+// - Find projects in gather_docs with suggestedStartDate within X days
+// - Create warning notifications
+
+generateCriticalEscalations():
+// - Find projects with dueDate within Y days not yet in main_work
+// - Escalate to management
+```
+
+**4.4 Scheduler configuration**
+- Add scheduler_config table entries
+- Make warning thresholds configurable
+
+**Deliverables:**
+- [ ] Nightly job running reliably
+- [ ] Work released automatically
+- [ ] Warnings generated correctly
+- [ ] Escalations working
+
+---
+
+### Phase 5: Configuration UI
+
+**Duration:** 3-4 days
+
+**5.1 Service settings**
+```
+Services → [Service Name] → Settings
+└── ☑ Enable complexity weighting for this service
+```
+
+**5.2 Client service complexity setting**
+```
+Client → Services tab → [Service] → Edit
+└── Complexity weight slider (0.5 - 2.0)
+```
+
+**5.3 Staff capacity settings**
+```
+Settings → Staff Capacity
+└── Grid: Staff × Service with capacity values
+    └── Click to edit annual/monthly capacity
+```
+
+**5.4 Project type smoothing configuration**
+```
+Settings → Project Types → [Type] → Smoothing
+└── Full configuration panel as documented
+    ├── Link to service
+    ├── Timing settings
+    └── Stage triggers
+```
+
+**5.5 Firm-wide smoothing settings**
+```
+Settings → Capacity Planning
+└── Tolerance thresholds (green/amber/red/critical)
+└── Enable/disable features (dynamic relaxation, cross-staff suggestions)
+└── Scheduler timing
+```
+
+**Deliverables:**
+- [ ] All configuration screens built
+- [ ] Validation enforced (project type activation)
+- [ ] Settings persisted correctly
+
+---
+
+### Phase 6: Capacity Scheduling View
+
+**Duration:** 5-6 days
+
+**6.1 Main view component**
+```
+Reports → Capacity Planning (or Capacity → Scheduling View)
+```
+
+**6.2 Filter panel**
+- Service dropdown
+- Service owner multi-select
+- Time period selector
+- View mode toggle
+- Show checkboxes (confirmed/provisional/in progress)
+
+**6.3 Heatmap timeline component**
+- Grid with rows per service owner + firm total
+- Columns per month
+- Colour-coded cells by utilization zone
+- Click handler for drilldown
+
+**6.4 Cell detail panel**
+- Shows when cell clicked
+- Lists projects in confirmed/provisional sections
+- Shows suggested actions for over-capacity
+- Action buttons (move, reassign, override)
+
+**6.5 Table view mode**
+- Traditional table format
+- Sortable columns
+- Filterable
+
+**6.6 Chart view mode**
+- Bar chart of capacity over time
+- Stacked: confirmed + provisional
+- Line overlay for target capacity
+
+**6.7 Export functionality**
+- Export to CSV
+- Export to PDF
+- Print view
+
+**6.8 API endpoints**
+```
+GET /api/capacity/grid
+POST /api/capacity/move-project
+POST /api/capacity/suggest-reassignment
+```
+
+**Deliverables:**
+- [ ] Heatmap view working with real data
+- [ ] All filter options functional
+- [ ] Cell drilldown showing correct projects
+- [ ] Actions (move, reassign) working
+- [ ] Export working
+
+---
+
+### Phase 7: Project Integration
+
+**Duration:** 2-3 days
+
+**7.1 Project detail timeline view**
+- Visual timeline showing flexible window
+- Current scheduled month highlighted
+- Stage progression markers
+
+**7.2 New client onboarding capacity preview**
+- When adding client + service
+- Show impact on capacity
+- Suggest optimal month
+
+**7.3 Project list/kanban capacity indicators**
+- Badge showing scheduled month
+- Warning indicators for over-capacity months
+
+**7.4 Stage transition hooks**
+- Trigger scheduling logic on appropriate stage moves
+- Show confirmation dialogs for capacity-impacting actions
+
+**Deliverables:**
+- [ ] Timeline visible on project detail
+- [ ] Capacity preview on new client
+- [ ] Indicators on project lists
+
+---
+
+### Phase 8: Notifications & Alerts
+
+**Duration:** 2-3 days
+
+**8.1 Notification types**
+- Project scheduled (provisional)
+- Project confirmed (docs received)
+- Project moved (auto-rebalance)
+- At-risk warning (docs outstanding)
+- Critical escalation (deadline approaching)
+- Capacity warning (month over threshold)
+
+**8.2 Notification channels**
+- In-app notifications
+- Email (optional, configurable)
+
+**8.3 Approval workflow UI**
+- Modal for red-zone approvals
+- Options: approve, request extension, reassign, escalate
+
+**Deliverables:**
+- [ ] All notification types implemented
+- [ ] Email delivery working (if enabled)
+- [ ] Approval workflow functional
+
+---
+
+### Phase 9: Reporting & Analytics
+
+**Duration:** 2-3 days
+
+**9.1 Smoothing snapshots**
+- Nightly capture of capacity state
+- Historical trend data
+
+**9.2 Distribution quality report**
+- Standard deviation of monthly load
+- Peak month analysis
+- Before/after comparison
+
+**9.3 Scheduling effectiveness report**
+- Projects completed by target date %
+- Average delay duration
+- Auto-rebalance success rate
+
+**9.4 Dashboard widgets**
+- Capacity summary card
+- Upcoming capacity warnings
+- At-risk projects count
+
+**Deliverables:**
+- [ ] Snapshot job running nightly
+- [ ] Reports accessible
+- [ ] Dashboard widgets working
+
+---
+
+### Phase 10: Testing & Refinement
+
+**Duration:** 3-4 days
+
+**10.1 Unit tests**
+- All capacity calculation functions
+- Scheduling algorithm edge cases
+- Tolerance zone logic
+
+**10.2 Integration tests**
+- Full project creation → scheduling flow
+- Stage transition → confirmation flow
+- Auto-rebalancing scenarios
+
+**10.3 End-to-end tests**
+- Complete user journey
+- Multi-user scenarios
+
+**10.4 Performance testing**
+- Capacity grid with large datasets
+- Nightly job with many projects
+
+**10.5 User acceptance testing**
+- Test with real accounting firm scenarios
+- Gather feedback
+
+**Deliverables:**
+- [ ] Test coverage > 80% for core logic
+- [ ] E2E tests passing
+- [ ] Performance acceptable
+- [ ] UAT feedback incorporated
+
+---
+
+### Total Estimated Duration
+
+| Phase | Duration |
+|-------|----------|
+| Phase 1: Data Model | 2-3 days |
+| Phase 2: Core Capacity Logic | 3-4 days |
+| Phase 3: Scheduling Algorithm | 4-5 days |
+| Phase 4: Nightly Scheduler | 2-3 days |
+| Phase 5: Configuration UI | 3-4 days |
+| Phase 6: Capacity Scheduling View | 5-6 days |
+| Phase 7: Project Integration | 2-3 days |
+| Phase 8: Notifications & Alerts | 2-3 days |
+| Phase 9: Reporting & Analytics | 2-3 days |
+| Phase 10: Testing & Refinement | 3-4 days |
+| **TOTAL** | **28-38 days** |
+
+### Recommended MVP Scope
+
+For initial release, prioritise:
+1. Phase 1: Data Model (required)
+2. Phase 2: Core Capacity Logic (required)
+3. Phase 3: Scheduling Algorithm (required)
+4. Phase 5: Configuration UI (basic)
+5. Phase 6: Capacity Scheduling View (heatmap only)
+
+**MVP Duration: ~15-20 days**
+
+Defer to post-MVP:
+- Nightly scheduler (can use manual triggers initially)
+- Table/chart view modes
+- Reporting & analytics
+- Email notifications
 
 ---
 
