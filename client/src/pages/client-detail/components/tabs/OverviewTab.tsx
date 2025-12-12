@@ -123,7 +123,7 @@ function ServicesSection({
               expandedServiceId={expandedPersonalServiceId}
               onExpandedChange={onExpandedPersonalServiceChange}
               onEditService={onEditPersonalService}
-              onRefetch={onRefetchPeopleServices}
+              onRefetch={() => { onRefetchServices(); onRefetchPeopleServices(); }}
             />
           </TabsContent>
 
