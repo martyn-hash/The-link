@@ -21,7 +21,6 @@ import {
   ProjectsTab, 
   OverviewTab, 
   TasksTab,
-  ServicesTab,
   NotesTab,
 } from "./components/tabs";
 import { useClientData, useClientMutations, useCompanyConnections } from "./hooks";
@@ -183,7 +182,7 @@ export default function ClientDetail() {
           />
 
           <SwipeableTabsWrapper
-            tabs={["overview", "services", "projects", "communications", "chronology", "documents", "tasks", "notes", "risk", "qc"]}
+            tabs={["overview", "projects", "communications", "chronology", "documents", "tasks", "notes", "risk", "qc"]}
             currentTab={activeTab}
             onTabChange={setActiveTab}
             enabled={isMobile}
@@ -203,20 +202,9 @@ export default function ClientDetail() {
               onRemoveCompanyConnection={(companyId) => unlinkFromCompanyMutation.mutate(companyId)}
               isLinkingCompany={linkToCompanyMutation.isPending}
               isUnlinkingCompany={unlinkFromCompanyMutation.isPending}
-            />
-          </TabsContent>
-
-          <TabsContent value="services" className="space-y-8 mt-6">
-            <ServicesTab
-              client={client!}
-              clientId={id!}
-              companyConnections={companyConnections}
               clientServices={clientServices}
-              companyServices={companyServicesData as EnhancedClientService[] | undefined}
               servicesLoading={servicesLoading}
               servicesError={!!servicesError}
-              companyServicesLoading={companyServicesLoading}
-              companyServicesError={companyServicesError}
               peopleServices={peopleServices}
               peopleServicesLoading={peopleServicesLoading}
               peopleServicesError={!!peopleServicesError}

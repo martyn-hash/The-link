@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const TAB_LIST = ["overview", "services", "projects", "communications", "chronology", "documents", "tasks", "notes", "risk"] as const;
+const TAB_LIST = ["overview", "projects", "communications", "chronology", "documents", "tasks", "notes", "risk"] as const;
 
 type TabValue = typeof TAB_LIST[number];
 
@@ -75,9 +75,8 @@ export function ClientTabNavigation({
     <>
       {/* Desktop Tabs - Grid Layout */}
       <div className="hidden md:block w-full">
-        <TabsList className="grid w-full grid-cols-9 gap-1 h-auto">
+        <TabsList className="grid w-full grid-cols-8 gap-1 h-auto">
           <TabsTrigger value="overview" data-testid="tab-overview" className="text-sm py-2">Overview</TabsTrigger>
-          <TabsTrigger value="services" data-testid="tab-services" className="text-sm py-2">Services</TabsTrigger>
           <TabsTrigger value="projects" data-testid="tab-projects" className="text-sm py-2">Projects</TabsTrigger>
           <TabsTrigger value="communications" data-testid="tab-communications" className="text-sm py-2">Comms</TabsTrigger>
           <TabsTrigger value="chronology" data-testid="tab-chronology" className="text-sm py-2">History</TabsTrigger>
@@ -150,7 +149,6 @@ export function ClientTabNavigation({
         <div className="w-full overflow-x-auto snap-x snap-mandatory scroll-smooth -mx-4 px-[10vw]" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           <TabsList className="inline-flex gap-2 h-auto">
             <MobileTabTrigger value="overview" label="Overview" testId="tab-overview" />
-            <MobileTabTrigger value="services" label="Services" testId="tab-services" />
             <MobileTabTrigger value="projects" label="Projects" testId="tab-projects" />
             <MobileTabTrigger value="communications" label="Comms" testId="tab-communications" />
             <MobileTabTrigger value="chronology" label="History" testId="tab-chronology" />
@@ -201,7 +199,6 @@ export function ClientTabNavigation({
         <div className="mt-4 mb-2">
           <h2 className="text-lg font-semibold text-foreground" data-testid="mobile-section-title">
             {activeTab === "overview" && "Overview"}
-            {activeTab === "services" && "Services"}
             {activeTab === "projects" && "Projects"}
             {activeTab === "communications" && "Communications"}
             {activeTab === "chronology" && "History"}

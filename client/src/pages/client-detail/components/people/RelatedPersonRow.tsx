@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Check, ChevronDown, Eye, Mail, QrCode, Star } from "lucide-react";
+import { Check, ChevronDown, Eye, Mail, QrCode, Star, FileSearch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,12 +17,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
 import type { ClientPortalUser } from "@shared/schema";
 import { ClientPersonWithPerson } from "../../utils/types";
 import { formatPersonName, formatBirthDate } from "../../utils/formatters";
+import { QuickViewPersonModal } from "./QuickViewPersonModal";
 
 interface RelatedPersonRowProps {
   clientPerson: ClientPersonWithPerson;
@@ -38,6 +45,7 @@ export function RelatedPersonRow({
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [showQRCode, setShowQRCode] = useState(false);
+  const [showQuickView, setShowQuickView] = useState(false);
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
   
   const { data: portalUser, refetch } = useQuery<ClientPortalUser>({
@@ -158,6 +166,23 @@ export function RelatedPersonRow({
         </TableCell>
         <TableCell className="text-right">
           <div className="flex items-center justify-end gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowQuickView(true)}
+                    data-testid={`button-quick-view-person-${clientPerson.person.id}`}
+                  >
+                    <FileSearch className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Quick view</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" disabled={!hasEmail} data-testid={`button-person-actions-${clientPerson.person.id}`}>
@@ -195,6 +220,13 @@ export function RelatedPersonRow({
           </div>
         </TableCell>
       </TableRow>
+
+      {/* Quick View Modal */}
+      <QuickViewPersonModal
+        clientPerson={clientPerson}
+        open={showQuickView}
+        onOpenChange={setShowQuickView}
+      />
 
       {/* QR Code Dialog */}
       <Dialog open={showQRCode} onOpenChange={setShowQRCode}>

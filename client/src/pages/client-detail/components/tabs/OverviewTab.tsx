@@ -3,18 +3,29 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Building2, MapPin, Mail, ExternalLink, Plus, X } from "lucide-react";
-import AddressMap from "@/components/address-map";
+import { Building2, MapPin, Mail, ExternalLink, Plus, X, Users } from "lucide-react";
 import TagManager from "@/components/tag-manager";
 import { RelatedPersonRow } from "../people";
-import type { Client } from "@shared/schema";
-import type { ClientPersonWithPerson } from "../../utils/types";
+import { ClientServicesList, PersonalServicesList } from "./services";
+import type { Client, Person, Service, User, PeopleService } from "@shared/schema";
+import type { ClientPersonWithPerson, EnhancedClientService } from "../../utils/types";
 
 interface CompanyConnection {
   client: Client;
   officerRole?: string;
   isPrimaryContact?: boolean;
 }
+
+interface ServiceWithRoles {
+  id: string;
+  roles?: Array<{
+    id: string;
+    name: string;
+    description?: string | null;
+  }>;
+}
+
+type PeopleServiceWithRelations = PeopleService & { person: Person; service: Service; serviceOwner?: User };
 
 interface OverviewTabProps {
   client: Client;
@@ -30,6 +41,19 @@ interface OverviewTabProps {
   onRemoveCompanyConnection: (companyId: string) => void;
   isLinkingCompany: boolean;
   isUnlinkingCompany: boolean;
+  clientServices: EnhancedClientService[] | undefined;
+  servicesLoading: boolean;
+  servicesError: boolean;
+  peopleServices: PeopleServiceWithRelations[] | undefined;
+  peopleServicesLoading: boolean;
+  peopleServicesError: boolean;
+  servicesWithRoles: ServiceWithRoles[] | undefined;
+  expandedPersonalServiceId: string | null;
+  onExpandedPersonalServiceChange: (value: string | null) => void;
+  onEditPersonalService: (serviceId: string) => void;
+  onRefetchServices: () => void;
+  onRefetchPeopleServices: () => void;
+  isMobile: boolean;
 }
 
 export function OverviewTab({
@@ -46,20 +70,33 @@ export function OverviewTab({
   onRemoveCompanyConnection,
   isLinkingCompany,
   isUnlinkingCompany,
+  clientServices,
+  servicesLoading,
+  servicesError,
+  peopleServices,
+  peopleServicesLoading,
+  peopleServicesError,
+  servicesWithRoles,
+  expandedPersonalServiceId,
+  onExpandedPersonalServiceChange,
+  onEditPersonalService,
+  onRefetchServices,
+  onRefetchPeopleServices,
+  isMobile,
 }: OverviewTabProps) {
-  const addressParts = [
+  const hasAddress = [
     client.registeredAddress1,
     client.registeredAddress2,
     client.registeredAddress3,
     client.registeredPostcode,
     client.registeredCountry
-  ].filter(Boolean);
-  const fullAddress = addressParts.join(', ');
-  const hasAddress = addressParts.length > 0;
+  ].filter(Boolean).length > 0;
+
+  const isCompanyClient = client.clientType?.toLowerCase() !== 'individual';
 
   return (
     <div className="space-y-8">
-      {/* Company Details */}
+      {/* Company Details with Related People - 35/65 Split */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -67,9 +104,9 @@ export function OverviewTab({
             Company Details
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Registered Office Address */}
+        <CardContent>
+          <div className="grid grid-cols-1 lg:grid-cols-[35%_1fr] gap-6">
+            {/* Left Side - Company Details (35%) */}
             <div className="space-y-4">
               <div className="flex items-center gap-2 mb-4">
                 <MapPin className="w-5 h-5 text-primary" />
@@ -128,121 +165,133 @@ export function OverviewTab({
                   className="mt-2"
                 />
               </div>
-            </div>
 
-            {/* Google Maps */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 mb-4">
-                <MapPin className="w-5 h-5 text-primary" />
-                <h3 className="text-lg font-semibold">Location</h3>
-              </div>
-              
-              {hasAddress ? (
-                <AddressMap 
-                  address={fullAddress}
-                  className="h-[300px]"
-                />
-              ) : (
-                <div className="h-[300px] rounded-lg border bg-muted/30 flex items-center justify-center">
-                  <p className="text-muted-foreground">No address available for map display</p>
+              {client.companyNumber && (
+                <div className="pt-4 border-t">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => window.open(`https://find-and-update.company-information.service.gov.uk/company/${client.companyNumber}`, '_blank')}
+                    data-testid="button-view-companies-house"
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    View on Companies House
+                  </Button>
                 </div>
               )}
             </div>
-          </div>
 
-          {client.companyNumber && (
-            <div className="pt-4 border-t">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => window.open(`https://find-and-update.company-information.service.gov.uk/company/${client.companyNumber}`, '_blank')}
-                data-testid="button-view-companies-house"
-              >
-                <ExternalLink className="w-4 h-4 mr-2" />
-                View on Companies House
-              </Button>
+            {/* Right Side - Related People (65%) */}
+            <div className="space-y-4 lg:border-l lg:pl-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Related People</h3>
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  data-testid="button-add-person"
+                  onClick={onAddPerson}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add
+                </Button>
+              </div>
+              
+              <div data-testid="section-related-people">
+                {peopleLoading ? (
+                  <div className="space-y-3">
+                    <Skeleton className="h-16 w-full" />
+                    <Skeleton className="h-16 w-full" />
+                  </div>
+                ) : peopleError ? (
+                  <div className="text-center py-8">
+                    <p className="text-destructive mb-2">
+                      Failed to load related people
+                    </p>
+                    <p className="text-muted-foreground text-sm">
+                      Please try refreshing the page or contact support if the issue persists.
+                    </p>
+                  </div>
+                ) : relatedPeople && relatedPeople.length > 0 ? (
+                  <div className="border rounded-lg overflow-hidden overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Name</TableHead>
+                          <TableHead>Primary Email</TableHead>
+                          <TableHead>Primary Phone</TableHead>
+                          <TableHead className="text-center">App Access</TableHead>
+                          <TableHead className="text-center">Push</TableHead>
+                          <TableHead>Date of Birth</TableHead>
+                          <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {[...relatedPeople]
+                          .sort((a, b) => {
+                            if (a.isPrimaryContact && !b.isPrimaryContact) return -1;
+                            if (!a.isPrimaryContact && b.isPrimaryContact) return 1;
+                            return 0;
+                          })
+                          .map((clientPerson) => (
+                          <RelatedPersonRow
+                            key={clientPerson.person.id}
+                            clientPerson={clientPerson}
+                            clientId={clientId}
+                            clientName={client?.name || ''}
+                          />
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">
+                      No directors or related people found for this client.
+                    </p>
+                    <p className="text-muted-foreground text-sm mt-2">
+                      Directors will be automatically added when creating clients from Companies House data.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
-          )}
+          </div>
         </CardContent>
       </Card>
 
-      {/* Related People Section */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Related People</CardTitle>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              data-testid="button-add-person"
-              onClick={onAddPerson}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div data-testid="section-related-people">
-            {peopleLoading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-16 w-full" />
-              </div>
-            ) : peopleError ? (
-              <div className="text-center py-8">
-                <p className="text-destructive mb-2">
-                  Failed to load related people
-                </p>
-                <p className="text-muted-foreground text-sm">
-                  Please try refreshing the page or contact support if the issue persists.
-                </p>
-              </div>
-            ) : relatedPeople && relatedPeople.length > 0 ? (
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Primary Email</TableHead>
-                      <TableHead>Primary Phone</TableHead>
-                      <TableHead className="text-center">App Access</TableHead>
-                      <TableHead className="text-center">Push</TableHead>
-                      <TableHead>Date of Birth</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {[...relatedPeople]
-                      .sort((a, b) => {
-                        if (a.isPrimaryContact && !b.isPrimaryContact) return -1;
-                        if (!a.isPrimaryContact && b.isPrimaryContact) return 1;
-                        return 0;
-                      })
-                      .map((clientPerson) => (
-                      <RelatedPersonRow
-                        key={clientPerson.person.id}
-                        clientPerson={clientPerson}
-                        clientId={clientId}
-                        clientName={client?.name || ''}
-                      />
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">
-                  No directors or related people found for this client.
-                </p>
-                <p className="text-muted-foreground text-sm mt-2">
-                  Directors will be automatically added when creating clients from Companies House data.
-                </p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      {/* Services Section */}
+      <div className="space-y-6">
+        {/* Client Services - show for company clients */}
+        {isCompanyClient && (
+          <ClientServicesList
+            clientId={clientId}
+            clientType={client.clientType as 'company' | 'individual' | null | undefined}
+            companyNumber={client.companyNumber}
+            services={clientServices}
+            isLoading={servicesLoading}
+            isError={servicesError}
+            isMobile={isMobile}
+            onRefetch={onRefetchServices}
+          />
+        )}
+
+        {/* Personal Services */}
+        <PersonalServicesList
+          clientId={clientId}
+          clientType={client.clientType as 'company' | 'individual' | null | undefined}
+          services={peopleServices}
+          isLoading={peopleServicesLoading}
+          isError={peopleServicesError}
+          servicesWithRoles={servicesWithRoles}
+          expandedServiceId={expandedPersonalServiceId}
+          onExpandedChange={onExpandedPersonalServiceChange}
+          onEditService={onEditPersonalService}
+          onRefetch={onRefetchPeopleServices}
+        />
+      </div>
 
       {/* Company Connections Section - Only show for individual clients */}
       {client.clientType?.toLowerCase() === 'individual' && (
