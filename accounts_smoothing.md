@@ -498,24 +498,48 @@ When capacity is exceeded, the system uses tolerance zones to determine whether 
 | **Red** | 120-150% | Requires human approval to proceed |
 | **Critical** | 150%+ | System refuses - escalates to management |
 
-### How Assignment Works With Tolerances
+### How Assignment Works With Auto-Rebalancing
+
+Before declaring capacity breached, the system first tries to **automatically move flexible work** to make room.
 
 ```
-FUNCTION assignWithToleranceCheck(project, clientManager, availableMonths):
+FUNCTION assignWithAutoRebalance(newProject, clientManager, targetMonth):
     
-    1. SORT availableMonths by utilization (lowest first)
+    1. CALCULATE utilizationIfAssigned for targetMonth
     
-    2. FOR each month in availableMonths:
-        a. CALCULATE utilizationIfAssigned
-        b. IF utilizationIfAssigned <= 100%:
-           → AUTO-ASSIGN (Green zone)
-           → RETURN success
-        c. IF utilizationIfAssigned <= 120%:
-           → AUTO-ASSIGN with warning flag (Amber zone)
-           → NOTIFY client manager of capacity pressure
-           → RETURN success with warning
+    2. IF utilization <= amber_threshold (120%):
+       → ASSIGN directly (Green/Amber zone)
+       → RETURN success
     
-    3. IF no Green/Amber months available:
+    3. IF utilization > amber_threshold:
+       → TRY to make room by moving flexible work
+       
+    4. FIND "moveable" projects in targetMonth:
+       - scheduleStatus = 'confirmed'
+       - daysUntilDueDate > 60 (plenty of slack)
+       - NOT flagged as "priority" or "schedulingLocked"
+       - hasNotBeenMovedRecently (no ping-pong)
+       - SORT by most slack time first (move least urgent first)
+    
+    5. FOR each moveable project (max 3 moves per rebalance):
+       a. FIND alternative months with capacity < 100%
+       b. IF alternative found within their flexible window:
+          → MOVE project to alternative month
+          → SET project.lastAutoMovedAt = now
+          → RECALCULATE targetMonth utilization
+          → IF now <= amber_threshold: STOP moving
+    
+    6. AFTER rebalancing attempt:
+       a. IF utilization <= amber_threshold:
+          → ASSIGN new project
+          → LOG all moves made
+          → NOTIFY affected staff: "XYZ Ltd moved from June to August"
+          → RETURN success
+       b. IF still > amber_threshold:
+          → No more moveable work available
+          → FALL THROUGH to human approval (Red zone)
+    
+    7. IF no Green/Amber option available (even after rebalancing):
         a. FIND lowest Red zone option (120-150%)
         b. PAUSE assignment
         c. PRESENT options to client manager:
@@ -525,10 +549,75 @@ FUNCTION assignWithToleranceCheck(project, clientManager, availableMonths):
            └── [Escalate to partner for resource review]
         d. AWAIT human decision
     
-    4. IF all options exceed 150% (Critical):
+    8. IF all options exceed 150% (Critical):
         a. REFUSE automatic assignment
         b. ESCALATE to partner/management immediately
         c. FLAG as "Resource Crisis - requires intervention"
+```
+
+### Which Projects Can Be Auto-Moved?
+
+| Criteria | Moveable? | Reason |
+|----------|-----------|--------|
+| Due date 90+ days away | Yes | Plenty of slack |
+| Due date 60-90 days away | Yes, if needed | Some slack available |
+| Due date <60 days away | No | Too close to deadline |
+| Flagged as "priority" | No | Client expectation set |
+| Flagged as "scheduling locked" | No | Explicitly fixed |
+| Moved in last 30 days | No | Avoid ping-ponging |
+
+### Auto-Rebalance Example
+
+```
+SCENARIO: ABC Ltd docs arrive, needs scheduling for June
+
+Current June: 2.8 / 2.4 (117% - Amber)
+If ABC Ltd (1.0) added: 3.8 / 2.4 (158% - Critical!)
+
+Step 1: Find moveable projects in June
+├── XYZ Ltd (1.0) - Due: July 30 - only 6 weeks slack - NOT MOVEABLE
+├── DEF Ltd (1.0) - Due: October 31 - 4 months slack - MOVEABLE ✓
+└── GHI Ltd (0.8) - Due: November 30 - 5 months slack - MOVEABLE ✓
+
+Step 2: Move DEF Ltd (most slack) to August
+├── August before: 1.7 / 2.4 (71%)
+├── August after: 2.7 / 2.4 (113% - Amber, acceptable)
+└── DEF Ltd successfully moved
+
+Step 3: Recalculate June
+├── June after move: 1.8 / 2.4 (75% - Green!)
+└── Now under threshold - stop moving
+
+Step 4: Assign ABC Ltd to June
+├── June final: 2.8 / 2.4 (117% - Amber ✓)
+└── AUTO-ASSIGNED successfully
+
+Notifications:
+├── To DEF Ltd assignee: "DEF Ltd rescheduled from June to August"
+├── To ABC Ltd assignee: "ABC Ltd scheduled for June"
+└── Both logged in project chronology
+```
+
+### Safeguards Against Chaos
+
+1. **Maximum 3 moves per rebalance**: Prevents cascading disruption
+2. **30-day cool-off**: Projects can only be auto-moved once per month
+3. **Priority lock**: Important clients can be flagged as "unmoveable"
+4. **Notification trail**: All moves logged and staff notified immediately
+5. **Reject window**: Staff can reject an auto-move within 24 hours if problematic
+
+### New Fields for Auto-Rebalancing
+
+```typescript
+// Add to projects table
+schedulingLocked: boolean("scheduling_locked").default(false),
+// If true, project cannot be auto-moved by rebalancing
+
+lastAutoMovedAt: timestamp("last_auto_moved_at"),
+// Prevents ping-ponging - can't be moved again within 30 days
+
+autoMoveCount: integer("auto_move_count").default(0),
+// Tracks how many times this project has been auto-rescheduled
 ```
 
 ### Approval Workflow for Red Zone
