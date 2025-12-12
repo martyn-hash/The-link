@@ -7,7 +7,7 @@
  * Imports are directly from domain modules to avoid circular dependencies.
  */
 import { relations } from 'drizzle-orm';
-import { clients, people, clientPeople, clientChronology, clientPortalUsers, clientTags, clientTagAssignments, clientEmailAliases, clientDomainAllowlist, peopleTags, peopleTagAssignments } from './tables';
+import { clients, people, clientPeople, clientChronology, clientPortalUsers, clientTags, clientTagAssignments, clientEmailAliases, clientDomainAllowlist, peopleTags, peopleTagAssignments, clientNotes } from './tables';
 import { users } from '../users/tables';
 import { clientServices, clientServiceRoleAssignments } from '../services/tables';
 import { projects } from '../projects/tables';
@@ -23,6 +23,7 @@ export const clientsRelations = relations(clients, ({ many }) => ({
   clientTagAssignments: many(clientTagAssignments),
   clientEmailAliases: many(clientEmailAliases),
   clientDomainAllowlist: many(clientDomainAllowlist),
+  clientNotes: many(clientNotes),
 }));
 
 export const peopleRelations = relations(people, ({ many }) => ({
@@ -115,6 +116,21 @@ export const clientDomainAllowlistRelations = relations(clientDomainAllowlist, (
   }),
   createdByUser: one(users, {
     fields: [clientDomainAllowlist.createdBy],
+    references: [users.id],
+  }),
+}));
+
+export const clientNotesRelations = relations(clientNotes, ({ one }) => ({
+  client: one(clients, {
+    fields: [clientNotes.clientId],
+    references: [clients.id],
+  }),
+  project: one(projects, {
+    fields: [clientNotes.projectId],
+    references: [projects.id],
+  }),
+  createdByUser: one(users, {
+    fields: [clientNotes.createdByUserId],
     references: [users.id],
   }),
 }));

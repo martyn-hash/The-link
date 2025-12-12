@@ -13,6 +13,7 @@ import {
   clientEmailAliases,
   clientDomainAllowlist,
   companySettings,
+  clientNotes,
   nlacAuditLogs,
 } from './tables';
 
@@ -87,6 +88,17 @@ export const insertCompanySettingsSchema = createInsertSchema(companySettings).o
 });
 
 export const updateCompanySettingsSchema = insertCompanySettingsSchema.partial();
+
+export const insertClientNoteSchema = createInsertSchema(clientNotes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateClientNoteSchema = insertClientNoteSchema.partial().omit({
+  clientId: true,
+  createdByUserId: true,
+});
 
 export const insertNlacAuditLogSchema = createInsertSchema(nlacAuditLogs).omit({
   id: true,

@@ -44,6 +44,7 @@ export {
   clientChronology,
   clientEmailAliases,
   clientDomainAllowlist,
+  clientNotes,
 } from './clients/tables';
 
 // Services domain tables

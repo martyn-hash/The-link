@@ -36,6 +36,7 @@ import ProjectChronology from "@/components/project-chronology";
 import ProjectMessaging from "@/components/ProjectMessaging";
 import { QueriesTab } from "@/components/queries/QueriesTab";
 import ClientCommsPanel from "@/components/ClientCommsPanel";
+import { NotesTab } from "@/pages/client-detail/components/tabs";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SwipeableTabsWrapper } from "@/components/swipeable-tabs";
 import type { ProjectWithRelations, User } from "@shared/schema";
@@ -680,11 +681,12 @@ export default function ProjectDetail() {
       <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full" data-client-tabs="project">
           {/* Desktop Tabs - Centered */}
           <div className="hidden md:block mx-auto max-w-screen-2xl px-4 md:px-6 lg:px-8">
-            <TabsList className="grid w-full max-w-3xl grid-cols-4">
+            <TabsList className="grid w-full max-w-3xl grid-cols-5">
               <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
               <TabsTrigger value="messages" data-testid="tab-messages">Messages</TabsTrigger>
               <TabsTrigger value="comms" data-testid="tab-comms">Comms</TabsTrigger>
               <TabsTrigger value="queries" data-testid="tab-queries">Queries</TabsTrigger>
+              <TabsTrigger value="notes" data-testid="tab-notes">Notes</TabsTrigger>
             </TabsList>
           </div>
 
@@ -723,6 +725,14 @@ export default function ProjectDetail() {
               >
                 Queries
               </TabsTrigger>
+              <TabsTrigger 
+                value="notes" 
+                data-testid="tab-notes" 
+                className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0" 
+                style={{ width: '80vw' }}
+              >
+                Notes
+              </TabsTrigger>
             </TabsList>
           </div>
 
@@ -734,13 +744,14 @@ export default function ProjectDetail() {
                 {currentTab === "messages" && "Messages"}
                 {currentTab === "comms" && "Communications"}
                 {currentTab === "queries" && "Queries"}
+                {currentTab === "notes" && "Notes"}
               </h2>
             </div>
           )}
 
           {isMobile ? (
             <SwipeableTabsWrapper
-              tabs={["overview", "messages", "comms", "queries"]}
+              tabs={["overview", "messages", "comms", "queries", "notes"]}
               currentTab={currentTab}
               onTabChange={setCurrentTab}
               enabled={true}
@@ -886,6 +897,14 @@ export default function ProjectDetail() {
               clientName={project.client?.name}
             />
           </TabsContent>
+
+          <TabsContent value="notes" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
+            <NotesTab 
+              clientId={project.clientId}
+              projectId={project.id}
+              mode="project"
+            />
+          </TabsContent>
             </SwipeableTabsWrapper>
           ) : (
             <>
@@ -1022,6 +1041,14 @@ export default function ProjectDetail() {
                   clientPeople={clientPeople}
                   user={user}
                   clientName={project.client?.name}
+                />
+              </TabsContent>
+
+              <TabsContent value="notes" className="!max-w-none w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
+                <NotesTab 
+                  clientId={project.clientId}
+                  projectId={project.id}
+                  mode="project"
                 />
               </TabsContent>
             </>

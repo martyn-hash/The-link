@@ -11,7 +11,7 @@ import { IStorage as OriginalIStorage } from './base/IStorage.js';
 // Import new domain storage classes
 import { UserStorage } from './users/userStorage.js';
 import { UserActivityStorage } from './users/userActivityStorage.js';
-import { ClientStorage, CompaniesHouseStorage, SearchStorage } from './clients/index.js';
+import { ClientStorage, CompaniesHouseStorage, SearchStorage, ClientNotesStorage } from './clients/index.js';
 import { PeopleStorage, ClientPeopleStorage } from './people/index.js';
 import { 
   ProjectStorage, 
@@ -141,6 +141,7 @@ class StorageBase {
   public readonly clientStorage: ClientStorage;
   public readonly companiesHouseStorage: CompaniesHouseStorage;
   public readonly searchStorage: SearchStorage;
+  public readonly clientNotesStorage: ClientNotesStorage;
   public readonly peopleStorage: PeopleStorage;
   public readonly clientPeopleStorage: ClientPeopleStorage;
   public readonly projectStorage: ProjectStorage;
@@ -209,6 +210,7 @@ class StorageBase {
     this.clientStorage = new ClientStorage();
     this.companiesHouseStorage = new CompaniesHouseStorage();
     this.searchStorage = new SearchStorage();
+    this.clientNotesStorage = new ClientNotesStorage();
     
     // Initialize people domain storages
     this.peopleStorage = new PeopleStorage();

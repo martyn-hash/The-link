@@ -23,6 +23,7 @@ import {
   TasksTab,
   ServicesTab,
   ApprovalOverridesTab,
+  NotesTab,
 } from "./components/tabs";
 import { useClientData, useClientMutations, useCompanyConnections } from "./hooks";
 import { ClientHeader } from "./components/ClientHeader";
@@ -183,7 +184,7 @@ export default function ClientDetail() {
           />
 
           <SwipeableTabsWrapper
-            tabs={["overview", "services", "projects", "communications", "chronology", "documents", "tasks", "approvals", "risk", "qc"]}
+            tabs={["overview", "services", "projects", "communications", "chronology", "documents", "tasks", "notes", "approvals", "risk", "qc"]}
             currentTab={activeTab}
             onTabChange={setActiveTab}
             enabled={isMobile}
@@ -262,6 +263,14 @@ export default function ClientDetail() {
               taskInstancesLoading={taskInstancesLoading}
               isMobile={isMobile}
               onNewClientRequest={() => setIsNewRequestDialogOpen(true)}
+            />
+          </TabsContent>
+
+          <TabsContent value="notes" className="space-y-6 mt-6">
+            <NotesTab 
+              clientId={id!}
+              projects={clientProjects?.map((p: any) => ({ id: p.id, description: p.description }))}
+              mode="client"
             />
           </TabsContent>
 

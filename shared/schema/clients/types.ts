@@ -12,6 +12,7 @@ import {
   clientEmailAliases,
   clientDomainAllowlist,
   companySettings,
+  clientNotes,
   nlacAuditLogs,
 } from './tables';
 import {
@@ -28,6 +29,8 @@ import {
   insertClientDomainAllowlistSchema,
   insertCompanySettingsSchema,
   updateCompanySettingsSchema,
+  insertClientNoteSchema,
+  updateClientNoteSchema,
   insertNlacAuditLogSchema,
 } from './schemas';
 
@@ -67,6 +70,10 @@ export type InsertClientDomainAllowlist = z.infer<typeof insertClientDomainAllow
 export type CompanySettings = typeof companySettings.$inferSelect;
 export type InsertCompanySettings = z.infer<typeof insertCompanySettingsSchema>;
 export type UpdateCompanySettings = z.infer<typeof updateCompanySettingsSchema>;
+
+export type ClientNote = typeof clientNotes.$inferSelect;
+export type InsertClientNote = z.infer<typeof insertClientNoteSchema>;
+export type UpdateClientNote = z.infer<typeof updateClientNoteSchema>;
 
 export type NlacAuditLog = typeof nlacAuditLogs.$inferSelect;
 export type InsertNlacAuditLog = z.infer<typeof insertNlacAuditLogSchema>;

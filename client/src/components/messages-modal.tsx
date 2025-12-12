@@ -4,12 +4,13 @@ import {
   DialogContent,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { MessageSquare, Mail, HelpCircle } from "lucide-react";
+import { MessageSquare, Mail, HelpCircle, StickyNote } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import ProjectMessaging from "@/components/ProjectMessaging";
 import ClientCommsPanel from "@/components/ClientCommsPanel";
 import { QueriesTab } from "@/components/queries/QueriesTab";
+import { NotesTab } from "@/pages/client-detail/components/tabs";
 
 interface MessagesModalProps {
   projectId: string;
@@ -41,7 +42,7 @@ export function MessagesModal({
       >
         <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
           <div className="border-b px-6 pt-6 pb-0">
-            <TabsList className="grid w-full max-w-xl grid-cols-3">
+            <TabsList className="grid w-full max-w-2xl grid-cols-4">
               <TabsTrigger value="internal" className="gap-2" data-testid="tab-internal-messages">
                 <MessageSquare className="w-4 h-4" />
                 Internal Messages
@@ -53,6 +54,10 @@ export function MessagesModal({
               <TabsTrigger value="client" className="gap-2" data-testid="tab-client-comms">
                 <Mail className="w-4 h-4" />
                 Client Comms
+              </TabsTrigger>
+              <TabsTrigger value="notes" className="gap-2" data-testid="tab-notes">
+                <StickyNote className="w-4 h-4" />
+                Notes
               </TabsTrigger>
             </TabsList>
           </div>
@@ -80,6 +85,21 @@ export function MessagesModal({
               <ClientCommsPanel projectId={projectId} clientId={project.clientId} />
             )}
             {open && activeTab === "client" && !project?.clientId && (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                No client associated with this project
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="notes" className="flex-1 overflow-hidden m-0 p-6">
+            {open && activeTab === "notes" && project?.clientId && (
+              <NotesTab 
+                clientId={project.clientId}
+                projectId={projectId}
+                mode="project"
+              />
+            )}
+            {open && activeTab === "notes" && !project?.clientId && (
               <div className="flex items-center justify-center h-full text-muted-foreground">
                 No client associated with this project
               </div>

@@ -1,9 +1,10 @@
-import { ClientStorage, CompaniesHouseStorage, SearchStorage } from '../clients/index.js';
+import { ClientStorage, CompaniesHouseStorage, SearchStorage, ClientNotesStorage } from '../clients/index.js';
 
 export interface ClientsFacadeDeps {
   clientStorage: ClientStorage;
   companiesHouseStorage: CompaniesHouseStorage;
   searchStorage: SearchStorage;
+  clientNotesStorage: ClientNotesStorage;
 }
 
 type Constructor<T = {}> = new (...args: any[]) => T;
@@ -112,6 +113,30 @@ export function applyClientsFacade<TBase extends Constructor<ClientsFacadeDeps>>
 
     async superSearch(query: string, limit?: number) {
       return this.searchStorage.superSearch(query, limit);
+    }
+
+    async createClientNote(noteData: any) {
+      return this.clientNotesStorage.createClientNote(noteData);
+    }
+
+    async getClientNoteById(id: string) {
+      return this.clientNotesStorage.getClientNoteById(id);
+    }
+
+    async getClientNotesByClientId(clientId: string, filter?: 'all' | 'client-only' | string) {
+      return this.clientNotesStorage.getClientNotesByClientId(clientId, filter);
+    }
+
+    async getClientNotesByProjectId(projectId: string) {
+      return this.clientNotesStorage.getClientNotesByProjectId(projectId);
+    }
+
+    async updateClientNote(id: string, noteData: any) {
+      return this.clientNotesStorage.updateClientNote(id, noteData);
+    }
+
+    async deleteClientNote(id: string) {
+      return this.clientNotesStorage.deleteClientNote(id);
     }
   };
 }

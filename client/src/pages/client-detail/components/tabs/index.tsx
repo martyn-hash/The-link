@@ -6,3 +6,4 @@ export { OverviewTab } from './OverviewTab';
 export { TasksTab } from './TasksTab';
 export { ServicesTab } from './ServicesTab';
 export { ApprovalOverridesTab } from './ApprovalOverridesTab';
+export { NotesTab } from './NotesTab';

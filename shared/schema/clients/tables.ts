@@ -244,6 +244,22 @@ export const companySettings = pgTable("company_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+export const clientNotes = pgTable("client_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
+  projectId: varchar("project_id"),
+  title: varchar("title").notNull(),
+  content: text("content").notNull(),
+  attachments: jsonb("attachments"),
+  createdByUserId: varchar("created_by_user_id").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_client_notes_client_id").on(table.clientId),
+  index("idx_client_notes_project_id").on(table.projectId),
+  index("idx_client_notes_created_at").on(table.createdAt),
+]);
+
 export const nlacAuditLogs = pgTable("nlac_audit_logs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),

@@ -14,3 +14,4 @@
 export { ClientStorage } from './clientStorage.js';
 export { CompaniesHouseStorage } from './companiesHouseStorage.js';
 export { SearchStorage } from './searchStorage.js';
+export { ClientNotesStorage, type ClientNoteWithRelations } from './clientNotesStorage.js';
