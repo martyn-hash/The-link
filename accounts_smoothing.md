@@ -123,9 +123,9 @@ export const smoothingSnapshots = pgTable("smoothing_snapshots", {
 
 ---
 
-## The Pre-Work Stage Flow
+## The Two-Stage Pre-Work Flow
 
-When an annual accounts project is created, it follows this lifecycle:
+When an annual accounts project is created, it follows this lifecycle with **two distinct pre-work stages**:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -139,13 +139,23 @@ When an annual accounts project is created, it follows this lifecycle:
 │      │                                                                   │
 │      ▼                                                                   │
 │  ┌────────────────────────────────────────┐                             │
-│  │  DOCUMENT COLLECTION STAGE             │ ◄── 30-day holding period  │
-│  │  - Request bank statements             │                             │
-│  │  - Request invoices/receipts           │                             │
+│  │  STAGE 1: GATHER DOCUMENTS             │ ◄── Active chasing stage   │
+│  │  - Request bank statements             │     No time pressure yet   │
+│  │  - Request invoices/receipts           │     Client manager works   │
+│  │  - Chase outstanding items             │     to collect everything  │
 │  │  - Verify bookkeeping complete         │                             │
 │  └────────────────────────────────────────┘                             │
 │      │                                                                   │
-│      │ (30 days elapsed OR documents complete)                          │
+│      │ (Client manager confirms all docs received)                       │
+│      ▼                                                                   │
+│  ┌────────────────────────────────────────┐                             │
+│  │  STAGE 2: READY TO START               │ ◄── Holding bay / queue    │
+│  │  - All documents received              │     Waiting for scheduled  │
+│  │  - Work is queued                      │     slot to open           │
+│  │  - Nightly job checks if slot ready    │                             │
+│  └────────────────────────────────────────┘                             │
+│      │                                                                   │
+│      │ (Nightly scheduler: suggestedStartDate reached)                   │
 │      ▼                                                                   │
 │  ┌────────────────────────────────────────┐                             │
 │  │  MAIN WORK STAGES BEGIN                │ ◄── Scheduled month starts │
@@ -162,23 +172,125 @@ When an annual accounts project is created, it follows this lifecycle:
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
+### Key Distinction Between the Two Pre-Work Stages
+
+| Stage | Purpose | Trigger to Exit | Time Pressure |
+|-------|---------|-----------------|---------------|
+| **Gather Documents** | Actively chase client for records | Client manager manually moves when complete | Low - depends on client responsiveness |
+| **Ready to Start** | Queue waiting for scheduled slot | Nightly scheduler moves when date reached | None - system controlled |
+
 ### Stage Configuration for Smoothing
 
-Annual accounts project types should have a designated **"pre-work" stage** that:
-- Is the first stage in the workflow
-- Has a configurable duration (default 30 days)
-- Does not count towards "active work" capacity
-- Acts as a queue/buffer before main work begins
+Annual accounts project types should have designated **pre-work stages** that the system recognises:
 
-**New field on `kanbanStages` table:**
+**New fields on `kanbanStages` table:**
 
 ```typescript
-isPreWorkStage: boolean("is_pre_work_stage").default(false),
-// Marks this stage as the document collection/holding stage
+smoothingStageType: varchar("smoothing_stage_type"),
+// Values: 'gather_documents' | 'ready_to_start' | 'main_work' | null
+// Identifies the stage's role in the smoothing workflow
 
-preWorkDurationDays: integer("pre_work_duration_days"),
-// How long projects typically stay here before releasing
+isSchedulerControlled: boolean("is_scheduler_controlled").default(false),
+// If true, projects exit this stage via the nightly scheduler, not manually
 ```
+
+---
+
+## The Nightly Scheduling Process
+
+A scheduled job runs each night (e.g., 2:00 AM) to manage work release:
+
+```
+NIGHTLY SCHEDULER JOB
+
+1. FIND all projects WHERE:
+   - Current stage has smoothingStageType = 'ready_to_start'
+   - suggestedStartDate <= TODAY
+   - NOT archived AND NOT inactive
+
+2. FOR each project:
+   a. GET the next stage (first 'main_work' stage)
+   b. MOVE project to that stage
+   c. NOTIFY the assigned user: "ABC Ltd accounts is ready to start"
+   d. LOG the transition in project chronology
+
+3. FIND projects at risk (still in 'gather_documents' but running late):
+   - WHERE current stage has smoothingStageType = 'gather_documents'
+   - AND suggestedStartDate is within 14 days
+   - AND documents still outstanding
+   
+4. FOR each at-risk project:
+   a. FLAG project with warning indicator
+   b. NOTIFY client manager: "ABC Ltd docs still outstanding - scheduled start in 10 days"
+
+5. FIND critical projects (approaching due date):
+   - WHERE dueDate is within 30 days
+   - AND project not yet in main work stages
+   
+6. FOR each critical project:
+   a. ESCALATE to manager/partner
+   b. SEND urgent notification
+```
+
+### Scheduler Configuration
+
+**New table: `scheduler_config`**
+
+```typescript
+export const schedulerConfig = pgTable("scheduler_config", {
+  id: varchar("id").primaryKey(),
+  configKey: varchar("config_key").notNull().unique(),
+  configValue: jsonb("config_value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Example config entries:
+// { key: "scheduler_run_time", value: "02:00" }
+// { key: "at_risk_warning_days", value: 14 }
+// { key: "critical_escalation_days", value: 30 }
+```
+
+---
+
+## The Capacity Heatmap / Calendar View
+
+The capacity calendar displays **forward-looking scheduled work**:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Work Pipeline - Jane Smith                                    2025      │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  January          February          March            April              │
+│ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌──────────────┐    │
+│ │ ████████ 2.5 │ │ ██████ 2.0   │ │ ████████ 2.4 │ │ ██████████ 3.1│    │
+│ │              │ │              │ │              │ │          ⚠  │    │
+│ │ In Progress: │ │ In Progress: │ │ Scheduled:   │ │ Scheduled:   │    │
+│ │ • ABC Ltd    │ │ • DEF Co     │ │ • GHI Ltd    │ │ • JKL Co     │    │
+│ │ • MNO Ltd    │ │ • PQR Ltd    │ │ • STU Ltd    │ │ • VWX Ltd    │    │
+│ │              │ │              │ │              │ │ • YZ Ltd     │    │
+│ │ Ready:       │ │ Ready:       │ │ Ready:       │ │ • AAA Ltd    │    │
+│ │ • STU Ltd    │ │ • GHI Ltd    │ │ • JKL Co     │ │              │    │
+│ │              │ │              │ │ • VWX Ltd    │ │              │    │
+│ └──────────────┘ └──────────────┘ └──────────────┘ └──────────────┘    │
+│                                                                          │
+│ Legend: In Progress = main work stages | Ready = in 'Ready to Start'   │
+│         Target: 2.4/month | ⚠ = over 120% capacity                      │
+│                                                                          │
+│ ┌─────────────────────────────────────────────────────────────────────┐ │
+│ │ Gathering Documents (not yet scheduled):                            │ │
+│ │ • BBB Ltd (Year End: Dec 24) - awaiting bank statements            │ │
+│ │ • CCC Ltd (Year End: Nov 24) - awaiting purchase invoices ⚠ LATE   │ │
+│ └─────────────────────────────────────────────────────────────────────┘ │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+This gives visibility into:
+- **What's being worked on now** (in main stages)
+- **What's queued and when it will arrive** (in Ready to Start)
+- **What's still being chased** (in Gather Documents)
+- **What's at risk** (late document collection)
 
 ---
 
@@ -341,7 +453,7 @@ A calendar view showing workload distribution:
 
 ### 3. Project Timeline View
 
-Within a project, show the scheduled timeline:
+Within a project, show the scheduled timeline with the two-stage pre-work flow:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -350,21 +462,33 @@ Within a project, show the scheduled timeline:
 │                                                              │
 │ Year End: 31 Dec 2024                                        │
 │ Due Date: 30 Sep 2025                                        │
-│ Scheduled Month: April 2025                                  │
+│ Scheduled Month: April 2025  ← Based on capacity analysis   │
 │ Weight: 1.5 (Moderate complexity)                            │
+│                                                              │
+│ Current Stage: [Gather Documents] ──────────────────────────│
 │                                                              │
 │ Timeline:                                                    │
 │ ─────────────────────────────────────────────────────────── │
-│ Jan     Feb      Mar       Apr       May    ...    Sep      │
-│  │       │        │    ┌────────┐     │              │      │
-│  ●───────●────────●────┤  WORK  ├─────●──────────────│      │
-│  │    Doc Coll    │    └────────┘     │              │      │
-│  │    Stage       │                   │              │      │
-│ Year            Docs              Target           Due      │
-│ End           Complete                                       │
+│ Jan        Feb        Mar         Apr        May    Sep     │
+│  │          │          │     ┌──────────┐    │       │      │
+│  ●══════════●══════════●─────┤   WORK   ├────●───────│      │
+│  │  Gather  │  Ready   │     └──────────┘    │       │      │
+│  │  Docs    │  to      │                     │       │      │
+│  │          │  Start   │                     │       │      │
+│ Year      Move to    Nightly            Target     Due      │
+│ End       queue      scheduler                               │
+│           when       releases                                │
+│           complete   to work                                 │
+│                                                              │
+│ ┌─────────────────────────────────────────────────────────┐ │
+│ │ Flexible window: Feb 2025 - Sep 2025                    │ │
+│ │ April selected: lowest capacity month for Jane Smith    │ │
+│ └─────────────────────────────────────────────────────────┘ │
 │                                                              │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+The scheduled month is calculated at project creation based on capacity, but the actual timing is flexible within the window. Work could theoretically start anywhere from 2 months after year end up until the due date, but the system picks the optimal month to balance workload.
 
 ### 4. New Client Onboarding
 
