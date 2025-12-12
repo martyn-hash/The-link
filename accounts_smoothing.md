@@ -74,17 +74,31 @@ complexityWeight: decimal("complexity_weight", { precision: 3, scale: 2 }).defau
 
 ```typescript
 // Add to projects table
+
+// Schedule status: tracks where in the scheduling lifecycle
+scheduleStatus: varchar("schedule_status"),
+// Values: 'provisional' | 'confirmed' | 'in_progress' | 'completed' | 'delayed'
+
+// Provisional scheduling (assigned at project creation)
+provisionalScheduledMonth: varchar("provisional_scheduled_month"),
+// Format: "YYYY-MM" - best guess based on capacity at creation time
+
+// Confirmed scheduling (assigned when docs received)
+confirmedScheduledMonth: varchar("confirmed_scheduled_month"),
+// Format: "YYYY-MM" - actual month based on real-time capacity when docs arrive
+
 suggestedStartDate: timestamp("suggested_start_date"),
-// Calculated date when main work should begin
-
-scheduledMonth: varchar("scheduled_month"),
-// Format: "YYYY-MM" - the month this work is allocated to
-
-schedulingLocked: boolean("scheduling_locked").default(true),
-// Once assigned, the month is locked (Option A approach)
+// Calculated date when main work should begin (set on confirmation)
 
 schedulingNotes: text("scheduling_notes"),
 // Auto-generated notes explaining why this month was chosen
+
+// Delay tracking
+originalScheduledMonth: varchar("original_scheduled_month"),
+// If rescheduled, stores the original month for reporting
+
+delayReason: varchar("delay_reason"),
+// If delayed: 'documents_late' | 'capacity_full' | 'client_request' | 'other'
 ```
 
 ### New Table: `capacity_targets`
@@ -296,12 +310,34 @@ This gives visibility into:
 
 ## The Smoothing Algorithm
 
-### On Project Creation
+### Key Concept: Provisional vs Confirmed Scheduling
+
+The scheduled month is not fixed at project creation. Instead:
+
+- **Provisional Schedule**: Assigned at project creation (best guess based on current capacity)
+- **Confirmed Schedule**: Recalculated when documents are received (based on real-time capacity)
+
+This handles the reality that clients don't always send documents on time.
+
+```
+SCHEDULING LIFECYCLE:
+
+Project Created ────► Provisional Schedule: April
+                      (based on capacity at creation time)
+                      
+Waiting for docs...   April passes, docs still not received
+                      
+Docs finally arrive ─► RECALCULATE optimal month
+(now June)            ─► Confirmed Schedule: July
+                      (based on current capacity, July has most space)
+```
+
+### On Project Creation (Provisional Schedule)
 
 When an annual accounts project is created:
 
 ```
-FUNCTION assignOptimalMonth(project, clientManager):
+FUNCTION assignProvisionalMonth(project, clientManager):
     
     1. GET yearEnd from client
     2. CALCULATE dueDate (yearEnd + statutory period, e.g., 9 months)
@@ -311,44 +347,127 @@ FUNCTION assignOptimalMonth(project, clientManager):
     5. GET clientWeight from client.complexityWeight
     
     6. FOR each month in range(earliestStart, latestTarget):
-        a. GET currentLoad = sum of weights for clientManager in this month
-        b. GET targetCapacity = clientManager's target for this month
-        c. CALCULATE utilizationIfAdded = (currentLoad + clientWeight) / targetCapacity
-        d. STORE month with its utilization score
+        a. GET currentLoad = sum of CONFIRMED weights for this month
+        b. GET provisionalLoad = sum of PROVISIONAL weights for this month
+        c. GET targetCapacity = clientManager's target for this month
+        d. CALCULATE utilizationIfAdded = (currentLoad + provisionalLoad + clientWeight) / targetCapacity
+        e. STORE month with its utilization score
     
     7. SELECT month with lowest utilizationIfAdded
        (prioritise months closer to yearEnd if scores are equal)
     
-    8. SET project.scheduledMonth = selectedMonth
-    9. SET project.targetDeliveryDate = end of selectedMonth
-    10. SET project.suggestedStartDate = start of selectedMonth - preWorkDays
+    8. SET project.provisionalScheduledMonth = selectedMonth
+    9. SET project.scheduleStatus = 'provisional'
     
     RETURN project
 ```
 
-### Capacity Calculation
+### On Document Receipt (Confirmed Schedule)
+
+When a project moves from "Gather Documents" to "Ready to Start":
+
+```
+FUNCTION confirmScheduledMonth(project, clientManager):
+    
+    1. GET today's date
+    2. GET dueDate from project
+    3. CALCULATE earliestStart = MAX(today, original earliestStart)
+       // Can't schedule in the past!
+    4. CALCULATE latestTarget (dueDate - safety buffer)
+    
+    5. GET clientWeight from client.complexityWeight
+    
+    6. FOR each month in range(earliestStart, latestTarget):
+        a. GET confirmedLoad = sum of CONFIRMED weights only
+        b. GET targetCapacity = clientManager's target for this month
+        c. CALCULATE utilizationIfAdded = (confirmedLoad + clientWeight) / targetCapacity
+        d. STORE month with its utilization score
+    
+    7. SELECT month with lowest utilizationIfAdded
+       (prioritise earlier months if scores are equal - get it done sooner)
+    
+    8. SET project.confirmedScheduledMonth = selectedMonth
+    9. SET project.scheduleStatus = 'confirmed'
+    10. SET project.suggestedStartDate = start of selectedMonth
+    
+    RETURN project
+```
+
+### Why This Works for Late Documents
+
+**Scenario:** 5 clients all send documents in the same month (June) when they were scheduled for different months.
+
+```
+Client A: Provisional April → Docs arrive June → Confirmed June (first in queue)
+Client B: Provisional March → Docs arrive June → Confirmed June (still space)
+Client C: Provisional May → Docs arrive June → Confirmed July (June now full)
+Client D: Provisional April → Docs arrive June → Confirmed July (joins queue)
+Client E: Provisional May → Docs arrive June → Confirmed August (July filling up)
+```
+
+Each client gets slotted into the **next available capacity** at the moment their documents arrive. The system automatically spreads the work.
+
+### Capacity Calculation (Dual View)
 
 ```
 FUNCTION calculateMonthlyCapacity(userId, yearMonth):
     
     1. GET all active projects WHERE:
        - clientManagerId = userId OR projectOwnerId = userId
-       - scheduledMonth = yearMonth
        - NOT archived AND NOT inactive
     
-    2. FOR each project:
-       a. GET client.complexityWeight
-       b. ADD to totalWeight
+    2. SEPARATE into:
+       a. CONFIRMED: scheduleStatus = 'confirmed' AND confirmedScheduledMonth = yearMonth
+       b. PROVISIONAL: scheduleStatus = 'provisional' AND provisionalScheduledMonth = yearMonth
     
-    3. GET capacityTarget for this user/month (or use default)
+    3. CALCULATE:
+       - confirmedWeight = sum of weights for confirmed projects
+       - provisionalWeight = sum of weights for provisional projects
+       - totalWeight = confirmedWeight + provisionalWeight
     
-    4. RETURN {
-         projectCount: count of projects,
-         totalWeight: sum of weights,
+    4. GET targetCapacity for this user/month (or use default)
+    
+    5. RETURN {
+         confirmedCount: count of confirmed projects,
+         confirmedWeight: sum of confirmed weights,
+         provisionalCount: count of provisional projects,
+         provisionalWeight: sum of provisional weights,
+         totalWeight: confirmedWeight + provisionalWeight,
          targetCapacity: from capacityTargets or calculated default,
-         utilizationPercent: (totalWeight / targetCapacity) * 100
+         confirmedUtilization: (confirmedWeight / targetCapacity) * 100,
+         totalUtilization: (totalWeight / targetCapacity) * 100
        }
 ```
+
+### Dashboard Display: Confirmed vs Provisional
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Capacity View - Jane Smith                                              │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│ April 2025                                                              │
+│ ┌─────────────────────────────────────────────────────────────────────┐ │
+│ │ ████████████░░░░░░░░ │ 2.5 confirmed + 1.5 provisional = 4.0 total │ │
+│ │ ▲ confirmed  ▲ provisional                                         │ │
+│ └─────────────────────────────────────────────────────────────────────┘ │
+│ Target: 2.4 │ Confirmed: 104% ✓ │ If all provisional arrive: 167% ⚠   │
+│                                                                          │
+│ Confirmed work (docs received):                                         │
+│ • ABC Ltd (1.5) - in Ready to Start queue                              │
+│ • DEF Ltd (1.0) - in Ready to Start queue                              │
+│                                                                          │
+│ Provisional (awaiting docs - may slip):                                 │
+│ • GHI Ltd (1.0) - docs requested 3 weeks ago                           │
+│ • JKL Ltd (0.5) - docs requested 1 week ago                            │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+This tells the client manager:
+- **Confirmed work**: This IS coming in April - plan for it
+- **Provisional work**: This MIGHT come in April, or might slip to later months
+- **Realistic planning**: Focus on confirmed utilization, treat provisional as "possible upside"
 
 ### Default Target Calculation
 
