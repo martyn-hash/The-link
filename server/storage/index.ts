@@ -90,6 +90,7 @@ import { WebhookStorage } from './webhooks/index.js';
 import { QboStorage, QcStorage } from './qbo/index.js';
 import { QueryStorage, QueryTokenStorage, ScheduledReminderStorage } from './queries/index.js';
 import { AIInteractionStorage } from './ai-interactions/index.js';
+import { AuditChangelogStorage } from './audit/index.js';
 
 // Import facade mixins and their dependency interfaces
 import { applyUsersFacade, type UsersFacadeDeps } from './facade/users.facade.js';
@@ -200,6 +201,7 @@ class StorageBase {
   public readonly queryTokenStorage: QueryTokenStorage;
   public readonly scheduledReminderStorage: ScheduledReminderStorage;
   public readonly aiInteractionStorage: AIInteractionStorage;
+  public readonly auditChangelogStorage: AuditChangelogStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -312,6 +314,9 @@ class StorageBase {
     
     // Initialize AI interactions storage
     this.aiInteractionStorage = new AIInteractionStorage();
+    
+    // Initialize audit changelog storage
+    this.auditChangelogStorage = new AuditChangelogStorage();
     
     // Register cross-domain helpers
     this.registerClientHelpers();

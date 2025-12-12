@@ -177,3 +177,8 @@ export {
   aiInsights,
   aiInteractionStatusEnum,
 } from './ai-interactions/tables';
+
+// Audit domain tables
+export {
+  auditChangelog,
+} from './audit/tables';

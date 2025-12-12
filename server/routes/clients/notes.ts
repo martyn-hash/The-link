@@ -111,6 +111,33 @@ export function registerClientNotesRoutes(
     }
   );
 
+  app.get(
+    "/api/notes/:noteId/changelog",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: any, res: any) => {
+      try {
+        const paramValidation = validateParams(noteIdSchema, req.params);
+        if (!paramValidation.success) {
+          return res.status(400).json({
+            message: "Invalid path parameters",
+            errors: paramValidation.errors,
+          });
+        }
+
+        const { noteId } = paramValidation.data;
+        const changelog = await (storage as any).auditChangelogStorage.getChangelogByEntity('client_note', noteId);
+        res.json(changelog);
+      } catch (error) {
+        console.error(
+          "Error fetching note changelog:",
+          error instanceof Error ? error.message : error
+        );
+        res.status(500).json({ message: "Failed to fetch note changelog" });
+      }
+    }
+  );
+
   app.post(
     "/api/clients/:clientId/notes",
     isAuthenticated,
@@ -147,6 +174,22 @@ export function registerClientNotesRoutes(
         }
 
         const note = await storage.createClientNote(validationResult.data);
+
+        if (note.projectId) {
+          try {
+            await storage.projectChronologyStorage.createChronologyEntry({
+              projectId: note.projectId,
+              entryType: 'note',
+              fromStatus: null,
+              toStatus: 'no_change',
+              changedById: userId,
+              notes: `Note added: ${note.title}`,
+            });
+          } catch (chronologyError) {
+            console.error("Error creating chronology entry for note:", chronologyError);
+          }
+        }
+
         res.status(201).json(note);
       } catch (error) {
         console.error(
@@ -173,6 +216,16 @@ export function registerClientNotesRoutes(
         }
 
         const { noteId } = paramValidation.data;
+        const userId = req.user?.effectiveUserId || req.user?.id;
+
+        if (!userId) {
+          return res.status(401).json({ message: "User ID not found" });
+        }
+
+        const existingNote = await storage.getClientNoteById(noteId);
+        if (!existingNote) {
+          return res.status(404).json({ message: "Note not found" });
+        }
 
         const validationResult = updateClientNoteSchema.safeParse(req.body);
         if (!validationResult.success) {
@@ -182,10 +235,37 @@ export function registerClientNotesRoutes(
           });
         }
 
+        const beforeValue = {
+          title: existingNote.title,
+          content: existingNote.content,
+          attachments: existingNote.attachments,
+        };
+
         const note = await storage.updateClientNote(
           noteId,
           validationResult.data
         );
+
+        const afterValue = {
+          title: note.title,
+          content: note.content,
+          attachments: note.attachments,
+        };
+
+        try {
+          await (storage as any).auditChangelogStorage.createChangelogEntry({
+            entityType: 'client_note',
+            entityId: noteId,
+            changeType: 'edit',
+            changedByUserId: userId,
+            beforeValue,
+            afterValue,
+            changeDescription: `Note "${existingNote.title}" was edited`,
+          });
+        } catch (changelogError) {
+          console.error("Error creating changelog entry:", changelogError);
+        }
+
         res.json(note);
       } catch (error) {
         console.error(
