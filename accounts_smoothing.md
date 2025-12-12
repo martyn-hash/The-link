@@ -44,31 +44,51 @@ Not all jobs are equal. A weight score (0.5 to 2.0) indicates relative complexit
 | 2.0 | High complexity | Groups, consolidations, complex transactions |
 
 ### Capacity Formula
-For a client manager with N clients:
+For a service owner (the person responsible for delivering a service to clients):
 
 ```
-Monthly Target = (Sum of all client weights) / 12
+Monthly Target = (Sum of complexity weights for owned services) / 12
 ```
 
 **Example:**
-- Client manager has 24 clients
-- Total weight: 28.5 (mix of complexities)
+- Jane owns annual accounts for 24 clients
+- Total weight from client_services: 28.5 (mix of complexities)
 - Monthly target: 28.5 / 12 = **2.4 weighted units per month**
 
 This means months should aim for ~2.4 weighted units of work, not exactly 2.4 jobs.
+
+**Note:** Only services with `enableComplexityWeighting = TRUE` count toward this target. VAT returns, payroll, etc. have fixed deadlines and are excluded from smoothing calculations.
 
 ---
 
 ## Data Model Changes
 
-### New Fields on `clients` Table
+### New Fields on `services` Table
 
 ```typescript
-// Add to clients table
+// Add to services table
+enableComplexityWeighting: boolean("enable_complexity_weighting").default(false),
+// TRUE for services that should be smoothed (annual accounts)
+// FALSE for fixed-deadline services (VAT returns, payroll)
+```
+
+### New Fields on `client_services` Table (Mapping)
+
+```typescript
+// Add to client_services table (the client-service mapping)
+serviceOwnerId: varchar("service_owner_id").references(() => users.id),
+// Who owns THIS service for THIS client (may differ from client manager)
+
 complexityWeight: decimal("complexity_weight", { precision: 3, scale: 2 }).default("1.00"),
 // Range: 0.50 to 2.00
-// Determines how much capacity this client consumes relative to others
+// Weight for THIS specific client-service combination
+// Only relevant when service.enableComplexityWeighting = TRUE
 ```
+
+**Why at service level?**
+- Same client might have simple accounts (0.5) but complex payroll (1.5)
+- Different staff may own different services for the same client
+- Only "smoothable" services (annual accounts) participate in capacity planning
 
 ### New Fields on `projects` Table
 
@@ -476,11 +496,28 @@ If no explicit capacity target is set:
 ```
 FUNCTION calculateDefaultTarget(userId):
     
-    1. GET all clients WHERE managerId = userId AND active
-    2. SUM all client.complexityWeight
+    1. GET all client_services 
+       WHERE serviceOwnerId = userId
+       AND service.enableComplexityWeighting = TRUE
+       AND client.status = 'active'
+    
+    2. SUM all client_services.complexityWeight
+    
     3. DIVIDE by 12
     
     RETURN monthlyTarget
+```
+
+**Example calculation:**
+```
+Jane's owned services (where enableComplexityWeighting = TRUE):
+├── ABC Ltd Annual Accounts: 1.5
+├── DEF Ltd Annual Accounts: 1.0
+├── GHI Ltd Annual Accounts: 0.5
+├── ... (21 more clients)
+└── Total: 28.5
+
+Monthly target: 28.5 / 12 = 2.375 ≈ 2.4 weighted units
 ```
 
 ---
