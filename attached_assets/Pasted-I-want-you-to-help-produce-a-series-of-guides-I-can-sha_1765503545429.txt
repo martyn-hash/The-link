@@ -1,0 +1,57 @@
+I want you to help produce a series of guides I can share with my team that will help them understand some of the key features of the app. 
+
+To achieve this, I am going to give you some Headline Features, and some of the topics I want you to cover and for each headline feature, I want you to create a support_doc_<Headline-Feature-Name>.md
+
+You should review the full codebase for each headline feature and propose any other topics we should include for the users to understand more clearly how the system works. I have completed the first one (queries feature) with as many examples of the topics as I could think of - this is the level of detail I am looking for from you. 
+
+Your writing should use short sentences of simple language. The audience is office workers, who have no technical knowledge. Your guides should be friendly, authoritative and dense with information, tips and detail about how to use the system. 
+
+Where a screenshot would help, you should print the text 'Insert Screenshot of <Detail of what the screenshot should be> here.'
+
+1.	Queries Feature
+	Uploading queries
+	Scrolling & deleting from preview of imported queries
+	Auto-Group
+	Filtering queries by money in / money out
+	Filtering queries by group
+	Searching with text for queries
+	Send to Client
+	Selecting the client email
+	Adding top and bottom text to emails
+	Choosing your reminder schedule
+	What happens for the client
+	What does 'Notifu' do
+	Answering queries as an internal user
+	Marking queries as resolved
+	Cancelling all scheduled reminders
+	Adding or Removing additional scheduled reminders
+	How the system learns from the client's queries (auto-suggest)
+
+2. Logging Communications in Projects
+	Emails
+	Calls
+	SMS
+	Add communications note
+
+3. Using Notes in Projects & How they differ from Communications
+	How notes are evergreen content
+
+4. Projects view Tips & Tricks
+	Use of filters - general
+	Finding overdue projects
+	Lists
+	Kanbans
+	Pivots
+	Calendars
+	Dashboards
+	Saving views
+	Updating current views
+	Adding and Removing columns
+	Changing pagination
+	
+
+
+Once you've reviewed the codebase, please suggest any topics I've missed. And I am looking for one .md document per Headline feature. 
+
+One final note, without being too obvious about it, your content should be positive about the system, and mention how the features will save the user time, or raise the quality of our work, or help get what we want from the client quicker etc. 
+ 
