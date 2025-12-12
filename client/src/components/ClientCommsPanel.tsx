@@ -16,15 +16,19 @@ import {
   Mail,
   MessageCircle,
   Phone,
+  PhoneCall,
   User,
   Send,
   Eye,
   Clock,
   FileText,
+  Plus,
 } from 'lucide-react';
 import { SMSDialog } from '@/pages/client-detail/components/communications/dialogs/SMSDialog';
 import { EmailDialog } from '@/pages/client-detail/components/communications/dialogs/EmailDialog';
 import { ViewCommunicationDialog } from '@/pages/client-detail/components/communications/dialogs/ViewCommunicationDialog';
+import { CallDialog } from '@/pages/client-detail/components/communications/dialogs/CallDialog';
+import { AddCommunicationDialog } from '@/pages/client-detail/components/communications/dialogs/AddCommunicationDialog';
 import type { PersonOption, CommunicationWithRelations } from '@/pages/client-detail/components/communications/types';
 import type { User as UserType } from '@shared/schema';
 
@@ -61,8 +65,16 @@ export default function ClientCommsPanel({ projectId, clientId }: ClientCommsPan
   const { user } = useAuth();
   const [isSendingSMS, setIsSendingSMS] = useState(false);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [isCallingPerson, setIsCallingPerson] = useState(false);
+  const [isAddingCommunication, setIsAddingCommunication] = useState(false);
   const [selectedCommunication, setSelectedCommunication] = useState<CommunicationWithRelations | null>(null);
   const [isViewingCommunication, setIsViewingCommunication] = useState(false);
+
+  const { data: featureFlags } = useQuery<{ ringCentralLive: boolean; appIsLive: boolean }>({
+    queryKey: ['/api/feature-flags'],
+  });
+
+  const showMakeCall = featureFlags?.ringCentralLive ?? false;
 
   const { data: clientData } = useQuery<{ name: string }>({
     queryKey: ['/api/clients', clientId],
@@ -198,6 +210,17 @@ export default function ClientCommsPanel({ projectId, clientId }: ClientCommsPan
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Client Communications</h2>
           <div className="flex gap-2">
+            {showMakeCall && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsCallingPerson(true)}
+                data-testid="button-make-call-project"
+              >
+                <PhoneCall className="w-4 h-4 mr-1" />
+                Make Call
+              </Button>
+            )}
             <Button
               size="sm"
               variant="outline"
@@ -210,12 +233,21 @@ export default function ClientCommsPanel({ projectId, clientId }: ClientCommsPan
             </Button>
             <Button
               size="sm"
+              variant="outline"
               onClick={() => setIsSendingEmail(true)}
               disabled={!hasEmailContacts}
               data-testid="button-send-email-project"
             >
               <Mail className="w-4 h-4 mr-1" />
               Email
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => setIsAddingCommunication(true)}
+              data-testid="button-add-communication-project"
+            >
+              <Plus className="w-4 h-4 mr-1" />
+              Add Communication
             </Button>
           </div>
         </div>
@@ -341,6 +373,21 @@ export default function ClientCommsPanel({ projectId, clientId }: ClientCommsPan
           setIsViewingCommunication(false);
           setSelectedCommunication(null);
         }}
+      />
+
+      <CallDialog
+        clientId={clientId}
+        projectId={projectId}
+        isOpen={isCallingPerson}
+        onClose={() => setIsCallingPerson(false)}
+      />
+
+      <AddCommunicationDialog
+        clientId={clientId}
+        projectId={projectId}
+        clientPeople={clientPeople || []}
+        isOpen={isAddingCommunication}
+        onClose={() => setIsAddingCommunication(false)}
       />
     </div>
   );
