@@ -179,11 +179,11 @@ export function registerClientNotesRoutes(
           try {
             await storage.projectChronologyStorage.createChronologyEntry({
               projectId: note.projectId,
-              entryType: 'note',
+              entryType: 'Note',
               fromStatus: null,
               toStatus: 'no_change',
               changedById: userId,
-              notes: `Note added: ${note.title}`,
+              notes: JSON.stringify({ noteId: note.id, title: note.title }),
             });
           } catch (chronologyError) {
             console.error("Error creating chronology entry for note:", chronologyError);

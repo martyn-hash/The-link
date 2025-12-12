@@ -13,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Eye, MessageSquare, CheckCircle, Mail, Phone, FileText, StickyNote, MessageCircle, Filter, Clock, User as UserIcon, ArrowRight, Paperclip, Download, ExternalLink, UserCog, PauseCircle, PlayCircle } from "lucide-react";
 import DOMPurify from "isomorphic-dompurify";
+import { ViewNoteModal } from "@/pages/client-detail/components/modals/ViewNoteModal";
 
 interface ProjectChronologyProps {
   project: ProjectWithRelations;
@@ -65,6 +66,8 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
   const [selectedProgressNote, setSelectedProgressNote] = useState<any | null>(null);
   const [isViewingStageChange, setIsViewingStageChange] = useState(false);
   const [isViewingProgressNote, setIsViewingProgressNote] = useState(false);
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null);
+  const [isViewingNote, setIsViewingNote] = useState(false);
 
   // Helper function to format time duration
   const formatDuration = (totalMinutes: number | null) => {
@@ -103,6 +106,12 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
   const { data: communications } = useQuery<any[]>({
     queryKey: [`/api/projects/${project.id}/communications`],
     enabled: !!project.id,
+  });
+
+  // Fetch selected note for modal
+  const { data: selectedNote } = useQuery<any>({
+    queryKey: ['/api/notes', selectedNoteId],
+    enabled: !!selectedNoteId,
   });
 
   // Fetch client message threads and filter for this project
@@ -476,8 +485,22 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
       case 'message_thread':
         setLocation(`/messages?thread=${entry.rawData.id}`);
         break;
-      case 'phone_call':
       case 'note':
+        // Check if this is a client note with noteId in JSON format
+        try {
+          const noteData = JSON.parse(entry.rawData.notes);
+          if (noteData.noteId) {
+            setSelectedNoteId(noteData.noteId);
+            setIsViewingNote(true);
+            break;
+          }
+        } catch {
+          // Fallback to progress note modal for old format
+        }
+        setSelectedProgressNote(entry.rawData);
+        setIsViewingProgressNote(true);
+        break;
+      case 'phone_call':
       case 'sms_sent':
       case 'sms_received':
       case 'email_sent':
@@ -1118,6 +1141,17 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Client Note Modal */}
+      <ViewNoteModal
+        note={selectedNote || null}
+        isOpen={isViewingNote}
+        onClose={() => {
+          setIsViewingNote(false);
+          setSelectedNoteId(null);
+        }}
+        clientId={project.clientId}
+      />
     </div>
   );
 }
