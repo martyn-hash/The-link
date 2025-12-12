@@ -116,7 +116,7 @@ export function ProjectProgressNotes({ projectId, clientId, clientPeople = [] }:
   // Restore email draft when dialog opens
   useEffect(() => {
     if (isSendingEmail && emailDraft.hasDraft && !emailDraftRestoredRef.current) {
-      if (emailDraft.savedContent) {
+      if (emailDraft.savedContent && emailDraft.savedContent !== '[subject-only]') {
         setEmailContent(emailDraft.savedContent);
       }
       if (emailDraft.additionalFields?.subject) {
@@ -149,9 +149,11 @@ export function ProjectProgressNotes({ projectId, clientId, clientPeople = [] }:
   }, [isSendingSMS, smsDraft.hasDraft, smsDraft.savedContent, smsDraft.additionalFields, smsForm]);
 
   // Save email draft as user types
+  // Use subject as fallback content when body is empty to ensure draft is saved
   useEffect(() => {
     if (isSendingEmail && (emailContent || emailSubject)) {
-      emailDraft.saveDraft(emailContent, { subject: emailSubject, personId: emailPersonId });
+      const contentToSave = emailContent || `[subject-only]`;
+      emailDraft.saveDraft(contentToSave, { subject: emailSubject, personId: emailPersonId });
     }
   }, [isSendingEmail, emailContent, emailSubject, emailPersonId, emailDraft]);
 
