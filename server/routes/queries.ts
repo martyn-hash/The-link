@@ -1402,9 +1402,9 @@ ${emailSignoff}`;
           console.error("[Query Access] Failed to create chronology entry:", chronologyError);
         }
         
-        // Send notifications to opted-in staff
+        // Send notifications to opted-in staff (only if not already sent)
         if (tokenData.notifyOnResponseUserIds && tokenData.notifyOnResponseUserIds.length > 0) {
-          console.log(`[Query Access] Sending open notification to ${tokenData.notifyOnResponseUserIds.length} user(s)`);
+          console.log(`[Query Access] Preparing open notification for ${tokenData.notifyOnResponseUserIds.length} user(s)`);
           
           try {
             const baseUrl = process.env.APP_URL || 'https://thelink.replit.app';
@@ -1418,32 +1418,46 @@ ${emailSignoff}`;
             const fromEmail = sgResult.fromEmail;
             
             if (sgClient && fromEmail) {
-              for (const userId of tokenData.notifyOnResponseUserIds) {
-                try {
-                  const user = await storage.getUser(userId);
-                  if (!user?.email) continue;
-                  
-                  const subject = `Client Opened Queries: ${projectName}`;
-                  const html = `
-                    <p>Hi ${user.firstName || 'Team Member'},</p>
-                    <p>The client${clientName ? ` (${clientName})` : ''} has just opened their bookkeeping queries for <strong>${projectName}</strong>.</p>
-                    <p>You'll receive another notification when they submit their responses.</p>
-                    <p><a href="${viewUrl}">View Project</a></p>
-                    <p>Best regards,<br/>The Link</p>
-                  `;
-                  
-                  await sgClient.send({
-                    to: user.email,
-                    from: fromEmail,
-                    subject,
-                    html,
-                  });
-                  
-                  console.log(`[Query Access] Sent open notification to ${user.email}`);
-                } catch (userNotifyError) {
-                  console.error(`[Query Access] Failed to notify user ${userId}:`, userNotifyError);
+              // Check if notification was already sent (atomic check)
+              const { wasAlreadySent } = await storage.markQueryOpenNotificationSent(tokenData.id);
+              
+              if (wasAlreadySent) {
+                console.log(`[Query Access] Open notification already sent for token ${tokenData.id}, skipping`);
+              } else {
+                let emailsSentSuccessfully = 0;
+                
+                for (const userId of tokenData.notifyOnResponseUserIds) {
+                  try {
+                    const user = await storage.getUser(userId);
+                    if (!user?.email) continue;
+                    
+                    const subject = `Client Opened Queries: ${projectName}`;
+                    const html = `
+                      <p>Hi ${user.firstName || 'Team Member'},</p>
+                      <p>The client${clientName ? ` (${clientName})` : ''} has just opened their bookkeeping queries for <strong>${projectName}</strong>.</p>
+                      <p>You'll receive another notification when they submit their responses.</p>
+                      <p><a href="${viewUrl}">View Project</a></p>
+                      <p>Best regards,<br/>The Link</p>
+                    `;
+                    
+                    await sgClient.send({
+                      to: user.email,
+                      from: fromEmail,
+                      subject,
+                      html,
+                    });
+                    
+                    emailsSentSuccessfully++;
+                    console.log(`[Query Access] Sent open notification to ${user.email}`);
+                  } catch (userNotifyError) {
+                    console.error(`[Query Access] Failed to notify user ${userId}:`, userNotifyError);
+                  }
                 }
+                
+                console.log(`[Query Access] Open notifications complete: ${emailsSentSuccessfully} sent successfully`);
               }
+            } else {
+              console.log(`[Query Access] SendGrid not configured, skipping open notifications`);
             }
           } catch (notifyError) {
             console.error("[Query Access] Failed to send open notifications:", notifyError);
@@ -1883,12 +1897,12 @@ ${emailSignoff}`;
         console.error("[Query Submit] Failed to create chronology entry:", chronologyError);
       }
 
-      // Send notifications to assigned users if configured
+      // Send notifications to assigned users if configured (only once per token)
       let notificationStats = { requested: 0, sent: 0, failed: 0, skipped: 0 };
       
       if (tokenData.notifyOnResponseUserIds && tokenData.notifyOnResponseUserIds.length > 0) {
         notificationStats.requested = tokenData.notifyOnResponseUserIds.length;
-        console.log(`[Query Notification] Processing ${notificationStats.requested} notification(s) for token ${tokenData.id}`);
+        console.log(`[Query Notification] Preparing ${notificationStats.requested} notification(s) for token ${tokenData.id}`);
         console.log(`[Query Notification] Project: ${projectName}, Client: ${clientName || 'Unknown'}`);
         
         try {
@@ -1913,43 +1927,54 @@ ${emailSignoff}`;
           }
           
           if (sgClient && fromEmail) {
-            for (const userId of tokenData.notifyOnResponseUserIds) {
-              try {
-                const user = await storage.getUser(userId);
-                if (!user) {
-                  console.warn(`[Query Notification] User ${userId} not found, skipping`);
-                  notificationStats.skipped++;
-                  continue;
+            // Only mark as sent AFTER we've confirmed SendGrid is available
+            const { wasAlreadySent } = await storage.markQuerySubmitNotificationSent(tokenData.id);
+            
+            if (wasAlreadySent) {
+              console.log(`[Query Notification] Submit notification already sent for token ${tokenData.id}, skipping`);
+              notificationStats.skipped = notificationStats.requested;
+            } else {
+              for (const userId of tokenData.notifyOnResponseUserIds) {
+                try {
+                  const user = await storage.getUser(userId);
+                  if (!user) {
+                    console.warn(`[Query Notification] User ${userId} not found, skipping`);
+                    notificationStats.skipped++;
+                    continue;
+                  }
+                  
+                  if (!user.email) {
+                    console.warn(`[Query Notification] User ${userId} has no email, skipping`);
+                    notificationStats.skipped++;
+                    continue;
+                  }
+                  
+                  const subject = `Client Responded: ${projectName}`;
+                  const html = `
+                    <p>Hi ${user.firstName || 'Team Member'},</p>
+                    <p>The client has submitted their responses to ${updatedCount} ${updatedCount === 1 ? 'query' : 'queries'} for <strong>${projectName}</strong>${clientName ? ` (${clientName})` : ''}.</p>
+                    <p><a href="${viewUrl}">View Responses</a></p>
+                    <p>Best regards,<br/>The Link</p>
+                  `;
+                  
+                  await sgClient.send({
+                    to: user.email,
+                    from: fromEmail,
+                    subject,
+                    html,
+                  });
+                  
+                  console.log(`[Query Notification] Sent response notification to ${user.email}`);
+                  notificationStats.sent++;
+                } catch (userNotifyError) {
+                  console.error(`[Query Notification] Failed to notify user ${userId}:`, userNotifyError);
+                  notificationStats.failed++;
                 }
-                
-                if (!user.email) {
-                  console.warn(`[Query Notification] User ${userId} has no email, skipping`);
-                  notificationStats.skipped++;
-                  continue;
-                }
-                
-                const subject = `Client Responded: ${projectName}`;
-                const html = `
-                  <p>Hi ${user.firstName || 'Team Member'},</p>
-                  <p>The client has submitted their responses to ${updatedCount} ${updatedCount === 1 ? 'query' : 'queries'} for <strong>${projectName}</strong>${clientName ? ` (${clientName})` : ''}.</p>
-                  <p><a href="${viewUrl}">View Responses</a></p>
-                  <p>Best regards,<br/>The Link</p>
-                `;
-                
-                await sgClient.send({
-                  to: user.email,
-                  from: fromEmail,
-                  subject,
-                  html,
-                });
-                
-                console.log(`[Query Notification] Sent response notification to ${user.email}`);
-                notificationStats.sent++;
-              } catch (userNotifyError) {
-                console.error(`[Query Notification] Failed to notify user ${userId}:`, userNotifyError);
-                notificationStats.failed++;
               }
             }
+          } else {
+            console.log(`[Query Notification] SendGrid not available, notifications will retry on next attempt`);
+            notificationStats.skipped = notificationStats.requested;
           }
           
           console.log(`[Query Notification] Completed: ${notificationStats.sent} sent, ${notificationStats.failed} failed, ${notificationStats.skipped} skipped`);

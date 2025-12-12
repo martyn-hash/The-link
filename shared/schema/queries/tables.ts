@@ -73,6 +73,8 @@ export const queryResponseTokens = pgTable("query_response_tokens", {
   expiresAt: timestamp("expires_at").notNull(),
   accessedAt: timestamp("accessed_at"),
   completedAt: timestamp("completed_at"),
+  openNotificationSentAt: timestamp("open_notification_sent_at"),
+  submitNotificationSentAt: timestamp("submit_notification_sent_at"),
   createdById: varchar("created_by_id").notNull().references(() => users.id),
   recipientEmail: varchar("recipient_email", { length: 255 }).notNull(),
   recipientName: varchar("recipient_name", { length: 255 }),

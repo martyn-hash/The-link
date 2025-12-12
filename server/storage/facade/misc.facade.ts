@@ -407,6 +407,14 @@ export function applyMiscFacade<TBase extends Constructor<MiscFacadeDeps>>(Base:
       return this.queryTokenStorage.markTokenCompleted(tokenId);
     }
 
+    async markQueryOpenNotificationSent(tokenId: string) {
+      return this.queryTokenStorage.markOpenNotificationSent(tokenId);
+    }
+
+    async markQuerySubmitNotificationSent(tokenId: string) {
+      return this.queryTokenStorage.markSubmitNotificationSent(tokenId);
+    }
+
     async updateQueryResponseToken(tokenId: string, updates: { recipientEmail?: string; recipientName?: string | null }) {
       return this.queryTokenStorage.updateToken(tokenId, updates);
     }

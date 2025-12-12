@@ -98,6 +98,36 @@ export class QueryTokenStorage extends BaseStorage {
       .where(eq(queryResponseTokens.id, tokenId));
   }
 
+  async markOpenNotificationSent(tokenId: string): Promise<{ wasAlreadySent: boolean }> {
+    const result = await db
+      .update(queryResponseTokens)
+      .set({ openNotificationSentAt: new Date() })
+      .where(
+        and(
+          eq(queryResponseTokens.id, tokenId),
+          sql`${queryResponseTokens.openNotificationSentAt} IS NULL`
+        )
+      )
+      .returning({ id: queryResponseTokens.id });
+    
+    return { wasAlreadySent: result.length === 0 };
+  }
+
+  async markSubmitNotificationSent(tokenId: string): Promise<{ wasAlreadySent: boolean }> {
+    const result = await db
+      .update(queryResponseTokens)
+      .set({ submitNotificationSentAt: new Date() })
+      .where(
+        and(
+          eq(queryResponseTokens.id, tokenId),
+          sql`${queryResponseTokens.submitNotificationSentAt} IS NULL`
+        )
+      )
+      .returning({ id: queryResponseTokens.id });
+    
+    return { wasAlreadySent: result.length === 0 };
+  }
+
   async updateToken(tokenId: string, updates: { recipientEmail?: string; recipientName?: string | null }): Promise<QueryResponseToken | undefined> {
     const [result] = await db
       .update(queryResponseTokens)
