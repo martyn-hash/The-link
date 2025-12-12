@@ -203,8 +203,11 @@ export default function ClientDetail() {
               isLinkingCompany={linkToCompanyMutation.isPending}
               isUnlinkingCompany={unlinkFromCompanyMutation.isPending}
               clientServices={clientServices}
+              companyServices={companyServicesData}
               servicesLoading={servicesLoading}
               servicesError={!!servicesError}
+              companyServicesLoading={companyServicesLoading}
+              companyServicesError={companyServicesError}
               peopleServices={peopleServices}
               peopleServicesLoading={peopleServicesLoading}
               peopleServicesError={!!peopleServicesError}

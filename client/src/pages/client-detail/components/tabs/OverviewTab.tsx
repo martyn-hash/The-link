@@ -1,14 +1,16 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Building2, MapPin, Mail, ExternalLink, Plus, X, Users } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Building2, MapPin, Mail, ExternalLink, Plus, X, Users, Settings, FileText } from "lucide-react";
 import TagManager from "@/components/tag-manager";
 import { RelatedPersonRow } from "../people";
-import { ClientServicesList, PersonalServicesList } from "./services";
+import { ClientServicesList, PersonalServicesList, ServicesDataSubTab } from "./services";
 import type { Client, Person, Service, User, PeopleService } from "@shared/schema";
-import type { ClientPersonWithPerson, EnhancedClientService } from "../../utils/types";
+import type { ClientPersonWithPerson, EnhancedClientService, ClientServiceWithService } from "../../utils/types";
 
 interface CompanyConnection {
   client: Client;
@@ -27,6 +29,119 @@ interface ServiceWithRoles {
 
 type PeopleServiceWithRelations = PeopleService & { person: Person; service: Service; serviceOwner?: User };
 
+interface ServicesSectionProps {
+  client: Client;
+  clientId: string;
+  companyConnections: CompanyConnection[];
+  clientServices: EnhancedClientService[] | undefined;
+  companyServices: ClientServiceWithService[] | undefined;
+  servicesLoading: boolean;
+  servicesError: boolean;
+  companyServicesLoading: boolean;
+  companyServicesError: boolean;
+  peopleServices: PeopleServiceWithRelations[] | undefined;
+  peopleServicesLoading: boolean;
+  peopleServicesError: boolean;
+  servicesWithRoles: ServiceWithRoles[] | undefined;
+  expandedPersonalServiceId: string | null;
+  onExpandedPersonalServiceChange: (value: string | null) => void;
+  onEditPersonalService: (serviceId: string) => void;
+  onRefetchServices: () => void;
+  onRefetchPeopleServices: () => void;
+  isMobile: boolean;
+}
+
+function ServicesSection({
+  client,
+  clientId,
+  companyConnections,
+  clientServices,
+  companyServices,
+  servicesLoading,
+  servicesError,
+  companyServicesLoading,
+  companyServicesError,
+  peopleServices,
+  peopleServicesLoading,
+  peopleServicesError,
+  servicesWithRoles,
+  expandedPersonalServiceId,
+  onExpandedPersonalServiceChange,
+  onEditPersonalService,
+  onRefetchServices,
+  onRefetchPeopleServices,
+  isMobile,
+}: ServicesSectionProps) {
+  const [activeSubTab, setActiveSubTab] = useState("list");
+
+  const clientTypeLower = client?.clientType?.toLowerCase();
+  const isCompany = clientTypeLower === 'company' || 
+                    (client?.clientType === null && client?.companyNumber);
+  const isIndividualWithConnections = clientTypeLower === 'individual' && (companyConnections?.length ?? 0) > 0;
+  const showClientServices = isCompany || isIndividualWithConnections;
+
+  const displayServices = isIndividualWithConnections ? companyServices : clientServices;
+  const displayLoading = isIndividualWithConnections ? companyServicesLoading : servicesLoading;
+  const displayError = isIndividualWithConnections ? companyServicesError : servicesError;
+
+  return (
+    <Card>
+      <CardContent className="pt-6">
+        <Tabs value={activeSubTab} onValueChange={setActiveSubTab} className="w-full">
+          <TabsList className="mb-4">
+            <TabsTrigger value="list" className="flex items-center gap-2" data-testid="tab-services-list">
+              <Settings className="h-4 w-4" />
+              Services
+            </TabsTrigger>
+            <TabsTrigger value="data" className="flex items-center gap-2" data-testid="tab-services-data">
+              <FileText className="h-4 w-4" />
+              Service Data
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="list" className="space-y-6">
+            {showClientServices && (
+              <ClientServicesList
+                clientId={clientId}
+                clientType={client.clientType as 'company' | 'individual' | null | undefined}
+                companyNumber={client.companyNumber}
+                services={displayServices}
+                isLoading={displayLoading}
+                isError={displayError}
+                isMobile={isMobile}
+                onRefetch={onRefetchServices}
+              />
+            )}
+
+            <PersonalServicesList
+              clientId={clientId}
+              clientType={client.clientType as 'company' | 'individual' | null | undefined}
+              services={peopleServices}
+              isLoading={peopleServicesLoading}
+              isError={peopleServicesError}
+              servicesWithRoles={servicesWithRoles}
+              expandedServiceId={expandedPersonalServiceId}
+              onExpandedChange={onExpandedPersonalServiceChange}
+              onEditService={onEditPersonalService}
+              onRefetch={onRefetchPeopleServices}
+            />
+          </TabsContent>
+
+          <TabsContent value="data">
+            <ServicesDataSubTab
+              clientId={clientId}
+              clientServices={displayServices}
+              isLoading={displayLoading}
+              isError={displayError}
+              onRefetch={onRefetchServices}
+            />
+          </TabsContent>
+        </Tabs>
+      </CardContent>
+    </Card>
+  );
+}
+
 interface OverviewTabProps {
   client: Client;
   clientId: string;
@@ -42,8 +157,11 @@ interface OverviewTabProps {
   isLinkingCompany: boolean;
   isUnlinkingCompany: boolean;
   clientServices: EnhancedClientService[] | undefined;
+  companyServices: ClientServiceWithService[] | undefined;
   servicesLoading: boolean;
   servicesError: boolean;
+  companyServicesLoading: boolean;
+  companyServicesError: boolean;
   peopleServices: PeopleServiceWithRelations[] | undefined;
   peopleServicesLoading: boolean;
   peopleServicesError: boolean;
@@ -71,8 +189,11 @@ export function OverviewTab({
   isLinkingCompany,
   isUnlinkingCompany,
   clientServices,
+  companyServices,
   servicesLoading,
   servicesError,
+  companyServicesLoading,
+  companyServicesError,
   peopleServices,
   peopleServicesLoading,
   peopleServicesError,
@@ -92,8 +213,6 @@ export function OverviewTab({
     client.registeredCountry
   ].filter(Boolean).length > 0;
 
-  const isCompanyClient = client.clientType?.toLowerCase() !== 'individual';
-
   return (
     <div className="space-y-8">
       {/* Company Details with Related People - 35/65 Split */}
@@ -105,12 +224,25 @@ export function OverviewTab({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 lg:grid-cols-[35%_1fr] gap-6">
-            {/* Left Side - Company Details (35%) */}
+          <div className="grid grid-cols-1 lg:grid-cols-[30%_1fr] gap-6">
+            {/* Left Side - Company Details (30%) */}
             <div className="space-y-4">
-              <div className="flex items-center gap-2 mb-4">
-                <MapPin className="w-5 h-5 text-primary" />
-                <h3 className="text-lg font-semibold">Registered Office</h3>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-primary" />
+                  <h3 className="text-lg font-semibold">Registered Office</h3>
+                </div>
+                {client.companyNumber && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => window.open(`https://find-and-update.company-information.service.gov.uk/company/${client.companyNumber}`, '_blank')}
+                    data-testid="button-view-companies-house"
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Companies House
+                  </Button>
+                )}
               </div>
               
               {hasAddress ? (
@@ -166,22 +298,9 @@ export function OverviewTab({
                 />
               </div>
 
-              {client.companyNumber && (
-                <div className="pt-4 border-t">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => window.open(`https://find-and-update.company-information.service.gov.uk/company/${client.companyNumber}`, '_blank')}
-                    data-testid="button-view-companies-house"
-                  >
-                    <ExternalLink className="w-4 h-4 mr-2" />
-                    View on Companies House
-                  </Button>
-                </div>
-              )}
             </div>
 
-            {/* Right Side - Related People (65%) */}
+            {/* Right Side - Related People (70%) */}
             <div className="space-y-4 lg:border-l lg:pl-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -222,8 +341,6 @@ export function OverviewTab({
                           <TableHead>Name</TableHead>
                           <TableHead>Primary Email</TableHead>
                           <TableHead>Primary Phone</TableHead>
-                          <TableHead className="text-center">App Access</TableHead>
-                          <TableHead className="text-center">Push</TableHead>
                           <TableHead>Date of Birth</TableHead>
                           <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
@@ -262,36 +379,28 @@ export function OverviewTab({
         </CardContent>
       </Card>
 
-      {/* Services Section */}
-      <div className="space-y-6">
-        {/* Client Services - show for company clients */}
-        {isCompanyClient && (
-          <ClientServicesList
-            clientId={clientId}
-            clientType={client.clientType as 'company' | 'individual' | null | undefined}
-            companyNumber={client.companyNumber}
-            services={clientServices}
-            isLoading={servicesLoading}
-            isError={servicesError}
-            isMobile={isMobile}
-            onRefetch={onRefetchServices}
-          />
-        )}
-
-        {/* Personal Services */}
-        <PersonalServicesList
-          clientId={clientId}
-          clientType={client.clientType as 'company' | 'individual' | null | undefined}
-          services={peopleServices}
-          isLoading={peopleServicesLoading}
-          isError={peopleServicesError}
-          servicesWithRoles={servicesWithRoles}
-          expandedServiceId={expandedPersonalServiceId}
-          onExpandedChange={onExpandedPersonalServiceChange}
-          onEditService={onEditPersonalService}
-          onRefetch={onRefetchPeopleServices}
-        />
-      </div>
+      {/* Services Section with Sub-tabs */}
+      <ServicesSection
+        client={client}
+        clientId={clientId}
+        companyConnections={companyConnections}
+        clientServices={clientServices}
+        companyServices={companyServices}
+        servicesLoading={servicesLoading}
+        servicesError={servicesError}
+        companyServicesLoading={companyServicesLoading}
+        companyServicesError={companyServicesError}
+        peopleServices={peopleServices}
+        peopleServicesLoading={peopleServicesLoading}
+        peopleServicesError={peopleServicesError}
+        servicesWithRoles={servicesWithRoles}
+        expandedPersonalServiceId={expandedPersonalServiceId}
+        onExpandedPersonalServiceChange={onExpandedPersonalServiceChange}
+        onEditPersonalService={onEditPersonalService}
+        onRefetchServices={onRefetchServices}
+        onRefetchPeopleServices={onRefetchPeopleServices}
+        isMobile={isMobile}
+      />
 
       {/* Company Connections Section - Only show for individual clients */}
       {client.clientType?.toLowerCase() === 'individual' && (
