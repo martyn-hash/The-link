@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { TiptapEditor } from "@/components/TiptapEditor";
 import {
   Dialog,
@@ -26,7 +27,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useDraftAutoSave } from "@/hooks/useDraftAutoSave";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
-import { Paperclip, X, Loader2, FileText, Image as ImageIcon, Save } from "lucide-react";
+import { Paperclip, X, Loader2, FileText, Image as ImageIcon, Save, Sparkles, Mic, ChevronDown, ChevronUp } from "lucide-react";
+import { AudioRecorder } from "@/components/AudioRecorder";
 
 const addNoteSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -61,6 +63,9 @@ export function AddNoteDialog({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [draftRestored, setDraftRestored] = useState(false);
+  const [showAiPrompt, setShowAiPrompt] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [isProcessingAi, setIsProcessingAi] = useState(false);
 
   const draftKey = projectId ? `note-${clientId}-${projectId}` : `note-${clientId}`;
   const { savedContent, additionalFields, hasDraft, saveDraft, clearDraft, lastSavedAt } = useDraftAutoSave({
@@ -134,6 +139,46 @@ export function AddNoteDialog({
     form.reset();
     setAttachments([]);
     setDraftRestored(false);
+  };
+
+  const handleAudioResult = (result: { content: string; subject?: string; transcription?: string }) => {
+    if (result.content) {
+      form.setValue('content', result.content);
+    }
+  };
+
+  const handleAiPromptSubmit = async () => {
+    if (!aiPrompt.trim()) return;
+    
+    setIsProcessingAi(true);
+    try {
+      const response = await fetch('/api/ai/text/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ prompt: aiPrompt }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to process prompt');
+      }
+
+      const result = await response.json();
+      if (result.content) {
+        form.setValue('content', result.content);
+        setAiPrompt('');
+        setShowAiPrompt(false);
+        toast({
+          title: "Note created",
+          description: "AI has generated your note content.",
+        });
+      }
+    } catch (error: any) {
+      showFriendlyError({ error: error.message || 'Failed to process your prompt. Please try again.' });
+    } finally {
+      setIsProcessingAi(false);
+    }
   };
 
   const onSubmit = (values: AddNoteFormValues) => {
@@ -212,7 +257,11 @@ export function AddNoteDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent 
+        className="max-w-2xl max-h-[90vh] overflow-y-auto"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle>Add Note</DialogTitle>
@@ -265,6 +314,66 @@ export function AddNoteDialog({
                 </FormItem>
               )}
             />
+
+            {/* AI Assist Section */}
+            <div className="space-y-2 border rounded-lg p-3 bg-muted/30">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary" />
+                  AI Assist
+                </span>
+                <div className="flex items-center gap-2">
+                  <AudioRecorder 
+                    onResult={handleAudioResult}
+                    mode="notes"
+                    disabled={isProcessingAi}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowAiPrompt(!showAiPrompt)}
+                    data-testid="button-toggle-ai-prompt"
+                  >
+                    {showAiPrompt ? <ChevronUp className="h-4 w-4 mr-1" /> : <ChevronDown className="h-4 w-4 mr-1" />}
+                    Write Prompt
+                  </Button>
+                </div>
+              </div>
+              
+              {showAiPrompt && (
+                <div className="space-y-2">
+                  <Textarea
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    placeholder="Describe what you want the AI to write..."
+                    className="min-h-[80px]"
+                    data-testid="textarea-ai-prompt"
+                  />
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleAiPromptSubmit}
+                      disabled={!aiPrompt.trim() || isProcessingAi}
+                      data-testid="button-submit-ai-prompt"
+                    >
+                      {isProcessingAi ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4 mr-2" />
+                          Generate Note
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">

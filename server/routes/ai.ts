@@ -159,6 +159,42 @@ export function registerAIRoutes(
     }
   );
 
+  // Text-based note generation from prompt
+  router.post(
+    "/text/notes",
+    isAuthenticated,
+    resolveEffectiveUser,
+    async (req: Request, res: Response) => {
+      try {
+        const { prompt } = req.body;
+        if (!prompt) {
+          return res.status(400).json({ error: "No prompt provided" });
+        }
+
+        console.log("[AI] Processing text prompt for notes, length:", prompt.length);
+
+        // Get system prompt from company settings
+        const settings = await storage.getCompanySettings();
+        const systemPrompt = settings?.aiSystemPromptNotes || 
+          "You are a professional assistant that converts user prompts into clear, well-structured notes. Create a concise summary with bullet points for key information. Focus on action items, important details, and main points discussed.";
+
+        // Process with GPT
+        const result = await processWithGPT(prompt, systemPrompt, false);
+        console.log("[AI] Text notes processing complete");
+
+        res.json({
+          success: true,
+          content: result.content,
+        });
+      } catch (error: any) {
+        console.error("[AI] Error processing text for notes:", error);
+        res.status(500).json({
+          error: error.message || "Failed to process prompt",
+        });
+      }
+    }
+  );
+
   router.post(
     "/audio/email",
     isAuthenticated,
