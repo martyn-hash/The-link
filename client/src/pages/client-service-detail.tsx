@@ -732,10 +732,12 @@ export default function ClientServiceDetail() {
       </Dialog>
 
       {/* Mobile Search Modal */}
-      <SuperSearch 
-        isOpen={mobileSearchOpen} 
-        onOpenChange={setMobileSearchOpen}
-      />
+      <div className="md:hidden">
+        <SuperSearch 
+          isOpen={mobileSearchOpen} 
+          onOpenChange={setMobileSearchOpen}
+        />
+      </div>
 
       <BottomNav onSearchClick={() => setMobileSearchOpen(true)} />
     </div>

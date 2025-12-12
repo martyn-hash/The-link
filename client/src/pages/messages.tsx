@@ -1312,10 +1312,12 @@ export default function Messages() {
       <BottomNav user={user} onSearchClick={() => setMobileSearchOpen(true)} />
 
       {/* Mobile Search Modal */}
-      <SuperSearch
-        isOpen={mobileSearchOpen}
-        onOpenChange={setMobileSearchOpen}
-      />
+      <div className="md:hidden">
+        <SuperSearch
+          isOpen={mobileSearchOpen}
+          onOpenChange={setMobileSearchOpen}
+        />
+      </div>
 
       {/* Mobile Thread View Dialog - Disabled for client tab (client threads not fully implemented yet) */}
       {isMobile && selectedThreadId && activeTab !== 'client' && selectedThread && (
