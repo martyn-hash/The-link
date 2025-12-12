@@ -125,7 +125,7 @@ export function registerClientNotesRoutes(
         }
 
         const { clientId } = paramValidation.data;
-        const userId = req.effectiveUserId || req.session?.user?.id;
+        const userId = req.user?.effectiveUserId || req.user?.id;
 
         if (!userId) {
           return res.status(401).json({ message: "User ID not found" });
