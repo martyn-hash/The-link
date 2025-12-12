@@ -44,6 +44,7 @@ const initialCallState: CallState = {
 
 export function CallDialog({ 
   clientId, 
+  projectId,
   personId, 
   phoneNumber,
   personName,
@@ -64,6 +65,7 @@ export function CallDialog({
   const callStartTimeRef = useRef<number | null>(null);
   const callContextRef = useRef<{
     clientId: string | undefined;
+    projectId: string | undefined;
     personId: string | undefined;
     phoneNumber: string;
     sessionId: string;
@@ -240,6 +242,7 @@ export function CallDialog({
     setCallState(prev => ({ ...prev, status: 'disconnected' }));
     
     const logClientId = ctx?.clientId || clientId;
+    const logProjectId = ctx?.projectId || projectId;
     const logPersonId = ctx?.personId || selectedPersonId;
     const logPhoneNumber = ctx?.phoneNumber;
     const logSessionId = ctx?.sessionId;
@@ -251,6 +254,7 @@ export function CallDialog({
         try {
           await apiRequest('POST', '/api/ringcentral/log-call', {
             clientId: logClientId,
+            projectId: logProjectId || undefined,
             personId: logPersonId || undefined,
             phoneNumber: logPhoneNumber,
             direction: 'outbound',
@@ -264,6 +268,9 @@ export function CallDialog({
           });
           
           queryClient.invalidateQueries({ queryKey: ['/api/communications/client', logClientId] });
+          if (logProjectId) {
+            queryClient.invalidateQueries({ queryKey: [`/api/projects/${logProjectId}/communications`] });
+          }
         } catch (error: any) {
           console.error('[RingCentral] Error logging call:', error);
         }
@@ -300,6 +307,7 @@ export function CallDialog({
       
       callContextRef.current = {
         clientId,
+        projectId,
         personId: selectedPersonId,
         phoneNumber: number,
         sessionId,

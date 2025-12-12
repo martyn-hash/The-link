@@ -42,7 +42,8 @@ const addCommunicationSchema = insertCommunicationSchema.extend({
 type AddCommunicationFormValues = z.infer<typeof addCommunicationSchema>;
 
 export function AddCommunicationDialog({ 
-  clientId, 
+  clientId,
+  projectId,
   clientPeople,
   isOpen, 
   onClose,
@@ -54,6 +55,7 @@ export function AddCommunicationDialog({
     resolver: zodResolver(addCommunicationSchema),
     defaultValues: {
       clientId,
+      projectId: projectId || undefined,
       type: 'note' as const,
       subject: '',
       content: '',
@@ -66,6 +68,9 @@ export function AddCommunicationDialog({
     mutationFn: (data: any) => apiRequest('POST', `/api/communications`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/communications/client', clientId] });
+      if (projectId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/communications`] });
+      }
       onClose();
       form.reset();
       toast({
@@ -82,6 +87,7 @@ export function AddCommunicationDialog({
   const onSubmit = (values: AddCommunicationFormValues) => {
     const formData = {
       ...values,
+      projectId: projectId || null,
       personId: values.personId === 'none' ? null : values.personId
     };
     addCommunicationMutation.mutate(formData);

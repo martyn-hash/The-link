@@ -438,7 +438,7 @@ export function registerIntegrationRoutes(
         });
       }
 
-      const { clientId, personId, phoneNumber, direction, duration, sessionId, recordingId } = validation.data;
+      const { clientId, projectId, personId, phoneNumber, direction, duration, sessionId, recordingId } = validation.data;
 
       const callTime = new Date();
       
@@ -448,6 +448,7 @@ export function registerIntegrationRoutes(
       // Create communication entry
       const communication = await storage.createCommunication({
         clientId,
+        projectId: projectId || null,
         personId: personId || null,
         userId: effectiveUserId,
         type: 'phone_call',

@@ -164,6 +164,7 @@ export interface ViewCommunicationDialogProps {
 
 export interface CallDialogProps {
   clientId?: string;
+  projectId?: string;
   personId?: string;
   phoneNumber?: string;
   personName?: string;

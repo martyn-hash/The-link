@@ -100,6 +100,7 @@ export const ringCentralAuthenticateSchema = z.object({
 
 export const ringCentralLogCallSchema = z.object({
   clientId: z.string().min(1, "Client ID is required"),
+  projectId: z.string().optional(),
   personId: z.string().optional(),
   phoneNumber: z.string().min(1, "Phone number is required"),
   direction: z.enum(['inbound', 'outbound']),
