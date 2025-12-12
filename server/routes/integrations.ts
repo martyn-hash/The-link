@@ -438,12 +438,22 @@ export function registerIntegrationRoutes(
         });
       }
 
-      const { clientId, projectId, personId, phoneNumber, direction, duration, sessionId, recordingId } = validation.data;
+      const { clientId, projectId, personId, phoneNumber, direction, duration, sessionId, recordingId, callDescription } = validation.data;
 
       const callTime = new Date();
       
       // Determine if we should schedule transcription (only for calls > 5 seconds)
       const shouldTranscribe = duration && duration > 5;
+      
+      // Build subject line - include description if provided (for non-person calls like HMRC)
+      const subjectLine = callDescription 
+        ? `Phone Call - ${callDescription} (${phoneNumber})`
+        : `Phone Call - ${phoneNumber}`;
+      
+      // Build content with description if provided
+      const contentLine = callDescription
+        ? `${direction === 'outbound' ? 'Outbound' : 'Inbound'} call to ${callDescription} (${phoneNumber}). Duration: ${duration || 0}s`
+        : `${direction === 'outbound' ? 'Outbound' : 'Inbound'} call to ${phoneNumber}. Duration: ${duration || 0}s`;
       
       // Create communication entry
       const communication = await storage.createCommunication({
@@ -452,8 +462,8 @@ export function registerIntegrationRoutes(
         personId: personId || null,
         userId: effectiveUserId,
         type: 'phone_call',
-        content: `${direction === 'outbound' ? 'Outbound' : 'Inbound'} call to ${phoneNumber}. Duration: ${duration || 0}s`,
-        subject: `Phone Call - ${phoneNumber}`,
+        content: contentLine,
+        subject: subjectLine,
         actualContactTime: callTime,
         metadata: {
           integration: 'ringcentral',
@@ -462,6 +472,7 @@ export function registerIntegrationRoutes(
           direction,
           duration,
           phoneNumber,
+          callDescription: callDescription || undefined,
           transcriptionStatus: shouldTranscribe ? 'pending' : 'not_available'
         }
       });

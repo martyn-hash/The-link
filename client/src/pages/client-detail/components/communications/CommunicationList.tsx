@@ -46,6 +46,12 @@ function getCallRecipient(item: CommunicationTimelineItem): string | null {
   }
   
   const metadata = comm.metadata as Record<string, any> | null;
+  
+  // If there's a call description (e.g., "HMRC"), show it with the phone number
+  if (metadata?.callDescription) {
+    return `${metadata.callDescription} (${metadata.phoneNumber || 'Unknown'})`;
+  }
+  
   if (metadata?.phoneNumber) {
     return metadata.phoneNumber;
   }

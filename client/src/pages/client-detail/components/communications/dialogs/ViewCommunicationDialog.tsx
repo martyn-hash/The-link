@@ -40,6 +40,7 @@ export function ViewCommunicationDialog({
   const duration = metadata?.duration;
   const phoneNumber = metadata?.phoneNumber;
   const direction = metadata?.direction;
+  const callDescription = metadata?.callDescription;
 
   if (isPhoneCall) {
     return (
@@ -80,7 +81,11 @@ export function ViewCommunicationDialog({
                   <div className="mt-1 flex items-center gap-2">
                     <UserIcon className="w-4 h-4 text-muted-foreground" />
                     <span className="text-sm" data-testid={`text-modal-person-${communication.id}`}>
-                      {communication.person ? formatPersonName(communication.person.fullName) : '—'}
+                      {communication.person 
+                        ? formatPersonName(communication.person.fullName) 
+                        : callDescription 
+                          ? callDescription 
+                          : '—'}
                     </span>
                   </div>
                 </div>

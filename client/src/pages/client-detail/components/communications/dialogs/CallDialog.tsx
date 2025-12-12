@@ -14,6 +14,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Phone, PhoneOff, Mic, MicOff, Pause, Play, Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -52,8 +55,13 @@ export function CallDialog({
   onClose
 }: CallDialogProps) {
   const { toast } = useToast();
+  const [callMode, setCallMode] = useState<'person' | 'other'>('person');
   const [selectedPersonId, setSelectedPersonId] = useState<string | undefined>(personId);
   const [selectedPhoneNumber, setSelectedPhoneNumber] = useState<string | undefined>(phoneNumber);
+  
+  // Other number mode state
+  const [otherPhoneNumber, setOtherPhoneNumber] = useState<string>('');
+  const [callDescription, setCallDescription] = useState<string>('');
   
   const [phoneStatus, setPhoneStatus] = useState<'not_ready' | 'initializing' | 'ready' | 'error'>('not_ready');
   const [callState, setCallState] = useState<CallState>(initialCallState);
@@ -69,6 +77,7 @@ export function CallDialog({
     personId: string | undefined;
     phoneNumber: string;
     sessionId: string;
+    callDescription?: string;
   } | null>(null);
   const callLoggedRef = useRef<boolean>(false);
   const sipInfoRef = useRef<any>(null);
@@ -123,11 +132,13 @@ export function CallDialog({
   };
 
   const initializeAndCall = async () => {
-    const number = selectedPhoneNumber;
+    const number = callMode === 'person' ? selectedPhoneNumber : otherPhoneNumber;
     if (!number) {
       toast({
         title: 'No phone number',
-        description: 'Please select a person with a phone number',
+        description: callMode === 'person' 
+          ? 'Please select a person with a phone number' 
+          : 'Please enter a phone number',
         variant: 'destructive',
       });
       return;
@@ -243,9 +254,10 @@ export function CallDialog({
     
     const logClientId = ctx?.clientId || clientId;
     const logProjectId = ctx?.projectId || projectId;
-    const logPersonId = ctx?.personId || selectedPersonId;
+    const logPersonId = ctx?.personId || (callMode === 'person' ? selectedPersonId : undefined);
     const logPhoneNumber = ctx?.phoneNumber;
     const logSessionId = ctx?.sessionId;
+    const logCallDescription = ctx?.callDescription;
     
     if (logSessionId) {
       callLoggedRef.current = true;
@@ -260,6 +272,7 @@ export function CallDialog({
             direction: 'outbound',
             duration: finalDuration,
             sessionId: logSessionId,
+            callDescription: logCallDescription || undefined,
           });
           
           toast({
@@ -308,9 +321,10 @@ export function CallDialog({
       callContextRef.current = {
         clientId,
         projectId,
-        personId: selectedPersonId,
+        personId: callMode === 'person' ? selectedPersonId : undefined,
         phoneNumber: number,
         sessionId,
+        callDescription: callMode === 'other' ? callDescription : undefined,
       };
       
       let formattedNumber = number;
@@ -493,45 +507,88 @@ export function CallDialog({
                   </div>
                 </div>
               ) : (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Select Person</label>
-                  <Select
-                    value={selectedPersonId || 'none'}
-                    onValueChange={(value) => {
-                      if (value === 'none') {
-                        setSelectedPersonId(undefined);
-                        setSelectedPhoneNumber(undefined);
-                      } else {
-                        setSelectedPersonId(value);
-                        const selected = (clientPeople || []).find((cp: any) => cp.person.id === value);
-                        setSelectedPhoneNumber(selected?.person?.primaryPhone || undefined);
-                      }
-                    }}
-                    disabled={isDialing}
-                  >
-                    <SelectTrigger data-testid="select-call-person">
-                      <SelectValue placeholder="Select a person to call..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No person selected</SelectItem>
-                      {(clientPeople || []).map((cp: any) => (
-                        <SelectItem 
-                          key={cp.person.id} 
-                          value={cp.person.id}
-                          disabled={!cp.person.primaryPhone}
-                        >
-                          {cp.person.firstName} {cp.person.lastName}
-                          {cp.person.primaryPhone ? ` - ${cp.person.primaryPhone}` : ' (no phone)'}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                <Tabs value={callMode} onValueChange={(v) => setCallMode(v as 'person' | 'other')} className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="person" disabled={isDialing} data-testid="tab-call-person">
+                      Related Person
+                    </TabsTrigger>
+                    <TabsTrigger value="other" disabled={isDialing} data-testid="tab-call-other">
+                      Other Number
+                    </TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="person" className="space-y-2 mt-4">
+                    <Label className="text-sm font-medium">Select Person</Label>
+                    <Select
+                      value={selectedPersonId || 'none'}
+                      onValueChange={(value) => {
+                        if (value === 'none') {
+                          setSelectedPersonId(undefined);
+                          setSelectedPhoneNumber(undefined);
+                        } else {
+                          setSelectedPersonId(value);
+                          const selected = (clientPeople || []).find((cp: any) => cp.person.id === value);
+                          setSelectedPhoneNumber(selected?.person?.primaryPhone || undefined);
+                        }
+                      }}
+                      disabled={isDialing}
+                    >
+                      <SelectTrigger data-testid="select-call-person">
+                        <SelectValue placeholder="Select a person to call..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No person selected</SelectItem>
+                        {(clientPeople || []).map((cp: any) => (
+                          <SelectItem 
+                            key={cp.person.id} 
+                            value={cp.person.id}
+                            disabled={!cp.person.primaryPhone}
+                          >
+                            {cp.person.firstName} {cp.person.lastName}
+                            {cp.person.primaryPhone ? ` - ${cp.person.primaryPhone}` : ' (no phone)'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TabsContent>
+                  
+                  <TabsContent value="other" className="space-y-4 mt-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="other-phone" className="text-sm font-medium">Phone Number</Label>
+                      <Input
+                        id="other-phone"
+                        type="tel"
+                        placeholder="e.g. 0300 200 3300"
+                        value={otherPhoneNumber}
+                        onChange={(e) => setOtherPhoneNumber(e.target.value)}
+                        disabled={isDialing}
+                        data-testid="input-other-phone"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="call-description" className="text-sm font-medium">
+                        Description <span className="text-muted-foreground font-normal">(optional)</span>
+                      </Label>
+                      <Input
+                        id="call-description"
+                        type="text"
+                        placeholder="e.g. HMRC, Switchboard, Bank"
+                        value={callDescription}
+                        onChange={(e) => setCallDescription(e.target.value)}
+                        disabled={isDialing}
+                        data-testid="input-call-description"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        This will appear in the communications log to identify the call.
+                      </p>
+                    </div>
+                  </TabsContent>
+                </Tabs>
               )}
 
               <Button
                 onClick={initializeAndCall}
-                disabled={!selectedPhoneNumber || isDialing}
+                disabled={(callMode === 'person' ? !selectedPhoneNumber : !otherPhoneNumber) || isDialing}
                 className="w-full h-12 text-base"
                 data-testid="button-call"
               >

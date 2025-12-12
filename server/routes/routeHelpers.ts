@@ -107,6 +107,7 @@ export const ringCentralLogCallSchema = z.object({
   duration: z.number().optional(),
   sessionId: z.string().min(1, "Session ID is required"),
   recordingId: z.string().optional(),
+  callDescription: z.string().optional(),
 });
 
 export const ringCentralRequestTranscriptSchema = z.object({
