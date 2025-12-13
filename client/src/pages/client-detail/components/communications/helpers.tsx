@@ -1,4 +1,4 @@
-import { PhoneCall, FileText, Send, Inbox, Mail, MessageSquare } from "lucide-react";
+import { PhoneCall, FileText, Send, Inbox, Mail, MessageSquare, Layers } from "lucide-react";
 
 export function getIcon(type: string) {
   switch (type) {
@@ -20,6 +20,8 @@ export function getIcon(type: string) {
       return <Mail className="h-4 w-4" />;
     case 'email':
       return <Mail className="h-4 w-4" />;
+    case 'inbox_email_thread':
+      return <Layers className="h-4 w-4" />;
     default:
       return <MessageSquare className="h-4 w-4" />;
   }
@@ -45,6 +47,8 @@ export function getTypeLabel(type: string): string {
       return 'Email Thread';
     case 'email':
       return 'Email';
+    case 'inbox_email_thread':
+      return 'Email Thread';
     default:
       return 'Communication';
   }
@@ -69,6 +73,8 @@ export function getTypeColor(type: string): string {
     case 'email_thread':
       return 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200';
     case 'email':
+      return 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200';
+    case 'inbox_email_thread':
       return 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200';
     default:
       return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';

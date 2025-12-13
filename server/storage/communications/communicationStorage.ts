@@ -280,6 +280,7 @@ export class CommunicationStorage extends BaseStorage {
       slaDeadline: result.email.slaDeadline,
       hasAttachments: result.email.hasAttachments || false,
       inboxName: result.inbox.displayName || result.inbox.emailAddress,
+      conversationId: result.email.conversationId || undefined,
     }));
 
     // Combine and sort by timestamp

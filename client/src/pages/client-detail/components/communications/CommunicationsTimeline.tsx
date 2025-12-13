@@ -39,7 +39,8 @@ import type {
   UnifiedTimelineItem,
   DirectionFilterType,
   SLAStatusFilterType,
-  InboxEmailTimelineItem
+  InboxEmailTimelineItem,
+  InboxEmailThreadGroup
 } from "./types";
 
 interface CommunicationsTimelineProps {
@@ -70,6 +71,7 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
   const [selectedInboxEmail, setSelectedInboxEmail] = useState<InboxEmailTimelineItem | null>(null);
   const [isViewingInboxEmail, setIsViewingInboxEmail] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [groupByThread, setGroupByThread] = useState(false);
 
   const { data: communications, isLoading } = useQuery<CommunicationWithRelations[]>({
     queryKey: ['/api/communications/client', clientId],
@@ -147,6 +149,7 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
       slaDeadline: item.slaDeadline,
       hasAttachments: item.hasAttachments,
       inboxName: item.inboxName,
+      conversationId: item.conversationId,
     }));
   
   const allItems: TimelineItem[] = [
@@ -254,6 +257,66 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
 
     return true;
   });
+
+  // Group inbox emails by conversationId when toggle is on
+  const displayItems = useMemo((): TimelineItem[] => {
+    if (!groupByThread) {
+      return filteredItems;
+    }
+
+    // Separate inbox emails from other items
+    const inboxEmails = filteredItems.filter((item): item is InboxEmailTimelineItem => item.kind === 'inbox_email');
+    const otherItems = filteredItems.filter(item => item.kind !== 'inbox_email');
+
+    // Group inbox emails by conversationId
+    const threadGroups = new Map<string, InboxEmailTimelineItem[]>();
+    const noThreadEmails: InboxEmailTimelineItem[] = [];
+
+    inboxEmails.forEach(email => {
+      if (email.conversationId) {
+        const existing = threadGroups.get(email.conversationId) || [];
+        existing.push(email);
+        threadGroups.set(email.conversationId, existing);
+      } else {
+        noThreadEmails.push(email);
+      }
+    });
+
+    // Convert thread groups to InboxEmailThreadGroup items
+    const threadItems: InboxEmailThreadGroup[] = [];
+    threadGroups.forEach((emails, conversationId) => {
+      // Sort emails by date (newest first)
+      emails.sort((a, b) => b.sortDate.getTime() - a.sortDate.getTime());
+      const latestEmail = emails[0];
+      
+      // Collect unique participants
+      const participantSet = new Set<string>();
+      emails.forEach(e => {
+        if (e.fromAddress) participantSet.add(e.fromName || e.fromAddress);
+        e.toRecipients?.forEach(r => participantSet.add(r.name || r.address));
+      });
+
+      threadItems.push({
+        kind: 'inbox_email_thread',
+        type: 'inbox_email_thread',
+        id: conversationId,
+        conversationId,
+        sortDate: latestEmail.sortDate,
+        displayDate: latestEmail.displayDate,
+        subject: latestEmail.subject,
+        content: latestEmail.content,
+        emails,
+        messageCount: emails.length,
+        latestDirection: latestEmail.direction,
+        participants: Array.from(participantSet),
+      });
+    });
+
+    // Combine and sort all items
+    const combined = [...otherItems, ...threadItems, ...noThreadEmails];
+    combined.sort((a, b) => b.sortDate.getTime() - a.sortDate.getTime());
+    return combined;
+  }, [filteredItems, groupByThread]);
 
   const handleViewCommunication = (communication: CommunicationWithRelations) => {
     setSelectedCommunication(communication);
@@ -442,12 +505,14 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
           onSlaStatusChange={setSlaStatusFilter}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
+          groupByThread={groupByThread}
+          onGroupByThreadChange={setGroupByThread}
         />
       </CardHeader>
       
       <CardContent>
         <CommunicationList
-          items={filteredItems}
+          items={displayItems}
           projectCache={projectCache}
           onViewCommunication={handleViewCommunication}
           onViewMessageThread={handleViewMessageThread}

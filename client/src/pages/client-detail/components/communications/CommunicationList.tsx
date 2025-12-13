@@ -12,7 +12,7 @@ import { Clock, Eye, MessageSquare, UserIcon, Phone, Loader2, FileText, XCircle,
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CommunicationCard } from "@/components/communication-card";
 import { getIcon, getTypeLabel, getTypeColor } from "./helpers.tsx";
-import type { CommunicationListProps, TimelineItem, CommunicationTimelineItem, InboxEmailTimelineItem, UnifiedTimelineItem } from "./types";
+import type { CommunicationListProps, TimelineItem, CommunicationTimelineItem, InboxEmailTimelineItem, UnifiedTimelineItem, InboxEmailThreadGroup } from "./types";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ProjectLinkProps {
@@ -212,6 +212,11 @@ export function CommunicationList({
       case 'inbox_email':
         onViewInboxEmail(item);
         break;
+      case 'inbox_email_thread':
+        if (item.emails.length > 0) {
+          onViewInboxEmail(item.emails[0]);
+        }
+        break;
     }
   };
 
@@ -236,6 +241,8 @@ export function CommunicationList({
           return item.inboxName || 'Staff';
         }
         return 'Email';
+      case 'inbox_email_thread':
+        return `${item.participants.length} participant${item.participants.length !== 1 ? 's' : ''}`;
       default:
         return 'System';
     }
@@ -270,10 +277,10 @@ export function CommunicationList({
                 projectCache[item.projectId!]?.description || 
                 projectCache[item.projectId!]?.client?.name
               }
-              messageCount={(item.kind === 'message_thread' || item.kind === 'email_thread') ? item.messageCount : undefined}
+              messageCount={(item.kind === 'message_thread' || item.kind === 'email_thread' || item.kind === 'inbox_email_thread') ? item.messageCount : undefined}
               unreadCount={item.kind === 'message_thread' ? item.unreadCount : undefined}
               attachmentCount={item.kind === 'message_thread' ? item.attachmentCount : undefined}
-              participants={item.kind === 'email_thread' ? item.participants : undefined}
+              participants={item.kind === 'email_thread' ? item.participants : item.kind === 'inbox_email_thread' ? item.participants : undefined}
               onView={() => handleItemView(item)}
               onProjectClick={handleProjectClick}
             />
@@ -375,6 +382,19 @@ export function CommunicationList({
                       </div>
                     )}
                   </div>
+                ) : item.kind === 'inbox_email_thread' ? (
+                  <div>
+                    <div className="font-medium text-sm flex items-center gap-2">
+                      <DirectionIndicator direction={item.latestDirection} />
+                      <span className="truncate max-w-[300px]">{item.subject || 'No Subject'}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate">
+                      {item.messageCount} email{item.messageCount !== 1 ? 's' : ''}
+                      {item.participants.length > 0 && (
+                        <span className="ml-2">• {item.participants.length} participant{item.participants.length !== 1 ? 's' : ''}</span>
+                      )}
+                    </div>
+                  </div>
                 ) : (
                   <div className="text-sm truncate">
                     {item.subject && <div className="font-medium">{item.subject}</div>}
@@ -455,6 +475,20 @@ export function CommunicationList({
                 >
                   <Eye className="h-4 w-4 mr-2" />
                   View
+                </Button>
+              ) : item.kind === 'inbox_email_thread' ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    if (item.emails.length > 0) {
+                      onViewInboxEmail(item.emails[0]);
+                    }
+                  }}
+                  data-testid={`button-view-inbox-thread-${item.id}`}
+                >
+                  <Eye className="h-4 w-4 mr-2" />
+                  View Thread
                 </Button>
               ) : (
                 <Button

@@ -72,6 +72,7 @@ export interface UnifiedTimelineItem {
   hasAttachments?: boolean;
   inboxName?: string;
   metadata?: unknown;
+  conversationId?: string;
 }
 
 export interface InboxEmailTimelineItem extends BaseTimelineDisplay {
@@ -86,9 +87,20 @@ export interface InboxEmailTimelineItem extends BaseTimelineDisplay {
   slaDeadline?: string | null;
   hasAttachments?: boolean;
   inboxName?: string;
+  conversationId?: string;
 }
 
-export type TimelineItem = CommunicationTimelineItem | MessageThreadTimelineItem | EmailThreadTimelineItem | InboxEmailTimelineItem;
+export interface InboxEmailThreadGroup extends BaseTimelineDisplay {
+  kind: 'inbox_email_thread';
+  type: 'inbox_email_thread';
+  conversationId: string;
+  emails: InboxEmailTimelineItem[];
+  messageCount: number;
+  latestDirection: 'inbound' | 'outbound' | null;
+  participants: string[];
+}
+
+export type TimelineItem = CommunicationTimelineItem | MessageThreadTimelineItem | EmailThreadTimelineItem | InboxEmailTimelineItem | InboxEmailThreadGroup;
 
 export interface LegacyTimelineItem {
   id: string;
@@ -230,6 +242,8 @@ export interface CommunicationFiltersProps {
   onSlaStatusChange: (status: SLAStatusFilterType) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  groupByThread: boolean;
+  onGroupByThreadChange: (enabled: boolean) => void;
 }
 
 export interface CommunicationListProps {

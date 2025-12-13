@@ -15,8 +15,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Filter, PhoneCall, Send, Mail, MessageSquare, FileText, X, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Search } from "lucide-react";
+import { Filter, PhoneCall, Send, Mail, MessageSquare, FileText, X, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Search, Layers } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import type { CommunicationFiltersProps, CommunicationFilterType, TimelineItem, DirectionFilterType, SLAStatusFilterType } from "./types";
 
 const FILTER_OPTIONS: { value: CommunicationFilterType; label: string; icon: typeof PhoneCall }[] = [
@@ -85,7 +86,9 @@ export function CommunicationFilters({
   slaStatusFilter,
   onSlaStatusChange,
   searchQuery,
-  onSearchChange
+  onSearchChange,
+  groupByThread,
+  onGroupByThreadChange
 }: CommunicationFiltersProps) {
   const [isOpen, setIsOpen] = useState(false);
   
@@ -302,6 +305,19 @@ export function CommunicationFilters({
           })}
         </SelectContent>
       </Select>
+
+      <div className="flex items-center gap-2 px-2 py-1 rounded-md border bg-background">
+        <Layers className="h-4 w-4 text-muted-foreground" />
+        <Label htmlFor="group-by-thread" className="text-sm font-normal cursor-pointer whitespace-nowrap">
+          Group by thread
+        </Label>
+        <Switch
+          id="group-by-thread"
+          checked={groupByThread}
+          onCheckedChange={onGroupByThreadChange}
+          data-testid="switch-group-by-thread"
+        />
+      </div>
 
       {totalActiveFilters > 0 && (
         <Button
