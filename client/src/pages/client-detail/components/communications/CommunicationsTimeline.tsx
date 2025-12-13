@@ -516,7 +516,10 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
       <ViewInboxEmailDialog
         email={selectedInboxEmail}
         isOpen={isViewingInboxEmail}
-        onClose={() => setIsViewingInboxEmail(false)}
+        onClose={() => {
+          setIsViewingInboxEmail(false);
+          setSelectedInboxEmail(null);
+        }}
       />
     </Card>
   );
