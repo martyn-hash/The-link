@@ -11,6 +11,20 @@ import { useProjectsPageState } from "@/hooks/projects-page/useProjectsPageState
 import { ProjectsHeader } from "@/components/projects-page/ProjectsHeader";
 import { ProjectsContent } from "@/components/projects-page/ProjectsContent";
 import type { CompanySettings } from "@shared/schema";
+
+interface InboxAccess {
+  id: string;
+  inboxId: string;
+  userId: string;
+  accessLevel: "read" | "write" | "full";
+  grantedAt: string;
+  inbox: {
+    id: string;
+    email: string;
+    displayName: string | null;
+    inboxType: string;
+  };
+}
 import {
   CreateDashboardModal,
   AddWidgetDialog,
@@ -34,6 +48,11 @@ export default function Projects() {
   });
 
   const emailModuleActive = companySettings?.emailModuleActive || false;
+
+  const { data: myInboxes = [] } = useQuery<InboxAccess[]>({
+    queryKey: ["/api/my-inboxes"],
+    enabled: isAuthenticated && emailModuleActive,
+  });
 
   useEffect(() => {
     if (state.error && isUnauthorizedError(state.error)) {
@@ -110,6 +129,10 @@ export default function Projects() {
           setSaveViewDialogOpen={state.setSaveViewDialogOpen}
           onOpenCreateDashboard={() => state.openCreateDashboardModal()}
           onOpenEditDashboard={() => state.openCreateDashboardModal(state.currentDashboard)}
+          commsInboxes={myInboxes}
+          commsSelectedInboxId={state.commsSelectedInboxId}
+          setCommsSelectedInboxId={state.setCommsSelectedInboxId}
+          setCommsSelectedMessageId={state.setCommsSelectedMessageId}
         />
 
         <ProjectsContent
@@ -179,6 +202,10 @@ export default function Projects() {
           pivotConfig={state.pivotConfig}
           onPivotConfigChange={state.onPivotConfigChange}
           currentSavedViewId={state.currentSavedViewId}
+          commsSelectedInboxId={state.commsSelectedInboxId}
+          setCommsSelectedInboxId={state.setCommsSelectedInboxId}
+          commsSelectedMessageId={state.commsSelectedMessageId}
+          setCommsSelectedMessageId={state.setCommsSelectedMessageId}
         />
       </main>
 

@@ -104,11 +104,31 @@ interface EmailDetail {
   }>;
 }
 
-export function CommsWorkspace() {
+interface CommsWorkspaceProps {
+  selectedInboxId?: string;
+  setSelectedInboxId?: (id: string) => void;
+  selectedMessageId?: string | null;
+  setSelectedMessageId?: (id: string | null) => void;
+}
+
+export function CommsWorkspace({
+  selectedInboxId: propSelectedInboxId,
+  setSelectedInboxId: propSetSelectedInboxId,
+  selectedMessageId: propSelectedMessageId,
+  setSelectedMessageId: propSetSelectedMessageId,
+}: CommsWorkspaceProps = {}) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [selectedInboxId, setSelectedInboxId] = useState<string>("");
-  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  
+  // Internal state as fallback when props not provided
+  const [internalSelectedInboxId, setInternalSelectedInboxId] = useState<string>("");
+  const [internalSelectedMessageId, setInternalSelectedMessageId] = useState<string | null>(null);
+  
+  // Use props if provided, otherwise use internal state
+  const selectedInboxId = propSelectedInboxId ?? internalSelectedInboxId;
+  const setSelectedInboxId = propSetSelectedInboxId ?? setInternalSelectedInboxId;
+  const selectedMessageId = propSelectedMessageId ?? internalSelectedMessageId;
+  const setSelectedMessageId = propSetSelectedMessageId ?? setInternalSelectedMessageId;
 
   const { data: myInboxes = [], isLoading: inboxesLoading } = useQuery<InboxAccess[]>({
     queryKey: ["/api/my-inboxes"],
@@ -193,102 +213,38 @@ export function CommsWorkspace() {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
-      <div className="lg:col-span-1 space-y-4">
-        <Card>
-          <CardHeader className="pb-3">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full">
+      {/* Left Column: Email List */}
+      <div className="lg:col-span-1 flex flex-col h-full">
+        <Card className="flex-1 flex flex-col min-h-[500px]">
+          <CardHeader className="pb-3 shrink-0">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2">
-                <Inbox className="h-5 w-5" />
-                Inboxes
+                <Mail className="h-5 w-5" />
+                {selectedInbox ? `${selectedInbox.displayName || selectedInbox.email}` : "Emails"}
               </CardTitle>
               <Button 
                 variant="ghost" 
                 size="sm" 
                 onClick={handleRefresh}
-                data-testid="button-refresh-inboxes"
+                disabled={!selectedInboxId}
+                data-testid="button-refresh-emails"
               >
                 <RefreshCw className="h-4 w-4" />
               </Button>
             </div>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <Select value={selectedInboxId} onValueChange={(value) => {
-              setSelectedInboxId(value);
-              setSelectedMessageId(null);
-            }}>
-              <SelectTrigger data-testid="select-inbox">
-                <SelectValue placeholder="Select an inbox..." />
-              </SelectTrigger>
-              <SelectContent>
-                {myInboxes.map((access) => (
-                  <SelectItem key={access.inboxId} value={access.inboxId}>
-                    <div className="flex items-center gap-2">
-                      <span>{access.inbox.displayName || access.inbox.email}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {access.accessLevel}
-                      </Badge>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <div className="mt-4 space-y-2">
-              {myInboxes.map((access) => (
-                <div
-                  key={access.id}
-                  className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                    selectedInboxId === access.inboxId
-                      ? "bg-primary/10 border-primary"
-                      : "hover:bg-muted"
-                  }`}
-                  onClick={() => {
-                    setSelectedInboxId(access.inboxId);
-                    setSelectedMessageId(null);
-                  }}
-                  data-testid={`inbox-item-${access.inboxId}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium text-sm">
-                        {access.inbox.displayName || access.inbox.email}
-                      </span>
-                    </div>
-                    <Badge variant="outline" className="text-xs">
-                      {access.accessLevel}
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1 ml-6">
-                    {access.inbox.email}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="lg:col-span-2 space-y-4">
-        <Card className="h-[400px] flex flex-col">
-          <CardHeader className="pb-3 shrink-0">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <Mail className="h-5 w-5" />
-              {selectedInbox ? `${selectedInbox.displayName || selectedInbox.email}` : "Emails"}
-            </CardTitle>
             <CardDescription>
               {selectedInbox 
-                ? "Select an email to view details"
-                : "Select an inbox to view emails"}
+                ? `${emailData?.messages?.length || 0} messages`
+                : "Select an inbox from the header"}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden p-0">
             {!selectedInboxId ? (
               <div className="flex items-center justify-center h-full text-muted-foreground">
-                <div className="text-center">
-                  <Mail className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-sm">Select an inbox from the left panel</p>
+                <div className="text-center p-4">
+                  <Inbox className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-sm">Select an inbox from the dropdown above</p>
                 </div>
               </div>
             ) : emailsLoading ? (
@@ -304,16 +260,16 @@ export function CommsWorkspace() {
                 ))}
               </div>
             ) : emailsError ? (
-              <div className="flex items-center justify-center h-full text-muted-foreground">
+              <div className="flex items-center justify-center h-full text-muted-foreground p-4">
                 <div className="text-center">
                   <AlertCircle className="h-12 w-12 mx-auto mb-4 text-destructive opacity-70" />
                   <p className="text-sm text-destructive font-medium">Unable to load emails</p>
                   <p className="text-xs text-muted-foreground mt-1 max-w-xs">
                     {(emailsError as Error).message.includes("not configured") 
-                      ? "Email integration is not set up. Please contact your administrator."
+                      ? "Email integration is not set up."
                       : (emailsError as Error).message.includes("not enabled")
-                      ? "Email features are currently disabled for your organization."
-                      : "There was a problem connecting to the email server. Please try again."}
+                      ? "Email features are disabled."
+                      : "Connection error. Please try again."}
                   </p>
                   <Button variant="outline" size="sm" className="mt-4" onClick={() => refetchEmails()}>
                     Try Again
@@ -326,46 +282,41 @@ export function CommsWorkspace() {
                   {emailData.messages.map((email) => (
                     <div
                       key={email.id}
-                      className={`p-4 cursor-pointer transition-colors hover:bg-muted/50 ${
-                        selectedMessageId === email.id ? "bg-muted" : ""
+                      className={`p-3 cursor-pointer transition-colors hover:bg-muted/50 ${
+                        selectedMessageId === email.id ? "bg-primary/10 border-l-2 border-l-primary" : ""
                       } ${!email.isRead ? "bg-primary/5" : ""}`}
                       onClick={() => setSelectedMessageId(email.id)}
                       data-testid={`email-item-${email.id}`}
                     >
-                      <div className="flex items-start gap-3">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className={`text-sm truncate ${!email.isRead ? "font-semibold" : ""}`}>
-                              {email.from.emailAddress.name || email.from.emailAddress.address}
-                            </span>
-                            {email.hasAttachments && (
-                              <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
-                            )}
-                            {email.importance === "high" && (
-                              <Badge variant="destructive" className="text-xs shrink-0">!</Badge>
-                            )}
-                          </div>
-                          <p className={`text-sm truncate ${!email.isRead ? "font-medium" : "text-muted-foreground"}`}>
-                            {email.subject || "(No subject)"}
-                          </p>
-                          <p className="text-xs text-muted-foreground truncate mt-1">
-                            {email.bodyPreview}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-xs text-muted-foreground">
-                            {formatDistanceToNow(new Date(email.receivedDateTime), { addSuffix: true })}
-                          </span>
-                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                        </div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-sm truncate flex-1 ${!email.isRead ? "font-semibold" : ""}`}>
+                          {email.from.emailAddress.name || email.from.emailAddress.address}
+                        </span>
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          {formatDistanceToNow(new Date(email.receivedDateTime), { addSuffix: true })}
+                        </span>
                       </div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <p className={`text-sm truncate flex-1 ${!email.isRead ? "font-medium" : "text-muted-foreground"}`}>
+                          {email.subject || "(No subject)"}
+                        </p>
+                        {email.hasAttachments && (
+                          <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
+                        )}
+                        {email.importance === "high" && (
+                          <Badge variant="destructive" className="text-xs shrink-0 px-1">!</Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {email.bodyPreview}
+                      </p>
                     </div>
                   ))}
                 </div>
               </ScrollArea>
             ) : (
               <div className="flex items-center justify-center h-full text-muted-foreground">
-                <div className="text-center">
+                <div className="text-center p-4">
                   <Inbox className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p className="text-sm">No emails found</p>
                 </div>
@@ -373,20 +324,30 @@ export function CommsWorkspace() {
             )}
           </CardContent>
         </Card>
+      </div>
 
-        <Card className="min-h-[250px]">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <MessageSquare className="h-5 w-5" />
-              {selectedEmail ? "Email Detail" : "AI Assist"}
-            </CardTitle>
+      {/* Right Column: Email Detail (full width) */}
+      <div className="lg:col-span-2 flex flex-col h-full">
+        <Card className="flex-1 flex flex-col min-h-[500px]">
+          <CardHeader className="pb-3 shrink-0">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <MessageSquare className="h-5 w-5" />
+                {selectedEmail ? "Email Detail" : "Email Content"}
+              </CardTitle>
+              {selectedEmail && (
+                <Badge variant="outline" className="text-xs">
+                  {format(new Date(selectedEmail.receivedDateTime), "PP")}
+                </Badge>
+              )}
+            </div>
             <CardDescription>
               {selectedEmail 
                 ? format(new Date(selectedEmail.receivedDateTime), "PPpp")
-                : "Context-aware briefing notes and suggested replies powered by AI"}
+                : "Select an email to view its content"}
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="flex-1 overflow-auto">
             {emailDetailLoading ? (
               <div className="space-y-3">
                 <Skeleton className="h-6 w-3/4" />
@@ -395,16 +356,16 @@ export function CommsWorkspace() {
               </div>
             ) : selectedEmail ? (
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-lg">{selectedEmail.subject || "(No subject)"}</h3>
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-4">
+                    <h3 className="font-semibold text-lg leading-tight">{selectedEmail.subject || "(No subject)"}</h3>
                     {selectedEmail.importance === "high" && (
-                      <Badge variant="destructive">High Priority</Badge>
+                      <Badge variant="destructive" className="shrink-0">High Priority</Badge>
                     )}
                   </div>
-                  <div className="text-sm space-y-1">
+                  <div className="text-sm space-y-1 bg-muted/30 rounded-lg p-3">
                     <p>
-                      <span className="text-muted-foreground">From:</span>{" "}
+                      <span className="text-muted-foreground font-medium">From:</span>{" "}
                       {selectedEmail.from.emailAddress.name || selectedEmail.from.emailAddress.address}
                       {selectedEmail.from.emailAddress.name && (
                         <span className="text-muted-foreground ml-1">
@@ -414,19 +375,19 @@ export function CommsWorkspace() {
                     </p>
                     {selectedEmail.toRecipients && selectedEmail.toRecipients.length > 0 && (
                       <p>
-                        <span className="text-muted-foreground">To:</span>{" "}
+                        <span className="text-muted-foreground font-medium">To:</span>{" "}
                         {selectedEmail.toRecipients.map(r => r.emailAddress.name || r.emailAddress.address).join(", ")}
                       </p>
                     )}
                     {selectedEmail.ccRecipients && selectedEmail.ccRecipients.length > 0 && (
                       <p>
-                        <span className="text-muted-foreground">CC:</span>{" "}
+                        <span className="text-muted-foreground font-medium">CC:</span>{" "}
                         {selectedEmail.ccRecipients.map(r => r.emailAddress.name || r.emailAddress.address).join(", ")}
                       </p>
                     )}
                   </div>
                   {selectedEmail.attachments && selectedEmail.attachments.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
+                    <div className="flex flex-wrap gap-2">
                       {selectedEmail.attachments.filter(a => !a.isInline).map(attachment => (
                         <Badge key={attachment.id} variant="secondary" className="flex items-center gap-1">
                           <Paperclip className="h-3 w-3" />
@@ -450,15 +411,15 @@ export function CommsWorkspace() {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-center py-8 text-muted-foreground">
+              <div className="flex items-center justify-center h-full min-h-[300px] text-muted-foreground">
                 <div className="text-center">
-                  <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                  <Mail className="h-16 w-16 mx-auto mb-4 opacity-30" />
+                  <p className="text-lg font-medium mb-1">No email selected</p>
                   <p className="text-sm">
                     {selectedInboxId 
-                      ? "Select an email to view details"
-                      : "AI Assist will be available when viewing an email"}
+                      ? "Click on an email from the list to view its content"
+                      : "Select an inbox first, then choose an email"}
                   </p>
-                  <p className="text-xs mt-1">Provides briefing notes and reply suggestions</p>
                 </div>
               </div>
             )}

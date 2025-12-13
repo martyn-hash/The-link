@@ -48,6 +48,16 @@ export function useProjectsPageState() {
   const [tasksSearchQuery, setTasksSearchQuery] = useState("");
   const [tasksReassignMode, setTasksReassignMode] = useState(false);
 
+  // Comms workspace state
+  const [commsSelectedInboxId, setCommsSelectedInboxIdInternal] = useState<string>("");
+  const [commsSelectedMessageId, setCommsSelectedMessageId] = useState<string | null>(null);
+  
+  // Wrapper that resets message selection when inbox changes
+  const setCommsSelectedInboxId = (id: string) => {
+    setCommsSelectedInboxIdInternal(id);
+    setCommsSelectedMessageId(null);
+  };
+
   const tasksActiveFilterCount = (tasksOwnershipFilter !== "assigned" ? 1 : 0) + 
     (tasksStatusFilter !== "open" ? 1 : 0) + 
     (tasksPriorityFilter !== "all" ? 1 : 0) +
@@ -674,6 +684,12 @@ export function useProjectsPageState() {
 
     calendarSettings,
     setCalendarSettings,
+
+    // Comms workspace state
+    commsSelectedInboxId,
+    setCommsSelectedInboxId,
+    commsSelectedMessageId,
+    setCommsSelectedMessageId,
 
     saveViewDialogOpen,
     setSaveViewDialogOpen,

@@ -27,6 +27,20 @@ import type { ViewMode, WorkspaceMode, Dashboard, Widget } from "@/types/project
 import type { ProjectView } from "@shared/schema";
 import type { OwnershipFilter } from "@/components/tasks/TasksWorkspace";
 
+interface InboxAccess {
+  id: string;
+  inboxId: string;
+  userId: string;
+  accessLevel: "read" | "write" | "full";
+  grantedAt: string;
+  inbox: {
+    id: string;
+    email: string;
+    displayName: string | null;
+    inboxType: string;
+  };
+}
+
 export interface ProjectsHeaderProps {
   workspaceMode: WorkspaceMode;
   setWorkspaceMode: (mode: WorkspaceMode) => void;
@@ -72,6 +86,11 @@ export interface ProjectsHeaderProps {
   setSaveViewDialogOpen: (open: boolean) => void;
   onOpenCreateDashboard: () => void;
   onOpenEditDashboard: () => void;
+  // Comms props
+  commsInboxes?: InboxAccess[];
+  commsSelectedInboxId?: string;
+  setCommsSelectedInboxId?: (id: string) => void;
+  setCommsSelectedMessageId?: (id: string | null) => void;
 }
 
 export function ProjectsHeader({
@@ -115,11 +134,28 @@ export function ProjectsHeader({
   setSaveViewDialogOpen,
   onOpenCreateDashboard,
   onOpenEditDashboard,
+  commsInboxes = [],
+  commsSelectedInboxId = "",
+  setCommsSelectedInboxId,
+  setCommsSelectedMessageId,
 }: ProjectsHeaderProps) {
+  const selectedInbox = commsInboxes.find(ia => ia.inboxId === commsSelectedInboxId)?.inbox;
+  
   return (
     <header className="bg-card border-b border-border page-container py-6">
       <div className="flex flex-wrap items-center justify-center gap-4">
-        {workspaceMode !== "tasks" && <CurrentViewName viewName={currentSavedViewName} />}
+        {workspaceMode === "projects" && <CurrentViewName viewName={currentSavedViewName} />}
+        {workspaceMode === "comms" && (
+          <CommsInboxSelector 
+            inboxes={commsInboxes}
+            selectedInboxId={commsSelectedInboxId}
+            selectedInboxName={selectedInbox?.displayName || selectedInbox?.email || null}
+            onSelectInbox={(id) => {
+              setCommsSelectedInboxId?.(id);
+              setCommsSelectedMessageId?.(null);
+            }}
+          />
+        )}
         
         <WorkspaceModeToggle
           workspaceMode={workspaceMode}
@@ -224,6 +260,40 @@ function CurrentViewName({ viewName }: CurrentViewNameProps) {
       >
         {viewName}
       </span>
+    </div>
+  );
+}
+
+interface CommsInboxSelectorProps {
+  inboxes: InboxAccess[];
+  selectedInboxId: string;
+  selectedInboxName: string | null;
+  onSelectInbox: (id: string) => void;
+}
+
+function CommsInboxSelector({ inboxes, selectedInboxId, selectedInboxName, onSelectInbox }: CommsInboxSelectorProps) {
+  return (
+    <div className="hidden md:flex items-center gap-2 w-[200px] flex-shrink-0">
+      <Select value={selectedInboxId} onValueChange={onSelectInbox}>
+        <SelectTrigger className="h-8 text-sm" data-testid="select-comms-inbox-header">
+          <div className="flex items-center gap-2">
+            <Mail className="h-4 w-4 text-primary flex-shrink-0" />
+            <SelectValue placeholder="Select inbox..." />
+          </div>
+        </SelectTrigger>
+        <SelectContent>
+          {inboxes.map((access) => (
+            <SelectItem key={access.inboxId} value={access.inboxId}>
+              <div className="flex items-center gap-2">
+                <span>{access.inbox.displayName || access.inbox.email}</span>
+                <Badge variant="outline" className="text-xs">
+                  {access.accessLevel}
+                </Badge>
+              </div>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }
@@ -460,7 +530,7 @@ function DesktopToolbar({
             </Button>
           )}
         </>
-      ) : (
+      ) : workspaceMode === "tasks" ? (
         <TasksToolbar
           isMobile={false}
           tasksOwnershipFilter={tasksOwnershipFilter}
@@ -481,7 +551,7 @@ function DesktopToolbar({
           setTasksReassignMode={setTasksReassignMode}
           clearTasksFilters={clearTasksFilters}
         />
-      )}
+      ) : null}
     </div>
   );
 }
@@ -610,7 +680,7 @@ function MobileToolbar({
             </Button>
           )}
         </>
-      ) : (
+      ) : workspaceMode === "tasks" ? (
         <TasksToolbar
           isMobile={true}
           tasksOwnershipFilter={tasksOwnershipFilter}
@@ -631,7 +701,7 @@ function MobileToolbar({
           setTasksReassignMode={setTasksReassignMode}
           clearTasksFilters={clearTasksFilters}
         />
-      )}
+      ) : null}
     </div>
   );
 }

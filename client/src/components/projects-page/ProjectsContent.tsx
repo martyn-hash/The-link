@@ -88,6 +88,11 @@ export interface ProjectsContentProps {
   pivotConfig?: PivotConfig | null;
   onPivotConfigChange?: (config: PivotConfig) => void;
   currentSavedViewId?: string | null;
+  // Comms props
+  commsSelectedInboxId?: string;
+  setCommsSelectedInboxId?: (id: string) => void;
+  commsSelectedMessageId?: string | null;
+  setCommsSelectedMessageId?: (id: string | null) => void;
 }
 
 function LoadingState() {
@@ -519,7 +524,12 @@ export function ProjectsContent({
   if (workspaceMode === "comms") {
     return (
       <main className="flex-1 overflow-auto w-full px-4 md:px-6 lg:px-8 py-6 md:py-8" style={{ paddingBottom: isMobile ? '4rem' : '0' }}>
-        <CommsWorkspace />
+        <CommsWorkspace 
+          selectedInboxId={commsSelectedInboxId}
+          setSelectedInboxId={setCommsSelectedInboxId}
+          selectedMessageId={commsSelectedMessageId}
+          setSelectedMessageId={setCommsSelectedMessageId}
+        />
       </main>
     );
   }
