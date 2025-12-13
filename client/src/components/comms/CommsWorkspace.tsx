@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,8 +13,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Mail, Inbox, RefreshCw, MessageSquare, Paperclip, ChevronRight, AlertCircle } from "lucide-react";
-import { formatDistanceToNow, format } from "date-fns";
+import { Mail, Inbox, RefreshCw, MessageSquare, Paperclip, ChevronRight, AlertCircle, Clock, User, Loader2 } from "lucide-react";
+import { formatDistanceToNow, format, isPast, isToday, differenceInHours } from "date-fns";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface InboxAccess {
   id: string;
@@ -30,36 +32,49 @@ interface InboxAccess {
   };
 }
 
-interface EmailMessage {
+interface StoredEmail {
   id: string;
-  subject: string;
-  from: {
-    emailAddress: {
-      address: string;
-      name?: string;
-    };
+  inboxId: string;
+  microsoftId: string;
+  conversationId: string | null;
+  fromAddress: string;
+  fromName: string | null;
+  toRecipients: Array<{ address: string; name?: string }> | null;
+  ccRecipients: Array<{ address: string; name?: string }> | null;
+  subject: string | null;
+  bodyPreview: string | null;
+  bodyHtml: string | null;
+  receivedAt: string;
+  hasAttachments: boolean | null;
+  importance: string | null;
+  matchedClientId: string | null;
+  slaDeadline: string | null;
+  repliedAt: string | null;
+  status: "pending_reply" | "replied" | "no_action_needed" | "overdue";
+  isRead: boolean | null;
+  isArchived: boolean | null;
+  syncedAt: string | null;
+  createdAt: string | null;
+  matchedClient?: {
+    id: string;
+    name: string;
+    companyName?: string;
   };
-  toRecipients?: Array<{
-    emailAddress: {
-      address: string;
-      name?: string;
-    };
-  }>;
-  receivedDateTime: string;
-  bodyPreview: string;
-  hasAttachments: boolean;
-  isRead: boolean;
-  importance: string;
 }
 
-interface EmailListResponse {
-  messages: EmailMessage[];
-  hasMore: boolean;
-  total: number | null;
-  inbox: {
-    id: string;
-    email: string;
-    displayName: string;
+interface StoredEmailsResponse {
+  emails: StoredEmail[];
+  stats: {
+    total: number;
+    pending: number;
+    overdue: number;
+    dueToday: number;
+    replied: number;
+  };
+  pagination: {
+    limit: number;
+    offset: number;
+    hasMore: boolean;
   };
 }
 
@@ -104,6 +119,8 @@ interface EmailDetail {
   }>;
 }
 
+type EmailFilter = "all" | "pending_reply" | "overdue" | "due_today" | "replied";
+
 interface CommsWorkspaceProps {
   selectedInboxId?: string;
   setSelectedInboxId?: (id: string) => void;
@@ -119,10 +136,12 @@ export function CommsWorkspace({
 }: CommsWorkspaceProps = {}) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   
   // Internal state as fallback when props not provided
   const [internalSelectedInboxId, setInternalSelectedInboxId] = useState<string>("");
   const [internalSelectedMessageId, setInternalSelectedMessageId] = useState<string | null>(null);
+  const [emailFilter, setEmailFilter] = useState<EmailFilter>("all");
   
   // Use props if provided, otherwise use internal state
   const selectedInboxId = propSelectedInboxId ?? internalSelectedInboxId;
@@ -140,15 +159,27 @@ export function CommsWorkspace({
     return myInboxes.find(ia => ia.inboxId === selectedInboxId)?.inbox;
   }, [selectedInboxId, myInboxes]);
 
+  // Fetch stored emails from database (with SLA tracking)
   const { 
     data: emailData, 
     isLoading: emailsLoading,
     error: emailsError,
     refetch: refetchEmails 
-  } = useQuery<EmailListResponse>({
-    queryKey: ["/api/comms/inbox", selectedInboxId, "messages"],
+  } = useQuery<StoredEmailsResponse>({
+    queryKey: ["/api/comms/inbox", selectedInboxId, "stored-emails", emailFilter],
     queryFn: async () => {
-      const res = await fetch(`/api/comms/inbox/${selectedInboxId}/messages`);
+      const params = new URLSearchParams({
+        clientMatched: "true",
+        limit: "50",
+      });
+      if (emailFilter !== "all") {
+        if (emailFilter === "due_today") {
+          params.set("dueToday", "true");
+        } else {
+          params.set("status", emailFilter);
+        }
+      }
+      const res = await fetch(`/api/comms/inbox/${selectedInboxId}/stored-emails?${params}`);
       if (!res.ok) {
         const error = await res.json();
         throw new Error(error.message || "Failed to fetch emails");
@@ -158,6 +189,29 @@ export function CommsWorkspace({
     enabled: !!selectedInboxId && selectedInboxId !== "",
   });
 
+  // Sync mutation to fetch new emails from Microsoft Graph
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/comms/inbox/${selectedInboxId}/sync`);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/comms/inbox", selectedInboxId, "stored-emails"] });
+      toast({
+        title: "Emails synced",
+        description: `${data.newEmails || 0} new emails synced, ${data.matchedCount || 0} matched to clients.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Sync failed",
+        description: error.message || "Failed to sync emails from server.",
+      });
+    },
+  });
+
+  // Fetch email detail from Graph API (for full content)
   const { 
     data: selectedEmail, 
     isLoading: emailDetailLoading 
@@ -174,10 +228,45 @@ export function CommsWorkspace({
     enabled: !!selectedInboxId && !!selectedMessageId,
   });
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     if (selectedInboxId) {
-      refetchEmails();
+      await syncMutation.mutateAsync();
     }
+  };
+
+  const getSlaStatusBadge = (email: StoredEmail) => {
+    if (email.status === "replied") {
+      return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">Replied</Badge>;
+    }
+    if (email.status === "no_action_needed") {
+      return null;
+    }
+    if (!email.slaDeadline) {
+      return null;
+    }
+    
+    const deadline = new Date(email.slaDeadline);
+    const now = new Date();
+    
+    if (isPast(deadline)) {
+      return <Badge variant="destructive" className="text-xs">Overdue</Badge>;
+    }
+    
+    if (isToday(deadline)) {
+      const hoursLeft = differenceInHours(deadline, now);
+      return (
+        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
+          Due in {hoursLeft}h
+        </Badge>
+      );
+    }
+    
+    return (
+      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs">
+        <Clock className="h-3 w-3 mr-1" />
+        {format(deadline, "MMM d")}
+      </Badge>
+    );
   };
 
   if (inboxesLoading) {
@@ -227,17 +316,84 @@ export function CommsWorkspace({
                 variant="ghost" 
                 size="sm" 
                 onClick={handleRefresh}
-                disabled={!selectedInboxId}
-                data-testid="button-refresh-emails"
+                disabled={!selectedInboxId || syncMutation.isPending}
+                data-testid="button-sync-emails"
               >
-                <RefreshCw className="h-4 w-4" />
+                {syncMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
               </Button>
             </div>
-            <CardDescription>
-              {selectedInbox 
-                ? `${emailData?.messages?.length || 0} messages`
-                : "Select an inbox from the header"}
-            </CardDescription>
+            <div className="flex items-center justify-between gap-2">
+              <CardDescription className="flex-1">
+                {selectedInbox 
+                  ? `${emailData?.emails?.length || 0} client emails`
+                  : "Select an inbox from the header"}
+              </CardDescription>
+              {selectedInbox && emailData?.stats && (
+                <div className="flex items-center gap-1 text-xs">
+                  {emailData.stats.overdue > 0 && (
+                    <Badge variant="destructive" className="text-xs">{emailData.stats.overdue} overdue</Badge>
+                  )}
+                  {emailData.stats.dueToday > 0 && (
+                    <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
+                      {emailData.stats.dueToday} due today
+                    </Badge>
+                  )}
+                </div>
+              )}
+            </div>
+            {selectedInboxId && (
+              <div className="flex gap-1 pt-2 flex-wrap">
+                <Button
+                  variant={emailFilter === "all" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setEmailFilter("all")}
+                  data-testid="filter-all"
+                >
+                  All
+                </Button>
+                <Button
+                  variant={emailFilter === "pending_reply" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setEmailFilter("pending_reply")}
+                  data-testid="filter-pending"
+                >
+                  Pending
+                </Button>
+                <Button
+                  variant={emailFilter === "due_today" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setEmailFilter("due_today")}
+                  data-testid="filter-due-today"
+                >
+                  Due Today
+                </Button>
+                <Button
+                  variant={emailFilter === "overdue" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setEmailFilter("overdue")}
+                  data-testid="filter-overdue"
+                >
+                  Overdue
+                </Button>
+                <Button
+                  variant={emailFilter === "replied" ? "secondary" : "ghost"}
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setEmailFilter("replied")}
+                  data-testid="filter-replied"
+                >
+                  Replied
+                </Button>
+              </div>
+            )}
           </CardHeader>
           <CardContent className="flex-1 overflow-hidden p-0">
             {!selectedInboxId ? (
@@ -276,24 +432,24 @@ export function CommsWorkspace({
                   </Button>
                 </div>
               </div>
-            ) : emailData?.messages && emailData.messages.length > 0 ? (
+            ) : emailData?.emails && emailData.emails.length > 0 ? (
               <ScrollArea className="h-full">
                 <div className="divide-y">
-                  {emailData.messages.map((email) => (
+                  {emailData.emails.map((email) => (
                     <div
                       key={email.id}
                       className={`p-3 cursor-pointer transition-colors hover:bg-muted/50 ${
-                        selectedMessageId === email.id ? "bg-primary/10 border-l-2 border-l-primary" : ""
+                        selectedMessageId === email.microsoftId ? "bg-primary/10 border-l-2 border-l-primary" : ""
                       } ${!email.isRead ? "bg-primary/5" : ""}`}
-                      onClick={() => setSelectedMessageId(email.id)}
+                      onClick={() => setSelectedMessageId(email.microsoftId)}
                       data-testid={`email-item-${email.id}`}
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <span className={`text-sm truncate flex-1 ${!email.isRead ? "font-semibold" : ""}`}>
-                          {email.from.emailAddress.name || email.from.emailAddress.address}
+                          {email.fromName || email.fromAddress}
                         </span>
                         <span className="text-xs text-muted-foreground shrink-0">
-                          {formatDistanceToNow(new Date(email.receivedDateTime), { addSuffix: true })}
+                          {formatDistanceToNow(new Date(email.receivedAt), { addSuffix: true })}
                         </span>
                       </div>
                       <div className="flex items-center gap-2 mb-1">
@@ -307,9 +463,21 @@ export function CommsWorkspace({
                           <Badge variant="destructive" className="text-xs shrink-0 px-1">!</Badge>
                         )}
                       </div>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {email.bodyPreview}
-                      </p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs text-muted-foreground truncate flex-1">
+                          {email.bodyPreview}
+                        </p>
+                        {getSlaStatusBadge(email)}
+                      </div>
+                      {email.matchedClient && (
+                        <div className="flex items-center gap-1 mt-1.5">
+                          <User className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground">
+                            {email.matchedClient.name}
+                            {email.matchedClient.companyName && ` - ${email.matchedClient.companyName}`}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -318,7 +486,10 @@ export function CommsWorkspace({
               <div className="flex items-center justify-center h-full text-muted-foreground">
                 <div className="text-center p-4">
                   <Inbox className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-sm">No emails found</p>
+                  <p className="text-sm">No client emails found</p>
+                  <p className="text-xs mt-1 text-muted-foreground">
+                    Click the sync button to fetch new emails
+                  </p>
                 </div>
               </div>
             )}

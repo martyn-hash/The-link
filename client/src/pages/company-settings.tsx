@@ -14,7 +14,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Settings, Save, Bell, Link2, Plus, Trash2, ExternalLink, Upload, Image as ImageIcon, AlertTriangle, Lock, Eye, EyeOff, Phone, MessageSquare, Mail } from "lucide-react";
+import { Settings, Save, Bell, Link2, Plus, Trash2, ExternalLink, Upload, Image as ImageIcon, AlertTriangle, Lock, Eye, EyeOff, Phone, MessageSquare, Mail, Clock } from "lucide-react";
 import type { CompanySettings, UpdateCompanySettings } from "@shared/schema";
 
 interface RedirectUrl {
@@ -45,6 +45,12 @@ export default function CompanySettingsPage() {
   const [aiButtonEnabled, setAiButtonEnabled] = useState(false);
   const [schedulingEmailsEnabled, setSchedulingEmailsEnabled] = useState(true);
   const [emailModuleActive, setEmailModuleActive] = useState(false);
+  
+  // SLA settings for email response tracking
+  const [slaResponseDays, setSlaResponseDays] = useState(2);
+  const [workingHoursStart, setWorkingHoursStart] = useState("09:00");
+  const [workingHoursEnd, setWorkingHoursEnd] = useState("17:00");
+  const [workingDays, setWorkingDays] = useState<number[]>([1, 2, 3, 4, 5]);
   
   // AI System Prompts
   const [aiSystemPromptNotes, setAiSystemPromptNotes] = useState("");
@@ -90,6 +96,10 @@ export default function CompanySettingsPage() {
       setAiButtonEnabled(settings.aiButtonEnabled || false);
       setSchedulingEmailsEnabled(settings.schedulingEmailsEnabled !== false);
       setEmailModuleActive(settings.emailModuleActive || false);
+      setSlaResponseDays(settings.slaResponseDays ?? 2);
+      setWorkingHoursStart(settings.workingHoursStart || "09:00");
+      setWorkingHoursEnd(settings.workingHoursEnd || "17:00");
+      setWorkingDays((settings.workingDays as number[]) || [1, 2, 3, 4, 5]);
       setAiSystemPromptNotes(settings.aiSystemPromptNotes || "");
       setAiSystemPromptEmails(settings.aiSystemPromptEmails || "");
       setAiSystemPromptStageNotifications(settings.aiSystemPromptStageNotifications || "");
@@ -258,6 +268,10 @@ export default function CompanySettingsPage() {
       aiButtonEnabled,
       schedulingEmailsEnabled,
       emailModuleActive,
+      slaResponseDays,
+      workingHoursStart,
+      workingHoursEnd,
+      workingDays,
       aiSystemPromptNotes: aiSystemPromptNotes || null,
       aiSystemPromptEmails: aiSystemPromptEmails || null,
       aiSystemPromptStageNotifications: aiSystemPromptStageNotifications || null,
@@ -665,6 +679,117 @@ export default function CompanySettingsPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Email SLA Settings Card */}
+          {emailModuleActive && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="w-5 h-5" />
+                  Email SLA Settings
+                </CardTitle>
+                <CardDescription>
+                  Configure response time targets and working hours for email SLA tracking. Emails from clients are tracked against these settings.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="sla-response-days">Response Target (Business Days)</Label>
+                    <Input
+                      id="sla-response-days"
+                      data-testid="input-sla-response-days"
+                      type="number"
+                      min={1}
+                      max={30}
+                      value={slaResponseDays}
+                      onChange={(e) => setSlaResponseDays(parseInt(e.target.value) || 2)}
+                      disabled={settingsLoading || updateSettingsMutation.isPending}
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      How many business days staff have to respond to client emails.
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label>Working Days</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        { day: 1, label: "Mon" },
+                        { day: 2, label: "Tue" },
+                        { day: 3, label: "Wed" },
+                        { day: 4, label: "Thu" },
+                        { day: 5, label: "Fri" },
+                        { day: 6, label: "Sat" },
+                        { day: 0, label: "Sun" },
+                      ].map(({ day, label }) => (
+                        <Button
+                          key={day}
+                          variant={workingDays.includes(day) ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => {
+                            if (workingDays.includes(day)) {
+                              setWorkingDays(workingDays.filter(d => d !== day));
+                            } else {
+                              setWorkingDays([...workingDays, day].sort());
+                            }
+                          }}
+                          disabled={settingsLoading || updateSettingsMutation.isPending}
+                          data-testid={`button-working-day-${day}`}
+                        >
+                          {label}
+                        </Button>
+                      ))}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Select which days count toward the SLA deadline.
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="working-hours-start">Working Hours Start</Label>
+                    <Input
+                      id="working-hours-start"
+                      data-testid="input-working-hours-start"
+                      type="time"
+                      value={workingHoursStart}
+                      onChange={(e) => setWorkingHoursStart(e.target.value)}
+                      disabled={settingsLoading || updateSettingsMutation.isPending}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="working-hours-end">Working Hours End</Label>
+                    <Input
+                      id="working-hours-end"
+                      data-testid="input-working-hours-end"
+                      type="time"
+                      value={workingHoursEnd}
+                      onChange={(e) => setWorkingHoursEnd(e.target.value)}
+                      disabled={settingsLoading || updateSettingsMutation.isPending}
+                    />
+                  </div>
+                </div>
+                
+                <p className="text-sm text-muted-foreground">
+                  SLA deadlines are calculated based on working hours. Emails received outside working hours will have their deadline start from the next working day.
+                </p>
+
+                <div className="flex justify-end">
+                  <Button
+                    onClick={handleSave}
+                    disabled={settingsLoading || updateSettingsMutation.isPending || !emailSenderName.trim()}
+                    data-testid="button-save-sla-settings"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Maintenance Mode Card */}
           <Card className={maintenanceMode ? "border-amber-500 dark:border-amber-600" : ""}>

@@ -914,10 +914,10 @@ export class EmailStorage {
       clientMatchedOnly?: boolean;
       dueTodayOnly?: boolean;
       overdueOnly?: boolean;
+      limit?: number;
+      offset?: number;
     }
   ): Promise<InboxEmail[]> {
-    let query = db.select().from(inboxEmails).where(eq(inboxEmails.inboxId, inboxId));
-
     const conditions: any[] = [eq(inboxEmails.inboxId, inboxId)];
 
     if (filters?.status && filters.status !== 'all') {
@@ -951,11 +951,20 @@ export class EmailStorage {
       );
     }
 
-    return await db
+    let query = db
       .select()
       .from(inboxEmails)
       .where(and(...conditions))
       .orderBy(desc(inboxEmails.receivedAt));
+
+    if (filters?.limit) {
+      query = query.limit(filters.limit) as any;
+    }
+    if (filters?.offset) {
+      query = query.offset(filters.offset) as any;
+    }
+
+    return await query;
   }
 
   async updateInboxEmail(id: string, updates: Partial<InsertInboxEmail>): Promise<InboxEmail> {

@@ -1264,6 +1264,7 @@ export function registerEmailRoutes(
    * Query params:
    * - status: Filter by status (pending_reply, replied, no_action_needed, overdue, all)
    * - clientMatched: If 'true', only return emails matched to clients
+   * - dueToday: If 'true', only return emails with SLA deadline today
    * - limit: Max results (default 50)
    * - offset: Pagination offset
    */
@@ -1274,6 +1275,7 @@ export function registerEmailRoutes(
       const { 
         status = 'all', 
         clientMatched = 'false',
+        dueToday = 'false',
         limit = '50',
         offset = '0'
       } = req.query;
@@ -1304,6 +1306,10 @@ export function registerEmailRoutes(
       
       if (clientMatched === 'true') {
         filters.clientMatchedOnly = true;
+      }
+      
+      if (dueToday === 'true') {
+        filters.dueTodayOnly = true;
       }
 
       const emails = await storage.getEmailsByInbox(inboxId, filters);
