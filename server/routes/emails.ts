@@ -121,6 +121,19 @@ export function registerEmailRoutes(
         await createReplyToMessage(user.email, graphMessageId, body, true, { subject, to, cc, attachments });
       }
       
+      // Mark related inbox emails as replied for SLA tracking
+      // Use conversationIdSeen which matches inbox_emails.conversationId (raw Graph API ID)
+      try {
+        if (message.conversationIdSeen) {
+          const markedCount = await storage.markConversationEmailsAsReplied(message.conversationIdSeen);
+          if (markedCount > 0) {
+            console.log(`[Email Reply] Marked ${markedCount} inbox email(s) as replied for conversation ${message.conversationIdSeen}`);
+          }
+        }
+      } catch (slaError) {
+        console.error('[Email Reply] Error updating SLA tracking:', slaError);
+      }
+      
       res.json({
         success: true,
         message: "Reply sent successfully. It will appear in your Sent Items shortly."

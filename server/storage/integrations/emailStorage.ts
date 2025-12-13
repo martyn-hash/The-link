@@ -1047,6 +1047,40 @@ export class EmailStorage {
       .orderBy(asc(inboxEmails.receivedAt));
   }
 
+  async markConversationEmailsAsReplied(conversationId: string): Promise<number> {
+    const result = await db
+      .update(inboxEmails)
+      .set({ 
+        status: 'replied', 
+        repliedAt: new Date() 
+      })
+      .where(
+        and(
+          eq(inboxEmails.conversationId, conversationId),
+          eq(inboxEmails.status, 'pending_reply')
+        )
+      )
+      .returning();
+    return result.length;
+  }
+
+  async markEmailsAsRepliedByRecipient(recipientEmail: string): Promise<number> {
+    const result = await db
+      .update(inboxEmails)
+      .set({ 
+        status: 'replied', 
+        repliedAt: new Date() 
+      })
+      .where(
+        and(
+          eq(inboxEmails.fromAddress, recipientEmail.toLowerCase()),
+          eq(inboxEmails.status, 'pending_reply')
+        )
+      )
+      .returning();
+    return result.length;
+  }
+
   async deleteInboxEmail(id: string): Promise<void> {
     await db.delete(inboxEmails).where(eq(inboxEmails.id, id));
   }

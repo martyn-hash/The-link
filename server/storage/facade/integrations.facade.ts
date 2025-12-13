@@ -447,6 +447,18 @@ export function applyIntegrationsFacade<TBase extends Constructor<IntegrationsFa
       return this.emailStorage.getInboxEmailStats(inboxId);
     }
 
+    async markConversationEmailsAsReplied(conversationId: string) {
+      return this.emailStorage.markConversationEmailsAsReplied(conversationId);
+    }
+
+    async markEmailsAsRepliedByRecipient(recipientEmail: string) {
+      return this.emailStorage.markEmailsAsRepliedByRecipient(recipientEmail);
+    }
+
+    async getEmailsByConversationId(conversationId: string) {
+      return this.emailStorage.getEmailsByConversationId(conversationId);
+    }
+
     // ============================================================================
     // SMS TEMPLATES - SmsTemplateStorage (6 methods)
     // ============================================================================
