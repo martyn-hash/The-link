@@ -1,5 +1,5 @@
 import { db } from "../../db";
-import { eq, and, or, desc, isNull, lt, sql, asc } from "drizzle-orm";
+import { eq, and, or, desc, isNull, lt, sql, asc, gte, lte } from "drizzle-orm";
 import {
   graphWebhookSubscriptions,
   graphSyncState,
@@ -14,6 +14,7 @@ import {
   inboxes,
   userInboxAccess,
   users,
+  inboxEmails,
   type GraphWebhookSubscription,
   type InsertGraphWebhookSubscription,
   type GraphSyncState,
@@ -38,6 +39,8 @@ import {
   type InsertInbox,
   type UserInboxAccess,
   type InsertUserInboxAccess,
+  type InboxEmail,
+  type InsertInboxEmail,
 } from "@shared/schema";
 
 export class EmailStorage {
@@ -869,5 +872,215 @@ export class EmailStorage {
     if (!hasAccess) {
       await this.grantInboxAccess(userId, inbox.id, 'full', userId);
     }
+  }
+
+  // ========== INBOX EMAILS (SLA TRACKING) ==========
+
+  async createInboxEmail(email: InsertInboxEmail): Promise<InboxEmail> {
+    const [created] = await db
+      .insert(inboxEmails)
+      .values(email)
+      .returning();
+    return created;
+  }
+
+  async getInboxEmailById(id: string): Promise<InboxEmail | undefined> {
+    const result = await db
+      .select()
+      .from(inboxEmails)
+      .where(eq(inboxEmails.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getInboxEmailByMicrosoftId(inboxId: string, microsoftId: string): Promise<InboxEmail | undefined> {
+    const result = await db
+      .select()
+      .from(inboxEmails)
+      .where(
+        and(
+          eq(inboxEmails.inboxId, inboxId),
+          eq(inboxEmails.microsoftId, microsoftId)
+        )
+      )
+      .limit(1);
+    return result[0];
+  }
+
+  async getEmailsByInbox(
+    inboxId: string,
+    filters?: {
+      status?: 'pending_reply' | 'replied' | 'no_action_needed' | 'overdue' | 'all';
+      clientMatchedOnly?: boolean;
+      dueTodayOnly?: boolean;
+      overdueOnly?: boolean;
+    }
+  ): Promise<InboxEmail[]> {
+    let query = db.select().from(inboxEmails).where(eq(inboxEmails.inboxId, inboxId));
+
+    const conditions: any[] = [eq(inboxEmails.inboxId, inboxId)];
+
+    if (filters?.status && filters.status !== 'all') {
+      conditions.push(eq(inboxEmails.status, filters.status));
+    }
+
+    if (filters?.clientMatchedOnly) {
+      conditions.push(sql`${inboxEmails.matchedClientId} IS NOT NULL`);
+    }
+
+    if (filters?.dueTodayOnly) {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+      conditions.push(
+        and(
+          gte(inboxEmails.slaDeadline, todayStart),
+          lte(inboxEmails.slaDeadline, todayEnd)
+        )
+      );
+    }
+
+    if (filters?.overdueOnly) {
+      const now = new Date();
+      conditions.push(
+        and(
+          lt(inboxEmails.slaDeadline, now),
+          eq(inboxEmails.status, 'pending_reply')
+        )
+      );
+    }
+
+    return await db
+      .select()
+      .from(inboxEmails)
+      .where(and(...conditions))
+      .orderBy(desc(inboxEmails.receivedAt));
+  }
+
+  async updateInboxEmail(id: string, updates: Partial<InsertInboxEmail>): Promise<InboxEmail> {
+    const [updated] = await db
+      .update(inboxEmails)
+      .set(updates)
+      .where(eq(inboxEmails.id, id))
+      .returning();
+    return updated;
+  }
+
+  async updateInboxEmailStatus(id: string, status: 'pending_reply' | 'replied' | 'no_action_needed' | 'overdue'): Promise<InboxEmail> {
+    return await this.updateInboxEmail(id, { status });
+  }
+
+  async markInboxEmailAsReplied(id: string): Promise<InboxEmail> {
+    return await this.updateInboxEmail(id, { 
+      status: 'replied', 
+      repliedAt: new Date() 
+    });
+  }
+
+  async getEmailsNeedingSlaCheck(): Promise<InboxEmail[]> {
+    const now = new Date();
+    return await db
+      .select()
+      .from(inboxEmails)
+      .where(
+        and(
+          eq(inboxEmails.status, 'pending_reply'),
+          sql`${inboxEmails.slaDeadline} IS NOT NULL`,
+          lt(inboxEmails.slaDeadline, now)
+        )
+      )
+      .orderBy(asc(inboxEmails.slaDeadline));
+  }
+
+  async markOverdueEmails(): Promise<number> {
+    const now = new Date();
+    const result = await db
+      .update(inboxEmails)
+      .set({ status: 'overdue' })
+      .where(
+        and(
+          eq(inboxEmails.status, 'pending_reply'),
+          sql`${inboxEmails.slaDeadline} IS NOT NULL`,
+          lt(inboxEmails.slaDeadline, now)
+        )
+      )
+      .returning();
+    return result.length;
+  }
+
+  async upsertInboxEmail(email: InsertInboxEmail): Promise<InboxEmail> {
+    const existing = await this.getInboxEmailByMicrosoftId(email.inboxId, email.microsoftId);
+    
+    if (existing) {
+      const updatePayload: Partial<InsertInboxEmail> = {};
+      if (email.matchedClientId && !existing.matchedClientId) {
+        updatePayload.matchedClientId = email.matchedClientId;
+      }
+      if (email.slaDeadline && !existing.slaDeadline) {
+        updatePayload.slaDeadline = email.slaDeadline;
+      }
+      if (email.bodyHtml && !existing.bodyHtml) {
+        updatePayload.bodyHtml = email.bodyHtml;
+      }
+      updatePayload.syncedAt = new Date();
+      
+      return await this.updateInboxEmail(existing.id, updatePayload);
+    } else {
+      return await this.createInboxEmail(email);
+    }
+  }
+
+  async getInboxEmailsForClient(clientId: string): Promise<InboxEmail[]> {
+    return await db
+      .select()
+      .from(inboxEmails)
+      .where(eq(inboxEmails.matchedClientId, clientId))
+      .orderBy(desc(inboxEmails.receivedAt));
+  }
+
+  async getEmailsByConversationId(conversationId: string): Promise<InboxEmail[]> {
+    return await db
+      .select()
+      .from(inboxEmails)
+      .where(eq(inboxEmails.conversationId, conversationId))
+      .orderBy(asc(inboxEmails.receivedAt));
+  }
+
+  async deleteInboxEmail(id: string): Promise<void> {
+    await db.delete(inboxEmails).where(eq(inboxEmails.id, id));
+  }
+
+  async getInboxEmailStats(inboxId: string): Promise<{
+    total: number;
+    pendingReply: number;
+    overdue: number;
+    dueToday: number;
+    replied: number;
+  }> {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+    const now = new Date();
+
+    const result = await db
+      .select({
+        total: sql<number>`count(*)`,
+        pendingReply: sql<number>`count(*) filter (where ${inboxEmails.status} = 'pending_reply')`,
+        overdue: sql<number>`count(*) filter (where ${inboxEmails.status} = 'overdue' or (${inboxEmails.status} = 'pending_reply' and ${inboxEmails.slaDeadline} < ${now}))`,
+        dueToday: sql<number>`count(*) filter (where ${inboxEmails.status} = 'pending_reply' and ${inboxEmails.slaDeadline} >= ${todayStart} and ${inboxEmails.slaDeadline} <= ${todayEnd})`,
+        replied: sql<number>`count(*) filter (where ${inboxEmails.status} = 'replied')`,
+      })
+      .from(inboxEmails)
+      .where(eq(inboxEmails.inboxId, inboxId));
+
+    return {
+      total: Number(result[0]?.total ?? 0),
+      pendingReply: Number(result[0]?.pendingReply ?? 0),
+      overdue: Number(result[0]?.overdue ?? 0),
+      dueToday: Number(result[0]?.dueToday ?? 0),
+      replied: Number(result[0]?.replied ?? 0),
+    };
   }
 }
