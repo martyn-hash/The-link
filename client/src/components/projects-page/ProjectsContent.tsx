@@ -447,6 +447,10 @@ export function ProjectsContent({
   pivotConfig,
   onPivotConfigChange,
   currentSavedViewId,
+  commsSelectedInboxId,
+  setCommsSelectedInboxId,
+  commsSelectedMessageId,
+  setCommsSelectedMessageId,
 }: ProjectsContentProps) {
   const viewContentProps = {
     viewMode,
