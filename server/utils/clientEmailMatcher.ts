@@ -29,7 +29,7 @@ export async function matchEmailToClient(email: string): Promise<ClientMatchResu
   const clientByAlias = await db
     .select({ clientId: clientEmailAliases.clientId })
     .from(clientEmailAliases)
-    .where(eq(clientEmailAliases.emailLowercase, normalizedEmail))
+    .where(sql`lower(email) = ${normalizedEmail}`)
     .limit(1);
 
   if (clientByAlias.length > 0) {

@@ -169,7 +169,6 @@ export function CommsWorkspace({
     queryKey: ["/api/comms/inbox", selectedInboxId, "stored-emails", emailFilter],
     queryFn: async () => {
       const params = new URLSearchParams({
-        clientMatched: "true",
         limit: "50",
       });
       if (emailFilter !== "all") {
@@ -328,7 +327,7 @@ export function CommsWorkspace({
             <div className="flex items-center justify-between gap-2">
               <CardDescription className="flex-1">
                 {selectedInbox 
-                  ? `${emailData?.emails?.length || 0} client emails`
+                  ? `${emailData?.emails?.length || 0} emails`
                   : "Select an inbox from the header"}
               </CardDescription>
               {selectedInbox && emailData?.stats && (
