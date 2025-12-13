@@ -300,10 +300,10 @@ export function CommsWorkspace({
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0 overflow-hidden">
       {/* Left Column: Email List */}
-      <div className="lg:col-span-1 flex flex-col h-full">
-        <Card className="flex-1 flex flex-col min-h-[500px]">
+      <div className="lg:col-span-1 flex flex-col min-h-0">
+        <Card className="flex-1 flex flex-col min-h-0">
           <CardHeader className="pb-3 shrink-0">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2">
@@ -393,9 +393,9 @@ export function CommsWorkspace({
               </div>
             )}
           </CardHeader>
-          <CardContent className="flex-1 overflow-hidden p-0">
+          <CardContent className="flex-1 min-h-0 p-0 flex flex-col overflow-hidden">
             {!selectedInboxId ? (
-              <div className="flex items-center justify-center h-full text-muted-foreground">
+              <div className="flex items-center justify-center flex-1 text-muted-foreground">
                 <div className="text-center p-4">
                   <Inbox className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p className="text-sm">Select an inbox from the dropdown above</p>
@@ -431,7 +431,7 @@ export function CommsWorkspace({
                 </div>
               </div>
             ) : emailData?.emails && emailData.emails.length > 0 ? (
-              <ScrollArea className="h-full">
+              <ScrollArea className="flex-1 min-h-0">
                 <div className="divide-y">
                   {emailData.emails.map((email) => (
                     <div
@@ -496,8 +496,8 @@ export function CommsWorkspace({
       </div>
 
       {/* Right Column: Email Detail (full width) */}
-      <div className="lg:col-span-2 flex flex-col h-full">
-        <Card className="flex-1 flex flex-col min-h-[500px]">
+      <div className="lg:col-span-2 flex flex-col min-h-0">
+        <Card className="flex-1 flex flex-col min-h-0">
           <CardHeader className="pb-3 shrink-0">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2">
@@ -528,9 +528,15 @@ export function CommsWorkspace({
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-4">
                     <h3 className="font-semibold text-lg leading-tight">{selectedEmail.subject || "(No subject)"}</h3>
-                    {selectedEmail.importance === "high" && (
-                      <Badge variant="destructive" className="shrink-0">High Priority</Badge>
-                    )}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {(() => {
+                        const storedEmail = emailData?.emails?.find(e => e.microsoftId === selectedMessageId);
+                        return storedEmail ? getSlaStatusBadge(storedEmail) : null;
+                      })()}
+                      {selectedEmail.importance === "high" && (
+                        <Badge variant="destructive">High Priority</Badge>
+                      )}
+                    </div>
                   </div>
                   <div className="text-sm space-y-1 bg-muted/30 rounded-lg p-3">
                     <p>

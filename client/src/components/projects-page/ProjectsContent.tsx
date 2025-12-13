@@ -527,7 +527,7 @@ export function ProjectsContent({
 
   if (workspaceMode === "comms") {
     return (
-      <main className="flex-1 overflow-auto w-full px-4 md:px-6 lg:px-8 py-6 md:py-8" style={{ paddingBottom: isMobile ? '4rem' : '0' }}>
+      <main className="flex-1 min-h-0 overflow-hidden w-full px-4 md:px-6 lg:px-8 py-4 flex flex-col" style={{ paddingBottom: isMobile ? '4rem' : '0' }}>
         <CommsWorkspace 
           selectedInboxId={commsSelectedInboxId}
           setSelectedInboxId={setCommsSelectedInboxId}

@@ -317,7 +317,7 @@ function WorkspaceModeToggle({
         variant={workspaceMode === "projects" ? "default" : "ghost"}
         size="sm"
         onClick={() => setWorkspaceMode("projects")}
-        className="gap-2"
+        className="gap-2 min-w-[100px] justify-center"
         data-testid="button-workspace-projects"
       >
         <FolderKanban className="h-4 w-4" />
@@ -327,7 +327,7 @@ function WorkspaceModeToggle({
         variant={workspaceMode === "tasks" ? "default" : "ghost"}
         size="sm"
         onClick={() => setWorkspaceMode("tasks")}
-        className="gap-2 relative"
+        className="gap-2 relative min-w-[100px] justify-center"
         data-testid="button-workspace-tasks"
       >
         <ClipboardList className="h-4 w-4" />
@@ -347,7 +347,7 @@ function WorkspaceModeToggle({
           variant={workspaceMode === "comms" ? "default" : "ghost"}
           size="sm"
           onClick={() => setWorkspaceMode("comms")}
-          className="gap-2"
+          className="gap-2 min-w-[100px] justify-center"
           data-testid="button-workspace-comms"
         >
           <Mail className="h-4 w-4" />
