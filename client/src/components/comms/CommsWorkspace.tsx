@@ -393,7 +393,7 @@ export function CommsWorkspace({
               </div>
             )}
           </CardHeader>
-          <CardContent className="flex-1 min-h-0 p-0 flex flex-col overflow-hidden">
+          <CardContent className="flex-1 min-h-0 p-0 overflow-y-auto">
             {!selectedInboxId ? (
               <div className="flex items-center justify-center flex-1 text-muted-foreground">
                 <div className="text-center p-4">
@@ -516,15 +516,15 @@ export function CommsWorkspace({
                 : "Select an email to view its content"}
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex-1 overflow-auto">
+          <CardContent className="flex-1 min-h-0 overflow-y-auto p-0">
             {emailDetailLoading ? (
-              <div className="space-y-3">
+              <div className="space-y-3 p-4">
                 <Skeleton className="h-6 w-3/4" />
                 <Skeleton className="h-4 w-1/2" />
                 <Skeleton className="h-32 w-full" />
               </div>
             ) : selectedEmail ? (
-              <div className="space-y-4">
+              <div className="space-y-4 p-4">
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-4">
                     <h3 className="font-semibold text-lg leading-tight">{selectedEmail.subject || "(No subject)"}</h3>
