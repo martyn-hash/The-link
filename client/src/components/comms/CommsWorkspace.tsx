@@ -192,8 +192,7 @@ export function CommsWorkspace({
   // Sync mutation to fetch new emails from Microsoft Graph
   const syncMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", `/api/comms/inbox/${selectedInboxId}/sync`);
-      return res.json();
+      return await apiRequest("POST", `/api/comms/inbox/${selectedInboxId}/sync`);
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/comms/inbox", selectedInboxId, "stored-emails"] });
