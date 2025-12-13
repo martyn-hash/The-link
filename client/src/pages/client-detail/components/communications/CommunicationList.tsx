@@ -8,11 +8,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Clock, Eye, MessageSquare, UserIcon, Phone, Loader2, FileText, XCircle } from "lucide-react";
+import { Clock, Eye, MessageSquare, UserIcon, Phone, Loader2, FileText, XCircle, ArrowDown, ArrowUp, Paperclip, AlertCircle, CheckCircle, Mail } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { CommunicationCard } from "@/components/communication-card";
 import { getIcon, getTypeLabel, getTypeColor } from "./helpers.tsx";
-import type { CommunicationListProps, TimelineItem, CommunicationTimelineItem } from "./types";
+import type { CommunicationListProps, TimelineItem, CommunicationTimelineItem, InboxEmailTimelineItem, UnifiedTimelineItem } from "./types";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ProjectLinkProps {
@@ -120,6 +120,63 @@ function TranscriptionStatusIcon({ item }: { item: CommunicationTimelineItem }) 
   );
 }
 
+function DirectionIndicator({ direction }: { direction: 'inbound' | 'outbound' | null }) {
+  if (!direction) return null;
+  
+  const isInbound = direction === 'inbound';
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full ${isInbound ? 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400' : 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400'}`}>
+            {isInbound ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{isInbound ? 'Inbound (received)' : 'Outbound (sent)'}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+function SLABadge({ status, slaDeadline }: { status?: string; slaDeadline?: string | null }) {
+  if (!status) return null;
+  
+  let variant: 'default' | 'secondary' | 'destructive' | 'outline' = 'secondary';
+  let label = status;
+  let icon = null;
+  
+  switch (status) {
+    case 'pending_reply':
+      variant = 'outline';
+      label = 'Pending';
+      icon = <Clock className="h-3 w-3 mr-1" />;
+      break;
+    case 'replied':
+      variant = 'secondary';
+      label = 'Replied';
+      icon = <CheckCircle className="h-3 w-3 mr-1 text-green-600" />;
+      break;
+    case 'overdue':
+      variant = 'destructive';
+      label = 'Overdue';
+      icon = <AlertCircle className="h-3 w-3 mr-1" />;
+      break;
+    case 'no_action_needed':
+      return null;
+    default:
+      return null;
+  }
+  
+  return (
+    <Badge variant={variant} className="text-xs flex items-center gap-0.5" data-testid={`badge-sla-${status}`}>
+      {icon}
+      {label}
+    </Badge>
+  );
+}
+
 export function CommunicationList({
   items,
   projectCache,
@@ -151,6 +208,8 @@ export function CommunicationList({
       case 'email_thread':
         onViewEmailThread(item.data);
         break;
+      case 'inbox_email':
+        break;
     }
   };
 
@@ -168,6 +227,13 @@ export function CommunicationList({
         return 'Email';
       case 'message_thread':
         return 'Internal Message';
+      case 'inbox_email':
+        if (item.direction === 'inbound') {
+          return item.fromName || item.fromAddress || 'Unknown sender';
+        } else if (item.direction === 'outbound') {
+          return item.inboxName || 'Staff';
+        }
+        return 'Email';
       default:
         return 'System';
     }
@@ -202,7 +268,7 @@ export function CommunicationList({
                 projectCache[item.projectId!]?.description || 
                 projectCache[item.projectId!]?.client?.name
               }
-              messageCount={item.kind !== 'communication' ? item.messageCount : undefined}
+              messageCount={(item.kind === 'message_thread' || item.kind === 'email_thread') ? item.messageCount : undefined}
               unreadCount={item.kind === 'message_thread' ? item.unreadCount : undefined}
               attachmentCount={item.kind === 'message_thread' ? item.attachmentCount : undefined}
               participants={item.kind === 'email_thread' ? item.participants : undefined}
@@ -281,6 +347,32 @@ export function CommunicationList({
                       )}
                     </div>
                   </div>
+                ) : item.kind === 'inbox_email' ? (
+                  <div>
+                    <div className="font-medium text-sm flex items-center gap-2">
+                      <DirectionIndicator direction={item.direction} />
+                      <span className="truncate max-w-[300px]">{item.subject || 'No Subject'}</span>
+                      {item.hasAttachments && (
+                        <Paperclip className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                      )}
+                      <SLABadge status={item.status} slaDeadline={item.slaDeadline} />
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate mt-0.5">
+                      {item.direction === 'inbound' ? (
+                        <span>From: {item.fromName || item.fromAddress || 'Unknown'}</span>
+                      ) : item.direction === 'outbound' ? (
+                        <span>To: {item.toRecipients?.map(r => r.name || r.address).join(', ') || 'Unknown'}</span>
+                      ) : null}
+                      {item.inboxName && (
+                        <span className="ml-2 text-muted-foreground/60">via {item.inboxName}</span>
+                      )}
+                    </div>
+                    {item.content && (
+                      <div className="text-xs text-muted-foreground truncate mt-0.5">
+                        {item.content.substring(0, 80)}...
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <div className="text-sm truncate">
                     {item.subject && <div className="font-medium">{item.subject}</div>}
@@ -351,6 +443,16 @@ export function CommunicationList({
                 >
                   <Eye className="h-4 w-4 mr-2" />
                   View Thread
+                </Button>
+              ) : item.kind === 'inbox_email' ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {}}
+                  data-testid={`button-view-inbox-email-${item.id}`}
+                >
+                  <Eye className="h-4 w-4 mr-2" />
+                  View
                 </Button>
               ) : (
                 <Button

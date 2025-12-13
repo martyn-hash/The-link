@@ -2,6 +2,16 @@ import type { Communication, Person, User } from "@shared/schema";
 
 export type CommunicationFilterType = 'all' | 'phone_call' | 'sms' | 'email' | 'message_thread' | 'note' | 'email_thread';
 
+export type DirectionFilterType = 'all' | 'inbound' | 'outbound';
+
+export type SLAStatusFilterType = 'all' | 'pending' | 'replied' | 'overdue';
+
+export interface CommunicationFilterState {
+  types: CommunicationFilterType[];
+  direction: DirectionFilterType;
+  slaStatus: SLAStatusFilterType;
+}
+
 export type CommunicationFilterSelection = CommunicationFilterType[];
 
 export interface CommunicationWithRelations extends Communication {
@@ -42,7 +52,43 @@ export interface EmailThreadTimelineItem extends BaseTimelineDisplay {
   participants?: string[] | null;
 }
 
-export type TimelineItem = CommunicationTimelineItem | MessageThreadTimelineItem | EmailThreadTimelineItem;
+export interface UnifiedTimelineItem {
+  id: string;
+  source: 'communication' | 'inbox_email';
+  type: string;
+  subject: string | null;
+  content: string | null;
+  direction: 'inbound' | 'outbound' | null;
+  timestamp: string;
+  clientId: string | null;
+  personId: string | null;
+  projectId: string | null;
+  userId: string | null;
+  fromAddress?: string;
+  fromName?: string;
+  toRecipients?: { address: string; name: string }[];
+  status?: string;
+  slaDeadline?: string | null;
+  hasAttachments?: boolean;
+  inboxName?: string;
+  metadata?: unknown;
+}
+
+export interface InboxEmailTimelineItem extends BaseTimelineDisplay {
+  kind: 'inbox_email';
+  data: UnifiedTimelineItem;
+  type: 'email';
+  direction: 'inbound' | 'outbound' | null;
+  fromAddress?: string;
+  fromName?: string;
+  toRecipients?: { address: string; name: string }[];
+  status?: string;
+  slaDeadline?: string | null;
+  hasAttachments?: boolean;
+  inboxName?: string;
+}
+
+export type TimelineItem = CommunicationTimelineItem | MessageThreadTimelineItem | EmailThreadTimelineItem | InboxEmailTimelineItem;
 
 export interface LegacyTimelineItem {
   id: string;
@@ -178,6 +224,10 @@ export interface CommunicationFiltersProps {
   selectedFilters: CommunicationFilterSelection;
   onFilterChange: (filters: CommunicationFilterSelection) => void;
   items: TimelineItem[];
+  directionFilter: DirectionFilterType;
+  onDirectionChange: (direction: DirectionFilterType) => void;
+  slaStatusFilter: SLAStatusFilterType;
+  onSlaStatusChange: (status: SLAStatusFilterType) => void;
 }
 
 export interface CommunicationListProps {

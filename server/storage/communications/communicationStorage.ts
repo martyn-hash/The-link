@@ -1,8 +1,30 @@
 import { BaseStorage } from '../base/BaseStorage.js';
 import { db } from '../../db.js';
-import { communications, clients, people, users, projects } from '@shared/schema';
-import { eq, desc, sql, and, inArray, lt } from 'drizzle-orm';
-import type { Communication, InsertCommunication, Client, Person, User, Project } from '@shared/schema';
+import { communications, clients, people, users, projects, inboxEmails, inboxes } from '@shared/schema';
+import { eq, desc, sql, and, inArray, lt, or } from 'drizzle-orm';
+import type { Communication, InsertCommunication, Client, Person, User, Project, InboxEmail } from '@shared/schema';
+
+export interface UnifiedTimelineItem {
+  id: string;
+  source: 'communication' | 'inbox_email';
+  type: string;
+  subject: string | null;
+  content: string | null;
+  direction: 'inbound' | 'outbound' | null;
+  timestamp: Date;
+  clientId: string | null;
+  personId: string | null;
+  projectId: string | null;
+  userId: string | null;
+  fromAddress?: string;
+  fromName?: string;
+  toRecipients?: { address: string; name: string }[];
+  status?: string;
+  slaDeadline?: Date | null;
+  hasAttachments?: boolean;
+  inboxName?: string;
+  metadata?: unknown;
+}
 
 /**
  * CommunicationStorage handles all communication tracking operations
@@ -176,6 +198,111 @@ export class CommunicationStorage extends BaseStorage {
       )
       .orderBy(desc(communications.createdAt))
       .limit(20);
+
+    return results;
+  }
+
+  // ============================================================================
+  // UNIFIED TIMELINE - Combined Communications + Inbox Emails
+  // ============================================================================
+
+  async getUnifiedTimelineByClientId(
+    clientId: string,
+    options: {
+      direction?: 'inbound' | 'outbound' | 'all';
+      limit?: number;
+      offset?: number;
+    } = {}
+  ): Promise<UnifiedTimelineItem[]> {
+    const { direction = 'all', limit = 100, offset = 0 } = options;
+    
+    // Get communications for this client
+    const commsResults = await db
+      .select({
+        communication: communications,
+        user: users,
+      })
+      .from(communications)
+      .innerJoin(users, eq(communications.userId, users.id))
+      .where(eq(communications.clientId, clientId))
+      .orderBy(desc(communications.loggedAt));
+
+    // Get inbox emails for this client
+    const emailResults = await db
+      .select({
+        email: inboxEmails,
+        inbox: inboxes,
+      })
+      .from(inboxEmails)
+      .innerJoin(inboxes, eq(inboxEmails.inboxId, inboxes.id))
+      .where(eq(inboxEmails.matchedClientId, clientId))
+      .orderBy(desc(inboxEmails.receivedAt));
+
+    // Transform communications to unified format
+    const commsItems: UnifiedTimelineItem[] = commsResults.map(result => ({
+      id: result.communication.id,
+      source: 'communication' as const,
+      type: result.communication.type,
+      subject: result.communication.subject,
+      content: result.communication.content,
+      direction: result.communication.type === 'phone_call' || result.communication.type === 'sms_sent' 
+        ? 'outbound' as const 
+        : result.communication.type === 'sms_received' || result.communication.type === 'email_received'
+          ? 'inbound' as const
+          : result.communication.type === 'email_sent'
+            ? 'outbound' as const
+            : null,
+      timestamp: result.communication.actualContactTime,
+      clientId: result.communication.clientId,
+      personId: result.communication.personId,
+      projectId: result.communication.projectId,
+      userId: result.communication.userId,
+      metadata: result.communication.metadata,
+    }));
+
+    // Transform inbox emails to unified format
+    const emailItems: UnifiedTimelineItem[] = emailResults.map(result => ({
+      id: result.email.id,
+      source: 'inbox_email' as const,
+      type: 'email',
+      subject: result.email.subject,
+      content: result.email.bodyPreview,
+      direction: result.email.direction as 'inbound' | 'outbound' | null,
+      timestamp: result.email.receivedAt,
+      clientId: result.email.matchedClientId,
+      personId: result.email.matchedPersonId,
+      projectId: result.email.projectId,
+      userId: result.email.staffUserId,
+      fromAddress: result.email.fromAddress,
+      fromName: result.email.fromName || undefined,
+      toRecipients: result.email.toRecipients as { address: string; name: string }[],
+      status: result.email.status || undefined,
+      slaDeadline: result.email.slaDeadline,
+      hasAttachments: result.email.hasAttachments || false,
+      inboxName: result.inbox.displayName || result.inbox.emailAddress,
+    }));
+
+    // Combine and sort by timestamp
+    let allItems = [...commsItems, ...emailItems];
+
+    // Apply direction filter if specified
+    if (direction !== 'all') {
+      allItems = allItems.filter(item => item.direction === direction);
+    }
+
+    // Sort by timestamp descending
+    allItems.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    // Apply pagination
+    return allItems.slice(offset, offset + limit);
+  }
+
+  async getInboxEmailsByClientId(clientId: string): Promise<InboxEmail[]> {
+    const results = await db
+      .select()
+      .from(inboxEmails)
+      .where(eq(inboxEmails.matchedClientId, clientId))
+      .orderBy(desc(inboxEmails.receivedAt));
 
     return results;
   }

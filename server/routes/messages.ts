@@ -97,6 +97,64 @@ export function registerMessageRoutes(
     }
   });
 
+  // GET /api/communications/client/:clientId/timeline - Get unified timeline (emails + communications) for a client
+  app.get("/api/communications/client/:clientId/timeline", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramsValidation = validateParams(paramClientIdSchema, req.params);
+      if (!paramsValidation.success) {
+        return res.status(400).json({
+          message: "Invalid client ID",
+          errors: paramsValidation.errors
+        });
+      }
+
+      const { clientId } = paramsValidation.data;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+
+      const hasAccess = await userHasClientAccess(effectiveUserId, clientId, req.user.isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied." });
+      }
+
+      const direction = req.query.direction as 'inbound' | 'outbound' | 'all' | undefined;
+      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 100;
+      const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
+
+      const timeline = await storage.getUnifiedTimelineByClientId(clientId, { direction, limit, offset });
+      res.json(timeline);
+    } catch (error) {
+      console.error("Error fetching client timeline:", error);
+      res.status(500).json({ message: "Failed to fetch client timeline" });
+    }
+  });
+
+  // GET /api/communications/client/:clientId/emails - Get inbox emails for a client
+  app.get("/api/communications/client/:clientId/emails", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramsValidation = validateParams(paramClientIdSchema, req.params);
+      if (!paramsValidation.success) {
+        return res.status(400).json({
+          message: "Invalid client ID",
+          errors: paramsValidation.errors
+        });
+      }
+
+      const { clientId } = paramsValidation.data;
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+
+      const hasAccess = await userHasClientAccess(effectiveUserId, clientId, req.user.isAdmin);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "Access denied." });
+      }
+
+      const emails = await storage.getInboxEmailsByClientId(clientId);
+      res.json(emails);
+    } catch (error) {
+      console.error("Error fetching client emails:", error);
+      res.status(500).json({ message: "Failed to fetch client emails" });
+    }
+  });
+
   // GET /api/communications/person/:personId - Get communications for a specific person
   app.get("/api/communications/person/:personId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {

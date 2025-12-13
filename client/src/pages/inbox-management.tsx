@@ -52,6 +52,9 @@ import {
 } from "@/components/ui/select";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Progress } from "@/components/ui/progress";
+import { Label } from "@/components/ui/label";
 import {
   Inbox,
   Plus,
@@ -60,6 +63,10 @@ import {
   Users,
   RefreshCw,
   Building2,
+  Download,
+  History,
+  CheckCircle,
+  AlertCircle,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import type { Inbox as InboxType, User } from "@shared/schema";
@@ -72,10 +79,38 @@ const addInboxSchema = z.object({
 
 type AddInboxFormData = z.infer<typeof addInboxSchema>;
 
+interface HistoricalImportResult {
+  inboxId: string;
+  inboxEmail: string;
+  inboxSynced: number;
+  sentSynced: number;
+  matched: number;
+  skipped: number;
+  errors: string[];
+}
+
+interface ImportResponse {
+  success: boolean;
+  summary: {
+    inboxesProcessed: number;
+    totalInboxSynced: number;
+    totalSentSynced: number;
+    totalMatched: number;
+    totalErrors: number;
+  };
+  results: HistoricalImportResult[];
+}
+
 export default function InboxManagement() {
   const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  
+  // Historical import state
+  const [selectedInboxIds, setSelectedInboxIds] = useState<Set<string>>(new Set());
+  const [sinceDays, setSinceDays] = useState(90);
+  const [maxMessagesPerFolder, setMaxMessagesPerFolder] = useState(500);
+  const [importResults, setImportResults] = useState<ImportResponse | null>(null);
 
   const form = useForm<AddInboxFormData>({
     resolver: zodResolver(addInboxSchema),
@@ -145,6 +180,66 @@ export default function InboxManagement() {
       showFriendlyError({ error });
     },
   });
+
+  const historicalImportMutation = useMutation({
+    mutationFn: async (params: {
+      inboxIds: string[];
+      sinceDays: number;
+      maxMessagesPerFolder: number;
+    }) => {
+      const response = await apiRequest("POST", "/api/admin/email/historical-import", params);
+      return response as ImportResponse;
+    },
+    onSuccess: (data) => {
+      setImportResults(data);
+      toast({
+        title: "Import Complete",
+        description: `Imported ${data.summary.totalInboxSynced + data.summary.totalSentSynced} emails from ${data.summary.inboxesProcessed} inbox(es)`,
+      });
+    },
+    onError: (error: any) => {
+      showFriendlyError({ error });
+    },
+  });
+
+  const handleToggleInbox = (inboxId: string) => {
+    setSelectedInboxIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(inboxId)) {
+        next.delete(inboxId);
+      } else {
+        next.add(inboxId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (!inboxes) return;
+    const activeInboxes = inboxes.filter(i => i.isActive);
+    if (selectedInboxIds.size === activeInboxes.length) {
+      setSelectedInboxIds(new Set());
+    } else {
+      setSelectedInboxIds(new Set(activeInboxes.map(i => i.id)));
+    }
+  };
+
+  const handleRunImport = () => {
+    if (selectedInboxIds.size === 0) {
+      toast({
+        title: "No inboxes selected",
+        description: "Please select at least one inbox to import",
+        variant: "destructive",
+      });
+      return;
+    }
+    setImportResults(null);
+    historicalImportMutation.mutate({
+      inboxIds: Array.from(selectedInboxIds),
+      sinceDays,
+      maxMessagesPerFolder,
+    });
+  };
 
   const handleAddInbox = (data: AddInboxFormData) => {
     addInboxMutation.mutate(data);
@@ -417,6 +512,212 @@ export default function InboxManagement() {
                     <RefreshCw className={`w-4 h-4 mr-2 ${syncInboxesMutation.isPending ? 'animate-spin' : ''}`} />
                     Sync from Users
                   </Button>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Historical Import Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <History className="w-5 h-5" />
+                Historical Email Import
+              </CardTitle>
+              <CardDescription>
+                Import historical emails from selected inboxes. This will sync both inbound and outbound emails from Microsoft 365.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Import Settings */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="sinceDays">Import emails from last</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="sinceDays"
+                      type="number"
+                      value={sinceDays}
+                      onChange={(e) => setSinceDays(parseInt(e.target.value) || 90)}
+                      className="w-24"
+                      min={1}
+                      max={365}
+                      data-testid="input-since-days"
+                    />
+                    <span className="text-sm text-muted-foreground">days</span>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="maxMessages">Max emails per folder</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="maxMessages"
+                      type="number"
+                      value={maxMessagesPerFolder}
+                      onChange={(e) => setMaxMessagesPerFolder(parseInt(e.target.value) || 500)}
+                      className="w-24"
+                      min={10}
+                      max={1000}
+                      data-testid="input-max-messages"
+                    />
+                    <span className="text-sm text-muted-foreground">emails</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Inbox Selection */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label>Select Inboxes to Import</Label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleSelectAll}
+                    data-testid="button-select-all-inboxes"
+                  >
+                    {inboxes && selectedInboxIds.size === inboxes.filter(i => i.isActive).length
+                      ? "Deselect All"
+                      : "Select All Active"}
+                  </Button>
+                </div>
+                
+                {inboxesLoading ? (
+                  <Skeleton className="h-24 w-full" />
+                ) : inboxes && inboxes.filter(i => i.isActive).length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {inboxes.filter(i => i.isActive).map((inbox) => (
+                      <div
+                        key={inbox.id}
+                        className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                          selectedInboxIds.has(inbox.id)
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:bg-muted/50"
+                        }`}
+                        onClick={() => handleToggleInbox(inbox.id)}
+                        data-testid={`checkbox-inbox-${inbox.id}`}
+                      >
+                        <Checkbox
+                          checked={selectedInboxIds.has(inbox.id)}
+                          onCheckedChange={() => handleToggleInbox(inbox.id)}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm truncate">
+                            {inbox.displayName || inbox.emailAddress}
+                          </div>
+                          <div className="text-xs text-muted-foreground truncate">
+                            {inbox.emailAddress}
+                          </div>
+                        </div>
+                        <Badge variant="outline" className="text-xs">
+                          {inbox.inboxType}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-6 text-muted-foreground">
+                    <Mail className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No active inboxes available for import</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Import Button */}
+              <div className="flex items-center gap-4">
+                <Button
+                  onClick={handleRunImport}
+                  disabled={historicalImportMutation.isPending || selectedInboxIds.size === 0}
+                  data-testid="button-run-import"
+                >
+                  {historicalImportMutation.isPending ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Importing...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4 mr-2" />
+                      Run Historical Import
+                    </>
+                  )}
+                </Button>
+                <span className="text-sm text-muted-foreground">
+                  {selectedInboxIds.size} inbox(es) selected
+                </span>
+              </div>
+
+              {/* Import Progress */}
+              {historicalImportMutation.isPending && (
+                <div className="space-y-2">
+                  <Progress value={undefined} className="h-2" />
+                  <p className="text-sm text-muted-foreground text-center">
+                    Importing emails... This may take several minutes depending on the number of emails.
+                  </p>
+                </div>
+              )}
+
+              {/* Import Results */}
+              {importResults && (
+                <div className="space-y-4 p-4 rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-2">
+                    {importResults.summary.totalErrors === 0 ? (
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                    ) : (
+                      <AlertCircle className="w-5 h-5 text-yellow-600" />
+                    )}
+                    <h4 className="font-semibold">Import Complete</h4>
+                  </div>
+
+                  {/* Summary */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center p-3 rounded bg-background">
+                      <div className="text-2xl font-bold text-primary">
+                        {importResults.summary.totalInboxSynced}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Inbound Emails</div>
+                    </div>
+                    <div className="text-center p-3 rounded bg-background">
+                      <div className="text-2xl font-bold text-primary">
+                        {importResults.summary.totalSentSynced}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Outbound Emails</div>
+                    </div>
+                    <div className="text-center p-3 rounded bg-background">
+                      <div className="text-2xl font-bold text-green-600">
+                        {importResults.summary.totalMatched}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Matched to Clients</div>
+                    </div>
+                    <div className="text-center p-3 rounded bg-background">
+                      <div className={`text-2xl font-bold ${importResults.summary.totalErrors > 0 ? 'text-red-600' : 'text-muted-foreground'}`}>
+                        {importResults.summary.totalErrors}
+                      </div>
+                      <div className="text-xs text-muted-foreground">Errors</div>
+                    </div>
+                  </div>
+
+                  {/* Per-inbox Results */}
+                  <div className="space-y-2">
+                    <h5 className="text-sm font-medium">Results by Inbox</h5>
+                    <div className="space-y-2">
+                      {importResults.results.map((result) => (
+                        <div
+                          key={result.inboxId}
+                          className="flex items-center justify-between p-2 rounded bg-background text-sm"
+                        >
+                          <span className="font-medium truncate">{result.inboxEmail}</span>
+                          <div className="flex items-center gap-3 text-muted-foreground">
+                            <span>{result.inboxSynced} in</span>
+                            <span>{result.sentSynced} out</span>
+                            <span className="text-green-600">{result.matched} matched</span>
+                            {result.errors.length > 0 && (
+                              <span className="text-red-600">{result.errors.length} errors</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
             </CardContent>

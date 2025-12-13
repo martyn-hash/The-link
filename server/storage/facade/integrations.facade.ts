@@ -435,6 +435,10 @@ export function applyIntegrationsFacade<TBase extends Constructor<IntegrationsFa
       return this.emailStorage.markOverdueEmails();
     }
 
+    async markOldEmailsAsNoAction(inboxId: string, thresholdDate: Date) {
+      return this.emailStorage.markOldEmailsAsNoAction(inboxId, thresholdDate);
+    }
+
     async upsertInboxEmail(email: any) {
       return this.emailStorage.upsertInboxEmail(email);
     }

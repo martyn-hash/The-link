@@ -150,6 +150,14 @@ export function applyTagsCommsFacade<TBase extends Constructor<TagsCommsFacadeDe
       return this.communicationStorage.getCommunicationsWithPendingTranscription();
     }
 
+    async getUnifiedTimelineByClientId(clientId: string, options?: { direction?: 'inbound' | 'outbound' | 'all'; limit?: number; offset?: number }) {
+      return this.communicationStorage.getUnifiedTimelineByClientId(clientId, options);
+    }
+
+    async getInboxEmailsByClientId(clientId: string) {
+      return this.communicationStorage.getInboxEmailsByClientId(clientId);
+    }
+
     // ============================================================================
     // PROJECT SCHEDULING DOMAIN - ProjectSchedulingStorage (14 methods)
     // ============================================================================

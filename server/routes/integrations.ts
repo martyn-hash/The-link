@@ -183,6 +183,49 @@ export function registerIntegrationRoutes(
         });
       }
 
+      // Track outbound email in inbox_emails table
+      try {
+        // Get or create inbox for the sender
+        const inbox = await storage.upsertInboxForUser(
+          userId,
+          user.email.toLowerCase(),
+          `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email
+        );
+
+        // Generate a unique ID for this outbound email (not from Microsoft since we sent it)
+        const outboundMicrosoftId = `outbound-${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+
+        // Parse recipients into the expected format
+        const toRecipients = [{
+          address: to,
+          name: to
+        }];
+
+        await storage.createInboxEmail({
+          inboxId: inbox.id,
+          microsoftId: outboundMicrosoftId,
+          fromAddress: user.email.toLowerCase(),
+          fromName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || undefined,
+          toRecipients: toRecipients,
+          subject: subject,
+          bodyPreview: content.substring(0, 200).replace(/<[^>]*>/g, ''),
+          bodyHtml: content,
+          receivedAt: new Date(),
+          hasAttachments: inlineAttachments.length > 0,
+          matchedClientId: clientId || null,
+          matchedPersonId: personId || null,
+          direction: 'outbound',
+          staffUserId: userId,
+          status: 'no_action_needed',
+          isRead: true,
+        });
+
+        console.log('[Outlook Email] Outbound email tracked in inbox_emails');
+      } catch (trackingError) {
+        // Don't fail the request if tracking fails - email was already sent
+        console.error('[Outlook Email] Error tracking outbound email:', trackingError);
+      }
+
       res.json({
         message: "Email sent successfully",
         sentTo: to,
@@ -1486,6 +1529,54 @@ export function registerIntegrationRoutes(
           attemptedRecipient: "jamsplan1@gmail.com",
           timestamp: new Date().toISOString()
         }
+      });
+    }
+  });
+
+  // POST /api/admin/email/historical-import - Run historical email import for selected inboxes
+  app.post("/api/admin/email/historical-import", isAuthenticated, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { inboxIds, sinceDays = 90, maxMessagesPerFolder = 500, markOldAsNoAction = true, noActionThresholdDays = 7 } = req.body;
+
+      if (!inboxIds || !Array.isArray(inboxIds) || inboxIds.length === 0) {
+        return res.status(400).json({ message: "inboxIds must be a non-empty array of inbox IDs" });
+      }
+
+      console.log(`[HISTORICAL IMPORT] Starting import for ${inboxIds.length} inbox(es), ${sinceDays} days back`);
+      
+      // Import the function dynamically to avoid circular dependencies
+      const { runHistoricalImport } = await import("../services/emailSyncService");
+      
+      const results = await runHistoricalImport(inboxIds, {
+        sinceDays,
+        maxMessagesPerFolder,
+        markOldAsNoAction,
+        noActionThresholdDays,
+      });
+
+      const totalInboxSynced = results.reduce((sum, r) => sum + r.inboxSynced, 0);
+      const totalSentSynced = results.reduce((sum, r) => sum + r.sentSynced, 0);
+      const totalMatched = results.reduce((sum, r) => sum + r.matched, 0);
+      const totalErrors = results.reduce((sum, r) => sum + r.errors.length, 0);
+
+      console.log(`[HISTORICAL IMPORT] Completed: ${totalInboxSynced} inbox, ${totalSentSynced} sent, ${totalMatched} matched, ${totalErrors} errors`);
+
+      res.json({
+        success: true,
+        summary: {
+          inboxesProcessed: results.length,
+          totalInboxSynced,
+          totalSentSynced,
+          totalMatched,
+          totalErrors,
+        },
+        results,
+      });
+    } catch (error) {
+      console.error("[HISTORICAL IMPORT] Error:", error);
+      res.status(500).json({
+        message: "Historical import failed",
+        error: error instanceof Error ? error.message : "Unknown error",
       });
     }
   });

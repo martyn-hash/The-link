@@ -34,7 +34,10 @@ import type {
   TimelineItem, 
   EmailThread,
   MessageThread,
-  PersonOption 
+  PersonOption,
+  UnifiedTimelineItem,
+  DirectionFilterType,
+  SLAStatusFilterType
 } from "./types";
 
 interface CommunicationsTimelineProps {
@@ -59,6 +62,8 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
   const [emailThreadViewerOpen, setEmailThreadViewerOpen] = useState(false);
   const [selectedEmailThreadId, setSelectedEmailThreadId] = useState<string | null>(null);
   const [selectedFilters, setSelectedFilters] = useState<CommunicationFilterSelection>(['all']);
+  const [directionFilter, setDirectionFilter] = useState<DirectionFilterType>('all');
+  const [slaStatusFilter, setSlaStatusFilter] = useState<SLAStatusFilterType>('all');
   const [projectCache, setProjectCache] = useState<Record<string, any>>({});
 
   const { data: communications, isLoading } = useQuery<CommunicationWithRelations[]>({
@@ -75,6 +80,11 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
     threads: EmailThread[];
   }>({
     queryKey: ['/api/emails/client', clientId],
+    enabled: !!clientId,
+  });
+
+  const { data: unifiedTimeline, isLoading: isLoadingUnifiedTimeline } = useQuery<UnifiedTimelineItem[]>({
+    queryKey: ['/api/communications/client', clientId, 'timeline'],
     enabled: !!clientId,
   });
 
@@ -111,6 +121,28 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
     if (!date) return '';
     return new Date(date as string | number | Date).toLocaleString();
   };
+  
+  const inboxEmailItems: TimelineItem[] = (unifiedTimeline || [])
+    .filter(item => item.source === 'inbox_email')
+    .map((item): TimelineItem => ({
+      kind: 'inbox_email',
+      id: item.id,
+      type: 'email',
+      sortDate: new Date(item.timestamp),
+      displayDate: formatDate(item.timestamp),
+      subject: item.subject,
+      content: item.content,
+      projectId: item.projectId,
+      data: item,
+      direction: item.direction,
+      fromAddress: item.fromAddress,
+      fromName: item.fromName,
+      toRecipients: item.toRecipients,
+      status: item.status,
+      slaDeadline: item.slaDeadline,
+      hasAttachments: item.hasAttachments,
+      inboxName: item.inboxName,
+    }));
   
   const allItems: TimelineItem[] = [
     ...(communications || []).map((comm): TimelineItem => {
@@ -159,17 +191,47 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
         participants: thread.participants,
         data: thread,
       };
-    })
+    }),
+    ...inboxEmailItems
   ].sort((a, b) => b.sortDate.getTime() - a.sortDate.getTime());
 
   const filteredItems = allItems.filter(item => {
-    if (selectedFilters.includes('all') || selectedFilters.length === 0) return true;
+    // Type filter
+    const passesTypeFilter = selectedFilters.includes('all') || selectedFilters.length === 0 || 
+      selectedFilters.some(filter => {
+        if (filter === 'sms') return item.type === 'sms_sent' || item.type === 'sms_received';
+        if (filter === 'email') return item.type === 'email_sent' || item.type === 'email_received' || item.kind === 'inbox_email';
+        return item.type === filter;
+      });
     
-    return selectedFilters.some(filter => {
-      if (filter === 'sms') return item.type === 'sms_sent' || item.type === 'sms_received';
-      if (filter === 'email') return item.type === 'email_sent' || item.type === 'email_received';
-      return item.type === filter;
-    });
+    if (!passesTypeFilter) return false;
+
+    // Direction filter
+    if (directionFilter !== 'all') {
+      if (item.kind === 'inbox_email') {
+        if (item.direction !== directionFilter) return false;
+      } else if (item.kind === 'communication') {
+        const isInbound = item.type === 'sms_received' || item.type === 'email_received' || item.type === 'phone_call';
+        const isOutbound = item.type === 'sms_sent' || item.type === 'email_sent';
+        if (directionFilter === 'inbound' && !isInbound) return false;
+        if (directionFilter === 'outbound' && !isOutbound) return false;
+      } else {
+        // For message_thread and email_thread, skip direction filtering
+        return true;
+      }
+    }
+
+    // SLA status filter
+    if (slaStatusFilter !== 'all') {
+      if (item.kind === 'inbox_email') {
+        if (item.status !== slaStatusFilter) return false;
+      } else {
+        // Only inbox_email items have SLA status - hide other items when SLA filter is active
+        return false;
+      }
+    }
+
+    return true;
   });
 
   const handleViewCommunication = (communication: CommunicationWithRelations) => {
@@ -190,7 +252,7 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
     setLocation(`/projects/${projectId}`);
   };
 
-  if (isLoading || isLoadingThreads || isLoadingEmailThreads) {
+  if (isLoading || isLoadingThreads || isLoadingEmailThreads || isLoadingUnifiedTimeline) {
     return (
       <Card>
         <CardHeader>
@@ -353,6 +415,10 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
           selectedFilters={selectedFilters}
           onFilterChange={setSelectedFilters}
           items={allItems}
+          directionFilter={directionFilter}
+          onDirectionChange={setDirectionFilter}
+          slaStatusFilter={slaStatusFilter}
+          onSlaStatusChange={setSlaStatusFilter}
         />
       </CardHeader>
       

@@ -2,7 +2,8 @@ import { pgTable, pgEnum, varchar, text, boolean, integer, timestamp, index, uni
 import { sql } from "drizzle-orm";
 
 import { users } from "../users/tables";
-import { clients, clientEmailAliases, clientDomainAllowlist } from "../clients/tables";
+import { clients, clientEmailAliases, clientDomainAllowlist, people } from "../clients/tables";
+import { projects } from "../projects/tables";
 
 export const emailDirectionEnum = pgEnum("email_direction", ["inbound", "outbound", "internal", "external"]);
 
@@ -218,6 +219,10 @@ export const inboxEmails = pgTable("inbox_emails", {
   hasAttachments: boolean("has_attachments").default(false),
   importance: varchar("importance").default("normal"),
   matchedClientId: varchar("matched_client_id").references(() => clients.id, { onDelete: "set null" }),
+  matchedPersonId: varchar("matched_person_id").references(() => people.id, { onDelete: "set null" }),
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: "set null" }),
+  direction: emailDirectionEnum("direction").default("inbound"),
+  staffUserId: varchar("staff_user_id").references(() => users.id, { onDelete: "set null" }),
   slaDeadline: timestamp("sla_deadline"),
   repliedAt: timestamp("replied_at"),
   status: inboxEmailStatusEnum("status").default("pending_reply"),
@@ -229,6 +234,10 @@ export const inboxEmails = pgTable("inbox_emails", {
   unique("unique_inbox_microsoft_id").on(table.inboxId, table.microsoftId),
   index("idx_inbox_emails_inbox_id").on(table.inboxId),
   index("idx_inbox_emails_matched_client_id").on(table.matchedClientId),
+  index("idx_inbox_emails_matched_person_id").on(table.matchedPersonId),
+  index("idx_inbox_emails_project_id").on(table.projectId),
+  index("idx_inbox_emails_direction").on(table.direction),
+  index("idx_inbox_emails_staff_user_id").on(table.staffUserId),
   index("idx_inbox_emails_status").on(table.status),
   index("idx_inbox_emails_sla_deadline").on(table.slaDeadline),
   index("idx_inbox_emails_received_at").on(table.receivedAt),

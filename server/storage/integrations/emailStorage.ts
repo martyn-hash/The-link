@@ -1032,12 +1032,33 @@ export class EmailStorage {
       if (email.bodyHtml && !existing.bodyHtml) {
         updatePayload.bodyHtml = email.bodyHtml;
       }
-      updatePayload.syncedAt = new Date();
       
-      return await this.updateInboxEmail(existing.id, updatePayload);
+      // Update directly to include syncedAt (not in InsertInboxEmail)
+      const [updated] = await db
+        .update(inboxEmails)
+        .set({ ...updatePayload, syncedAt: new Date() })
+        .where(eq(inboxEmails.id, existing.id))
+        .returning();
+      return updated;
     } else {
       return await this.createInboxEmail(email);
     }
+  }
+
+  async markOldEmailsAsNoAction(inboxId: string, thresholdDate: Date): Promise<number> {
+    const result = await db
+      .update(inboxEmails)
+      .set({ status: 'no_action_needed' })
+      .where(
+        and(
+          eq(inboxEmails.inboxId, inboxId),
+          eq(inboxEmails.direction, 'inbound'),
+          eq(inboxEmails.status, 'pending_reply'),
+          lt(inboxEmails.receivedAt, thresholdDate)
+        )
+      )
+      .returning();
+    return result.length;
   }
 
   async getInboxEmailsForClient(clientId: string): Promise<InboxEmail[]> {

@@ -18,6 +18,8 @@ export function getIcon(type: string) {
       return <MessageSquare className="h-4 w-4" />;
     case 'email_thread':
       return <Mail className="h-4 w-4" />;
+    case 'email':
+      return <Mail className="h-4 w-4" />;
     default:
       return <MessageSquare className="h-4 w-4" />;
   }
@@ -41,6 +43,8 @@ export function getTypeLabel(type: string): string {
       return 'Instant Message';
     case 'email_thread':
       return 'Email Thread';
+    case 'email':
+      return 'Email';
     default:
       return 'Communication';
   }
@@ -63,6 +67,8 @@ export function getTypeColor(type: string): string {
     case 'message_thread':
       return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200';
     case 'email_thread':
+      return 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200';
+    case 'email':
       return 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200';
     default:
       return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
