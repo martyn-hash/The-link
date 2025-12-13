@@ -87,7 +87,6 @@ export async function matchEmailToClient(email: string): Promise<ClientMatchResu
     const clientByDomainAllowlist = await db
       .select({ 
         clientId: clientDomainAllowlist.clientId,
-        matchConfidence: clientDomainAllowlist.matchConfidence,
       })
       .from(clientDomainAllowlist)
       .where(eq(clientDomainAllowlist.domain, domain))
@@ -97,7 +96,7 @@ export async function matchEmailToClient(email: string): Promise<ClientMatchResu
       return {
         clientId: clientByDomainAllowlist[0].clientId,
         matchType: 'domain',
-        confidence: clientByDomainAllowlist[0].matchConfidence || 'medium',
+        confidence: 'medium',
       };
     }
   }
