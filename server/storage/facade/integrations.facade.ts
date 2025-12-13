@@ -396,6 +396,58 @@ export function applyIntegrationsFacade<TBase extends Constructor<IntegrationsFa
     }
 
     // ============================================================================
+    // INBOX EMAILS (SLA TRACKING) - EmailStorage (12 methods)
+    // ============================================================================
+
+    async createInboxEmail(email: any) {
+      return this.emailStorage.createInboxEmail(email);
+    }
+
+    async getInboxEmailById(id: string) {
+      return this.emailStorage.getInboxEmailById(id);
+    }
+
+    async getInboxEmailByMicrosoftId(inboxId: string, microsoftId: string) {
+      return this.emailStorage.getInboxEmailByMicrosoftId(inboxId, microsoftId);
+    }
+
+    async getEmailsByInbox(inboxId: string, filters?: any) {
+      return this.emailStorage.getEmailsByInbox(inboxId, filters);
+    }
+
+    async updateInboxEmail(id: string, updates: any) {
+      return this.emailStorage.updateInboxEmail(id, updates);
+    }
+
+    async updateInboxEmailStatus(id: string, status: 'pending_reply' | 'replied' | 'no_action_needed' | 'overdue') {
+      return this.emailStorage.updateInboxEmailStatus(id, status);
+    }
+
+    async markInboxEmailAsReplied(id: string) {
+      return this.emailStorage.markInboxEmailAsReplied(id);
+    }
+
+    async getEmailsNeedingSlaCheck() {
+      return this.emailStorage.getEmailsNeedingSlaCheck();
+    }
+
+    async markOverdueEmails() {
+      return this.emailStorage.markOverdueEmails();
+    }
+
+    async upsertInboxEmail(email: any) {
+      return this.emailStorage.upsertInboxEmail(email);
+    }
+
+    async getInboxEmailsForClient(clientId: string) {
+      return this.emailStorage.getInboxEmailsForClient(clientId);
+    }
+
+    async getInboxEmailStats(inboxId: string) {
+      return this.emailStorage.getInboxEmailStats(inboxId);
+    }
+
+    // ============================================================================
     // SMS TEMPLATES - SmsTemplateStorage (6 methods)
     // ============================================================================
 
