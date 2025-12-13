@@ -335,7 +335,7 @@ function WorkspaceModeToggle({
         {openTasksAndRemindersCount > 0 && (
           <Badge 
             variant="destructive" 
-            className="ml-1 h-5 min-w-[20px] px-1.5 text-xs flex items-center justify-center"
+            className="absolute -top-1 -right-1 h-5 min-w-[20px] px-1.5 text-xs flex items-center justify-center"
             data-testid="badge-open-tasks-count"
           >
             {openTasksAndRemindersCount > 99 ? '99+' : openTasksAndRemindersCount}
