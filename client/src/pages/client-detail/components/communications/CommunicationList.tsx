@@ -184,6 +184,7 @@ export function CommunicationList({
   onViewMessageThread,
   onViewEmailThread,
   onViewInboxEmail,
+  onViewInboxThread,
   onProjectClick,
 }: CommunicationListProps) {
   const isMobile = useIsMobile();
@@ -213,7 +214,9 @@ export function CommunicationList({
         onViewInboxEmail(item);
         break;
       case 'inbox_email_thread':
-        if (item.emails.length > 0) {
+        if (onViewInboxThread) {
+          onViewInboxThread(item);
+        } else if (item.emails.length > 0) {
           onViewInboxEmail(item.emails[0]);
         }
         break;
@@ -481,7 +484,9 @@ export function CommunicationList({
                   variant="ghost"
                   size="sm"
                   onClick={() => {
-                    if (item.emails.length > 0) {
+                    if (onViewInboxThread) {
+                      onViewInboxThread(item);
+                    } else if (item.emails.length > 0) {
                       onViewInboxEmail(item.emails[0]);
                     }
                   }}

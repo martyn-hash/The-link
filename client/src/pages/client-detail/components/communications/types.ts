@@ -253,5 +253,6 @@ export interface CommunicationListProps {
   onViewMessageThread: (thread: MessageThread) => void;
   onViewEmailThread: (thread: EmailThread) => void;
   onViewInboxEmail: (email: InboxEmailTimelineItem) => void;
+  onViewInboxThread?: (thread: InboxEmailThreadGroup) => void;
   onProjectClick?: (projectId: string) => void;
 }

@@ -69,6 +69,7 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
   const [slaStatusFilter, setSlaStatusFilter] = useState<SLAStatusFilterType>('all');
   const [projectCache, setProjectCache] = useState<Record<string, any>>({});
   const [selectedInboxEmail, setSelectedInboxEmail] = useState<InboxEmailTimelineItem | null>(null);
+  const [selectedInboxThread, setSelectedInboxThread] = useState<InboxEmailThreadGroup | null>(null);
   const [isViewingInboxEmail, setIsViewingInboxEmail] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [groupByThread, setGroupByThread] = useState(false);
@@ -519,6 +520,12 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
           onViewEmailThread={handleViewEmailThread}
           onViewInboxEmail={(email) => {
             setSelectedInboxEmail(email);
+            setSelectedInboxThread(null);
+            setIsViewingInboxEmail(true);
+          }}
+          onViewInboxThread={(thread) => {
+            setSelectedInboxThread(thread);
+            setSelectedInboxEmail(null);
             setIsViewingInboxEmail(true);
           }}
           onProjectClick={handleProjectClick}
@@ -580,10 +587,12 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
 
       <ViewInboxEmailDialog
         email={selectedInboxEmail}
+        thread={selectedInboxThread}
         isOpen={isViewingInboxEmail}
         onClose={() => {
           setIsViewingInboxEmail(false);
           setSelectedInboxEmail(null);
+          setSelectedInboxThread(null);
         }}
       />
     </Card>
