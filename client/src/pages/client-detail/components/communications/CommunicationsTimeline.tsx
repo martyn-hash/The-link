@@ -23,6 +23,7 @@ import { CommunicationList } from "./CommunicationList";
 import {
   CreateMessageDialog,
   ViewCommunicationDialog,
+  ViewInboxEmailDialog,
   AddCommunicationDialog,
   SMSDialog,
   CallDialog,
@@ -37,7 +38,8 @@ import type {
   PersonOption,
   UnifiedTimelineItem,
   DirectionFilterType,
-  SLAStatusFilterType
+  SLAStatusFilterType,
+  InboxEmailTimelineItem
 } from "./types";
 
 interface CommunicationsTimelineProps {
@@ -65,6 +67,9 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
   const [directionFilter, setDirectionFilter] = useState<DirectionFilterType>('all');
   const [slaStatusFilter, setSlaStatusFilter] = useState<SLAStatusFilterType>('all');
   const [projectCache, setProjectCache] = useState<Record<string, any>>({});
+  const [selectedInboxEmail, setSelectedInboxEmail] = useState<InboxEmailTimelineItem | null>(null);
+  const [isViewingInboxEmail, setIsViewingInboxEmail] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const { data: communications, isLoading } = useQuery<CommunicationWithRelations[]>({
     queryKey: ['/api/communications/client', clientId],
@@ -227,6 +232,22 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
         if (item.status !== slaStatusFilter) return false;
       } else {
         // Only inbox_email items have SLA status - hide other items when SLA filter is active
+        return false;
+      }
+    }
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      const searchableFields = [
+        item.subject,
+        item.content,
+        item.kind === 'inbox_email' ? item.fromAddress : null,
+        item.kind === 'inbox_email' ? item.fromName : null,
+        item.kind === 'communication' ? `${item.data.user?.firstName || ''} ${item.data.user?.lastName || ''}` : null,
+      ].filter(Boolean).map(f => f?.toLowerCase() || '');
+      
+      if (!searchableFields.some(field => field.includes(query))) {
         return false;
       }
     }
@@ -419,6 +440,8 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
           onDirectionChange={setDirectionFilter}
           slaStatusFilter={slaStatusFilter}
           onSlaStatusChange={setSlaStatusFilter}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
         />
       </CardHeader>
       
@@ -429,6 +452,10 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
           onViewCommunication={handleViewCommunication}
           onViewMessageThread={handleViewMessageThread}
           onViewEmailThread={handleViewEmailThread}
+          onViewInboxEmail={(email) => {
+            setSelectedInboxEmail(email);
+            setIsViewingInboxEmail(true);
+          }}
           onProjectClick={handleProjectClick}
         />
       </CardContent>
@@ -484,6 +511,12 @@ export function CommunicationsTimeline({ clientId, user, clientCompany }: Commun
         threadId={selectedEmailThreadId}
         open={emailThreadViewerOpen}
         onOpenChange={setEmailThreadViewerOpen}
+      />
+
+      <ViewInboxEmailDialog
+        email={selectedInboxEmail}
+        isOpen={isViewingInboxEmail}
+        onClose={() => setIsViewingInboxEmail(false)}
       />
     </Card>
   );

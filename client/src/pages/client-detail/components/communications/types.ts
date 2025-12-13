@@ -228,6 +228,8 @@ export interface CommunicationFiltersProps {
   onDirectionChange: (direction: DirectionFilterType) => void;
   slaStatusFilter: SLAStatusFilterType;
   onSlaStatusChange: (status: SLAStatusFilterType) => void;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
 }
 
 export interface CommunicationListProps {
@@ -236,5 +238,6 @@ export interface CommunicationListProps {
   onViewCommunication: (communication: CommunicationWithRelations) => void;
   onViewMessageThread: (thread: MessageThread) => void;
   onViewEmailThread: (thread: EmailThread) => void;
+  onViewInboxEmail: (email: InboxEmailTimelineItem) => void;
   onProjectClick?: (projectId: string) => void;
 }

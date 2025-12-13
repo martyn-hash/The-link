@@ -15,7 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Filter, PhoneCall, Send, Mail, MessageSquare, FileText, X, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle } from "lucide-react";
+import { Filter, PhoneCall, Send, Mail, MessageSquare, FileText, X, ArrowDownLeft, ArrowUpRight, Clock, CheckCircle2, AlertCircle, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import type { CommunicationFiltersProps, CommunicationFilterType, TimelineItem, DirectionFilterType, SLAStatusFilterType } from "./types";
 
 const FILTER_OPTIONS: { value: CommunicationFilterType; label: string; icon: typeof PhoneCall }[] = [
@@ -82,7 +83,9 @@ export function CommunicationFilters({
   directionFilter,
   onDirectionChange,
   slaStatusFilter,
-  onSlaStatusChange 
+  onSlaStatusChange,
+  searchQuery,
+  onSearchChange
 }: CommunicationFiltersProps) {
   const [isOpen, setIsOpen] = useState(false);
   
@@ -129,6 +132,28 @@ export function CommunicationFilters({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          type="text"
+          placeholder="Search communications..."
+          value={searchQuery}
+          onChange={(e) => onSearchChange(e.target.value)}
+          className="pl-9 h-9 w-[200px]"
+          data-testid="input-search-communications"
+        />
+        {searchQuery && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 p-0"
+            onClick={() => onSearchChange('')}
+            data-testid="button-clear-search"
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        )}
+      </div>
       <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
           <Button

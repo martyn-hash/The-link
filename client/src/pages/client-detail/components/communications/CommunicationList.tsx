@@ -183,6 +183,7 @@ export function CommunicationList({
   onViewCommunication,
   onViewMessageThread,
   onViewEmailThread,
+  onViewInboxEmail,
   onProjectClick,
 }: CommunicationListProps) {
   const isMobile = useIsMobile();
@@ -209,6 +210,7 @@ export function CommunicationList({
         onViewEmailThread(item.data);
         break;
       case 'inbox_email':
+        onViewInboxEmail(item);
         break;
     }
   };
@@ -448,7 +450,7 @@ export function CommunicationList({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {}}
+                  onClick={() => onViewInboxEmail(item)}
                   data-testid={`button-view-inbox-email-${item.id}`}
                 >
                   <Eye className="h-4 w-4 mr-2" />
