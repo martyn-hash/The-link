@@ -1251,4 +1251,269 @@ export function registerEmailRoutes(
       res.status(500).json({ message: "Failed to sync user inboxes", error: error.message });
     }
   });
+
+  // ============================================================================
+  // INBOX EMAILS WITH SLA TRACKING
+  // These routes work with stored emails from inbox_emails table for SLA management
+  // ============================================================================
+
+  /**
+   * GET /api/comms/inbox/:inboxId/stored-emails
+   * Get stored inbox emails with SLA tracking (from inbox_emails table)
+   * 
+   * Query params:
+   * - status: Filter by status (pending_reply, replied, no_action_needed, overdue, all)
+   * - clientMatched: If 'true', only return emails matched to clients
+   * - limit: Max results (default 50)
+   * - offset: Pagination offset
+   */
+  app.get('/api/comms/inbox/:inboxId/stored-emails', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const { inboxId } = req.params;
+      const { 
+        status = 'all', 
+        clientMatched = 'false',
+        limit = '50',
+        offset = '0'
+      } = req.query;
+
+      // Check company-level email feature flag
+      const companySettings = await storage.getCompanySettings();
+      if (!companySettings?.emailModuleActive) {
+        return res.status(403).json({ 
+          message: "Email features are not enabled for your organization" 
+        });
+      }
+
+      // Verify user has access to this inbox
+      const hasAccess = await storage.canUserAccessInbox(userId, inboxId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this inbox" });
+      }
+
+      // Build filters
+      const filters: any = {
+        limit: Math.min(parseInt(limit as string) || 50, 100),
+        offset: parseInt(offset as string) || 0,
+      };
+      
+      if (status !== 'all') {
+        filters.status = status;
+      }
+      
+      if (clientMatched === 'true') {
+        filters.clientMatchedOnly = true;
+      }
+
+      const emails = await storage.getEmailsByInbox(inboxId, filters);
+      const stats = await storage.getInboxEmailStats(inboxId);
+
+      res.json({
+        emails,
+        stats,
+        pagination: {
+          limit: filters.limit,
+          offset: filters.offset,
+          hasMore: emails.length === filters.limit
+        }
+      });
+    } catch (error: any) {
+      console.error('[Stored Emails] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch stored emails", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * POST /api/comms/inbox/:inboxId/sync
+   * Trigger a sync of emails from Microsoft Graph API to inbox_emails table
+   */
+  app.post('/api/comms/inbox/:inboxId/sync', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const { inboxId } = req.params;
+      
+      // Validate and sanitize input parameters with sensible bounds
+      const rawMaxMessages = parseInt(req.body.maxMessages) || 100;
+      const rawSinceDays = parseInt(req.body.sinceDays) || 30;
+      const maxMessages = Math.max(1, Math.min(rawMaxMessages, 200));
+      const sinceDays = Math.max(1, Math.min(rawSinceDays, 90));
+
+      // Check company-level email feature flag
+      const companySettings = await storage.getCompanySettings();
+      if (!companySettings?.emailModuleActive) {
+        return res.status(403).json({ 
+          message: "Email features are not enabled for your organization" 
+        });
+      }
+
+      // Verify user has access to this inbox
+      const hasAccess = await storage.canUserAccessInbox(userId, inboxId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this inbox" });
+      }
+
+      // Check if Graph API is configured
+      if (!isApplicationGraphConfigured()) {
+        return res.status(400).json({
+          message: "Microsoft 365 email integration is not configured"
+        });
+      }
+
+      // Trigger the sync
+      const { syncInboxEmails } = await import('../services/emailSyncService');
+      const result = await syncInboxEmails(inboxId, { 
+        maxMessages,
+        sinceDays
+      });
+
+      // Also run overdue check
+      const { markOverdueEmails } = await import('../services/emailSyncService');
+      const overdueCount = await markOverdueEmails();
+
+      res.json({
+        success: true,
+        ...result,
+        overdueMarked: overdueCount,
+        message: `Synced ${result.synced} emails, ${result.matched} matched to clients`
+      });
+    } catch (error: any) {
+      console.error('[Inbox Sync] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to sync inbox", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * PATCH /api/comms/inbox-emails/:emailId/status
+   * Update the status of a stored inbox email
+   */
+  app.patch('/api/comms/inbox-emails/:emailId/status', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const { emailId } = req.params;
+      const { status } = req.body;
+
+      // Validate status
+      const validStatuses = ['pending_reply', 'replied', 'no_action_needed', 'overdue'];
+      if (!status || !validStatuses.includes(status)) {
+        return res.status(400).json({ 
+          message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
+        });
+      }
+
+      // Get the email first to verify it exists
+      const email = await storage.getInboxEmailById(emailId);
+      if (!email) {
+        return res.status(404).json({ message: "Email not found" });
+      }
+
+      // Verify user has access to the inbox this email belongs to
+      const hasAccess = await storage.canUserAccessInbox(userId, email.inboxId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this email's inbox" });
+      }
+
+      // Update the status
+      const updateData: any = { status };
+      if (status === 'replied') {
+        updateData.repliedAt = new Date();
+      }
+
+      const updated = await storage.updateInboxEmail(emailId, updateData);
+
+      res.json({
+        success: true,
+        email: updated
+      });
+    } catch (error: any) {
+      console.error('[Update Email Status] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to update email status", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * GET /api/comms/inbox-emails/:emailId
+   * Get a single stored inbox email by ID
+   */
+  app.get('/api/comms/inbox-emails/:emailId', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const { emailId } = req.params;
+
+      const email = await storage.getInboxEmailById(emailId);
+      if (!email) {
+        return res.status(404).json({ message: "Email not found" });
+      }
+
+      // Verify user has access to this inbox
+      const hasAccess = await storage.canUserAccessInbox(userId, email.inboxId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this email" });
+      }
+
+      res.json(email);
+    } catch (error: any) {
+      console.error('[Get Inbox Email] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch email", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * GET /api/comms/inbox-email-stats
+   * Get SLA stats for all inboxes the user has access to
+   */
+  app.get('/api/comms/inbox-email-stats', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+
+      // Get all inboxes user has access to
+      const accessRecords = await storage.getInboxAccessByUserId(userId);
+      
+      const stats: Record<string, any> = {};
+      let totals = {
+        total: 0,
+        pendingReply: 0,
+        overdue: 0,
+        dueToday: 0,
+        replied: 0,
+      };
+
+      for (const access of accessRecords) {
+        const inboxStats = await storage.getInboxEmailStats(access.inbox.id);
+        stats[access.inbox.id] = {
+          inbox: access.inbox,
+          stats: inboxStats
+        };
+        
+        totals.total += inboxStats.total;
+        totals.pendingReply += inboxStats.pendingReply;
+        totals.overdue += inboxStats.overdue;
+        totals.dueToday += inboxStats.dueToday;
+        totals.replied += inboxStats.replied;
+      }
+
+      res.json({
+        inboxes: stats,
+        totals
+      });
+    } catch (error: any) {
+      console.error('[Inbox Email Stats] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch inbox stats", 
+        error: error.message 
+      });
+    }
+  });
 }
