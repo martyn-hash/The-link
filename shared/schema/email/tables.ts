@@ -8,6 +8,8 @@ export const emailDirectionEnum = pgEnum("email_direction", ["inbound", "outboun
 
 export const emailMatchConfidenceEnum = pgEnum("email_match_confidence", ["high", "medium", "low"]);
 
+export const inboxEmailStatusEnum = pgEnum("inbox_email_status", ["pending_reply", "replied", "no_action_needed", "overdue"]);
+
 export const emailThreads = pgTable("email_threads", {
   canonicalConversationId: varchar("canonical_conversation_id").primaryKey(),
   threadKey: varchar("thread_key").unique(),
@@ -198,4 +200,37 @@ export const userInboxAccess = pgTable("user_inbox_access", {
   unique("unique_user_inbox_access").on(table.userId, table.inboxId),
   index("idx_user_inbox_access_user_id").on(table.userId),
   index("idx_user_inbox_access_inbox_id").on(table.inboxId),
+]);
+
+export const inboxEmails = pgTable("inbox_emails", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  inboxId: varchar("inbox_id").notNull().references(() => inboxes.id, { onDelete: "cascade" }),
+  microsoftId: varchar("microsoft_id").notNull(),
+  conversationId: varchar("conversation_id"),
+  fromAddress: varchar("from_address").notNull(),
+  fromName: varchar("from_name"),
+  toRecipients: jsonb("to_recipients").default([]),
+  ccRecipients: jsonb("cc_recipients").default([]),
+  subject: text("subject"),
+  bodyPreview: text("body_preview"),
+  bodyHtml: text("body_html"),
+  receivedAt: timestamp("received_at").notNull(),
+  hasAttachments: boolean("has_attachments").default(false),
+  importance: varchar("importance").default("normal"),
+  matchedClientId: varchar("matched_client_id").references(() => clients.id, { onDelete: "set null" }),
+  slaDeadline: timestamp("sla_deadline"),
+  repliedAt: timestamp("replied_at"),
+  status: inboxEmailStatusEnum("status").default("pending_reply"),
+  isRead: boolean("is_read").default(false),
+  isArchived: boolean("is_archived").default(false),
+  syncedAt: timestamp("synced_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  unique("unique_inbox_microsoft_id").on(table.inboxId, table.microsoftId),
+  index("idx_inbox_emails_inbox_id").on(table.inboxId),
+  index("idx_inbox_emails_matched_client_id").on(table.matchedClientId),
+  index("idx_inbox_emails_status").on(table.status),
+  index("idx_inbox_emails_sla_deadline").on(table.slaDeadline),
+  index("idx_inbox_emails_received_at").on(table.receivedAt),
+  index("idx_inbox_emails_from_address").on(table.fromAddress),
 ]);

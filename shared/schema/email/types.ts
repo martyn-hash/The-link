@@ -10,6 +10,7 @@ import {
   graphSyncState,
   inboxes,
   userInboxAccess,
+  inboxEmails,
 } from "./tables";
 import {
   insertEmailMessageSchema,
@@ -22,6 +23,7 @@ import {
   insertGraphSyncStateSchema,
   insertInboxSchema,
   insertUserInboxAccessSchema,
+  insertInboxEmailSchema,
 } from "./schemas";
 
 export type EmailMessage = typeof emailMessages.$inferSelect;
@@ -53,3 +55,6 @@ export type InsertInbox = z.infer<typeof insertInboxSchema>;
 
 export type UserInboxAccess = typeof userInboxAccess.$inferSelect;
 export type InsertUserInboxAccess = z.infer<typeof insertUserInboxAccessSchema>;
+
+export type InboxEmail = typeof inboxEmails.$inferSelect;
+export type InsertInboxEmail = z.infer<typeof insertInboxEmailSchema>;

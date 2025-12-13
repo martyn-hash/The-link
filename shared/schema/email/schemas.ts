@@ -10,6 +10,7 @@ import {
   graphSyncState,
   inboxes,
   userInboxAccess,
+  inboxEmails,
 } from "./tables";
 
 export const insertEmailMessageSchema = createInsertSchema(emailMessages).omit({
@@ -63,4 +64,10 @@ export const insertUserInboxAccessSchema = createInsertSchema(userInboxAccess).o
   id: true,
   createdAt: true,
   grantedAt: true,
+});
+
+export const insertInboxEmailSchema = createInsertSchema(inboxEmails).omit({
+  id: true,
+  syncedAt: true,
+  createdAt: true,
 });
