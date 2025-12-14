@@ -551,6 +551,18 @@ export function applyIntegrationsFacade<TBase extends Constructor<IntegrationsFa
       return this.emailStorage.getUnclassifiedInboxEmails(inboxId);
     }
 
+    async getWorkflowStats(inboxId?: string) {
+      return this.emailStorage.getWorkflowStats(inboxId);
+    }
+
+    async getEmailsByWorkflowFilter(
+      inboxId: string,
+      filter: 'requires_task' | 'requires_reply' | 'urgent' | 'opportunities' | 'information_only' | 'all_outstanding',
+      options?: { limit?: number; offset?: number; sinceDays?: number }
+    ) {
+      return this.emailStorage.getEmailsByWorkflowFilter(inboxId, filter, options);
+    }
+
     // ============================================================================
     // SMS TEMPLATES - SmsTemplateStorage (6 methods)
     // ============================================================================

@@ -1424,4 +1424,148 @@ export class EmailStorage {
       .where(and(...conditions))
       .orderBy(desc(inboxEmails.receivedAt));
   }
+
+  // ========== WORKFLOW STATS FOR TOOLBAR ==========
+
+  /**
+   * Get workflow-based stats for the Comms Workspace toolbar
+   * Returns counts for each slicing category based on classifications
+   */
+  async getWorkflowStats(inboxId?: string): Promise<{
+    requiresTask: number;
+    requiresReply: number;
+    urgent: number;
+    opportunities: number;
+    informationOnly: number;
+    allOutstanding: number;
+  }> {
+    const conditions: any[] = [];
+    
+    if (inboxId) {
+      conditions.push(eq(inboxEmails.inboxId, inboxId));
+    }
+
+    // Join classifications with workflow state to get accurate counts
+    const baseQuery = db
+      .select({
+        requiresTask: sql<number>`count(*) filter (where ${emailClassifications.requiresTask} = true and coalesce(${emailWorkflowState.taskRequirementMet}, false) = false and coalesce(${emailWorkflowState.state}, 'pending') != 'complete')`,
+        requiresReply: sql<number>`count(*) filter (where ${emailClassifications.requiresReply} = true and coalesce(${emailWorkflowState.replySent}, false) = false and coalesce(${emailWorkflowState.state}, 'pending') != 'complete')`,
+        urgent: sql<number>`count(*) filter (where ${emailClassifications.urgency} in ('critical', 'high') and coalesce(${emailWorkflowState.state}, 'pending') != 'complete')`,
+        opportunities: sql<number>`count(*) filter (where ${emailClassifications.opportunity} in ('upsell', 'cross_sell', 'referral', 'expansion'))`,
+        informationOnly: sql<number>`count(*) filter (where ${emailClassifications.informationOnly} = true and coalesce(${emailWorkflowState.state}, 'pending') != 'complete')`,
+        allOutstanding: sql<number>`count(*) filter (where coalesce(${emailWorkflowState.state}, 'pending') != 'complete')`,
+      })
+      .from(emailClassifications)
+      .innerJoin(inboxEmails, eq(emailClassifications.emailId, inboxEmails.id))
+      .leftJoin(emailWorkflowState, eq(emailClassifications.emailId, emailWorkflowState.emailId));
+
+    let result;
+    if (conditions.length > 0) {
+      result = await baseQuery.where(and(...conditions));
+    } else {
+      result = await baseQuery;
+    }
+
+    return {
+      requiresTask: Number(result[0]?.requiresTask ?? 0),
+      requiresReply: Number(result[0]?.requiresReply ?? 0),
+      urgent: Number(result[0]?.urgent ?? 0),
+      opportunities: Number(result[0]?.opportunities ?? 0),
+      informationOnly: Number(result[0]?.informationOnly ?? 0),
+      allOutstanding: Number(result[0]?.allOutstanding ?? 0),
+    };
+  }
+
+  /**
+   * Get emails filtered by workflow classification
+   * Used by the Comms Workspace toolbar slicing
+   */
+  async getEmailsByWorkflowFilter(
+    inboxId: string,
+    filter: 'requires_task' | 'requires_reply' | 'urgent' | 'opportunities' | 'information_only' | 'all_outstanding',
+    options: {
+      limit?: number;
+      offset?: number;
+      sinceDays?: number;
+    } = {}
+  ): Promise<(InboxEmail & { classification?: any; workflowState?: any })[]> {
+    const { limit = 50, offset = 0, sinceDays = 7 } = options;
+    
+    const sinceDate = new Date();
+    sinceDate.setDate(sinceDate.getDate() - sinceDays);
+
+    const conditions: any[] = [
+      eq(inboxEmails.inboxId, inboxId),
+      gte(inboxEmails.receivedAt, sinceDate),
+    ];
+
+    // Add filter-specific conditions
+    switch (filter) {
+      case 'requires_task':
+        conditions.push(eq(emailClassifications.requiresTask, true));
+        conditions.push(or(
+          isNull(emailWorkflowState.taskRequirementMet),
+          eq(emailWorkflowState.taskRequirementMet, false)
+        ));
+        conditions.push(or(
+          isNull(emailWorkflowState.state),
+          sql`${emailWorkflowState.state} != 'complete'`
+        ));
+        break;
+      case 'requires_reply':
+        conditions.push(eq(emailClassifications.requiresReply, true));
+        conditions.push(or(
+          isNull(emailWorkflowState.replySent),
+          eq(emailWorkflowState.replySent, false)
+        ));
+        conditions.push(or(
+          isNull(emailWorkflowState.state),
+          sql`${emailWorkflowState.state} != 'complete'`
+        ));
+        break;
+      case 'urgent':
+        conditions.push(sql`${emailClassifications.urgency} in ('critical', 'high')`);
+        conditions.push(or(
+          isNull(emailWorkflowState.state),
+          sql`${emailWorkflowState.state} != 'complete'`
+        ));
+        break;
+      case 'opportunities':
+        conditions.push(sql`${emailClassifications.opportunity} in ('upsell', 'cross_sell', 'referral', 'expansion')`);
+        break;
+      case 'information_only':
+        conditions.push(eq(emailClassifications.informationOnly, true));
+        conditions.push(or(
+          isNull(emailWorkflowState.state),
+          sql`${emailWorkflowState.state} != 'complete'`
+        ));
+        break;
+      case 'all_outstanding':
+        conditions.push(or(
+          isNull(emailWorkflowState.state),
+          sql`${emailWorkflowState.state} != 'complete'`
+        ));
+        break;
+    }
+
+    const results = await db
+      .select({
+        email: inboxEmails,
+        classification: emailClassifications,
+        workflowState: emailWorkflowState,
+      })
+      .from(inboxEmails)
+      .innerJoin(emailClassifications, eq(inboxEmails.id, emailClassifications.emailId))
+      .leftJoin(emailWorkflowState, eq(inboxEmails.id, emailWorkflowState.emailId))
+      .where(and(...conditions))
+      .orderBy(desc(inboxEmails.receivedAt))
+      .limit(limit)
+      .offset(offset);
+
+    return results.map(r => ({
+      ...r.email,
+      classification: r.classification,
+      workflowState: r.workflowState,
+    }));
+  }
 }

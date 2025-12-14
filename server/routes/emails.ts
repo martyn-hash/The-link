@@ -1873,4 +1873,98 @@ export function registerEmailRoutes(
       });
     }
   });
+
+  /**
+   * GET /api/comms/inbox/:inboxId/workflow-stats
+   * Get workflow-based stats for the Comms Workspace toolbar
+   * Returns counts for each slicing category
+   */
+  app.get('/api/comms/inbox/:inboxId/workflow-stats', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const { inboxId } = req.params;
+
+      // Verify user has access to this inbox
+      const hasAccess = await storage.canUserAccessInbox(userId, inboxId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this inbox" });
+      }
+
+      const stats = await storage.getWorkflowStats(inboxId);
+
+      res.json({
+        inboxId,
+        stats
+      });
+    } catch (error: any) {
+      console.error('[Workflow Stats] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch workflow stats", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * GET /api/comms/inbox/:inboxId/workflow-emails
+   * Get emails filtered by workflow classification
+   * 
+   * Query params:
+   * - filter: 'requires_task' | 'requires_reply' | 'urgent' | 'opportunities' | 'information_only' | 'all_outstanding'
+   * - limit: number (default 50)
+   * - offset: number (default 0)
+   * - sinceDays: number (default 7)
+   */
+  app.get('/api/comms/inbox/:inboxId/workflow-emails', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const { inboxId } = req.params;
+      const { filter = 'all_outstanding', limit, offset, sinceDays } = req.query;
+
+      // Verify user has access to this inbox
+      const hasAccess = await storage.canUserAccessInbox(userId, inboxId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this inbox" });
+      }
+
+      // Validate filter
+      const validFilters = ['requires_task', 'requires_reply', 'urgent', 'opportunities', 'information_only', 'all_outstanding'];
+      if (!validFilters.includes(filter as string)) {
+        return res.status(400).json({ 
+          message: `Invalid filter. Must be one of: ${validFilters.join(', ')}` 
+        });
+      }
+
+      const emails = await storage.getEmailsByWorkflowFilter(
+        inboxId,
+        filter as 'requires_task' | 'requires_reply' | 'urgent' | 'opportunities' | 'information_only' | 'all_outstanding',
+        {
+          limit: Math.min(parseInt(limit as string) || 50, 100),
+          offset: parseInt(offset as string) || 0,
+          sinceDays: parseInt(sinceDays as string) || 7,
+        }
+      );
+
+      // Also get the stats for badge counts
+      const stats = await storage.getWorkflowStats(inboxId);
+
+      res.json({
+        inboxId,
+        filter,
+        emails,
+        stats,
+        pagination: {
+          limit: Math.min(parseInt(limit as string) || 50, 100),
+          offset: parseInt(offset as string) || 0,
+          hasMore: emails.length === Math.min(parseInt(limit as string) || 50, 100)
+        }
+      });
+    } catch (error: any) {
+      console.error('[Workflow Emails] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch workflow emails", 
+        error: error.message 
+      });
+    }
+  });
 }
