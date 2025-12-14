@@ -463,7 +463,11 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
       onClick={handleCardClick}
       data-testid={`project-card-${project.id}`}
     >
-      <CardContent className="p-4 flex flex-col">
+      <CardContent className={`p-4 flex flex-col ${
+        project.priorityServiceIndicators && project.priorityServiceIndicators.length > 0 && !isSelected 
+          ? 'pt-7' 
+          : ''
+      }`}>
         <div className="flex items-start justify-between mb-2">
           <h4 className="font-medium text-sm text-foreground line-clamp-1 flex-1 pr-2" title={project.client.name}>
             {project.client.name}
