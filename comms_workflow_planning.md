@@ -54,10 +54,12 @@ Transform email from a passive inbox into an active, zero-backlog workflow where
 - Workflow state automatically re-evaluated after changes
 - Audit log records: who, when, what changed, previous/new values
 
-### 🔟 Retro Adding of Emails 🔄 TO DO
+### 🔟 Retro Adding of Emails ✅ COMPLETE
 - Ability to bring emails into system that didn't pass Customer Gate
 - Query full inbox through Graph API
 - Use case: client changes email, new person joins team
+- Backend: GET /api/comms/inbox/:inboxId/browse, POST /api/comms/inbox/:inboxId/import
+- Frontend: Import Emails dialog with search, date range, client selection, multi-import
 
 ---
 
@@ -86,5 +88,28 @@ Before final sign-off, conduct live testing using Abdul's inbox to validate the 
 
 ---
 
+## Final Review Findings (December 2025)
+
+### ✅ Stages Working Correctly
+- **Stages 1-7**: Customer Gate, Deterministic Classification, AI Classification, Toolbar Slicing, Workflow Enforcement, Task Linking, Reply Tracking - all functioning as specified
+- **Stage 9**: Manual Overrides with full audit trail - working correctly
+- **Stage 10**: Retro Email Import - fully implemented with browse/import endpoints and UI
+
+### ⚠️ Issue Found: SLA Business Hours (Stage 8)
+**Problem**: SLA calculations default to 09:00-17:00 instead of 08:00-18:00 UK time as specified. Additionally, timezone handling doesn't explicitly apply `slaTimezone` setting, which could cause drift on non-UK servers.
+
+**Impact**: SLA deadlines and urgency badges may calculate slightly off from spec.
+
+**Fix Required**: Update `server/services/slaService.ts` to:
+1. Default to 08:00-18:00 when settings are absent
+2. Explicitly apply timezone conversion using `slaTimezone` (Europe/London)
+
+### Improvement Opportunities
+1. **Batch SLA checks**: Consider batching deadline checks for efficiency with large email volumes
+2. **Caching**: Add caching for company settings in SLA calculations
+3. **Monitoring**: Add metrics/logging for classification pipeline performance
+
+---
+
 ## Next Up
-**Stage 10: Retro Adding of Emails**
+**Stage 11: Live Validation Testing** (after SLA fix)
