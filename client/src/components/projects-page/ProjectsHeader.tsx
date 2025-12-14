@@ -143,8 +143,8 @@ export function ProjectsHeader({
   
   return (
     <header className="bg-card border-b border-border page-container py-6">
-      {/* Desktop: 3-column grid layout - left/center/right */}
-      <div className="hidden md:grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4">
+      {/* Desktop: 3-column grid layout - left/center/right - always full width */}
+      <div className="hidden md:grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 w-full">
         {/* Left column: context-dependent content, left-aligned */}
         <div className="flex items-center justify-start">
           {workspaceMode === "projects" && <CurrentViewName viewName={currentSavedViewName} />}
