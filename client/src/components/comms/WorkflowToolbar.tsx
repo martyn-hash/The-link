@@ -105,6 +105,9 @@ export function WorkflowToolbar({
   const buttonsToRender = filterButtons 
     ? TOOLBAR_BUTTONS.filter(btn => filterButtons.includes(btn.id))
     : TOOLBAR_BUTTONS;
+  
+  const activeFilterInThisToolbar = buttonsToRender.some(btn => btn.id === activeFilter);
+  
   const getBadgeVariant = (variant: 'destructive' | 'warning' | 'default', isActive: boolean) => {
     if (isActive) return 'default';
     if (variant === 'warning') return 'outline';
@@ -113,9 +116,9 @@ export function WorkflowToolbar({
 
   if (isLoading) {
     return (
-      <div className="flex flex-wrap gap-2 p-2 bg-muted/30 rounded-lg" data-testid="workflow-toolbar-loading">
+      <div className="flex flex-wrap items-center gap-2" data-testid="workflow-toolbar-loading">
         {buttonsToRender.map((_, i) => (
-          <Skeleton key={i} className="h-9 w-24" />
+          <Skeleton key={i} className="h-8 w-24" />
         ))}
       </div>
     );
@@ -123,7 +126,7 @@ export function WorkflowToolbar({
 
   return (
     <div 
-      className="flex flex-wrap gap-1.5 p-2 bg-muted/30 rounded-lg"
+      className="flex flex-wrap items-center gap-2"
       data-testid="workflow-toolbar"
     >
       {buttonsToRender.map(button => {
@@ -138,8 +141,7 @@ export function WorkflowToolbar({
                 variant={isActive ? "default" : "outline"}
                 size="sm"
                 className={cn(
-                  "h-8 gap-1.5 transition-all",
-                  isActive && "ring-2 ring-primary/20",
+                  "h-8 gap-1.5",
                   !isActive && count === 0 && "opacity-60"
                 )}
                 onClick={() => onFilterChange(isActive ? null : button.id)}
@@ -173,7 +175,7 @@ export function WorkflowToolbar({
         );
       })}
       
-      {activeFilter && !hideClearButton && (
+      {activeFilterInThisToolbar && !hideClearButton && (
         <Button
           variant="ghost"
           size="sm"
