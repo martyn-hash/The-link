@@ -51,6 +51,7 @@ export interface ProjectsHeaderProps {
   emailModuleActive?: boolean;
   currentSavedViewId: string | null;
   currentSavedViewName: string | null;
+  currentServiceName: string | null;
   currentDashboard: Dashboard | null;
   kanbanCompactMode: boolean;
   dashboardWidgets: Widget[];
@@ -107,6 +108,7 @@ export function ProjectsHeader({
   emailModuleActive = false,
   currentSavedViewId,
   currentSavedViewName,
+  currentServiceName,
   currentDashboard,
   kanbanCompactMode,
   tasksOwnershipFilter,
@@ -156,7 +158,7 @@ export function ProjectsHeader({
       <div className="hidden md:grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 w-full">
         {/* Left column: context-dependent content, left-aligned */}
         <div className="flex items-center justify-start gap-3">
-          {workspaceMode === "projects" && <CurrentViewName viewName={currentSavedViewName} />}
+          {workspaceMode === "projects" && <CurrentViewName viewName={currentSavedViewName} serviceName={currentServiceName} />}
           {workspaceMode === "comms" && commsSelectedInboxId && setCommsActiveFilter && (
             <WorkflowToolbar
               stats={commsWorkflowStats}
@@ -271,26 +273,39 @@ export function ProjectsHeader({
 
 interface CurrentViewNameProps {
   viewName: string | null;
+  serviceName: string | null;
 }
 
-function CurrentViewName({ viewName }: CurrentViewNameProps) {
-  if (!viewName) {
+function CurrentViewName({ viewName, serviceName }: CurrentViewNameProps) {
+  if (!viewName && !serviceName) {
     return null;
   }
 
   return (
     <div 
-      className="flex items-center gap-2 flex-shrink-0"
+      className="flex items-center gap-3 flex-shrink-0"
       data-testid="current-view-name-container"
     >
-      <Bookmark className="h-4 w-4 text-primary flex-shrink-0" />
-      <span 
-        className="text-sm font-medium text-foreground line-clamp-2 leading-tight"
-        title={viewName}
-        data-testid="text-current-view-name"
-      >
-        {viewName}
-      </span>
+      {serviceName && (
+        <span 
+          className="text-sm font-medium text-muted-foreground"
+          data-testid="text-current-service-name"
+        >
+          {serviceName}
+        </span>
+      )}
+      {viewName && (
+        <div className="flex items-center gap-2">
+          <Bookmark className="h-4 w-4 text-primary flex-shrink-0" />
+          <span 
+            className="text-sm font-medium text-foreground line-clamp-2 leading-tight"
+            title={viewName}
+            data-testid="text-current-view-name"
+          >
+            {viewName}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

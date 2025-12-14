@@ -128,6 +128,9 @@ export default function Projects() {
           emailModuleActive={emailModuleActive}
           currentSavedViewId={state.currentSavedViewId}
           currentSavedViewName={state.currentSavedViewName}
+          currentServiceName={state.serviceFilter && state.serviceFilter !== 'all' 
+            ? state.allServices?.find(s => s.id === state.serviceFilter)?.name || null 
+            : null}
           currentDashboard={state.currentDashboard}
           kanbanCompactMode={state.kanbanCompactMode}
           dashboardWidgets={state.dashboardWidgets}
