@@ -60,7 +60,7 @@ export default function Projects() {
       // Try to find an inbox matching the user's email
       const userEmail = state.user?.email?.toLowerCase();
       const matchingInbox = userEmail 
-        ? myInboxes.find(ia => ia.inbox.email.toLowerCase() === userEmail)
+        ? myInboxes.find(ia => ia.inbox?.email?.toLowerCase() === userEmail)
         : null;
       
       // Select matching inbox or fall back to first inbox
