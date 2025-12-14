@@ -2,9 +2,12 @@ import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TableRow, TableCell } from "@/components/ui/table";
-import { Eye } from "lucide-react";
+import { Eye, RotateCcw } from "lucide-react";
 import { formatDate } from "../../utils/formatters";
 import { EnhancedClientService } from "../../utils/types";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface ClientServiceRowProps {
   clientService: EnhancedClientService;
@@ -12,6 +15,31 @@ interface ClientServiceRowProps {
 
 export function ClientServiceRow({ clientService }: ClientServiceRowProps) {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const isInactive = clientService.isActive === false;
+
+  const reactivateMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("PUT", `/api/client-services/${clientService.id}`, {
+        isActive: true,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/clients', clientService.clientId, 'services'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/client-services'] });
+      toast({
+        title: "Service Reactivated",
+        description: `${clientService.service?.name || 'Service'} has been reactivated successfully.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to reactivate service",
+        description: error.message || "An error occurred while reactivating the service.",
+        variant: "destructive",
+      });
+    },
+  });
 
   return (
     <TableRow data-testid={`service-row-${clientService.id}`}>
@@ -94,15 +122,29 @@ export function ClientServiceRow({ clientService }: ClientServiceRowProps) {
         </div>
       </TableCell>
       <TableCell className="text-right">
-        <Button
-          variant="default"
-          size="sm"
-          onClick={() => setLocation(`/client-service/${clientService.id}`)}
-          data-testid={`button-view-service-${clientService.id}`}
-        >
-          <Eye className="h-4 w-4 mr-2" />
-          View
-        </Button>
+        <div className="flex items-center justify-end gap-2">
+          {isInactive && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => reactivateMutation.mutate()}
+              disabled={reactivateMutation.isPending}
+              data-testid={`button-reactivate-service-${clientService.id}`}
+            >
+              <RotateCcw className={`h-4 w-4 mr-2 ${reactivateMutation.isPending ? 'animate-spin' : ''}`} />
+              {reactivateMutation.isPending ? 'Reactivating...' : 'Reactivate'}
+            </Button>
+          )}
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => setLocation(`/client-service/${clientService.id}`)}
+            data-testid={`button-view-service-${clientService.id}`}
+          >
+            <Eye className="h-4 w-4 mr-2" />
+            View
+          </Button>
+        </div>
       </TableCell>
     </TableRow>
   );

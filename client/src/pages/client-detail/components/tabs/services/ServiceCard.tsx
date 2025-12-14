@@ -1,9 +1,12 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Eye } from "lucide-react";
+import { Eye, RotateCcw } from "lucide-react";
 import { useLocation } from "wouter";
 import { format } from "date-fns";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { EnhancedClientService } from "../../../utils/types";
 
 interface ServiceCardProps {
@@ -21,6 +24,31 @@ function formatDate(date: string | Date | null | undefined): string {
 
 export function ServiceCard({ clientService }: ServiceCardProps) {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const isInactive = clientService.isActive === false;
+
+  const reactivateMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("PUT", `/api/client-services/${clientService.id}`, {
+        isActive: true,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/clients', clientService.clientId, 'services'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/client-services'] });
+      toast({
+        title: "Service Reactivated",
+        description: `${clientService.service?.name || 'Service'} has been reactivated successfully.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to reactivate service",
+        description: error.message || "An error occurred while reactivating the service.",
+        variant: "destructive",
+      });
+    },
+  });
 
   return (
     <Card data-testid={`service-card-${clientService.id}`}>
@@ -89,16 +117,31 @@ export function ServiceCard({ clientService }: ServiceCardProps) {
             </div>
           </div>
 
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full mt-2"
-            onClick={() => setLocation(`/client-service/${clientService.id}`)}
-            data-testid={`button-view-service-${clientService.id}`}
-          >
-            <Eye className="h-4 w-4 mr-2" />
-            View Details
-          </Button>
+          <div className="flex flex-col gap-2 mt-2">
+            {isInactive && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => reactivateMutation.mutate()}
+                disabled={reactivateMutation.isPending}
+                data-testid={`button-reactivate-service-${clientService.id}`}
+              >
+                <RotateCcw className={`h-4 w-4 mr-2 ${reactivateMutation.isPending ? 'animate-spin' : ''}`} />
+                {reactivateMutation.isPending ? 'Reactivating...' : 'Reactivate'}
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => setLocation(`/client-service/${clientService.id}`)}
+              data-testid={`button-view-service-${clientService.id}`}
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              View Details
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

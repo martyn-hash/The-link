@@ -2,8 +2,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Briefcase, Calendar, Clock, Pencil, Users, User as UserIcon } from "lucide-react";
+import { Briefcase, Calendar, Clock, Pencil, RotateCcw, Users, User as UserIcon } from "lucide-react";
 import { format } from "date-fns";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { ServiceProjectsList } from "../../projects/ServiceProjectsList";
 import type { Person, Service, User, PeopleService } from "@shared/schema";
 
@@ -47,8 +50,32 @@ export function PersonalServiceRow({
   servicesWithRoles,
   onEdit 
 }: PersonalServiceRowProps) {
+  const { toast } = useToast();
   const serviceWithRoles = servicesWithRoles?.find(s => s.id === peopleService.service.id);
   const roles = serviceWithRoles?.roles || [];
+
+  const reactivateMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("PUT", `/api/people-services/${peopleService.id}`, {
+        isActive: true,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/people-services'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/clients'] });
+      toast({
+        title: "Service Reactivated",
+        description: `${peopleService.service?.name || 'Service'} has been reactivated successfully.`,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to reactivate service",
+        description: error.message || "An error occurred while reactivating the service.",
+        variant: "destructive",
+      });
+    },
+  });
 
   return (
     <AccordionItem 
@@ -143,16 +170,31 @@ export function PersonalServiceRow({
         <div className="pt-4">
           <div className="flex items-center justify-between mb-4">
             <div></div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onEdit(peopleService.id)}
-              data-testid={`button-edit-personal-service-${peopleService.id}`}
-              className="h-8 px-3 text-xs"
-            >
-              <Pencil className="h-3 w-3 mr-1" />
-              Edit Service
-            </Button>
+            <div className="flex items-center gap-2">
+              {isInactive && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => reactivateMutation.mutate()}
+                  disabled={reactivateMutation.isPending}
+                  data-testid={`button-reactivate-personal-service-${peopleService.id}`}
+                  className="h-8 px-3 text-xs"
+                >
+                  <RotateCcw className={`h-3 w-3 mr-1 ${reactivateMutation.isPending ? 'animate-spin' : ''}`} />
+                  {reactivateMutation.isPending ? 'Reactivating...' : 'Reactivate'}
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onEdit(peopleService.id)}
+                data-testid={`button-edit-personal-service-${peopleService.id}`}
+                className="h-8 px-3 text-xs"
+              >
+                <Pencil className="h-3 w-3 mr-1" />
+                Edit Service
+              </Button>
+            </div>
           </div>
           <Tabs defaultValue="roles" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
