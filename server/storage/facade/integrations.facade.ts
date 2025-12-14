@@ -464,6 +464,90 @@ export function applyIntegrationsFacade<TBase extends Constructor<IntegrationsFa
     }
 
     // ============================================================================
+    // EMAIL QUARANTINE - EmailStorage
+    // ============================================================================
+
+    async createEmailQuarantine(quarantine: any) {
+      return this.emailStorage.createEmailQuarantine(quarantine);
+    }
+
+    async getEmailQuarantineById(id: string) {
+      return this.emailStorage.getEmailQuarantineById(id);
+    }
+
+    async getQuarantineByMicrosoftId(inboxId: string, microsoftId: string) {
+      return this.emailStorage.getQuarantineByMicrosoftId(inboxId, microsoftId);
+    }
+
+    async getQuarantinedEmails(filters?: any) {
+      return this.emailStorage.getQuarantinedEmails(filters);
+    }
+
+    async restoreQuarantinedEmail(id: string, userId: string, clientId: string) {
+      return this.emailStorage.restoreQuarantinedEmail(id, userId, clientId);
+    }
+
+    async deleteQuarantinedEmail(id: string) {
+      return this.emailStorage.deleteQuarantinedEmail(id);
+    }
+
+    async getQuarantineStats(inboxId?: string) {
+      return this.emailStorage.getQuarantineStats(inboxId);
+    }
+
+    // ============================================================================
+    // EMAIL CLASSIFICATIONS - EmailStorage
+    // ============================================================================
+
+    async createEmailClassification(classification: any) {
+      return this.emailStorage.createEmailClassification(classification);
+    }
+
+    async getEmailClassificationByEmailId(emailId: string) {
+      return this.emailStorage.getEmailClassificationByEmailId(emailId);
+    }
+
+    async upsertEmailClassification(classification: any) {
+      return this.emailStorage.upsertEmailClassification(classification);
+    }
+
+    async updateEmailClassification(id: string, updates: any) {
+      return this.emailStorage.updateEmailClassification(id, updates);
+    }
+
+    // ============================================================================
+    // EMAIL WORKFLOW STATE - EmailStorage
+    // ============================================================================
+
+    async createEmailWorkflowState(state: any) {
+      return this.emailStorage.createEmailWorkflowState(state);
+    }
+
+    async getEmailWorkflowStateByEmailId(emailId: string) {
+      return this.emailStorage.getEmailWorkflowStateByEmailId(emailId);
+    }
+
+    async upsertEmailWorkflowState(state: any) {
+      return this.emailStorage.upsertEmailWorkflowState(state);
+    }
+
+    async updateEmailWorkflowState(id: string, updates: any) {
+      return this.emailStorage.updateEmailWorkflowState(id, updates);
+    }
+
+    // ============================================================================
+    // EMAIL CLASSIFICATION OVERRIDES - EmailStorage
+    // ============================================================================
+
+    async createClassificationOverride(override: any) {
+      return this.emailStorage.createClassificationOverride(override);
+    }
+
+    async getClassificationOverridesByEmailId(emailId: string) {
+      return this.emailStorage.getClassificationOverridesByEmailId(emailId);
+    }
+
+    // ============================================================================
     // SMS TEMPLATES - SmsTemplateStorage (6 methods)
     // ============================================================================
 

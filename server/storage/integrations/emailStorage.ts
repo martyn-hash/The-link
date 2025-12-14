@@ -15,6 +15,10 @@ import {
   userInboxAccess,
   users,
   inboxEmails,
+  emailQuarantine,
+  emailClassifications,
+  emailWorkflowState,
+  emailClassificationOverrides,
   type GraphWebhookSubscription,
   type InsertGraphWebhookSubscription,
   type GraphSyncState,
@@ -41,6 +45,14 @@ import {
   type InsertUserInboxAccess,
   type InboxEmail,
   type InsertInboxEmail,
+  type EmailQuarantine,
+  type InsertEmailQuarantine,
+  type EmailClassification,
+  type InsertEmailClassification,
+  type EmailWorkflowState,
+  type InsertEmailWorkflowState,
+  type EmailClassificationOverride,
+  type InsertEmailClassificationOverride,
 } from "@shared/schema";
 
 export class EmailStorage {
@@ -1164,5 +1176,230 @@ export class EmailStorage {
       dueToday: Number(result[0]?.dueToday ?? 0),
       replied: Number(result[0]?.replied ?? 0),
     };
+  }
+
+  // ========== EMAIL QUARANTINE ==========
+
+  async createEmailQuarantine(quarantine: InsertEmailQuarantine): Promise<EmailQuarantine> {
+    const [created] = await db
+      .insert(emailQuarantine)
+      .values(quarantine)
+      .returning();
+    return created;
+  }
+
+  async getEmailQuarantineById(id: string): Promise<EmailQuarantine | undefined> {
+    const result = await db
+      .select()
+      .from(emailQuarantine)
+      .where(eq(emailQuarantine.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getQuarantineByMicrosoftId(inboxId: string, microsoftId: string): Promise<EmailQuarantine | undefined> {
+    const result = await db
+      .select()
+      .from(emailQuarantine)
+      .where(
+        and(
+          eq(emailQuarantine.inboxId, inboxId),
+          eq(emailQuarantine.microsoftId, microsoftId)
+        )
+      )
+      .limit(1);
+    return result[0];
+  }
+
+  async getQuarantinedEmails(filters?: {
+    inboxId?: string;
+    restoredOnly?: boolean;
+    pendingOnly?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<EmailQuarantine[]> {
+    const conditions: any[] = [];
+
+    if (filters?.inboxId) {
+      conditions.push(eq(emailQuarantine.inboxId, filters.inboxId));
+    }
+
+    if (filters?.restoredOnly) {
+      conditions.push(sql`${emailQuarantine.restoredAt} IS NOT NULL`);
+    }
+
+    if (filters?.pendingOnly) {
+      conditions.push(isNull(emailQuarantine.restoredAt));
+    }
+
+    let query = db
+      .select()
+      .from(emailQuarantine)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(emailQuarantine.receivedAt));
+
+    if (filters?.limit) {
+      query = query.limit(filters.limit) as any;
+    }
+    if (filters?.offset) {
+      query = query.offset(filters.offset) as any;
+    }
+
+    return await query;
+  }
+
+  async restoreQuarantinedEmail(id: string, userId: string, clientId: string): Promise<EmailQuarantine> {
+    const [updated] = await db
+      .update(emailQuarantine)
+      .set({
+        restoredAt: new Date(),
+        restoredBy: userId,
+        restoredToClientId: clientId,
+      })
+      .where(eq(emailQuarantine.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteQuarantinedEmail(id: string): Promise<void> {
+    await db.delete(emailQuarantine).where(eq(emailQuarantine.id, id));
+  }
+
+  async getQuarantineStats(inboxId?: string): Promise<{ total: number; pending: number; restored: number }> {
+    const conditions: any[] = [];
+    if (inboxId) {
+      conditions.push(eq(emailQuarantine.inboxId, inboxId));
+    }
+
+    const result = await db
+      .select({
+        total: sql<number>`count(*)`,
+        pending: sql<number>`count(*) filter (where ${emailQuarantine.restoredAt} IS NULL)`,
+        restored: sql<number>`count(*) filter (where ${emailQuarantine.restoredAt} IS NOT NULL)`,
+      })
+      .from(emailQuarantine)
+      .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+    return {
+      total: Number(result[0]?.total ?? 0),
+      pending: Number(result[0]?.pending ?? 0),
+      restored: Number(result[0]?.restored ?? 0),
+    };
+  }
+
+  // ========== EMAIL CLASSIFICATIONS ==========
+
+  async createEmailClassification(classification: InsertEmailClassification): Promise<EmailClassification> {
+    const [created] = await db
+      .insert(emailClassifications)
+      .values(classification)
+      .returning();
+    return created;
+  }
+
+  async getEmailClassificationByEmailId(emailId: string): Promise<EmailClassification | undefined> {
+    const result = await db
+      .select()
+      .from(emailClassifications)
+      .where(eq(emailClassifications.emailId, emailId))
+      .limit(1);
+    return result[0];
+  }
+
+  async upsertEmailClassification(classification: InsertEmailClassification): Promise<EmailClassification> {
+    const existing = await this.getEmailClassificationByEmailId(classification.emailId);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(emailClassifications)
+        .set({
+          ...classification,
+          updatedAt: new Date(),
+        })
+        .where(eq(emailClassifications.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      return await this.createEmailClassification(classification);
+    }
+  }
+
+  async updateEmailClassification(id: string, updates: Partial<InsertEmailClassification>): Promise<EmailClassification> {
+    const [updated] = await db
+      .update(emailClassifications)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(emailClassifications.id, id))
+      .returning();
+    return updated;
+  }
+
+  // ========== EMAIL WORKFLOW STATE ==========
+
+  async createEmailWorkflowState(state: InsertEmailWorkflowState): Promise<EmailWorkflowState> {
+    const [created] = await db
+      .insert(emailWorkflowState)
+      .values(state)
+      .returning();
+    return created;
+  }
+
+  async getEmailWorkflowStateByEmailId(emailId: string): Promise<EmailWorkflowState | undefined> {
+    const result = await db
+      .select()
+      .from(emailWorkflowState)
+      .where(eq(emailWorkflowState.emailId, emailId))
+      .limit(1);
+    return result[0];
+  }
+
+  async upsertEmailWorkflowState(state: InsertEmailWorkflowState): Promise<EmailWorkflowState> {
+    const existing = await this.getEmailWorkflowStateByEmailId(state.emailId);
+    
+    if (existing) {
+      const [updated] = await db
+        .update(emailWorkflowState)
+        .set({
+          ...state,
+          updatedAt: new Date(),
+        })
+        .where(eq(emailWorkflowState.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      return await this.createEmailWorkflowState(state);
+    }
+  }
+
+  async updateEmailWorkflowState(id: string, updates: Partial<InsertEmailWorkflowState>): Promise<EmailWorkflowState> {
+    const [updated] = await db
+      .update(emailWorkflowState)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(emailWorkflowState.id, id))
+      .returning();
+    return updated;
+  }
+
+  // ========== EMAIL CLASSIFICATION OVERRIDES ==========
+
+  async createClassificationOverride(override: InsertEmailClassificationOverride): Promise<EmailClassificationOverride> {
+    const [created] = await db
+      .insert(emailClassificationOverrides)
+      .values(override)
+      .returning();
+    return created;
+  }
+
+  async getClassificationOverridesByEmailId(emailId: string): Promise<EmailClassificationOverride[]> {
+    return await db
+      .select()
+      .from(emailClassificationOverrides)
+      .where(eq(emailClassificationOverrides.emailId, emailId))
+      .orderBy(desc(emailClassificationOverrides.overrideAt));
   }
 }

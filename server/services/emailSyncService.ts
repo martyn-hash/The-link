@@ -2,6 +2,7 @@ import { getUncachableOutlookClient } from "../utils/outlookClient";
 import { matchEmailToClient } from "../utils/clientEmailMatcher";
 import { calculateSlaDeadline, DEFAULT_SLA_SETTINGS } from "../utils/slaCalculator";
 import { storage } from "../storage";
+import { processEmailThroughGate } from "./customerGateService";
 
 interface GraphEmailMessage {
   id: string;
@@ -103,13 +104,10 @@ export async function syncInboxEmails(
         }
 
         const fromAddress = message.from.emailAddress.address.toLowerCase();
-        const clientMatch = await matchEmailToClient(fromAddress);
 
         const receivedAt = message.receivedDateTime 
           ? new Date(message.receivedDateTime) 
           : new Date();
-
-        const slaDeadline = calculateSlaDeadline(receivedAt, DEFAULT_SLA_SETTINGS);
 
         const toRecipients = (message.toRecipients || []).map(r => ({
           address: r.emailAddress?.address || "",
@@ -120,6 +118,26 @@ export async function syncInboxEmails(
           address: r.emailAddress?.address || "",
           name: r.emailAddress?.name || "",
         }));
+
+        const gateResult = await processEmailThroughGate({
+          inboxId,
+          microsoftId: message.id,
+          fromAddress,
+          fromName: message.from.emailAddress.name || null,
+          toRecipients,
+          ccRecipients,
+          subject: message.subject || null,
+          bodyPreview: message.bodyPreview || null,
+          receivedAt,
+          hasAttachments: message.hasAttachments || false,
+        });
+
+        if (gateResult.quarantined) {
+          result.skipped++;
+          continue;
+        }
+
+        const slaDeadline = calculateSlaDeadline(receivedAt, DEFAULT_SLA_SETTINGS);
 
         const emailData = {
           inboxId,
@@ -135,8 +153,8 @@ export async function syncInboxEmails(
           receivedAt,
           hasAttachments: message.hasAttachments || false,
           importance: message.importance || "normal",
-          matchedClientId: clientMatch?.clientId || null,
-          matchedPersonId: clientMatch?.personId || null,
+          matchedClientId: gateResult.clientMatch?.clientId || null,
+          matchedPersonId: gateResult.clientMatch?.personId || null,
           direction: "inbound" as const,
           slaDeadline,
           status: "pending_reply" as const,
@@ -146,7 +164,7 @@ export async function syncInboxEmails(
         await storage.upsertInboxEmail(emailData);
         result.synced++;
         
-        if (clientMatch) {
+        if (gateResult.clientMatch) {
           result.matched++;
         }
 
