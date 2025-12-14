@@ -915,10 +915,11 @@ export async function createReplyToMessage(
       fileSize?: number;
     }>;
   } = {}
-): Promise<{ success: boolean }> {
+): Promise<{ success: boolean; sentMessageId?: string }> {
   const client = await getApplicationGraphClient();
 
   // For plain text without attachments, use simple reply action
+  // Note: Simple reply action doesn't return the sent message ID
   if (!isHtml && (!options.attachments || options.attachments.length === 0)) {
     await client
       .api(`/users/${encodeURIComponent(userIdOrEmail)}/messages/${messageId}/reply`)
@@ -936,6 +937,9 @@ export async function createReplyToMessage(
   if (!draftReply || !draftReply.id) {
     throw new Error('Failed to create draft reply');
   }
+  
+  // Capture the draft ID - this becomes the sent message ID after sending
+  const sentMessageId = draftReply.id;
 
   // Step 2: Update draft body with HTML content and custom recipients/subject
   const patchData: any = {
@@ -989,8 +993,8 @@ export async function createReplyToMessage(
     .api(`/users/${encodeURIComponent(userIdOrEmail)}/messages/${draftReply.id}/send`)
     .post({});
 
-  console.log(`[Application Graph] Reply sent from ${userIdOrEmail}`);
-  return { success: true };
+  console.log(`[Application Graph] Reply sent from ${userIdOrEmail} (messageId: ${sentMessageId})`);
+  return { success: true, sentMessageId };
 }
 
 /**
@@ -1018,10 +1022,11 @@ export async function createReplyAllToMessage(
       fileSize?: number;
     }>;
   } = {}
-): Promise<{ success: boolean }> {
+): Promise<{ success: boolean; sentMessageId?: string }> {
   const client = await getApplicationGraphClient();
 
   // For plain text without attachments, use simple replyAll action
+  // Note: Simple replyAll action doesn't return the sent message ID
   if (!isHtml && (!options.attachments || options.attachments.length === 0)) {
     await client
       .api(`/users/${encodeURIComponent(userIdOrEmail)}/messages/${messageId}/replyAll`)
@@ -1039,6 +1044,9 @@ export async function createReplyAllToMessage(
   if (!draftReply || !draftReply.id) {
     throw new Error('Failed to create draft reply-all');
   }
+  
+  // Capture the draft ID - this becomes the sent message ID after sending
+  const sentMessageId = draftReply.id;
 
   // Step 2: Update draft body with HTML content and custom recipients/subject
   const patchData: any = {
@@ -1092,8 +1100,8 @@ export async function createReplyAllToMessage(
     .api(`/users/${encodeURIComponent(userIdOrEmail)}/messages/${draftReply.id}/send`)
     .post({});
 
-  console.log(`[Application Graph] Reply-all sent from ${userIdOrEmail}`);
-  return { success: true };
+  console.log(`[Application Graph] Reply-all sent from ${userIdOrEmail} (messageId: ${sentMessageId})`);
+  return { success: true, sentMessageId };
 }
 
 /**

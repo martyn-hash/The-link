@@ -463,6 +463,27 @@ export function applyIntegrationsFacade<TBase extends Constructor<IntegrationsFa
       return this.emailStorage.getEmailsByConversationId(conversationId);
     }
 
+    // Stage 7: Reply Integration
+    async getInboxEmailsByConversationId(conversationId: string) {
+      return this.emailStorage.getInboxEmailsByConversationId(conversationId);
+    }
+
+    async markReplyAsSentForConversation(conversationId: string, replyMessageId?: string) {
+      return this.emailStorage.markReplyAsSentForConversation(conversationId, replyMessageId);
+    }
+
+    async canEmailBeAutoCompleted(emailId: string) {
+      return this.emailStorage.canEmailBeAutoCompleted(emailId);
+    }
+
+    async autoCompleteEmailIfPossible(emailId: string, userId?: string) {
+      return this.emailStorage.autoCompleteEmailIfPossible(emailId, userId);
+    }
+
+    async autoCompleteConversationEmailsIfPossible(conversationId: string, userId?: string) {
+      return this.emailStorage.autoCompleteConversationEmailsIfPossible(conversationId, userId);
+    }
+
     // ============================================================================
     // EMAIL QUARANTINE - EmailStorage
     // ============================================================================

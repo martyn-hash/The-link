@@ -119,11 +119,15 @@ export function registerEmailRoutes(
       
       // Send reply via Microsoft Graph API using tenant-wide permissions
       // Pass user's email (for /users/{email}/... endpoints) instead of userId
+      let replyResult: { success: boolean; sentMessageId?: string };
       if (replyAll) {
-        await createReplyAllToMessage(user.email, graphMessageId, body, true, { subject, to, cc, attachments });
+        replyResult = await createReplyAllToMessage(user.email, graphMessageId, body, true, { subject, to, cc, attachments });
       } else {
-        await createReplyToMessage(user.email, graphMessageId, body, true, { subject, to, cc, attachments });
+        replyResult = await createReplyToMessage(user.email, graphMessageId, body, true, { subject, to, cc, attachments });
       }
+      
+      // Capture the sent message ID from the Graph API response (available for HTML/attachment replies)
+      const sentReplyMessageId = replyResult.sentMessageId;
       
       // Mark related inbox emails as replied for SLA tracking
       // Use conversationIdSeen which matches inbox_emails.conversationId (raw Graph API ID)
@@ -138,9 +142,31 @@ export function registerEmailRoutes(
         console.error('[Email Reply] Error updating SLA tracking:', slaError);
       }
       
+      // Stage 7: Track reply in workflow state and attempt auto-completion
+      let autoCompletedCount = 0;
+      try {
+        if (message.conversationIdSeen) {
+          // Mark reply as sent in workflow state for all emails in this conversation
+          // Pass the sent reply message ID when available (HTML/attachment replies capture it from draft ID)
+          const replyTrackingCount = await storage.markReplyAsSentForConversation(message.conversationIdSeen, sentReplyMessageId);
+          if (replyTrackingCount > 0) {
+            console.log(`[Email Reply] Updated ${replyTrackingCount} workflow state(s) with reply tracking for conversation ${message.conversationIdSeen}${sentReplyMessageId ? ` (replyId: ${sentReplyMessageId})` : ''}`);
+          }
+          
+          // Attempt auto-completion for emails that now meet all requirements
+          autoCompletedCount = await storage.autoCompleteConversationEmailsIfPossible(message.conversationIdSeen, userId);
+          if (autoCompletedCount > 0) {
+            console.log(`[Email Reply] Auto-completed ${autoCompletedCount} email(s) after reply for conversation ${message.conversationIdSeen}`);
+          }
+        }
+      } catch (workflowError) {
+        console.error('[Email Reply] Error updating workflow state:', workflowError);
+      }
+      
       res.json({
         success: true,
-        message: "Reply sent successfully. It will appear in your Sent Items shortly."
+        message: "Reply sent successfully. It will appear in your Sent Items shortly.",
+        autoCompleted: autoCompletedCount > 0 ? autoCompletedCount : undefined,
       });
     } catch (error) {
       console.error('Error sending email reply:', error);

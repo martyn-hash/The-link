@@ -1500,6 +1500,166 @@ export class EmailStorage {
     return undefined;
   }
 
+  // ========== STAGE 7: REPLY INTEGRATION ==========
+
+  /**
+   * Get inbox emails by conversation ID (for reply tracking)
+   */
+  async getInboxEmailsByConversationId(conversationId: string): Promise<InboxEmail[]> {
+    return await db
+      .select()
+      .from(inboxEmails)
+      .where(eq(inboxEmails.conversationId, conversationId))
+      .orderBy(desc(inboxEmails.receivedAt));
+  }
+
+  /**
+   * Mark reply as sent for all emails in a conversation
+   * Updates emailWorkflowState with reply tracking fields
+   * Returns count of updated workflow states
+   */
+  async markReplyAsSentForConversation(conversationId: string, replyMessageId?: string): Promise<number> {
+    const emails = await this.getInboxEmailsByConversationId(conversationId);
+    if (emails.length === 0) return 0;
+
+    let updatedCount = 0;
+    for (const email of emails) {
+      const existing = await this.getEmailWorkflowStateByEmailId(email.id);
+      
+      if (existing) {
+        // Only update if reply not already marked as sent
+        if (!existing.replySent) {
+          await db
+            .update(emailWorkflowState)
+            .set({
+              replySent: true,
+              replyMessageId: replyMessageId || null,
+              replySentAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(eq(emailWorkflowState.id, existing.id));
+          updatedCount++;
+        }
+      } else {
+        // Create new workflow state with reply marked as sent
+        await db
+          .insert(emailWorkflowState)
+          .values({
+            emailId: email.id,
+            state: 'pending',
+            replySent: true,
+            replyMessageId: replyMessageId || null,
+            replySentAt: new Date(),
+          });
+        updatedCount++;
+      }
+    }
+    
+    return updatedCount;
+  }
+
+  /**
+   * Check if an email can be auto-completed based on reply and task requirements
+   * Email can be auto-completed when:
+   * - If requires_reply: replySent must be true
+   * - If requires_task: taskRequirementMet must be true (linked task exists)
+   * - Email must not already be complete
+   */
+  async canEmailBeAutoCompleted(emailId: string): Promise<boolean> {
+    const workflowState = await this.getEmailWorkflowStateByEmailId(emailId);
+    if (!workflowState || workflowState.state === 'complete') {
+      return false;
+    }
+
+    // Get classification to check requirements
+    const classification = await db
+      .select()
+      .from(emailClassifications)
+      .where(eq(emailClassifications.emailId, emailId))
+      .limit(1);
+
+    if (classification.length === 0) {
+      // No classification means no requirements, but we should still check workflow state
+      const requiresReply = workflowState.requiresReply;
+      const requiresTask = workflowState.requiresTask;
+
+      // If requires reply and not sent, can't complete
+      if (requiresReply && !workflowState.replySent) {
+        return false;
+      }
+
+      // If requires task and no task linked, can't complete
+      if (requiresTask && !workflowState.taskRequirementMet) {
+        return false;
+      }
+
+      return true;
+    }
+
+    const classificationData = classification[0];
+
+    // If requires reply and not sent, can't complete
+    if (classificationData.requiresReply && !workflowState.replySent) {
+      return false;
+    }
+
+    // If requires task and no task linked, can't complete
+    if (classificationData.requiresTask && !workflowState.taskRequirementMet) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Auto-complete an email if all requirements are met
+   * Returns the updated workflow state if completed, undefined otherwise
+   */
+  async autoCompleteEmailIfPossible(emailId: string, userId?: string): Promise<EmailWorkflowState | undefined> {
+    const canComplete = await this.canEmailBeAutoCompleted(emailId);
+    if (!canComplete) {
+      return undefined;
+    }
+
+    const workflowState = await this.getEmailWorkflowStateByEmailId(emailId);
+    if (!workflowState) {
+      return undefined;
+    }
+
+    const [updated] = await db
+      .update(emailWorkflowState)
+      .set({
+        state: 'complete',
+        completedAt: new Date(),
+        completedBy: userId || null,
+        completionNote: 'Auto-completed: all requirements met',
+        updatedAt: new Date(),
+      })
+      .where(eq(emailWorkflowState.id, workflowState.id))
+      .returning();
+
+    return updated;
+  }
+
+  /**
+   * After a reply is sent, check all emails in the conversation and auto-complete if possible
+   * Returns count of auto-completed emails
+   */
+  async autoCompleteConversationEmailsIfPossible(conversationId: string, userId?: string): Promise<number> {
+    const emails = await this.getInboxEmailsByConversationId(conversationId);
+    if (emails.length === 0) return 0;
+
+    let completedCount = 0;
+    for (const email of emails) {
+      const completed = await this.autoCompleteEmailIfPossible(email.id, userId);
+      if (completed) {
+        completedCount++;
+      }
+    }
+
+    return completedCount;
+  }
+
   // ========== EMAIL CLASSIFICATION OVERRIDES ==========
 
   async createClassificationOverride(override: InsertEmailClassificationOverride): Promise<EmailClassificationOverride> {
