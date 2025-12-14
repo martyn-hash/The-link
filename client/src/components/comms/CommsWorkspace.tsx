@@ -18,7 +18,7 @@ import { Mail, Inbox, RefreshCw, MessageSquare, Paperclip, ChevronRight, AlertCi
 import { formatDistanceToNow, format, isPast, isToday, differenceInHours } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { WorkflowToolbar, WorkflowFilter, WorkflowStats } from "./WorkflowToolbar";
+import { type WorkflowFilter } from "./WorkflowToolbar";
 
 interface InboxAccess {
   id: string;
@@ -126,6 +126,8 @@ interface CommsWorkspaceProps {
   setSelectedInboxId?: (id: string) => void;
   selectedMessageId?: string | null;
   setSelectedMessageId?: (id: string | null) => void;
+  activeFilter?: WorkflowFilter;
+  setActiveFilter?: (filter: WorkflowFilter) => void;
 }
 
 export function CommsWorkspace({
@@ -133,6 +135,8 @@ export function CommsWorkspace({
   setSelectedInboxId: propSetSelectedInboxId,
   selectedMessageId: propSelectedMessageId,
   setSelectedMessageId: propSetSelectedMessageId,
+  activeFilter: propActiveFilter,
+  setActiveFilter: propSetActiveFilter,
 }: CommsWorkspaceProps = {}) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -142,13 +146,15 @@ export function CommsWorkspace({
   const [internalSelectedInboxId, setInternalSelectedInboxId] = useState<string>("");
   const [internalSelectedMessageId, setInternalSelectedMessageId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [activeFilter, setActiveFilter] = useState<WorkflowFilter>(null);
+  const [internalActiveFilter, setInternalActiveFilter] = useState<WorkflowFilter>(null);
   
   // Use props if provided, otherwise use internal state
   const selectedInboxId = propSelectedInboxId ?? internalSelectedInboxId;
   const setSelectedInboxId = propSetSelectedInboxId ?? setInternalSelectedInboxId;
   const selectedMessageId = propSelectedMessageId ?? internalSelectedMessageId;
   const setSelectedMessageId = propSetSelectedMessageId ?? setInternalSelectedMessageId;
+  const activeFilter = propActiveFilter ?? internalActiveFilter;
+  const setActiveFilter = propSetActiveFilter ?? setInternalActiveFilter;
 
   const { data: myInboxes = [], isLoading: inboxesLoading } = useQuery<InboxAccess[]>({
     queryKey: ["/api/my-inboxes"],
@@ -185,17 +191,6 @@ export function CommsWorkspace({
     },
     enabled: !!selectedInboxId && selectedInboxId !== "",
     staleTime: 5 * 60 * 1000,
-  });
-
-  // Fetch workflow stats for the toolbar
-  const { data: workflowData, isLoading: workflowStatsLoading } = useQuery<{ stats: WorkflowStats }>({
-    queryKey: ["/api/comms/inbox", selectedInboxId, "workflow-stats"],
-    queryFn: async () => {
-      const res = await fetch(`/api/comms/inbox/${selectedInboxId}/workflow-stats`);
-      if (!res.ok) throw new Error("Failed to fetch workflow stats");
-      return res.json();
-    },
-    enabled: !!selectedInboxId && selectedInboxId !== "",
   });
 
   // Fetch filtered workflow emails when a filter is active
@@ -386,17 +381,6 @@ export function CommsWorkspace({
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-8 h-8 text-sm"
                   data-testid="input-email-search"
-                />
-              </div>
-            )}
-            {selectedInboxId && (
-              <div className="pt-2">
-                <WorkflowToolbar
-                  stats={workflowData?.stats}
-                  isLoading={workflowStatsLoading}
-                  activeFilter={activeFilter}
-                  onFilterChange={setActiveFilter}
-                  compact
                 />
               </div>
             )}

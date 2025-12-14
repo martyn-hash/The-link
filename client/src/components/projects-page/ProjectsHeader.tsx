@@ -26,6 +26,7 @@ import { CreateReminderDialog } from "@/components/create-reminder-dialog";
 import type { ViewMode, WorkspaceMode, Dashboard, Widget } from "@/types/projects-page";
 import type { ProjectView } from "@shared/schema";
 import type { OwnershipFilter } from "@/components/tasks/TasksWorkspace";
+import { WorkflowToolbar, type WorkflowFilter, type WorkflowStats } from "@/components/comms/WorkflowToolbar";
 
 interface InboxAccess {
   id: string;
@@ -91,6 +92,10 @@ export interface ProjectsHeaderProps {
   commsSelectedInboxId?: string;
   setCommsSelectedInboxId?: (id: string) => void;
   setCommsSelectedMessageId?: (id: string | null) => void;
+  commsWorkflowStats?: WorkflowStats;
+  commsWorkflowStatsLoading?: boolean;
+  commsActiveFilter?: WorkflowFilter;
+  setCommsActiveFilter?: (filter: WorkflowFilter) => void;
 }
 
 export function ProjectsHeader({
@@ -138,6 +143,10 @@ export function ProjectsHeader({
   commsSelectedInboxId = "",
   setCommsSelectedInboxId,
   setCommsSelectedMessageId,
+  commsWorkflowStats,
+  commsWorkflowStatsLoading = false,
+  commsActiveFilter = null,
+  setCommsActiveFilter,
 }: ProjectsHeaderProps) {
   const selectedInbox = commsInboxes.find(ia => ia.inboxId === commsSelectedInboxId)?.inbox;
   
@@ -207,6 +216,11 @@ export function ProjectsHeader({
             setSaveViewDialogOpen={setSaveViewDialogOpen}
             onOpenCreateDashboard={onOpenCreateDashboard}
             onOpenEditDashboard={onOpenEditDashboard}
+            commsSelectedInboxId={commsSelectedInboxId}
+            commsWorkflowStats={commsWorkflowStats}
+            commsWorkflowStatsLoading={commsWorkflowStatsLoading}
+            commsActiveFilter={commsActiveFilter}
+            setCommsActiveFilter={setCommsActiveFilter}
           />
         </div>
       </div>
@@ -412,6 +426,12 @@ interface DesktopToolbarProps {
   setSaveViewDialogOpen: (open: boolean) => void;
   onOpenCreateDashboard: () => void;
   onOpenEditDashboard: () => void;
+  // Comms workflow toolbar props
+  commsSelectedInboxId?: string;
+  commsWorkflowStats?: WorkflowStats;
+  commsWorkflowStatsLoading?: boolean;
+  commsActiveFilter?: WorkflowFilter;
+  setCommsActiveFilter?: (filter: WorkflowFilter) => void;
 }
 
 function DesktopToolbar({
@@ -449,6 +469,11 @@ function DesktopToolbar({
   setSaveViewDialogOpen,
   onOpenCreateDashboard,
   onOpenEditDashboard,
+  commsSelectedInboxId,
+  commsWorkflowStats,
+  commsWorkflowStatsLoading = false,
+  commsActiveFilter,
+  setCommsActiveFilter,
 }: DesktopToolbarProps) {
   return (
     <div className="flex items-center space-x-3 flex-shrink-0">
@@ -570,6 +595,15 @@ function DesktopToolbar({
           setTasksReassignMode={setTasksReassignMode}
           clearTasksFilters={clearTasksFilters}
         />
+      ) : workspaceMode === "comms" ? (
+        commsSelectedInboxId && setCommsActiveFilter ? (
+          <WorkflowToolbar
+            stats={commsWorkflowStats}
+            isLoading={commsWorkflowStatsLoading}
+            activeFilter={commsActiveFilter ?? null}
+            onFilterChange={setCommsActiveFilter}
+          />
+        ) : null
       ) : null}
     </div>
   );

@@ -51,11 +51,13 @@ export function useProjectsPageState() {
   // Comms workspace state
   const [commsSelectedInboxId, setCommsSelectedInboxIdInternal] = useState<string>("");
   const [commsSelectedMessageId, setCommsSelectedMessageId] = useState<string | null>(null);
+  const [commsActiveFilter, setCommsActiveFilter] = useState<'requires_task' | 'requires_reply' | 'urgent' | 'opportunities' | 'information_only' | 'all_outstanding' | null>(null);
   
   // Wrapper that resets message selection when inbox changes
   const setCommsSelectedInboxId = (id: string) => {
     setCommsSelectedInboxIdInternal(id);
     setCommsSelectedMessageId(null);
+    setCommsActiveFilter(null);
   };
 
   const tasksActiveFilterCount = (tasksOwnershipFilter !== "assigned" ? 1 : 0) + 
@@ -690,6 +692,8 @@ export function useProjectsPageState() {
     setCommsSelectedInboxId,
     commsSelectedMessageId,
     setCommsSelectedMessageId,
+    commsActiveFilter,
+    setCommsActiveFilter,
 
     saveViewDialogOpen,
     setSaveViewDialogOpen,

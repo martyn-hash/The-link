@@ -93,6 +93,8 @@ export interface ProjectsContentProps {
   setCommsSelectedInboxId?: (id: string) => void;
   commsSelectedMessageId?: string | null;
   setCommsSelectedMessageId?: (id: string | null) => void;
+  commsActiveFilter?: 'requires_task' | 'requires_reply' | 'urgent' | 'opportunities' | 'information_only' | 'all_outstanding' | null;
+  setCommsActiveFilter?: (filter: 'requires_task' | 'requires_reply' | 'urgent' | 'opportunities' | 'information_only' | 'all_outstanding' | null) => void;
 }
 
 function LoadingState() {
@@ -451,6 +453,8 @@ export function ProjectsContent({
   setCommsSelectedInboxId,
   commsSelectedMessageId,
   setCommsSelectedMessageId,
+  commsActiveFilter,
+  setCommsActiveFilter,
 }: ProjectsContentProps) {
   const viewContentProps = {
     viewMode,
@@ -533,6 +537,8 @@ export function ProjectsContent({
           setSelectedInboxId={setCommsSelectedInboxId}
           selectedMessageId={commsSelectedMessageId}
           setSelectedMessageId={setCommsSelectedMessageId}
+          activeFilter={commsActiveFilter}
+          setActiveFilter={setCommsActiveFilter}
         />
       </main>
     );

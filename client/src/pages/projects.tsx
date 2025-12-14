@@ -54,6 +54,24 @@ export default function Projects() {
     enabled: isAuthenticated && emailModuleActive,
   });
 
+  // Fetch workflow stats for the comms toolbar
+  const { data: workflowStatsData, isLoading: workflowStatsLoading } = useQuery<{ stats: {
+    requiresTask: number;
+    requiresReply: number;
+    urgent: number;
+    opportunities: number;
+    informationOnly: number;
+    allOutstanding: number;
+  }}>({
+    queryKey: ["/api/comms/inbox", state.commsSelectedInboxId, "workflow-stats"],
+    queryFn: async () => {
+      const res = await fetch(`/api/comms/inbox/${state.commsSelectedInboxId}/workflow-stats`);
+      if (!res.ok) throw new Error("Failed to fetch workflow stats");
+      return res.json();
+    },
+    enabled: isAuthenticated && emailModuleActive && !!state.commsSelectedInboxId,
+  });
+
   // Auto-select default inbox based on user's email or first available inbox
   useEffect(() => {
     if (myInboxes.length > 0 && !state.commsSelectedInboxId) {
@@ -150,6 +168,10 @@ export default function Projects() {
           commsSelectedInboxId={state.commsSelectedInboxId}
           setCommsSelectedInboxId={state.setCommsSelectedInboxId}
           setCommsSelectedMessageId={state.setCommsSelectedMessageId}
+          commsWorkflowStats={workflowStatsData?.stats}
+          commsWorkflowStatsLoading={workflowStatsLoading}
+          commsActiveFilter={state.commsActiveFilter}
+          setCommsActiveFilter={state.setCommsActiveFilter}
         />
 
         <ProjectsContent
@@ -223,6 +245,8 @@ export default function Projects() {
           setCommsSelectedInboxId={state.setCommsSelectedInboxId}
           commsSelectedMessageId={state.commsSelectedMessageId}
           setCommsSelectedMessageId={state.setCommsSelectedMessageId}
+          commsActiveFilter={state.commsActiveFilter}
+          setCommsActiveFilter={state.setCommsActiveFilter}
         />
       </main>
 
