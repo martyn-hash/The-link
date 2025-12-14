@@ -88,7 +88,6 @@ interface WorkflowToolbarProps {
   isLoading?: boolean;
   activeFilter: WorkflowFilter;
   onFilterChange: (filter: WorkflowFilter) => void;
-  compact?: boolean;
   filterButtons?: WorkflowFilter[];
 }
 
@@ -97,7 +96,6 @@ export function WorkflowToolbar({
   isLoading = false,
   activeFilter,
   onFilterChange,
-  compact = false,
   filterButtons
 }: WorkflowToolbarProps) {
   const buttonsToRender = filterButtons 
@@ -143,12 +141,7 @@ export function WorkflowToolbar({
                 data-testid={`toolbar-btn-${button.id}`}
               >
                 <Icon className="h-4 w-4 mr-2" />
-                <span className={cn("hidden sm:inline", compact && "sm:hidden md:inline")}>
-                  {compact ? button.shortLabel : button.label}
-                </span>
-                <span className={cn("sm:hidden", compact && "sm:inline md:hidden")}>
-                  {button.shortLabel}
-                </span>
+                {button.label}
                 {count > 0 && (
                   <Badge 
                     variant={getBadgeVariant(button.badgeVariant, isActive)}
