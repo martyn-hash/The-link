@@ -21,6 +21,8 @@ export const ALLOWED_FILE_TYPES = {
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
     'text/plain',
     'text/csv',
+    'application/zip', // .zip
+    'application/x-zip-compressed', // .zip (Windows)
   ],
   audio: [
     'audio/webm',
@@ -210,7 +212,7 @@ export function validateFileUpload(
   if (!validateFileType(fileType)) {
     return {
       isValid: false,
-      error: `File type not allowed: ${fileType}. Allowed types: images, PDFs, documents, and audio files.`
+      error: `File type not allowed: ${fileType}. Allowed types: images, PDFs, documents, audio files, and ZIP archives.`
     };
   }
 

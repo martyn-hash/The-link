@@ -202,15 +202,12 @@ export default function InternalTaskDetail() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/internal-tasks/${taskId}/documents`] });
-      setUploadingFile(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
       toast({
         title: "Document uploaded",
         description: "File has been uploaded successfully.",
       });
     },
     onError: () => {
-      setUploadingFile(false);
       showFriendlyError({ error: "Failed to upload document. Please try again." });
     },
   });
@@ -229,16 +226,34 @@ export default function InternalTaskDetail() {
     },
   });
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    const validFiles: File[] = [];
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       if (file.size > 10 * 1024 * 1024) {
-        showFriendlyError({ error: "Maximum file size is 10MB." });
-        return;
+        showFriendlyError({ error: `${file.name} exceeds the maximum file size of 10MB.` });
+        continue;
       }
-      setUploadingFile(true);
-      uploadDocumentMutation.mutate(file);
+      validFiles.push(file);
     }
+    
+    if (validFiles.length === 0) return;
+    
+    setUploadingFile(true);
+    
+    for (const file of validFiles) {
+      try {
+        await uploadDocumentMutation.mutateAsync(file);
+      } catch (error) {
+        // Error already handled by mutation
+      }
+    }
+    
+    setUploadingFile(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleDownload = async (doc: TaskDocument) => {
@@ -930,6 +945,8 @@ export default function InternalTaskDetail() {
                     <input
                       ref={fileInputRef}
                       type="file"
+                      multiple
+                      accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,application/zip"
                       className="hidden"
                       onChange={handleFileSelect}
                       disabled={uploadingFile}
@@ -942,10 +959,10 @@ export default function InternalTaskDetail() {
                       data-testid="button-upload-document"
                     >
                       <Upload className="w-4 h-4 mr-2" />
-                      {uploadingFile ? "Uploading..." : "Upload Document"}
+                      {uploadingFile ? "Uploading..." : "Upload Documents"}
                     </Button>
                     <p className="text-xs text-muted-foreground mt-2">
-                      Maximum file size: 10MB
+                      Maximum file size: 10MB per file
                     </p>
                   </div>
 

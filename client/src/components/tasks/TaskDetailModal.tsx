@@ -51,6 +51,7 @@ import {
 } from "lucide-react";
 import type { InternalTask, TaskType, User as UserType, Client, Project, Person, Service, Message } from "@shared/schema";
 import { format, formatDistanceToNow } from "date-fns";
+import { useLocation } from "wouter";
 
 interface InternalTaskWithRelations extends InternalTask {
   taskType?: TaskType | null;
@@ -107,6 +108,7 @@ function getStatusColor(status: string) {
 export function TaskDetailModal({ taskId, open, onOpenChange }: TaskDetailModalProps) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [newProgressNote, setNewProgressNote] = useState("");
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [closureNote, setClosureNote] = useState("");
@@ -278,7 +280,10 @@ export function TaskDetailModal({ taskId, open, onOpenChange }: TaskDetailModalP
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => window.open(`/internal-tasks/${taskId}`, '_blank')}
+                      onClick={() => {
+                        onOpenChange(false);
+                        setLocation(`/internal-tasks/${taskId}`);
+                      }}
                       data-testid="button-open-full-page"
                     >
                       <ExternalLink className="h-4 w-4" />

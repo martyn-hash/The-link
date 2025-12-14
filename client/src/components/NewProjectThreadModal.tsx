@@ -506,7 +506,7 @@ export default function NewProjectThreadModal({
                 multiple
                 className="hidden"
                 onChange={handleFileSelect}
-                accept="image/*,.pdf,audio/*,.doc,.docx,.xls,.xlsx,.txt,.csv"
+                accept="image/*,.pdf,audio/*,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,application/zip"
               />
             </div>
             

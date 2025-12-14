@@ -25,7 +25,7 @@ export function AttachmentsSection({
         <input
           type="file"
           multiple
-          accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv"
+          accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip,application/zip"
           onChange={(e) => {
             const files = Array.from(e.target.files || []);
             if (files.length > 0) {

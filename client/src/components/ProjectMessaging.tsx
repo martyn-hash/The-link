@@ -661,7 +661,7 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
                     <input
                       type="file"
                       multiple
-                      accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
+                      accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.zip,application/zip"
                       onChange={handleFileSelect}
                       style={{ display: 'none' }}
                       id="file-upload"

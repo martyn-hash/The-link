@@ -21,7 +21,7 @@ export function FileUploadZone({
   onFilesSelected,
   maxFiles = 5,
   maxSize = 25 * 1024 * 1024, // 25MB default
-  acceptedTypes = ['image/*', '.pdf', 'audio/*', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv'],
+  acceptedTypes = ['image/*', '.pdf', 'audio/*', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv', '.zip', 'application/zip'],
   disabled = false,
   className = '',
   compact = false,
@@ -197,7 +197,7 @@ export function FileUploadZone({
 
             <div className="text-xs text-muted-foreground">
               <p>Maximum {maxFiles} files • {formatFileSize(maxSize)} per file</p>
-              <p className="mt-1">Supported: Images, PDFs, Documents, Audio</p>
+              <p className="mt-1">Supported: Images, PDFs, Documents, Audio, ZIP files</p>
             </div>
           </div>
         )}
