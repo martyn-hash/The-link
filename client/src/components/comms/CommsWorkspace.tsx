@@ -393,9 +393,9 @@ export function CommsWorkspace({
               </div>
             )}
           </CardHeader>
-          <CardContent className="flex-1 min-h-0 p-0 overflow-y-auto">
+          <CardContent className="flex-1 min-h-0 p-0 flex flex-col" style={{ overflowY: 'auto' }}>
             {!selectedInboxId ? (
-              <div className="flex items-center justify-center flex-1 text-muted-foreground">
+              <div className="flex items-center justify-center flex-1 text-muted-foreground h-full">
                 <div className="text-center p-4">
                   <Inbox className="h-12 w-12 mx-auto mb-4 opacity-50" />
                   <p className="text-sm">Select an inbox from the dropdown above</p>
@@ -516,9 +516,9 @@ export function CommsWorkspace({
                 : "Select an email to view its content"}
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex-1 min-h-0 overflow-y-auto p-0">
+          <CardContent className="flex-1 min-h-0 p-0 flex flex-col" style={{ overflowY: 'auto' }}>
             {emailDetailLoading ? (
-              <div className="space-y-3 p-4">
+              <div className="space-y-3 p-4 flex-1">
                 <Skeleton className="h-6 w-3/4" />
                 <Skeleton className="h-4 w-1/2" />
                 <Skeleton className="h-32 w-full" />
