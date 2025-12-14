@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useDraftAutoSave } from "@/hooks/useDraftAutoSave";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -287,6 +288,64 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   const [groupName, setGroupName] = useState("");
   const [groupDescription, setGroupDescription] = useState("");
 
+  // Auto-save draft for new query text
+  const { savedContent: savedNewQueryText, hasDraft: hasNewQueryDraft, saveDraft: saveNewQueryDraft, clearDraft: clearNewQueryDraft } = useDraftAutoSave({
+    key: `query-draft-new-${projectId}`,
+    debounceMs: 500,
+  });
+
+  // Auto-save draft for edit query response - use stable key based on current editing query
+  const editQueryId = editingQuery?.id;
+  const { savedContent: savedEditResponse, hasDraft: hasEditResponseDraft, saveDraft: saveEditResponseDraft, clearDraft: clearEditResponseDraft } = useDraftAutoSave({
+    key: editQueryId ? `query-response-${editQueryId}` : 'query-response-inactive',
+    debounceMs: 500,
+  });
+
+  // Track if we've restored the new query draft for this dialog session
+  const hasRestoredNewQueryRef = useRef(false);
+
+  // Restore new query draft when dialog opens (only once per session)
+  useEffect(() => {
+    if (isAddDialogOpen) {
+      if (!hasRestoredNewQueryRef.current && hasNewQueryDraft && savedNewQueryText) {
+        setNewQueryText(savedNewQueryText);
+        hasRestoredNewQueryRef.current = true;
+      }
+    } else {
+      hasRestoredNewQueryRef.current = false;
+    }
+  }, [isAddDialogOpen, hasNewQueryDraft, savedNewQueryText]);
+
+  // Auto-save new query text when it changes
+  useEffect(() => {
+    if (isAddDialogOpen && newQueryText) {
+      saveNewQueryDraft(newQueryText);
+    }
+  }, [newQueryText, isAddDialogOpen, saveNewQueryDraft]);
+
+  // Track if we've restored the edit response draft for this query
+  const hasRestoredEditResponseRef = useRef<string | null>(null);
+
+  // Restore edit response draft when editing a query (only once per query)
+  useEffect(() => {
+    if (isEditDialogOpen && editQueryId && hasEditResponseDraft && savedEditResponse) {
+      if (hasRestoredEditResponseRef.current !== editQueryId) {
+        setEditQueryResponse(savedEditResponse);
+        hasRestoredEditResponseRef.current = editQueryId;
+      }
+    }
+    if (!isEditDialogOpen) {
+      hasRestoredEditResponseRef.current = null;
+    }
+  }, [isEditDialogOpen, editQueryId, hasEditResponseDraft, savedEditResponse]);
+
+  // Auto-save edit response when it changes
+  useEffect(() => {
+    if (isEditDialogOpen && editQueryId && editQueryResponse) {
+      saveEditResponseDraft(editQueryResponse);
+    }
+  }, [editQueryResponse, isEditDialogOpen, editQueryId, saveEditResponseDraft]);
+
   // Auto-group state
   const [isAutoGroupDialogOpen, setIsAutoGroupDialogOpen] = useState(false);
   const [autoGroupPrefixLength, setAutoGroupPrefixLength] = useState(6);
@@ -422,6 +481,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
       queryClient.invalidateQueries({ queryKey: ['/api/queries/counts'] });
+      clearNewQueryDraft();
       resetAddForm();
       setIsAddDialogOpen(false);
       toast({ title: "Query created", description: "Your query has been added." });
@@ -450,6 +510,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries'] });
       queryClient.invalidateQueries({ queryKey: ['/api/queries/counts'] });
+      clearEditResponseDraft();
       setIsEditDialogOpen(false);
       setEditingQuery(null);
       toast({ title: "Query updated", description: "Query has been updated." });

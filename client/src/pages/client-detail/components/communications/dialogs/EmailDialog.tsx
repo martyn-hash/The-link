@@ -565,10 +565,8 @@ export function EmailDialog({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => {
-        if (!open) handleClose();
+        if (!open) handleClose(false);
         if (open) {
-          setEmailContent('');
-          setEmailSubject('');
           setSelectedRecipients(new Set());
           setAttachments([]);
           setPendingFiles([]);
