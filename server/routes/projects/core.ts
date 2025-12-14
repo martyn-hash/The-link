@@ -324,6 +324,46 @@ export function registerProjectCoreRoutes(
         notes: chronologyNotes || `Project manually marked as ${completionStatus === 'completed_successfully' ? 'successfully completed' : 'unsuccessfully completed'} by ${effectiveUser.name}. Completion status: ${completionStatus}`
       });
 
+      // Auto-complete linked emails when task is completed
+      setImmediate(async () => {
+        try {
+          const linkedWorkflowStates = await storage.getEmailWorkflowStatesByLinkedTaskId(req.params.id);
+          
+          for (const workflowState of linkedWorkflowStates) {
+            // Skip if already complete
+            if (workflowState.state === 'complete') continue;
+            
+            // Mark task requirement as met
+            await storage.updateEmailWorkflowState(workflowState.id, {
+              taskRequirementMet: true,
+            });
+            
+            // Check if email can auto-complete:
+            // - If requiresReply is true, replySent must also be true
+            // - If requiresTask is true, taskRequirementMet is now true
+            const canAutoComplete = 
+              (!workflowState.requiresReply || workflowState.replySent);
+            
+            if (canAutoComplete) {
+              await storage.completeEmail(
+                workflowState.emailId, 
+                effectiveUserId, 
+                `Auto-completed: linked task completed`
+              );
+              console.log(`[Project Complete] Auto-completed email ${workflowState.emailId} - linked task ${req.params.id} was completed`);
+            } else {
+              console.log(`[Project Complete] Updated task requirement for email ${workflowState.emailId} - still requires reply`);
+            }
+          }
+          
+          if (linkedWorkflowStates.length > 0) {
+            console.log(`[Project Complete] Processed ${linkedWorkflowStates.length} linked emails for project ${req.params.id}`);
+          }
+        } catch (emailError) {
+          console.error("[Project Complete] Error auto-completing linked emails:", emailError);
+        }
+      });
+
       res.json(updatedProject);
     } catch (error) {
       console.error("Error completing project:", error instanceof Error ? error.message : error);

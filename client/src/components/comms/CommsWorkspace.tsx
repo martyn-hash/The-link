@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Mail, Inbox, RefreshCw, MessageSquare, Paperclip, ChevronRight, AlertCircle, Clock, User, Loader2, Search } from "lucide-react";
+import { Mail, Inbox, RefreshCw, MessageSquare, Paperclip, ChevronRight, AlertCircle, Clock, User, Loader2, Search, CheckCircle, Link2, X } from "lucide-react";
 import { formatDistanceToNow, format, isPast, isToday, differenceInHours } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -66,6 +66,11 @@ interface StoredEmail {
   workflowState?: {
     state: string;
     completedAt: string | null;
+    linkedTaskId: string | null;
+    taskRequirementMet: boolean | null;
+    requiresTask: boolean | null;
+    requiresReply: boolean | null;
+    replySent: boolean | null;
   };
 }
 
@@ -156,6 +161,16 @@ export function CommsWorkspace({
   // Track emails that are being completed (optimistic UI)
   const [pendingCompletions, setPendingCompletions] = useState<Set<string>>(new Set());
   
+  // Local filter: show completed emails
+  const [showCompleted, setShowCompleted] = useState<boolean>(false);
+  
+  // Clear showCompleted when a header filter is selected
+  useEffect(() => {
+    if (activeFilter) {
+      setShowCompleted(false);
+    }
+  }, [activeFilter]);
+  
   // Use props if provided, otherwise use internal state
   const selectedInboxId = propSelectedInboxId ?? internalSelectedInboxId;
   const setSelectedInboxId = propSetSelectedInboxId ?? setInternalSelectedInboxId;
@@ -201,19 +216,20 @@ export function CommsWorkspace({
     staleTime: 5 * 60 * 1000,
   });
 
-  // Fetch filtered workflow emails when a filter is active
+  // Fetch filtered workflow emails when a filter is active (or showing completed)
+  const effectiveFilter = showCompleted ? "completed" : activeFilter;
   const { data: workflowEmails, isLoading: workflowLoading } = useQuery<{ emails: StoredEmail[] }>({
-    queryKey: ["/api/comms/inbox", selectedInboxId, "workflow-emails", activeFilter],
+    queryKey: ["/api/comms/inbox", selectedInboxId, "workflow-emails", effectiveFilter],
     queryFn: async () => {
-      const res = await fetch(`/api/comms/inbox/${selectedInboxId}/workflow-emails?filter=${activeFilter}`);
+      const res = await fetch(`/api/comms/inbox/${selectedInboxId}/workflow-emails?filter=${effectiveFilter}`);
       if (!res.ok) throw new Error("Failed to fetch workflow emails");
       return res.json();
     },
-    enabled: !!selectedInboxId && selectedInboxId !== "" && !!activeFilter,
+    enabled: !!selectedInboxId && selectedInboxId !== "" && !!effectiveFilter,
   });
 
-  // Use filtered emails when filter is active, otherwise use regular emails
-  const displayEmails = activeFilter && workflowEmails?.emails 
+  // Use filtered emails when filter is active (including completed), otherwise use regular emails
+  const displayEmails = effectiveFilter && workflowEmails?.emails 
     ? workflowEmails.emails 
     : emailData?.emails;
 
@@ -300,6 +316,77 @@ export function CommsWorkspace({
     enabled: !!selectedInboxId && !!selectedMessageId,
   });
 
+  // Get the stored email for the selected message (to access workflowState)
+  const selectedStoredEmail = useMemo(() => {
+    if (!selectedMessageId || !displayEmails) return null;
+    return displayEmails.find(e => e.microsoftId === selectedMessageId);
+  }, [selectedMessageId, displayEmails]);
+
+  // Fetch email classification for the selected email
+  const { data: emailClassification } = useQuery<{ classification: { requiresTask: boolean; requiresReply: boolean } | null }>({
+    queryKey: ["/api/comms/emails", selectedStoredEmail?.id, "classification"],
+    queryFn: async () => {
+      const res = await fetch(`/api/comms/emails/${selectedStoredEmail?.id}/classification`);
+      if (!res.ok) throw new Error("Failed to fetch classification");
+      return res.json();
+    },
+    enabled: !!selectedStoredEmail?.id,
+  });
+
+  // Fetch user's tasks (projects) for linking dropdown
+  interface Task {
+    id: string;
+    name: string;
+    currentStatus: string;
+    completionStatus: boolean;
+    clientId: string | null;
+    clientName?: string;
+  }
+  const { data: tasksData } = useQuery<Task[]>({
+    queryKey: ["/api/projects"],
+    enabled: !!selectedStoredEmail && (emailClassification?.classification?.requiresTask || selectedStoredEmail?.workflowState?.requiresTask),
+  });
+
+  // Filter tasks to show incomplete ones, prioritize same client if email matched
+  const availableTasks = useMemo(() => {
+    if (!tasksData) return [];
+    const incompleteTasks = tasksData.filter(t => t.currentStatus !== 'completed' && !t.completionStatus);
+    if (selectedStoredEmail?.matchedClientId) {
+      // Sort client tasks first
+      return [...incompleteTasks].sort((a, b) => {
+        const aMatch = a.clientId === selectedStoredEmail.matchedClientId ? 1 : 0;
+        const bMatch = b.clientId === selectedStoredEmail.matchedClientId ? 1 : 0;
+        return bMatch - aMatch;
+      });
+    }
+    return incompleteTasks;
+  }, [tasksData, selectedStoredEmail?.matchedClientId]);
+
+  // Link task mutation
+  const linkTaskMutation = useMutation({
+    mutationFn: async ({ emailId, taskId }: { emailId: string; taskId: string | null }) => {
+      return await apiRequest("PATCH", `/api/comms/inbox-emails/${emailId}/link-task`, { taskId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          query.queryKey[0] === "/api/comms/inbox" && 
+          query.queryKey[1] === selectedInboxId
+      });
+      toast({
+        title: "Task linked",
+        description: "Email has been linked to the selected task.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to link task",
+        description: error.message || "Could not link task to email.",
+      });
+    },
+  });
+
   const handleRefresh = async () => {
     if (selectedInboxId) {
       await syncMutation.mutateAsync();
@@ -379,6 +466,34 @@ export function CommsWorkspace({
       <div className="lg:col-span-1 flex flex-col min-h-0">
         <Card className="flex-1 flex flex-col min-h-0">
           <CardHeader className="pb-3 shrink-0">
+            {/* Inbox Selector */}
+            {myInboxes.length > 0 && (
+              <div className="mb-2">
+                <Select value={selectedInboxId} onValueChange={(id) => {
+                  setSelectedInboxId(id);
+                  setSelectedMessageId(null);
+                }}>
+                  <SelectTrigger className="h-9 text-sm" data-testid="select-comms-inbox">
+                    <div className="flex items-center gap-2">
+                      <Inbox className="h-4 w-4 text-primary flex-shrink-0" />
+                      <SelectValue placeholder="Select inbox..." />
+                    </div>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {myInboxes.map((access) => (
+                      <SelectItem key={access.inboxId} value={access.inboxId}>
+                        <div className="flex items-center gap-2">
+                          <span>{access.inbox.displayName || access.inbox.email}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {access.accessLevel}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg flex items-center gap-2">
                 <Mail className="h-5 w-5" />
@@ -401,10 +516,12 @@ export function CommsWorkspace({
             <div className="flex items-center justify-between gap-2">
               <CardDescription className="flex-1">
                 {selectedInbox 
-                  ? activeFilter
-                    ? `${displayEmails?.length || 0} filtered emails`
-                    : `${emailData?.emails?.length || 0} emails (last 7 days)`
-                  : "Select an inbox from the header"}
+                  ? showCompleted
+                    ? `${displayEmails?.length || 0} completed emails`
+                    : activeFilter
+                      ? `${displayEmails?.length || 0} filtered emails`
+                      : `${emailData?.emails?.length || 0} emails (last 7 days)`
+                  : "Select an inbox above"}
               </CardDescription>
               {selectedInbox && emailData?.stats && (
                 <div className="flex items-center gap-1 text-xs">
@@ -420,16 +537,33 @@ export function CommsWorkspace({
               )}
             </div>
             {selectedInboxId && (
-              <div className="relative pt-2">
-                <Search className="absolute left-2.5 top-1/2 mt-1 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="text"
-                  placeholder="Search emails..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8 h-8 text-sm"
-                  data-testid="input-email-search"
-                />
+              <div className="space-y-2 pt-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    type="text"
+                    placeholder="Search emails..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8 h-8 text-sm"
+                    data-testid="input-email-search"
+                  />
+                </div>
+                <Button
+                  variant={showCompleted ? "default" : "outline"}
+                  size="sm"
+                  className="w-full gap-2 h-8"
+                  onClick={() => {
+                    setShowCompleted(!showCompleted);
+                    if (!showCompleted) {
+                      setActiveFilter(null);
+                    }
+                  }}
+                  data-testid="button-show-completed"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  {showCompleted ? "Showing Completed" : "Show Completed"}
+                </Button>
               </div>
             )}
           </CardHeader>
@@ -438,7 +572,7 @@ export function CommsWorkspace({
               <div className="flex items-center justify-center flex-1 text-muted-foreground h-full">
                 <div className="text-center p-4">
                   <Inbox className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p className="text-sm">Select an inbox from the dropdown above</p>
+                  <p className="text-sm">Select an inbox from the dropdown</p>
                 </div>
               </div>
             ) : emailsLoading || (activeFilter && workflowLoading) ? (
@@ -638,6 +772,84 @@ export function CommsWorkspace({
                     </pre>
                   )}
                 </div>
+
+                {/* Task Linking Section - Stage 6 */}
+                {selectedStoredEmail && (emailClassification?.classification?.requiresTask || selectedStoredEmail.workflowState?.requiresTask) && (
+                  <div className="border-t pt-4 mt-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Link2 className="h-4 w-4 text-primary" />
+                      <span className="font-medium text-sm">Linked Task</span>
+                      {selectedStoredEmail.workflowState?.taskRequirementMet && (
+                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Task Complete
+                        </Badge>
+                      )}
+                    </div>
+                    
+                    {selectedStoredEmail.workflowState?.linkedTaskId ? (
+                      <div className="flex items-center justify-between gap-2 p-3 bg-muted/30 rounded-lg">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <CheckCircle className={`h-4 w-4 shrink-0 ${selectedStoredEmail.workflowState.taskRequirementMet ? 'text-green-600' : 'text-muted-foreground'}`} />
+                          <span className="text-sm truncate">
+                            {tasksData?.find(t => t.id === selectedStoredEmail.workflowState?.linkedTaskId)?.name || 'Linked Task'}
+                          </span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2"
+                          onClick={() => linkTaskMutation.mutate({ emailId: selectedStoredEmail.id, taskId: null })}
+                          disabled={linkTaskMutation.isPending}
+                          data-testid="button-unlink-task"
+                        >
+                          {linkTaskMutation.isPending ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <X className="h-3 w-3" />
+                          )}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Select
+                          value=""
+                          onValueChange={(taskId) => {
+                            if (taskId && selectedStoredEmail) {
+                              linkTaskMutation.mutate({ emailId: selectedStoredEmail.id, taskId });
+                            }
+                          }}
+                          disabled={linkTaskMutation.isPending}
+                        >
+                          <SelectTrigger className="h-9 text-sm" data-testid="select-link-task">
+                            <SelectValue placeholder="Select a task to link..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableTasks.length > 0 ? (
+                              availableTasks.slice(0, 20).map((task) => (
+                                <SelectItem key={task.id} value={task.id}>
+                                  <div className="flex items-center gap-2">
+                                    <span className="truncate">{task.name}</span>
+                                    {task.clientId === selectedStoredEmail.matchedClientId && (
+                                      <Badge variant="outline" className="text-xs shrink-0">Same Client</Badge>
+                                    )}
+                                  </div>
+                                </SelectItem>
+                              ))
+                            ) : (
+                              <div className="p-2 text-sm text-muted-foreground text-center">
+                                No available tasks
+                              </div>
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Link this email to a task. The email will auto-complete when the task is done.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex items-center justify-center h-full min-h-[300px] text-muted-foreground">

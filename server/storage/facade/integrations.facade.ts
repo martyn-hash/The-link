@@ -527,6 +527,10 @@ export function applyIntegrationsFacade<TBase extends Constructor<IntegrationsFa
       return this.emailStorage.getEmailWorkflowStateByEmailId(emailId);
     }
 
+    async getEmailWorkflowStatesByLinkedTaskId(taskId: string) {
+      return this.emailStorage.getEmailWorkflowStatesByLinkedTaskId(taskId);
+    }
+
     async upsertEmailWorkflowState(state: any) {
       return this.emailStorage.upsertEmailWorkflowState(state);
     }
@@ -565,7 +569,7 @@ export function applyIntegrationsFacade<TBase extends Constructor<IntegrationsFa
 
     async getEmailsByWorkflowFilter(
       inboxId: string,
-      filter: 'requires_task' | 'requires_reply' | 'urgent' | 'opportunities' | 'information_only' | 'all_outstanding',
+      filter: 'requires_task' | 'requires_reply' | 'urgent' | 'opportunities' | 'information_only' | 'all_outstanding' | 'completed',
       options?: { limit?: number; offset?: number; sinceDays?: number }
     ) {
       return this.emailStorage.getEmailsByWorkflowFilter(inboxId, filter, options);

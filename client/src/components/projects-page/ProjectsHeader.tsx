@@ -157,27 +157,14 @@ export function ProjectsHeader({
         {/* Left column: context-dependent content, left-aligned */}
         <div className="flex items-center justify-start gap-3">
           {workspaceMode === "projects" && <CurrentViewName viewName={currentSavedViewName} />}
-          {workspaceMode === "comms" && (
-            <>
-              <CommsInboxSelector 
-                inboxes={commsInboxes}
-                selectedInboxId={commsSelectedInboxId}
-                selectedInboxName={selectedInbox?.displayName || selectedInbox?.email || null}
-                onSelectInbox={(id) => {
-                  setCommsSelectedInboxId?.(id);
-                  setCommsSelectedMessageId?.(null);
-                }}
-              />
-              {commsSelectedInboxId && setCommsActiveFilter && (
-                <WorkflowToolbar
-                  stats={commsWorkflowStats}
-                  isLoading={commsWorkflowStatsLoading}
-                  activeFilter={commsActiveFilter ?? null}
-                  onFilterChange={setCommsActiveFilter}
-                  filterButtons={['information_only', 'all_outstanding']}
-                />
-              )}
-            </>
+          {workspaceMode === "comms" && commsSelectedInboxId && setCommsActiveFilter && (
+            <WorkflowToolbar
+              stats={commsWorkflowStats}
+              isLoading={commsWorkflowStatsLoading}
+              activeFilter={commsActiveFilter ?? null}
+              onFilterChange={setCommsActiveFilter}
+              filterButtons={['information_only', 'all_outstanding']}
+            />
           )}
           {/* Tasks mode: empty left column for balance */}
         </div>

@@ -998,6 +998,11 @@ export class EmailStorage {
         workflowState: {
           state: emailWorkflowState.state,
           completedAt: emailWorkflowState.completedAt,
+          linkedTaskId: emailWorkflowState.linkedTaskId,
+          taskRequirementMet: emailWorkflowState.taskRequirementMet,
+          requiresTask: emailWorkflowState.requiresTask,
+          requiresReply: emailWorkflowState.requiresReply,
+          replySent: emailWorkflowState.replySent,
         },
       })
       .from(inboxEmails)
@@ -1020,6 +1025,11 @@ export class EmailStorage {
       workflowState: r.workflowState?.state ? {
         state: r.workflowState.state,
         completedAt: r.workflowState.completedAt,
+        linkedTaskId: r.workflowState.linkedTaskId,
+        taskRequirementMet: r.workflowState.taskRequirementMet,
+        requiresTask: r.workflowState.requiresTask,
+        requiresReply: r.workflowState.requiresReply,
+        replySent: r.workflowState.replySent,
       } : undefined,
     }));
   }
@@ -1382,6 +1392,14 @@ export class EmailStorage {
     return result[0];
   }
 
+  async getEmailWorkflowStatesByLinkedTaskId(taskId: string): Promise<EmailWorkflowState[]> {
+    const result = await db
+      .select()
+      .from(emailWorkflowState)
+      .where(eq(emailWorkflowState.linkedTaskId, taskId));
+    return result;
+  }
+
   async upsertEmailWorkflowState(state: InsertEmailWorkflowState): Promise<EmailWorkflowState> {
     const existing = await this.getEmailWorkflowStateByEmailId(state.emailId);
     
@@ -1579,7 +1597,7 @@ export class EmailStorage {
    */
   async getEmailsByWorkflowFilter(
     inboxId: string,
-    filter: 'requires_task' | 'requires_reply' | 'urgent' | 'opportunities' | 'information_only' | 'all_outstanding',
+    filter: 'requires_task' | 'requires_reply' | 'urgent' | 'opportunities' | 'information_only' | 'all_outstanding' | 'completed',
     options: {
       limit?: number;
       offset?: number;
@@ -1642,6 +1660,9 @@ export class EmailStorage {
           isNull(emailWorkflowState.state),
           sql`${emailWorkflowState.state} != 'complete'`
         ));
+        break;
+      case 'completed':
+        conditions.push(eq(emailWorkflowState.state, sql`'complete'`));
         break;
     }
 

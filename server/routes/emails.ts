@@ -1546,6 +1546,64 @@ export function registerEmailRoutes(
   });
 
   /**
+   * PATCH /api/comms/inbox-emails/:emailId/link-task
+   * Link or unlink a task to an email
+   * Body: { taskId: string | null }
+   */
+  app.patch('/api/comms/inbox-emails/:emailId/link-task', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const { emailId } = req.params;
+      const { taskId } = req.body;
+
+      // Get the email first to verify it exists
+      const email = await storage.getInboxEmailById(emailId);
+      if (!email) {
+        return res.status(404).json({ message: "Email not found" });
+      }
+
+      // Verify user has access to the inbox this email belongs to
+      const hasAccess = await storage.canUserAccessInbox(userId, email.inboxId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this email's inbox" });
+      }
+
+      // Get existing workflow state
+      let workflowState = await storage.getEmailWorkflowStateByEmailId(emailId);
+      
+      // If linking a task, verify it exists and check if complete
+      let taskRequirementMet = false;
+      if (taskId) {
+        const task = await storage.getProjectById(taskId);
+        if (!task) {
+          return res.status(404).json({ message: "Task not found" });
+        }
+        // Check if task is completed
+        taskRequirementMet = task.currentStatus === 'completed' || task.completionStatus === true;
+      }
+
+      // Update or create workflow state with linked task
+      const updatedWorkflow = await storage.upsertEmailWorkflowState({
+        emailId,
+        ...(workflowState || {}),
+        linkedTaskId: taskId || null,
+        taskRequirementMet,
+      });
+
+      res.json({
+        success: true,
+        workflowState: updatedWorkflow
+      });
+    } catch (error: any) {
+      console.error('[Link Task] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to link task", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
    * GET /api/comms/inbox-emails/:emailId
    * Get a single stored inbox email by ID
    */
@@ -2014,7 +2072,7 @@ export function registerEmailRoutes(
       }
 
       // Validate filter
-      const validFilters = ['requires_task', 'requires_reply', 'urgent', 'opportunities', 'information_only', 'all_outstanding'];
+      const validFilters = ['requires_task', 'requires_reply', 'urgent', 'opportunities', 'information_only', 'all_outstanding', 'completed'];
       if (!validFilters.includes(filter as string)) {
         return res.status(400).json({ 
           message: `Invalid filter. Must be one of: ${validFilters.join(', ')}` 
@@ -2023,7 +2081,7 @@ export function registerEmailRoutes(
 
       const emails = await storage.getEmailsByWorkflowFilter(
         inboxId,
-        filter as 'requires_task' | 'requires_reply' | 'urgent' | 'opportunities' | 'information_only' | 'all_outstanding',
+        filter as 'requires_task' | 'requires_reply' | 'urgent' | 'opportunities' | 'information_only' | 'all_outstanding' | 'completed',
         {
           limit: Math.min(parseInt(limit as string) || 50, 100),
           offset: parseInt(offset as string) || 0,
