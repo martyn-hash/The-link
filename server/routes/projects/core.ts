@@ -133,6 +133,53 @@ export function registerProjectCoreRoutes(
 
       const projects = await storage.getAllProjects(filters);
       res.json(projects);
+
+      // Update user's cache in the background after sending response
+      const viewKey = (req.query.viewKey as string) || 'default';
+      setImmediate(async () => {
+        try {
+          const stageStats: Record<string, number> = {};
+          for (const project of projects) {
+            const stage = project.currentStatus || 'unknown';
+            stageStats[stage] = (stageStats[stage] || 0) + 1;
+          }
+          
+          // Normalize filters to match canonical defaults used in /api/projects/cached
+          // Base defaults match the cached endpoint exactly
+          const canonicalFilters: Record<string, any> = {
+            archived: filters.archived ?? false,
+            inactive: filters.inactive ?? false,
+            showCompletedRegardless: filters.showCompletedRegardless ?? false,
+          };
+          // Add any additional filter values that were explicitly set (not undefined)
+          if (filters.showArchived !== undefined) canonicalFilters.showArchived = filters.showArchived;
+          if (filters.month) canonicalFilters.month = filters.month;
+          if (filters.serviceId) canonicalFilters.serviceId = filters.serviceId;
+          if (filters.assigneeId) canonicalFilters.assigneeId = filters.assigneeId;
+          if (filters.serviceOwnerId) canonicalFilters.serviceOwnerId = filters.serviceOwnerId;
+          if (filters.userId) canonicalFilters.userId = filters.userId;
+          if (filters.dynamicDateFilter) canonicalFilters.dynamicDateFilter = filters.dynamicDateFilter;
+          if (filters.dateFrom) canonicalFilters.dateFrom = filters.dateFrom;
+          if (filters.dateTo) canonicalFilters.dateTo = filters.dateTo;
+          if (filters.dueDate) canonicalFilters.dueDate = filters.dueDate;
+          
+          const cacheData: CachedProjectView = {
+            projects: projects,
+            stageStats,
+            lastRefreshed: new Date().toISOString(),
+          };
+          
+          await (storage as any).viewCacheStorage.setCachedView(
+            effectiveUserId,
+            viewKey,
+            cacheData,
+            canonicalFilters,
+            1440
+          );
+        } catch (cacheError) {
+          console.error('[View Cache] Error updating cache after fresh fetch:', cacheError);
+        }
+      });
     } catch (error) {
       console.error("Error fetching projects:", error instanceof Error ? (error instanceof Error ? error.message : null) : error);
       res.status(500).json({ message: "Failed to fetch projects" });

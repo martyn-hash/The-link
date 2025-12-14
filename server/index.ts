@@ -297,7 +297,7 @@ app.use((req, res, next) => {
     // Runs at 04:00 UK time to pre-compute project views for instant loading
     cron.schedule('0 4 * * *', async () => {
       try {
-        log('[View Cache] Starting nightly view cache warming...');
+        log('[View Cache] Starting early morning view cache warming (04:00)...');
         const result = await warmViewCache();
         log(`[View Cache] Warming completed: ${result.status} - ${result.viewsCached}/${result.usersProcessed} views cached in ${result.executionTimeMs}ms`);
         if (result.errors.length > 0) {
@@ -310,7 +310,52 @@ app.use((req, res, next) => {
       timezone: "Europe/London"
     });
     
-    log('[View Cache] Nightly scheduler initialized (runs daily at 04:00 UK time)');
+    cron.schedule('30 8 * * *', async () => {
+      try {
+        log('[View Cache] Starting morning view cache warming (08:30)...');
+        const result = await warmViewCache();
+        log(`[View Cache] Warming completed: ${result.status} - ${result.viewsCached}/${result.usersProcessed} views cached in ${result.executionTimeMs}ms`);
+        if (result.errors.length > 0) {
+          console.error('[View Cache] Warming errors:', result.errors.slice(0, 10));
+        }
+      } catch (error) {
+        console.error('[View Cache] Fatal error in view cache warming:', error);
+      }
+    }, {
+      timezone: "Europe/London"
+    });
+    
+    cron.schedule('0 12 * * *', async () => {
+      try {
+        log('[View Cache] Starting midday view cache warming (12:00)...');
+        const result = await warmViewCache();
+        log(`[View Cache] Warming completed: ${result.status} - ${result.viewsCached}/${result.usersProcessed} views cached in ${result.executionTimeMs}ms`);
+        if (result.errors.length > 0) {
+          console.error('[View Cache] Warming errors:', result.errors.slice(0, 10));
+        }
+      } catch (error) {
+        console.error('[View Cache] Fatal error in view cache warming:', error);
+      }
+    }, {
+      timezone: "Europe/London"
+    });
+    
+    cron.schedule('0 15 * * *', async () => {
+      try {
+        log('[View Cache] Starting afternoon view cache warming (15:00)...');
+        const result = await warmViewCache();
+        log(`[View Cache] Warming completed: ${result.status} - ${result.viewsCached}/${result.usersProcessed} views cached in ${result.executionTimeMs}ms`);
+        if (result.errors.length > 0) {
+          console.error('[View Cache] Warming errors:', result.errors.slice(0, 10));
+        }
+      } catch (error) {
+        console.error('[View Cache] Fatal error in view cache warming:', error);
+      }
+    }, {
+      timezone: "Europe/London"
+    });
+    
+    log('[View Cache] Scheduler initialized (runs daily at 04:00, 08:30, 12:00 & 15:00 UK time)');
     
     // Setup activity logs cleanup
     // Runs daily at 4:00 AM UTC (after project scheduling, CH sync, and email resolver)
