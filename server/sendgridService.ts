@@ -1,4 +1,5 @@
 import sgMail from '@sendgrid/mail';
+import { getAppUrl } from './utils/getAppUrl';
 
 let connectionSettings: any;
 
@@ -66,15 +67,17 @@ export async function sendProjectMessageReminderEmail(summary: UnreadProjectMess
     const threadPlural = summary.threads.length === 1 ? 'thread' : 'threads';
     const messagePlural = totalUnread === 1 ? 'message' : 'messages';
     
+    const baseUrl = getAppUrl();
+    
     let threadList = summary.threads.map(thread => {
       const messageCount = thread.unreadCount === 1 ? '1 message' : `${thread.unreadCount} messages`;
-      const projectUrl = `${process.env.REPLIT_DOMAINS?.split(',')[0] || 'http://localhost:5000'}/projects/${thread.projectId}?tab=messages&thread=${thread.threadId}`;
+      const projectUrl = `${baseUrl}/projects/${thread.projectId}?tab=messages&thread=${thread.threadId}`;
       return `• ${thread.topic} (${thread.projectName}) - ${messageCount}\n  ${projectUrl}`;
     }).join('\n\n');
     
     const htmlThreadList = summary.threads.map(thread => {
       const messageCount = thread.unreadCount === 1 ? '1 message' : `${thread.unreadCount} messages`;
-      const projectUrl = `${process.env.REPLIT_DOMAINS?.split(',')[0] || 'http://localhost:5000'}/projects/${thread.projectId}?tab=messages&thread=${thread.threadId}`;
+      const projectUrl = `${baseUrl}/projects/${thread.projectId}?tab=messages&thread=${thread.threadId}`;
       return `
         <div style="margin-bottom: 20px; padding: 15px; background-color: #f9fafb; border-left: 3px solid #3b82f6; border-radius: 4px;">
           <div style="font-weight: 600; color: #111827; margin-bottom: 8px;">

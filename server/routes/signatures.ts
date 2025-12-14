@@ -29,6 +29,7 @@ import { UAParser } from "ua-parser-js";
 import { generateCertificateOfCompletion } from "../lib/certificateGenerator";
 import geoip from "geoip-lite";
 import { z } from "zod";
+import { getAppUrl } from "../utils/getAppUrl";
 
 /**
  * Session management constants and helpers
@@ -1014,9 +1015,8 @@ export function registerSignatureRoutes(
           }
 
           const now = new Date();
-          const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-            ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-            : `http://localhost:5000`;
+          // Always use production URL for emails
+          const baseUrl = getAppUrl();
 
           // Get person details for all recipients in one query
           const personIds = createdRecipients.map(r => r.personId);
@@ -1194,9 +1194,8 @@ export function registerSignatureRoutes(
         }
 
         const now = new Date();
-        const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-          ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-          : `http://localhost:5000`;
+        // Always use production URL for emails
+        const baseUrl = getAppUrl();
         
         // Get firm name and email sender name from company settings for email
         const [settings] = await db.select().from(companySettings).limit(1);
@@ -2206,9 +2205,8 @@ You agree that:
               .innerJoin(people, eq(signatureRequestRecipients.personId, people.id))
               .where(eq(signatureRequestRecipients.signatureRequestId, request.id));
 
-            const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-              ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-              : `http://localhost:5000`;
+            // Always use production URL for emails
+            const baseUrl = getAppUrl();
 
             // Generate download links for signed PDF and certificate
             const signedPdfUrl = `${baseUrl}/api/signed-documents/${signedDocumentId}/download`;

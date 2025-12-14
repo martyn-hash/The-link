@@ -22,6 +22,7 @@ import {
   isTokenLockedOut,
   sanitizeAttachment 
 } from "../lib/queryTokenRateLimiter";
+import { getAppUrl } from "../utils/getAppUrl";
 
 const paramProjectIdSchema = z.object({
   projectId: z.string().uuid("Invalid project ID format")
@@ -183,7 +184,8 @@ export function registerQueryRoutes(
       let sentCount = 0;
       const clientName = project.client?.name || 'Unknown Client';
       const projectTypeName = project.projectType?.name || 'Project';
-      const baseUrl = process.env.PUBLIC_URL ?? (process.env.REPLIT_DEV_DOMAIN ? `https://${process.env.REPLIT_DEV_DOMAIN}` : '');
+      // Always use production URL for emails
+      const baseUrl = getAppUrl();
 
       for (const user of validUsers) {
         if (!user) continue;
@@ -910,26 +912,8 @@ export function registerQueryRoutes(
         // Build the response URL with proper domain handling
         responseUrl = `/queries/respond/${token.token}`;
         
-        // Get base URL: APP_URL for production only, Replit domain for dev
-        let baseUrl: string;
-        const isProduction = process.env.NODE_ENV === 'production';
-        
-        if (isProduction && process.env.APP_URL) {
-          // Production: use the configured APP_URL
-          baseUrl = process.env.APP_URL;
-        } else {
-          // Development: use Replit dev domain
-          const replitDomain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0];
-          if (replitDomain) {
-            // Clean up the domain and ensure https:// prefix
-            baseUrl = replitDomain.replace(/^render:\/\/\//, '').replace(/^\/+/, '');
-            if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
-              baseUrl = `https://${baseUrl}`;
-            }
-          } else {
-            baseUrl = 'http://localhost:5000';
-          }
-        }
+        // Always use production URL for emails to ensure links work for recipients
+        const baseUrl = getAppUrl();
         fullResponseUrl = `${baseUrl}${responseUrl}`;
       }
 
@@ -1252,26 +1236,8 @@ ${emailSignoff}`;
       // Build the response URL with proper domain handling
       const responseUrl = `/queries/respond/${token.token}`;
       
-      // Get base URL: APP_URL for production only, Replit domain for dev
-      let baseUrl: string;
-      const isProduction = process.env.NODE_ENV === 'production';
-      
-      if (isProduction && process.env.APP_URL) {
-        // Production: use the configured APP_URL
-        baseUrl = process.env.APP_URL;
-      } else {
-        // Development: use Replit dev domain
-        const replitDomain = process.env.REPLIT_DEV_DOMAIN || process.env.REPLIT_DOMAINS?.split(',')[0];
-        if (replitDomain) {
-          // Clean up the domain and ensure https:// prefix
-          baseUrl = replitDomain.replace(/^render:\/\/\//, '').replace(/^\/+/, '');
-          if (!baseUrl.startsWith('http://') && !baseUrl.startsWith('https://')) {
-            baseUrl = `https://${baseUrl}`;
-          }
-        } else {
-          baseUrl = 'http://localhost:5000';
-        }
-      }
+      // Always use production URL for emails to ensure links work for recipients
+      const baseUrl = getAppUrl();
       const fullResponseUrl = `${baseUrl}${responseUrl}`;
 
       // Format date helper
@@ -1407,7 +1373,7 @@ ${emailSignoff}`;
           console.log(`[Query Access] Preparing open notification for ${tokenData.notifyOnResponseUserIds.length} user(s)`);
           
           try {
-            const baseUrl = process.env.APP_URL || 'https://thelink.replit.app';
+            const baseUrl = getAppUrl();
             const viewUrl = clientId 
               ? `${baseUrl}/clients/${clientId}/projects/${tokenData.projectId}`
               : `${baseUrl}/projects/${tokenData.projectId}`;
@@ -1907,7 +1873,7 @@ ${emailSignoff}`;
         
         try {
           // Build view URL - use project-only URL if clientId is missing
-          const baseUrl = process.env.APP_URL || 'https://thelink.replit.app';
+          const baseUrl = getAppUrl();
           const viewUrl = clientId 
             ? `${baseUrl}/clients/${clientId}/projects/${tokenData.projectId}`
             : `${baseUrl}/projects/${tokenData.projectId}`;

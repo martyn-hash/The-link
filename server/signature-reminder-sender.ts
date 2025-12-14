@@ -2,6 +2,7 @@ import { db } from "./db";
 import { signatureRequests, signatureRequestRecipients, signatures, people, companySettings, signatureAuditLogs } from "@shared/schema";
 import { eq, and, lte, lt, isNull, sql } from "drizzle-orm";
 import { sendReminderEmail } from "./lib/sendgrid";
+import { getAppUrl } from "./utils/getAppUrl";
 
 /**
  * Signature Reminder Sender Service
@@ -102,7 +103,8 @@ export async function processPendingReminders(): Promise<ReminderResult> {
           }
 
           // CRITICAL FIX: Use secure token instead of database ID for signing URL
-          const signUrl = `${process.env.REPL_SLUG ? `https://${process.env.REPL_SLUG}.${process.env.REPLIT_DOMAINS}` : 'http://localhost:5000'}/sign?token=${recipient.secureToken}`;
+          // Always use production URL for emails
+          const signUrl = `${getAppUrl()}/sign?token=${recipient.secureToken}`;
 
           // Calculate days since request was created
           const createdAt = request.createdAt || now;

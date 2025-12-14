@@ -34,6 +34,7 @@ import {
   DialoraWebhookConfig,
   DialoraCallContext
 } from "./dialoraService";
+import { getAppUrl } from "../utils/getAppUrl";
 
 interface ReminderSendResult {
   success: boolean;
@@ -561,7 +562,8 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
     return { success: false, error: 'Invalid query token' };
   }
 
-  const responseLink = `${process.env.PUBLIC_URL || ''}/queries/respond/${token[0].token}`;
+  // Always use production URL for emails
+  const responseLink = `${getAppUrl()}/queries/respond/${token[0].token}`;
   
   const clientData = await db
     .select({ 
