@@ -5,6 +5,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { showFriendlyError } from "@/lib/friendlyErrors";
+import { useDraftAutoSave } from "@/hooks/useDraftAutoSave";
 import {
   Dialog,
   DialogContent,
@@ -109,6 +110,12 @@ export function CreateTaskDialog({
   // Track if we've added the project's client (to avoid duplicate additions)
   const hasAddedProjectClientRef = useRef(false);
 
+  // Auto-save draft for task creation
+  const { savedContent: savedTitle, additionalFields: savedFields, hasDraft, saveDraft, clearDraft } = useDraftAutoSave({
+    key: 'task-draft-new',
+    debounceMs: 500,
+  });
+
   // Fetch task types
   const { data: taskTypes = [], isLoading: loadingTypes } = useQuery<TaskType[]>({
     queryKey: ["/api/internal-task-types"],
@@ -154,6 +161,29 @@ export function CreateTaskDialog({
       dueTime: defaultValues?.dueTime || "",
     });
   }, [defaultValues, form]);
+
+  // Restore draft when dialog opens (only if no defaultValues provided)
+  useEffect(() => {
+    if (open && !defaultValues?.title) {
+      if (hasDraft && savedTitle) {
+        form.setValue('title', savedTitle);
+        if (savedFields?.description) {
+          form.setValue('description', savedFields.description);
+        }
+      }
+    }
+  }, [open, hasDraft, savedTitle, savedFields, defaultValues?.title, form]);
+
+  // Watch form values for auto-save
+  const watchedTitle = form.watch('title');
+  const watchedDescription = form.watch('description');
+
+  // Auto-save task draft when form values change
+  useEffect(() => {
+    if (open && !defaultValues?.title) {
+      saveDraft(watchedTitle, { description: watchedDescription || '' });
+    }
+  }, [watchedTitle, watchedDescription, open, saveDraft, defaultValues?.title]);
 
   // Reset hydration flags when dialog closes
   useEffect(() => {
@@ -288,6 +318,9 @@ export function CreateTaskDialog({
           return typeof key === 'string' && key.startsWith('/api/internal-tasks');
         }
       });
+      
+      // Clear the auto-saved draft on successful creation
+      clearDraft();
       
       // Reset form and connections
       form.reset();

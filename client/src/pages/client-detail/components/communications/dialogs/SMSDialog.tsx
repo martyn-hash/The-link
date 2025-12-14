@@ -1,6 +1,7 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Send, FileText, AlertCircle } from "lucide-react";
+import { useDraftAutoSave } from "@/hooks/useDraftAutoSave";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -43,6 +44,30 @@ export function SMSDialog({
   const [usedTemplateId, setUsedTemplateId] = useState<string | null>(null);
   const [rawTemplateContent, setRawTemplateContent] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-save draft for SMS message
+  const { savedContent: savedDraft, hasDraft, saveDraft, clearDraft } = useDraftAutoSave({
+    key: `sms-draft-${clientId}`,
+    debounceMs: 500,
+  });
+
+  // Restore draft when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      if (hasDraft && savedDraft) {
+        setMessage(savedDraft);
+      } else if (!initialValues?.message) {
+        setMessage('');
+      }
+    }
+  }, [isOpen, hasDraft, savedDraft]);
+
+  // Auto-save message content when it changes
+  useEffect(() => {
+    if (isOpen) {
+      saveDraft(message);
+    }
+  }, [message, isOpen, saveDraft]);
   
   // Filter to only show people with mobile numbers (check primaryPhone first, fallback to telephone)
   const peopleWithMobile = (clientPeople || []).filter((cp: any) => {
@@ -58,7 +83,7 @@ export function SMSDialog({
       if (projectId) {
         queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/communications`] });
       }
-      handleClose();
+      handleClose(true);
       toast({
         title: "SMS sent successfully",
         description: "The SMS message has been sent and logged.",
@@ -70,11 +95,14 @@ export function SMSDialog({
     },
   });
 
-  const handleClose = () => {
+  const handleClose = (clearDraftOnClose: boolean = false) => {
     setSmsPersonId(undefined);
     setMessage('');
     setUsedTemplateId(null);
     setRawTemplateContent(null);
+    if (clearDraftOnClose) {
+      clearDraft();
+    }
     onClose();
   };
 

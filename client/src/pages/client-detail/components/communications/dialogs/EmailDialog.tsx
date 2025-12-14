@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Mail, Paperclip, Sparkles, Mic, Eye, Edit3, Lock, Clock, Phone, MessageSquare, Users } from "lucide-react";
+import { useDraftAutoSave } from "@/hooks/useDraftAutoSave";
 import { ReminderScheduleEditor } from "@/components/reminders/ReminderScheduleEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -117,6 +118,31 @@ export function EmailDialog({
   const [aiPrompt, setAiPrompt] = useState("");
   const [isRefining, setIsRefining] = useState(false);
   const [showPromptModal, setShowPromptModal] = useState(false);
+
+  // Auto-save draft for email composition
+  const { savedContent: savedDraft, additionalFields: savedFields, hasDraft, saveDraft, clearDraft } = useDraftAutoSave({
+    key: `email-draft-${clientId}-${projectId || 'no-project'}`,
+    debounceMs: 500,
+  });
+
+  // Restore draft when dialog opens (only if no initialValues provided)
+  useEffect(() => {
+    if (isOpen && !initialValues?.subject && !initialValues?.content) {
+      if (hasDraft && savedDraft) {
+        setEmailContent(savedDraft);
+        if (savedFields?.subject) {
+          setEmailSubject(savedFields.subject);
+        }
+      }
+    }
+  }, [isOpen, hasDraft, savedDraft, savedFields, initialValues?.subject, initialValues?.content]);
+
+  // Auto-save email content when it changes
+  useEffect(() => {
+    if (isOpen && !hasProtectedHtml) {
+      saveDraft(emailContent, { subject: emailSubject });
+    }
+  }, [emailContent, emailSubject, isOpen, saveDraft, hasProtectedHtml]);
   
   // Build the final email content for sending (combines intro + protected HTML + signoff)
   const getFinalEmailContent = useCallback(() => {
@@ -408,7 +434,7 @@ export function EmailDialog({
       if (projectId) {
         queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/communications`] });
       }
-      handleClose();
+      handleClose(true);
       const recipientCount = selectedRecipients.size;
       toast({
         title: "Email sent successfully",
@@ -421,7 +447,7 @@ export function EmailDialog({
     },
   });
 
-  const handleClose = () => {
+  const handleClose = (clearDraftOnClose: boolean = false) => {
     setSelectedRecipients(new Set());
     setEmailSubject('');
     setEmailContent('');
@@ -433,6 +459,9 @@ export function EmailDialog({
     setIsAttachmentsOpen(false);
     setAiPrompt('');
     setShowPromptModal(false);
+    if (clearDraftOnClose) {
+      clearDraft();
+    }
     onClose();
   };
 
