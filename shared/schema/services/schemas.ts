@@ -9,6 +9,7 @@ import {
   clientServiceRoleAssignments,
   chChangeRequests,
   serviceAssignmentViews,
+  servicePriorityIndicators,
 } from "./tables";
 
 export const udfDefinitionSchema = z.object({
@@ -132,3 +133,11 @@ export const insertServiceAssignmentViewSchema = createInsertSchema(serviceAssig
 
 export type ServiceAssignmentView = typeof serviceAssignmentViews.$inferSelect;
 export type InsertServiceAssignmentView = z.infer<typeof insertServiceAssignmentViewSchema>;
+
+export const insertServicePriorityIndicatorSchema = createInsertSchema(servicePriorityIndicators).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type ServicePriorityIndicator = typeof servicePriorityIndicators.$inferSelect;
+export type InsertServicePriorityIndicator = z.infer<typeof insertServicePriorityIndicatorSchema>;

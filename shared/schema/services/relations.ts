@@ -7,6 +7,7 @@ import {
   serviceRoles,
   clientServiceRoleAssignments,
   chChangeRequests,
+  servicePriorityIndicators,
 } from "./tables";
 
 import { users } from "../users/tables";
@@ -22,6 +23,8 @@ export const servicesRelations = relations(services, ({ one, many }) => ({
   clientServices: many(clientServices),
   peopleServices: many(peopleServices),
   serviceRoles: many(serviceRoles),
+  priorityIndicatorsAsIndicator: many(servicePriorityIndicators, { relationName: "indicatorService" }),
+  priorityIndicatorsAsTarget: many(servicePriorityIndicators, { relationName: "targetService" }),
 }));
 
 export const clientServicesRelations = relations(clientServices, ({ one, many }) => ({
@@ -102,5 +105,18 @@ export const chChangeRequestsRelations = relations(chChangeRequests, ({ one }) =
   approver: one(users, {
     fields: [chChangeRequests.approvedBy],
     references: [users.id],
+  }),
+}));
+
+export const servicePriorityIndicatorsRelations = relations(servicePriorityIndicators, ({ one }) => ({
+  indicatorService: one(services, {
+    fields: [servicePriorityIndicators.indicatorServiceId],
+    references: [services.id],
+    relationName: "indicatorService",
+  }),
+  targetService: one(services, {
+    fields: [servicePriorityIndicators.targetServiceId],
+    references: [services.id],
+    relationName: "targetService",
   }),
 }));

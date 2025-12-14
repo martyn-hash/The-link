@@ -5,6 +5,7 @@ import {
   projectSchedulingHistory,
   projectTypes,
   services,
+  servicePriorityIndicators,
 } from '@shared/schema';
 import { eq, and, or, desc, gte, lte, lt, isNotNull, isNull, inArray, sql } from 'drizzle-orm';
 import type {
@@ -246,30 +247,29 @@ export class ProjectQueryStorage {
     }
 
     try {
-      const indicatorServices = await db
+      const indicatorMappings = await db
         .select({
-          id: services.id,
-          name: services.name,
-          showInProjectServiceId: services.showInProjectServiceId,
+          indicatorServiceId: servicePriorityIndicators.indicatorServiceId,
+          targetServiceId: servicePriorityIndicators.targetServiceId,
+          indicatorServiceName: services.name,
         })
-        .from(services)
-        .where(isNotNull(services.showInProjectServiceId));
+        .from(servicePriorityIndicators)
+        .innerJoin(services, eq(servicePriorityIndicators.indicatorServiceId, services.id));
 
-      if (indicatorServices.length === 0) {
+      if (indicatorMappings.length === 0) {
         return priorityMap;
       }
 
       const targetToIndicators = new Map<string, Array<{ id: string; name: string }>>();
-      for (const service of indicatorServices) {
-        if (service.showInProjectServiceId) {
-          const existing = targetToIndicators.get(service.showInProjectServiceId) || [];
-          existing.push({ id: service.id, name: service.name });
-          targetToIndicators.set(service.showInProjectServiceId, existing);
-        }
+      for (const mapping of indicatorMappings) {
+        const existing = targetToIndicators.get(mapping.targetServiceId) || [];
+        existing.push({ id: mapping.indicatorServiceId, name: mapping.indicatorServiceName });
+        targetToIndicators.set(mapping.targetServiceId, existing);
       }
+      
+      const indicatorServiceIds = Array.from(new Set(indicatorMappings.map(m => m.indicatorServiceId)));
 
       const clientIds = Array.from(new Set(projectList.map(p => p.clientId)));
-      const indicatorServiceIds = indicatorServices.map(s => s.id);
 
       const aggregatedProjectData = await db
         .select({

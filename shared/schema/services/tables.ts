@@ -121,6 +121,17 @@ export const serviceAssignmentViews = pgTable("service_assignment_views", {
   index("idx_service_assignment_views_user_id").on(table.userId),
 ]);
 
+export const servicePriorityIndicators = pgTable("service_priority_indicators", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  indicatorServiceId: varchar("indicator_service_id").notNull().references(() => services.id, { onDelete: "cascade" }),
+  targetServiceId: varchar("target_service_id").notNull().references(() => services.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_service_priority_indicators_indicator").on(table.indicatorServiceId),
+  index("idx_service_priority_indicators_target").on(table.targetServiceId),
+  unique("unique_indicator_target").on(table.indicatorServiceId, table.targetServiceId),
+]);
+
 export const chChangeRequests = pgTable("ch_change_requests", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   clientId: varchar("client_id").notNull().references(() => clients.id, { onDelete: "cascade" }),
