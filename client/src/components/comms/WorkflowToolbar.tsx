@@ -90,7 +90,6 @@ interface WorkflowToolbarProps {
   onFilterChange: (filter: WorkflowFilter) => void;
   compact?: boolean;
   filterButtons?: WorkflowFilter[];
-  hideClearButton?: boolean;
 }
 
 export function WorkflowToolbar({
@@ -99,14 +98,11 @@ export function WorkflowToolbar({
   activeFilter,
   onFilterChange,
   compact = false,
-  filterButtons,
-  hideClearButton = false
+  filterButtons
 }: WorkflowToolbarProps) {
   const buttonsToRender = filterButtons 
     ? TOOLBAR_BUTTONS.filter(btn => filterButtons.includes(btn.id))
     : TOOLBAR_BUTTONS;
-  
-  const activeFilterInThisToolbar = buttonsToRender.some(btn => btn.id === activeFilter);
   
   const getBadgeVariant = (variant: 'destructive' | 'warning' | 'default', isActive: boolean) => {
     if (isActive) return 'default';
@@ -118,7 +114,7 @@ export function WorkflowToolbar({
     return (
       <div className="flex flex-wrap items-center gap-2" data-testid="workflow-toolbar-loading">
         {buttonsToRender.map((_, i) => (
-          <Skeleton key={i} className="h-8 w-24" />
+          <Skeleton key={i} className="h-9 w-24" />
         ))}
       </div>
     );
@@ -141,13 +137,12 @@ export function WorkflowToolbar({
                 variant={isActive ? "default" : "outline"}
                 size="sm"
                 className={cn(
-                  "h-8 gap-1.5",
                   !isActive && count === 0 && "opacity-60"
                 )}
                 onClick={() => onFilterChange(isActive ? null : button.id)}
                 data-testid={`toolbar-btn-${button.id}`}
               >
-                <Icon className="h-3.5 w-3.5" />
+                <Icon className="h-4 w-4 mr-2" />
                 <span className={cn("hidden sm:inline", compact && "sm:hidden md:inline")}>
                   {compact ? button.shortLabel : button.label}
                 </span>
@@ -158,7 +153,7 @@ export function WorkflowToolbar({
                   <Badge 
                     variant={getBadgeVariant(button.badgeVariant, isActive)}
                     className={cn(
-                      "ml-1 h-5 min-w-[20px] px-1.5 text-xs font-medium",
+                      "ml-2 h-5 min-w-[20px] px-1.5 text-xs font-medium",
                       isActive && "bg-primary-foreground text-primary",
                       !isActive && button.badgeVariant === 'warning' && "bg-amber-100 text-amber-700 border-amber-200"
                     )}
@@ -175,17 +170,6 @@ export function WorkflowToolbar({
         );
       })}
       
-      {activeFilterInThisToolbar && !hideClearButton && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 text-muted-foreground hover:text-foreground"
-          onClick={() => onFilterChange(null)}
-          data-testid="toolbar-clear-filter"
-        >
-          Clear filter
-        </Button>
-      )}
     </div>
   );
 }

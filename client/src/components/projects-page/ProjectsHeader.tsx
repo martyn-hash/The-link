@@ -175,7 +175,6 @@ export function ProjectsHeader({
                   activeFilter={commsActiveFilter ?? null}
                   onFilterChange={setCommsActiveFilter}
                   filterButtons={['information_only', 'all_outstanding']}
-                  hideClearButton={true}
                 />
               )}
             </>
