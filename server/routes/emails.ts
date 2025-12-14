@@ -34,6 +34,10 @@ const replyToEmailSchema = z.object({
   })).optional(),
 });
 
+const completeEmailSchema = z.object({
+  note: z.string().max(500).optional(),
+});
+
 export function registerEmailRoutes(
   app: Express,
   isAuthenticated: any,
@@ -1454,6 +1458,88 @@ export function registerEmailRoutes(
       console.error('[Update Email Status] Error:', error);
       res.status(500).json({ 
         message: "Failed to update email status", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * POST /api/comms/inbox-emails/:emailId/complete
+   * Mark an email as complete in the workflow (Step 5: Email as Workflow)
+   * Emails must be explicitly "checked off" to disappear from the inbox
+   */
+  app.post('/api/comms/inbox-emails/:emailId/complete', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const { emailId } = req.params;
+      
+      // Validate request body
+      const parseResult = completeEmailSchema.safeParse(req.body || {});
+      if (!parseResult.success) {
+        return res.status(400).json({ message: "Invalid request body", errors: parseResult.error.errors });
+      }
+      const { note } = parseResult.data;
+
+      // Get the email first to verify it exists
+      const email = await storage.getInboxEmailById(emailId);
+      if (!email) {
+        return res.status(404).json({ message: "Email not found" });
+      }
+
+      // Verify user has access to the inbox this email belongs to
+      const hasAccess = await storage.canUserAccessInbox(userId, email.inboxId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this email's inbox" });
+      }
+
+      // Mark email as complete in workflow
+      const workflowState = await storage.completeEmail(emailId, userId, note);
+
+      res.json({
+        success: true,
+        workflowState
+      });
+    } catch (error: any) {
+      console.error('[Complete Email] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to complete email", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * POST /api/comms/inbox-emails/:emailId/uncomplete
+   * Re-open a completed email (move back to pending)
+   */
+  app.post('/api/comms/inbox-emails/:emailId/uncomplete', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const { emailId } = req.params;
+
+      // Get the email first to verify it exists
+      const email = await storage.getInboxEmailById(emailId);
+      if (!email) {
+        return res.status(404).json({ message: "Email not found" });
+      }
+
+      // Verify user has access to the inbox this email belongs to
+      const hasAccess = await storage.canUserAccessInbox(userId, email.inboxId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this email's inbox" });
+      }
+
+      // Uncomplete the email
+      const workflowState = await storage.uncompleteEmail(emailId);
+
+      res.json({
+        success: true,
+        workflowState
+      });
+    } catch (error: any) {
+      console.error('[Uncomplete Email] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to uncomplete email", 
         error: error.message 
       });
     }

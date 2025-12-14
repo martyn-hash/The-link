@@ -930,8 +930,9 @@ export class EmailStorage {
       search?: string;
       limit?: number;
       offset?: number;
+      includeCompleted?: boolean; // Default false - exclude completed emails
     }
-  ): Promise<InboxEmail[]> {
+  ): Promise<(InboxEmail & { workflowState?: { state: string; completedAt: Date | null } })[]> {
     const conditions: any[] = [eq(inboxEmails.inboxId, inboxId)];
 
     if (filters?.status && filters.status !== 'all') {
@@ -981,9 +982,26 @@ export class EmailStorage {
       );
     }
 
+    // Exclude completed emails by default (Step 5: Email as Workflow)
+    if (!filters?.includeCompleted) {
+      conditions.push(
+        or(
+          isNull(emailWorkflowState.state),
+          sql`${emailWorkflowState.state} != 'complete'`
+        )
+      );
+    }
+
     let query = db
-      .select()
+      .select({
+        email: inboxEmails,
+        workflowState: {
+          state: emailWorkflowState.state,
+          completedAt: emailWorkflowState.completedAt,
+        },
+      })
       .from(inboxEmails)
+      .leftJoin(emailWorkflowState, eq(inboxEmails.id, emailWorkflowState.emailId))
       .where(and(...conditions))
       .orderBy(desc(inboxEmails.receivedAt));
 
@@ -994,7 +1012,16 @@ export class EmailStorage {
       query = query.offset(filters.offset) as any;
     }
 
-    return await query;
+    const results = await query;
+    
+    // Flatten the result to match expected format
+    return results.map(r => ({
+      ...r.email,
+      workflowState: r.workflowState?.state ? {
+        state: r.workflowState.state,
+        completedAt: r.workflowState.completedAt,
+      } : undefined,
+    }));
   }
 
   async updateInboxEmail(id: string, updates: Partial<InsertInboxEmail>): Promise<InboxEmail> {
@@ -1383,6 +1410,76 @@ export class EmailStorage {
       .where(eq(emailWorkflowState.id, id))
       .returning();
     return updated;
+  }
+
+  /**
+   * Mark an email as complete in the workflow
+   * Creates workflow state if it doesn't exist
+   * Returns existing state if already complete (no-op for duplicate calls)
+   */
+  async completeEmail(emailId: string, userId: string, note?: string): Promise<EmailWorkflowState> {
+    const existing = await this.getEmailWorkflowStateByEmailId(emailId);
+    
+    if (existing) {
+      // If already complete, return existing state (no-op)
+      if (existing.state === 'complete') {
+        return existing;
+      }
+      
+      const [updated] = await db
+        .update(emailWorkflowState)
+        .set({
+          state: 'complete',
+          completedAt: new Date(),
+          completedBy: userId,
+          completionNote: note || null,
+          updatedAt: new Date(),
+        })
+        .where(eq(emailWorkflowState.id, existing.id))
+        .returning();
+      return updated;
+    } else {
+      const [created] = await db
+        .insert(emailWorkflowState)
+        .values({
+          emailId,
+          state: 'complete',
+          completedAt: new Date(),
+          completedBy: userId,
+          completionNote: note || null,
+        })
+        .returning();
+      return created;
+    }
+  }
+
+  /**
+   * Uncomplete an email (reopen it)
+   * Returns existing state if already pending (no-op for duplicate calls)
+   */
+  async uncompleteEmail(emailId: string): Promise<EmailWorkflowState | undefined> {
+    const existing = await this.getEmailWorkflowStateByEmailId(emailId);
+    
+    if (existing) {
+      // If already pending, return existing state (no-op)
+      if (existing.state === 'pending') {
+        return existing;
+      }
+      
+      const [updated] = await db
+        .update(emailWorkflowState)
+        .set({
+          state: 'pending',
+          completedAt: null,
+          completedBy: null,
+          completionNote: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(emailWorkflowState.id, existing.id))
+        .returning();
+      return updated;
+    }
+    return undefined;
   }
 
   // ========== EMAIL CLASSIFICATION OVERRIDES ==========

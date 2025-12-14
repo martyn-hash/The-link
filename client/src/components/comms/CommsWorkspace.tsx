@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -61,6 +62,10 @@ interface StoredEmail {
     id: string;
     name: string;
     companyName?: string;
+  };
+  workflowState?: {
+    state: string;
+    completedAt: string | null;
   };
 }
 
@@ -148,6 +153,9 @@ export function CommsWorkspace({
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [internalActiveFilter, setInternalActiveFilter] = useState<WorkflowFilter>(null);
   
+  // Track emails that are being completed (optimistic UI)
+  const [pendingCompletions, setPendingCompletions] = useState<Set<string>>(new Set());
+  
   // Use props if provided, otherwise use internal state
   const selectedInboxId = propSelectedInboxId ?? internalSelectedInboxId;
   const setSelectedInboxId = propSetSelectedInboxId ?? setInternalSelectedInboxId;
@@ -231,6 +239,46 @@ export function CommsWorkspace({
         variant: "destructive",
         title: "Sync failed",
         description: error.message || "Failed to sync emails from server.",
+      });
+    },
+  });
+
+  // Complete email mutation - marks an email as done/actioned
+  const completeEmailMutation = useMutation({
+    mutationFn: async (emailId: string) => {
+      // Add to pending completions for optimistic UI
+      setPendingCompletions(prev => new Set(prev).add(emailId));
+      return await apiRequest("POST", `/api/comms/inbox-emails/${emailId}/complete`);
+    },
+    onSuccess: (_data, emailId) => {
+      // Invalidate both regular and workflow email queries
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          query.queryKey[0] === "/api/comms/inbox" && 
+          query.queryKey[1] === selectedInboxId
+      });
+      toast({
+        title: "Email completed",
+        description: "Email has been marked as done and removed from your list.",
+      });
+      // Remove from pending after successful completion
+      setPendingCompletions(prev => {
+        const next = new Set(prev);
+        next.delete(emailId);
+        return next;
+      });
+    },
+    onError: (error: Error, emailId) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to complete email",
+        description: error.message || "Could not mark email as complete.",
+      });
+      // Remove from pending on error
+      setPendingCompletions(prev => {
+        const next = new Set(prev);
+        next.delete(emailId);
+        return next;
       });
     },
   });
@@ -435,6 +483,20 @@ export function CommsWorkspace({
                       data-testid={`email-item-${email.id}`}
                     >
                       <div className="flex items-center gap-2 mb-1">
+                        <Checkbox
+                          className="shrink-0 h-4 w-4"
+                          checked={email.workflowState?.state === "complete" || pendingCompletions.has(email.id)}
+                          onCheckedChange={(checked) => {
+                            const isPending = pendingCompletions.has(email.id);
+                            const isComplete = email.workflowState?.state === "complete";
+                            if (checked && !isComplete && !isPending && selectedInboxId) {
+                              completeEmailMutation.mutate(email.id);
+                            }
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          disabled={email.workflowState?.state === "complete" || pendingCompletions.has(email.id)}
+                          data-testid={`checkbox-complete-email-${email.id}`}
+                        />
                         <span className={`text-sm truncate flex-1 ${!email.isRead ? "font-semibold" : ""}`}>
                           {email.fromName || email.fromAddress}
                         </span>

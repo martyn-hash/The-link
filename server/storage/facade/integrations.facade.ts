@@ -535,6 +535,14 @@ export function applyIntegrationsFacade<TBase extends Constructor<IntegrationsFa
       return this.emailStorage.updateEmailWorkflowState(id, updates);
     }
 
+    async completeEmail(emailId: string, userId: string, note?: string) {
+      return this.emailStorage.completeEmail(emailId, userId, note);
+    }
+
+    async uncompleteEmail(emailId: string) {
+      return this.emailStorage.uncompleteEmail(emailId);
+    }
+
     // ============================================================================
     // EMAIL CLASSIFICATION OVERRIDES - EmailStorage
     // ============================================================================
