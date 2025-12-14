@@ -44,3 +44,4 @@ export * from './calendar';
 export * from './queries';
 export * from './ai-interactions';
 export * from './audit';
+export * from './view-cache';

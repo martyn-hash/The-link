@@ -182,3 +182,8 @@ export {
 export {
   auditChangelog,
 } from './audit/tables';
+
+// View Cache domain tables
+export {
+  projectViewCache,
+} from './view-cache/tables';

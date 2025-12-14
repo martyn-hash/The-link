@@ -4,6 +4,7 @@ import { updateProjectStatusSchema } from "@shared/schema";
 import { sendStageChangeNotificationEmail } from "../../emailService";
 import { handleProjectStageChangeForNotifications } from "../../notification-scheduler";
 import { stageConfigCache } from "../../utils/ttlCache";
+import { invalidateAllViewCaches } from "../../view-cache-service";
 
 interface StageConfigCacheEntry {
   stages: any[];
@@ -544,6 +545,12 @@ export function registerProjectStatusRoutes(
           }
         } catch (notificationError) {
           console.error("[Stage Change Notifications] Error handling notification suppression/reactivation:", notificationError);
+        }
+
+        try {
+          await invalidateAllViewCaches();
+        } catch (cacheError) {
+          console.error("[View Cache] Error invalidating caches:", cacheError);
         }
       });
     } catch (error) {

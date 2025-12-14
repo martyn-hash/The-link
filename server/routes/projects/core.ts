@@ -3,6 +3,8 @@ import { z } from "zod";
 import { storage } from "../../storage/index";
 import { completeProjectSchema } from "@shared/schema";
 import { validateParams, paramUuidSchema } from "../routeHelpers";
+import { invalidateAllViewCaches } from "../../view-cache-service";
+import type { CachedProjectView } from "@shared/schema";
 
 export function registerProjectCoreRoutes(
   app: Express,
@@ -25,6 +27,55 @@ export function registerProjectCoreRoutes(
     } catch (error) {
       console.error("Error fetching service due dates:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to fetch service due dates" });
+    }
+  });
+
+  app.get("/api/projects/cached", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId;
+      const effectiveUser = req.user?.effectiveUser;
+
+      if (!effectiveUserId || !effectiveUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const viewKey = (req.query.viewKey as string) || 'default';
+      
+      const normalize = (v: any) => (v && v !== 'all' ? v : undefined);
+      const filters = {
+        archived: req.query.archived === 'true' ? true : req.query.archived === 'false' ? false : undefined,
+        showArchived: req.query.showArchived === 'true' ? true : req.query.showArchived === 'false' ? false : undefined,
+        showCompletedRegardless: req.query.showCompletedRegardless === 'true' ? true : req.query.showCompletedRegardless === 'false' ? false : undefined,
+        inactive: req.query.inactive === 'true' ? true : req.query.inactive === 'false' ? false : undefined,
+      };
+
+      const cachedData: CachedProjectView | null = await (storage as any).viewCacheStorage.getCachedView(
+        effectiveUserId,
+        viewKey,
+        filters
+      );
+
+      if (cachedData) {
+        res.setHeader('X-Cache-Status', 'hit');
+        res.setHeader('X-Cache-Timestamp', cachedData.lastRefreshed || new Date().toISOString());
+        return res.json({
+          projects: cachedData.projects,
+          stageStats: cachedData.stageStats,
+          fromCache: true,
+          cachedAt: cachedData.lastRefreshed,
+        });
+      }
+
+      res.setHeader('X-Cache-Status', 'miss');
+      return res.json({
+        projects: null,
+        stageStats: null,
+        fromCache: false,
+        cachedAt: null,
+      });
+    } catch (error) {
+      console.error("Error fetching cached projects:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch cached projects" });
     }
   });
 
@@ -243,6 +294,15 @@ export function registerProjectCoreRoutes(
       }
 
       const updatedProject = await storage.updateProject(req.params.id, finalUpdateData);
+      
+      setImmediate(async () => {
+        try {
+          await invalidateAllViewCaches();
+        } catch (cacheError) {
+          console.error("[View Cache] Error invalidating caches:", cacheError);
+        }
+      });
+      
       res.json(updatedProject);
     } catch (error) {
       console.error("Error updating project:", error instanceof Error ? error.message : error);
@@ -361,6 +421,12 @@ export function registerProjectCoreRoutes(
           }
         } catch (emailError) {
           console.error("[Project Complete] Error auto-completing linked emails:", emailError);
+        }
+
+        try {
+          await invalidateAllViewCaches();
+        } catch (cacheError) {
+          console.error("[View Cache] Error invalidating caches:", cacheError);
         }
       });
 

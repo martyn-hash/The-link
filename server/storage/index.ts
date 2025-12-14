@@ -91,6 +91,7 @@ import { QboStorage, QcStorage } from './qbo/index.js';
 import { QueryStorage, QueryTokenStorage, ScheduledReminderStorage } from './queries/index.js';
 import { AIInteractionStorage } from './ai-interactions/index.js';
 import { AuditChangelogStorage } from './audit/index.js';
+import { ViewCacheStorage } from './view-cache/index.js';
 
 // Import facade mixins and their dependency interfaces
 import { applyUsersFacade, type UsersFacadeDeps } from './facade/users.facade.js';
@@ -202,6 +203,7 @@ class StorageBase {
   public readonly scheduledReminderStorage: ScheduledReminderStorage;
   public readonly aiInteractionStorage: AIInteractionStorage;
   public readonly auditChangelogStorage: AuditChangelogStorage;
+  public readonly viewCacheStorage: ViewCacheStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -317,6 +319,9 @@ class StorageBase {
     
     // Initialize audit changelog storage
     this.auditChangelogStorage = new AuditChangelogStorage();
+    
+    // Initialize view cache storage
+    this.viewCacheStorage = new ViewCacheStorage();
     
     // Register cross-domain helpers
     this.registerClientHelpers();

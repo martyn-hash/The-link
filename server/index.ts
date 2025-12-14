@@ -6,6 +6,7 @@ import { runChSync } from "./ch-sync-service";
 import { executeScheduledRun, runStartupCatchup } from "./scheduling-orchestrator";
 import { sendProjectMessageReminders } from "./projectMessageReminderService";
 import { updateDashboardCache } from "./dashboard-cache-service";
+import { warmViewCache } from "./view-cache-service";
 import { storage, initializeDefaultNotificationTemplates } from "./storage/index";
 import { seedTaskTypes } from "./seedData";
 import { startNotificationCron } from "./notification-cron";
@@ -291,6 +292,25 @@ app.use((req, res, next) => {
     });
     
     log('[Dashboard Cache] Hourly scheduler initialized (runs every hour 08:00-18:00 UK time)');
+    
+    // Setup view cache warming
+    // Runs at 04:00 UK time to pre-compute project views for instant loading
+    cron.schedule('0 4 * * *', async () => {
+      try {
+        log('[View Cache] Starting nightly view cache warming...');
+        const result = await warmViewCache();
+        log(`[View Cache] Warming completed: ${result.status} - ${result.viewsCached}/${result.usersProcessed} views cached in ${result.executionTimeMs}ms`);
+        if (result.errors.length > 0) {
+          console.error('[View Cache] Warming errors:', result.errors.slice(0, 10));
+        }
+      } catch (error) {
+        console.error('[View Cache] Fatal error in view cache warming:', error);
+      }
+    }, {
+      timezone: "Europe/London"
+    });
+    
+    log('[View Cache] Nightly scheduler initialized (runs daily at 04:00 UK time)');
     
     // Setup activity logs cleanup
     // Runs daily at 4:00 AM UTC (after project scheduling, CH sync, and email resolver)

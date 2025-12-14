@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { storage } from "../../storage/index";
+import { invalidateAllViewCaches } from "../../view-cache-service";
 
 export function registerProjectBatchUpdatesRoutes(
   app: Express,
@@ -109,6 +110,16 @@ export function registerProjectBatchUpdatesRoutes(
       }
 
       console.log(`[API] Batch updated ${updatedCount} project due dates from ${currentDueDate} to ${newDueDate} for project type ${projectTypeId}`);
+
+      if (updatedCount > 0) {
+        setImmediate(async () => {
+          try {
+            await invalidateAllViewCaches();
+          } catch (cacheError) {
+            console.error("[View Cache] Error invalidating caches:", cacheError);
+          }
+        });
+      }
 
       res.json({
         success: true,
