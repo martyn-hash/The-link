@@ -23,7 +23,8 @@ import {
   ReplyAll,
   Send,
   X,
-  RefreshCw
+  RefreshCw,
+  CheckCircle
 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import DOMPurify from 'isomorphic-dompurify';
@@ -65,9 +66,13 @@ interface EmailThreadViewerProps {
   threadId: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Stage 7: Indicates this email requires a reply for workflow completion */
+  requiresReply?: boolean;
+  /** Stage 7: Indicates a reply has already been sent */
+  replySent?: boolean;
 }
 
-export function EmailThreadViewer({ threadId, open, onOpenChange }: EmailThreadViewerProps) {
+export function EmailThreadViewer({ threadId, open, onOpenChange, requiresReply, replySent }: EmailThreadViewerProps) {
   const { toast } = useToast();
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set());
   const [previewAttachment, setPreviewAttachment] = useState<AttachmentData | null>(null);
@@ -492,6 +497,19 @@ export function EmailThreadViewer({ threadId, open, onOpenChange }: EmailThreadV
                   <X className="h-4 w-4" />
                 </Button>
               </div>
+              
+              {/* Stage 7: Show indicator when replying will help complete workflow */}
+              {requiresReply && !replySent && (
+                <div 
+                  className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg text-sm"
+                  data-testid="indicator-reply-completes-workflow"
+                >
+                  <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
+                  <span className="text-green-700 dark:text-green-300">
+                    Sending this reply will help complete the email workflow
+                  </span>
+                </div>
+              )}
 
               {/* Recipients Display */}
               {(() => {
