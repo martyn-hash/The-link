@@ -1156,7 +1156,7 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
                             />
                           )}
                           
-                          {field.type === 'select' && field.options && (
+                          {field.type === 'dropdown' && field.options && (
                             <Select 
                               value={udfValues[field.id] ?? ''} 
                               onValueChange={(value) => {

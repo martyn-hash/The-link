@@ -311,8 +311,11 @@ function UDFEditor({ control, name }: UDFEditorProps) {
                             <Input
                               placeholder="Enter options separated by commas (e.g., Option A, Option B, Option C)"
                               data-testid={`input-udf-options-${index}`}
-                              value={(field.value || []).join(", ")}
+                              value={Array.isArray(field.value) ? field.value.join(", ") : (field.value || "")}
                               onChange={(e) => {
+                                field.onChange(e.target.value);
+                              }}
+                              onBlur={(e) => {
                                 const options = e.target.value.split(",").map(o => o.trim()).filter(o => o);
                                 field.onChange(options);
                               }}
