@@ -245,6 +245,7 @@ export const companySettings = pgTable("company_settings", {
   workingHoursStart: varchar("working_hours_start").default("09:00"),
   workingHoursEnd: varchar("working_hours_end").default("17:00"),
   workingDays: jsonb("working_days").default(sql`'[1,2,3,4,5]'::jsonb`),
+  slaTimezone: varchar("sla_timezone").default("Europe/London"),
   // Email dev override settings for comms workflow
   emailDevOverride: jsonb("email_dev_override").default(sql`'{"enabled": false, "bypassGate": false, "logOverrides": true}'::jsonb`),
   // Startup catch-up setting - when true, checks for missed nightly runs on server startup
