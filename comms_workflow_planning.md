@@ -46,10 +46,13 @@ Transform email from a passive inbox into an active, zero-backlog workflow where
 - Breach detection cron job (runs every 15 minutes)
 - Urgency badges with countdown timers
 
-### 9️⃣ Manual Overrides & Auditability 🔄 TO DO
-- Users can add/remove classifications manually
-- Track overrides: who changed what and why
-- Re-evaluate completion rules after changes
+### 9️⃣ Manual Overrides & Auditability ✅ COMPLETE
+- PATCH /api/comms/emails/:emailId/classification - Override with Zod validation
+- GET /api/comms/emails/:emailId/classification/history - Audit trail
+- UI in CommsWorkspace: edit button, checkboxes for task/reply/info-only, urgency dropdown
+- Required reason field for all overrides
+- Workflow state automatically re-evaluated after changes
+- Audit log records: who, when, what changed, previous/new values
 
 ### 🔟 Retro Adding of Emails 🔄 TO DO
 - Ability to bring emails into system that didn't pass Customer Gate
@@ -84,4 +87,4 @@ Before final sign-off, conduct live testing using Abdul's inbox to validate the 
 ---
 
 ## Next Up
-**Stage 9: Manual Overrides & Auditability**
+**Stage 10: Retro Adding of Emails**

@@ -2366,4 +2366,355 @@ export function registerEmailRoutes(
       });
     }
   });
+
+  // ==================================================
+  // STAGE 10: RETRO ADDING OF EMAILS
+  // ==================================================
+
+  /**
+   * GET /api/comms/inbox/:inboxId/browse
+   * Browse emails from Graph API that are NOT yet in the system
+   * This allows users to retroactively add emails that didn't pass Customer Gate
+   * 
+   * Query params:
+   * - top: Number of emails to fetch (default 25, max 50)
+   * - skip: Pagination offset (default 0)
+   * - folder: Mail folder (default 'Inbox')
+   * - search: Search query for subject/sender
+   * - sinceDays: Only fetch emails from the last N days (default 30)
+   */
+  app.get('/api/comms/inbox/:inboxId/browse', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const { inboxId } = req.params;
+      const { 
+        top = '25', 
+        skip = '0', 
+        folder = 'Inbox',
+        search,
+        sinceDays = '30'
+      } = req.query;
+
+      // Check company-level email feature flag
+      const companySettings = await storage.getCompanySettings();
+      if (!companySettings?.emailModuleActive) {
+        return res.status(403).json({ 
+          message: "Email features are not enabled for your organization" 
+        });
+      }
+
+      // Verify user has access to this inbox
+      const hasAccess = await storage.canUserAccessInbox(userId, inboxId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this inbox" });
+      }
+
+      // Get the inbox to find the email address
+      const inbox = await storage.getInboxById(inboxId);
+      if (!inbox) {
+        return res.status(404).json({ message: "Inbox not found" });
+      }
+
+      // Check if Graph API is configured
+      if (!isApplicationGraphConfigured()) {
+        return res.status(400).json({
+          message: "Microsoft 365 email integration is not configured"
+        });
+      }
+
+      const client = await getApplicationGraphClient();
+      const emailAddress = inbox.emailAddress;
+      const topNum = Math.min(parseInt(top as string) || 25, 50);
+      const skipNum = parseInt(skip as string) || 0;
+      const sinceDaysNum = parseInt(sinceDays as string) || 30;
+
+      // Build date filter for last N days
+      const sinceDate = new Date();
+      sinceDate.setDate(sinceDate.getDate() - sinceDaysNum);
+      const sinceDateIso = sinceDate.toISOString();
+
+      // Build Graph API request
+      let graphRequest = client
+        .api(`/users/${encodeURIComponent(emailAddress)}/mailFolders/${folder}/messages`)
+        .select('id,subject,from,toRecipients,ccRecipients,receivedDateTime,bodyPreview,hasAttachments,isRead,importance')
+        .filter(`receivedDateTime ge ${sinceDateIso}`)
+        .orderby('receivedDateTime DESC')
+        .top(topNum)
+        .skip(skipNum);
+
+      // Add search if provided
+      if (search) {
+        graphRequest = graphRequest.search(`"${search}"`);
+      }
+
+      const response = await graphRequest.get();
+      const messages = response.value || [];
+
+      // Get existing emails from this inbox to filter out already-ingested ones
+      const existingMicrosoftIds = new Set<string>();
+      const quarantinedMicrosoftIds = new Set<string>();
+
+      // Check which messages are already in inbox_emails
+      for (const msg of messages) {
+        const existing = await storage.getInboxEmailByMicrosoftId(inboxId, msg.id);
+        if (existing) {
+          existingMicrosoftIds.add(msg.id);
+        }
+      }
+
+      // Check which messages are in quarantine
+      for (const msg of messages) {
+        const quarantined = await storage.getQuarantineByMicrosoftId(inboxId, msg.id);
+        if (quarantined) {
+          quarantinedMicrosoftIds.add(msg.id);
+        }
+      }
+
+      // Annotate messages with their status
+      const annotatedMessages = messages.map((msg: any) => ({
+        microsoftId: msg.id,
+        subject: msg.subject || '(no subject)',
+        from: msg.from?.emailAddress?.address || '',
+        fromName: msg.from?.emailAddress?.name || '',
+        toRecipients: (msg.toRecipients || []).map((r: any) => ({
+          address: r.emailAddress?.address,
+          name: r.emailAddress?.name
+        })),
+        ccRecipients: (msg.ccRecipients || []).map((r: any) => ({
+          address: r.emailAddress?.address,
+          name: r.emailAddress?.name
+        })),
+        receivedAt: msg.receivedDateTime,
+        bodyPreview: msg.bodyPreview || '',
+        hasAttachments: msg.hasAttachments || false,
+        isRead: msg.isRead || false,
+        importance: msg.importance || 'normal',
+        // Status flags
+        isInSystem: existingMicrosoftIds.has(msg.id),
+        isQuarantined: quarantinedMicrosoftIds.has(msg.id),
+        canImport: !existingMicrosoftIds.has(msg.id) // Can import if not already in system
+      }));
+
+      // Return only emails not in system (unless includeAll is true)
+      const includeAll = req.query.includeAll === 'true';
+      const filteredMessages = includeAll 
+        ? annotatedMessages 
+        : annotatedMessages.filter((m: any) => m.canImport);
+
+      res.json({
+        inboxId,
+        folder,
+        emails: filteredMessages,
+        total: filteredMessages.length,
+        hasMore: messages.length === topNum,
+        pagination: {
+          top: topNum,
+          skip: skipNum,
+          sinceDays: sinceDaysNum
+        }
+      });
+    } catch (error: any) {
+      console.error('[Browse Inbox] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to browse inbox", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * POST /api/comms/inbox/:inboxId/import
+   * Import a specific email from Graph API into the system
+   * This bypasses the Customer Gate and directly associates with a client
+   * 
+   * Body:
+   * - microsoftId: The Graph API message ID to import
+   * - clientId: The client to associate with this email
+   * - personId: Optional person ID to associate
+   */
+  app.post('/api/comms/inbox/:inboxId/import', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const { inboxId } = req.params;
+      const { microsoftId, clientId, personId } = req.body;
+
+      // Validate request
+      const importSchema = z.object({
+        microsoftId: z.string().min(1, "Microsoft ID is required"),
+        clientId: z.string().min(1, "Client ID is required"),
+        personId: z.string().optional(),
+      });
+
+      const validationResult = importSchema.safeParse({ microsoftId, clientId, personId });
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid request", 
+          errors: validationResult.error.flatten().fieldErrors 
+        });
+      }
+
+      // Check company-level email feature flag
+      const companySettings = await storage.getCompanySettings();
+      if (!companySettings?.emailModuleActive) {
+        return res.status(403).json({ 
+          message: "Email features are not enabled for your organization" 
+        });
+      }
+
+      // Verify user has access to this inbox
+      const hasAccess = await storage.canUserAccessInbox(userId, inboxId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this inbox" });
+      }
+
+      // Get the inbox
+      const inbox = await storage.getInboxById(inboxId);
+      if (!inbox) {
+        return res.status(404).json({ message: "Inbox not found" });
+      }
+
+      // Verify client exists
+      const client = await storage.getClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+
+      // Check if already in system
+      const existing = await storage.getInboxEmailByMicrosoftId(inboxId, microsoftId);
+      if (existing) {
+        return res.status(409).json({ 
+          message: "Email already exists in the system",
+          emailId: existing.id
+        });
+      }
+
+      // Check if Graph API is configured
+      if (!isApplicationGraphConfigured()) {
+        return res.status(400).json({
+          message: "Microsoft 365 email integration is not configured"
+        });
+      }
+
+      // Fetch the full email from Graph API
+      const graphClient = await getApplicationGraphClient();
+      const emailAddress = inbox.emailAddress;
+
+      const message = await graphClient
+        .api(`/users/${encodeURIComponent(emailAddress)}/messages/${microsoftId}`)
+        .select('id,subject,from,toRecipients,ccRecipients,receivedDateTime,bodyPreview,body,hasAttachments,importance,conversationId')
+        .get();
+
+      if (!message) {
+        return res.status(404).json({ message: "Email not found in mailbox" });
+      }
+
+      // Extract email details
+      const fromAddress = message.from?.emailAddress?.address?.toLowerCase() || '';
+      const fromName = message.from?.emailAddress?.name || '';
+      const toRecipients = (message.toRecipients || []).map((r: any) => ({
+        address: r.emailAddress?.address,
+        name: r.emailAddress?.name
+      }));
+      const ccRecipients = (message.ccRecipients || []).map((r: any) => ({
+        address: r.emailAddress?.address,
+        name: r.emailAddress?.name
+      }));
+
+      // Determine direction based on sender
+      const isInternalEmail = (email: string) => {
+        const normalized = email.toLowerCase();
+        return normalized.endsWith('@growth-accountants.com') || normalized.endsWith('@thelink.uk.com');
+      };
+      const direction = isInternalEmail(fromAddress) ? 'outbound' : 'inbound';
+
+      // Create inbox email record
+      const newEmail = await storage.createInboxEmail({
+        inboxId,
+        microsoftId: message.id,
+        conversationId: message.conversationId || null,
+        fromAddress,
+        fromName,
+        toRecipients,
+        ccRecipients,
+        subject: message.subject || '(no subject)',
+        bodyPreview: message.bodyPreview || '',
+        bodyHtml: message.body?.content || '',
+        receivedAt: new Date(message.receivedDateTime),
+        hasAttachments: message.hasAttachments || false,
+        importance: message.importance || 'normal',
+        matchedClientId: clientId,
+        matchedPersonId: personId || null,
+        direction,
+        status: 'pending_reply',
+        isRead: false,
+        isArchived: false,
+      });
+
+      // Get user for logging
+      const user = await storage.getUser(userId);
+
+      // If this was in quarantine, mark it as restored
+      const quarantined = await storage.getQuarantineByMicrosoftId(inboxId, microsoftId);
+      if (quarantined) {
+        await storage.restoreQuarantinedEmail(quarantined.id, userId, clientId);
+      }
+
+      // Run through classification pipeline (deterministic + AI)
+      try {
+        // Create initial workflow state
+        await storage.createEmailWorkflowState({
+          emailId: newEmail.id,
+          state: 'pending',
+          requiresTask: false,
+          requiresReply: direction === 'inbound',
+          taskRequirementMet: true,
+          replySent: false,
+          completedAt: null,
+          completedBy: null,
+          manualComplete: false,
+        });
+
+        console.log(`[Email Import] Created workflow state for imported email ${newEmail.id}`);
+
+        // Run deterministic classification
+        const emailForClassification = {
+          id: newEmail.id,
+          subject: newEmail.subject || '',
+          bodyPreview: newEmail.bodyPreview || '',
+          hasAttachments: newEmail.hasAttachments,
+          direction: newEmail.direction,
+        };
+
+        // Run the classification service if available
+        const { EmailClassificationService } = await import('../services/emailClassificationService');
+        const classificationService = new EmailClassificationService();
+        await classificationService.classifyEmail(newEmail.id, emailForClassification);
+
+        console.log(`[Email Import] Classified imported email ${newEmail.id}`);
+      } catch (classificationError) {
+        console.error('[Email Import] Classification error (non-fatal):', classificationError);
+      }
+
+      res.json({
+        success: true,
+        emailId: newEmail.id,
+        message: `Email imported and associated with client: ${client.name}`,
+        importedBy: user?.email || userId,
+        email: {
+          id: newEmail.id,
+          subject: newEmail.subject,
+          from: newEmail.fromAddress,
+          receivedAt: newEmail.receivedAt,
+          clientId,
+          direction
+        }
+      });
+    } catch (error: any) {
+      console.error('[Import Email] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to import email", 
+        error: error.message 
+      });
+    }
+  });
 }

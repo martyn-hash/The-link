@@ -15,11 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Mail, Inbox, RefreshCw, MessageSquare, Paperclip, ChevronRight, AlertCircle, Clock, User, Loader2, Search, CheckCircle, Link2, X, Edit2, History, Info, Tag } from "lucide-react";
+import { Mail, Inbox, RefreshCw, MessageSquare, Paperclip, ChevronRight, AlertCircle, Clock, User, Loader2, Search, CheckCircle, Link2, X, Edit2, History, Info, Tag, Download } from "lucide-react";
 import { formatDistanceToNow, format, isPast, isToday, differenceInHours } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { type WorkflowFilter } from "./WorkflowToolbar";
+import { ImportEmailsDialog } from "./ImportEmailsDialog";
 
 interface InboxAccess {
   id: string;
@@ -163,6 +164,9 @@ export function CommsWorkspace({
   
   // Local filter: show completed emails
   const [showCompleted, setShowCompleted] = useState<boolean>(false);
+  
+  // Import emails dialog state
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
   
   // Use props if provided, otherwise use internal state
   const selectedInboxId = propSelectedInboxId ?? internalSelectedInboxId;
@@ -640,6 +644,17 @@ export function CommsWorkspace({
                 >
                   <CheckCircle className="h-4 w-4" />
                   {showCompleted ? "Showing Completed" : "Show Completed"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-2 h-8"
+                  onClick={() => setImportDialogOpen(true)}
+                  disabled={!selectedInboxId}
+                  data-testid="button-import-emails"
+                >
+                  <Download className="h-4 w-4" />
+                  Import Emails
                 </Button>
               </div>
             )}
@@ -1124,6 +1139,13 @@ export function CommsWorkspace({
           </CardContent>
         </Card>
       </div>
+
+      <ImportEmailsDialog
+        open={importDialogOpen}
+        onOpenChange={setImportDialogOpen}
+        inboxId={selectedInboxId}
+        inboxEmail={selectedInbox?.email || ""}
+      />
     </div>
   );
 }
