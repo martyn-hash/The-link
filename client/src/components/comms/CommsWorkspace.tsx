@@ -18,6 +18,7 @@ import { Mail, Inbox, RefreshCw, MessageSquare, Paperclip, ChevronRight, AlertCi
 import { formatDistanceToNow, format, isPast, isToday, differenceInHours } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { WorkflowToolbar, WorkflowFilter, WorkflowStats } from "./WorkflowToolbar";
 
 interface InboxAccess {
   id: string;
@@ -141,6 +142,7 @@ export function CommsWorkspace({
   const [internalSelectedInboxId, setInternalSelectedInboxId] = useState<string>("");
   const [internalSelectedMessageId, setInternalSelectedMessageId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [activeFilter, setActiveFilter] = useState<WorkflowFilter>(null);
   
   // Use props if provided, otherwise use internal state
   const selectedInboxId = propSelectedInboxId ?? internalSelectedInboxId;
@@ -184,6 +186,33 @@ export function CommsWorkspace({
     enabled: !!selectedInboxId && selectedInboxId !== "",
     staleTime: 5 * 60 * 1000,
   });
+
+  // Fetch workflow stats for the toolbar
+  const { data: workflowData, isLoading: workflowStatsLoading } = useQuery<{ stats: WorkflowStats }>({
+    queryKey: ["/api/comms/inbox", selectedInboxId, "workflow-stats"],
+    queryFn: async () => {
+      const res = await fetch(`/api/comms/inbox/${selectedInboxId}/workflow-stats`);
+      if (!res.ok) throw new Error("Failed to fetch workflow stats");
+      return res.json();
+    },
+    enabled: !!selectedInboxId && selectedInboxId !== "",
+  });
+
+  // Fetch filtered workflow emails when a filter is active
+  const { data: workflowEmails, isLoading: workflowLoading } = useQuery<{ emails: StoredEmail[] }>({
+    queryKey: ["/api/comms/inbox", selectedInboxId, "workflow-emails", activeFilter],
+    queryFn: async () => {
+      const res = await fetch(`/api/comms/inbox/${selectedInboxId}/workflow-emails?filter=${activeFilter}`);
+      if (!res.ok) throw new Error("Failed to fetch workflow emails");
+      return res.json();
+    },
+    enabled: !!selectedInboxId && selectedInboxId !== "" && !!activeFilter,
+  });
+
+  // Use filtered emails when filter is active, otherwise use regular emails
+  const displayEmails = activeFilter && workflowEmails?.emails 
+    ? workflowEmails.emails 
+    : emailData?.emails;
 
   // Sync mutation to fetch new emails from Microsoft Graph
   const syncMutation = useMutation({
@@ -329,7 +358,9 @@ export function CommsWorkspace({
             <div className="flex items-center justify-between gap-2">
               <CardDescription className="flex-1">
                 {selectedInbox 
-                  ? `${emailData?.emails?.length || 0} emails (last 7 days)`
+                  ? activeFilter
+                    ? `${displayEmails?.length || 0} filtered emails`
+                    : `${emailData?.emails?.length || 0} emails (last 7 days)`
                   : "Select an inbox from the header"}
               </CardDescription>
               {selectedInbox && emailData?.stats && (
@@ -358,6 +389,17 @@ export function CommsWorkspace({
                 />
               </div>
             )}
+            {selectedInboxId && (
+              <div className="pt-2">
+                <WorkflowToolbar
+                  stats={workflowData?.stats}
+                  isLoading={workflowStatsLoading}
+                  activeFilter={activeFilter}
+                  onFilterChange={setActiveFilter}
+                  compact
+                />
+              </div>
+            )}
           </CardHeader>
           <CardContent className="flex-1 min-h-0 p-0 flex flex-col" style={{ overflowY: 'auto' }}>
             {!selectedInboxId ? (
@@ -367,7 +409,7 @@ export function CommsWorkspace({
                   <p className="text-sm">Select an inbox from the dropdown above</p>
                 </div>
               </div>
-            ) : emailsLoading ? (
+            ) : emailsLoading || (activeFilter && workflowLoading) ? (
               <div className="p-4 space-y-3">
                 {[1, 2, 3, 4, 5].map((i) => (
                   <div key={i} className="flex gap-3">
@@ -396,10 +438,10 @@ export function CommsWorkspace({
                   </Button>
                 </div>
               </div>
-            ) : emailData?.emails && emailData.emails.length > 0 ? (
+            ) : displayEmails && displayEmails.length > 0 ? (
               <ScrollArea className="flex-1 min-h-0">
                 <div className="divide-y">
-                  {emailData.emails.map((email) => (
+                  {displayEmails.map((email) => (
                     <div
                       key={email.id}
                       className={`p-3 cursor-pointer transition-colors hover:bg-muted/50 ${
