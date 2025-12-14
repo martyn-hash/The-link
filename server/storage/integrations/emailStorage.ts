@@ -1846,4 +1846,46 @@ export class EmailStorage {
       workflowState: r.workflowState,
     }));
   }
+
+  // ========== PENDING REPLY DETECTION ==========
+
+  /**
+   * Get all unique conversation IDs that require a reply but haven't been replied to yet.
+   * Used by the sent items detection service to match against Outlook sent items.
+   * Returns conversations with their inbox ID for efficient mailbox querying.
+   */
+  async getPendingReplyConversations(): Promise<Array<{
+    conversationId: string;
+    inboxId: string;
+    emailId: string;
+  }>> {
+    const results = await db
+      .select({
+        conversationId: inboxEmails.conversationId,
+        inboxId: inboxEmails.inboxId,
+        emailId: inboxEmails.id,
+      })
+      .from(inboxEmails)
+      .innerJoin(emailWorkflowState, eq(inboxEmails.id, emailWorkflowState.emailId))
+      .where(
+        and(
+          eq(emailWorkflowState.requiresReply, true),
+          eq(emailWorkflowState.replySent, false),
+          or(
+            isNull(emailWorkflowState.state),
+            sql`${emailWorkflowState.state} != 'complete'`
+          ),
+          sql`${inboxEmails.conversationId} IS NOT NULL`
+        )
+      )
+      .orderBy(desc(inboxEmails.receivedAt));
+
+    // Filter out null conversationIds and dedupe
+    const seen = new Set<string>();
+    return results.filter(r => {
+      if (!r.conversationId || seen.has(r.conversationId)) return false;
+      seen.add(r.conversationId);
+      return true;
+    }) as Array<{ conversationId: string; inboxId: string; emailId: string }>;
+  }
 }

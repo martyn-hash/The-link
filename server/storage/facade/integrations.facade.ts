@@ -484,6 +484,10 @@ export function applyIntegrationsFacade<TBase extends Constructor<IntegrationsFa
       return this.emailStorage.autoCompleteConversationEmailsIfPossible(conversationId, userId);
     }
 
+    async getPendingReplyConversations() {
+      return this.emailStorage.getPendingReplyConversations();
+    }
+
     // ============================================================================
     // EMAIL QUARANTINE - EmailStorage
     // ============================================================================

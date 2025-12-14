@@ -319,5 +319,23 @@ app.use((req, res, next) => {
     });
     
     log('[Activity Cleanup] Nightly scheduler initialized (runs daily at 4:00 AM UTC, 90-day retention)');
+    
+    // Setup sent items reply detection
+    // Runs every 10 minutes during business hours (08:00-19:00 UK time)
+    // Scans Outlook Sent Items folders to detect replies sent directly from Outlook
+    const { sentItemsReplyDetectionService } = await import('./services/sentItemsReplyDetectionService');
+    cron.schedule('*/10 8-19 * * *', async () => {
+      try {
+        log('[Sent Items Detection] Starting periodic check...');
+        const result = await sentItemsReplyDetectionService.runDetection();
+        log(`[Sent Items Detection] Check completed: ${result.checked} checked, ${result.matched} matched, ${result.completed} completed, ${result.errors} errors`);
+      } catch (error) {
+        console.error('[Sent Items Detection] Fatal error in detection job:', error);
+      }
+    }, {
+      timezone: "Europe/London"
+    });
+    
+    log('[Sent Items Detection] Scheduler initialized (runs every 10 minutes 08:00-19:00 UK time)');
   });
 })();
