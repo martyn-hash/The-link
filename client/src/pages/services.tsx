@@ -638,14 +638,28 @@ export default function Services() {
     },
   });
 
+  // Helper to normalize UDF options (handles string vs array)
+  const normalizeUdfOptions = (data: CreateServiceFormData): CreateServiceFormData => {
+    if (!data.udfDefinitions) return data;
+    return {
+      ...data,
+      udfDefinitions: data.udfDefinitions.map(udf => ({
+        ...udf,
+        options: typeof udf.options === 'string' 
+          ? udf.options.split(',').map(o => o.trim()).filter(o => o)
+          : (udf.options || [])
+      }))
+    };
+  };
+
   // Event handlers
   const handleCreateService = (data: CreateServiceFormData) => {
-    createServiceMutation.mutate(data);
+    createServiceMutation.mutate(normalizeUdfOptions(data));
   };
 
   const handleUpdateService = (data: CreateServiceFormData) => {
     if (!editingService) return;
-    updateServiceMutation.mutate({ ...data, id: editingService.id });
+    updateServiceMutation.mutate({ ...normalizeUdfOptions(data), id: editingService.id });
   };
 
   const handleEditService = (service: ServiceWithDetails) => {
