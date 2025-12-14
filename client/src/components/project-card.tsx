@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { StageChangePopover } from "./stage-change-popover";
 import { GripVertical, AlertCircle, Clock, Info, MessageSquare, Check, HelpCircle } from "lucide-react";
 import type { ProjectWithRelations, KanbanStage, User } from "@shared/schema";
 import { calculateCurrentInstanceTime } from "@shared/businessTime";
@@ -626,35 +627,28 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
         </div>
       )}
 
-      {/* Info button in top-right corner - hidden on desktop (hover devices), visible on mobile */}
+      {/* Info button in top-right corner - hover shows stage change info */}
       {hasQuickActions && onShowInfo && (
         <div 
-          className="absolute top-2 right-2 z-10 [@media(hover:hover)]:hidden"
+          className="absolute top-2 right-2 z-10"
           onPointerDown={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="h-7 w-7 p-0 rounded-full shadow-sm hover:shadow-md transition-shadow"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onShowInfo(project.id);
-                  }}
-                  data-testid={`button-info-${project.id}`}
-                >
-                  <Info className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>View latest stage change</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          <StageChangePopover projectId={project.id}>
+            <Button
+              variant="secondary"
+              size="sm"
+              className="h-7 w-7 p-0 rounded-full shadow-sm hover:shadow-md transition-shadow"
+              onClick={(e) => {
+                e.stopPropagation();
+                onShowInfo(project.id);
+              }}
+              data-testid={`button-info-${project.id}`}
+            >
+              <Info className="h-3.5 w-3.5" />
+            </Button>
+          </StageChangePopover>
         </div>
       )}
 

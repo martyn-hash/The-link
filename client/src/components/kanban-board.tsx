@@ -1219,30 +1219,18 @@ export default function KanbanBoard({
                             const currentStageConfig = stages?.find(s => s.name === project.currentStatus);
                             
                             return (
-                              <StageChangePopover
+                              <ProjectCard
                                 key={project.id}
-                                projectId={project.id}
-                                open={hoveredProjectId === project.id}
-                                onOpenChange={(open) => {
-                                  if (open) {
-                                    setHoveredProjectId(project.id);
-                                  } else if (hoveredProjectId === project.id) {
-                                    setHoveredProjectId(null);
-                                  }
-                                }}
-                              >
-                                <ProjectCard
-                                  project={project}
-                                  stageConfig={currentStageConfig}
-                                  onOpenModal={() => navigateToProject(project.id)}
-                                  onShowInfo={handleShowInfo}
-                                  onShowMessages={handleShowMessages}
-                                  isSelected={selectedProjectIds.has(project.id)}
-                                  onSelectToggle={handleSelectToggle}
-                                  openQueryCount={queryCounts[project.id] || 0}
-                                  isPendingMove={pendingMove?.projectId === project.id}
-                                />
-                              </StageChangePopover>
+                                project={project}
+                                stageConfig={currentStageConfig}
+                                onOpenModal={() => navigateToProject(project.id)}
+                                onShowInfo={handleShowInfo}
+                                onShowMessages={handleShowMessages}
+                                isSelected={selectedProjectIds.has(project.id)}
+                                onSelectToggle={handleSelectToggle}
+                                openQueryCount={queryCounts[project.id] || 0}
+                                isPendingMove={pendingMove?.projectId === project.id}
+                              />
                             );
                           })}
                         </SortableContext>
