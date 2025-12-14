@@ -25,7 +25,12 @@ export function ClientServiceRow({ clientService }: ClientServiceRowProps) {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/client-services/client/${clientService.clientId}`] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => {
+          const key = query.queryKey[0];
+          return typeof key === 'string' && key.includes('/api/client-services');
+        }
+      });
       toast({
         title: "Service Reactivated",
         description: `${clientService.service?.name || 'Service'} has been reactivated successfully.`,
