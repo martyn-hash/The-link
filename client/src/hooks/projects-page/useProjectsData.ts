@@ -34,6 +34,7 @@ interface UseProjectsDataParams {
   showArchived: boolean;
   showCompletedRegardless: boolean;
   serviceDueDateFilter: string;
+  selectedViewId?: string | null;
 }
 
 export function useProjectsData({
@@ -45,15 +46,16 @@ export function useProjectsData({
   showArchived,
   showCompletedRegardless,
   serviceDueDateFilter,
+  selectedViewId,
 }: UseProjectsDataParams) {
+  const viewKey = selectedViewId || 'default';
+  const isSavedView = !!selectedViewId;
   const hasNoSpecialFilters = serviceDueDateFilter === "all";
+  const canUseCache = hasNoSpecialFilters || isSavedView;
 
   const { data: cachedProjectsData } = useQuery<CachedProjectsResponse>({
-    queryKey: ["/api/projects/cached", { 
-      showArchived,
-      showCompletedRegardless,
-    }],
-    enabled: isAuthenticated && !!userId && hasNoSpecialFilters,
+    queryKey: ["/api/projects/cached", { viewKey }],
+    enabled: isAuthenticated && !!userId && canUseCache,
     retry: false,
     staleTime: Infinity,
     gcTime: 5 * 60 * 1000,
@@ -68,10 +70,10 @@ export function useProjectsData({
     enabled: isAuthenticated && !!userId,
     retry: false,
     staleTime: 2 * 60 * 1000,
-    placeholderData: hasNoSpecialFilters ? (cachedProjectsData?.projects ?? undefined) : undefined,
+    placeholderData: canUseCache ? (cachedProjectsData?.projects ?? undefined) : undefined,
   });
 
-  const isUsingCachedData = projectsLoading && hasNoSpecialFilters && cachedProjectsData?.fromCache === true && cachedProjectsData?.projects !== null;
+  const isUsingCachedData = projectsLoading && canUseCache && cachedProjectsData?.fromCache === true && cachedProjectsData?.projects !== null;
   const cachedAt = cachedProjectsData?.cachedAt;
   const isRefreshingInBackground = projectsFetching && !projectsLoading;
 

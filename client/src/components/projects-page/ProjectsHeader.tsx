@@ -54,6 +54,7 @@ export interface ProjectsHeaderProps {
   currentServiceName: string | null;
   currentDashboard: Dashboard | null;
   kanbanCompactMode: boolean;
+  isRefreshingInBackground?: boolean;
   dashboardWidgets: Widget[];
   dashboardDescription: string;
   dashboardIsHomescreen: boolean;
@@ -111,6 +112,7 @@ export function ProjectsHeader({
   currentServiceName,
   currentDashboard,
   kanbanCompactMode,
+  isRefreshingInBackground = false,
   tasksOwnershipFilter,
   tasksStatusFilter,
   tasksPriorityFilter,
@@ -158,7 +160,7 @@ export function ProjectsHeader({
       <div className="hidden md:grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 w-full">
         {/* Left column: context-dependent content, left-aligned */}
         <div className="flex items-center justify-start gap-3">
-          {workspaceMode === "projects" && <CurrentViewName viewName={currentSavedViewName} serviceName={currentServiceName} />}
+          {workspaceMode === "projects" && <CurrentViewName viewName={currentSavedViewName} serviceName={currentServiceName} isRefreshing={isRefreshingInBackground} />}
           {workspaceMode === "comms" && commsSelectedInboxId && setCommsActiveFilter && (
             <WorkflowToolbar
               stats={commsWorkflowStats}
@@ -274,13 +276,10 @@ export function ProjectsHeader({
 interface CurrentViewNameProps {
   viewName: string | null;
   serviceName: string | null;
+  isRefreshing?: boolean;
 }
 
-function CurrentViewName({ viewName, serviceName }: CurrentViewNameProps) {
-  if (!viewName && !serviceName) {
-    return null;
-  }
-
+function CurrentViewName({ viewName, serviceName, isRefreshing = false }: CurrentViewNameProps) {
   return (
     <div 
       className="flex items-center gap-3 flex-shrink-0"
@@ -305,6 +304,14 @@ function CurrentViewName({ viewName, serviceName }: CurrentViewNameProps) {
             {viewName}
           </span>
         </div>
+      )}
+      {isRefreshing && (
+        <span 
+          className="text-sm text-muted-foreground animate-pulse"
+          data-testid="text-syncing-indicator"
+        >
+          Syncing with live data...
+        </span>
       )}
     </div>
   );

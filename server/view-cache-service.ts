@@ -21,44 +21,81 @@ export async function warmViewCache(): Promise<ViewCacheResult> {
     for (const user of users) {
       try {
         const preferences = await storage.getUserProjectPreferences(user.id);
+        const userViews = await storage.getProjectViewsByUserId(user.id);
         
-        const defaultFilters: Record<string, any> = {
+        let defaultFilters: Record<string, any> = {
           archived: false,
           inactive: false,
           showCompletedRegardless: false,
         };
         
         if (preferences?.defaultViewId && preferences.defaultViewType === 'saved') {
-          const userViews = await storage.getProjectViewsByUserId(user.id);
           const savedView = userViews.find(v => v.id === preferences.defaultViewId);
           if (savedView?.filters) {
-            Object.assign(defaultFilters, savedView.filters as Record<string, any>);
+            defaultFilters = {
+              archived: false,
+              inactive: false,
+              showCompletedRegardless: false,
+              ...(savedView.filters as Record<string, any>),
+            };
           }
         }
 
-        const projects = await storage.getAllProjects(defaultFilters);
-
-        const stageStats: Record<string, number> = {};
-        for (const project of projects) {
+        const defaultProjects = await storage.getAllProjects(defaultFilters);
+        const defaultStageStats: Record<string, number> = {};
+        for (const project of defaultProjects) {
           const stage = project.currentStatus || 'unknown';
-          stageStats[stage] = (stageStats[stage] || 0) + 1;
+          defaultStageStats[stage] = (defaultStageStats[stage] || 0) + 1;
         }
-
-        const cacheData: CachedProjectView = {
-          projects: projects,
-          stageStats,
+        const defaultCacheData: CachedProjectView = {
+          projects: defaultProjects,
+          stageStats: defaultStageStats,
           lastRefreshed: new Date().toISOString(),
         };
-
         await (storage as any).viewCacheStorage.setCachedView(
           user.id,
-          preferences?.defaultViewId || 'default',
-          cacheData,
+          'default',
+          defaultCacheData,
           defaultFilters,
           1440
         );
-
         viewsCached++;
+
+        for (const view of userViews) {
+          try {
+            const viewFilters: Record<string, any> = {
+              archived: false,
+              inactive: false,
+              showCompletedRegardless: false,
+              ...(view.filters as Record<string, any> || {}),
+            };
+            
+            const projects = await storage.getAllProjects(viewFilters);
+            const stageStats: Record<string, number> = {};
+            for (const project of projects) {
+              const stage = project.currentStatus || 'unknown';
+              stageStats[stage] = (stageStats[stage] || 0) + 1;
+            }
+            
+            const cacheData: CachedProjectView = {
+              projects: projects,
+              stageStats,
+              lastRefreshed: new Date().toISOString(),
+            };
+
+            await (storage as any).viewCacheStorage.setCachedView(
+              user.id,
+              view.id,
+              cacheData,
+              viewFilters,
+              1440
+            );
+            viewsCached++;
+          } catch (viewError) {
+            errors.push(`User ${user.id} View ${view.id}: ${viewError instanceof Error ? viewError.message : String(viewError)}`);
+          }
+        }
+
         usersProcessed++;
       } catch (userError) {
         errors.push(`User ${user.id}: ${userError instanceof Error ? userError.message : String(userError)}`);

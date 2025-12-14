@@ -180,6 +180,7 @@ export function useProjectsPageState() {
     showArchived,
     showCompletedRegardless,
     serviceDueDateFilter,
+    selectedViewId: currentSavedViewId,
   });
 
   const tasksPrefetchConfigs = useMemo(

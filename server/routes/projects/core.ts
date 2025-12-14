@@ -41,13 +41,38 @@ export function registerProjectCoreRoutes(
 
       const viewKey = (req.query.viewKey as string) || 'default';
       
-      const normalize = (v: any) => (v && v !== 'all' ? v : undefined);
-      const filters = {
-        archived: req.query.archived === 'true' ? true : req.query.archived === 'false' ? false : undefined,
-        showArchived: req.query.showArchived === 'true' ? true : req.query.showArchived === 'false' ? false : undefined,
-        showCompletedRegardless: req.query.showCompletedRegardless === 'true' ? true : req.query.showCompletedRegardless === 'false' ? false : undefined,
-        inactive: req.query.inactive === 'true' ? true : req.query.inactive === 'false' ? false : undefined,
+      let filters: Record<string, any> = {
+        archived: false,
+        inactive: false,
+        showCompletedRegardless: false,
       };
+
+      if (viewKey !== 'default') {
+        const userViews = await storage.getProjectViewsByUserId(effectiveUserId);
+        const savedView = userViews.find(v => v.id === viewKey);
+        if (savedView?.filters && typeof savedView.filters === 'object') {
+          const savedFilters = savedView.filters as Record<string, unknown>;
+          for (const key in savedFilters) {
+            if (Object.prototype.hasOwnProperty.call(savedFilters, key)) {
+              filters[key] = savedFilters[key];
+            }
+          }
+        }
+      } else {
+        const preferences = await storage.getUserProjectPreferences(effectiveUserId);
+        if (preferences?.defaultViewId && preferences.defaultViewType === 'saved') {
+          const userViews = await storage.getProjectViewsByUserId(effectiveUserId);
+          const savedView = userViews.find(v => v.id === preferences.defaultViewId);
+          if (savedView?.filters && typeof savedView.filters === 'object') {
+            const savedFilters = savedView.filters as Record<string, unknown>;
+            for (const key in savedFilters) {
+              if (Object.prototype.hasOwnProperty.call(savedFilters, key)) {
+                filters[key] = savedFilters[key];
+              }
+            }
+          }
+        }
+      }
 
       const cachedData: CachedProjectView | null = await (storage as any).viewCacheStorage.getCachedView(
         effectiveUserId,
