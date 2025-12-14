@@ -513,16 +513,18 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
         </div>
       </CardContent>
 
-      {/* Priority service indicators - shown in top-left corner */}
+      {/* Priority service indicators - shown in top-left corner, limited to 2 inline with +N overflow */}
       {project.priorityServiceIndicators && project.priorityServiceIndicators.length > 0 && !isSelected && (
         <div 
-          className="absolute top-1.5 left-1.5 z-10 flex flex-wrap gap-px max-w-[65%]"
+          className="absolute top-1.5 left-1.5 z-10 flex flex-wrap gap-px max-w-[70%]"
           data-testid={`priority-indicators-${project.id}`}
         >
-          {project.priorityServiceIndicators.map((indicator, index) => {
-            const indicatorObj = typeof indicator === 'string' 
-              ? { name: indicator, count: 1, dueDate: null } 
-              : indicator;
+          {(() => {
+            const MAX_VISIBLE = 2;
+            const indicators = project.priorityServiceIndicators;
+            const visibleIndicators = indicators.slice(0, MAX_VISIBLE);
+            const overflowIndicators = indicators.slice(MAX_VISIBLE);
+            const overflowCount = overflowIndicators.length;
             
             const formatDueDate = (date: Date | string | null | undefined): string => {
               if (!date) return '';
@@ -532,28 +534,80 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
               return `${day}/${month}`;
             };
             
-            const suffix = indicatorObj.count > 1 
-              ? ' - Multiple' 
-              : indicatorObj.dueDate 
-                ? ` - ${formatDueDate(indicatorObj.dueDate)}` 
-                : '';
-            
-            const displayText = `${indicatorObj.name}${suffix}`;
-            const tooltipText = indicatorObj.count > 1 
-              ? `Client has ${indicatorObj.count} active ${indicatorObj.name} projects`
-              : `Client has ${indicatorObj.name} service`;
+            const renderIndicator = (indicator: typeof indicators[0], index: number) => {
+              const indicatorObj = typeof indicator === 'string' 
+                ? { name: indicator, count: 1, dueDate: null } 
+                : indicator;
+              
+              const suffix = indicatorObj.count > 1 
+                ? ' - Multiple' 
+                : indicatorObj.dueDate 
+                  ? ` - ${formatDueDate(indicatorObj.dueDate)}` 
+                  : '';
+              
+              const displayText = `${indicatorObj.name}${suffix}`;
+              const tooltipText = indicatorObj.count > 1 
+                ? `Client has ${indicatorObj.count} active ${indicatorObj.name} projects`
+                : `Client has ${indicatorObj.name} service`;
+              
+              return (
+                <span
+                  key={`${project.id}-indicator-${index}`}
+                  className="inline-flex items-center px-1 py-px rounded text-[8px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+                  title={tooltipText}
+                  data-testid={`priority-badge-${project.id}-${index}`}
+                >
+                  {displayText}
+                </span>
+              );
+            };
             
             return (
-              <span
-                key={`${project.id}-indicator-${index}`}
-                className="inline-flex items-center px-1 py-px rounded text-[8px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
-                title={tooltipText}
-                data-testid={`priority-badge-${project.id}-${index}`}
-              >
-                {displayText}
-              </span>
+              <>
+                {visibleIndicators.map((indicator, index) => renderIndicator(indicator, index))}
+                {overflowCount > 0 && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span
+                          className="inline-flex items-center px-1 py-px rounded text-[8px] font-medium bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-100 cursor-default"
+                          data-testid={`priority-overflow-${project.id}`}
+                        >
+                          +{overflowCount}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent 
+                        side="bottom" 
+                        align="start"
+                        className="max-w-xs"
+                      >
+                        <div className="flex flex-col gap-1">
+                          {overflowIndicators.map((indicator, idx) => {
+                            const indicatorObj = typeof indicator === 'string' 
+                              ? { name: indicator, count: 1, dueDate: null } 
+                              : indicator;
+                            const suffix = indicatorObj.count > 1 
+                              ? ' - Multiple' 
+                              : indicatorObj.dueDate 
+                                ? ` - ${formatDueDate(indicatorObj.dueDate)}` 
+                                : '';
+                            return (
+                              <span 
+                                key={`overflow-${idx}`}
+                                className="text-xs"
+                              >
+                                {indicatorObj.name}{suffix}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </>
             );
-          })}
+          })()}
         </div>
       )}
 
