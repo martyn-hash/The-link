@@ -77,13 +77,13 @@ export default function Projects() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-background">
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
       <TopNavigation 
         user={state.user} 
         onMobileSearchClick={() => state.setMobileSearchOpen(true)} 
       />
 
-      <main className="flex-1 pb-20">
+      <main className="flex-1 min-h-0 flex flex-col overflow-hidden pb-20">
         <ProjectsHeader
           workspaceMode={state.workspaceMode}
           setWorkspaceMode={state.setWorkspaceMode}
