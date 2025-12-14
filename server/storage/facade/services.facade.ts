@@ -66,6 +66,14 @@ export function applyServicesFacade<TBase extends Constructor<ServicesFacadeDeps
       return this.serviceStorage.deleteService(id);
     }
 
+    async getPriorityIndicatorTargets(indicatorServiceId: string) {
+      return this.serviceStorage.getPriorityIndicatorTargets(indicatorServiceId);
+    }
+
+    async setPriorityIndicatorTargets(indicatorServiceId: string, targetServiceIds: string[]) {
+      return this.serviceStorage.setPriorityIndicatorTargets(indicatorServiceId, targetServiceIds);
+    }
+
     async resolveServiceOwner(clientId: string, projectTypeId: string) {
       return this.serviceAssignmentStorage.resolveServiceOwner(clientId, projectTypeId);
     }

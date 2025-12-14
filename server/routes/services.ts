@@ -202,6 +202,53 @@ export function registerServiceRoutes(
     }
   });
 
+  // GET /api/services/:id/priority-indicator-targets - Get target services where this service appears as a priority indicator
+  app.get("/api/services/:id/priority-indicator-targets", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+
+      const existingService = await storage.getServiceById(id);
+      if (!existingService) {
+        return res.status(404).json({ message: "Service not found" });
+      }
+
+      const targetServiceIds = await storage.getPriorityIndicatorTargets(id);
+      res.json({ targetServiceIds });
+    } catch (error) {
+      console.error("Error fetching priority indicator targets:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to fetch priority indicator targets" });
+    }
+  });
+
+  // PUT /api/services/:id/priority-indicator-targets - Set target services where this service should appear as a priority indicator
+  app.put("/api/services/:id/priority-indicator-targets", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+
+      const existingService = await storage.getServiceById(id);
+      if (!existingService) {
+        return res.status(404).json({ message: "Service not found" });
+      }
+
+      const schema = z.object({
+        targetServiceIds: z.array(z.string()).default([])
+      });
+
+      const validData = schema.parse(req.body);
+      await storage.setPriorityIndicatorTargets(id, validData.targetServiceIds);
+      res.json({ message: "Priority indicator targets updated", targetServiceIds: validData.targetServiceIds });
+    } catch (error) {
+      console.error("Error updating priority indicator targets:", error instanceof Error ? error.message : error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          message: "Invalid request data",
+          errors: error.errors
+        });
+      }
+      res.status(500).json({ message: "Failed to update priority indicator targets" });
+    }
+  });
+
   // GET /api/services/by-project-type/:projectTypeId - Get service by project type ID
   app.get("/api/services/by-project-type/:projectTypeId", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {

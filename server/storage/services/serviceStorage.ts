@@ -12,8 +12,9 @@ import {
   clients,
   clientPeople,
   projects,
+  servicePriorityIndicators,
 } from '@shared/schema';
-import { eq, and, or, isNull, sql } from 'drizzle-orm';
+import { eq, and, or, isNull, sql, inArray } from 'drizzle-orm';
 import type { Service, InsertService, ProjectType, WorkRole } from '@shared/schema';
 import type { ScheduledServiceView } from '../base/types.js';
 
@@ -543,6 +544,34 @@ export class ServiceStorage extends BaseStorage {
     const result = await db.delete(services).where(eq(services.id, id));
     if (result.rowCount === 0) {
       throw new Error("Service not found");
+    }
+  }
+
+  // ==================== Priority Indicator Operations ====================
+
+  async getPriorityIndicatorTargets(indicatorServiceId: string): Promise<string[]> {
+    const results = await db
+      .select({ targetServiceId: servicePriorityIndicators.targetServiceId })
+      .from(servicePriorityIndicators)
+      .where(eq(servicePriorityIndicators.indicatorServiceId, indicatorServiceId));
+    
+    return results.map(r => r.targetServiceId);
+  }
+
+  async setPriorityIndicatorTargets(indicatorServiceId: string, targetServiceIds: string[]): Promise<void> {
+    await db.delete(servicePriorityIndicators)
+      .where(eq(servicePriorityIndicators.indicatorServiceId, indicatorServiceId));
+    
+    if (targetServiceIds.length > 0) {
+      const validTargetIds = targetServiceIds.filter(id => id && id.trim() !== '');
+      if (validTargetIds.length > 0) {
+        await db.insert(servicePriorityIndicators).values(
+          validTargetIds.map(targetId => ({
+            indicatorServiceId,
+            targetServiceId: targetId,
+          }))
+        );
+      }
     }
   }
 }

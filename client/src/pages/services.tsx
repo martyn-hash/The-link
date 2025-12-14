@@ -428,6 +428,9 @@ export default function Services() {
   // Edit states
   const [editingService, setEditingService] = useState<ServiceWithDetails | null>(null);
   const [editingRole, setEditingRole] = useState<WorkRoleWithUsage | null>(null);
+  
+  // Priority indicator targets (for multi-select)
+  const [priorityIndicatorTargets, setPriorityIndicatorTargets] = useState<string[]>([]);
 
   // Forms
   const serviceForm = useForm<CreateServiceFormData>({
@@ -513,6 +516,13 @@ export default function Services() {
         );
       }
       
+      // Save priority indicator targets if any selected
+      if (priorityIndicatorTargets.length > 0) {
+        await apiRequest("PUT", `/api/services/${service.id}/priority-indicator-targets`, { 
+          targetServiceIds: priorityIndicatorTargets 
+        });
+      }
+      
       return service;
     },
     onSuccess: () => {
@@ -521,6 +531,7 @@ export default function Services() {
       queryClient.invalidateQueries({ queryKey: ["/api/work-roles"] });
       setViewMode('list');
       serviceForm.reset();
+      setPriorityIndicatorTargets([]);
     },
     onError: (error: Error) => {
       showFriendlyError({ error });
@@ -557,6 +568,11 @@ export default function Services() {
         )
       );
       
+      // Save priority indicator targets
+      await apiRequest("PUT", `/api/services/${id}/priority-indicator-targets`, { 
+        targetServiceIds: priorityIndicatorTargets 
+      });
+      
       return service;
     },
     onSuccess: () => {
@@ -566,6 +582,7 @@ export default function Services() {
       setViewMode('list');
       setEditingService(null);
       serviceForm.reset();
+      setPriorityIndicatorTargets([]);
     },
     onError: (error: Error) => {
       showFriendlyError({ error });
@@ -638,6 +655,13 @@ export default function Services() {
     },
   });
 
+  // Mutation to save priority indicator targets
+  const savePriorityIndicatorTargetsMutation = useMutation({
+    mutationFn: async ({ serviceId, targetServiceIds }: { serviceId: string; targetServiceIds: string[] }) => {
+      return await apiRequest("PUT", `/api/services/${serviceId}/priority-indicator-targets`, { targetServiceIds });
+    },
+  });
+
   // Helper to normalize UDF options (handles string vs array)
   const normalizeUdfOptions = (data: CreateServiceFormData): CreateServiceFormData => {
     if (!data.udfDefinitions) return data;
@@ -662,7 +686,7 @@ export default function Services() {
     updateServiceMutation.mutate({ ...normalizeUdfOptions(data), id: editingService.id });
   };
 
-  const handleEditService = (service: ServiceWithDetails) => {
+  const handleEditService = async (service: ServiceWithDetails) => {
     setEditingService(service);
     serviceForm.reset({
       name: service.name,
@@ -679,6 +703,20 @@ export default function Services() {
       applicableClientTypes: (service as any).applicableClientTypes ?? "company",
       showInProjectServiceId: (service as any).showInProjectServiceId ?? null,
     });
+    
+    // Fetch existing priority indicator targets
+    try {
+      const response = await fetch(`/api/services/${service.id}/priority-indicator-targets`);
+      if (response.ok) {
+        const data = await response.json();
+        setPriorityIndicatorTargets(data.targetServiceIds || []);
+      } else {
+        setPriorityIndicatorTargets([]);
+      }
+    } catch (error) {
+      setPriorityIndicatorTargets([]);
+    }
+    
     setViewMode('edit-service');
   };
 
@@ -694,6 +732,7 @@ export default function Services() {
   // Navigation helpers
   const handleStartCreateService = () => {
     serviceForm.reset();
+    setPriorityIndicatorTargets([]);
     setViewMode('create-service');
   };
 
@@ -707,6 +746,7 @@ export default function Services() {
     roleForm.reset();
     setEditingService(null);
     setEditingRole(null);
+    setPriorityIndicatorTargets([]);
     setViewMode('list');
   };
 
@@ -1224,43 +1264,49 @@ export default function Services() {
                             )}
                           </div>
 
-                          {/* Show in Project Section */}
-                          <FormField
-                            control={serviceForm.control}
-                            name="showInProjectServiceId"
-                            render={({ field }) => (
-                              <FormItem className="rounded-lg border p-4 shadow-sm">
-                                <div className="space-y-3">
-                                  <div>
-                                    <FormLabel>Show in Project</FormLabel>
-                                    <div className="text-sm text-muted-foreground">
-                                      When a client has this service plus the selected service below, show this service name as a priority indicator on the other service's project cards
-                                    </div>
-                                  </div>
-                                  <FormControl>
-                                    <Select 
-                                      onValueChange={(value) => field.onChange(value === "none" ? null : value)} 
-                                      value={field.value || "none"} 
-                                      data-testid="select-show-in-project"
-                                    >
-                                      <SelectTrigger className="w-full md:w-[300px]">
-                                        <SelectValue placeholder="Select service to show on" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="none">None</SelectItem>
-                                        {services?.filter(s => s.id !== editingService?.id).map((service) => (
-                                          <SelectItem key={service.id} value={service.id}>
-                                            {service.name}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </FormControl>
-                                  <FormMessage />
+                          {/* Show in Project Section - Multi-select */}
+                          <div className="rounded-lg border p-4 shadow-sm">
+                            <div className="space-y-3">
+                              <div>
+                                <label className="text-sm font-medium">Show in Project</label>
+                                <div className="text-sm text-muted-foreground">
+                                  Select one or more services where this service should appear as a priority indicator on project cards
                                 </div>
-                              </FormItem>
-                            )}
-                          />
+                              </div>
+                              <div className="space-y-2 max-h-48 overflow-y-auto">
+                                {services?.map((service) => (
+                                  <div key={service.id} className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`priority-target-create-${service.id}`}
+                                      checked={priorityIndicatorTargets.includes(service.id)}
+                                      onCheckedChange={(checked) => {
+                                        if (checked) {
+                                          setPriorityIndicatorTargets([...priorityIndicatorTargets, service.id]);
+                                        } else {
+                                          setPriorityIndicatorTargets(priorityIndicatorTargets.filter(id => id !== service.id));
+                                        }
+                                      }}
+                                      data-testid={`checkbox-priority-target-${service.id}`}
+                                    />
+                                    <label 
+                                      htmlFor={`priority-target-create-${service.id}`} 
+                                      className="text-sm font-medium cursor-pointer"
+                                    >
+                                      {service.name}
+                                    </label>
+                                  </div>
+                                ))}
+                                {(!services || services.length === 0) && (
+                                  <p className="text-sm text-muted-foreground">No other services available</p>
+                                )}
+                              </div>
+                              {priorityIndicatorTargets.length > 0 && (
+                                <div className="text-xs text-muted-foreground">
+                                  Selected: {priorityIndicatorTargets.length} service(s)
+                                </div>
+                              )}
+                            </div>
+                          </div>
 
                           <FormField
                             control={serviceForm.control}
@@ -1587,43 +1633,49 @@ export default function Services() {
                             )}
                           </div>
 
-                          {/* Show in Project Section */}
-                          <FormField
-                            control={serviceForm.control}
-                            name="showInProjectServiceId"
-                            render={({ field }) => (
-                              <FormItem className="rounded-lg border p-4 shadow-sm">
-                                <div className="space-y-3">
-                                  <div>
-                                    <FormLabel>Show in Project</FormLabel>
-                                    <div className="text-sm text-muted-foreground">
-                                      When a client has this service plus the selected service below, show this service name as a priority indicator on the other service's project cards
-                                    </div>
-                                  </div>
-                                  <FormControl>
-                                    <Select 
-                                      onValueChange={(value) => field.onChange(value === "none" ? null : value)} 
-                                      value={field.value || "none"} 
-                                      data-testid="select-show-in-project-edit"
-                                    >
-                                      <SelectTrigger className="w-full md:w-[300px]">
-                                        <SelectValue placeholder="Select service to show on" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="none">None</SelectItem>
-                                        {services?.filter(s => s.id !== editingService?.id).map((service) => (
-                                          <SelectItem key={service.id} value={service.id}>
-                                            {service.name}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </FormControl>
-                                  <FormMessage />
+                          {/* Show in Project Section - Multi-select */}
+                          <div className="rounded-lg border p-4 shadow-sm">
+                            <div className="space-y-3">
+                              <div>
+                                <label className="text-sm font-medium">Show in Project</label>
+                                <div className="text-sm text-muted-foreground">
+                                  Select one or more services where this service should appear as a priority indicator on project cards
                                 </div>
-                              </FormItem>
-                            )}
-                          />
+                              </div>
+                              <div className="space-y-2 max-h-48 overflow-y-auto">
+                                {services?.filter(s => s.id !== editingService?.id).map((service) => (
+                                  <div key={service.id} className="flex items-center space-x-2">
+                                    <Checkbox
+                                      id={`priority-target-edit-${service.id}`}
+                                      checked={priorityIndicatorTargets.includes(service.id)}
+                                      onCheckedChange={(checked) => {
+                                        if (checked) {
+                                          setPriorityIndicatorTargets([...priorityIndicatorTargets, service.id]);
+                                        } else {
+                                          setPriorityIndicatorTargets(priorityIndicatorTargets.filter(id => id !== service.id));
+                                        }
+                                      }}
+                                      data-testid={`checkbox-priority-target-edit-${service.id}`}
+                                    />
+                                    <label 
+                                      htmlFor={`priority-target-edit-${service.id}`} 
+                                      className="text-sm font-medium cursor-pointer"
+                                    >
+                                      {service.name}
+                                    </label>
+                                  </div>
+                                ))}
+                                {(!services || services.filter(s => s.id !== editingService?.id).length === 0) && (
+                                  <p className="text-sm text-muted-foreground">No other services available</p>
+                                )}
+                              </div>
+                              {priorityIndicatorTargets.length > 0 && (
+                                <div className="text-xs text-muted-foreground">
+                                  Selected: {priorityIndicatorTargets.length} service(s)
+                                </div>
+                              )}
+                            </div>
+                          </div>
 
                           <FormField
                             control={serviceForm.control}
