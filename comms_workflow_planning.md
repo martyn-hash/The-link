@@ -112,4 +112,152 @@ Before final sign-off, conduct live testing using Abdul's inbox to validate the 
 ---
 
 ## Next Up
-**Stage 11: Live Validation Testing** (after SLA fix)
+**Stage 11: Live Validation Testing**
+
+---
+
+## 📋 Step-by-Step Testing Session Notes (December 2025)
+
+### Test Inbox Setup - COMPLETE
+- **Inbox**: abdul@growth.accountants
+- **Inbox ID**: `9eb2b1a1-b026-4a05-ae0b-5f9e5daa07a0`
+- **Access**: Full access granted to admin123 user
+- **Mode**: Dev mode - NO customer gate (ingest all emails regardless of client matching)
+
+### SLA Settings (from Company Settings)
+- Working Hours: 09:00 - 17:30
+- Working Days: Mon-Fri
+- Response Target: 2 business days
+- These are pulled from company_settings table, not hardcoded
+
+### Manual Step-by-Step Testing Plan
+
+The user wants to manually control each step of the classification pipeline to observe and validate behavior:
+
+#### Step 1: Sync Emails from Abdul's Inbox
+```
+POST /api/comms/inbox/9eb2b1a1-b026-4a05-ae0b-5f9e5daa07a0/sync
+```
+- Fetches emails from Microsoft Graph API
+- Stores in `inbox_emails` table
+- **Dev mode**: Skip customer gate, ingest ALL emails
+
+#### Step 2: Run Deterministic Classification Rules
+Service: `server/services/deterministicClassificationService.ts`
+
+Rules evaluated (in priority order):
+1. DEADLINE_ASAP - "asap", "urgent", "immediately" → task_floor + reply_floor
+2. DEADLINE_DATE - "by Monday", "due Friday" → reply_floor
+3. REQUEST_CAN_YOU - "can you", "could you" → task_floor + reply_floor
+4. REQUEST_PLEASE - "please advise/confirm/send" → task_floor + reply_floor
+5. HAS_ATTACHMENTS - email has files → task_floor
+6. QUESTION_MARK - contains "?" → reply_floor
+7. ACKNOWLEDGEMENT_ONLY - "thanks", "noted", "got it" → clears both floors
+
+Output: `requires_task_floor`, `requires_reply_floor`, `triggered_rules[]`
+
+#### Step 3: Send to OpenAI (GPT-4o-mini)
+Service: `server/services/aiClassificationService.ts`
+
+AI receives:
+- Subject, body preview, sender name
+- Attachment info
+- Thread position (first/reply/forward)
+- Deterministic floor values (AI can raise but not lower)
+
+AI returns:
+- requires_task, requires_reply (merged with floors)
+- sentiment: score (-1 to 1), label (very_negative → very_positive)
+- opportunity: upsell/cross_sell/referral/expansion/retention_risk/testimonial
+- urgency: critical/high/normal/low
+- information_only: true/false
+- confidence: 0-1
+- reasoning: explanation
+
+#### Step 4: Store Classification & Create Workflow State
+Pipeline: `server/services/emailClassificationPipeline.ts`
+
+Creates records in:
+- `email_classifications` - stores all classification data
+- `email_workflow_states` - tracks pending/completed status
+
+#### Step 5: Calculate SLA Deadline (if requires_reply)
+Service: `server/services/slaService.ts`
+
+- Uses company settings for working hours
+- Calculates deadline in business hours only
+- Skips weekends per working_days setting
+- Stores deadline in `inbox_emails.sla_deadline`
+
+#### Step 6: Display in UI
+Component: `client/src/components/comms/CommsWorkspace.tsx`
+
+- Toolbar filters by classification (Requires Task, Reply, Urgent, etc.)
+- Urgency badges show countdown timers
+- Complete button enforces task/reply requirements
+
+### Key API Endpoints for Testing
+
+```
+# Sync inbox
+POST /api/comms/inbox/:inboxId/sync
+
+# Get stored emails with classifications
+GET /api/comms/inbox/:inboxId/stored-emails
+
+# Get workflow-filtered emails
+GET /api/comms/inbox/:inboxId/workflow-emails?filter=requires_task|requires_reply|urgent|opportunities|information_only|completed
+
+# Classify/re-classify a specific email
+POST /api/comms/emails/:emailId/classify
+
+# Get classification for email
+GET /api/comms/emails/:emailId/classification
+
+# Override classification (with audit)
+PATCH /api/comms/emails/:emailId/classification
+Body: { changes: {...}, reason: "..." }
+
+# Get override history
+GET /api/comms/emails/:emailId/classification/history
+
+# Complete an email (mark as done)
+POST /api/comms/inbox-emails/:emailId/complete
+
+# Link task to email
+PATCH /api/comms/inbox-emails/:emailId/link-task
+Body: { taskId: "..." }
+```
+
+### Key Files Reference
+
+| Component | File Path |
+|-----------|-----------|
+| Classification Pipeline | `server/services/emailClassificationPipeline.ts` |
+| Deterministic Rules | `server/services/deterministicClassificationService.ts` |
+| AI Classification | `server/services/aiClassificationService.ts` |
+| SLA Service | `server/services/slaService.ts` |
+| Email Routes | `server/routes/emails.ts` |
+| Email Storage | `server/storage/integrations/emailStorage.ts` |
+| CommsWorkspace UI | `client/src/components/comms/CommsWorkspace.tsx` |
+| Import Dialog | `client/src/components/comms/ImportEmailsDialog.tsx` |
+
+### Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `inboxes` | Registered email inboxes |
+| `user_inbox_access` | User permissions for inboxes |
+| `inbox_emails` | Stored emails with SLA deadlines |
+| `email_classifications` | AI + deterministic classification results |
+| `email_workflow_states` | Workflow tracking (pending/completed) |
+| `email_classification_overrides` | Audit trail of manual changes |
+| `email_quarantine` | Emails that didn't pass customer gate |
+
+### Notes for Resuming
+
+1. Abdul's inbox is already created and accessible
+2. User wants NO customer gate during dev testing - all emails should be ingested
+3. User wants to control each step manually to observe behavior
+4. After sync, can manually trigger classification via API or let pipeline run automatically
+5. Company settings already configure SLA hours (09:00-17:30) - no code change needed
