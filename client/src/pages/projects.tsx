@@ -54,6 +54,23 @@ export default function Projects() {
     enabled: isAuthenticated && emailModuleActive,
   });
 
+  // Auto-select default inbox based on user's email or first available inbox
+  useEffect(() => {
+    if (myInboxes.length > 0 && !state.commsSelectedInboxId) {
+      // Try to find an inbox matching the user's email
+      const userEmail = state.user?.email?.toLowerCase();
+      const matchingInbox = userEmail 
+        ? myInboxes.find(ia => ia.inbox.email.toLowerCase() === userEmail)
+        : null;
+      
+      // Select matching inbox or fall back to first inbox
+      const defaultInbox = matchingInbox || myInboxes[0];
+      if (defaultInbox) {
+        state.setCommsSelectedInboxId(defaultInbox.inboxId);
+      }
+    }
+  }, [myInboxes, state.commsSelectedInboxId, state.user?.email]);
+
   useEffect(() => {
     if (state.error && isUnauthorizedError(state.error)) {
       setLocation("/");
