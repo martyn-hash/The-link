@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { GripVertical, AlertCircle, Clock, Info, MessageSquare, Check, HelpCircle } from "lucide-react";
 import type { ProjectWithRelations, KanbanStage, User } from "@shared/schema";
 import { calculateCurrentInstanceTime } from "@shared/businessTime";
@@ -464,7 +465,7 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
     >
       <CardContent className="p-4 flex flex-col">
         <div className="flex items-start justify-between mb-2">
-          <h4 className="font-medium text-foreground line-clamp-1 flex-1 pr-2" title={project.client.name}>
+          <h4 className="font-medium text-sm text-foreground line-clamp-1 flex-1 pr-2" title={project.client.name}>
             {project.client.name}
           </h4>
           <div className="flex items-center space-x-1 flex-shrink-0">
@@ -553,7 +554,7 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
               return (
                 <span
                   key={`${project.id}-indicator-${index}`}
-                  className="inline-flex items-center px-1 py-px rounded text-[8px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
+                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200"
                   title={tooltipText}
                   data-testid={`priority-badge-${project.id}-${index}`}
                 >
@@ -566,44 +567,44 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
               <>
                 {visibleIndicators.map((indicator, index) => renderIndicator(indicator, index))}
                 {overflowCount > 0 && (
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span
-                          className="inline-flex items-center px-1 py-px rounded text-[8px] font-medium bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-100 cursor-default"
-                          data-testid={`priority-overflow-${project.id}`}
-                        >
-                          +{overflowCount}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent 
-                        side="bottom" 
-                        align="start"
-                        className="max-w-xs"
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-200 text-blue-800 dark:bg-blue-800 dark:text-blue-100 cursor-pointer hover:bg-blue-300 dark:hover:bg-blue-700 transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                        data-testid={`priority-overflow-${project.id}`}
                       >
-                        <div className="flex flex-col gap-1">
-                          {overflowIndicators.map((indicator, idx) => {
-                            const indicatorObj = typeof indicator === 'string' 
-                              ? { name: indicator, count: 1, dueDate: null } 
-                              : indicator;
-                            const suffix = indicatorObj.count > 1 
-                              ? ' - Multiple' 
-                              : indicatorObj.dueDate 
-                                ? ` - ${formatDueDate(indicatorObj.dueDate)}` 
-                                : '';
-                            return (
-                              <span 
-                                key={`overflow-${idx}`}
-                                className="text-xs"
-                              >
-                                {indicatorObj.name}{suffix}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                        +{overflowCount}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent 
+                      side="bottom" 
+                      align="start"
+                      className="w-auto p-2"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex flex-col gap-1">
+                        {overflowIndicators.map((indicator, idx) => {
+                          const indicatorObj = typeof indicator === 'string' 
+                            ? { name: indicator, count: 1, dueDate: null } 
+                            : indicator;
+                          const suffix = indicatorObj.count > 1 
+                            ? ' - Multiple' 
+                            : indicatorObj.dueDate 
+                              ? ` - ${formatDueDate(indicatorObj.dueDate)}` 
+                              : '';
+                          return (
+                            <span 
+                              key={`overflow-${idx}`}
+                              className="text-xs whitespace-nowrap"
+                            >
+                              {indicatorObj.name}{suffix}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 )}
               </>
             );
