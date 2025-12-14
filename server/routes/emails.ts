@@ -1535,4 +1535,342 @@ export function registerEmailRoutes(
       });
     }
   });
+
+  // ==================================================
+  // EMAIL CLASSIFICATION & WORKFLOW ROUTES
+  // ==================================================
+
+  /**
+   * GET /api/comms/quarantine
+   * Get quarantined emails (emails that didn't pass the customer gate)
+   * 
+   * Query params:
+   * - inboxId: Filter by inbox (required unless admin)
+   * - includeRestored: Include restored emails (default: false)
+   */
+  app.get('/api/comms/quarantine', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const isAdmin = req.user?.isAdmin === true;
+      const inboxId = req.query.inboxId as string | undefined;
+      const includeRestored = req.query.includeRestored === 'true';
+
+      // Non-admin users must specify an inboxId
+      if (!isAdmin && !inboxId) {
+        return res.status(400).json({ message: "inboxId is required" });
+      }
+
+      // If inboxId is provided, verify user has access (even admins should verify inbox exists)
+      if (inboxId) {
+        const hasAccess = await storage.canUserAccessInbox(userId, inboxId);
+        if (!hasAccess && !isAdmin) {
+          return res.status(403).json({ message: "You don't have access to this inbox" });
+        }
+      }
+
+      const quarantinedEmails = await storage.getQuarantinedEmails({
+        inboxId,
+        includeRestored,
+      });
+
+      res.json({
+        quarantined: quarantinedEmails,
+        count: quarantinedEmails.length
+      });
+    } catch (error: any) {
+      console.error('[Get Quarantine] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch quarantined emails", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * POST /api/comms/quarantine/:id/restore
+   * Restore a quarantined email by associating it with a client
+   */
+  app.post('/api/comms/quarantine/:id/restore', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const isAdmin = req.user?.isAdmin === true;
+      const { id } = req.params;
+      const { clientId } = req.body;
+
+      if (!clientId) {
+        return res.status(400).json({ message: "clientId is required" });
+      }
+
+      // Get the quarantined email to verify it exists and check access
+      const quarantinedEmail = await storage.getEmailQuarantineById(id);
+      if (!quarantinedEmail) {
+        return res.status(404).json({ message: "Quarantined email not found" });
+      }
+
+      // Verify user has access to the inbox this email belongs to
+      const hasAccess = await storage.canUserAccessInbox(userId, quarantinedEmail.inboxId);
+      if (!hasAccess && !isAdmin) {
+        return res.status(403).json({ message: "You don't have access to this inbox" });
+      }
+
+      // Verify client exists
+      const client = await storage.getClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+
+      const restored = await storage.restoreQuarantinedEmail(id, userId, clientId);
+      
+      res.json({
+        success: true,
+        restored
+      });
+    } catch (error: any) {
+      console.error('[Restore Quarantine] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to restore quarantined email", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * GET /api/comms/emails/:emailId/classification
+   * Get classification for a specific email
+   */
+  app.get('/api/comms/emails/:emailId/classification', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const { emailId } = req.params;
+
+      // Get the email to verify access
+      const email = await storage.getInboxEmailById(emailId);
+      if (!email) {
+        return res.status(404).json({ message: "Email not found" });
+      }
+
+      // Verify user has access to this inbox
+      const hasAccess = await storage.canUserAccessInbox(userId, email.inboxId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this email" });
+      }
+
+      const classification = await storage.getEmailClassificationByEmailId(emailId);
+      
+      res.json({
+        emailId,
+        classification: classification || null
+      });
+    } catch (error: any) {
+      console.error('[Get Classification] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch classification", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * POST /api/comms/emails/:emailId/classify
+   * Classify or re-classify a specific email
+   */
+  app.post('/api/comms/emails/:emailId/classify', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const { emailId } = req.params;
+
+      // Get the email to verify access
+      const email = await storage.getInboxEmailById(emailId);
+      if (!email) {
+        return res.status(404).json({ message: "Email not found" });
+      }
+
+      // Verify user has access to this inbox
+      const hasAccess = await storage.canUserAccessInbox(userId, email.inboxId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this email" });
+      }
+
+      // Run the classification pipeline
+      const { classifyExistingEmail } = await import('../services/emailClassificationPipeline');
+      const result = await classifyExistingEmail(emailId);
+      
+      if (!result) {
+        return res.status(500).json({ message: "Classification failed" });
+      }
+
+      res.json({
+        success: true,
+        emailId,
+        classification: result.mergedClassification,
+        classificationId: result.classificationId,
+        workflowStateId: result.workflowStateId
+      });
+    } catch (error: any) {
+      console.error('[Classify Email] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to classify email", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * POST /api/comms/emails/classify-unclassified
+   * Classify all unclassified emails in an inbox
+   * 
+   * Body:
+   * - inboxId: Required inbox ID to filter by (unless admin)
+   */
+  app.post('/api/comms/emails/classify-unclassified', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const isAdmin = req.user?.isAdmin === true;
+      const { inboxId } = req.body;
+
+      // Non-admin users must specify an inboxId
+      if (!isAdmin && !inboxId) {
+        return res.status(400).json({ message: "inboxId is required" });
+      }
+
+      // If inboxId is provided, verify access
+      if (inboxId) {
+        const hasAccess = await storage.canUserAccessInbox(userId, inboxId);
+        if (!hasAccess && !isAdmin) {
+          return res.status(403).json({ message: "You don't have access to this inbox" });
+        }
+      }
+
+      // Run classification pipeline on all unclassified emails
+      const { classifyUnclassifiedEmails } = await import('../services/emailClassificationPipeline');
+      const results = await classifyUnclassifiedEmails(inboxId);
+
+      res.json({
+        success: true,
+        classified: results.length,
+        results: results.map(r => ({
+          emailId: r.emailId,
+          requiresTask: r.mergedClassification.requiresTask,
+          requiresReply: r.mergedClassification.requiresReply,
+          urgency: r.mergedClassification.urgency
+        }))
+      });
+    } catch (error: any) {
+      console.error('[Classify Unclassified] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to classify emails", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * GET /api/comms/emails/:emailId/workflow
+   * Get workflow state for a specific email
+   */
+  app.get('/api/comms/emails/:emailId/workflow', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const { emailId } = req.params;
+
+      // Get the email to verify access
+      const email = await storage.getInboxEmailById(emailId);
+      if (!email) {
+        return res.status(404).json({ message: "Email not found" });
+      }
+
+      // Verify user has access to this inbox
+      const hasAccess = await storage.canUserAccessInbox(userId, email.inboxId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this email" });
+      }
+
+      const workflowState = await storage.getEmailWorkflowStateByEmailId(emailId);
+      
+      res.json({
+        emailId,
+        workflow: workflowState || null
+      });
+    } catch (error: any) {
+      console.error('[Get Workflow] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch workflow state", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * PATCH /api/comms/emails/:emailId/workflow
+   * Update workflow state for an email
+   * 
+   * Body:
+   * - state: 'pending' | 'working' | 'blocked' | 'complete'
+   * - taskLinked: boolean (optional)
+   * - replyCompleted: boolean (optional)
+   * - notes: string (optional)
+   */
+  app.patch('/api/comms/emails/:emailId/workflow', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const { emailId } = req.params;
+      const { state, taskLinked, replyCompleted, notes } = req.body;
+
+      // Get the email to verify access
+      const email = await storage.getInboxEmailById(emailId);
+      if (!email) {
+        return res.status(404).json({ message: "Email not found" });
+      }
+
+      // Verify user has access to this inbox
+      const hasAccess = await storage.canUserAccessInbox(userId, email.inboxId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this email" });
+      }
+
+      // Validate state if provided
+      const validStates = ['pending', 'working', 'blocked', 'complete'];
+      if (state && !validStates.includes(state)) {
+        return res.status(400).json({ 
+          message: `Invalid state. Must be one of: ${validStates.join(', ')}` 
+        });
+      }
+
+      // Get existing workflow state or create new one
+      let workflowState = await storage.getEmailWorkflowStateByEmailId(emailId);
+      
+      const updateData: any = {
+        emailId,
+        ...(workflowState || {}),
+        ...(state && { state }),
+        ...(typeof taskLinked === 'boolean' && { taskLinked }),
+        ...(typeof replyCompleted === 'boolean' && { replyCompleted }),
+        ...(notes !== undefined && { notes }),
+      };
+
+      // If completing, set completedAt
+      if (state === 'complete' && (!workflowState || workflowState.state !== 'complete')) {
+        updateData.completedAt = new Date();
+        updateData.completedBy = userId;
+      }
+
+      // If starting to work, set startedAt
+      if (state === 'working' && (!workflowState || workflowState.state === 'pending')) {
+        updateData.startedAt = new Date();
+      }
+
+      const updated = await storage.upsertEmailWorkflowState(updateData);
+
+      res.json({
+        success: true,
+        workflow: updated
+      });
+    } catch (error: any) {
+      console.error('[Update Workflow] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to update workflow state", 
+        error: error.message 
+      });
+    }
+  });
 }
