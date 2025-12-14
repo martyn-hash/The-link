@@ -870,36 +870,37 @@ function TasksToolbar({
     <>
       <CreateTaskDialog 
         trigger={
-          <Button size="sm" data-testid="button-create-task">
-            <ClipboardList className="h-4 w-4 mr-2" />
-            Create Task
+          <Button size="sm" className="px-2 lg:px-4" data-testid="button-create-task">
+            <ClipboardList className="h-4 w-4 lg:mr-2" />
+            <span className="hidden lg:inline">Create Task</span>
           </Button>
         }
       />
       <CreateReminderDialog 
         trigger={
-          <Button variant="outline" size="sm" data-testid="button-create-reminder">
-            <CalendarIcon className="h-4 w-4 mr-2" />
-            Set Reminder
+          <Button variant="outline" size="sm" className="px-2 lg:px-4" data-testid="button-create-reminder">
+            <CalendarIcon className="h-4 w-4 lg:mr-2" />
+            <span className="hidden lg:inline">Set Reminder</span>
           </Button>
         }
       />
       <Button
         variant={tasksReassignMode ? "default" : "outline"}
         size="sm"
+        className="px-2 lg:px-4"
         onClick={() => setTasksReassignMode(!tasksReassignMode)}
         data-testid="button-reassign-mode"
       >
-        <Users className="h-4 w-4 mr-2" />
-        {tasksReassignMode ? "Exit Reassign" : "Reassign"}
+        <Users className="h-4 w-4 lg:mr-2" />
+        <span className="hidden lg:inline">{tasksReassignMode ? "Exit Reassign" : "Reassign"}</span>
       </Button>
       <Popover open={filterOpen} onOpenChange={setFilterOpen}>
         <PopoverTrigger asChild>
-          <Button variant="outline" size="sm" className="relative" data-testid="button-tasks-filters">
-            <Filter className="h-4 w-4 mr-2" />
-            Filters
+          <Button variant="outline" size="sm" className="relative px-2 lg:px-4" data-testid="button-tasks-filters">
+            <Filter className="h-4 w-4 lg:mr-2" />
+            <span className="hidden lg:inline">Filters</span>
             {tasksActiveFilterCount > 0 && (
-              <Badge variant="secondary" className="ml-2 h-5 w-5 p-0 flex items-center justify-center text-xs">
+              <Badge variant="secondary" className="ml-1 lg:ml-2 h-5 w-5 p-0 flex items-center justify-center text-xs">
                 {tasksActiveFilterCount}
               </Badge>
             )}
