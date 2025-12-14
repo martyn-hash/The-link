@@ -155,18 +155,30 @@ export function ProjectsHeader({
       {/* Desktop: 3-column grid layout - left/center/right - always full width */}
       <div className="hidden md:grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 w-full">
         {/* Left column: context-dependent content, left-aligned */}
-        <div className="flex items-center justify-start">
+        <div className="flex items-center justify-start gap-3">
           {workspaceMode === "projects" && <CurrentViewName viewName={currentSavedViewName} />}
           {workspaceMode === "comms" && (
-            <CommsInboxSelector 
-              inboxes={commsInboxes}
-              selectedInboxId={commsSelectedInboxId}
-              selectedInboxName={selectedInbox?.displayName || selectedInbox?.email || null}
-              onSelectInbox={(id) => {
-                setCommsSelectedInboxId?.(id);
-                setCommsSelectedMessageId?.(null);
-              }}
-            />
+            <>
+              <CommsInboxSelector 
+                inboxes={commsInboxes}
+                selectedInboxId={commsSelectedInboxId}
+                selectedInboxName={selectedInbox?.displayName || selectedInbox?.email || null}
+                onSelectInbox={(id) => {
+                  setCommsSelectedInboxId?.(id);
+                  setCommsSelectedMessageId?.(null);
+                }}
+              />
+              {commsSelectedInboxId && setCommsActiveFilter && (
+                <WorkflowToolbar
+                  stats={commsWorkflowStats}
+                  isLoading={commsWorkflowStatsLoading}
+                  activeFilter={commsActiveFilter ?? null}
+                  onFilterChange={setCommsActiveFilter}
+                  filterButtons={['information_only', 'all_outstanding']}
+                  hideClearButton={true}
+                />
+              )}
+            </>
           )}
           {/* Tasks mode: empty left column for balance */}
         </div>
@@ -602,6 +614,7 @@ function DesktopToolbar({
             isLoading={commsWorkflowStatsLoading}
             activeFilter={commsActiveFilter ?? null}
             onFilterChange={setCommsActiveFilter}
+            filterButtons={['requires_task', 'requires_reply', 'urgent', 'opportunities']}
           />
         ) : null
       ) : null}

@@ -89,6 +89,8 @@ interface WorkflowToolbarProps {
   activeFilter: WorkflowFilter;
   onFilterChange: (filter: WorkflowFilter) => void;
   compact?: boolean;
+  filterButtons?: WorkflowFilter[];
+  hideClearButton?: boolean;
 }
 
 export function WorkflowToolbar({
@@ -96,8 +98,13 @@ export function WorkflowToolbar({
   isLoading = false,
   activeFilter,
   onFilterChange,
-  compact = false
+  compact = false,
+  filterButtons,
+  hideClearButton = false
 }: WorkflowToolbarProps) {
+  const buttonsToRender = filterButtons 
+    ? TOOLBAR_BUTTONS.filter(btn => filterButtons.includes(btn.id))
+    : TOOLBAR_BUTTONS;
   const getBadgeVariant = (variant: 'destructive' | 'warning' | 'default', isActive: boolean) => {
     if (isActive) return 'default';
     if (variant === 'warning') return 'outline';
@@ -107,7 +114,7 @@ export function WorkflowToolbar({
   if (isLoading) {
     return (
       <div className="flex flex-wrap gap-2 p-2 bg-muted/30 rounded-lg" data-testid="workflow-toolbar-loading">
-        {[1, 2, 3, 4, 5, 6].map(i => (
+        {buttonsToRender.map((_, i) => (
           <Skeleton key={i} className="h-9 w-24" />
         ))}
       </div>
@@ -119,7 +126,7 @@ export function WorkflowToolbar({
       className="flex flex-wrap gap-1.5 p-2 bg-muted/30 rounded-lg"
       data-testid="workflow-toolbar"
     >
-      {TOOLBAR_BUTTONS.map(button => {
+      {buttonsToRender.map(button => {
         const Icon = button.icon;
         const count = stats?.[button.statKey] ?? 0;
         const isActive = activeFilter === button.id;
@@ -166,7 +173,7 @@ export function WorkflowToolbar({
         );
       })}
       
-      {activeFilter && (
+      {activeFilter && !hideClearButton && (
         <Button
           variant="ghost"
           size="sm"
