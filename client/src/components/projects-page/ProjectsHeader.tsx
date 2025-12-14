@@ -143,20 +143,26 @@ export function ProjectsHeader({
   
   return (
     <header className="bg-card border-b border-border page-container py-6">
-      <div className="flex flex-wrap items-center justify-center gap-4">
-        {workspaceMode === "projects" && <CurrentViewName viewName={currentSavedViewName} />}
-        {workspaceMode === "comms" && (
-          <CommsInboxSelector 
-            inboxes={commsInboxes}
-            selectedInboxId={commsSelectedInboxId}
-            selectedInboxName={selectedInbox?.displayName || selectedInbox?.email || null}
-            onSelectInbox={(id) => {
-              setCommsSelectedInboxId?.(id);
-              setCommsSelectedMessageId?.(null);
-            }}
-          />
-        )}
+      {/* Desktop: 3-column grid layout - left/center/right */}
+      <div className="hidden md:grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4">
+        {/* Left column: context-dependent content, left-aligned */}
+        <div className="flex items-center justify-start">
+          {workspaceMode === "projects" && <CurrentViewName viewName={currentSavedViewName} />}
+          {workspaceMode === "comms" && (
+            <CommsInboxSelector 
+              inboxes={commsInboxes}
+              selectedInboxId={commsSelectedInboxId}
+              selectedInboxName={selectedInbox?.displayName || selectedInbox?.email || null}
+              onSelectInbox={(id) => {
+                setCommsSelectedInboxId?.(id);
+                setCommsSelectedMessageId?.(null);
+              }}
+            />
+          )}
+          {/* Tasks mode: empty left column for balance */}
+        </div>
         
+        {/* Center column: workspace toggle - FIXED position */}
         <WorkspaceModeToggle
           workspaceMode={workspaceMode}
           setWorkspaceMode={setWorkspaceMode}
@@ -164,43 +170,56 @@ export function ProjectsHeader({
           emailModuleActive={emailModuleActive}
         />
         
-        <DesktopToolbar
-          workspaceMode={workspaceMode}
-          viewMode={viewMode}
-          currentSavedViewId={currentSavedViewId}
-          currentDashboard={currentDashboard}
-          kanbanCompactMode={kanbanCompactMode}
-          isMobile={isMobile}
-          tasksOwnershipFilter={tasksOwnershipFilter}
-          tasksStatusFilter={tasksStatusFilter}
-          tasksPriorityFilter={tasksPriorityFilter}
-          tasksAssigneeFilter={tasksAssigneeFilter}
-          tasksDateFromFilter={tasksDateFromFilter}
-          tasksDateToFilter={tasksDateToFilter}
-          tasksActiveFilterCount={tasksActiveFilterCount}
-          canSeeAllTasks={canSeeAllTasks}
-          tasksReassignMode={tasksReassignMode}
-          setTasksOwnershipFilter={setTasksOwnershipFilter}
-          setTasksStatusFilter={setTasksStatusFilter}
-          setTasksPriorityFilter={setTasksPriorityFilter}
-          setTasksAssigneeFilter={setTasksAssigneeFilter}
-          setTasksDateFromFilter={setTasksDateFromFilter}
-          setTasksDateToFilter={setTasksDateToFilter}
-          setTasksReassignMode={setTasksReassignMode}
-          clearTasksFilters={clearTasksFilters}
-          handleManualViewModeChange={handleManualViewModeChange}
-          handleLoadSavedView={handleLoadSavedView}
-          handleLoadDashboard={handleLoadDashboard}
-          handleUpdateCurrentView={handleUpdateCurrentView}
-          handleSaveDashboardAsNew={handleSaveDashboardAsNew}
-          toggleKanbanCompactMode={toggleKanbanCompactMode}
-          activeFilterCount={activeFilterCount}
-          setFilterPanelOpen={setFilterPanelOpen}
-          setSaveViewDialogOpen={setSaveViewDialogOpen}
-          onOpenCreateDashboard={onOpenCreateDashboard}
-          onOpenEditDashboard={onOpenEditDashboard}
-        />
+        {/* Right column: context-dependent toolbar, right-aligned */}
+        <div className="flex items-center justify-end">
+          <DesktopToolbar
+            workspaceMode={workspaceMode}
+            viewMode={viewMode}
+            currentSavedViewId={currentSavedViewId}
+            currentDashboard={currentDashboard}
+            kanbanCompactMode={kanbanCompactMode}
+            isMobile={isMobile}
+            tasksOwnershipFilter={tasksOwnershipFilter}
+            tasksStatusFilter={tasksStatusFilter}
+            tasksPriorityFilter={tasksPriorityFilter}
+            tasksAssigneeFilter={tasksAssigneeFilter}
+            tasksDateFromFilter={tasksDateFromFilter}
+            tasksDateToFilter={tasksDateToFilter}
+            tasksActiveFilterCount={tasksActiveFilterCount}
+            canSeeAllTasks={canSeeAllTasks}
+            tasksReassignMode={tasksReassignMode}
+            setTasksOwnershipFilter={setTasksOwnershipFilter}
+            setTasksStatusFilter={setTasksStatusFilter}
+            setTasksPriorityFilter={setTasksPriorityFilter}
+            setTasksAssigneeFilter={setTasksAssigneeFilter}
+            setTasksDateFromFilter={setTasksDateFromFilter}
+            setTasksDateToFilter={setTasksDateToFilter}
+            setTasksReassignMode={setTasksReassignMode}
+            clearTasksFilters={clearTasksFilters}
+            handleManualViewModeChange={handleManualViewModeChange}
+            handleLoadSavedView={handleLoadSavedView}
+            handleLoadDashboard={handleLoadDashboard}
+            handleUpdateCurrentView={handleUpdateCurrentView}
+            handleSaveDashboardAsNew={handleSaveDashboardAsNew}
+            toggleKanbanCompactMode={toggleKanbanCompactMode}
+            activeFilterCount={activeFilterCount}
+            setFilterPanelOpen={setFilterPanelOpen}
+            setSaveViewDialogOpen={setSaveViewDialogOpen}
+            onOpenCreateDashboard={onOpenCreateDashboard}
+            onOpenEditDashboard={onOpenEditDashboard}
+          />
+        </div>
+      </div>
 
+      {/* Mobile: stacked flex layout */}
+      <div className="flex md:hidden flex-wrap items-center justify-center gap-4">
+        <WorkspaceModeToggle
+          workspaceMode={workspaceMode}
+          setWorkspaceMode={setWorkspaceMode}
+          openTasksAndRemindersCount={openTasksAndRemindersCount}
+          emailModuleActive={emailModuleActive}
+        />
+        
         <MobileToolbar
           workspaceMode={workspaceMode}
           viewMode={viewMode}
@@ -244,12 +263,12 @@ interface CurrentViewNameProps {
 
 function CurrentViewName({ viewName }: CurrentViewNameProps) {
   if (!viewName) {
-    return <div className="hidden md:block w-[160px]" />;
+    return null;
   }
 
   return (
     <div 
-      className="hidden md:flex items-center gap-2 w-[160px] flex-shrink-0"
+      className="flex items-center gap-2 flex-shrink-0"
       data-testid="current-view-name-container"
     >
       <Bookmark className="h-4 w-4 text-primary flex-shrink-0" />
@@ -273,7 +292,7 @@ interface CommsInboxSelectorProps {
 
 function CommsInboxSelector({ inboxes, selectedInboxId, selectedInboxName, onSelectInbox }: CommsInboxSelectorProps) {
   return (
-    <div className="hidden md:flex items-center gap-2 w-[200px] flex-shrink-0">
+    <div className="flex items-center gap-2 w-[200px] flex-shrink-0">
       <Select value={selectedInboxId} onValueChange={onSelectInbox}>
         <SelectTrigger className="h-8 text-sm" data-testid="select-comms-inbox-header">
           <div className="flex items-center gap-2">
@@ -432,7 +451,7 @@ function DesktopToolbar({
   onOpenEditDashboard,
 }: DesktopToolbarProps) {
   return (
-    <div className="hidden md:flex items-center space-x-3 flex-shrink-0">
+    <div className="flex items-center space-x-3 flex-shrink-0">
       {workspaceMode === "projects" ? (
         <>
           <LayoutsMenu
