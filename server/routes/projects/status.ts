@@ -427,6 +427,7 @@ export function registerProjectStatusRoutes(
         projectCreatedAt: project.createdAt?.toISOString(),
         previousStatus: project.currentStatus,
         previousAssigneeId: project.currentAssigneeId,
+        changedById: effectiveUserId,
         newStatus: updateData.newStatus,
         changeReason: updateData.changeReason,
         notes: updateData.notesHtml || updateData.notes,
@@ -465,6 +466,11 @@ export function registerProjectStatusRoutes(
             let chronology: any[] | null = null;
             
             for (const user of usersToNotify) {
+              if (user.id === backgroundContext.changedById) {
+                console.log(`[Stage Change Email] User ${user.email} made this stage change, skipping email notification`);
+                continue;
+              }
+              
               if (user.id === backgroundContext.previousAssigneeId) {
                 console.log(`[Stage Change Email] User ${user.email} is same as previous assignee, skipping email notification`);
                 continue;
