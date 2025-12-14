@@ -1660,6 +1660,64 @@ export class EmailStorage {
     return completedCount;
   }
 
+  // ========== SLA TRACKING ==========
+
+  /**
+   * Get all emails requiring reply with SLA deadlines (for breach checking)
+   */
+  async getEmailsRequiringReplyWithDeadlines(): Promise<EmailWorkflowState[]> {
+    return await db
+      .select()
+      .from(emailWorkflowState)
+      .where(
+        and(
+          eq(emailWorkflowState.requiresReply, true),
+          eq(emailWorkflowState.replySent, false),
+          sql`${emailWorkflowState.slaDeadline} IS NOT NULL`,
+          eq(emailWorkflowState.slaBreach, false)
+        )
+      );
+  }
+
+  /**
+   * Mark an email as SLA breached
+   */
+  async updateSlaBreach(emailId: string, breached: boolean, breachedAt?: Date): Promise<EmailWorkflowState | undefined> {
+    const existing = await this.getEmailWorkflowStateByEmailId(emailId);
+    if (!existing) return undefined;
+
+    const [updated] = await db
+      .update(emailWorkflowState)
+      .set({
+        slaBreach: breached,
+        slaBreachedAt: breached ? (breachedAt || new Date()) : null,
+        updatedAt: new Date(),
+      })
+      .where(eq(emailWorkflowState.id, existing.id))
+      .returning();
+
+    return updated;
+  }
+
+  /**
+   * Set SLA deadline on email workflow state
+   */
+  async setSlaDeadline(emailId: string, deadline: Date): Promise<EmailWorkflowState | undefined> {
+    const existing = await this.getEmailWorkflowStateByEmailId(emailId);
+    if (!existing) return undefined;
+
+    const [updated] = await db
+      .update(emailWorkflowState)
+      .set({
+        slaDeadline: deadline,
+        updatedAt: new Date(),
+      })
+      .where(eq(emailWorkflowState.id, existing.id))
+      .returning();
+
+    return updated;
+  }
+
   // ========== EMAIL CLASSIFICATION OVERRIDES ==========
 
   async createClassificationOverride(override: InsertEmailClassificationOverride): Promise<EmailClassificationOverride> {

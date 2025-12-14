@@ -573,6 +573,22 @@ export function applyIntegrationsFacade<TBase extends Constructor<IntegrationsFa
     }
 
     // ============================================================================
+    // SLA TRACKING - EmailStorage
+    // ============================================================================
+
+    async getEmailsRequiringReplyWithDeadlines() {
+      return this.emailStorage.getEmailsRequiringReplyWithDeadlines();
+    }
+
+    async updateSlaBreach(emailId: string, breached: boolean, breachedAt?: Date) {
+      return this.emailStorage.updateSlaBreach(emailId, breached, breachedAt);
+    }
+
+    async setSlaDeadline(emailId: string, deadline: Date) {
+      return this.emailStorage.setSlaDeadline(emailId, deadline);
+    }
+
+    // ============================================================================
     // EMAIL CLASSIFICATION OVERRIDES - EmailStorage
     // ============================================================================
 
