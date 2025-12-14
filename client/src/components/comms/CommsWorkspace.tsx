@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Mail, Inbox, RefreshCw, MessageSquare, Paperclip, ChevronRight, AlertCircle, Clock, User, Loader2, Search, CheckCircle, Link2, X } from "lucide-react";
+import { Mail, Inbox, RefreshCw, MessageSquare, Paperclip, ChevronRight, AlertCircle, Clock, User, Loader2, Search, CheckCircle, Link2, X, Edit2, History, Info, Tag } from "lucide-react";
 import { formatDistanceToNow, format, isPast, isToday, differenceInHours } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -323,7 +323,19 @@ export function CommsWorkspace({
   }, [selectedMessageId, displayEmails]);
 
   // Fetch email classification for the selected email
-  const { data: emailClassification } = useQuery<{ classification: { requiresTask: boolean; requiresReply: boolean } | null }>({
+  interface EmailClassificationData {
+    id: string;
+    requiresTask: boolean;
+    requiresReply: boolean;
+    informationOnly: boolean;
+    urgency: 'critical' | 'high' | 'normal' | 'low' | null;
+    opportunity: string | null;
+    sentimentLabel: string | null;
+    overrideBy: string | null;
+    overrideAt: string | null;
+    overrideReason: string | null;
+  }
+  const { data: emailClassification, refetch: refetchClassification } = useQuery<{ classification: EmailClassificationData | null }>({
     queryKey: ["/api/comms/emails", selectedStoredEmail?.id, "classification"],
     queryFn: async () => {
       const res = await fetch(`/api/comms/emails/${selectedStoredEmail?.id}/classification`);
@@ -331,6 +343,39 @@ export function CommsWorkspace({
       return res.json();
     },
     enabled: !!selectedStoredEmail?.id,
+  });
+
+  // Classification override mutation
+  const [showOverrideForm, setShowOverrideForm] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [pendingOverrides, setPendingOverrides] = useState<Partial<EmailClassificationData>>({});
+
+  const overrideClassificationMutation = useMutation({
+    mutationFn: async ({ emailId, changes, reason }: { emailId: string; changes: Record<string, any>; reason: string }) => {
+      return await apiRequest("PATCH", `/api/comms/emails/${emailId}/classification`, { changes, reason });
+    },
+    onSuccess: () => {
+      refetchClassification();
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          query.queryKey[0] === "/api/comms/inbox" && 
+          query.queryKey[1] === selectedInboxId
+      });
+      setShowOverrideForm(false);
+      setOverrideReason("");
+      setPendingOverrides({});
+      toast({
+        title: "Classification updated",
+        description: "Email classification has been updated with your changes.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        variant: "destructive",
+        title: "Failed to update classification",
+        description: error.message || "Could not update email classification.",
+      });
+    },
   });
 
   // Fetch user's tasks (projects) for linking dropdown
@@ -878,6 +923,186 @@ export function CommsWorkspace({
                         <p className="text-xs text-muted-foreground">
                           Link this email to a task. The email will auto-complete when the task is done.
                         </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Classification Override Section - Stage 9 */}
+                {selectedStoredEmail && emailClassification?.classification && (
+                  <div className="border-t pt-4 mt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Tag className="h-4 w-4 text-primary" />
+                        <span className="font-medium text-sm">Classification</span>
+                        {emailClassification.classification.overrideBy && (
+                          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
+                            <Edit2 className="h-3 w-3 mr-1" />
+                            Manually Edited
+                          </Badge>
+                        )}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => {
+                          setShowOverrideForm(!showOverrideForm);
+                          if (!showOverrideForm) {
+                            setPendingOverrides({
+                              requiresTask: emailClassification.classification!.requiresTask,
+                              requiresReply: emailClassification.classification!.requiresReply,
+                              informationOnly: emailClassification.classification!.informationOnly,
+                              urgency: emailClassification.classification!.urgency,
+                            });
+                          }
+                        }}
+                        data-testid="button-edit-classification"
+                      >
+                        {showOverrideForm ? "Cancel" : "Edit"}
+                      </Button>
+                    </div>
+
+                    {/* Current classification display */}
+                    {!showOverrideForm && (
+                      <div className="flex flex-wrap gap-2 p-3 bg-muted/30 rounded-lg">
+                        <Badge variant={emailClassification.classification.requiresTask ? "default" : "secondary"} className="text-xs">
+                          Task: {emailClassification.classification.requiresTask ? "Required" : "No"}
+                        </Badge>
+                        <Badge variant={emailClassification.classification.requiresReply ? "default" : "secondary"} className="text-xs">
+                          Reply: {emailClassification.classification.requiresReply ? "Required" : "No"}
+                        </Badge>
+                        {emailClassification.classification.informationOnly && (
+                          <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                            <Info className="h-3 w-3 mr-1" />
+                            Info Only
+                          </Badge>
+                        )}
+                        {emailClassification.classification.urgency && emailClassification.classification.urgency !== 'normal' && (
+                          <Badge 
+                            variant="outline" 
+                            className={`text-xs ${
+                              emailClassification.classification.urgency === 'critical' ? 'bg-red-50 text-red-700 border-red-200' :
+                              emailClassification.classification.urgency === 'high' ? 'bg-orange-50 text-orange-700 border-orange-200' :
+                              emailClassification.classification.urgency === 'low' ? 'bg-gray-50 text-gray-600 border-gray-200' : ''
+                            }`}
+                          >
+                            Urgency: {emailClassification.classification.urgency}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Override form */}
+                    {showOverrideForm && (
+                      <div className="space-y-3 p-3 bg-muted/30 rounded-lg border">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm">Requires Task</label>
+                            <Checkbox
+                              checked={pendingOverrides.requiresTask ?? false}
+                              onCheckedChange={(checked) => setPendingOverrides(p => ({ ...p, requiresTask: !!checked }))}
+                              data-testid="checkbox-requires-task"
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm">Requires Reply</label>
+                            <Checkbox
+                              checked={pendingOverrides.requiresReply ?? false}
+                              onCheckedChange={(checked) => setPendingOverrides(p => ({ ...p, requiresReply: !!checked }))}
+                              data-testid="checkbox-requires-reply"
+                            />
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm">Info Only</label>
+                            <Checkbox
+                              checked={pendingOverrides.informationOnly ?? false}
+                              onCheckedChange={(checked) => setPendingOverrides(p => ({ ...p, informationOnly: !!checked }))}
+                              data-testid="checkbox-info-only"
+                            />
+                          </div>
+                          <div className="flex items-center justify-between gap-2">
+                            <label className="text-sm">Urgency</label>
+                            <Select
+                              value={pendingOverrides.urgency || 'normal'}
+                              onValueChange={(value) => setPendingOverrides(p => ({ ...p, urgency: value as any }))}
+                            >
+                              <SelectTrigger className="h-7 w-24 text-xs" data-testid="select-urgency">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="critical">Critical</SelectItem>
+                                <SelectItem value="high">High</SelectItem>
+                                <SelectItem value="normal">Normal</SelectItem>
+                                <SelectItem value="low">Low</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium">Reason for change</label>
+                          <Input
+                            placeholder="Why are you changing this classification?"
+                            value={overrideReason}
+                            onChange={(e) => setOverrideReason(e.target.value)}
+                            className="h-8 text-sm"
+                            data-testid="input-override-reason"
+                          />
+                        </div>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setShowOverrideForm(false);
+                              setPendingOverrides({});
+                              setOverrideReason("");
+                            }}
+                            data-testid="button-cancel-override"
+                          >
+                            Cancel
+                          </Button>
+                          <Button
+                            size="sm"
+                            disabled={!overrideReason.trim() || overrideClassificationMutation.isPending}
+                            onClick={() => {
+                              if (selectedStoredEmail && overrideReason.trim()) {
+                                const changes: Record<string, any> = {};
+                                if (pendingOverrides.requiresTask !== emailClassification.classification!.requiresTask) {
+                                  changes.requiresTask = pendingOverrides.requiresTask;
+                                }
+                                if (pendingOverrides.requiresReply !== emailClassification.classification!.requiresReply) {
+                                  changes.requiresReply = pendingOverrides.requiresReply;
+                                }
+                                if (pendingOverrides.informationOnly !== emailClassification.classification!.informationOnly) {
+                                  changes.informationOnly = pendingOverrides.informationOnly;
+                                }
+                                if (pendingOverrides.urgency !== emailClassification.classification!.urgency) {
+                                  changes.urgency = pendingOverrides.urgency;
+                                }
+                                if (Object.keys(changes).length > 0) {
+                                  overrideClassificationMutation.mutate({
+                                    emailId: selectedStoredEmail.id,
+                                    changes,
+                                    reason: overrideReason.trim()
+                                  });
+                                } else {
+                                  toast({
+                                    title: "No changes",
+                                    description: "No classification fields were changed.",
+                                  });
+                                }
+                              }
+                            }}
+                            data-testid="button-save-override"
+                          >
+                            {overrideClassificationMutation.isPending ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              "Save Changes"
+                            )}
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </div>

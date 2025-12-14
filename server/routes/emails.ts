@@ -1887,21 +1887,29 @@ export function registerEmailRoutes(
       const { emailId } = req.params;
       const { changes, reason } = req.body;
 
-      if (!changes || typeof changes !== 'object') {
-        return res.status(400).json({ message: "changes object is required" });
+      // Validate request with Zod
+      const overrideSchema = z.object({
+        changes: z.object({
+          requiresTask: z.boolean().optional(),
+          requiresReply: z.boolean().optional(),
+          informationOnly: z.boolean().optional(),
+          urgency: z.enum(['critical', 'high', 'normal', 'low']).optional(),
+          opportunity: z.enum(['upsell', 'cross_sell', 'referral', 'expansion', 'retention_risk', 'testimonial']).nullable().optional(),
+          sentimentLabel: z.enum(['very_negative', 'negative', 'neutral', 'positive', 'very_positive']).nullable().optional(),
+        }).refine(obj => Object.keys(obj).length > 0, { message: "At least one field must be changed" }),
+        reason: z.string().min(1, "Reason is required").max(500, "Reason too long"),
+      });
+
+      const validationResult = overrideSchema.safeParse({ changes, reason });
+      if (!validationResult.success) {
+        return res.status(400).json({ 
+          message: "Invalid request", 
+          errors: validationResult.error.flatten().fieldErrors 
+        });
       }
 
-      if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
-        return res.status(400).json({ message: "reason is required for override" });
-      }
-
-      // Validate allowed fields
-      const allowedFields = ['requiresTask', 'requiresReply', 'informationOnly', 'urgency', 'opportunity', 'sentimentLabel'];
-      const changedFields = Object.keys(changes);
-      const invalidFields = changedFields.filter(f => !allowedFields.includes(f));
-      if (invalidFields.length > 0) {
-        return res.status(400).json({ message: `Invalid fields: ${invalidFields.join(', ')}` });
-      }
+      const validatedChanges = validationResult.data.changes;
+      const validatedReason = validationResult.data.reason.trim();
 
       // Get the email to verify access
       const email = await storage.getInboxEmailById(emailId);
@@ -1923,9 +1931,10 @@ export function registerEmailRoutes(
 
       // Create audit log entries for each changed field
       const overrideRecords = [];
+      const changedFields = Object.keys(validatedChanges) as (keyof typeof validatedChanges)[];
       for (const fieldName of changedFields) {
         const previousValue = (existingClassification as any)[fieldName];
-        const newValue = changes[fieldName];
+        const newValue = validatedChanges[fieldName];
         
         // Skip if value hasn't actually changed
         if (previousValue === newValue) continue;
@@ -1936,7 +1945,7 @@ export function registerEmailRoutes(
           fieldName,
           previousValue: previousValue !== undefined ? previousValue : null,
           newValue: newValue,
-          reason: reason.trim(),
+          reason: validatedReason,
           previousClassificationSnapshot: existingClassification,
         });
         overrideRecords.push(overrideRecord);
@@ -1944,11 +1953,11 @@ export function registerEmailRoutes(
 
       // Update the classification with new values and override metadata
       const updatePayload: any = {
-        ...changes,
+        ...validatedChanges,
         overrideBy: userId,
         overrideAt: new Date(),
-        overrideReason: reason.trim(),
-        overrideChanges: changes,
+        overrideReason: validatedReason,
+        overrideChanges: validatedChanges,
       };
 
       const updatedClassification = await storage.updateEmailClassification(existingClassification.id, updatePayload);
@@ -1959,20 +1968,19 @@ export function registerEmailRoutes(
         const workflowUpdates: any = {};
         
         // Sync requiresTask and requiresReply if changed
-        if ('requiresTask' in changes) {
-          workflowUpdates.requiresTask = changes.requiresTask;
+        if ('requiresTask' in validatedChanges) {
+          workflowUpdates.requiresTask = validatedChanges.requiresTask;
           // If task is no longer required, mark requirement as met
-          if (!changes.requiresTask) {
+          if (!validatedChanges.requiresTask) {
             workflowUpdates.taskRequirementMet = true;
           }
         }
-        if ('requiresReply' in changes) {
-          workflowUpdates.requiresReply = changes.requiresReply;
-          // If reply is no longer required, we don't need to mark replySent
+        if ('requiresReply' in validatedChanges) {
+          workflowUpdates.requiresReply = validatedChanges.requiresReply;
         }
 
         // If information_only is set to true, clear task and reply requirements
-        if (changes.informationOnly === true) {
+        if (validatedChanges.informationOnly === true) {
           workflowUpdates.requiresTask = false;
           workflowUpdates.requiresReply = false;
           workflowUpdates.taskRequirementMet = true;
@@ -1984,12 +1992,14 @@ export function registerEmailRoutes(
         const taskMet = 'taskRequirementMet' in workflowUpdates ? workflowUpdates.taskRequirementMet : workflowState.taskRequirementMet;
         const replySent = workflowState.replySent;
 
+        // Log workflow state update for debugging
+        console.log(`[Override Classification] Updating workflow state for email ${emailId}:`, workflowUpdates);
+
         // Check if email can now be auto-completed
         const canComplete = (!newRequiresTask || taskMet) && (!newRequiresReply || replySent);
         
         if (canComplete && workflowState.state !== 'complete') {
-          // Email requirements are now met, but don't auto-complete - let user do it
-          // Just update the workflow state with new requirements
+          // Email requirements are now met, but don't auto-complete - let user do it explicitly
         }
 
         // If there are workflow updates, apply them
