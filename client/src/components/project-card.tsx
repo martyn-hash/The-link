@@ -627,10 +627,10 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
         </div>
       )}
 
-      {/* Info button in top-right corner - hover shows stage change info */}
-      {hasQuickActions && onShowInfo && (
+      {/* Messages button in bottom-right corner - hover shows stage change info */}
+      {hasQuickActions && onShowMessages && (
         <div 
-          className="absolute top-2 right-2 z-10"
+          className="absolute bottom-2 right-2 z-10"
           onPointerDown={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
@@ -642,45 +642,13 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
               className="h-7 w-7 p-0 rounded-full shadow-sm hover:shadow-md transition-shadow"
               onClick={(e) => {
                 e.stopPropagation();
-                onShowInfo(project.id);
+                onShowMessages(project.id);
               }}
-              data-testid={`button-info-${project.id}`}
+              data-testid={`button-messages-${project.id}`}
             >
-              <Info className="h-3.5 w-3.5" />
+              <MessageSquare className="h-3.5 w-3.5" />
             </Button>
           </StageChangePopover>
-        </div>
-      )}
-
-      {/* Messages button in bottom-right corner */}
-      {hasQuickActions && onShowMessages && (
-        <div 
-          className="absolute bottom-2 right-2 z-10"
-          onPointerDown={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="h-7 w-7 p-0 rounded-full shadow-sm hover:shadow-md transition-shadow"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onShowMessages(project.id);
-                  }}
-                  data-testid={`button-messages-${project.id}`}
-                >
-                  <MessageSquare className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>View project messages</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
         </div>
       )}
     </Card>
