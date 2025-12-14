@@ -516,11 +516,11 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
       {/* Priority service indicators - shown in top-left corner, limited to 2 inline with +N overflow */}
       {project.priorityServiceIndicators && project.priorityServiceIndicators.length > 0 && !isSelected && (
         <div 
-          className="absolute top-1.5 left-1.5 z-10 flex flex-wrap gap-px max-w-[70%]"
+          className="absolute top-1.5 left-1.5 z-10 flex items-center gap-0.5"
           data-testid={`priority-indicators-${project.id}`}
         >
           {(() => {
-            const MAX_VISIBLE = 2;
+            const MAX_VISIBLE = 1;
             const indicators = project.priorityServiceIndicators;
             const visibleIndicators = indicators.slice(0, MAX_VISIBLE);
             const overflowIndicators = indicators.slice(MAX_VISIBLE);
