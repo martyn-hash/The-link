@@ -11,6 +11,10 @@ import {
   inboxes,
   userInboxAccess,
   inboxEmails,
+  emailQuarantine,
+  emailClassifications,
+  emailWorkflowState,
+  emailClassificationOverrides,
 } from "./tables";
 import {
   insertEmailMessageSchema,
@@ -24,6 +28,10 @@ import {
   insertInboxSchema,
   insertUserInboxAccessSchema,
   insertInboxEmailSchema,
+  insertEmailQuarantineSchema,
+  insertEmailClassificationSchema,
+  insertEmailWorkflowStateSchema,
+  insertEmailClassificationOverrideSchema,
 } from "./schemas";
 
 export type EmailMessage = typeof emailMessages.$inferSelect;
@@ -58,3 +66,23 @@ export type InsertUserInboxAccess = z.infer<typeof insertUserInboxAccessSchema>;
 
 export type InboxEmail = typeof inboxEmails.$inferSelect;
 export type InsertInboxEmail = z.infer<typeof insertInboxEmailSchema>;
+
+// Comms workflow types
+export type EmailQuarantine = typeof emailQuarantine.$inferSelect;
+export type InsertEmailQuarantine = z.infer<typeof insertEmailQuarantineSchema>;
+
+export type EmailClassification = typeof emailClassifications.$inferSelect;
+export type InsertEmailClassification = z.infer<typeof insertEmailClassificationSchema>;
+
+export type EmailWorkflowState = typeof emailWorkflowState.$inferSelect;
+export type InsertEmailWorkflowState = z.infer<typeof insertEmailWorkflowStateSchema>;
+
+export type EmailClassificationOverride = typeof emailClassificationOverrides.$inferSelect;
+export type InsertEmailClassificationOverride = z.infer<typeof insertEmailClassificationOverrideSchema>;
+
+// Classification-related type definitions
+export type SentimentLabel = "very_negative" | "negative" | "neutral" | "positive" | "very_positive";
+export type OpportunityType = "upsell" | "cross_sell" | "referral" | "expansion" | "retention_risk" | "testimonial";
+export type UrgencyLevel = "critical" | "high" | "normal" | "low";
+export type WorkflowState = "pending" | "working" | "blocked" | "complete";
+export type QuarantineReason = "no_client_match" | "no_contact_match" | "dev_override_disabled";

@@ -232,7 +232,7 @@ export const companySettings = pgTable("company_settings", {
   maintenanceMessage: text("maintenance_message"),
   nlacPassword: varchar("nlac_password"),
   ringCentralLive: boolean("ring_central_live").default(false).notNull(),
-  appIsLive: boolean("app_is_live").default(false).notNull(),
+  appIsLive: varchar("app_is_live").default(false).notNull(),
   aiButtonEnabled: boolean("ai_button_enabled").default(false).notNull(),
   schedulingEmailsEnabled: boolean("scheduling_emails_enabled").default(true).notNull(),
   emailModuleActive: boolean("email_module_active").default(false).notNull(),
@@ -245,6 +245,8 @@ export const companySettings = pgTable("company_settings", {
   workingHoursStart: varchar("working_hours_start").default("09:00"),
   workingHoursEnd: varchar("working_hours_end").default("17:00"),
   workingDays: jsonb("working_days").default(sql`'[1,2,3,4,5]'::jsonb`),
+  // Email dev override settings for comms workflow
+  emailDevOverride: jsonb("email_dev_override").default(sql`'{"enabled": false, "bypassGate": false, "logOverrides": true}'::jsonb`),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

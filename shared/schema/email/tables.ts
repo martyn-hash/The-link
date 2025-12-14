@@ -243,3 +243,156 @@ export const inboxEmails = pgTable("inbox_emails", {
   index("idx_inbox_emails_received_at").on(table.receivedAt),
   index("idx_inbox_emails_from_address").on(table.fromAddress),
 ]);
+
+// === COMMS WORKFLOW SYSTEM TABLES ===
+
+// Quarantine reason enum
+export const quarantineReasonEnum = pgEnum("quarantine_reason", ["no_client_match", "no_contact_match", "dev_override_disabled"]);
+
+// Sentiment label enum
+export const sentimentLabelEnum = pgEnum("sentiment_label", ["very_negative", "negative", "neutral", "positive", "very_positive"]);
+
+// Opportunity type enum
+export const opportunityTypeEnum = pgEnum("opportunity_type", ["upsell", "cross_sell", "referral", "expansion", "retention_risk", "testimonial"]);
+
+// Urgency level enum
+export const urgencyLevelEnum = pgEnum("urgency_level", ["critical", "high", "normal", "low"]);
+
+// Workflow state enum
+export const workflowStateEnum = pgEnum("workflow_state", ["pending", "working", "blocked", "complete"]);
+
+// Quarantined emails (non-matching)
+export const emailQuarantine = pgTable("email_quarantine", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  inboxId: varchar("inbox_id").notNull().references(() => inboxes.id, { onDelete: "cascade" }),
+  microsoftId: varchar("microsoft_id").notNull(),
+  fromAddress: varchar("from_address").notNull(),
+  fromName: varchar("from_name"),
+  toRecipients: jsonb("to_recipients").default([]),
+  ccRecipients: jsonb("cc_recipients").default([]),
+  subject: text("subject"),
+  bodyPreview: text("body_preview"),
+  receivedAt: timestamp("received_at").notNull(),
+  hasAttachments: boolean("has_attachments").default(false),
+  quarantineReason: quarantineReasonEnum("quarantine_reason").notNull(),
+  restoredAt: timestamp("restored_at"),
+  restoredBy: varchar("restored_by").references(() => users.id, { onDelete: "set null" }),
+  restoredToClientId: varchar("restored_to_client_id").references(() => clients.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  unique("unique_quarantine_inbox_microsoft_id").on(table.inboxId, table.microsoftId),
+  index("idx_email_quarantine_inbox_id").on(table.inboxId),
+  index("idx_email_quarantine_from_address").on(table.fromAddress),
+  index("idx_email_quarantine_received_at").on(table.receivedAt),
+  index("idx_email_quarantine_restored_at").on(table.restoredAt),
+]);
+
+// Email classifications (merged deterministic + AI results)
+export const emailClassifications = pgTable("email_classifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  emailId: varchar("email_id").notNull().references(() => inboxEmails.id, { onDelete: "cascade" }).unique(),
+  
+  // Final merged values
+  requiresTask: boolean("requires_task").notNull().default(false),
+  requiresReply: boolean("requires_reply").notNull().default(false),
+  sentimentScore: text("sentiment_score"),
+  sentimentLabel: sentimentLabelEnum("sentiment_label"),
+  opportunity: opportunityTypeEnum("opportunity"),
+  urgency: urgencyLevelEnum("urgency").default("normal"),
+  informationOnly: boolean("information_only").default(false),
+  
+  // Deterministic layer results
+  deterministicTaskFloor: boolean("deterministic_task_floor"),
+  deterministicReplyFloor: boolean("deterministic_reply_floor"),
+  triggeredRules: jsonb("triggered_rules").default([]),
+  
+  // AI layer results
+  aiTask: boolean("ai_task"),
+  aiReply: boolean("ai_reply"),
+  aiConfidence: text("ai_confidence"),
+  aiReasoning: text("ai_reasoning"),
+  aiRawResponse: jsonb("ai_raw_response"),
+  
+  // Manual overrides
+  overrideBy: varchar("override_by").references(() => users.id, { onDelete: "set null" }),
+  overrideAt: timestamp("override_at"),
+  overrideReason: text("override_reason"),
+  overrideChanges: jsonb("override_changes"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_email_classifications_email_id").on(table.emailId),
+  index("idx_email_classifications_requires_task").on(table.requiresTask),
+  index("idx_email_classifications_requires_reply").on(table.requiresReply),
+  index("idx_email_classifications_urgency").on(table.urgency),
+  index("idx_email_classifications_opportunity").on(table.opportunity),
+  index("idx_email_classifications_information_only").on(table.informationOnly),
+]);
+
+// Email workflow state machine
+export const emailWorkflowState = pgTable("email_workflow_state", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  emailId: varchar("email_id").notNull().references(() => inboxEmails.id, { onDelete: "cascade" }).unique(),
+  
+  // Current state
+  state: workflowStateEnum("state").notNull().default("pending"),
+  
+  // Task tracking
+  requiresTask: boolean("requires_task").default(false),
+  linkedTaskId: varchar("linked_task_id"),
+  taskRequirementMet: boolean("task_requirement_met").default(false),
+  
+  // Reply tracking
+  requiresReply: boolean("requires_reply").default(false),
+  replySent: boolean("reply_sent").default(false),
+  replyMessageId: varchar("reply_message_id"),
+  replySentAt: timestamp("reply_sent_at"),
+  
+  // Completion tracking
+  completedAt: timestamp("completed_at"),
+  completedBy: varchar("completed_by").references(() => users.id, { onDelete: "set null" }),
+  completionNote: text("completion_note"),
+  
+  // SLA tracking
+  slaDeadline: timestamp("sla_deadline"),
+  slaBreach: boolean("sla_breach").default(false),
+  slaBreachedAt: timestamp("sla_breached_at"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_email_workflow_state_email_id").on(table.emailId),
+  index("idx_email_workflow_state_state").on(table.state),
+  index("idx_email_workflow_state_requires_task").on(table.requiresTask),
+  index("idx_email_workflow_state_requires_reply").on(table.requiresReply),
+  index("idx_email_workflow_state_sla_deadline").on(table.slaDeadline),
+]);
+
+// Classification override audit log
+export const emailClassificationOverrides = pgTable("email_classification_overrides", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  emailId: varchar("email_id").notNull().references(() => inboxEmails.id, { onDelete: "cascade" }),
+  
+  // Who and when
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  overrideAt: timestamp("override_at").defaultNow(),
+  
+  // What changed
+  fieldName: varchar("field_name").notNull(),
+  previousValue: jsonb("previous_value"),
+  newValue: jsonb("new_value"),
+  
+  // Why
+  reason: text("reason").notNull(),
+  
+  // Context snapshots
+  previousClassificationSnapshot: jsonb("previous_classification_snapshot"),
+  newClassificationSnapshot: jsonb("new_classification_snapshot"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_email_classification_overrides_email_id").on(table.emailId),
+  index("idx_email_classification_overrides_user_id").on(table.userId),
+  index("idx_email_classification_overrides_override_at").on(table.overrideAt),
+]);

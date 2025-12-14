@@ -11,6 +11,10 @@ import {
   inboxes,
   userInboxAccess,
   inboxEmails,
+  emailQuarantine,
+  emailClassifications,
+  emailWorkflowState,
+  emailClassificationOverrides,
 } from "./tables";
 
 export const insertEmailMessageSchema = createInsertSchema(emailMessages).omit({
@@ -69,5 +73,28 @@ export const insertUserInboxAccessSchema = createInsertSchema(userInboxAccess).o
 export const insertInboxEmailSchema = createInsertSchema(inboxEmails).omit({
   id: true,
   syncedAt: true,
+  createdAt: true,
+});
+
+// Comms workflow schemas
+export const insertEmailQuarantineSchema = createInsertSchema(emailQuarantine).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEmailClassificationSchema = createInsertSchema(emailClassifications).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertEmailWorkflowStateSchema = createInsertSchema(emailWorkflowState).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertEmailClassificationOverrideSchema = createInsertSchema(emailClassificationOverrides).omit({
+  id: true,
   createdAt: true,
 });
