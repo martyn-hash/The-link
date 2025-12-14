@@ -164,13 +164,6 @@ export function CommsWorkspace({
   // Local filter: show completed emails
   const [showCompleted, setShowCompleted] = useState<boolean>(false);
   
-  // Clear showCompleted when a header filter is selected
-  useEffect(() => {
-    if (activeFilter) {
-      setShowCompleted(false);
-    }
-  }, [activeFilter]);
-  
   // Use props if provided, otherwise use internal state
   const selectedInboxId = propSelectedInboxId ?? internalSelectedInboxId;
   const setSelectedInboxId = propSetSelectedInboxId ?? setInternalSelectedInboxId;
@@ -178,6 +171,13 @@ export function CommsWorkspace({
   const setSelectedMessageId = propSetSelectedMessageId ?? setInternalSelectedMessageId;
   const activeFilter = propActiveFilter ?? internalActiveFilter;
   const setActiveFilter = propSetActiveFilter ?? setInternalActiveFilter;
+  
+  // Clear showCompleted when a header filter is selected
+  useEffect(() => {
+    if (activeFilter) {
+      setShowCompleted(false);
+    }
+  }, [activeFilter]);
 
   const { data: myInboxes = [], isLoading: inboxesLoading } = useQuery<InboxAccess[]>({
     queryKey: ["/api/my-inboxes"],
