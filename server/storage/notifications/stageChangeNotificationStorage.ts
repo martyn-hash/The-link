@@ -403,7 +403,13 @@ export class StageChangeNotificationStorage {
 
   /**
    * Prepare a client value notification (client-facing notification sent via staff's Outlook)
-   * This fetches client contacts (people linked to the project's client) instead of internal staff
+   * This fetches client contacts (people linked to the project's client) instead of internal staff.
+   * 
+   * IMPORTANT: This function only returns a notification preview if there is an explicitly
+   * configured stage notification template in project_type_notifications for this stage.
+   * Client notifications should only be sent when explicitly configured by the user in the
+   * project type settings - stage changes without configured notifications should not
+   * prompt for client notification (those are internal staff notifications only).
    */
   async prepareClientValueNotification(
     projectId: string,
@@ -429,9 +435,49 @@ export class StageChangeNotificationStorage {
         .where(eq(projectTypes.id, project.projectTypeId));
 
       if (projectType && projectType.notificationsActive === false) {
-        console.log(`Notifications disabled for project type ${project.projectTypeId}, skipping notification preview`);
+        console.log(`[ClientValueNotification] Notifications disabled for project type ${project.projectTypeId}, skipping`);
         return null;
       }
+
+      // First, look up the target stage to check if there's a configured stage notification
+      const [newStage] = await db
+        .select()
+        .from(kanbanStages)
+        .where(
+          and(
+            eq(kanbanStages.name, newStageName),
+            eq(kanbanStages.projectTypeId, project.projectTypeId)
+          )
+        );
+
+      if (!newStage) {
+        console.warn(`[ClientValueNotification] Kanban stage '${newStageName}' not found for project type ${project.projectTypeId}`);
+        return null;
+      }
+
+      // CRITICAL: Check if there's an explicitly configured stage notification template for this stage
+      // Only proceed if there's a configured template - don't send generic client notifications
+      const [stageTemplate] = await db
+        .select()
+        .from(projectTypeNotifications)
+        .where(
+          and(
+            eq(projectTypeNotifications.projectTypeId, project.projectTypeId),
+            eq(projectTypeNotifications.stageId, newStage.id),
+            eq(projectTypeNotifications.stageTrigger, 'entry'),
+            eq(projectTypeNotifications.isActive, true)
+          )
+        )
+        .limit(1);
+
+      if (!stageTemplate) {
+        // No configured stage notification template - don't prompt for client notification
+        // Stage change notifications without templates are internal staff notifications only
+        console.log(`[ClientValueNotification] No stage notification template configured for stage '${newStageName}' in project type ${project.projectTypeId}, skipping client notification`);
+        return null;
+      }
+
+      console.log(`[ClientValueNotification] Found configured stage notification template for stage '${newStageName}'`);
 
       // Get project with client data and chronology for context
       const projectWithClient = await db.query.projects.findFirst({
@@ -515,17 +561,7 @@ export class StageChangeNotificationStorage {
       const changeReason = mostRecentChronologyEntry?.changeReason || undefined;
       const notes = mostRecentChronologyEntry?.notes || undefined;
 
-      // Calculate due date if available - lookup stage by name AND projectTypeId to avoid cross-type conflicts
-      const [newStage] = await db
-        .select()
-        .from(kanbanStages)
-        .where(
-          and(
-            eq(kanbanStages.name, newStageName),
-            eq(kanbanStages.projectTypeId, project.projectTypeId)
-          )
-        );
-
+      // Calculate due date if available
       let formattedDueDate: string | undefined = undefined;
       if (newStage?.maxInstanceTime) {
         const chronologyForEmail = chronologyEntries.map((entry: any) => ({
@@ -565,9 +601,9 @@ export class StageChangeNotificationStorage {
       const recipientIds = recipients.map(r => r.personId).sort().join(',');
       const dedupeKey = `client:${projectId}:${newStageName}:${changeReason || 'none'}:${recipientIds}`;
 
-      // Look up stage notification template from project_type_notifications
-      let emailSubject = `Update: ${projectWithClient.description} - ${newStageName}`;
-      let emailBody = `
+      // Use the template's subject/body, falling back to sensible defaults if template fields are empty
+      let emailSubject = stageTemplate.emailTitle || `Update: ${projectWithClient.description} - ${newStageName}`;
+      let emailBody = stageTemplate.emailBody || `
         <p>Dear Client,</p>
         <p>We wanted to let you know that work on "${projectWithClient.description}" has progressed to: <strong>${newStageName}</strong></p>
         ${oldStageName ? `<p>Previous stage: ${oldStageName}</p>` : ''}
@@ -575,32 +611,6 @@ export class StageChangeNotificationStorage {
         <p>If you have any questions, please don't hesitate to get in touch.</p>
         <p>Kind regards,<br/>${sendingUser.firstName || 'The Team'}</p>
       `.trim();
-
-      // Try to find a matching notification template for this stage
-      if (newStage?.id) {
-        const [stageTemplate] = await db
-          .select()
-          .from(projectTypeNotifications)
-          .where(
-            and(
-              eq(projectTypeNotifications.projectTypeId, project.projectTypeId),
-              eq(projectTypeNotifications.stageId, newStage.id),
-              eq(projectTypeNotifications.stageTrigger, 'entry'),
-              eq(projectTypeNotifications.isActive, true)
-            )
-          )
-          .limit(1);
-
-        if (stageTemplate?.emailTitle || stageTemplate?.emailBody) {
-          console.log(`[ClientValueNotification] Using template from project_type_notifications for stage ${newStageName}`);
-          if (stageTemplate.emailTitle) {
-            emailSubject = stageTemplate.emailTitle;
-          }
-          if (stageTemplate.emailBody) {
-            emailBody = stageTemplate.emailBody;
-          }
-        }
-      }
 
       // Fetch stage approval responses for this project and build the approval map
       // This allows templates to use {stage_approval:ApprovalName} variables
