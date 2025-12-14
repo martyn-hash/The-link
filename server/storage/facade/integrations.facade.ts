@@ -547,6 +547,10 @@ export function applyIntegrationsFacade<TBase extends Constructor<IntegrationsFa
       return this.emailStorage.getClassificationOverridesByEmailId(emailId);
     }
 
+    async getUnclassifiedInboxEmails(inboxId?: string) {
+      return this.emailStorage.getUnclassifiedInboxEmails(inboxId);
+    }
+
     // ============================================================================
     // SMS TEMPLATES - SmsTemplateStorage (6 methods)
     // ============================================================================

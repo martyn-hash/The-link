@@ -1402,4 +1402,26 @@ export class EmailStorage {
       .where(eq(emailClassificationOverrides.emailId, emailId))
       .orderBy(desc(emailClassificationOverrides.overrideAt));
   }
+
+  // ========== UNCLASSIFIED EMAILS ==========
+
+  async getUnclassifiedInboxEmails(inboxId?: string): Promise<InboxEmail[]> {
+    const classifiedEmailIds = db
+      .select({ emailId: emailClassifications.emailId })
+      .from(emailClassifications);
+    
+    const conditions: any[] = [
+      sql`${inboxEmails.id} NOT IN (${classifiedEmailIds})`
+    ];
+    
+    if (inboxId) {
+      conditions.push(eq(inboxEmails.inboxId, inboxId));
+    }
+
+    return await db
+      .select()
+      .from(inboxEmails)
+      .where(and(...conditions))
+      .orderBy(desc(inboxEmails.receivedAt));
+  }
 }
