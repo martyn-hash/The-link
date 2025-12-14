@@ -337,5 +337,26 @@ app.use((req, res, next) => {
     });
     
     log('[Sent Items Detection] Scheduler initialized (runs every 10 minutes 08:00-19:00 UK time)');
+    
+    // Setup SLA breach detection
+    // Runs every 15 minutes during business hours (08:00-18:00 UK time)
+    // Detects and marks emails that have exceeded their SLA deadline
+    cron.schedule('*/15 8-18 * * *', async () => {
+      try {
+        const { checkForSlaBreaches, markEmailsAsBreached } = await import('./services/slaService');
+        const breaches = await checkForSlaBreaches();
+        if (breaches.length > 0) {
+          const emailIds = breaches.map(b => b.emailId);
+          await markEmailsAsBreached(emailIds);
+          log(`[SLA Breach Detection] Marked ${breaches.length} email(s) as breached`);
+        }
+      } catch (error) {
+        console.error('[SLA Breach Detection] Fatal error in detection job:', error);
+      }
+    }, {
+      timezone: "Europe/London"
+    });
+    
+    log('[SLA Breach Detection] Scheduler initialized (runs every 15 minutes 08:00-18:00 UK time)');
   });
 })();

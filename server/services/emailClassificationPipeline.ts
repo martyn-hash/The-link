@@ -1,5 +1,6 @@
 import { runDeterministicClassification, DeterministicResult } from "./deterministicClassificationService";
 import { classifyEmail, MergedClassification } from "./aiClassificationService";
+import { calculateSlaDeadline } from "./slaService";
 import { storage } from "../storage";
 import type { InsertEmailClassification, InsertEmailWorkflowState } from "@shared/schema";
 
@@ -14,6 +15,7 @@ interface EmailToClassify {
   attachmentNames?: string[];
   isReply?: boolean;
   isForward?: boolean;
+  receivedAt?: Date;
 }
 
 export interface ClassificationPipelineResult {
@@ -110,6 +112,17 @@ export async function runClassificationPipeline(email: EmailToClassify): Promise
   const workflowState = await storage.upsertEmailWorkflowState(workflowData);
   console.log(`[Classification Pipeline] Workflow state created with ID ${workflowState.id}`);
 
+  if (mergedClassification.requiresReply) {
+    try {
+      const receivedAt = email.receivedAt || new Date();
+      const slaDeadline = await calculateSlaDeadline(receivedAt);
+      await storage.setSlaDeadline(email.id, slaDeadline);
+      console.log(`[Classification Pipeline] SLA deadline set for email ${email.id}: ${slaDeadline.toISOString()} (based on receivedAt: ${receivedAt.toISOString()})`);
+    } catch (error) {
+      console.error(`[Classification Pipeline] Error setting SLA deadline for email ${email.id}:`, error);
+    }
+  }
+
   return {
     emailId: email.id,
     deterministicResult,
@@ -139,7 +152,8 @@ export async function classifyExistingEmail(emailId: string): Promise<Classifica
     hasAttachments: email.hasAttachments ?? false,
     attachmentNames,
     isReply: false,
-    isForward: false
+    isForward: false,
+    receivedAt: email.receivedAt ? new Date(email.receivedAt) : new Date()
   });
 }
 
@@ -164,7 +178,8 @@ export async function classifyUnclassifiedEmails(inboxId?: string): Promise<Clas
         hasAttachments: email.hasAttachments ?? false,
         attachmentNames,
         isReply: false,
-        isForward: false
+        isForward: false,
+        receivedAt: email.receivedAt ? new Date(email.receivedAt) : new Date()
       });
       
       results.push(result);

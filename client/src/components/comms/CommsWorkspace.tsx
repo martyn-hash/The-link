@@ -394,38 +394,70 @@ export function CommsWorkspace({
   };
 
   const getSlaStatusBadge = (email: StoredEmail) => {
-    if (email.status === "replied") {
-      return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs">Replied</Badge>;
+    if (email.status === "replied" || email.workflowState?.replySent) {
+      return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs" data-testid={`badge-replied-${email.id}`}>Replied</Badge>;
     }
     if (email.status === "no_action_needed") {
       return null;
     }
-    if (!email.slaDeadline) {
+    if (!email.slaDeadline && !email.workflowState?.requiresReply) {
       return null;
     }
     
-    const deadline = new Date(email.slaDeadline);
+    const deadline = email.slaDeadline ? new Date(email.slaDeadline) : null;
     const now = new Date();
     
-    if (isPast(deadline)) {
-      return <Badge variant="destructive" className="text-xs">Overdue</Badge>;
+    if (deadline && isPast(deadline)) {
+      return <Badge variant="destructive" className="text-xs animate-pulse" data-testid={`badge-overdue-${email.id}`}>Overdue</Badge>;
     }
     
-    if (isToday(deadline)) {
+    if (deadline) {
       const hoursLeft = differenceInHours(deadline, now);
+      
+      if (hoursLeft <= 2) {
+        return (
+          <Badge variant="destructive" className="text-xs" data-testid={`badge-critical-${email.id}`}>
+            <Clock className="h-3 w-3 mr-1" />
+            {hoursLeft <= 0 ? "<1h" : `${hoursLeft}h`} left
+          </Badge>
+        );
+      }
+      
+      if (hoursLeft <= 4) {
+        return (
+          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 text-xs" data-testid={`badge-high-${email.id}`}>
+            <Clock className="h-3 w-3 mr-1" />
+            {hoursLeft}h left
+          </Badge>
+        );
+      }
+      
+      if (isToday(deadline) || hoursLeft <= 8) {
+        return (
+          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs" data-testid={`badge-normal-${email.id}`}>
+            <Clock className="h-3 w-3 mr-1" />
+            {hoursLeft}h left
+          </Badge>
+        );
+      }
+      
       return (
-        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 text-xs">
-          Due in {hoursLeft}h
+        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs" data-testid={`badge-low-${email.id}`}>
+          <Clock className="h-3 w-3 mr-1" />
+          {format(deadline, "MMM d")}
         </Badge>
       );
     }
     
-    return (
-      <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs">
-        <Clock className="h-3 w-3 mr-1" />
-        {format(deadline, "MMM d")}
-      </Badge>
-    );
+    if (email.workflowState?.requiresReply) {
+      return (
+        <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-xs" data-testid={`badge-needs-reply-${email.id}`}>
+          Needs Reply
+        </Badge>
+      );
+    }
+    
+    return null;
   };
 
   if (inboxesLoading) {

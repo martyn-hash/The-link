@@ -1377,6 +1377,39 @@ export function registerEmailRoutes(
   });
 
   /**
+   * GET /api/comms/emails/:emailId/sla-time-remaining
+   * Get SLA time remaining for an email with business hours calculation
+   */
+  app.get('/api/comms/emails/:emailId/sla-time-remaining', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { emailId } = req.params;
+      
+      const workflowState = await storage.getEmailWorkflowStateByEmailId(emailId);
+      if (!workflowState || !workflowState.slaDeadline) {
+        return res.json({
+          hasDeadline: false,
+          timeRemaining: null
+        });
+      }
+      
+      const { getTimeRemaining } = await import('../services/slaService');
+      const timeRemaining = await getTimeRemaining(workflowState.slaDeadline);
+      
+      res.json({
+        hasDeadline: true,
+        deadline: workflowState.slaDeadline.toISOString(),
+        timeRemaining
+      });
+    } catch (error: any) {
+      console.error('[SLA Time Remaining] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to get SLA time remaining", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
    * POST /api/comms/inbox/:inboxId/sync
    * Trigger a sync of emails from Microsoft Graph API to inbox_emails table
    */
