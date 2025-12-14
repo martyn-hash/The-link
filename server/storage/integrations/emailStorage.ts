@@ -914,6 +914,8 @@ export class EmailStorage {
       clientMatchedOnly?: boolean;
       dueTodayOnly?: boolean;
       overdueOnly?: boolean;
+      sinceDate?: Date;
+      search?: string;
       limit?: number;
       offset?: number;
     }
@@ -947,6 +949,22 @@ export class EmailStorage {
         and(
           lt(inboxEmails.slaDeadline, now),
           eq(inboxEmails.status, 'pending_reply')
+        )
+      );
+    }
+    
+    if (filters?.sinceDate) {
+      conditions.push(gte(inboxEmails.receivedAt, filters.sinceDate));
+    }
+    
+    if (filters?.search) {
+      const searchTerm = `%${filters.search.toLowerCase()}%`;
+      conditions.push(
+        or(
+          sql`LOWER(${inboxEmails.subject}) LIKE ${searchTerm}`,
+          sql`LOWER(${inboxEmails.fromAddress}) LIKE ${searchTerm}`,
+          sql`LOWER(${inboxEmails.fromName}) LIKE ${searchTerm}`,
+          sql`LOWER(${inboxEmails.bodyPreview}) LIKE ${searchTerm}`
         )
       );
     }

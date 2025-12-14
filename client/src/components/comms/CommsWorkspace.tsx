@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -13,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Mail, Inbox, RefreshCw, MessageSquare, Paperclip, ChevronRight, AlertCircle, Clock, User, Loader2 } from "lucide-react";
+import { Mail, Inbox, RefreshCw, MessageSquare, Paperclip, ChevronRight, AlertCircle, Clock, User, Loader2, Search } from "lucide-react";
 import { formatDistanceToNow, format, isPast, isToday, differenceInHours } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -119,8 +120,6 @@ interface EmailDetail {
   }>;
 }
 
-type EmailFilter = "all" | "pending_reply" | "overdue" | "due_today" | "replied";
-
 interface CommsWorkspaceProps {
   selectedInboxId?: string;
   setSelectedInboxId?: (id: string) => void;
@@ -141,7 +140,7 @@ export function CommsWorkspace({
   // Internal state as fallback when props not provided
   const [internalSelectedInboxId, setInternalSelectedInboxId] = useState<string>("");
   const [internalSelectedMessageId, setInternalSelectedMessageId] = useState<string | null>(null);
-  const [emailFilter, setEmailFilter] = useState<EmailFilter>("all");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   
   // Use props if provided, otherwise use internal state
   const selectedInboxId = propSelectedInboxId ?? internalSelectedInboxId;
@@ -159,24 +158,21 @@ export function CommsWorkspace({
     return myInboxes.find(ia => ia.inboxId === selectedInboxId)?.inbox;
   }, [selectedInboxId, myInboxes]);
 
-  // Fetch stored emails from database (with SLA tracking)
+  // Fetch stored emails from database (with SLA tracking) - defaults to last 7 days
   const { 
     data: emailData, 
     isLoading: emailsLoading,
     error: emailsError,
     refetch: refetchEmails 
   } = useQuery<StoredEmailsResponse>({
-    queryKey: ["/api/comms/inbox", selectedInboxId, "stored-emails", emailFilter],
+    queryKey: ["/api/comms/inbox", selectedInboxId, "stored-emails", searchQuery],
     queryFn: async () => {
       const params = new URLSearchParams({
         limit: "50",
+        sinceDays: "7",
       });
-      if (emailFilter !== "all") {
-        if (emailFilter === "due_today") {
-          params.set("dueToday", "true");
-        } else {
-          params.set("status", emailFilter);
-        }
+      if (searchQuery.trim()) {
+        params.set("search", searchQuery.trim());
       }
       const res = await fetch(`/api/comms/inbox/${selectedInboxId}/stored-emails?${params}`);
       if (!res.ok) {
@@ -186,6 +182,7 @@ export function CommsWorkspace({
       return res.json();
     },
     enabled: !!selectedInboxId && selectedInboxId !== "",
+    staleTime: 5 * 60 * 1000,
   });
 
   // Sync mutation to fetch new emails from Microsoft Graph
@@ -194,7 +191,12 @@ export function CommsWorkspace({
       return await apiRequest("POST", `/api/comms/inbox/${selectedInboxId}/sync`);
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/comms/inbox", selectedInboxId, "stored-emails"] });
+      queryClient.invalidateQueries({ 
+        predicate: (query) => 
+          query.queryKey[0] === "/api/comms/inbox" && 
+          query.queryKey[1] === selectedInboxId && 
+          query.queryKey[2] === "stored-emails"
+      });
       toast({
         title: "Emails synced",
         description: `${data.newEmails || 0} new emails synced, ${data.matchedCount || 0} matched to clients.`,
@@ -327,7 +329,7 @@ export function CommsWorkspace({
             <div className="flex items-center justify-between gap-2">
               <CardDescription className="flex-1">
                 {selectedInbox 
-                  ? `${emailData?.emails?.length || 0} emails`
+                  ? `${emailData?.emails?.length || 0} emails (last 7 days)`
                   : "Select an inbox from the header"}
               </CardDescription>
               {selectedInbox && emailData?.stats && (
@@ -344,52 +346,16 @@ export function CommsWorkspace({
               )}
             </div>
             {selectedInboxId && (
-              <div className="flex gap-1 pt-2 flex-wrap">
-                <Button
-                  variant={emailFilter === "all" ? "secondary" : "ghost"}
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setEmailFilter("all")}
-                  data-testid="filter-all"
-                >
-                  All
-                </Button>
-                <Button
-                  variant={emailFilter === "pending_reply" ? "secondary" : "ghost"}
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setEmailFilter("pending_reply")}
-                  data-testid="filter-pending"
-                >
-                  Pending
-                </Button>
-                <Button
-                  variant={emailFilter === "due_today" ? "secondary" : "ghost"}
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setEmailFilter("due_today")}
-                  data-testid="filter-due-today"
-                >
-                  Due Today
-                </Button>
-                <Button
-                  variant={emailFilter === "overdue" ? "secondary" : "ghost"}
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setEmailFilter("overdue")}
-                  data-testid="filter-overdue"
-                >
-                  Overdue
-                </Button>
-                <Button
-                  variant={emailFilter === "replied" ? "secondary" : "ghost"}
-                  size="sm"
-                  className="h-7 text-xs"
-                  onClick={() => setEmailFilter("replied")}
-                  data-testid="filter-replied"
-                >
-                  Replied
-                </Button>
+              <div className="relative pt-2">
+                <Search className="absolute left-2.5 top-1/2 mt-1 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search emails..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 h-8 text-sm"
+                  data-testid="input-email-search"
+                />
               </div>
             )}
           </CardHeader>

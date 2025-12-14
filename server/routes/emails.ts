@@ -1277,7 +1277,9 @@ export function registerEmailRoutes(
         clientMatched = 'false',
         dueToday = 'false',
         limit = '50',
-        offset = '0'
+        offset = '0',
+        sinceDays = '7',
+        search = ''
       } = req.query;
 
       // Check company-level email feature flag
@@ -1310,6 +1312,17 @@ export function registerEmailRoutes(
       
       if (dueToday === 'true') {
         filters.dueTodayOnly = true;
+      }
+      
+      // Add date filter - default to last 7 days
+      const sinceDaysNum = Math.max(1, Math.min(parseInt(sinceDays as string) || 7, 365));
+      const sinceDate = new Date();
+      sinceDate.setDate(sinceDate.getDate() - sinceDaysNum);
+      filters.sinceDate = sinceDate;
+      
+      // Add search filter if provided
+      if (search && typeof search === 'string' && search.trim()) {
+        filters.search = search.trim();
       }
 
       const emails = await storage.getEmailsByInbox(inboxId, filters);
