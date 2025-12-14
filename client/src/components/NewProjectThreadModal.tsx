@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { useDraftAutoSave } from '@/hooks/useDraftAutoSave';
 import {
   Dialog,
   DialogContent,
@@ -57,6 +58,34 @@ export default function NewProjectThreadModal({
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [uploadErrors, setUploadErrors] = useState<string[]>([]);
   const [notifyImmediately, setNotifyImmediately] = useState(true);
+
+  // Auto-save draft for initial message content
+  const { savedContent: savedDraft, additionalFields: savedAdditionalFields, hasDraft, saveDraft, clearDraft, lastSavedAt } = useDraftAutoSave({
+    key: `new-project-thread-${project.id}`,
+    debounceMs: 500,
+  });
+
+  // Restore draft when modal opens or reset if no draft
+  useEffect(() => {
+    if (open) {
+      if (hasDraft && savedDraft) {
+        setInitialMessage(savedDraft);
+        if (savedAdditionalFields?.topic) {
+          setTopic(savedAdditionalFields.topic);
+        }
+      } else {
+        setInitialMessage('');
+        setTopic('');
+      }
+    }
+  }, [open, hasDraft, savedDraft, savedAdditionalFields]);
+
+  // Auto-save when content changes (including empty to clear draft)
+  useEffect(() => {
+    if (open) {
+      saveDraft(initialMessage, { topic });
+    }
+  }, [initialMessage, topic, open, saveDraft]);
 
   // Check if the editor has valid content (text, tables, images, or lists)
   const hasValidContent = useMemo(() => {
@@ -153,14 +182,14 @@ export default function NewProjectThreadModal({
         title: "Thread created",
         description: "The conversation thread has been created with your message.",
       });
-      handleClose();
+      handleClose(true);
     },
     onError: (error: any) => {
       showFriendlyError({ error });
     },
   });
 
-  const handleClose = () => {
+  const handleClose = (clearDraftOnClose: boolean = false) => {
     setTopic('');
     setSelectedParticipants([]);
     setSearchTerm('');
@@ -170,6 +199,9 @@ export default function NewProjectThreadModal({
     setUploadingFiles(false);
     setUploadErrors([]);
     setNotifyImmediately(true);
+    if (clearDraftOnClose) {
+      clearDraft();
+    }
     onOpenChange(false);
   };
 
@@ -240,7 +272,7 @@ export default function NewProjectThreadModal({
           title: "Thread created",
           description: "The conversation thread has been created with your message.",
         });
-        handleClose();
+        handleClose(true);
       } else {
         // No files to upload - use existing behavior
         createThreadMutation.mutate({
@@ -537,7 +569,7 @@ export default function NewProjectThreadModal({
           <div className="flex gap-2">
             <Button
               variant="outline"
-              onClick={handleClose}
+              onClick={() => handleClose()}
               data-testid="button-cancel"
             >
               Cancel

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { useDraftAutoSave } from '@/hooks/useDraftAutoSave';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -104,6 +105,32 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
   const threadFromUrl = urlParams.get('thread');
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(threadFromUrl);
 
+  // Auto-save draft for message content
+  const { savedContent: savedDraft, hasDraft, saveDraft, clearDraft, lastSavedAt } = useDraftAutoSave({
+    key: `project-messaging-${projectId}-${selectedThreadId || 'no-thread'}`,
+    debounceMs: 500,
+  });
+
+  // Restore saved draft when thread changes or reset if no draft
+  useEffect(() => {
+    if (selectedThreadId) {
+      if (hasDraft && savedDraft) {
+        setNewMessage(savedDraft);
+      } else {
+        setNewMessage('');
+      }
+    } else {
+      setNewMessage('');
+    }
+  }, [selectedThreadId, hasDraft, savedDraft]);
+
+  // Auto-save message content when it changes (including empty to clear draft)
+  useEffect(() => {
+    if (selectedThreadId) {
+      saveDraft(newMessage);
+    }
+  }, [newMessage, selectedThreadId, saveDraft]);
+
   // Fetch threads for this project
   const { data: threadsResponse, isLoading: threadsLoading } = useQuery<{
     threads: ProjectMessageThread[];
@@ -146,6 +173,7 @@ export default function ProjectMessaging({ projectId, project }: ProjectMessagin
       setNewMessage('');
       setSelectedFiles([]);
       setNotifyImmediately(true);
+      clearDraft();
     },
     onError: (error: any) => {
       showFriendlyError({ error });

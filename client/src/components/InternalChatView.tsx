@@ -3,6 +3,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useLocation } from 'wouter';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { useDraftAutoSave } from '@/hooks/useDraftAutoSave';
 import TopNavigation from '@/components/top-navigation';
 import BottomNav from '@/components/bottom-nav';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -192,6 +193,32 @@ export function InternalChatView({
   const [focusModeOpen, setFocusModeOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-save draft for message content
+  const { savedContent: savedDraft, hasDraft, saveDraft, clearDraft, lastSavedAt } = useDraftAutoSave({
+    key: `internal-chat-${selectedThreadId || 'no-thread'}`,
+    debounceMs: 500,
+  });
+
+  // Restore saved draft when thread changes or reset if no draft
+  useEffect(() => {
+    if (selectedThreadId) {
+      if (hasDraft && savedDraft) {
+        setNewMessage(savedDraft);
+      } else {
+        setNewMessage('');
+      }
+    } else {
+      setNewMessage('');
+    }
+  }, [selectedThreadId, hasDraft, savedDraft]);
+
+  // Auto-save message content when it changes (including empty to clear draft)
+  useEffect(() => {
+    if (selectedThreadId) {
+      saveDraft(newMessage);
+    }
+  }, [newMessage, selectedThreadId, saveDraft]);
   const previousMessageCountRef = useRef<number>(0);
   const isInitialThreadLoadRef = useRef<boolean>(true);
 
@@ -348,6 +375,7 @@ export function InternalChatView({
       setSelectedFiles([]);
       setRecordedAudio(null);
       setAudioUrl(null);
+      clearDraft();
       const queryKey = selectedThreadType === 'staff'
         ? ['/api/staff-messages/threads', selectedThreadId, 'messages']
         : ['/api/internal/project-messages/threads', selectedThreadId, 'messages'];
