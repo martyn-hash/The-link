@@ -1202,7 +1202,6 @@ export default function KanbanBoard({
                                 </Tooltip>
                               </TooltipProvider>
                             )}
-                            {!isSpecialColumn && !isCompactMode && <Plus className="w-4 h-4 text-muted-foreground cursor-pointer hover:text-foreground" />}
                           </div>
                         </div>
                         <p className={`text-xs mt-1 ${config.isBenchColumn ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'}`}>
