@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, closestCorners, useDroppable, DragOverEvent, PointerSensor, KeyboardSensor, useSensor, useSensors, pointerWithin, rectIntersection } from "@dnd-kit/core";
@@ -13,7 +13,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, AlertCircle, RefreshCw, X, Maximize2, Minimize2, ChevronDown, ChevronRight, Clock } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { Plus, AlertCircle, RefreshCw, X, Maximize2, Minimize2, ChevronDown, ChevronRight, Clock, SlidersHorizontal, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { BulkChangeStatusModal } from "./BulkChangeStatusModal";
 import { BulkMoveRestrictionDialog } from "./BulkMoveRestrictionDialog";
 import { BulkMoveStageConflictDialog } from "./BulkMoveStageConflictDialog";
@@ -23,6 +26,13 @@ import type { ProjectWithRelations, User, KanbanStage, ChangeReason } from "@sha
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { calculateCurrentInstanceTime } from "@shared/businessTime";
+
+// Stage filter/sort configuration
+type SortDirection = 'asc' | 'desc' | null;
+interface StageFilterConfig {
+  sortByTimeRemaining: SortDirection;
+  filterByServices: string[]; // Service names to filter by (clients must have ALL selected services)
+}
 
 const COMPACT_MODE_STORAGE_KEY = "kanban-compact-mode";
 
@@ -201,6 +211,88 @@ export default function KanbanBoard({
     staleTime: 30 * 1000, // 30 seconds - refresh frequently for query counts
     refetchInterval: 60 * 1000, // Refetch every minute
   });
+  
+  // State for stage-level filters and sorting
+  const [stageFilters, setStageFilters] = useState<Record<string, StageFilterConfig>>({});
+  
+  // Get all unique service types across all projects' clients for filter options
+  const allServiceTypes = useMemo(() => {
+    const services = new Set<string>();
+    projects.forEach(project => {
+      if (project.priorityServiceIndicators) {
+        project.priorityServiceIndicators.forEach(indicator => {
+          const name = typeof indicator === 'string' ? indicator : indicator.name;
+          if (name) services.add(name);
+        });
+      }
+    });
+    return Array.from(services).sort();
+  }, [projects]);
+  
+  // Helper to calculate time remaining for a project in its current stage
+  const getProjectTimeRemaining = useCallback((project: ProjectWithRelations, stageConfig?: KanbanStage): number | null => {
+    if (!stageConfig?.maxInstanceTime || stageConfig.maxInstanceTime === 0) {
+      return null;
+    }
+    
+    try {
+      const createdAt = project.createdAt 
+        ? (typeof project.createdAt === 'string' ? project.createdAt : new Date(project.createdAt).toISOString())
+        : undefined;
+      
+      const transformedChronology = (project.chronology || [])
+        .filter((entry): entry is typeof entry & { timestamp: NonNullable<typeof entry.timestamp> } => {
+          return entry.timestamp !== null && entry.timestamp !== undefined;
+        })
+        .map((entry) => ({
+          toStatus: entry.toStatus,
+          timestamp: entry.timestamp instanceof Date 
+            ? entry.timestamp.toISOString() 
+            : typeof entry.timestamp === 'string'
+            ? entry.timestamp
+            : new Date(entry.timestamp).toISOString()
+        }));
+      
+      const currentBusinessHours = calculateCurrentInstanceTime(
+        transformedChronology,
+        project.currentStatus,
+        createdAt
+      );
+      
+      return stageConfig.maxInstanceTime - currentBusinessHours;
+    } catch (error) {
+      return null;
+    }
+  }, []);
+  
+  // Get filter config for a stage, or defaults
+  const getStageFilter = (stageName: string): StageFilterConfig => {
+    return stageFilters[stageName] || { sortByTimeRemaining: null, filterByServices: [] };
+  };
+  
+  // Update filter for a specific stage
+  const updateStageFilter = (stageName: string, updates: Partial<StageFilterConfig>) => {
+    setStageFilters(prev => ({
+      ...prev,
+      [stageName]: { ...getStageFilter(stageName), ...updates }
+    }));
+  };
+  
+  // Clear all filters for a stage
+  const clearStageFilter = (stageName: string) => {
+    setStageFilters(prev => {
+      const newFilters = { ...prev };
+      delete newFilters[stageName];
+      return newFilters;
+    });
+  };
+  
+  // Check if a stage has any active filters
+  const hasActiveFilters = (stageName: string): boolean => {
+    const filter = stageFilters[stageName];
+    if (!filter) return false;
+    return filter.sortByTimeRemaining !== null || filter.filterByServices.length > 0;
+  };
   
   // Handler for toggling project selection (CTRL+Click)
   const handleSelectToggle = (projectId: string) => {
@@ -791,15 +883,50 @@ export default function KanbanBoard({
       >
         <div className={`flex h-full overflow-x-auto ${isCompactMode ? 'gap-1' : 'space-x-6'}`}>
           {orderedStages.map(([status, config]) => {
-            const stageProjects = projectsByStatus[status] || [];
+            const rawStageProjects = projectsByStatus[status] || [];
             // Get the actual stage config from the API for schedule calculations
             const actualStageConfig = stages?.find(s => s.name === status);
-            const scheduleCounts = getScheduleCounts(stageProjects, actualStageConfig);
+            const scheduleCounts = getScheduleCounts(rawStageProjects, actualStageConfig);
             const isStageExpanded = expandedStages.has(status);
             const showCompact = isCompactMode && !isStageExpanded;
             
             // Determine if this is a special column (read-only)
             const isSpecialColumn = config.isCompletionColumn || config.isBenchColumn;
+            
+            // Apply stage-level filtering and sorting
+            const stageFilter = getStageFilter(status);
+            let stageProjects = [...rawStageProjects];
+            
+            // Filter by services (AND logic - client must have ALL selected services)
+            if (stageFilter.filterByServices.length > 0) {
+              stageProjects = stageProjects.filter(project => {
+                const projectServices = (project.priorityServiceIndicators || []).map(ind => 
+                  typeof ind === 'string' ? ind : ind.name
+                );
+                return stageFilter.filterByServices.every(service => 
+                  projectServices.includes(service)
+                );
+              });
+            }
+            
+            // Sort by time remaining
+            if (stageFilter.sortByTimeRemaining && actualStageConfig) {
+              stageProjects.sort((a, b) => {
+                const timeA = getProjectTimeRemaining(a, actualStageConfig);
+                const timeB = getProjectTimeRemaining(b, actualStageConfig);
+                
+                // Null values (no deadline) go to the end
+                if (timeA === null && timeB === null) return 0;
+                if (timeA === null) return 1;
+                if (timeB === null) return -1;
+                
+                // For 'asc' (urgent first): least time remaining first (smallest values first)
+                // For 'desc' (most time): most time remaining first (largest values first)
+                return stageFilter.sortByTimeRemaining === 'asc' 
+                  ? timeA - timeB 
+                  : timeB - timeA;
+              });
+            }
             
             return (
               <DroppableColumn key={status} id={`column-${status}`} isCompact={isCompactMode} isExpanded={isStageExpanded}>
@@ -919,7 +1046,9 @@ export default function KanbanBoard({
                               {config.title}
                             </h3>
                             <Badge className={`text-xs ${config.isBenchColumn ? 'bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300' : 'bg-gray-100 hover:bg-gray-200 text-gray-600 dark:bg-gray-800/50 dark:text-gray-300'}`}>
-                              {stageProjects.length}
+                              {hasActiveFilters(status) && stageProjects.length !== rawStageProjects.length 
+                                ? `${stageProjects.length}/${rawStageProjects.length}` 
+                                : stageProjects.length}
                             </Badge>
                             {!config.isCompletionColumn && !config.isBenchColumn && (
                               <>
@@ -943,6 +1072,126 @@ export default function KanbanBoard({
                             )}
                           </div>
                           <div className="flex items-center gap-1">
+                            {/* Stage filter popover - only show for non-special columns */}
+                            {!isSpecialColumn && (
+                              <Popover>
+                                <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className={`h-6 w-6 p-0 ${hasActiveFilters(status) ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                                    data-testid={`filter-button-${status}`}
+                                  >
+                                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent 
+                                  className="w-64 p-3" 
+                                  align="end"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <div className="space-y-4">
+                                    <div className="flex items-center justify-between">
+                                      <h4 className="font-medium text-sm">Sort & Filter</h4>
+                                      {hasActiveFilters(status) && (
+                                        <Button 
+                                          variant="ghost" 
+                                          size="sm" 
+                                          className="h-6 px-2 text-xs"
+                                          onClick={() => clearStageFilter(status)}
+                                          data-testid={`clear-filter-${status}`}
+                                        >
+                                          Clear
+                                        </Button>
+                                      )}
+                                    </div>
+                                    
+                                    {/* Sort by time remaining */}
+                                    <div className="space-y-2">
+                                      <Label className="text-xs text-muted-foreground">Sort by time remaining</Label>
+                                      <div className="flex gap-1">
+                                        <Button
+                                          variant={getStageFilter(status).sortByTimeRemaining === 'asc' ? 'default' : 'outline'}
+                                          size="sm"
+                                          className="flex-1 h-7 text-xs gap-1"
+                                          onClick={() => updateStageFilter(status, { 
+                                            sortByTimeRemaining: getStageFilter(status).sortByTimeRemaining === 'asc' ? null : 'asc' 
+                                          })}
+                                          data-testid={`sort-asc-${status}`}
+                                        >
+                                          <ArrowUp className="w-3 h-3" />
+                                          Urgent first
+                                        </Button>
+                                        <Button
+                                          variant={getStageFilter(status).sortByTimeRemaining === 'desc' ? 'default' : 'outline'}
+                                          size="sm"
+                                          className="flex-1 h-7 text-xs gap-1"
+                                          onClick={() => updateStageFilter(status, { 
+                                            sortByTimeRemaining: getStageFilter(status).sortByTimeRemaining === 'desc' ? null : 'desc' 
+                                          })}
+                                          data-testid={`sort-desc-${status}`}
+                                        >
+                                          <ArrowDown className="w-3 h-3" />
+                                          Most time
+                                        </Button>
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Filter by client's other services */}
+                                    {allServiceTypes.length > 0 && (
+                                      <div className="space-y-2">
+                                        <Label className="text-xs text-muted-foreground">Client has other services</Label>
+                                        <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                                          {allServiceTypes.map(service => {
+                                            const currentFilter = getStageFilter(status);
+                                            const isChecked = currentFilter.filterByServices.includes(service);
+                                            return (
+                                              <div key={service} className="flex items-center gap-2">
+                                                <Checkbox
+                                                  id={`filter-${status}-${service}`}
+                                                  checked={isChecked}
+                                                  onCheckedChange={(checked) => {
+                                                    const newServices = checked
+                                                      ? [...currentFilter.filterByServices, service]
+                                                      : currentFilter.filterByServices.filter(s => s !== service);
+                                                    updateStageFilter(status, { filterByServices: newServices });
+                                                  }}
+                                                  data-testid={`filter-service-${status}-${service}`}
+                                                />
+                                                <Label 
+                                                  htmlFor={`filter-${status}-${service}`}
+                                                  className="text-xs cursor-pointer"
+                                                >
+                                                  {service}
+                                                </Label>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    )}
+                                    
+                                    {/* Active filter summary */}
+                                    {hasActiveFilters(status) && (
+                                      <div className="pt-2 border-t">
+                                        <p className="text-xs text-muted-foreground">
+                                          {getStageFilter(status).sortByTimeRemaining && (
+                                            <span className="block">
+                                              Sorted: {getStageFilter(status).sortByTimeRemaining === 'asc' ? 'Urgent first' : 'Most time first'}
+                                            </span>
+                                          )}
+                                          {getStageFilter(status).filterByServices.length > 0 && (
+                                            <span className="block">
+                                              Filtered: {getStageFilter(status).filterByServices.join(' + ')}
+                                            </span>
+                                          )}
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                            )}
                             {isCompactMode && isStageExpanded && (
                               <TooltipProvider>
                                 <Tooltip>

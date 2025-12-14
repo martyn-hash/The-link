@@ -374,10 +374,19 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
     return remaining;
   }, [currentBusinessHours, effectiveStageConfig?.maxInstanceTime]);
 
-  // Format time for compact display (e.g., "2D 7H to go" or "Overdue")
-  const formatTimeUntilDue = (hours: number | null): string => {
+  // Format time for compact display (e.g., "2D 7H to go" or "Behind Schedule" or "Overdue")
+  // Use projectStatus to determine the correct label:
+  // - "Behind Schedule" when stage time exceeded but not past due date
+  // - "Overdue" when past the actual project due date
+  const formatTimeUntilDue = (hours: number | null, status: 'On Track' | 'Behind Schedule' | 'Late / Overdue' | 'On The Bench'): string => {
     if (hours === null) return "No deadline";
-    if (hours <= 0) return "Overdue";
+    if (hours <= 0) {
+      // Use the actual status to determine the text
+      if (status === 'Late / Overdue') {
+        return "Overdue";
+      }
+      return "Behind Schedule";
+    }
     
     const roundedHours = Math.round(hours);
     
@@ -394,7 +403,7 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
     }
   };
 
-  const formattedTimeUntilDue = formatTimeUntilDue(timeRemaining);
+  const formattedTimeUntilDue = formatTimeUntilDue(timeRemaining, projectStatus.status);
 
   // Get assignee first name
   const assigneeFirstName = useMemo(() => {
