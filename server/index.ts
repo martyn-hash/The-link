@@ -137,10 +137,18 @@ app.use((req, res, next) => {
     
     // Run startup catch-up to detect and execute any missed scheduling runs
     // This ensures server restarts don't cause missed overnight scheduling
+    // Only runs if startupCatchUp setting is enabled (defaults to true)
     try {
-      log('[Scheduling Orchestrator] Running startup catch-up check...');
-      const catchupResult = await runStartupCatchup();
-      log(`[Scheduling Orchestrator] ${catchupResult.message}`);
+      const settings = await storage.getCompanySettings();
+      const startupCatchUpEnabled = settings?.startupCatchUp !== false;
+      
+      if (startupCatchUpEnabled) {
+        log('[Scheduling Orchestrator] Running startup catch-up check...');
+        const catchupResult = await runStartupCatchup();
+        log(`[Scheduling Orchestrator] ${catchupResult.message}`);
+      } else {
+        log('[Scheduling Orchestrator] Startup catch-up check disabled via company settings');
+      }
     } catch (catchupError) {
       console.error('[Scheduling Orchestrator] Error in startup catch-up:', catchupError);
     }
