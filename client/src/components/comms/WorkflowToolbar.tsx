@@ -1,11 +1,11 @@
-import { CheckSquare, Reply, AlertTriangle, TrendingUp, Info, Inbox, LucideIcon } from "lucide-react";
+import { CheckSquare, Reply, TrendingUp, Info, Inbox, LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-export type WorkflowFilter = 'requires_task' | 'requires_reply' | 'urgent' | 'opportunities' | 'information_only' | 'all_outstanding' | null;
+export type WorkflowFilter = 'requires_task' | 'requires_reply' | 'opportunities' | 'information_only' | 'all_outstanding' | null;
 
 interface WorkflowStats {
   requiresTask: number;
@@ -44,15 +44,6 @@ const TOOLBAR_BUTTONS: ToolbarButton[] = [
     statKey: 'requiresReply',
     badgeVariant: 'warning',
     tooltip: 'Emails awaiting your response'
-  },
-  {
-    id: 'urgent',
-    label: 'Urgent',
-    shortLabel: 'Urgent',
-    icon: AlertTriangle,
-    statKey: 'urgent',
-    badgeVariant: 'destructive',
-    tooltip: 'Time-sensitive emails'
   },
   {
     id: 'opportunities',
