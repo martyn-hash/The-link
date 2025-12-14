@@ -21,6 +21,7 @@ interface ServiceWithRoles {
 
 export interface PersonalServiceRowProps {
   peopleService: PeopleService & { person: Person; service: Service; serviceOwner?: User };
+  clientId: string;
   isInactive?: boolean;
   servicesWithRoles?: ServiceWithRoles[];
   onEdit: (serviceId: string) => void;
@@ -46,6 +47,7 @@ function formatPersonName(fullName?: string | null): string {
 
 export function PersonalServiceRow({ 
   peopleService, 
+  clientId,
   isInactive = false,
   servicesWithRoles,
   onEdit 
@@ -61,8 +63,7 @@ export function PersonalServiceRow({
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/people-services'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/clients'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/people-services/client/${clientId}`] });
       toast({
         title: "Service Reactivated",
         description: `${peopleService.service?.name || 'Service'} has been reactivated successfully.`,

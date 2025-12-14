@@ -34,8 +34,7 @@ export function ServiceCard({ clientService }: ServiceCardProps) {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/clients', clientService.clientId, 'services'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/client-services'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/client-services/client/${clientService.clientId}`] });
       toast({
         title: "Service Reactivated",
         description: `${clientService.service?.name || 'Service'} has been reactivated successfully.`,

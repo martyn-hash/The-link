@@ -120,6 +120,7 @@ export function PersonalServicesList({
                         <PersonalServiceRow
                           key={peopleService.id}
                           peopleService={peopleService}
+                          clientId={clientId}
                           servicesWithRoles={servicesWithRoles}
                           onEdit={onEditService}
                         />
@@ -142,6 +143,7 @@ export function PersonalServicesList({
                         <PersonalServiceRow
                           key={peopleService.id}
                           peopleService={peopleService}
+                          clientId={clientId}
                           isInactive
                           servicesWithRoles={servicesWithRoles}
                           onEdit={onEditService}
