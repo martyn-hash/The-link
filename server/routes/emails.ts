@@ -1874,6 +1874,192 @@ export function registerEmailRoutes(
   });
 
   /**
+   * PATCH /api/comms/emails/:emailId/classification
+   * Override classification for a specific email with audit trail
+   * 
+   * Body:
+   * - changes: Object with classification field changes (requiresTask, requiresReply, informationOnly, urgency, opportunity)
+   * - reason: Required explanation for the override
+   */
+  app.patch('/api/comms/emails/:emailId/classification', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const { emailId } = req.params;
+      const { changes, reason } = req.body;
+
+      if (!changes || typeof changes !== 'object') {
+        return res.status(400).json({ message: "changes object is required" });
+      }
+
+      if (!reason || typeof reason !== 'string' || reason.trim().length === 0) {
+        return res.status(400).json({ message: "reason is required for override" });
+      }
+
+      // Validate allowed fields
+      const allowedFields = ['requiresTask', 'requiresReply', 'informationOnly', 'urgency', 'opportunity', 'sentimentLabel'];
+      const changedFields = Object.keys(changes);
+      const invalidFields = changedFields.filter(f => !allowedFields.includes(f));
+      if (invalidFields.length > 0) {
+        return res.status(400).json({ message: `Invalid fields: ${invalidFields.join(', ')}` });
+      }
+
+      // Get the email to verify access
+      const email = await storage.getInboxEmailById(emailId);
+      if (!email) {
+        return res.status(404).json({ message: "Email not found" });
+      }
+
+      // Verify user has access to this inbox
+      const hasAccess = await storage.canUserAccessInbox(userId, email.inboxId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this email" });
+      }
+
+      // Get existing classification
+      const existingClassification = await storage.getEmailClassificationByEmailId(emailId);
+      if (!existingClassification) {
+        return res.status(404).json({ message: "No classification found for this email. Classify it first." });
+      }
+
+      // Create audit log entries for each changed field
+      const overrideRecords = [];
+      for (const fieldName of changedFields) {
+        const previousValue = (existingClassification as any)[fieldName];
+        const newValue = changes[fieldName];
+        
+        // Skip if value hasn't actually changed
+        if (previousValue === newValue) continue;
+
+        const overrideRecord = await storage.createClassificationOverride({
+          emailId,
+          userId,
+          fieldName,
+          previousValue: previousValue !== undefined ? previousValue : null,
+          newValue: newValue,
+          reason: reason.trim(),
+          previousClassificationSnapshot: existingClassification,
+        });
+        overrideRecords.push(overrideRecord);
+      }
+
+      // Update the classification with new values and override metadata
+      const updatePayload: any = {
+        ...changes,
+        overrideBy: userId,
+        overrideAt: new Date(),
+        overrideReason: reason.trim(),
+        overrideChanges: changes,
+      };
+
+      const updatedClassification = await storage.updateEmailClassification(existingClassification.id, updatePayload);
+
+      // Re-evaluate workflow state based on new classification
+      const workflowState = await storage.getEmailWorkflowStateByEmailId(emailId);
+      if (workflowState) {
+        const workflowUpdates: any = {};
+        
+        // Sync requiresTask and requiresReply if changed
+        if ('requiresTask' in changes) {
+          workflowUpdates.requiresTask = changes.requiresTask;
+          // If task is no longer required, mark requirement as met
+          if (!changes.requiresTask) {
+            workflowUpdates.taskRequirementMet = true;
+          }
+        }
+        if ('requiresReply' in changes) {
+          workflowUpdates.requiresReply = changes.requiresReply;
+          // If reply is no longer required, we don't need to mark replySent
+        }
+
+        // If information_only is set to true, clear task and reply requirements
+        if (changes.informationOnly === true) {
+          workflowUpdates.requiresTask = false;
+          workflowUpdates.requiresReply = false;
+          workflowUpdates.taskRequirementMet = true;
+        }
+
+        // Re-evaluate completion state
+        const newRequiresTask = 'requiresTask' in workflowUpdates ? workflowUpdates.requiresTask : workflowState.requiresTask;
+        const newRequiresReply = 'requiresReply' in workflowUpdates ? workflowUpdates.requiresReply : workflowState.requiresReply;
+        const taskMet = 'taskRequirementMet' in workflowUpdates ? workflowUpdates.taskRequirementMet : workflowState.taskRequirementMet;
+        const replySent = workflowState.replySent;
+
+        // Check if email can now be auto-completed
+        const canComplete = (!newRequiresTask || taskMet) && (!newRequiresReply || replySent);
+        
+        if (canComplete && workflowState.state !== 'complete') {
+          // Email requirements are now met, but don't auto-complete - let user do it
+          // Just update the workflow state with new requirements
+        }
+
+        // If there are workflow updates, apply them
+        if (Object.keys(workflowUpdates).length > 0) {
+          await storage.updateEmailWorkflowState(workflowState.id, workflowUpdates);
+        }
+      }
+
+      res.json({
+        success: true,
+        emailId,
+        classification: updatedClassification,
+        overridesRecorded: overrideRecords.length,
+        message: `Classification updated with ${overrideRecords.length} field change(s) recorded`
+      });
+    } catch (error: any) {
+      console.error('[Override Classification] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to override classification", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
+   * GET /api/comms/emails/:emailId/classification/history
+   * Get override history for a specific email's classification
+   */
+  app.get('/api/comms/emails/:emailId/classification/history', isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const userId = req.user!.effectiveUserId;
+      const { emailId } = req.params;
+
+      // Get the email to verify access
+      const email = await storage.getInboxEmailById(emailId);
+      if (!email) {
+        return res.status(404).json({ message: "Email not found" });
+      }
+
+      // Verify user has access to this inbox
+      const hasAccess = await storage.canUserAccessInbox(userId, email.inboxId);
+      if (!hasAccess) {
+        return res.status(403).json({ message: "You don't have access to this email" });
+      }
+
+      const overrides = await storage.getClassificationOverridesByEmailId(emailId);
+      
+      // Enrich with user info
+      const enrichedOverrides = await Promise.all(overrides.map(async (override) => {
+        const user = await storage.getUser(override.userId);
+        return {
+          ...override,
+          userName: user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email : 'Unknown User'
+        };
+      }));
+      
+      res.json({
+        emailId,
+        overrides: enrichedOverrides
+      });
+    } catch (error: any) {
+      console.error('[Get Classification History] Error:', error);
+      res.status(500).json({ 
+        message: "Failed to fetch classification history", 
+        error: error.message 
+      });
+    }
+  });
+
+  /**
    * POST /api/comms/emails/:emailId/classify
    * Classify or re-classify a specific email
    */
