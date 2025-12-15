@@ -315,14 +315,21 @@ function ComponentRenderer({ component, themeColor }: { component: RenderedCompo
 
   switch (component.componentType) {
     case 'heading':
-      const HeadingTag = (content.level || 'h2') as keyof JSX.IntrinsicElements;
+      const levelMap: Record<string | number, 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'> = {
+        1: 'h1', 2: 'h2', 3: 'h3', 4: 'h4', 5: 'h5', 6: 'h6',
+        'h1': 'h1', 'h2': 'h2', 'h3': 'h3', 'h4': 'h4', 'h5': 'h5', 'h6': 'h6',
+      };
+      const HeadingTag = levelMap[content.level] || 'h2';
       const headingStyles = {
         h1: 'text-3xl font-bold',
         h2: 'text-2xl font-semibold',
         h3: 'text-xl font-medium',
+        h4: 'text-lg font-medium',
+        h5: 'text-base font-medium',
+        h6: 'text-sm font-medium',
       };
       return (
-        <HeadingTag className={headingStyles[content.level as keyof typeof headingStyles] || headingStyles.h2} data-testid={`component-heading-${component.id}`}>
+        <HeadingTag className={headingStyles[HeadingTag] || headingStyles.h2} data-testid={`component-heading-${component.id}`}>
           {content.text}
         </HeadingTag>
       );

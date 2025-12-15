@@ -195,7 +195,7 @@ export default function PageBuilder() {
     <div className="flex flex-col h-screen bg-background">
       <header className="border-b px-4 py-3 flex items-center justify-between bg-card">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => setLocation('/pages')} data-testid="button-back">
+          <Button variant="ghost" size="icon" onClick={() => setLocation('/super-admin/campaigns')} data-testid="button-back">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
