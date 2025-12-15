@@ -14,16 +14,12 @@ interface OutlookCalendarFilters {
 }
 
 export function useOutlookCalendarEvents(filters: OutlookCalendarFilters) {
-  const params = new URLSearchParams();
-  params.set("start", filters.start);
-  params.set("end", filters.end);
-  
-  if (filters.selectedUserIds.length > 0) {
-    params.set("selectedUserIds", filters.selectedUserIds.join(","));
-  }
-
   return useQuery<MSCalendarEventsResponse>({
-    queryKey: ["/api/ms-calendar/events", filters.start, filters.end, filters.selectedUserIds],
+    queryKey: ["/api/ms-calendar/events", { 
+      start: filters.start, 
+      end: filters.end, 
+      selectedUserIds: filters.selectedUserIds.join(",") 
+    }],
     enabled: Boolean(filters.start && filters.end && filters.enabled !== false && filters.selectedUserIds.length > 0),
     staleTime: 30000,
   });
