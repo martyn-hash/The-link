@@ -1,11 +1,29 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useMemo } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { Link } from 'wouter';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { 
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { 
   Mail, 
   MessageSquare, 
@@ -22,8 +40,18 @@ import {
   AlertCircle,
   Pause,
   ArrowRight,
-  Layers
+  Layers,
+  Search,
+  MoreVertical,
+  Trash2,
+  Play,
+  TrendingUp,
+  Activity,
+  Calendar
 } from 'lucide-react';
+import { apiRequest, queryClient } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
+import { format } from 'date-fns';
 
 interface Campaign {
   id: string;
@@ -35,6 +63,18 @@ interface Campaign {
   scheduledFor: string | null;
   sentAt: string | null;
   recipientCount?: number;
+  channel?: string;
+}
+
+interface CampaignWithMetrics extends Campaign {
+  metrics?: {
+    sent: number;
+    delivered: number;
+    opened: number;
+    clicked: number;
+    openRate: number;
+    clickRate: number;
+  };
 }
 
 interface Page {
@@ -91,10 +131,34 @@ const statusIcons: Record<string, any> = {
   cancelled: AlertCircle,
 };
 
+const channelIcons: Record<string, any> = {
+  email: Mail,
+  sms: MessageSquare,
+  voice: Phone,
+};
+
+const statusTabs = [
+  { value: 'all', label: 'All' },
+  { value: 'draft', label: 'Drafts' },
+  { value: 'review', label: 'In Review' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'scheduled', label: 'Scheduled' },
+  { value: 'sending', label: 'Sending' },
+  { value: 'sent', label: 'Sent' },
+  { value: 'paused', label: 'Paused' },
+];
+
 export default function CampaignsAdmin() {
   const [activeTab, setActiveTab] = useState('overview');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCampaigns, setSelectedCampaigns] = useState<Set<string>>(new Set());
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [campaignToDelete, setCampaignToDelete] = useState<string | null>(null);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
+  const { toast } = useToast();
 
-  const { data: campaigns, isLoading: campaignsLoading } = useQuery<Campaign[]>({
+  const { data: campaigns, isLoading: campaignsLoading } = useQuery<CampaignWithMetrics[]>({
     queryKey: ['/api/campaigns'],
   });
 
@@ -110,9 +174,118 @@ export default function CampaignsAdmin() {
     queryKey: ['/api/campaigns/analytics/overview'],
   });
 
+  const pauseMutation = useMutation({
+    mutationFn: async (campaignId: string) => {
+      return apiRequest(`/api/campaigns/${campaignId}/pause`, { method: 'POST' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns/stats/by-status'] });
+      toast({ title: 'Campaign paused' });
+    },
+    onError: () => {
+      toast({ title: 'Failed to pause campaign', variant: 'destructive' });
+    },
+  });
+
+  const resumeMutation = useMutation({
+    mutationFn: async (campaignId: string) => {
+      return apiRequest(`/api/campaigns/${campaignId}/resume`, { method: 'POST' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns/stats/by-status'] });
+      toast({ title: 'Campaign resumed' });
+    },
+    onError: () => {
+      toast({ title: 'Failed to resume campaign', variant: 'destructive' });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (campaignId: string) => {
+      return apiRequest(`/api/campaigns/${campaignId}`, { method: 'DELETE' });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns/stats/by-status'] });
+      toast({ title: 'Campaign deleted' });
+      setDeleteDialogOpen(false);
+      setCampaignToDelete(null);
+    },
+    onError: () => {
+      toast({ title: 'Failed to delete campaign', variant: 'destructive' });
+    },
+  });
+
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async (campaignIds: string[]) => {
+      await Promise.all(campaignIds.map(id => 
+        apiRequest(`/api/campaigns/${id}`, { method: 'DELETE' })
+      ));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns/stats/by-status'] });
+      toast({ title: `${selectedCampaigns.size} campaign(s) deleted` });
+      setSelectedCampaigns(new Set());
+    },
+    onError: () => {
+      toast({ title: 'Failed to delete campaigns', variant: 'destructive' });
+    },
+  });
+
+  const filteredCampaigns = useMemo(() => {
+    if (!campaigns) return [];
+    
+    return campaigns.filter(campaign => {
+      const matchesStatus = statusFilter === 'all' || campaign.status === statusFilter;
+      const matchesSearch = !searchQuery || 
+        campaign.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        campaign.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesStatus && matchesSearch;
+    });
+  }, [campaigns, statusFilter, searchQuery]);
+
+  const toggleCampaignSelection = (campaignId: string) => {
+    const newSelection = new Set(selectedCampaigns);
+    if (newSelection.has(campaignId)) {
+      newSelection.delete(campaignId);
+    } else {
+      newSelection.add(campaignId);
+    }
+    setSelectedCampaigns(newSelection);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedCampaigns.size === filteredCampaigns.length) {
+      setSelectedCampaigns(new Set());
+    } else {
+      setSelectedCampaigns(new Set(filteredCampaigns.map(c => c.id)));
+    }
+  };
+
+  const handleDeleteCampaign = (campaignId: string) => {
+    setCampaignToDelete(campaignId);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (campaignToDelete) {
+      deleteMutation.mutate(campaignToDelete);
+    }
+  };
+
   const totalCampaigns = campaigns?.length || 0;
   const totalPages = pages?.length || 0;
   const publishedPages = pages?.filter(p => p.isPublished).length || 0;
+
+  const recentCampaigns = useMemo(() => {
+    if (!campaigns) return [];
+    return [...campaigns]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 5);
+  }, [campaigns]);
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-7xl">
@@ -200,12 +373,12 @@ export default function CampaignsAdmin() {
             </Card>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Layers className="h-5 w-5" />
-                  Campaign Status Breakdown
+                  Campaign Status
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -222,7 +395,11 @@ export default function CampaignsAdmin() {
                       return (
                         <div 
                           key={status} 
-                          className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50"
+                          className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 cursor-pointer"
+                          onClick={() => {
+                            setActiveTab('campaigns');
+                            setStatusFilter(status);
+                          }}
                           data-testid={`status-row-${status}`}
                         >
                           <div className="flex items-center gap-3">
@@ -241,14 +418,98 @@ export default function CampaignsAdmin() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Settings className="h-5 w-5" />
-                  Implementation Status
+                  <TrendingUp className="h-5 w-5" />
+                  Top Performers
                 </CardTitle>
-                <CardDescription>
-                  Campaigns & Pages module completion
-                </CardDescription>
+                <CardDescription>Highest engagement campaigns</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent>
+                {analyticsOverview?.topPerformingCampaigns?.length ? (
+                  <div className="space-y-3">
+                    {analyticsOverview.topPerformingCampaigns.slice(0, 5).map((campaign, index) => (
+                      <div 
+                        key={campaign.id} 
+                        className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-sm font-medium text-muted-foreground w-5">
+                            {index + 1}.
+                          </span>
+                          <span className="text-sm truncate max-w-[120px]">{campaign.name}</span>
+                        </div>
+                        <div className="flex gap-2 text-xs">
+                          <Badge variant="outline" className="font-normal">
+                            {campaign.openRate}% opens
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No campaigns sent yet
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5" />
+                  Recent Activity
+                </CardTitle>
+                <CardDescription>Latest campaigns</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {recentCampaigns.length > 0 ? (
+                  <div className="space-y-3">
+                    {recentCampaigns.map(campaign => {
+                      const Icon = statusIcons[campaign.status] || FileText;
+                      return (
+                        <div 
+                          key={campaign.id} 
+                          className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50"
+                        >
+                          <div className="flex items-center gap-3">
+                            <Icon className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <p className="text-sm font-medium truncate max-w-[140px]">
+                                {campaign.name}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {format(new Date(campaign.createdAt), 'MMM d')}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge className={statusColors[campaign.status]} variant="secondary">
+                            {campaign.status}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No recent activity
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                Implementation Status
+              </CardTitle>
+              <CardDescription>
+                Campaigns & Pages module completion
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm">Phase 1: Foundation</span>
@@ -262,24 +523,28 @@ export default function CampaignsAdmin() {
                     <span className="text-sm">Phase 3: Pages Module</span>
                     <Badge className="bg-green-100 text-green-800">Complete</Badge>
                   </div>
+                </div>
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm">Phase 4: Multi-Step Campaigns</span>
+                    <span className="text-sm">Phase 4: Multi-Step</span>
                     <Badge className="bg-green-100 text-green-800">Complete</Badge>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm">Phase 5: Analytics & Polish</span>
+                    <span className="text-sm">Phase 5: Analytics</span>
                     <Badge className="bg-green-100 text-green-800">Complete</Badge>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm">Phase 6: Campaign List UI</span>
-                    <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>
+                    <Badge className="bg-green-100 text-green-800">Complete</Badge>
                   </div>
+                </div>
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm">Phase 7: Campaign Detail UI</span>
                     <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-sm">Phase 8: Campaign Creation UI</span>
+                    <span className="text-sm">Phase 8: Creation Wizard</span>
                     <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>
                   </div>
                   <div className="flex items-center justify-between">
@@ -287,88 +552,70 @@ export default function CampaignsAdmin() {
                     <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Available Features</CardTitle>
-              <CardDescription>Backend services and APIs ready for use</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div className="p-4 border rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Users className="h-5 w-5 text-blue-500" />
-                    <h4 className="font-medium">Client Targeting</h4>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    16+ filter types for precise client selection
-                  </p>
-                </div>
-
-                <div className="p-4 border rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Mail className="h-5 w-5 text-green-500" />
-                    <h4 className="font-medium">Email Delivery</h4>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    SendGrid integration with retry logic
-                  </p>
-                </div>
-
-                <div className="p-4 border rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <MessageSquare className="h-5 w-5 text-purple-500" />
-                    <h4 className="font-medium">SMS Delivery</h4>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    VoodooSMS integration with tracking
-                  </p>
-                </div>
-
-                <div className="p-4 border rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Phone className="h-5 w-5 text-orange-500" />
-                    <h4 className="font-medium">Voice Calls</h4>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Dialora.ai AI-powered voice outreach
-                  </p>
-                </div>
-
-                <div className="p-4 border rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <FileText className="h-5 w-5 text-teal-500" />
-                    <h4 className="font-medium">Page Builder</h4>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    14 component types with drag-and-drop
-                  </p>
-                </div>
-
-                <div className="p-4 border rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <BarChart3 className="h-5 w-5 text-red-500" />
-                    <h4 className="font-medium">Analytics</h4>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Engagement scoring and metrics
-                  </p>
-                </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="campaigns" className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold">All Campaigns</h2>
-            <Button disabled data-testid="button-create-campaign">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Campaign (Coming Soon)
-            </Button>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div className="flex items-center gap-4">
+              <h2 className="text-xl font-semibold">All Campaigns</h2>
+              {selectedCampaigns.size > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">
+                    {selectedCampaigns.size} selected
+                  </span>
+                  <Button 
+                    variant="destructive" 
+                    size="sm"
+                    onClick={() => setBulkDeleteDialogOpen(true)}
+                    disabled={bulkDeleteMutation.isPending}
+                    data-testid="button-bulk-delete"
+                  >
+                    <Trash2 className="h-4 w-4 mr-1" />
+                    Delete Selected
+                  </Button>
+                </div>
+              )}
+            </div>
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <div className="relative flex-1 sm:flex-none sm:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search campaigns..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                  data-testid="input-search-campaigns"
+                />
+              </div>
+              <Button disabled data-testid="button-create-campaign">
+                <Plus className="h-4 w-4 mr-2" />
+                Create Campaign
+              </Button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <div className="flex gap-2 pb-2">
+              {statusTabs.map(tab => (
+                <Button
+                  key={tab.value}
+                  variant={statusFilter === tab.value ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setStatusFilter(tab.value)}
+                  data-testid={`filter-${tab.value}`}
+                >
+                  {tab.label}
+                  {tab.value !== 'all' && stats && (
+                    <Badge variant="secondary" className="ml-2">
+                      {stats[tab.value as keyof CampaignStats] || 0}
+                    </Badge>
+                  )}
+                </Button>
+              ))}
+            </div>
           </div>
 
           {campaignsLoading ? (
@@ -382,41 +629,134 @@ export default function CampaignsAdmin() {
                 </Card>
               ))}
             </div>
-          ) : campaigns && campaigns.length > 0 ? (
-            <div className="space-y-4">
-              {campaigns.map(campaign => {
-                const Icon = statusIcons[campaign.status] || FileText;
+          ) : filteredCampaigns.length > 0 ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
+                <Checkbox
+                  checked={selectedCampaigns.size === filteredCampaigns.length && filteredCampaigns.length > 0}
+                  onCheckedChange={toggleSelectAll}
+                  data-testid="checkbox-select-all"
+                />
+                <span>Select all ({filteredCampaigns.length})</span>
+              </div>
+              {filteredCampaigns.map(campaign => {
+                const StatusIcon = statusIcons[campaign.status] || FileText;
+                const ChannelIcon = channelIcons[campaign.channel || 'email'] || Mail;
                 return (
-                  <Card key={campaign.id} data-testid={`campaign-card-${campaign.id}`}>
-                    <CardContent className="p-6">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <div className="flex items-center gap-3 mb-2">
-                            <h3 className="font-semibold text-lg">{campaign.name}</h3>
+                  <Card 
+                    key={campaign.id} 
+                    className={`transition-colors ${selectedCampaigns.has(campaign.id) ? 'border-primary' : ''}`}
+                    data-testid={`campaign-card-${campaign.id}`}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-4">
+                        <div className="pt-1">
+                          <Checkbox
+                            checked={selectedCampaigns.has(campaign.id)}
+                            onCheckedChange={() => toggleCampaignSelection(campaign.id)}
+                            data-testid={`checkbox-campaign-${campaign.id}`}
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 mb-2 flex-wrap">
+                            <h3 className="font-semibold text-lg truncate">{campaign.name}</h3>
                             <Badge className={statusColors[campaign.status]}>
-                              <Icon className="h-3 w-3 mr-1" />
+                              <StatusIcon className="h-3 w-3 mr-1" />
                               {campaign.status}
+                            </Badge>
+                            <Badge variant="outline">
+                              <ChannelIcon className="h-3 w-3 mr-1" />
+                              {campaign.channel || 'email'}
                             </Badge>
                             <Badge variant="outline">{campaign.category}</Badge>
                           </div>
                           {campaign.description && (
-                            <p className="text-muted-foreground text-sm mb-2">
+                            <p className="text-muted-foreground text-sm mb-3 line-clamp-2">
                               {campaign.description}
                             </p>
                           )}
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span>Created: {new Date(campaign.createdAt).toLocaleDateString()}</span>
+                          <div className="flex flex-wrap items-center gap-4 text-sm">
+                            <div className="flex items-center gap-1 text-muted-foreground">
+                              <Calendar className="h-3.5 w-3.5" />
+                              <span>Created: {format(new Date(campaign.createdAt), 'MMM d, yyyy')}</span>
+                            </div>
+                            {campaign.recipientCount !== undefined && (
+                              <div className="flex items-center gap-1 text-muted-foreground">
+                                <Users className="h-3.5 w-3.5" />
+                                <span>{campaign.recipientCount} recipients</span>
+                              </div>
+                            )}
                             {campaign.scheduledFor && (
-                              <span>Scheduled: {new Date(campaign.scheduledFor).toLocaleString()}</span>
+                              <div className="flex items-center gap-1 text-purple-600">
+                                <Clock className="h-3.5 w-3.5" />
+                                <span>Scheduled: {format(new Date(campaign.scheduledFor), 'MMM d, h:mm a')}</span>
+                              </div>
                             )}
                             {campaign.sentAt && (
-                              <span>Sent: {new Date(campaign.sentAt).toLocaleString()}</span>
+                              <div className="flex items-center gap-1 text-green-600">
+                                <Send className="h-3.5 w-3.5" />
+                                <span>Sent: {format(new Date(campaign.sentAt), 'MMM d, h:mm a')}</span>
+                              </div>
                             )}
                           </div>
+                          {campaign.metrics && (
+                            <div className="flex gap-4 mt-3 pt-3 border-t">
+                              <div className="text-center">
+                                <p className="text-lg font-semibold">{campaign.metrics.sent}</p>
+                                <p className="text-xs text-muted-foreground">Sent</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-lg font-semibold">{campaign.metrics.openRate}%</p>
+                                <p className="text-xs text-muted-foreground">Opens</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-lg font-semibold">{campaign.metrics.clickRate}%</p>
+                                <p className="text-xs text-muted-foreground">Clicks</p>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                        <Button variant="outline" size="sm" disabled>
-                          View Details
-                        </Button>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm" disabled data-testid={`button-view-${campaign.id}`}>
+                            View
+                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" data-testid={`button-more-${campaign.id}`}>
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              {campaign.status === 'sending' && (
+                                <DropdownMenuItem 
+                                  onClick={() => pauseMutation.mutate(campaign.id)}
+                                  disabled={pauseMutation.isPending}
+                                >
+                                  <Pause className="h-4 w-4 mr-2" />
+                                  Pause
+                                </DropdownMenuItem>
+                              )}
+                              {campaign.status === 'paused' && (
+                                <DropdownMenuItem 
+                                  onClick={() => resumeMutation.mutate(campaign.id)}
+                                  disabled={resumeMutation.isPending}
+                                >
+                                  <Play className="h-4 w-4 mr-2" />
+                                  Resume
+                                </DropdownMenuItem>
+                              )}
+                              {(campaign.status === 'draft' || campaign.status === 'cancelled') && (
+                                <DropdownMenuItem 
+                                  onClick={() => handleDeleteCampaign(campaign.id)}
+                                  className="text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -427,14 +767,20 @@ export default function CampaignsAdmin() {
             <Card>
               <CardContent className="p-12 text-center">
                 <Mail className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium mb-2">No campaigns yet</h3>
+                <h3 className="text-lg font-medium mb-2">
+                  {searchQuery || statusFilter !== 'all' ? 'No campaigns found' : 'No campaigns yet'}
+                </h3>
                 <p className="text-muted-foreground mb-4">
-                  Create your first campaign to start reaching clients
+                  {searchQuery || statusFilter !== 'all' 
+                    ? 'Try adjusting your search or filter'
+                    : 'Create your first campaign to start reaching clients'}
                 </p>
-                <Button disabled>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Campaign (Coming Soon)
-                </Button>
+                {!searchQuery && statusFilter === 'all' && (
+                  <Button disabled>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Create Campaign
+                  </Button>
+                )}
               </CardContent>
             </Card>
           )}
@@ -554,16 +900,16 @@ export default function CampaignsAdmin() {
                           key={campaign.id} 
                           className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50"
                         >
-                          <span className="font-medium truncate flex-1 mr-4">{campaign.name}</span>
-                          <div className="flex items-center gap-4 text-sm">
-                            <span className="text-green-600">{campaign.openRate}% open</span>
-                            <span className="text-blue-600">{campaign.clickRate}% click</span>
+                          <span className="font-medium truncate max-w-[200px]">{campaign.name}</span>
+                          <div className="flex gap-3 text-sm">
+                            <span className="text-green-600">{campaign.openRate}% opens</span>
+                            <span className="text-blue-600">{campaign.clickRate}% clicks</span>
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-muted-foreground text-center py-4">
+                    <p className="text-muted-foreground text-center py-6">
                       No campaign data available yet
                     </p>
                   )}
@@ -574,15 +920,58 @@ export default function CampaignsAdmin() {
             <Card>
               <CardContent className="p-12 text-center">
                 <BarChart3 className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-medium mb-2">Analytics Coming Soon</h3>
+                <h3 className="text-lg font-medium mb-2">No analytics data yet</h3>
                 <p className="text-muted-foreground">
-                  Send campaigns to start seeing engagement metrics
+                  Send your first campaign to see analytics
                 </p>
               </CardContent>
             </Card>
           )}
         </TabsContent>
       </Tabs>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Campaign?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the campaign and all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedCampaigns.size} Campaign{selectedCampaigns.size !== 1 ? 's' : ''}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the selected campaigns and all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                bulkDeleteMutation.mutate(Array.from(selectedCampaigns));
+                setBulkDeleteDialogOpen(false);
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete {selectedCampaigns.size} Campaign{selectedCampaigns.size !== 1 ? 's' : ''}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
