@@ -14,7 +14,7 @@
 import cron from 'node-cron';
 import { getDueReminders, processReminder, checkAndCancelRemindersIfComplete, migrateePlaceholderReminders } from './services/queryReminderService';
 import { db } from './db';
-import { projectChronology, scheduledQueryReminders } from '@shared/schema';
+import { projectChronology, scheduledQueryReminders, communications, queryResponseTokens, projects } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { getUncachableSendGridClient } from './lib/sendgrid';
 
@@ -201,6 +201,72 @@ async function processQueryReminders(): Promise<void> {
               });
             } catch (chronError) {
               console.error('[QueryReminderCron] Failed to log chronology:', chronError);
+            }
+
+            // Log to communications table for client comms history
+            try {
+              // Map channel to communication type - only process known channels
+              const channelTypeMap: Record<string, 'email_sent' | 'sms_sent' | 'phone_call'> = {
+                email: 'email_sent',
+                sms: 'sms_sent',
+                voice: 'phone_call'
+              };
+              
+              const communicationType = channelTypeMap[reminder.channel];
+              if (!communicationType) {
+                console.warn(`[QueryReminderCron] Unknown channel "${reminder.channel}" - skipping communications log`);
+              } else {
+                const tokenData = await db
+                  .select({ createdById: queryResponseTokens.createdById })
+                  .from(queryResponseTokens)
+                  .where(eq(queryResponseTokens.id, reminder.tokenId))
+                  .limit(1);
+
+                const projectData = await db
+                  .select({ clientId: projects.clientId })
+                  .from(projects)
+                  .where(eq(projects.id, reminder.projectId))
+                  .limit(1);
+
+                if (tokenData[0]?.createdById && projectData[0]?.clientId) {
+                  const channelLabels: Record<string, string> = {
+                    email: 'Email',
+                    sms: 'SMS',
+                    voice: 'Voice Call'
+                  };
+                  const channelLabel = channelLabels[reminder.channel] || reminder.channel;
+                  const queryCount = reminder.queriesRemaining || 'pending';
+                  const queryWord = (reminder.queriesRemaining === 1) ? 'query' : 'queries';
+                  
+                  // Use actual send time - the send just succeeded, so use now; sentAt may not be set yet
+                  const sentTimestamp = new Date();
+                  
+                  await db.insert(communications).values({
+                    clientId: projectData[0].clientId,
+                    projectId: reminder.projectId,
+                    userId: tokenData[0].createdById,
+                    type: communicationType,
+                    subject: `Query Reminder ${channelLabel}`,
+                    content: `Automated ${channelLabel.toLowerCase()} reminder sent to ${reminder.recipientName || 'client'} for ${queryCount} outstanding bookkeeping ${queryWord}.`,
+                    actualContactTime: sentTimestamp,
+                    isRead: true,
+                    metadata: {
+                      source: 'query_reminder',
+                      channel: reminder.channel,
+                      reminderId: reminder.id,
+                      tokenId: reminder.tokenId,
+                      recipientName: reminder.recipientName,
+                      recipientEmail: reminder.recipientEmail,
+                      recipientPhone: reminder.recipientPhone,
+                      queriesRemaining: reminder.queriesRemaining,
+                      queriesTotal: reminder.queriesTotal
+                    }
+                  });
+                  console.log(`[QueryReminderCron] Logged ${reminder.channel} reminder to communications for client ${projectData[0].clientId}`);
+                }
+              }
+            } catch (commError) {
+              console.error('[QueryReminderCron] Failed to log to communications:', commError);
             }
           }
         } else {
