@@ -224,6 +224,16 @@ export class CampaignRecipientStorage extends BaseStorage {
     
     return db.insert(campaignRecipients).values(dataToInsert).returning();
   }
+
+  async getNoEngagement(campaignId: string): Promise<CampaignRecipient[]> {
+    return db.select().from(campaignRecipients)
+      .where(and(
+        eq(campaignRecipients.campaignId, campaignId),
+        inArray(campaignRecipients.status, ['sent', 'delivered']),
+        isNull(campaignRecipients.openedAt),
+        isNull(campaignRecipients.clickedAt)
+      ));
+  }
 }
 
 export const campaignRecipientStorage = new CampaignRecipientStorage();

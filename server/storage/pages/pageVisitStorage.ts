@@ -145,6 +145,17 @@ export class PageVisitStorage extends BaseStorage {
     
     return (result[0]?.count ?? 0) > 0;
   }
+
+  async countByRecipientIds(recipientIds: string[]): Promise<number> {
+    if (recipientIds.length === 0) return 0;
+    
+    const result = await db
+      .select({ count: sql<number>`count(DISTINCT ${pageActionLogs.recipientId})::int` })
+      .from(pageActionLogs)
+      .where(sql`${pageActionLogs.recipientId} = ANY(${recipientIds})`);
+    
+    return result[0]?.count ?? 0;
+  }
 }
 
 export const pageVisitStorage = new PageVisitStorage();

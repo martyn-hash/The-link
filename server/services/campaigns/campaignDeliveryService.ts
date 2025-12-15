@@ -247,7 +247,7 @@ async function logEngagementEvent(
   eventData?: any
 ): Promise<void> {
   try {
-    await campaignAnalyticsStorage.logEngagement({
+    await campaignAnalyticsStorage.createEngagementEvent({
       campaignId,
       recipientId,
       eventType: eventType as any,

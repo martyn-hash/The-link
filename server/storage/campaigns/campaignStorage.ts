@@ -131,6 +131,15 @@ export class CampaignStorage extends BaseStorage {
       return acc;
     }, {} as Record<string, number>);
   }
+
+  async getSentBefore(date: Date): Promise<Campaign[]> {
+    return db.select().from(campaigns)
+      .where(and(
+        eq(campaigns.status, 'sent'),
+        sql`${campaigns.sentAt} < ${date}`
+      ))
+      .orderBy(desc(campaigns.sentAt));
+  }
 }
 
 export const campaignStorage = new CampaignStorage();
