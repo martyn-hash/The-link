@@ -58,6 +58,9 @@ import { registerAddressRoutes } from "./routes/address";
 import { registerImportRoutes } from "./routes/import";
 import { registerAdminMiscRoutes } from "./routes/admin/misc";
 import { registerPerformanceLeagueRoutes } from "./routes/performanceLeague";
+import { registerCampaignRoutes } from "./routes/campaigns";
+import { registerPageRoutes } from "./routes/pages";
+import { registerContactPreferencesRoutes } from "./routes/contactPreferences";
 
 /**
  * Register all application routes
@@ -158,6 +161,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerImportRoutes(app, isAuthenticated, resolveEffectiveUser);
   registerAdminMiscRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin);
   registerPerformanceLeagueRoutes(app, isAuthenticated, resolveEffectiveUser);
+  
+  // Register campaigns and pages module routes
+  registerCampaignRoutes(app, isAuthenticated, resolveEffectiveUser);
+  registerPageRoutes(app, isAuthenticated, resolveEffectiveUser);
+  registerContactPreferencesRoutes(app, isAuthenticated, resolveEffectiveUser);
 
   const httpServer = createServer(app);
   return httpServer;

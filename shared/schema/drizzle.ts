@@ -187,3 +187,34 @@ export {
 export {
   projectViewCache,
 } from './view-cache/tables';
+
+// Campaigns domain tables
+export {
+  campaignCategoryEnum,
+  campaignStatusEnum,
+  channelEnum,
+  recipientStatusEnum,
+  engagementEventEnum,
+  queueStatusEnum,
+  contactPreferences,
+  campaignTemplates,
+  campaigns,
+  campaignTargetCriteria,
+  campaignMessages,
+  campaignRecipients,
+  campaignEngagement,
+  clientEngagementScores,
+  campaignDeliveryQueue,
+} from './campaigns/tables';
+
+// Pages domain tables
+export {
+  pageComponentTypeEnum,
+  pageActionTypeEnum,
+  pageTemplates,
+  pages,
+  pageComponents,
+  pageActions,
+  pageVisits,
+  pageActionLogs,
+} from './pages/tables';
