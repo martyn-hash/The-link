@@ -44,6 +44,45 @@ export async function processSequenceProgression(): Promise<{
   };
 }
 
+export async function processSingleSequence(campaignId: string): Promise<{
+  recipientsProgressed: number;
+  errors: string[];
+}> {
+  console.log(`[Sequence] Processing single sequence: ${campaignId}`);
+  
+  const campaign = await campaignStorage.getById(campaignId);
+  if (!campaign) {
+    throw new Error('Campaign not found');
+  }
+  
+  const parentId = campaign.parentCampaignId || campaign.id;
+  const parentCampaign = campaign.parentCampaignId 
+    ? await campaignStorage.getById(parentId)
+    : campaign;
+  
+  if (!parentCampaign) {
+    throw new Error('Parent campaign not found');
+  }
+  
+  if (!parentCampaign.isSequence) {
+    throw new Error('Campaign is not part of a sequence');
+  }
+  
+  const errors: string[] = [];
+  let recipientsProgressed = 0;
+  
+  try {
+    const result = await processSequence(parentCampaign);
+    recipientsProgressed = result.recipientsProgressed;
+  } catch (error: any) {
+    const errorMsg = `Error processing sequence ${parentCampaign.id}: ${error.message}`;
+    console.error(`[Sequence] ${errorMsg}`);
+    errors.push(errorMsg);
+  }
+  
+  return { recipientsProgressed, errors };
+}
+
 async function processSequence(parentCampaign: Campaign): Promise<{ recipientsProgressed: number }> {
   console.log(`[Sequence] Processing sequence: ${parentCampaign.name} (${parentCampaign.id})`);
   

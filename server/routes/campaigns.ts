@@ -14,6 +14,7 @@ import * as recipientService from '../services/campaigns/campaignRecipientServic
 import * as workflowService from '../services/campaigns/campaignWorkflowService.js';
 import * as deliveryService from '../services/campaigns/campaignDeliveryService.js';
 import * as mergeFieldService from '../services/campaigns/mergeFieldService.js';
+import * as sequenceService from '../services/campaigns/campaignSequenceService.js';
 import campaignWebhooks from './campaigns/webhooks.js';
 
 type AuthMiddleware = (req: Request, res: Response, next: NextFunction) => void;
@@ -458,6 +459,80 @@ export function registerCampaignRoutes(
     try {
       const fields = mergeFieldService.getAvailableMergeFields();
       res.json(fields);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get('/api/campaigns/:id/sequence', isAuthenticated, resolveEffectiveUser, async (req: any, res) => {
+    try {
+      const campaign = await campaignStorage.getById(req.params.id);
+      if (!campaign) {
+        return res.status(404).json({ error: 'Campaign not found' });
+      }
+
+      const sequenceCondition = campaign.sequenceCondition as any || null;
+      const isSequenceCampaign = campaign.isSequence === true;
+
+      res.json({
+        isSequence: isSequenceCampaign,
+        parentCampaignId: campaign.parentCampaignId,
+        sequenceOrder: campaign.sequenceOrder,
+        sequenceCondition,
+        status: campaign.status,
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get('/api/campaigns/:id/sequence/steps', isAuthenticated, resolveEffectiveUser, async (req: any, res) => {
+    try {
+      const campaign = await campaignStorage.getById(req.params.id);
+      if (!campaign) {
+        return res.status(404).json({ error: 'Campaign not found' });
+      }
+
+      if (campaign.isSequence !== true) {
+        return res.status(400).json({ error: 'This campaign is not a sequence' });
+      }
+
+      const parentId = campaign.parentCampaignId || campaign.id;
+      const steps = await campaignStorage.getSequenceSteps(parentId);
+      
+      res.json({
+        parentCampaignId: parentId,
+        steps: steps.map((step: any) => ({
+          id: step.id,
+          name: step.name,
+          sequenceOrder: step.sequenceOrder,
+          status: step.status,
+          sequenceCondition: step.sequenceCondition,
+        })),
+      });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post('/api/campaigns/:id/sequence/process', isAuthenticated, resolveEffectiveUser, async (req: any, res) => {
+    try {
+      const campaign = await campaignStorage.getById(req.params.id);
+      if (!campaign) {
+        return res.status(404).json({ error: 'Campaign not found' });
+      }
+      
+      const parentId = campaign.parentCampaignId || campaign.id;
+      const parentCampaign = campaign.parentCampaignId 
+        ? await campaignStorage.getById(parentId)
+        : campaign;
+      
+      if (!parentCampaign?.isSequence) {
+        return res.status(400).json({ error: 'Campaign is not part of a sequence' });
+      }
+      
+      const result = await sequenceService.processSingleSequence(req.params.id);
+      res.json(result);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
