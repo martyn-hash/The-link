@@ -11,9 +11,13 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Trophy, TrendingUp, TrendingDown, Minus, AlertTriangle, User, Calendar, Target, Clock, ChevronRight, Download, RefreshCw, Info } from "lucide-react";
+import { Trophy, TrendingUp, TrendingDown, Minus, AlertTriangle, User, Calendar as CalendarIcon, Target, Clock, ChevronRight, Download, RefreshCw, Info } from "lucide-react";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { cn } from "@/lib/utils";
+import type { DateRange } from "react-day-picker";
 import type { Service, User as UserType } from "@shared/schema";
 
 interface LeagueEntry {
@@ -65,7 +69,10 @@ interface LeagueResponse {
 export default function PerformanceLeaguePage() {
   const { user } = useAuth();
   const [serviceId, setServiceId] = useState<string>("");
-  const [dateRange, setDateRange] = useState<string>("this-month");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: startOfMonth(new Date()),
+    to: endOfMonth(new Date()),
+  });
   const [minProjects, setMinProjects] = useState<string>("5");
   const [selectedAssignee, setSelectedAssignee] = useState<LeagueEntry | null>(null);
 
@@ -73,34 +80,8 @@ export default function PerformanceLeaguePage() {
     queryKey: ["/api/services"],
   });
 
-  const getDateRange = () => {
-    const now = new Date();
-    switch (dateRange) {
-      case "this-month":
-        return {
-          startDate: format(startOfMonth(now), "yyyy-MM-dd"),
-          endDate: format(endOfMonth(now), "yyyy-MM-dd"),
-        };
-      case "last-month":
-        const lastMonth = subMonths(now, 1);
-        return {
-          startDate: format(startOfMonth(lastMonth), "yyyy-MM-dd"),
-          endDate: format(endOfMonth(lastMonth), "yyyy-MM-dd"),
-        };
-      case "last-3-months":
-        return {
-          startDate: format(startOfMonth(subMonths(now, 2)), "yyyy-MM-dd"),
-          endDate: format(endOfMonth(now), "yyyy-MM-dd"),
-        };
-      default:
-        return {
-          startDate: format(startOfMonth(now), "yyyy-MM-dd"),
-          endDate: format(endOfMonth(now), "yyyy-MM-dd"),
-        };
-    }
-  };
-
-  const { startDate, endDate } = getDateRange();
+  const startDate = dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : "";
+  const endDate = dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : "";
 
   const { data: leagueData, isLoading, refetch, error } = useQuery<LeagueResponse>({
     queryKey: ["/api/analytics/performance-league", { serviceId, startDate, endDate, minProjects }],
@@ -191,17 +172,77 @@ export default function PerformanceLeaguePage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="date-range">Date Range</Label>
-                <Select value={dateRange} onValueChange={setDateRange}>
-                  <SelectTrigger id="date-range" data-testid="select-date-range">
-                    <SelectValue placeholder="Select date range" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="this-month">This Month</SelectItem>
-                    <SelectItem value="last-month">Last Month</SelectItem>
-                    <SelectItem value="last-3-months">Last 3 Months</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Label>Date Range</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !dateRange && "text-muted-foreground"
+                      )}
+                      data-testid="button-date-range"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateRange?.from ? (
+                        dateRange.to ? (
+                          <>
+                            {format(dateRange.from, "d MMM yyyy")} - {format(dateRange.to, "d MMM yyyy")}
+                          </>
+                        ) : (
+                          format(dateRange.from, "d MMM yyyy")
+                        )
+                      ) : (
+                        <span>Pick a date range</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      initialFocus
+                      mode="range"
+                      defaultMonth={dateRange?.from}
+                      selected={dateRange}
+                      onSelect={setDateRange}
+                      numberOfMonths={2}
+                    />
+                    <div className="p-3 border-t flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDateRange({
+                          from: startOfMonth(new Date()),
+                          to: endOfMonth(new Date()),
+                        })}
+                      >
+                        This Month
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const lastMonth = subMonths(new Date(), 1);
+                          setDateRange({
+                            from: startOfMonth(lastMonth),
+                            to: endOfMonth(lastMonth),
+                          });
+                        }}
+                      >
+                        Last Month
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDateRange({
+                          from: startOfMonth(subMonths(new Date(), 2)),
+                          to: endOfMonth(new Date()),
+                        })}
+                      >
+                        Last 3 Months
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="min-projects">Minimum Projects</Label>
