@@ -5,9 +5,11 @@ import {
   eachDayOfInterval,
   isSameDay,
   format,
+  parseISO,
 } from "date-fns";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Video, Calendar } from "lucide-react";
 import CalendarDayModal from "./CalendarDayModal";
 import type { CalendarEvent as CalendarEventType } from "@shared/schema";
 
@@ -26,6 +28,10 @@ interface CategorySummary {
   type: "service" | "stage" | "target" | "task";
 }
 
+function isOutlookEvent(event: CalendarEventType): boolean {
+  return event.id.startsWith('ms_') || Boolean(event.meta?.isMsCalendar);
+}
+
 function groupEventsByCategory(events: CalendarEventType[]): CategorySummary[] {
   const serviceMap = new Map<string, { count: number; color: string }>();
   let stageCount = 0;
@@ -33,6 +39,9 @@ function groupEventsByCategory(events: CalendarEventType[]): CategorySummary[] {
   let taskCount = 0;
 
   events.forEach((event) => {
+    if (isOutlookEvent(event)) {
+      return;
+    }
     if (event.type === "project_due") {
       const serviceName = event.meta?.serviceName || "Other";
       const existing = serviceMap.get(serviceName) || { count: 0, color: event.color };
@@ -88,6 +97,21 @@ function groupEventsByCategory(events: CalendarEventType[]): CategorySummary[] {
   return summaries.sort((a, b) => b.count - a.count);
 }
 
+function getOutlookEvents(events: CalendarEventType[]): CalendarEventType[] {
+  return events
+    .filter(isOutlookEvent)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+}
+
+function formatEventTime(dateStr: string): string {
+  try {
+    const date = parseISO(dateStr);
+    return format(date, "h:mm a");
+  } catch {
+    return "";
+  }
+}
+
 export default function CalendarWeekView({
   currentDate,
   events,
@@ -119,14 +143,15 @@ export default function CalendarWeekView({
   const today = new Date();
 
   const handleDayClick = (day: Date, dayEvents: CalendarEventType[]) => {
-    if (dayEvents.length > 0) {
+    const nonOutlookEvents = dayEvents.filter(e => !isOutlookEvent(e));
+    if (nonOutlookEvents.length > 0) {
       setSelectedDay(day);
       setModalOpen(true);
     }
   };
 
   const selectedDayEvents = selectedDay 
-    ? eventsByDay.get(format(selectedDay, "yyyy-MM-dd")) || []
+    ? (eventsByDay.get(format(selectedDay, "yyyy-MM-dd")) || []).filter(e => !isOutlookEvent(e))
     : [];
 
   return (
@@ -137,7 +162,8 @@ export default function CalendarWeekView({
             const isToday = isSameDay(day, today);
             const dayKey = format(day, "yyyy-MM-dd");
             const dayEvents = eventsByDay.get(dayKey) || [];
-            const totalEvents = dayEvents.length;
+            const projectTaskEvents = dayEvents.filter(e => !isOutlookEvent(e));
+            const projectTaskCount = projectTaskEvents.length;
             
             return (
               <div
@@ -161,16 +187,16 @@ export default function CalendarWeekView({
                 <div className="text-xs text-muted-foreground">
                   {format(day, "MMM")}
                 </div>
-                {totalEvents > 0 && (
+                {projectTaskCount > 0 && (
                   <button
-                    onClick={() => handleDayClick(day, dayEvents)}
+                    onClick={() => handleDayClick(day, projectTaskEvents)}
                     className={cn(
                       "mt-2 text-xs font-medium px-2 py-1 rounded-full transition-all",
                       "bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground"
                     )}
                     data-testid={`calendar-week-see-more-${dayKey}`}
                   >
-                    {totalEvents} items
+                    {projectTaskCount} items
                   </button>
                 )}
               </div>
@@ -184,31 +210,80 @@ export default function CalendarWeekView({
             const dayKey = format(day, "yyyy-MM-dd");
             const dayEvents = eventsByDay.get(dayKey) || [];
             const categories = groupEventsByCategory(dayEvents);
-            const totalEvents = dayEvents.length;
+            const outlookEvents = getOutlookEvents(dayEvents);
+            const projectEventsCount = dayEvents.filter(e => !isOutlookEvent(e)).length;
+            const hasContent = categories.length > 0 || outlookEvents.length > 0;
 
             return (
               <div
                 key={day.toISOString()}
                 className={cn(
                   "border-r-2 border-border last:border-r-0 min-h-[350px] transition-colors group",
-                  isToday && "bg-primary/5",
-                  totalEvents > 0 && "cursor-pointer hover:bg-accent/30"
+                  isToday && "bg-primary/5"
                 )}
                 data-testid={`calendar-week-day-${dayKey}`}
-                onClick={() => handleDayClick(day, dayEvents)}
               >
                 <ScrollArea className="h-full p-3">
                   <div className="space-y-2">
-                    {categories.length === 0 ? (
+                    {!hasContent ? (
                       <div className="text-xs text-muted-foreground text-center py-8">
                         No events
                       </div>
                     ) : (
                       <>
+                        {outlookEvents.map((event) => {
+                          const msEvent = event.meta?.msCalendarEvent;
+                          const isTeamsMeeting = msEvent?.isOnlineMeeting;
+                          const eventColor = event.color || "#0078d4";
+                          
+                          return (
+                            <button
+                              key={event.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEventClick(event);
+                              }}
+                              className={cn(
+                                "w-full text-left p-2 rounded-lg border transition-all",
+                                "hover:shadow-md hover:scale-[1.02] cursor-pointer",
+                                "bg-gradient-to-r from-blue-50 to-transparent dark:from-blue-950/30 dark:to-transparent"
+                              )}
+                              style={{
+                                borderLeftWidth: "3px",
+                                borderLeftColor: eventColor,
+                              }}
+                              data-testid={`calendar-outlook-event-${event.id}`}
+                            >
+                              <div className="flex items-start gap-2">
+                                <Calendar className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-xs font-medium text-foreground truncate">
+                                    {event.title}
+                                  </div>
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <span className="text-[10px] text-muted-foreground">
+                                      {formatEventTime(event.date)}
+                                    </span>
+                                    {isTeamsMeeting && (
+                                      <Video className="h-2.5 w-2.5 text-blue-500" />
+                                    )}
+                                  </div>
+                                  {event.assigneeName && event.assigneeName !== "My Calendar" && (
+                                    <div className="text-[10px] text-muted-foreground truncate mt-0.5">
+                                      {event.assigneeName}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+
                         {categories.map((category, i) => (
                           <div
                             key={`${category.name}-${i}`}
-                            className="p-2 rounded-lg border transition-colors hover:bg-accent/50"
+                            onClick={() => handleDayClick(day, dayEvents.filter(e => !isOutlookEvent(e)))}
+                            className="p-2 rounded-lg border transition-colors hover:bg-accent/50 cursor-pointer"
                             style={{ 
                               borderLeftWidth: "3px",
                               borderLeftColor: category.color 
@@ -225,7 +300,7 @@ export default function CalendarWeekView({
                           </div>
                         ))}
                         
-                        {totalEvents > 0 && (
+                        {projectEventsCount > 0 && (
                           <button
                             className={cn(
                               "w-full text-center py-2 text-xs font-medium rounded-lg transition-all",
@@ -234,10 +309,10 @@ export default function CalendarWeekView({
                             )}
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleDayClick(day, dayEvents);
+                              handleDayClick(day, dayEvents.filter(e => !isOutlookEvent(e)));
                             }}
                           >
-                            See all {totalEvents} items
+                            See all {projectEventsCount} items
                           </button>
                         )}
                       </>
