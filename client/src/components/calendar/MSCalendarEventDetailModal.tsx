@@ -15,6 +15,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -54,6 +56,9 @@ import {
   Pencil,
   X,
   Save,
+  CheckCircle2,
+  XCircle,
+  HelpCircle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -169,15 +174,6 @@ export function MSCalendarEventDetailModal({
 
   if (!event) return null;
 
-  const formatDateTime = (dateTimeStr: string) => {
-    try {
-      const date = parseISO(dateTimeStr);
-      return format(date, "EEEE, MMMM d, yyyy 'at' h:mm a");
-    } catch {
-      return dateTimeStr;
-    }
-  };
-
   const formatTime = (dateTimeStr: string) => {
     try {
       const date = parseISO(dateTimeStr);
@@ -251,6 +247,34 @@ export function MSCalendarEventDetailModal({
     }
   };
 
+  const getAttendeeStatusIcon = (response?: string) => {
+    switch (response) {
+      case "accepted":
+        return <CheckCircle2 className="h-4 w-4 text-green-600" />;
+      case "declined":
+        return <XCircle className="h-4 w-4 text-red-600" />;
+      case "tentativelyAccepted":
+        return <HelpCircle className="h-4 w-4 text-yellow-600" />;
+      default:
+        return <HelpCircle className="h-4 w-4 text-muted-foreground" />;
+    }
+  };
+
+  const getAttendeeStatusLabel = (response?: string) => {
+    switch (response) {
+      case "accepted":
+        return "Accepted";
+      case "declined":
+        return "Declined";
+      case "tentativelyAccepted":
+        return "Tentative";
+      case "none":
+        return "No response";
+      default:
+        return "Pending";
+    }
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={(newOpen) => {
@@ -260,335 +284,370 @@ export function MSCalendarEventDetailModal({
         }
         onOpenChange(newOpen);
       }}>
-        <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto" data-testid="ms-calendar-event-modal">
-          <DialogHeader>
-            <div className="flex items-start gap-3">
-              <div
-                className={`w-3 h-3 rounded-full mt-1.5 flex-shrink-0 ${getShowAsColor(event.showAs)}`}
-              />
-              <div className="flex-1">
-                <DialogTitle className="text-xl" data-testid="text-event-subject">
-                  {isEditing ? "Edit Event" : event.subject}
-                </DialogTitle>
-                {!isEditing && (
-                  <div className="flex items-center gap-2 mt-1">
-                    <Badge variant="outline" className="text-xs">
-                      {getShowAsLabel(event.showAs)}
-                    </Badge>
-                    {event.isOnlineMeeting && (
-                      <Badge variant="secondary" className="text-xs flex items-center gap-1">
-                        <Video className="h-3 w-3" />
-                        Teams Meeting
-                      </Badge>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </DialogHeader>
-
+        <DialogContent className="sm:max-w-[800px] max-h-[90vh] p-0 overflow-hidden" data-testid="ms-calendar-event-modal">
           {isEditing ? (
-            <Form {...form}>
-              <form onSubmit={form.handleSubmit(handleSave)} className="space-y-4 py-4">
-                <FormField
-                  control={form.control}
-                  name="subject"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Subject</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="Event subject" data-testid="input-event-subject" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="grid grid-cols-2 gap-4">
+            <div className="p-6">
+              <DialogHeader className="mb-6">
+                <DialogTitle className="text-xl">Edit Event</DialogTitle>
+              </DialogHeader>
+              <Form {...form}>
+                <form onSubmit={form.handleSubmit(handleSave)} className="space-y-4">
                   <FormField
                     control={form.control}
-                    name="startDateTime"
+                    name="subject"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Start</FormLabel>
+                        <FormLabel>Subject</FormLabel>
                         <FormControl>
-                          <Input type="datetime-local" {...field} data-testid="input-event-start" />
+                          <Input {...field} placeholder="Event subject" data-testid="input-event-subject" />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
-                    name="endDateTime"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>End</FormLabel>
-                        <FormControl>
-                          <Input type="datetime-local" {...field} data-testid="input-event-end" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="startDateTime"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Start</FormLabel>
+                          <FormControl>
+                            <Input type="datetime-local" {...field} data-testid="input-event-start" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                <FormField
-                  control={form.control}
-                  name="location"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Location</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder="Add location" data-testid="input-event-location" />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="showAs"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Show As</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-event-showas">
-                            <SelectValue placeholder="Select status" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="busy">Busy</SelectItem>
-                          <SelectItem value="free">Free</SelectItem>
-                          <SelectItem value="tentative">Tentative</SelectItem>
-                          <SelectItem value="oof">Out of Office</SelectItem>
-                          <SelectItem value="workingElsewhere">Working Elsewhere</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="isTeamsMeeting"
-                  render={({ field }) => (
-                    <FormItem className="flex items-center justify-between rounded-lg border p-3">
-                      <div className="space-y-0.5">
-                        <FormLabel className="text-base">Teams Meeting</FormLabel>
-                        <p className="text-sm text-muted-foreground">
-                          Add a Teams meeting link
-                        </p>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                          data-testid="switch-teams-meeting"
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description</FormLabel>
-                      <FormControl>
-                        <Textarea 
-                          {...field} 
-                          placeholder="Add description" 
-                          rows={3}
-                          data-testid="textarea-event-description"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <div className="flex justify-end gap-2 pt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleCancelEdit}
-                    data-testid="button-cancel-edit"
-                  >
-                    <X className="h-4 w-4 mr-2" />
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={updateMutation.isPending}
-                    data-testid="button-save-event"
-                  >
-                    {updateMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <Save className="h-4 w-4 mr-2" />
-                    )}
-                    Save Changes
-                  </Button>
-                </div>
-              </form>
-            </Form>
-          ) : (
-            <>
-              <div className="space-y-4 py-4">
-                <div className="flex items-start gap-3">
-                  <Calendar className="h-5 w-5 text-muted-foreground mt-0.5" />
-                  <div>
-                    <p className="font-medium" data-testid="text-event-date">
-                      {formatDate(event.start.dateTime)}
-                    </p>
-                    {!event.isAllDay && (
-                      <p className="text-sm text-muted-foreground" data-testid="text-event-time">
-                        {formatTime(event.start.dateTime)} - {formatTime(event.end.dateTime)}
-                      </p>
-                    )}
-                    {event.isAllDay && (
-                      <p className="text-sm text-muted-foreground">All day</p>
-                    )}
-                  </div>
-                </div>
-
-                {event.location?.displayName && (
-                  <div className="flex items-start gap-3">
-                    <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
-                    <p data-testid="text-event-location">{event.location.displayName}</p>
-                  </div>
-                )}
-
-                <div className="flex items-start gap-3">
-                  <User className="h-5 w-5 text-muted-foreground mt-0.5" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Calendar</p>
-                    <p className="font-medium" data-testid="text-calendar-owner">
-                      {event.calendarOwnerName}
-                    </p>
-                  </div>
-                </div>
-
-                {event.organizer && (
-                  <div className="flex items-start gap-3">
-                    <User className="h-5 w-5 text-muted-foreground mt-0.5" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Organizer</p>
-                      <p className="font-medium" data-testid="text-organizer">
-                        {event.organizer.emailAddress?.name || event.organizer.emailAddress?.address}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {event.attendees && event.attendees.length > 0 && (
-                  <div className="flex items-start gap-3">
-                    <Users className="h-5 w-5 text-muted-foreground mt-0.5" />
-                    <div className="flex-1">
-                      <p className="text-sm text-muted-foreground mb-2">
-                        Attendees ({event.attendees.length})
-                      </p>
-                      <div className="space-y-1">
-                        {event.attendees.map((attendee, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center justify-between text-sm"
-                          >
-                            <span>
-                              {attendee.emailAddress.name || attendee.emailAddress.address}
-                            </span>
-                            {attendee.status?.response && (
-                              <Badge
-                                variant={
-                                  attendee.status.response === "accepted"
-                                    ? "default"
-                                    : attendee.status.response === "declined"
-                                    ? "destructive"
-                                    : "secondary"
-                                }
-                                className="text-xs"
-                              >
-                                {attendee.status.response}
-                              </Badge>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {event.body?.content && (
-                  <div className="border-t pt-4">
-                    <p className="text-sm text-muted-foreground mb-2">Description</p>
-                    <div
-                      className="text-sm prose prose-sm max-w-none"
-                      dangerouslySetInnerHTML={{
-                        __html: event.body.contentType === "html" 
-                          ? event.body.content 
-                          : event.body.content.replace(/\n/g, "<br />"),
-                      }}
-                      data-testid="text-event-description"
+                    <FormField
+                      control={form.control}
+                      name="endDateTime"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>End</FormLabel>
+                          <FormControl>
+                            <Input type="datetime-local" {...field} data-testid="input-event-end" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
                     />
                   </div>
-                )}
+
+                  <FormField
+                    control={form.control}
+                    name="location"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Location</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Add location" data-testid="input-event-location" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="showAs"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Show As</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-event-showas">
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="busy">Busy</SelectItem>
+                            <SelectItem value="free">Free</SelectItem>
+                            <SelectItem value="tentative">Tentative</SelectItem>
+                            <SelectItem value="oof">Out of Office</SelectItem>
+                            <SelectItem value="workingElsewhere">Working Elsewhere</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="isTeamsMeeting"
+                    render={({ field }) => (
+                      <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                        <div className="space-y-0.5">
+                          <FormLabel className="text-base">Teams Meeting</FormLabel>
+                          <p className="text-sm text-muted-foreground">
+                            Add a Teams meeting link
+                          </p>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            data-testid="switch-teams-meeting"
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Description</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            {...field} 
+                            placeholder="Add description" 
+                            rows={3}
+                            data-testid="textarea-event-description"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleCancelEdit}
+                      data-testid="button-cancel-edit"
+                    >
+                      <X className="h-4 w-4 mr-2" />
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={updateMutation.isPending}
+                      data-testid="button-save-event"
+                    >
+                      {updateMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4 mr-2" />
+                      )}
+                      Save Changes
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            </div>
+          ) : (
+            <>
+              <div className={`px-6 pt-6 pb-4 border-b bg-gradient-to-r from-muted/50 to-background ${getShowAsColor(event.showAs)}/5`}>
+                <div className="flex items-start gap-4">
+                  <div
+                    className={`w-4 h-4 rounded-full mt-1 flex-shrink-0 ${getShowAsColor(event.showAs)} shadow-sm`}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <DialogTitle className="text-2xl font-semibold leading-tight mb-2" data-testid="text-event-subject">
+                      {event.subject}
+                    </DialogTitle>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline" className="text-xs font-medium">
+                        {getShowAsLabel(event.showAs)}
+                      </Badge>
+                      {event.isOnlineMeeting && (
+                        <Badge className="text-xs flex items-center gap-1 bg-blue-600 hover:bg-blue-700">
+                          <Video className="h-3 w-3" />
+                          Teams Meeting
+                        </Badge>
+                      )}
+                      {event.isAllDay && (
+                        <Badge variant="secondary" className="text-xs">
+                          All Day
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
 
-              <DialogFooter className="flex-wrap gap-2">
-                {event.onlineMeeting?.joinUrl && (
-                  <Button
-                    variant="default"
-                    className="bg-blue-600 hover:bg-blue-700"
-                    onClick={() => window.open(event.onlineMeeting!.joinUrl, "_blank")}
-                    data-testid="button-join-teams"
-                  >
-                    <Video className="h-4 w-4 mr-2" />
-                    Join Teams Meeting
-                  </Button>
-                )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-0 md:gap-6 p-6">
+                <div className="space-y-5">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <Calendar className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="flex-1 pt-1">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Date & Time</p>
+                      <p className="font-medium text-base" data-testid="text-event-date">
+                        {formatDate(event.start.dateTime)}
+                      </p>
+                      {!event.isAllDay && (
+                        <p className="text-sm text-muted-foreground mt-0.5" data-testid="text-event-time">
+                          {formatTime(event.start.dateTime)} – {formatTime(event.end.dateTime)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
 
-                {event.webLink && (
-                  <Button
-                    variant="outline"
-                    onClick={() => window.open(event.webLink, "_blank")}
-                    data-testid="button-open-outlook"
-                  >
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    Open in Outlook
-                  </Button>
-                )}
+                  {event.location?.displayName && (
+                    <div className="flex items-start gap-4">
+                      <div className="flex-shrink-0 w-10 h-10 rounded-full bg-orange-500/10 flex items-center justify-center">
+                        <MapPin className="h-5 w-5 text-orange-600" />
+                      </div>
+                      <div className="flex-1 pt-1">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Location</p>
+                        <p className="font-medium" data-testid="text-event-location">{event.location.displayName}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 w-10 h-10 rounded-full bg-violet-500/10 flex items-center justify-center">
+                      <User className="h-5 w-5 text-violet-600" />
+                    </div>
+                    <div className="flex-1 pt-1">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Calendar</p>
+                      <p className="font-medium" data-testid="text-calendar-owner">
+                        {event.calendarOwnerName}
+                      </p>
+                    </div>
+                  </div>
+
+                  {event.organizer && (
+                    <div className="flex items-start gap-4">
+                      <div className="flex-shrink-0 w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                        <User className="h-5 w-5 text-emerald-600" />
+                      </div>
+                      <div className="flex-1 pt-1">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Organizer</p>
+                        <p className="font-medium" data-testid="text-organizer">
+                          {event.organizer.emailAddress?.name || event.organizer.emailAddress?.address}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-6 md:mt-0">
+                  {event.attendees && event.attendees.length > 0 ? (
+                    <div className="rounded-xl border bg-muted/30 p-4">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Users className="h-5 w-5 text-muted-foreground" />
+                        <span className="font-semibold">Attendees</span>
+                        <Badge variant="secondary" className="ml-auto text-xs">
+                          {event.attendees.length}
+                        </Badge>
+                      </div>
+                      <ScrollArea className="max-h-[200px]">
+                        <div className="space-y-2">
+                          {event.attendees.map((attendee, index) => (
+                            <div
+                              key={index}
+                              className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
+                            >
+                              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium text-primary">
+                                {(attendee.emailAddress.name || attendee.emailAddress.address)?.[0]?.toUpperCase() || "?"}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium truncate">
+                                  {attendee.emailAddress.name || attendee.emailAddress.address}
+                                </p>
+                                {attendee.emailAddress.name && (
+                                  <p className="text-xs text-muted-foreground truncate">
+                                    {attendee.emailAddress.address}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                {getAttendeeStatusIcon(attendee.status?.response)}
+                                <span className="text-xs text-muted-foreground hidden sm:inline">
+                                  {getAttendeeStatusLabel(attendee.status?.response)}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed bg-muted/20 p-6 text-center">
+                      <Users className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">No attendees</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {event.body?.content && (
+                <div className="px-6 pb-4">
+                  <Separator className="mb-4" />
+                  <div className="flex items-center gap-2 mb-3">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Description</p>
+                  </div>
+                  <div
+                    className="text-sm prose prose-sm max-w-none dark:prose-invert bg-muted/30 rounded-lg p-4"
+                    dangerouslySetInnerHTML={{
+                      __html: event.body.contentType === "html" 
+                        ? event.body.content 
+                        : event.body.content.replace(/\n/g, "<br />"),
+                    }}
+                    data-testid="text-event-description"
+                  />
+                </div>
+              )}
+
+              <DialogFooter className="px-6 py-4 border-t bg-muted/30 gap-2 flex-wrap sm:flex-nowrap">
+                <div className="flex gap-2 flex-1 flex-wrap sm:flex-nowrap">
+                  {event.onlineMeeting?.joinUrl && (
+                    <Button
+                      className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                      onClick={() => window.open(event.onlineMeeting!.joinUrl, "_blank")}
+                      data-testid="button-join-teams"
+                    >
+                      <Video className="h-4 w-4 mr-2" />
+                      Join Teams
+                    </Button>
+                  )}
+
+                  {event.webLink && (
+                    <Button
+                      variant="outline"
+                      onClick={() => window.open(event.webLink, "_blank")}
+                      data-testid="button-open-outlook"
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Open in Outlook
+                    </Button>
+                  )}
+                </div>
 
                 {canEdit && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsEditing(true)}
-                    data-testid="button-edit-event"
-                  >
-                    <Pencil className="h-4 w-4 mr-2" />
-                    Edit
-                  </Button>
-                )}
-
-                {canEdit && (
-                  <Button
-                    variant="destructive"
-                    onClick={() => setShowDeleteConfirm(true)}
-                    disabled={deleteMutation.isPending}
-                    data-testid="button-delete-event"
-                  >
-                    {deleteMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsEditing(true)}
+                      data-testid="button-edit-event"
+                    >
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      onClick={() => setShowDeleteConfirm(true)}
+                      disabled={deleteMutation.isPending}
+                      data-testid="button-delete-event"
+                    >
+                      {deleteMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
                 )}
               </DialogFooter>
             </>
