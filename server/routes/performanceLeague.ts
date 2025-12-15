@@ -149,6 +149,24 @@ export function registerPerformanceLeagueRoutes(
           }
           const metrics = assigneeMetrics.get(assigneeId)!;
           metrics.projectCount++;
+
+          // Calculate project days for this assignee on this project
+          for (let i = 0; i < sortedChronology.length; i++) {
+            const entry = sortedChronology[i];
+            if (entry.assigneeId !== assigneeId) continue;
+
+            const entryTime = new Date(entry.timestamp!);
+            const nextEntry = sortedChronology[i + 1];
+            const exitTime = nextEntry ? new Date(nextEntry.timestamp!) : new Date();
+
+            // Clamp to the date range
+            const periodStart = entryTime < rangeStart ? rangeStart : entryTime;
+            const periodEnd = exitTime > rangeEnd ? rangeEnd : exitTime;
+
+            if (periodStart < periodEnd) {
+              metrics.projectDays += countBusinessDays(periodStart, periodEnd);
+            }
+          }
         }
 
         for (let i = 0; i < sortedChronology.length; i++) {
@@ -265,10 +283,9 @@ export function registerPerformanceLeagueRoutes(
         entry.rank = index + 1;
       });
 
-      const filteredEntries = entries.filter(e => !e.smallSample || minProjectsNum === 0);
-
+      // Return all entries with smallSample flag rather than filtering them out
       res.json({
-        entries: filteredEntries.map(e => ({
+        entries: entries.map(e => ({
           rank: e.rank,
           assigneeId: e.assigneeId,
           assigneeName: e.assigneeName,
@@ -324,6 +341,7 @@ export function registerPerformanceLeagueRoutes(
       const userMap = new Map(users.map(u => [u.id, `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email]));
 
       let projectCount = 0;
+      let projectDays = 0;
       let lateEvents = 0;
       let totalLateDays = 0;
       const stageBreakdown = new Map<string, { lateEvents: number; lateDays: number }>();
@@ -340,11 +358,19 @@ export function registerPerformanceLeagueRoutes(
           (a, b) => new Date(a.timestamp!).getTime() - new Date(b.timestamp!).getTime()
         );
 
+        // Check if this assignee was involved in the project during the date range
+        // This includes: entries within range OR ongoing assignment spanning the range
         let assigneeInvolved = false;
-        for (const entry of sortedChronology) {
+        
+        for (let i = 0; i < sortedChronology.length; i++) {
+          const entry = sortedChronology[i];
           if (entry.assigneeId === assigneeId) {
             const entryTime = new Date(entry.timestamp!);
-            if (entryTime >= rangeStart && entryTime <= rangeEnd) {
+            const nextEntry = sortedChronology[i + 1];
+            const exitTime = nextEntry ? new Date(nextEntry.timestamp!) : new Date();
+            
+            // Check if assignment period overlaps with date range
+            if (entryTime <= rangeEnd && exitTime >= rangeStart) {
               assigneeInvolved = true;
               break;
             }
@@ -353,6 +379,24 @@ export function registerPerformanceLeagueRoutes(
 
         if (!assigneeInvolved) continue;
         projectCount++;
+        
+        // Calculate project days for this assignee on this project
+        for (let i = 0; i < sortedChronology.length; i++) {
+          const entry = sortedChronology[i];
+          if (entry.assigneeId !== assigneeId) continue;
+
+          const entryTime = new Date(entry.timestamp!);
+          const nextEntry = sortedChronology[i + 1];
+          const exitTime = nextEntry ? new Date(nextEntry.timestamp!) : new Date();
+
+          // Clamp to the date range
+          const periodStart = entryTime < rangeStart ? rangeStart : entryTime;
+          const periodEnd = exitTime > rangeEnd ? rangeEnd : exitTime;
+
+          if (periodStart < periodEnd) {
+            projectDays += countBusinessDays(periodStart, periodEnd);
+          }
+        }
 
         for (let i = 0; i < sortedChronology.length; i++) {
           const entry = sortedChronology[i];
@@ -447,7 +491,7 @@ export function registerPerformanceLeagueRoutes(
           assigneeName: userMap.get(assigneeId) || 'Unknown',
           serviceName: service.name,
           projectCount,
-          projectDays: 0,
+          projectDays,
           lateEvents,
           totalLateDays,
           lir,
