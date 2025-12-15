@@ -7,6 +7,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -16,6 +21,22 @@ export interface CalendarAccessUser {
   lastName: string | null;
   email: string | null;
 }
+
+export interface CalendarColorPreference {
+  calendarOwnerId: string;
+  color: string;
+}
+
+const CALENDAR_COLORS = [
+  { name: "Blue", value: "#3b82f6" },
+  { name: "Green", value: "#22c55e" },
+  { name: "Purple", value: "#a855f7" },
+  { name: "Orange", value: "#f97316" },
+  { name: "Pink", value: "#ec4899" },
+  { name: "Cyan", value: "#06b6d4" },
+  { name: "Red", value: "#ef4444" },
+  { name: "Yellow", value: "#eab308" },
+];
 
 interface CalendarHeaderProps {
   currentDate: Date;
@@ -40,6 +61,8 @@ interface CalendarHeaderProps {
   onSelectedCalendarUserIdsChange?: (ids: string[]) => void;
   currentUserId?: string;
   onCreateMeeting?: () => void;
+  calendarColors?: Record<string, string>;
+  onCalendarColorChange?: (calendarOwnerId: string, color: string) => void;
 }
 
 export default function CalendarHeader({
@@ -65,6 +88,8 @@ export default function CalendarHeader({
   onSelectedCalendarUserIdsChange,
   currentUserId,
   onCreateMeeting,
+  calendarColors = {},
+  onCalendarColorChange,
 }: CalendarHeaderProps) {
   const displayFormat = viewType === "month" 
     ? "MMMM yyyy" 
@@ -171,30 +196,73 @@ export default function CalendarHeader({
               <div className="space-y-2">
                 <h4 className="font-medium text-sm mb-3">Show Calendars</h4>
                 {accessibleCalendars.map((user) => (
-                  <button
+                  <div
                     key={user.id}
-                    onClick={() => toggleCalendarUser(user.id)}
-                    className={cn(
-                      "flex items-center w-full px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors",
-                      selectedCalendarUserIds.includes(user.id) && "bg-muted"
-                    )}
-                    data-testid={`button-toggle-calendar-${user.id}`}
+                    className="flex items-center gap-1"
                   >
-                    <div className={cn(
-                      "w-4 h-4 border rounded mr-2 flex items-center justify-center",
-                      selectedCalendarUserIds.includes(user.id) 
-                        ? "bg-primary border-primary" 
-                        : "border-input"
-                    )}>
-                      {selectedCalendarUserIds.includes(user.id) && (
-                        <Check className="h-3 w-3 text-primary-foreground" />
+                    <button
+                      onClick={() => toggleCalendarUser(user.id)}
+                      className={cn(
+                        "flex items-center flex-1 px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors",
+                        selectedCalendarUserIds.includes(user.id) && "bg-muted"
                       )}
-                    </div>
-                    <span>{getUserDisplayName(user)}</span>
-                    {user.id === currentUserId && (
-                      <span className="ml-1 text-muted-foreground text-xs">(You)</span>
+                      data-testid={`button-toggle-calendar-${user.id}`}
+                    >
+                      <div className={cn(
+                        "w-4 h-4 border rounded mr-2 flex items-center justify-center",
+                        selectedCalendarUserIds.includes(user.id) 
+                          ? "bg-primary border-primary" 
+                          : "border-input"
+                      )}>
+                        {selectedCalendarUserIds.includes(user.id) && (
+                          <Check className="h-3 w-3 text-primary-foreground" />
+                        )}
+                      </div>
+                      <span className="flex-1 text-left">{getUserDisplayName(user)}</span>
+                      {user.id === currentUserId && (
+                        <span className="ml-1 text-muted-foreground text-xs">(You)</span>
+                      )}
+                    </button>
+                    {onCalendarColorChange && (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                            data-testid={`button-calendar-color-${user.id}`}
+                          >
+                            <div 
+                              className="w-4 h-4 rounded-full border border-border"
+                              style={{ backgroundColor: calendarColors[user.id] || CALENDAR_COLORS[0].value }}
+                            />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-2" align="end" side="right">
+                          <div className="grid grid-cols-4 gap-1.5">
+                            {CALENDAR_COLORS.map((color) => (
+                              <Tooltip key={color.value}>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    onClick={() => onCalendarColorChange(user.id, color.value)}
+                                    className={cn(
+                                      "w-6 h-6 rounded-full border-2 transition-transform hover:scale-110",
+                                      calendarColors[user.id] === color.value 
+                                        ? "border-foreground" 
+                                        : "border-transparent"
+                                    )}
+                                    style={{ backgroundColor: color.value }}
+                                    data-testid={`button-color-${user.id}-${color.name.toLowerCase()}`}
+                                  />
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  <p>{color.name}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            ))}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
                     )}
-                  </button>
+                  </div>
                 ))}
                 {accessibleCalendars.length === 0 && (
                   <p className="text-sm text-muted-foreground">No accessible calendars</p>

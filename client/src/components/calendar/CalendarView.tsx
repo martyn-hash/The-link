@@ -11,7 +11,8 @@ import {
   format,
 } from "date-fns";
 import { Loader2 } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import CalendarHeader, { type CalendarAccessUser } from "./CalendarHeader";
 import CalendarMonthView from "./CalendarMonthView";
 import CalendarWeekView from "./CalendarWeekView";
@@ -20,6 +21,13 @@ import { useOutlookCalendarEvents } from "./useOutlookCalendarEvents";
 import { CreateMeetingModal } from "./CreateMeetingModal";
 import { MSCalendarEventDetailModal } from "./MSCalendarEventDetailModal";
 import type { CalendarEvent, CalendarViewSettings, User, MSCalendarEvent } from "@shared/schema";
+
+interface CalendarColorPreference {
+  id: string;
+  userId: string;
+  calendarOwnerId: string;
+  color: string;
+}
 
 interface CalendarViewProps {
   serviceFilter?: string;
@@ -81,6 +89,35 @@ export default function CalendarView({
     enabled: msCalendarConfigured,
     staleTime: 60000,
   });
+
+  const { data: colorPreferencesData } = useQuery<CalendarColorPreference[]>({
+    queryKey: ['/api/calendar/color-preferences'],
+    enabled: msCalendarConfigured,
+    staleTime: 30000,
+  });
+
+  const calendarColors = useMemo(() => {
+    const colors: Record<string, string> = {};
+    if (colorPreferencesData) {
+      for (const pref of colorPreferencesData) {
+        colors[pref.calendarOwnerId] = pref.color;
+      }
+    }
+    return colors;
+  }, [colorPreferencesData]);
+
+  const updateColorMutation = useMutation({
+    mutationFn: async ({ calendarOwnerId, color }: { calendarOwnerId: string; color: string }) => {
+      await apiRequest('POST', '/api/calendar/color-preferences', { calendarOwnerId, color });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/calendar/color-preferences'] });
+    },
+  });
+
+  const handleCalendarColorChange = (calendarOwnerId: string, color: string) => {
+    updateColorMutation.mutate({ calendarOwnerId, color });
+  };
 
   const accessibleCalendars: CalendarAccessUser[] = useMemo(() => {
     const calendars: CalendarAccessUser[] = [];
@@ -278,6 +315,8 @@ export default function CalendarView({
         onSelectedCalendarUserIdsChange={setSelectedCalendarUserIds}
         currentUserId={currentUserId}
         onCreateMeeting={() => setCreateMeetingOpen(true)}
+        calendarColors={calendarColors}
+        onCalendarColorChange={handleCalendarColorChange}
       />
 
       <div className="flex-1 mt-4 relative">
