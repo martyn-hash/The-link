@@ -90,16 +90,33 @@ export function MSCalendarEventDetailModal({
     },
   });
 
+  const stripHtml = (html: string): string => {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    return doc.body.textContent || "";
+  };
+
   useEffect(() => {
     if (event && isEditing) {
-      const startDate = parseISO(event.start.dateTime);
-      const endDate = parseISO(event.end.dateTime);
+      let description = "";
+      if (event.body?.content) {
+        description = event.body.contentType === "html" 
+          ? stripHtml(event.body.content)
+          : event.body.content;
+      }
+      
+      const extractDateTimeLocal = (isoString: string): string => {
+        const match = isoString.match(/^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})/);
+        if (match) {
+          return `${match[1]}T${match[2]}`;
+        }
+        return isoString.slice(0, 16);
+      };
       
       form.reset({
         subject: event.subject || "",
-        description: event.body?.content || "",
-        startDateTime: format(startDate, "yyyy-MM-dd'T'HH:mm"),
-        endDateTime: format(endDate, "yyyy-MM-dd'T'HH:mm"),
+        description,
+        startDateTime: extractDateTimeLocal(event.start.dateTime),
+        endDateTime: extractDateTimeLocal(event.end.dateTime),
         location: event.location?.displayName || "",
         showAs: event.showAs as UpdateMeetingInput["showAs"] || "busy",
         isTeamsMeeting: event.isOnlineMeeting || false,
@@ -190,7 +207,11 @@ export function MSCalendarEventDetailModal({
   };
 
   const handleSave = (data: UpdateMeetingInput) => {
-    updateMutation.mutate(data);
+    const payload = { ...data };
+    
+    payload.timeZone = event.start.timeZone || "Europe/London";
+    
+    updateMutation.mutate(payload);
   };
 
   const handleCancelEdit = () => {
