@@ -13,6 +13,7 @@ import { startNotificationCron } from "./notification-cron";
 import { startSignatureReminderCron } from "./signature-reminder-cron";
 import { startReminderNotificationCron } from "./reminder-notification-cron";
 import { startQueryReminderCron } from "./query-reminder-cron";
+import { startSequenceCron } from "./sequence-cron";
 import { recoverPendingTranscriptions } from "./transcription-service";
 import fs from "fs";
 import path from "path";
@@ -255,6 +256,10 @@ app.use((req, res, next) => {
     // Setup query reminder cron job
     // Runs every 5 minutes between 07:00-22:00 UK time to send automated reminders for bookkeeping queries
     startQueryReminderCron();
+    
+    // Setup campaign sequence progression cron job
+    // Runs daily at 06:00 UK time to progress multi-step campaign sequences
+    startSequenceCron();
     
     // Setup dashboard cache updates
     // Overnight update: Runs at 03:00 UK time (3:00 AM GMT/BST) - Europe/London timezone
