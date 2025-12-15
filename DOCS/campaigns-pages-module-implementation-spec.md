@@ -500,7 +500,15 @@ queueStatusEnum: 'pending' | 'processing' | 'completed' | 'failed_permanent'
    server/routes/contactPreferences.ts
    ```
 
-### 4.2 Success Criteria - Phase 1
+### 4.2 Testing Access - Phase 1
+
+To test Phase 1 features:
+1. Navigate to the root page
+2. Click the "Passwords" tab
+3. Login with: **admin@example.com** / **admin123**
+4. Access campaign templates via Super Admin menu
+
+### 4.3 Success Criteria - Phase 1
 - [ ] All tables created and migrated successfully
 - [ ] Storage layer compiles without errors
 - [ ] Can create/read/update/delete campaign templates via API
@@ -1441,7 +1449,15 @@ router.post('/campaigns/:id/confirm-preview', requireAuth, async (req, res) => {
 });
 ```
 
-### 5.7 Success Criteria - Phase 2
+### 5.7 Testing Access - Phase 2
+
+To test Phase 2 features:
+1. Navigate to the root page
+2. Click the "Passwords" tab
+3. Login with: **admin@example.com** / **admin123**
+4. Access Campaigns from the main navigation or Super Admin menu
+
+### 5.8 Success Criteria - Phase 2
 
 - [ ] All 16+ filters work correctly and can be combined
 - [ ] Live count updates as filters change (debounced)
@@ -1986,7 +2002,15 @@ export async function verifyPageOtp(visitToken: string, code: string): Promise<{
 // - OTP requirement toggle
 ```
 
-### 6.6 Success Criteria - Phase 3
+### 6.6 Testing Access - Phase 3
+
+To test Phase 3 features:
+1. Navigate to the root page
+2. Click the "Passwords" tab
+3. Login with: **admin@example.com** / **admin123**
+4. Access Page Builder from campaign creation or standalone via menu
+
+### 6.7 Success Criteria - Phase 3
 
 - [ ] Page builder UI allows creating/editing all 14 component types
 - [ ] Grid layout works (sections → rows → columns with responsive)
@@ -2174,7 +2198,15 @@ async function findEligibleRecipientsForStep(
 // - Can edit/reorder steps
 ```
 
-### 7.4 Success Criteria - Phase 4
+### 7.4 Testing Access - Phase 4
+
+To test Phase 4 features:
+1. Navigate to the root page
+2. Click the "Passwords" tab
+3. Login with: **admin@example.com** / **admin123**
+4. Create a new campaign and select "Sequence" type
+
+### 7.5 Success Criteria - Phase 4
 
 - [ ] Sequence parent campaign created with steps
 - [ ] Each step has condition and wait period
@@ -2435,7 +2467,15 @@ router.post('/dialora/campaign-events', async (req, res) => {
 });
 ```
 
-### 8.4 Success Criteria - Phase 5
+### 8.4 Testing Access - Phase 5
+
+To test Phase 5 features:
+1. Navigate to the root page
+2. Click the "Passwords" tab
+3. Login with: **admin@example.com** / **admin123**
+4. Access Campaign Analytics from campaign detail page or dashboard
+
+### 8.5 Success Criteria - Phase 5
 
 - [ ] Engagement scores calculate correctly
 - [ ] Consecutive ignored counter works
