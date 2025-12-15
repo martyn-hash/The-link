@@ -246,7 +246,7 @@ export default function CalendarDayModal({
           "p-0 gap-0 transition-all duration-300 ease-in-out flex flex-col",
           isExpanded 
             ? "max-w-[96vw] w-[96vw] h-[94vh] max-h-[94vh]" 
-            : "max-w-[95vw] md:max-w-4xl h-auto max-h-[80vh]"
+            : "max-w-[95vw] md:max-w-5xl h-auto max-h-[85vh]"
         )}
       >
         <DialogHeader className="px-4 py-3 border-b bg-muted/30 shrink-0">
@@ -282,7 +282,7 @@ export default function CalendarDayModal({
             <div 
               className={cn(
                 "border-r transition-all duration-300 flex flex-col shrink-0",
-                isExpanded ? "w-14" : "w-48"
+                isExpanded ? "w-14" : "w-72"
               )}
             >
               {!isExpanded && (
@@ -347,14 +347,21 @@ export default function CalendarDayModal({
                                 key={event.id}
                                 onClick={() => handleEventSelect(event)}
                                 className={cn(
-                                  "w-full text-left px-1.5 py-1 rounded text-[11px] transition-colors",
+                                  "w-full text-left px-1.5 py-1.5 rounded text-[11px] transition-colors",
                                   "hover:bg-accent",
                                   selectedEvent?.id === event.id && "bg-accent ring-1 ring-primary"
                                 )}
                               >
-                                <div className="flex items-center gap-1">
-                                  <ChevronRight className="w-2.5 h-2.5 text-muted-foreground flex-shrink-0" />
-                                  <span className="truncate font-medium">{event.title}</span>
+                                <div className="flex items-start gap-1">
+                                  <ChevronRight className="w-2.5 h-2.5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                                  <div className="min-w-0 flex-1">
+                                    <span className="block truncate font-medium">{event.title}</span>
+                                    {event.clientName && (
+                                      <span className="block truncate text-[10px] text-muted-foreground">
+                                        {event.clientName}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </button>
                             ))}
