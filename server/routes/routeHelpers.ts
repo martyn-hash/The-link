@@ -12,13 +12,17 @@ export const emailAttachmentSchema = z.object({
 
 // Email sending schema
 export const sendEmailSchema = z.object({
-  to: z.string().email("Invalid email address"),
+  to: z.union([
+    z.string().email("Invalid email address"),
+    z.array(z.string().email("Invalid email address")).min(1, "At least one recipient is required")
+  ]),
   cc: z.array(z.string().email("Invalid CC email address")).optional(),
   bcc: z.array(z.string().email("Invalid BCC email address")).optional(),
   subject: z.string().min(1, "Subject is required"),
   content: z.string().min(1, "Email content is required"),
   clientId: z.string().optional(),
-  personId: z.string().optional(),
+  personIds: z.array(z.string()).optional(), // Array of person IDs for logging multiple recipients
+  personId: z.string().optional(), // Kept for backward compatibility
   projectId: z.string().optional(),
   isHtml: z.boolean().optional(),
   attachments: z.array(emailAttachmentSchema).optional(),

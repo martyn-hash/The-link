@@ -1236,10 +1236,13 @@ export function registerIntegrationRoutes(
         });
       }
 
-      const { to, cc, bcc, subject, content, clientId, personId, projectId, isHtml, attachments } = bodyValidation.data;
+      const { to, cc, bcc, subject, content, clientId, personId, personIds, projectId, isHtml, attachments } = bodyValidation.data;
+      
+      // Normalize 'to' to always be an array for consistent handling
+      const toRecipients = Array.isArray(to) ? to : [to];
 
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
-      console.log('[EMAIL SEND] User ID:', effectiveUserId, 'Client ID:', clientId || 'none', 'Project ID:', projectId || 'none', 'Attachments:', attachments?.length || 0, 'CC:', cc?.length || 0, 'BCC:', bcc?.length || 0);
+      console.log('[EMAIL SEND] User ID:', effectiveUserId, 'Client ID:', clientId || 'none', 'Project ID:', projectId || 'none', 'To recipients:', toRecipients.length, 'Attachments:', attachments?.length || 0, 'CC:', cc?.length || 0, 'BCC:', bcc?.length || 0);
 
       // Check if user has access to this client (only if clientId is provided)
       if (clientId) {
@@ -1303,7 +1306,7 @@ export function registerIntegrationRoutes(
 
           emailResult = await sendEmailAsUserTenantWide(
             user.email!,
-            to,
+            toRecipients, // Pass all recipients as array
             subject,
             processedContent,
             isHtml || false,
@@ -1337,7 +1340,7 @@ export function registerIntegrationRoutes(
           
           // Build SendGrid message
           const sgMessage: any = {
-            to,
+            to: toRecipients, // Pass all recipients as array
             from: {
               email: fromEmail,
               name: senderName
@@ -1384,7 +1387,7 @@ export function registerIntegrationRoutes(
           
           emailResult = await sgMail.send(sgMessage);
           sentVia = 'sendgrid';
-          console.log('[EMAIL SEND] Email sent successfully via SendGrid:', { to, subject });
+          console.log('[EMAIL SEND] Email sent successfully via SendGrid:', { to: toRecipients, subject });
         } catch (sendgridError) {
           const sgErr = sendgridError instanceof Error ? sendgridError.message : String(sendgridError);
           console.error('[EMAIL SEND] SendGrid also failed:', sgErr);
@@ -1401,19 +1404,31 @@ export function registerIntegrationRoutes(
       }
 
       // Log the email as a communication record (only if linked to a client)
+      // If multiple personIds are provided, log one communication entry with first personId
+      // (the communication content shows all recipients in the metadata)
       let communication = null;
       if (clientId) {
+        // Use personIds array if provided, otherwise fall back to single personId
+        const recipientPersonIds = personIds && personIds.length > 0 ? personIds : (personId ? [personId] : []);
+        const primaryPersonId = recipientPersonIds[0] || null;
+        
         communication = await storage.createCommunication({
           clientId,
-          personId: personId || null,
+          personId: primaryPersonId,
           projectId: projectId || null,
           type: 'email_sent',
           subject: subject,
           content: content,
           actualContactTime: new Date(),
-          userId: effectiveUserId
+          userId: effectiveUserId,
+          metadata: toRecipients.length > 1 ? {
+            allRecipients: toRecipients,
+            allPersonIds: recipientPersonIds,
+            cc: cc || [],
+            bcc: bcc || []
+          } : undefined
         });
-        console.log('[EMAIL SEND] Communication logged with ID:', communication.id, projectId ? `(linked to project ${projectId})` : '');
+        console.log('[EMAIL SEND] Communication logged with ID:', communication.id, 'Recipients:', toRecipients.length, projectId ? `(linked to project ${projectId})` : '');
       }
 
       res.json({

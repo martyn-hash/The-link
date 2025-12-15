@@ -419,24 +419,23 @@ export function EmailDialog({
       cc?: string[];
       bcc?: string[];
     }) => {
-      // Send emails to all recipients
-      const results = [];
-      for (const recipient of data.recipients) {
-        const result = await apiRequest('POST', '/api/email/send', {
-          to: recipient.email,
-          subject: data.subject,
-          content: data.content,
-          clientId: data.clientId,
-          projectId: data.projectId,
-          personId: recipient.personId,
-          isHtml: data.isHtml,
-          attachments: data.attachments,
-          cc: data.cc,
-          bcc: data.bcc,
-        });
-        results.push(result);
-      }
-      return results;
+      // Send a single email with all recipients in the "To" field
+      const toEmails = data.recipients.map(r => r.email);
+      const personIds = data.recipients.map(r => r.personId);
+      
+      const result = await apiRequest('POST', '/api/email/send', {
+        to: toEmails, // Array of recipient emails
+        subject: data.subject,
+        content: data.content,
+        clientId: data.clientId,
+        projectId: data.projectId,
+        personIds: personIds, // Array of person IDs for logging
+        isHtml: data.isHtml,
+        attachments: data.attachments,
+        cc: data.cc,
+        bcc: data.bcc,
+      });
+      return result;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/communications/client', clientId] });
