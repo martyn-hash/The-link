@@ -57,6 +57,7 @@ import { registerSearchRoutes } from "./routes/search";
 import { registerAddressRoutes } from "./routes/address";
 import { registerImportRoutes } from "./routes/import";
 import { registerAdminMiscRoutes } from "./routes/admin/misc";
+import { registerPerformanceLeagueRoutes } from "./routes/performanceLeague";
 
 /**
  * Register all application routes
@@ -156,6 +157,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerAddressRoutes(app, isAuthenticated);
   registerImportRoutes(app, isAuthenticated, resolveEffectiveUser);
   registerAdminMiscRoutes(app, isAuthenticated, resolveEffectiveUser, requireAdmin);
+  registerPerformanceLeagueRoutes(app, isAuthenticated, resolveEffectiveUser);
 
   const httpServer = createServer(app);
   return httpServer;

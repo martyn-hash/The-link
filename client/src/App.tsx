@@ -87,6 +87,7 @@ const SignatureRequestsPage = lazy(() => import("@/pages/signature-requests"));
 const SignatureRequestBuilder = lazy(() => import("@/pages/signature-request-builder"));
 const QueryResponsePage = lazy(() => import("@/pages/query-response"));
 const InboxManagement = lazy(() => import("@/pages/inbox-management"));
+const PerformanceLeague = lazy(() => import("@/pages/performance-league"));
 
 function PageLoader() {
   return (
@@ -241,6 +242,7 @@ function Router() {
         <Route path="/super-admin/qbo-connections" component={QboConnections} />
         <Route path="/super-admin/qbo-connections/:connectionId/qc" component={QboQcPage} />
         <Route path="/super-admin/graph-test" component={GraphTest} />
+        <Route path="/super-admin/performance-league" component={PerformanceLeague} />
         <Route path="/company-settings" component={CompanySettingsPage} />
         
         {/* Catch-all NotFound route */}
