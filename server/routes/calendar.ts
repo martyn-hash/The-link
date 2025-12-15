@@ -477,7 +477,7 @@ export function registerCalendarRoutes(
         return res.status(400).json({ message: "User email not found" });
       }
 
-      const { subject, description, startDateTime, endDateTime, timeZone, location, attendeeEmails, isTeamsMeeting, isAllDay } = req.body;
+      const { subject, description, startDateTime, endDateTime, timeZone, location, attendeeEmails, isTeamsMeeting, isAllDay, showAs, reminderMinutes } = req.body;
 
       const updates: Parameters<typeof updateUserCalendarEvent>[2] = {};
 
@@ -487,6 +487,8 @@ export function registerCalendarRoutes(
       if (endDateTime && timeZone) updates.end = { dateTime: endDateTime, timeZone };
       if (location !== undefined) updates.location = { displayName: location };
       if (isAllDay !== undefined) updates.isAllDay = isAllDay;
+      if (showAs !== undefined) updates.showAs = showAs;
+      if (reminderMinutes !== undefined) updates.reminderMinutesBeforeStart = reminderMinutes;
       if (isTeamsMeeting !== undefined) {
         updates.isOnlineMeeting = isTeamsMeeting;
         if (isTeamsMeeting) updates.onlineMeetingProvider = "teamsForBusiness";

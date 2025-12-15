@@ -139,3 +139,19 @@ export const createMeetingSchema = z.object({
 });
 
 export type CreateMeetingInput = z.infer<typeof createMeetingSchema>;
+
+export const updateMeetingSchema = z.object({
+  subject: z.string().min(1, "Subject is required").optional(),
+  description: z.string().optional(),
+  startDateTime: z.string().optional(),
+  endDateTime: z.string().optional(),
+  timeZone: z.string().optional(),
+  location: z.string().optional(),
+  attendeeEmails: z.array(z.string().email()).optional(),
+  isTeamsMeeting: z.boolean().optional(),
+  isAllDay: z.boolean().optional(),
+  showAs: z.enum(["free", "tentative", "busy", "oof", "workingElsewhere"]).optional(),
+  reminderMinutes: z.number().optional(),
+});
+
+export type UpdateMeetingInput = z.infer<typeof updateMeetingSchema>;
