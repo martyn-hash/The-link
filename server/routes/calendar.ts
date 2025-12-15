@@ -4,7 +4,7 @@ import { projects, projectTypes, services, clients, users, internalTasks, kanban
 import { eq, and, gte, lte, or, isNull, isNotNull, ne, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { CalendarEvent, CalendarEventsResponse, MSCalendarEvent } from "@shared/schema";
-import { calendarAccessStorage } from "../storage/users";
+import { calendarAccessStorage, calendarColorStorage } from "../storage/users";
 import { storage } from "../storage";
 import {
   getUserCalendarEvents,
@@ -587,6 +587,51 @@ export function registerCalendarRoutes(
     } catch (error) {
       console.error("Error setting calendar access:", error);
       res.status(500).json({ message: "Failed to set calendar access" });
+    }
+  });
+
+  app.get("/api/calendar/color-preferences", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const currentUser = req.user;
+      const preferences = await calendarColorStorage.getColorPreferencesForUser(currentUser.id);
+      res.json(preferences);
+    } catch (error) {
+      console.error("Error fetching calendar color preferences:", error);
+      res.status(500).json({ message: "Failed to fetch calendar color preferences" });
+    }
+  });
+
+  app.post("/api/calendar/color-preferences", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const currentUser = req.user;
+      const { calendarOwnerId, color } = req.body;
+
+      if (!calendarOwnerId || !color) {
+        return res.status(400).json({ message: "calendarOwnerId and color are required" });
+      }
+
+      const preference = await calendarColorStorage.setColorPreference({
+        userId: currentUser.id,
+        calendarOwnerId,
+        color,
+      });
+      res.json(preference);
+    } catch (error) {
+      console.error("Error setting calendar color preference:", error);
+      res.status(500).json({ message: "Failed to set calendar color preference" });
+    }
+  });
+
+  app.delete("/api/calendar/color-preferences/:calendarOwnerId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const currentUser = req.user;
+      const { calendarOwnerId } = req.params;
+
+      await calendarColorStorage.deleteColorPreference(currentUser.id, calendarOwnerId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting calendar color preference:", error);
+      res.status(500).json({ message: "Failed to delete calendar color preference" });
     }
   });
 }

@@ -214,3 +214,15 @@ export const userCalendarAccess = pgTable("user_calendar_access", {
   index("idx_user_calendar_access_can_access_user_id").on(table.canAccessUserId),
   unique("unique_user_calendar_access").on(table.userId, table.canAccessUserId),
 ]);
+
+export const userCalendarColorPreferences = pgTable("user_calendar_color_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  calendarOwnerId: varchar("calendar_owner_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  color: varchar("color").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("idx_user_calendar_color_prefs_user_id").on(table.userId),
+  unique("unique_user_calendar_color").on(table.userId, table.calendarOwnerId),
+]);

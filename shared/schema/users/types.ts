@@ -13,6 +13,7 @@ import {
   dashboardCache,
   userProjectPreferences,
   userCalendarAccess,
+  userCalendarColorPreferences,
 } from './tables';
 import {
   insertUserSchema,
@@ -35,6 +36,8 @@ import {
   insertUserProjectPreferencesSchema,
   updateUserProjectPreferencesSchema,
   insertUserCalendarAccessSchema,
+  insertUserCalendarColorPreferencesSchema,
+  updateUserCalendarColorPreferencesSchema,
 } from './schemas';
 
 export type User = typeof users.$inferSelect;
@@ -87,6 +90,10 @@ export type UpdateUserProjectPreference = z.infer<typeof updateUserProjectPrefer
 
 export type UserCalendarAccess = typeof userCalendarAccess.$inferSelect;
 export type InsertUserCalendarAccess = z.infer<typeof insertUserCalendarAccessSchema>;
+
+export type UserCalendarColorPreference = typeof userCalendarColorPreferences.$inferSelect;
+export type InsertUserCalendarColorPreference = z.infer<typeof insertUserCalendarColorPreferencesSchema>;
+export type UpdateUserCalendarColorPreference = z.infer<typeof updateUserCalendarColorPreferencesSchema>;
 
 // Backward compatibility aliases (legacy used plural names)
 export type UserNotificationPreferences = UserNotificationPreference;

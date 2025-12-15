@@ -14,6 +14,7 @@ import {
   dashboardCache,
   userProjectPreferences,
   userCalendarAccess,
+  userCalendarColorPreferences,
 } from './tables';
 
 export const insertUserSchema = createInsertSchema(users).omit({
@@ -115,4 +116,15 @@ export const updateUserProjectPreferencesSchema = insertUserProjectPreferencesSc
 export const insertUserCalendarAccessSchema = createInsertSchema(userCalendarAccess).omit({
   id: true,
   grantedAt: true,
+});
+
+export const insertUserCalendarColorPreferencesSchema = createInsertSchema(userCalendarColorPreferences).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateUserCalendarColorPreferencesSchema = insertUserCalendarColorPreferencesSchema.partial().omit({
+  userId: true,
+  calendarOwnerId: true,
 });
