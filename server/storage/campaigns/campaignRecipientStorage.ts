@@ -178,6 +178,23 @@ export class CampaignRecipientStorage extends BaseStorage {
       .where(eq(campaignRecipients.externalMessageId, externalMessageId));
     return recipient;
   }
+
+  async getLastForPersonChannel(personId: string, channel: string): Promise<{ sentAt: Date | null; category: string | null } | undefined> {
+    const [recipient] = await db
+      .select({
+        sentAt: campaignRecipients.sentAt,
+        category: campaignRecipients.lastCampaignCategory,
+      })
+      .from(campaignRecipients)
+      .where(and(
+        eq(campaignRecipients.personId, personId),
+        eq(campaignRecipients.channel, channel as any)
+      ))
+      .orderBy(desc(campaignRecipients.sentAt))
+      .limit(1);
+    
+    return recipient;
+  }
 }
 
 export const campaignRecipientStorage = new CampaignRecipientStorage();

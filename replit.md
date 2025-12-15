@@ -66,3 +66,44 @@ The calendar integration allows staff with `accessCalendar` permission to view a
 -   `GET /api/users/my-calendar-access`: Get accessible calendars for current user
 -   `GET /api/users/:id/calendar-access`: Get user's calendar access (admin)
 -   `POST /api/users/:id/calendar-access`: Set user's calendar access (super admin)
+
+## Campaigns & Pages Communications Module (In Progress)
+
+### Overview
+Multi-channel outbound campaign system with client-first targeting, personalized action pages, and comprehensive analytics. Enables targeted communications via Email (SendGrid), SMS (VoodooSMS), and Voice (Dialora.ai).
+
+### Phase 1 - Foundation (Complete)
+-   14 database tables for campaigns, pages, recipients, analytics, preferences
+-   12 storage modules with facade pattern
+-   3 API route modules with authentication
+
+### Phase 2 - Campaign Engine (Complete)
+-   **Targeting Service** (`server/services/campaigns/campaignTargetingService.ts`): 16+ client-first filter types (client status, services, projects, data completeness, engagement history)
+-   **Recipient Service** (`server/services/campaigns/campaignRecipientService.ts`): Contact resolution with deduplication, opt-out filtering, E.164 phone normalization
+-   **Merge Field Service** (`server/services/campaigns/mergeFieldService.ts`): Client, person, campaign, and firm merge fields with fallback syntax `{{field|default}}`
+-   **Workflow Service** (`server/services/campaigns/campaignWorkflowService.ts`): State machine (draft→review→approved→scheduled→sending→sent) with mandatory preview confirmation
+-   **Delivery Service** (`server/services/campaigns/campaignDeliveryService.ts`): Queue processing with retry logic (3 attempts, exponential backoff: 1min, 5min, 15min)
+-   **Webhook Handlers** (`server/routes/campaigns/webhooks.ts`): Delivery status from SendGrid, VoodooSMS, Dialora with signature verification
+
+### API Endpoints
+-   `GET/POST/PATCH/DELETE /api/campaigns`: Campaign CRUD
+-   `GET /api/campaigns/:id/workflow`: Get workflow state and allowed transitions
+-   `POST /api/campaigns/:id/workflow/transition`: Transition campaign status
+-   `POST /api/campaigns/:id/workflow/preview-confirm`: Confirm preview before approval
+-   `POST /api/campaigns/:id/targeting/preview`: Preview matched clients with pagination
+-   `POST /api/campaigns/:id/recipients/resolve`: Resolve contacts from targeting
+-   `POST /api/campaigns/:id/preview-message`: Preview rendered message with merge data
+-   `POST /api/campaigns/:id/send`: Queue campaign for delivery
+-   `GET /api/campaigns/:id/delivery-stats`: Get delivery statistics
+-   `POST /api/campaigns/:id/pause`: Pause active delivery
+-   `POST /api/campaigns/:id/resume`: Resume paused delivery
+-   `GET /api/campaign-targeting/available-filters`: List available filter types
+-   `GET /api/merge-fields`: List available merge fields
+-   `POST /api/public/webhooks/campaigns/sendgrid`: SendGrid delivery events
+-   `POST /api/public/webhooks/campaigns/voodoosms`: VoodooSMS delivery events
+-   `POST /api/public/webhooks/campaigns/dialora`: Dialora voice call events
+
+### Next Phase - Campaign Pages
+-   Page builder with 14 component types
+-   Public page rendering with personalization
+-   Form submissions and action tracking
