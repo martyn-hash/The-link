@@ -1,6 +1,6 @@
 import { BaseStorage } from '../base/BaseStorage.js';
 import { db } from '../../db.js';
-import { pageVisits, pageActionLogs } from '@shared/schema';
+import { pageVisits, pageActionLogs, pageActions } from '@shared/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import type {
   PageVisit,
@@ -125,16 +125,23 @@ export class PageVisitStorage extends BaseStorage {
   }
 
   async existsForRecipient(recipientId: string, actionType?: string): Promise<boolean> {
-    const conditions = [eq(pageActionLogs.recipientId, recipientId)];
-    
     if (actionType) {
-      conditions.push(eq(pageActionLogs.actionType, actionType));
+      const result = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(pageActionLogs)
+        .innerJoin(pageActions, eq(pageActionLogs.actionId, pageActions.id))
+        .where(and(
+          eq(pageActionLogs.recipientId, recipientId),
+          eq(pageActions.actionType, actionType as any)
+        ));
+      
+      return (result[0]?.count ?? 0) > 0;
     }
     
     const result = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(pageActionLogs)
-      .where(and(...conditions));
+      .where(eq(pageActionLogs.recipientId, recipientId));
     
     return (result[0]?.count ?? 0) > 0;
   }
