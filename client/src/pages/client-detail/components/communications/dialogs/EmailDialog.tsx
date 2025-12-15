@@ -442,13 +442,22 @@ export function EmailDialog({
       if (projectId) {
         queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/communications`] });
       }
+      
+      // Get the primary recipient's data to pass back for reminder scheduling
+      const primaryRecipient = peopleWithEmail.find(p => selectedRecipients.has(p.id));
+      const recipientData = primaryRecipient ? {
+        email: primaryRecipient.email,
+        name: primaryRecipient.fullName || 'Client',
+        phone: primaryRecipient.phone || null,
+      } : undefined;
+      
       handleClose(true);
       const recipientCount = selectedRecipients.size;
       toast({
         title: "Email sent successfully",
         description: `The email has been sent to ${recipientCount} recipient${recipientCount > 1 ? 's' : ''} and logged.`,
       });
-      onSuccess?.();
+      onSuccess?.(recipientData);
     },
     onError: (error: any) => {
       showFriendlyError({ error });

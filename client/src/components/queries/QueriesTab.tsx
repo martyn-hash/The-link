@@ -110,6 +110,7 @@ import { cn } from "@/lib/utils";
 import type { BookkeepingQueryWithRelations, User, QuerySuggestion } from "@shared/schema";
 import { QueryBulkImport, type ParsedQuery } from "./QueryBulkImport";
 import { EmailDialog } from "@/pages/client-detail/components/communications/dialogs/EmailDialog";
+import type { EmailRecipientData } from "@/pages/client-detail/components/communications/types";
 import { ScheduledRemindersPanel } from "./ScheduledRemindersPanel";
 
 type QueryStatus = "open" | "answered_by_staff" | "sent_to_client" | "answered_by_client" | "resolved";
@@ -1043,8 +1044,8 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     handleOpenSendOptions(queryIds);
   };
 
-  // Called when email is successfully sent
-  const handleEmailSuccess = async () => {
+  // Called when email is successfully sent - receives recipient data for reminder scheduling
+  const handleEmailSuccess = async (recipientData?: EmailRecipientData) => {
     if (pendingEmailQueryIds.length > 0) {
       try {
         // Mark queries as sent and log to chronology
@@ -1058,14 +1059,19 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
           const enabledReminders = configuredReminders.filter(r => r.enabled);
           if (enabledReminders.length > 0) {
             try {
+              // Pass real recipient data from the email dialog for reminder scheduling
               await apiRequest('POST', `/api/projects/${projectId}/queries/reminders`, {
                 tokenId: pendingEmailTokenId,
                 reminders: enabledReminders.map(r => ({
                   scheduledAt: r.scheduledAt,
                   channel: r.channel,
                 })),
+                // Pass recipient data from the email - this is the REAL data, not placeholder
+                recipientEmail: recipientData?.email,
+                recipientName: recipientData?.name,
+                recipientPhone: recipientData?.phone,
               });
-              console.log(`Saved ${enabledReminders.length} scheduled reminders for token ${pendingEmailTokenId}`);
+              console.log(`Saved ${enabledReminders.length} scheduled reminders for token ${pendingEmailTokenId} to ${recipientData?.email}`);
             } catch (reminderError) {
               console.error('Error saving reminders:', reminderError);
               // Don't fail the overall operation if reminder saving fails

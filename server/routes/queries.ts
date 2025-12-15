@@ -2312,6 +2312,10 @@ ${tableHtml}
       scheduledAt: z.string(),
       channel: z.enum(['email', 'sms', 'voice']),
     })),
+    // Accept real recipient data from the email dialog (not from stale token)
+    recipientEmail: z.string().email().optional(),
+    recipientName: z.string().optional(),
+    recipientPhone: z.string().optional(),
   });
 
   app.post("/api/projects/:projectId/queries/reminders", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
@@ -2324,7 +2328,7 @@ ${tableHtml}
       const { projectId } = req.params;
       const data = projectRemindersSchema.parse(req.body);
       
-      // Get the token to verify it belongs to this project and get recipient info
+      // Get the token to verify it belongs to this project
       const token = await storage.getQueryResponseTokenById(data.tokenId);
       if (!token) {
         return res.status(404).json({ message: "Token not found" });
@@ -2333,19 +2337,50 @@ ${tableHtml}
         return res.status(403).json({ message: "Token does not belong to this project" });
       }
 
-      // Get the first recipient from the token to use as recipient info
-      const recipientEmail = token.recipientEmail || null;
-      const recipientName = token.recipientName || 'Client';
+      // Use recipient data from request (passed from email dialog) - this is the REAL data
+      // Fall back to token data only if not provided (but token data may be placeholder)
+      let recipientEmail = data.recipientEmail || null;
+      let recipientName = data.recipientName || 'Client';
+      let recipientPhone = data.recipientPhone || null;
       
-      // Get recipient phone from people associated with this client (if available)
-      let recipientPhone: string | null = null;
-      const project = await storage.getProjectById(projectId);
-      if (project?.clientId) {
-        const clientPeople = await storage.getClientPeopleByClientId(project.clientId);
-        const primaryContact = clientPeople.find((cp: any) => cp.isPrimaryContact) || clientPeople[0];
-        if (primaryContact?.person?.telephone) {
-          recipientPhone = primaryContact.person.telephone;
+      // If no recipient data provided in request, try to get from client people as fallback
+      if (!recipientEmail || recipientEmail === 'pending@placeholder.com') {
+        const project = await storage.getProjectById(projectId);
+        if (project?.clientId) {
+          const clientPeople = await storage.getClientPeopleByClientId(project.clientId);
+          const primaryContact = clientPeople.find((cp: any) => cp.isPrimaryContact) || clientPeople[0];
+          if (primaryContact?.person) {
+            if (!recipientEmail || recipientEmail === 'pending@placeholder.com') {
+              recipientEmail = primaryContact.person.primaryEmail || primaryContact.person.email || null;
+            }
+            if (!recipientName || recipientName === 'Client') {
+              recipientName = `${primaryContact.person.firstName || ''} ${primaryContact.person.lastName || ''}`.trim() || 'Client';
+            }
+            if (!recipientPhone) {
+              recipientPhone = primaryContact.person.telephone || primaryContact.person.primaryPhone || null;
+            }
+          }
         }
+      }
+      
+      // Validate we have at least an email for email reminders
+      const hasEmailReminder = data.reminders.some(r => r.channel === 'email');
+      const hasSmsReminder = data.reminders.some(r => r.channel === 'sms');
+      const hasVoiceReminder = data.reminders.some(r => r.channel === 'voice');
+      
+      if (hasEmailReminder && (!recipientEmail || recipientEmail === 'pending@placeholder.com')) {
+        return res.status(400).json({ message: "Cannot schedule email reminders without a valid recipient email address" });
+      }
+      if ((hasSmsReminder || hasVoiceReminder) && !recipientPhone) {
+        return res.status(400).json({ message: "Cannot schedule SMS/voice reminders without a recipient phone number" });
+      }
+      
+      // Also update the token with the real recipient data for future reference
+      if (recipientEmail && recipientEmail !== 'pending@placeholder.com') {
+        await storage.updateQueryResponseToken(data.tokenId, {
+          recipientEmail,
+          recipientName: recipientName !== 'Client' ? recipientName : token.recipientName,
+        });
       }
 
       const { scheduleReminders } = await import('../services/queryReminderService');
@@ -2362,6 +2397,8 @@ ${tableHtml}
         })),
         token.queryCount || 1
       );
+      
+      console.log(`[QueryReminders] Scheduled ${scheduled.length} reminders for token ${data.tokenId} to ${recipientEmail} / ${recipientPhone}`);
       
       res.json({ success: true, reminders: scheduled });
     } catch (error: any) {

@@ -190,6 +190,13 @@ export interface QueryEmailOptions {
   voiceAiAvailable?: boolean;
 }
 
+/** Data about the recipient of an email - passed back through onSuccess for reminder scheduling */
+export interface EmailRecipientData {
+  email: string;
+  name: string;
+  phone?: string | null;
+}
+
 export interface EmailDialogProps extends DialogBaseProps {
   clientPeople: PersonOption[];
   user: User | null;
@@ -208,6 +215,8 @@ export interface EmailDialogProps extends DialogBaseProps {
   queryEmailOptions?: QueryEmailOptions;
   /** Callback when reminders are configured */
   onRemindersConfigured?: (reminders: ReminderScheduleItem[]) => void;
+  /** Override onSuccess to optionally receive recipient data for query emails */
+  onSuccess?: (recipientData?: EmailRecipientData) => void;
 }
 
 export interface AddCommunicationDialogProps extends DialogBaseProps {
