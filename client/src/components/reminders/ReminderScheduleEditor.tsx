@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Mail, MessageSquare, Phone, X, Clock, Calendar, ChevronDown, ChevronUp, Plus } from 'lucide-react';
+import { Mail, MessageSquare, Phone, X, Clock, Calendar, ChevronDown, ChevronUp, Plus, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { isWeekend, addDays, setHours, setMinutes } from 'date-fns';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { isWeekend, addDays, setHours, setMinutes, format } from 'date-fns';
 import { generateReminderSchedule, formatReminderDate } from '@/lib/reminderScheduleGenerator';
 import type { ReminderScheduleItem } from '@/pages/client-detail/components/communications/types';
 import { cn } from '@/lib/utils';
@@ -73,6 +75,10 @@ export function ReminderScheduleEditor({
   voiceAiAvailable = false,
 }: ReminderScheduleEditorProps) {
   const [isExpanded, setIsExpanded] = useState(true);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newReminderDate, setNewReminderDate] = useState<Date | undefined>(addDays(new Date(), 1));
+  const [newReminderTime, setNewReminderTime] = useState('10:00');
+  const [newReminderChannel, setNewReminderChannel] = useState<'email' | 'sms' | 'voice'>('email');
 
   useEffect(() => {
     if (schedule.length === 0 && expiryDays > 0) {
@@ -143,21 +149,38 @@ export function ReminderScheduleEditor({
   };
 
   const addReminder = () => {
-    const lastReminder = schedule[schedule.length - 1];
-    const baseDate = lastReminder
-      ? addDays(new Date(lastReminder.scheduledAt), 1)
-      : addDays(new Date(), 1);
-    const newDate = setMinutes(setHours(baseDate, 10), 0);
+    if (!newReminderDate) return;
+    
+    const [hours, minutes] = newReminderTime.split(':').map(Number);
+    const newDate = setMinutes(setHours(newReminderDate, hours), minutes);
 
     onScheduleChange([
       ...schedule,
       {
         id: `reminder-new-${Date.now()}`,
         scheduledAt: newDate.toISOString(),
-        channel: 'email',
+        channel: newReminderChannel,
         enabled: true,
       },
     ]);
+    
+    // Reset form and hide it
+    setShowAddForm(false);
+    setNewReminderDate(addDays(new Date(), 1));
+    setNewReminderTime('10:00');
+    setNewReminderChannel('email');
+  };
+  
+  const openAddForm = () => {
+    // Set default date to tomorrow or day after last reminder
+    const lastReminder = schedule[schedule.length - 1];
+    const defaultDate = lastReminder
+      ? addDays(new Date(lastReminder.scheduledAt), 1)
+      : addDays(new Date(), 1);
+    setNewReminderDate(defaultDate);
+    setNewReminderTime('10:00');
+    setNewReminderChannel('email');
+    setShowAddForm(true);
   };
 
   const cancelAll = () => {
@@ -359,18 +382,122 @@ export function ReminderScheduleEditor({
               </div>
             </ScrollArea>
 
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-full gap-1.5 h-8 text-xs"
-              onClick={addReminder}
-              disabled={disabled}
-              data-testid="button-add-reminder"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add Reminder
-            </Button>
+            {showAddForm ? (
+              <div className="p-3 bg-background rounded-md border border-primary/20 space-y-3" data-testid="add-reminder-form">
+                <div className="flex items-center gap-2 text-xs font-medium">
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Custom Reminder
+                </div>
+                
+                <div className="grid grid-cols-3 gap-2">
+                  {/* Date Picker */}
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs justify-start font-normal"
+                        data-testid="picker-reminder-date"
+                      >
+                        <Calendar className="h-3 w-3 mr-1.5" />
+                        {newReminderDate ? format(newReminderDate, 'dd MMM') : 'Pick date'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <CalendarComponent
+                        mode="single"
+                        selected={newReminderDate}
+                        onSelect={setNewReminderDate}
+                        disabled={(date) => date < new Date()}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  
+                  {/* Time Picker */}
+                  <Select value={newReminderTime} onValueChange={setNewReminderTime}>
+                    <SelectTrigger className="h-8 text-xs" data-testid="select-reminder-time">
+                      <Clock className="h-3 w-3 mr-1" />
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {TIME_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  
+                  {/* Channel Picker */}
+                  <Select 
+                    value={newReminderChannel} 
+                    onValueChange={(v) => setNewReminderChannel(v as 'email' | 'sms' | 'voice')}
+                  >
+                    <SelectTrigger className="h-8 text-xs" data-testid="select-reminder-channel">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableChannelOptions.map((opt) => {
+                        const isWeekendDay = newReminderDate ? isWeekend(newReminderDate) : false;
+                        const isDisabled = isChannelDisabled(opt.value, isWeekendDay);
+                        return (
+                          <SelectItem
+                            key={opt.value}
+                            value={opt.value}
+                            disabled={isDisabled}
+                            className="text-xs"
+                          >
+                            <div className="flex items-center gap-1.5">
+                              <opt.icon className="h-3 w-3" />
+                              {opt.label}
+                            </div>
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    className="flex-1 h-7 text-xs gap-1"
+                    onClick={addReminder}
+                    disabled={!newReminderDate}
+                    data-testid="button-confirm-add-reminder"
+                  >
+                    <Check className="h-3 w-3" />
+                    Add
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => setShowAddForm(false)}
+                    data-testid="button-cancel-add-reminder"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-full gap-1.5 h-8 text-xs"
+                onClick={openAddForm}
+                disabled={disabled}
+                data-testid="button-add-reminder"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Reminder
+              </Button>
+            )}
 
             <p className="text-[11px] text-muted-foreground leading-tight">
               Reminders auto-stop when all queries are answered. Voice calls are disabled on weekends.
