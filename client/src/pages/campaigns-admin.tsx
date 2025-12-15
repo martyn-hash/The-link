@@ -590,9 +590,11 @@ export default function CampaignsAdmin() {
                   data-testid="input-search-campaigns"
                 />
               </div>
-              <Button disabled data-testid="button-create-campaign">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Campaign
+              <Button asChild data-testid="button-create-campaign">
+                <Link href="/super-admin/campaigns/new">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Campaign
+                </Link>
               </Button>
             </div>
           </div>
@@ -776,9 +778,11 @@ export default function CampaignsAdmin() {
                     : 'Create your first campaign to start reaching clients'}
                 </p>
                 {!searchQuery && statusFilter === 'all' && (
-                  <Button disabled>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Campaign
+                  <Button asChild>
+                    <Link href="/super-admin/campaigns/new">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Campaign
+                    </Link>
                   </Button>
                 )}
               </CardContent>

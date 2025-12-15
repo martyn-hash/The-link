@@ -92,6 +92,7 @@ const PageBuilder = lazy(() => import("@/pages/page-builder"));
 const CampaignPageView = lazy(() => import("@/pages/campaign-page-view"));
 const CampaignsAdmin = lazy(() => import("@/pages/campaigns-admin"));
 const CampaignDetail = lazy(() => import("@/pages/campaign-detail"));
+const CampaignCreate = lazy(() => import("@/pages/campaign-create"));
 
 function PageLoader() {
   return (
@@ -248,6 +249,7 @@ function Router() {
         <Route path="/super-admin/graph-test" component={GraphTest} />
         <Route path="/super-admin/performance-league" component={PerformanceLeague} />
         <Route path="/super-admin/campaigns" component={CampaignsAdmin} />
+        <Route path="/super-admin/campaigns/new" component={CampaignCreate} />
         <Route path="/super-admin/campaigns/:id" component={CampaignDetail} />
         <Route path="/company-settings" component={CompanySettingsPage} />
         <Route path="/page-builder/:id" component={PageBuilder} />

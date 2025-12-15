@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRoute, useLocation } from 'wouter';
 import {
@@ -49,12 +49,14 @@ export default function PageBuilder() {
   const [, params] = useRoute('/page-builder/:id');
   const [, setLocation] = useLocation();
   const pageId = params?.id;
+  const isNewPage = pageId === 'new';
   
   const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
   const [selectedActionId, setSelectedActionId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'components' | 'actions' | 'settings'>('components');
   const [draggedType, setDraggedType] = useState<ComponentType | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -64,9 +66,27 @@ export default function PageBuilder() {
     })
   );
 
+  useEffect(() => {
+    if (isNewPage && !isCreating) {
+      setIsCreating(true);
+      apiRequest('POST', '/api/pages', {
+        name: 'Untitled Page',
+        slug: `page-${Date.now()}`,
+        layoutType: 'single_column',
+      })
+        .then((newPage: any) => {
+          setLocation(`/page-builder/${newPage.id}`, { replace: true });
+        })
+        .catch((err) => {
+          toast({ title: 'Error creating page', description: err.message, variant: 'destructive' });
+          setLocation('/super-admin/campaigns');
+        });
+    }
+  }, [isNewPage, isCreating, setLocation]);
+
   const { data: page, isLoading } = useQuery<PageWithDetails>({
     queryKey: ['/api/pages', pageId],
-    enabled: !!pageId,
+    enabled: !!pageId && !isNewPage,
   });
 
   const updatePageMutation = useMutation({
@@ -175,7 +195,7 @@ export default function PageBuilder() {
   const selectedComponent = page?.components?.find(c => c.id === selectedComponentId);
   const selectedAction = page?.actions?.find(a => a.id === selectedActionId);
 
-  if (isLoading) {
+  if (isLoading || isNewPage) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
