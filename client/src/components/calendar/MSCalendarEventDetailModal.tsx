@@ -499,7 +499,19 @@ export function MSCalendarEventDetailModal({
                       </div>
                       <div className="flex-1 pt-1">
                         <p className="text-xs text-muted-foreground uppercase tracking-wider font-medium mb-1">Location</p>
-                        <p className="font-medium" data-testid="text-event-location">{event.location.displayName}</p>
+                        {/^https?:\/\//i.test(event.location.displayName) ? (
+                          <a 
+                            href={event.location.displayName} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="font-medium text-primary hover:underline break-all"
+                            data-testid="text-event-location"
+                          >
+                            {event.location.displayName}
+                          </a>
+                        ) : (
+                          <p className="font-medium" data-testid="text-event-location">{event.location.displayName}</p>
+                        )}
                       </div>
                     </div>
                   )}
@@ -541,7 +553,7 @@ export function MSCalendarEventDetailModal({
                           {event.attendees.length}
                         </Badge>
                       </div>
-                      <ScrollArea className="max-h-[200px]">
+                      <ScrollArea className="h-[200px]">
                         <div className="space-y-2">
                           {event.attendees.map((attendee, index) => (
                             <div

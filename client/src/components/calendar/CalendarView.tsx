@@ -72,12 +72,21 @@ export default function CalendarView({
   const [showMSCalendar, setShowMSCalendar] = useState(
     initialSettings?.showMSCalendar ?? true
   );
-  const [selectedCalendarUserIds, setSelectedCalendarUserIds] = useState<string[]>(
-    initialSettings?.selectedCalendarUserIds || []
-  );
-  const [calendarSelectionsInitialized, setCalendarSelectionsInitialized] = useState(
-    Boolean(initialSettings?.selectedCalendarUserIds?.length)
-  );
+  const [selectedCalendarUserIds, setSelectedCalendarUserIds] = useState<string[]>(() => {
+    const savedCalendarUserIds = localStorage.getItem('calendarSelectedUserIds');
+    if (savedCalendarUserIds) {
+      try {
+        return JSON.parse(savedCalendarUserIds);
+      } catch {
+        return initialSettings?.selectedCalendarUserIds || [];
+      }
+    }
+    return initialSettings?.selectedCalendarUserIds || [];
+  });
+  const [calendarSelectionsInitialized, setCalendarSelectionsInitialized] = useState(() => {
+    const savedCalendarUserIds = localStorage.getItem('calendarSelectedUserIds');
+    return Boolean(savedCalendarUserIds || initialSettings?.selectedCalendarUserIds?.length);
+  });
   const [createMeetingOpen, setCreateMeetingOpen] = useState(false);
   const [selectedMSEvent, setSelectedMSEvent] = useState<MSCalendarEvent | null>(null);
   const [msEventDetailOpen, setMsEventDetailOpen] = useState(false);
@@ -153,6 +162,12 @@ export default function CalendarView({
       setCalendarSelectionsInitialized(true);
     }
   }, [currentUserId, accessibleCalendars, calendarSelectionsInitialized, selectedCalendarUserIds.length]);
+
+  useEffect(() => {
+    if (selectedCalendarUserIds.length > 0) {
+      localStorage.setItem('calendarSelectedUserIds', JSON.stringify(selectedCalendarUserIds));
+    }
+  }, [selectedCalendarUserIds]);
 
   const dateRange = useMemo(() => {
     if (viewType === "month") {
