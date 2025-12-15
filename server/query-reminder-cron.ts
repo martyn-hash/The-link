@@ -12,7 +12,7 @@
  */
 
 import cron from 'node-cron';
-import { getDueReminders, processReminder, checkAndCancelRemindersIfComplete } from './services/queryReminderService';
+import { getDueReminders, processReminder, checkAndCancelRemindersIfComplete, migrateePlaceholderReminders } from './services/queryReminderService';
 import { db } from './db';
 import { projectChronology, scheduledQueryReminders } from '@shared/schema';
 import { eq } from 'drizzle-orm';
@@ -341,7 +341,14 @@ async function sendMonitoringEmail(stats: CronRunStats): Promise<void> {
  * Start the query reminder cron job
  * Runs every hour on the hour
  */
-export function startQueryReminderCron(): void {
+export async function startQueryReminderCron(): Promise<void> {
+  // Run migration to fix placeholder reminders on startup
+  try {
+    await migrateePlaceholderReminders();
+  } catch (error) {
+    console.error('[QueryReminderCron] Error running placeholder migration:', error);
+  }
+
   cron.schedule('0 * * * *', async () => {
     await processQueryReminders();
   });

@@ -21,6 +21,7 @@ import {
   projects,
   projectTypes,
   users,
+  people,
   type ScheduledQueryReminder,
   type InsertScheduledQueryReminder,
   type DialoraSettings,
@@ -542,6 +543,15 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
     projectId: reminder.projectId
   });
 
+  // Check for and fix placeholder recipients before processing
+  if (reminder.recipientEmail?.includes('placeholder') || reminder.recipientEmail?.includes('pending@')) {
+    const fixedReminder = await fixPlaceholderRecipient(reminder);
+    if (!fixedReminder) {
+      return { success: false, error: 'Could not resolve placeholder recipient' };
+    }
+    reminder = fixedReminder;
+  }
+
   const queryStatus = await getQueryStatusForToken(reminder.tokenId);
   
   if (!queryStatus) {
@@ -817,6 +827,214 @@ export async function checkAndCancelRemindersIfComplete(tokenId: string): Promis
   }
   
   return false;
+}
+
+/**
+ * Check if a recipient email is a placeholder
+ */
+function isPlaceholderEmail(email: string | null): boolean {
+  if (!email) return true;
+  return email.includes('placeholder') || email.includes('pending@');
+}
+
+/**
+ * Attempt to hydrate placeholder recipient data from project/client contacts
+ * Returns updated recipient info or null if cannot be resolved
+ */
+export async function hydrateRecipientFromProjectData(
+  projectId: string | null
+): Promise<{ email: string; name: string; phone: string | null } | null> {
+  if (!projectId) return null;
+  
+  try {
+    const projectData = await db
+      .select({
+        clientId: projects.clientId
+      })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+      .limit(1);
+    
+    if (!projectData[0]?.clientId) return null;
+    
+    const clientId = projectData[0].clientId;
+    
+    const primaryPerson = await db
+      .select({
+        name: people.name,
+        email: people.email,
+        mobile: people.mobile
+      })
+      .from(people)
+      .where(and(
+        eq(people.clientId, clientId),
+        eq(people.isPrimary, true)
+      ))
+      .limit(1);
+    
+    if (primaryPerson[0]?.email) {
+      return {
+        email: primaryPerson[0].email,
+        name: primaryPerson[0].name || 'Client',
+        phone: primaryPerson[0].mobile || null
+      };
+    }
+    
+    const anyPerson = await db
+      .select({
+        name: people.name,
+        email: people.email,
+        mobile: people.mobile
+      })
+      .from(people)
+      .where(eq(people.clientId, clientId))
+      .limit(1);
+    
+    if (anyPerson[0]?.email) {
+      return {
+        email: anyPerson[0].email,
+        name: anyPerson[0].name || 'Client',
+        phone: anyPerson[0].mobile || null
+      };
+    }
+    
+    const clientData = await db
+      .select({
+        name: clients.name,
+        email: clients.email
+      })
+      .from(clients)
+      .where(eq(clients.id, clientId))
+      .limit(1);
+    
+    if (clientData[0]?.email) {
+      return {
+        email: clientData[0].email,
+        name: clientData[0].name || 'Client',
+        phone: null
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('[QueryReminder] Error hydrating recipient:', error);
+    return null;
+  }
+}
+
+/**
+ * Fix placeholder recipients in a reminder before sending
+ * Updates both the reminder and the token with real data
+ */
+export async function fixPlaceholderRecipient(reminder: ScheduledQueryReminder): Promise<ScheduledQueryReminder | null> {
+  if (!isPlaceholderEmail(reminder.recipientEmail)) {
+    return reminder;
+  }
+  
+  console.log(`[QueryReminder] Attempting to hydrate placeholder recipient for reminder ${reminder.id}`);
+  
+  const realRecipient = await hydrateRecipientFromProjectData(reminder.projectId);
+  
+  if (!realRecipient) {
+    console.error(`[QueryReminder] Cannot hydrate recipient for reminder ${reminder.id} - cancelling`);
+    await db
+      .update(scheduledQueryReminders)
+      .set({
+        status: 'cancelled',
+        cancelledAt: new Date(),
+        errorMessage: 'Could not resolve placeholder recipient - no valid contact found'
+      })
+      .where(eq(scheduledQueryReminders.id, reminder.id));
+    return null;
+  }
+  
+  await db
+    .update(scheduledQueryReminders)
+    .set({
+      recipientEmail: realRecipient.email,
+      recipientName: realRecipient.name,
+      recipientPhone: realRecipient.phone
+    })
+    .where(eq(scheduledQueryReminders.id, reminder.id));
+  
+  await db
+    .update(queryResponseTokens)
+    .set({
+      recipientEmail: realRecipient.email,
+      recipientName: realRecipient.name
+    })
+    .where(eq(queryResponseTokens.id, reminder.tokenId));
+  
+  console.log(`[QueryReminder] Hydrated reminder ${reminder.id} with real recipient: ${realRecipient.email}`);
+  
+  return {
+    ...reminder,
+    recipientEmail: realRecipient.email,
+    recipientName: realRecipient.name,
+    recipientPhone: realRecipient.phone
+  };
+}
+
+/**
+ * Startup migration: Clean up placeholder reminders
+ * - Cancels reminders scheduled before today
+ * - Hydrates today's reminders with real recipient data
+ */
+export async function migrateePlaceholderReminders(): Promise<void> {
+  console.log('[QueryReminder] Running placeholder reminder migration...');
+  
+  const now = new Date();
+  const ukNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/London' }));
+  const startOfTodayUK = new Date(ukNow);
+  startOfTodayUK.setHours(0, 0, 0, 0);
+  const ukOffset = ukNow.getTime() - now.getTime();
+  const startOfTodayUTC = new Date(startOfTodayUK.getTime() - ukOffset);
+  
+  const placeholderReminders = await db
+    .select()
+    .from(scheduledQueryReminders)
+    .where(
+      and(
+        eq(scheduledQueryReminders.status, 'pending'),
+        or(
+          eq(scheduledQueryReminders.recipientEmail, 'pending@placeholder.com'),
+          eq(scheduledQueryReminders.recipientEmail, 'placeholder@example.com')
+        )
+      )
+    );
+  
+  console.log(`[QueryReminder] Found ${placeholderReminders.length} placeholder reminder(s)`);
+  
+  let cancelled = 0;
+  let hydrated = 0;
+  let failed = 0;
+  
+  for (const reminder of placeholderReminders) {
+    const scheduledTime = reminder.scheduledAt ? new Date(reminder.scheduledAt) : null;
+    
+    if (!scheduledTime || scheduledTime < startOfTodayUTC) {
+      await db
+        .update(scheduledQueryReminders)
+        .set({
+          status: 'cancelled',
+          cancelledAt: now,
+          errorMessage: 'Cancelled - placeholder recipient, scheduled before today'
+        })
+        .where(eq(scheduledQueryReminders.id, reminder.id));
+      cancelled++;
+      console.log(`[QueryReminder] Cancelled old placeholder reminder ${reminder.id}`);
+      continue;
+    }
+    
+    const fixed = await fixPlaceholderRecipient(reminder);
+    if (fixed) {
+      hydrated++;
+    } else {
+      failed++;
+    }
+  }
+  
+  console.log(`[QueryReminder] Migration complete: ${cancelled} cancelled, ${hydrated} hydrated, ${failed} failed`);
 }
 
 /**
