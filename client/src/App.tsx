@@ -88,6 +88,8 @@ const SignatureRequestBuilder = lazy(() => import("@/pages/signature-request-bui
 const QueryResponsePage = lazy(() => import("@/pages/query-response"));
 const InboxManagement = lazy(() => import("@/pages/inbox-management"));
 const PerformanceLeague = lazy(() => import("@/pages/performance-league"));
+const PageBuilder = lazy(() => import("@/pages/page-builder"));
+const CampaignPageView = lazy(() => import("@/pages/campaign-page-view"));
 
 function PageLoader() {
   return (
@@ -244,6 +246,10 @@ function Router() {
         <Route path="/super-admin/graph-test" component={GraphTest} />
         <Route path="/super-admin/performance-league" component={PerformanceLeague} />
         <Route path="/company-settings" component={CompanySettingsPage} />
+        <Route path="/page-builder/:id" component={PageBuilder} />
+        
+        {/* Public campaign page - no auth required */}
+        <Route path="/p/:slug" component={CampaignPageView} />
         
         {/* Catch-all NotFound route */}
         <Route component={NotFound} />

@@ -9,6 +9,7 @@ import {
   insertPageActionSchema,
 } from '@shared/schema';
 import { z } from 'zod';
+import publicPageRoutes from './pages/publicRoutes.js';
 
 type AuthMiddleware = (req: Request, res: Response, next: NextFunction) => void;
 
@@ -17,6 +18,7 @@ export function registerPageRoutes(
   isAuthenticated: AuthMiddleware,
   resolveEffectiveUser: AuthMiddleware
 ): void {
+  app.use('/api/public', publicPageRoutes);
   app.get('/api/pages', isAuthenticated, resolveEffectiveUser, async (req: any, res) => {
     try {
       const { isPublished, limit, offset } = req.query;
