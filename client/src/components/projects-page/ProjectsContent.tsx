@@ -354,6 +354,7 @@ function ViewContent({
         onEventClick={handleCalendarEventClick}
         initialSettings={calendarSettings}
         onSettingsChange={setCalendarSettings}
+        currentUserId={user.id}
       />
     );
   }

@@ -64,6 +64,7 @@ export const calendarViewSettingsSchema = z.object({
   showProjectTargetDates: z.boolean(),
   showStageDeadlines: z.boolean(),
   showTaskDueDates: z.boolean(),
+  showMSCalendar: z.boolean().optional(),
 });
 
 export type CalendarViewSettings = z.infer<typeof calendarViewSettingsSchema>;

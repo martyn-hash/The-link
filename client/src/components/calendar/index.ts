@@ -5,3 +5,6 @@ export { default as CalendarWeekView } from "./CalendarWeekView";
 export { default as CalendarEvent } from "./CalendarEvent";
 export { default as CalendarDayModal } from "./CalendarDayModal";
 export { useCalendarEvents } from "./useCalendarEvents";
+export { useOutlookCalendarEvents } from "./useOutlookCalendarEvents";
+export { CreateMeetingModal } from "./CreateMeetingModal";
+export { MSCalendarEventDetailModal } from "./MSCalendarEventDetailModal";

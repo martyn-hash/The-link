@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Users, Check, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -8,6 +8,14 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+
+export interface CalendarAccessUser {
+  id: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+}
 
 interface CalendarHeaderProps {
   currentDate: Date;
@@ -24,6 +32,14 @@ interface CalendarHeaderProps {
   setShowStageDeadlines: (value: boolean) => void;
   showTasks: boolean;
   setShowTasks: (value: boolean) => void;
+  showMSCalendar?: boolean;
+  setShowMSCalendar?: (value: boolean) => void;
+  msCalendarConfigured?: boolean;
+  accessibleCalendars?: CalendarAccessUser[];
+  selectedCalendarUserIds?: string[];
+  onSelectedCalendarUserIdsChange?: (ids: string[]) => void;
+  currentUserId?: string;
+  onCreateMeeting?: () => void;
 }
 
 export default function CalendarHeader({
@@ -41,10 +57,34 @@ export default function CalendarHeader({
   setShowStageDeadlines,
   showTasks,
   setShowTasks,
+  showMSCalendar,
+  setShowMSCalendar,
+  msCalendarConfigured,
+  accessibleCalendars = [],
+  selectedCalendarUserIds = [],
+  onSelectedCalendarUserIdsChange,
+  currentUserId,
+  onCreateMeeting,
 }: CalendarHeaderProps) {
   const displayFormat = viewType === "month" 
     ? "MMMM yyyy" 
     : "'Week of' MMM d, yyyy";
+
+  const getUserDisplayName = (user: CalendarAccessUser) => {
+    const parts = [user.firstName, user.lastName].filter(Boolean);
+    return parts.length > 0 ? parts.join(' ') : user.email || 'Unknown';
+  };
+
+  const toggleCalendarUser = (userId: string) => {
+    if (!onSelectedCalendarUserIdsChange) return;
+    if (selectedCalendarUserIds.includes(userId)) {
+      onSelectedCalendarUserIdsChange(selectedCalendarUserIds.filter(id => id !== userId));
+    } else {
+      onSelectedCalendarUserIdsChange([...selectedCalendarUserIds, userId]);
+    }
+  };
+
+  const hasAccessibleCalendars = accessibleCalendars.length > 0;
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between pb-4 border-b">
@@ -82,6 +122,17 @@ export default function CalendarHeader({
       </div>
 
       <div className="flex items-center gap-2">
+        {msCalendarConfigured && onCreateMeeting && (
+          <Button
+            size="sm"
+            onClick={onCreateMeeting}
+            data-testid="button-create-meeting"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            New Meeting
+          </Button>
+        )}
+
         <div className="flex items-center border rounded-lg overflow-hidden">
           <Button
             variant={viewType === "month" ? "default" : "ghost"}
@@ -102,6 +153,56 @@ export default function CalendarHeader({
             Week
           </Button>
         </div>
+
+        {msCalendarConfigured && hasAccessibleCalendars && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" data-testid="button-calendar-users">
+                <Users className="h-4 w-4 mr-1" />
+                Calendars
+                {selectedCalendarUserIds.length > 0 && (
+                  <span className="ml-1 bg-primary text-primary-foreground rounded-full px-1.5 text-xs">
+                    {selectedCalendarUserIds.length}
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64" align="end">
+              <div className="space-y-2">
+                <h4 className="font-medium text-sm mb-3">Show Calendars</h4>
+                {accessibleCalendars.map((user) => (
+                  <button
+                    key={user.id}
+                    onClick={() => toggleCalendarUser(user.id)}
+                    className={cn(
+                      "flex items-center w-full px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors",
+                      selectedCalendarUserIds.includes(user.id) && "bg-muted"
+                    )}
+                    data-testid={`button-toggle-calendar-${user.id}`}
+                  >
+                    <div className={cn(
+                      "w-4 h-4 border rounded mr-2 flex items-center justify-center",
+                      selectedCalendarUserIds.includes(user.id) 
+                        ? "bg-primary border-primary" 
+                        : "border-input"
+                    )}>
+                      {selectedCalendarUserIds.includes(user.id) && (
+                        <Check className="h-3 w-3 text-primary-foreground" />
+                      )}
+                    </div>
+                    <span>{getUserDisplayName(user)}</span>
+                    {user.id === currentUserId && (
+                      <span className="ml-1 text-muted-foreground text-xs">(You)</span>
+                    )}
+                  </button>
+                ))}
+                {accessibleCalendars.length === 0 && (
+                  <p className="text-sm text-muted-foreground">No accessible calendars</p>
+                )}
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
 
         <Popover>
           <PopoverTrigger asChild>
@@ -162,6 +263,20 @@ export default function CalendarHeader({
                     data-testid="switch-show-tasks"
                   />
                 </div>
+
+                {msCalendarConfigured && setShowMSCalendar && (
+                  <div className="flex items-center justify-between pt-2 border-t">
+                    <Label htmlFor="show-ms-calendar" className="text-sm">
+                      Outlook Calendar
+                    </Label>
+                    <Switch
+                      id="show-ms-calendar"
+                      checked={showMSCalendar ?? false}
+                      onCheckedChange={setShowMSCalendar}
+                      data-testid="switch-show-ms-calendar"
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </PopoverContent>

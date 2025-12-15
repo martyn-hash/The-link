@@ -77,7 +77,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
-import type { User, UserSession, Inbox as InboxType, UserInboxAccess } from "@shared/schema";
+import type { User, UserSession, Inbox as InboxType, UserInboxAccess, UserCalendarAccess } from "@shared/schema";
 
 const passwordFormSchema = z.object({
   password: z.string().min(6, "Password must be at least 6 characters"),
@@ -146,6 +146,25 @@ export default function UserDetailPage() {
   const [selectedInboxIds, setSelectedInboxIds] = useState<string[]>([]);
   const [selectedAccessLevel, setSelectedAccessLevel] = useState<string>("read");
   const [inboxPopoverOpen, setInboxPopoverOpen] = useState(false);
+
+  // Calendar access queries
+  const { data: userCalendarAccess, isLoading: calendarAccessLoading } = useQuery<(UserCalendarAccess & { canAccessUser: User })[]>({
+    queryKey: ["/api/users", userId, "calendar-access"],
+    queryFn: async () => {
+      const res = await fetch(`/api/users/${userId}/calendar-access`);
+      if (!res.ok) throw new Error("Failed to fetch calendar access");
+      return res.json();
+    },
+    enabled: !!userId && !!currentUser?.superAdmin,
+  });
+
+  const { data: allUsers, isLoading: allUsersLoading } = useQuery<User[]>({
+    queryKey: ["/api/users"],
+    enabled: !!currentUser?.superAdmin,
+  });
+
+  const [selectedCalendarUserIds, setSelectedCalendarUserIds] = useState<string[]>([]);
+  const [calendarPopoverOpen, setCalendarPopoverOpen] = useState(false);
 
   useEffect(() => {
     if (targetUser) {
@@ -233,6 +252,24 @@ export default function UserDetailPage() {
         title: "Success",
         description: "Inbox access revoked successfully",
       });
+    },
+    onError: (error: any) => {
+      showFriendlyError({ error });
+    },
+  });
+
+  const updateCalendarAccessMutation = useMutation({
+    mutationFn: async (canAccessUserIds: string[]) => {
+      return await apiRequest("POST", `/api/users/${userId}/calendar-access`, { canAccessUserIds });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users", userId, "calendar-access"] });
+      toast({
+        title: "Success",
+        description: "Calendar access updated successfully",
+      });
+      setSelectedCalendarUserIds([]);
+      setCalendarPopoverOpen(false);
     },
     onError: (error: any) => {
       showFriendlyError({ error });
@@ -874,6 +911,219 @@ export default function UserDetailPage() {
                     <Inbox className="w-12 h-12 mx-auto mb-4 opacity-50" />
                     <p>No inbox access configured for this user</p>
                     <p className="text-sm mt-2">Grant access to inboxes using the form above</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {currentUser?.superAdmin && (
+            <Card data-testid="card-calendar-access">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Calendar className="w-5 h-5" />
+                  Calendar Access
+                </CardTitle>
+                <CardDescription>
+                  Manage which other users' calendars this user can view
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <Popover open={calendarPopoverOpen} onOpenChange={setCalendarPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={calendarPopoverOpen}
+                        className="flex-1 justify-between"
+                        data-testid="select-calendar-users"
+                      >
+                        {selectedCalendarUserIds.length === 0
+                          ? "Select users..."
+                          : `${selectedCalendarUserIds.length} user${selectedCalendarUserIds.length !== 1 ? 's' : ''} selected`}
+                        <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0" align="start">
+                      <div className="p-3 border-b">
+                        <p className="text-sm font-medium">Select users whose calendars this user can view</p>
+                        <p className="text-xs text-muted-foreground">
+                          {selectedCalendarUserIds.length} selected
+                        </p>
+                      </div>
+                      <ScrollArea className="h-[300px]">
+                        <div className="p-2 space-y-1">
+                          {allUsersLoading ? (
+                            <div className="py-6 text-center text-sm text-muted-foreground">
+                              Loading users...
+                            </div>
+                          ) : (() => {
+                            const availableUsers = allUsers?.filter(
+                              user => user.id !== userId && user.accessCalendar
+                            ) || [];
+                            
+                            if (availableUsers.length === 0) {
+                              return (
+                                <div className="py-6 text-center text-sm text-muted-foreground">
+                                  No users with calendar access available
+                                </div>
+                              );
+                            }
+                            
+                            const existingAccessIds = userCalendarAccess?.map(a => a.canAccessUserId) || [];
+                            
+                            return availableUsers.map(user => {
+                              const isSelected = selectedCalendarUserIds.includes(user.id) || existingAccessIds.includes(user.id);
+                              const isExisting = existingAccessIds.includes(user.id);
+                              return (
+                                <div
+                                  key={user.id}
+                                  className={`flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-muted ${
+                                    isSelected ? 'bg-muted' : ''
+                                  } ${isExisting ? 'opacity-60' : ''}`}
+                                  onClick={() => {
+                                    if (isExisting) return;
+                                    if (isSelected) {
+                                      setSelectedCalendarUserIds(prev => prev.filter(id => id !== user.id));
+                                    } else {
+                                      setSelectedCalendarUserIds(prev => [...prev, user.id]);
+                                    }
+                                  }}
+                                  data-testid={`checkbox-calendar-user-${user.id}`}
+                                >
+                                  <Checkbox
+                                    checked={isSelected}
+                                    disabled={isExisting}
+                                    onCheckedChange={(checked) => {
+                                      if (isExisting) return;
+                                      if (checked) {
+                                        setSelectedCalendarUserIds(prev => [...prev, user.id]);
+                                      } else {
+                                        setSelectedCalendarUserIds(prev => prev.filter(id => id !== user.id));
+                                      }
+                                    }}
+                                  />
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-medium text-sm truncate">
+                                      {user.firstName} {user.lastName}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground truncate">
+                                      {user.email}
+                                    </div>
+                                  </div>
+                                  {isExisting && (
+                                    <Badge variant="outline" className="text-xs shrink-0">
+                                      Already granted
+                                    </Badge>
+                                  )}
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                      </ScrollArea>
+                      {selectedCalendarUserIds.length > 0 && (
+                        <div className="p-2 border-t flex justify-between">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setSelectedCalendarUserIds([])}
+                          >
+                            Clear selection
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => setCalendarPopoverOpen(false)}
+                          >
+                            <Check className="w-4 h-4 mr-1" />
+                            Done
+                          </Button>
+                        </div>
+                      )}
+                    </PopoverContent>
+                  </Popover>
+                  
+                  <Button
+                    onClick={() => {
+                      if (selectedCalendarUserIds.length > 0) {
+                        const existingIds = userCalendarAccess?.map(a => a.canAccessUserId) || [];
+                        const allIds = [...new Set([...existingIds, ...selectedCalendarUserIds])];
+                        updateCalendarAccessMutation.mutate(allIds);
+                      }
+                    }}
+                    disabled={selectedCalendarUserIds.length === 0 || updateCalendarAccessMutation.isPending}
+                    data-testid="button-grant-calendar-access"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    {updateCalendarAccessMutation.isPending ? "Granting..." : "Grant Access"}
+                  </Button>
+                </div>
+
+                {calendarAccessLoading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-12 w-full" />
+                  </div>
+                ) : userCalendarAccess && userCalendarAccess.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>User</TableHead>
+                          <TableHead>Email</TableHead>
+                          <TableHead>Granted</TableHead>
+                          <TableHead className="w-[100px]">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {userCalendarAccess.map((access) => (
+                          <TableRow key={access.id} data-testid={`row-calendar-access-${access.id}`}>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Calendar className="w-4 h-4 text-muted-foreground" />
+                                <div className="font-medium">
+                                  {access.canAccessUser?.firstName} {access.canAccessUser?.lastName}
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <div className="text-sm text-muted-foreground">
+                                {access.canAccessUser?.email}
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              {access.grantedAt 
+                                ? formatDistanceToNow(new Date(access.grantedAt), { addSuffix: true })
+                                : "Unknown"
+                              }
+                            </TableCell>
+                            <TableCell>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const newIds = userCalendarAccess
+                                    .filter(a => a.canAccessUserId !== access.canAccessUserId)
+                                    .map(a => a.canAccessUserId);
+                                  updateCalendarAccessMutation.mutate(newIds);
+                                }}
+                                disabled={updateCalendarAccessMutation.isPending}
+                                data-testid={`button-revoke-calendar-${access.id}`}
+                              >
+                                <Trash2 className="w-4 h-4 text-destructive" />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Calendar className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No calendar access configured for this user</p>
+                    <p className="text-sm mt-2">Grant access to other users' calendars using the form above</p>
                   </div>
                 )}
               </CardContent>
