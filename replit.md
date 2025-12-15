@@ -146,3 +146,25 @@ Multi-channel outbound campaign system with client-first targeting, personalized
 -   `GET /api/campaigns/:id/sequence/analytics`: Sequence-specific analytics with step-by-step tracking
 -   `GET /api/campaigns/analytics/overview`: Dashboard overview stats (total campaigns, monthly sent, average rates, top performers)
 -   `GET /api/client-engagement/:clientId`: Get client engagement summary and score
+
+### Phase 6 - Campaign Creation Wizard (Complete)
+-   **7-Step Wizard** (`client/src/pages/campaign-wizard/`): Mailchimp/HubSpot-inspired campaign creation flow
+    1. **Overview** (`StepOverview.tsx`): Campaign name, category (chase/informational/upsell/engagement), description, template selection
+    2. **Targeting** (`StepTargeting.tsx`): Visual filter builder with 16+ client-first filters, live preview with matched client count
+    3. **Recipients** (`StepRecipients.tsx`): Contact strategy (primary_only/all_contacts/role_based), channel selection (Email/SMS/Voice)
+    4. **Messages** (`StepMessages.tsx`): Multi-channel message composer with merge field insertion and live preview
+    5. **Page** (`StepPage.tsx`): Optional landing page attachment (skip/create new/use existing)
+    6. **Testing** (`StepTesting.tsx`): Deliverability checklist, send test messages, preview all channels
+    7. **Launch** (`StepLaunch.tsx`): Send now or schedule, campaign summary, confirmation dialog
+
+-   **Key Features**:
+    -   Persistent sidebar navigation with progress tracking and step validation
+    -   Autosave with 2-second debounce (creates campaign on first save, updates thereafter)
+    -   Creation guard ensures campaign is persisted before moving to step 2+
+    -   Real-time recipient count and channel availability stats
+    -   Merge field picker with categories (client, person, campaign, firm)
+    -   Quick-start page templates (document collection, book call, confirm details, interested/not interested)
+
+-   **Routes**:
+    -   `GET /super-admin/campaigns/new`: Create new campaign
+    -   `GET /super-admin/campaigns/:id/edit`: Edit existing campaign
