@@ -1,6 +1,9 @@
 import type { Express } from "express";
 import { z } from "zod";
 import { storage } from "../../storage/index";
+import { db } from "../../db";
+import { scheduledQueryReminders, queryResponseTokens, bookkeepingQueries } from "@shared/schema";
+import { eq, and, gte, or, sql, inArray } from "drizzle-orm";
 
 const VALID_FREQUENCIES = ['daily', 'weekly', 'fortnightly', 'monthly', 'quarterly', 'annually'];
 
@@ -286,6 +289,157 @@ export function registerAdminMiscRoutes(
     } catch (error) {
       console.error("Error fetching scheduling exceptions by run:", error);
       res.status(500).json({ message: "Failed to fetch scheduling exceptions" });
+    }
+  });
+
+  // Get stats about cancelled reminders that could be restored
+  app.get("/api/admin/query-reminders/recovery-stats", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const now = new Date();
+      
+      // Find cancelled reminders scheduled for today or future
+      const cancelledReminders = await db
+        .select()
+        .from(scheduledQueryReminders)
+        .where(
+          and(
+            eq(scheduledQueryReminders.status, 'cancelled'),
+            gte(scheduledQueryReminders.scheduledAt, now)
+          )
+        );
+      
+      // Find active tokens (not completed, not expired)
+      const activeTokens = await db
+        .select()
+        .from(queryResponseTokens)
+        .where(
+          and(
+            sql`${queryResponseTokens.completedAt} IS NULL`,
+            gte(queryResponseTokens.expiresAt, now)
+          )
+        );
+      
+      // Count tokens with unanswered queries
+      let tokensWithPendingQueries = 0;
+      for (const token of activeTokens) {
+        if (token.queryIds && token.queryIds.length > 0) {
+          const queries = await db
+            .select()
+            .from(bookkeepingQueries)
+            .where(inArray(bookkeepingQueries.id, token.queryIds));
+          
+          const hasUnanswered = queries.some(q => 
+            q.status !== 'answered_by_client' && q.status !== 'resolved'
+          );
+          if (hasUnanswered) tokensWithPendingQueries++;
+        }
+      }
+
+      res.json({
+        cancelledRemindersInFuture: cancelledReminders.length,
+        activeTokens: activeTokens.length,
+        tokensWithPendingQueries,
+        message: cancelledReminders.length > 0 
+          ? `Found ${cancelledReminders.length} cancelled reminders that could be restored`
+          : 'No cancelled future reminders found'
+      });
+    } catch (error) {
+      console.error("Error getting recovery stats:", error);
+      res.status(500).json({ message: "Failed to get recovery stats" });
+    }
+  });
+
+  // Restore cancelled reminders that are scheduled for the future
+  app.post("/api/admin/query-reminders/restore-cancelled", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+    try {
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+      const { confirm } = req.body;
+      
+      if (confirm !== "RESTORE") {
+        return res.status(400).json({
+          message: "Confirmation required. Send { confirm: 'RESTORE' } to proceed."
+        });
+      }
+
+      const now = new Date();
+      
+      // Find cancelled reminders scheduled for today or future
+      const cancelledReminders = await db
+        .select()
+        .from(scheduledQueryReminders)
+        .where(
+          and(
+            eq(scheduledQueryReminders.status, 'cancelled'),
+            gte(scheduledQueryReminders.scheduledAt, now)
+          )
+        );
+      
+      if (cancelledReminders.length === 0) {
+        return res.json({
+          success: true,
+          message: "No cancelled future reminders to restore",
+          restored: 0
+        });
+      }
+
+      // For each cancelled reminder, check if its token still has pending queries
+      let restored = 0;
+      let skipped = 0;
+      
+      for (const reminder of cancelledReminders) {
+        // Get the token
+        const [token] = await db
+          .select()
+          .from(queryResponseTokens)
+          .where(eq(queryResponseTokens.id, reminder.tokenId));
+        
+        if (!token || token.completedAt || token.expiresAt < now) {
+          skipped++;
+          continue;
+        }
+        
+        // Check if token still has unanswered queries
+        if (token.queryIds && token.queryIds.length > 0) {
+          const queries = await db
+            .select()
+            .from(bookkeepingQueries)
+            .where(inArray(bookkeepingQueries.id, token.queryIds));
+          
+          const hasPending = queries.some(q => 
+            q.status !== 'answered_by_client' && q.status !== 'resolved'
+          );
+          
+          if (!hasPending) {
+            skipped++;
+            continue;
+          }
+        }
+        
+        // Restore the reminder
+        await db
+          .update(scheduledQueryReminders)
+          .set({
+            status: 'pending',
+            cancelledAt: null,
+            cancelledById: null,
+            errorMessage: null
+          })
+          .where(eq(scheduledQueryReminders.id, reminder.id));
+        
+        restored++;
+      }
+      
+      console.log(`[Admin] User ${effectiveUserId} restored ${restored} query reminders (skipped ${skipped})`);
+
+      res.json({
+        success: true,
+        message: `Restored ${restored} reminders, skipped ${skipped}`,
+        restored,
+        skipped
+      });
+    } catch (error) {
+      console.error("Error restoring reminders:", error);
+      res.status(500).json({ message: "Failed to restore reminders" });
     }
   });
 }

@@ -1023,22 +1023,15 @@ function needsPhoneHydration(reminder: ScheduledQueryReminder): boolean {
 }
 
 /**
- * Startup migration: Clean up placeholder reminders and fix missing phone numbers
- * - Cancels reminders scheduled before today
- * - Hydrates today's reminders with real recipient data
+ * Startup migration: Fix placeholder reminders with missing recipient data
+ * CONSERVATIVE: Only hydrates reminders, never cancels them
  * - Fixes SMS/voice reminders with null phone numbers
+ * - Fixes reminders with placeholder emails
  */
 export async function migrateePlaceholderReminders(): Promise<void> {
-  console.log('[QueryReminder] Running placeholder reminder migration...');
+  console.log('[QueryReminder] Running placeholder reminder migration (hydration only)...');
   
-  const now = new Date();
-  const ukNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/London' }));
-  const startOfTodayUK = new Date(ukNow);
-  startOfTodayUK.setHours(0, 0, 0, 0);
-  const ukOffset = ukNow.getTime() - now.getTime();
-  const startOfTodayUTC = new Date(startOfTodayUK.getTime() - ukOffset);
-  
-  // Find reminders with placeholder emails OR SMS/voice with null phone
+  // Find pending reminders that need hydration (placeholder emails or missing phone)
   const allPendingReminders = await db
     .select()
     .from(scheduledQueryReminders)
@@ -1048,38 +1041,27 @@ export async function migrateePlaceholderReminders(): Promise<void> {
     isPlaceholderEmail(r.recipientEmail) || needsPhoneHydration(r)
   );
   
-  console.log(`[QueryReminder] Found ${remindersToFix.length} reminder(s) needing fix (placeholder emails or missing phone)`);
+  console.log(`[QueryReminder] Found ${remindersToFix.length} reminder(s) needing hydration`);
   
-  let cancelled = 0;
   let hydrated = 0;
   let failed = 0;
   
+  // Process in small batches to avoid blocking event loop
   for (const reminder of remindersToFix) {
-    const scheduledTime = reminder.scheduledAt ? new Date(reminder.scheduledAt) : null;
-    
-    if (!scheduledTime || scheduledTime < startOfTodayUTC) {
-      await db
-        .update(scheduledQueryReminders)
-        .set({
-          status: 'cancelled',
-          cancelledAt: now,
-          errorMessage: 'Cancelled - placeholder recipient, scheduled before today'
-        })
-        .where(eq(scheduledQueryReminders.id, reminder.id));
-      cancelled++;
-      console.log(`[QueryReminder] Cancelled old placeholder reminder ${reminder.id}`);
-      continue;
-    }
-    
-    const fixed = await fixPlaceholderRecipient(reminder);
-    if (fixed) {
-      hydrated++;
-    } else {
+    try {
+      const fixed = await fixPlaceholderRecipient(reminder);
+      if (fixed) {
+        hydrated++;
+      } else {
+        failed++;
+      }
+    } catch (error) {
+      console.error(`[QueryReminder] Error hydrating reminder ${reminder.id}:`, error);
       failed++;
     }
   }
   
-  console.log(`[QueryReminder] Migration complete: ${cancelled} cancelled, ${hydrated} hydrated, ${failed} failed`);
+  console.log(`[QueryReminder] Migration complete: ${hydrated} hydrated, ${failed} failed`);
 }
 
 /**
