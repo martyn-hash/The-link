@@ -1236,10 +1236,10 @@ export function registerIntegrationRoutes(
         });
       }
 
-      const { to, subject, content, clientId, personId, projectId, isHtml, attachments } = bodyValidation.data;
+      const { to, cc, bcc, subject, content, clientId, personId, projectId, isHtml, attachments } = bodyValidation.data;
 
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
-      console.log('[EMAIL SEND] User ID:', effectiveUserId, 'Client ID:', clientId || 'none', 'Project ID:', projectId || 'none', 'Attachments:', attachments?.length || 0);
+      console.log('[EMAIL SEND] User ID:', effectiveUserId, 'Client ID:', clientId || 'none', 'Project ID:', projectId || 'none', 'Attachments:', attachments?.length || 0, 'CC:', cc?.length || 0, 'BCC:', bcc?.length || 0);
 
       // Check if user has access to this client (only if clientId is provided)
       if (clientId) {
@@ -1308,6 +1308,8 @@ export function registerIntegrationRoutes(
             processedContent,
             isHtml || false,
             { 
+              cc: cc && cc.length > 0 ? cc : undefined,
+              bcc: bcc && bcc.length > 0 ? bcc : undefined,
               attachments: formattedAttachments,
               inlineAttachments: inlineAttachments.length > 0 ? inlineAttachments : undefined
             }
@@ -1343,6 +1345,16 @@ export function registerIntegrationRoutes(
             subject,
             ...(isHtml ? { html: processedContent } : { text: processedContent }),
           };
+          
+          // Add CC recipients if present
+          if (cc && cc.length > 0) {
+            sgMessage.cc = cc;
+          }
+          
+          // Add BCC recipients if present
+          if (bcc && bcc.length > 0) {
+            sgMessage.bcc = bcc;
+          }
           
           // Add attachments if present (including inline attachments for SendGrid)
           const sgAttachments: any[] = [];

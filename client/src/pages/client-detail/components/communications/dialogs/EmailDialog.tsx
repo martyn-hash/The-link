@@ -118,6 +118,11 @@ export function EmailDialog({
   const [aiPrompt, setAiPrompt] = useState("");
   const [isRefining, setIsRefining] = useState(false);
   const [showPromptModal, setShowPromptModal] = useState(false);
+  
+  // CC/BCC state
+  const [showCcBcc, setShowCcBcc] = useState(false);
+  const [ccEmails, setCcEmails] = useState<string>("");
+  const [bccEmails, setBccEmails] = useState<string>("");
 
   // Auto-save draft for email composition
   const { savedContent: savedDraft, additionalFields: savedFields, hasDraft, saveDraft, clearDraft } = useDraftAutoSave({
@@ -410,7 +415,9 @@ export function EmailDialog({
       clientId: string;
       projectId?: string;
       isHtml?: boolean; 
-      attachments?: EmailAttachment[] 
+      attachments?: EmailAttachment[];
+      cc?: string[];
+      bcc?: string[];
     }) => {
       // Send emails to all recipients
       const results = [];
@@ -424,6 +431,8 @@ export function EmailDialog({
           personId: recipient.personId,
           isHtml: data.isHtml,
           attachments: data.attachments,
+          cc: data.cc,
+          bcc: data.bcc,
         });
         results.push(result);
       }
@@ -459,6 +468,9 @@ export function EmailDialog({
     setIsAttachmentsOpen(false);
     setAiPrompt('');
     setShowPromptModal(false);
+    setShowCcBcc(false);
+    setCcEmails('');
+    setBccEmails('');
     if (clearDraftOnClose) {
       clearDraft();
     }
@@ -502,6 +514,16 @@ export function EmailDialog({
       finalEmailContent = combinedContent + spacing + user.emailSignature;
     }
     
+    // Parse CC and BCC emails (comma-separated, trimmed)
+    const parsedCc = ccEmails
+      .split(',')
+      .map(e => e.trim())
+      .filter(e => e.length > 0 && e.includes('@'));
+    const parsedBcc = bccEmails
+      .split(',')
+      .map(e => e.trim())
+      .filter(e => e.length > 0 && e.includes('@'));
+    
     sendEmailMutation.mutate({
       recipients,
       subject: emailSubject || 'Message from CRM',
@@ -510,6 +532,8 @@ export function EmailDialog({
       clientId: clientId,
       projectId: projectId,
       attachments: attachments.length > 0 ? attachments : undefined,
+      cc: parsedCc.length > 0 ? parsedCc : undefined,
+      bcc: parsedBcc.length > 0 ? parsedBcc : undefined,
     });
   };
 
@@ -806,6 +830,46 @@ export function EmailDialog({
                     data-testid="input-email-subject-dialog"
                   />
                 </div>
+                
+                {/* CC/BCC Toggle */}
+                <Collapsible open={showCcBcc} onOpenChange={setShowCcBcc}>
+                  <CollapsibleTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                      data-testid="button-toggle-cc-bcc"
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                      {showCcBcc ? 'Hide CC/BCC' : 'Add CC/BCC'}
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-2 space-y-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="email-cc" className="text-xs text-muted-foreground">CC (comma-separated emails)</Label>
+                      <Input
+                        id="email-cc"
+                        value={ccEmails}
+                        onChange={(e) => setCcEmails(e.target.value)}
+                        placeholder="email1@example.com, email2@example.com"
+                        className="h-8 text-sm"
+                        data-testid="input-email-cc"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="email-bcc" className="text-xs text-muted-foreground">BCC (comma-separated emails)</Label>
+                      <Input
+                        id="email-bcc"
+                        value={bccEmails}
+                        onChange={(e) => setBccEmails(e.target.value)}
+                        placeholder="email1@example.com, email2@example.com"
+                        className="h-8 text-sm"
+                        data-testid="input-email-bcc"
+                      />
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
 
                 {/* Protected HTML Mode (Query Emails with tables/buttons) */}
                 {hasProtectedHtml ? (
@@ -1138,6 +1202,47 @@ export function EmailDialog({
                       data-testid="input-email-subject-standard"
                     />
                   </div>
+                  
+                  {/* CC/BCC Toggle */}
+                  <Collapsible open={showCcBcc} onOpenChange={setShowCcBcc}>
+                    <CollapsibleTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                        data-testid="button-toggle-cc-bcc-standard"
+                      >
+                        <Users className="h-3.5 w-3.5" />
+                        {showCcBcc ? 'Hide CC/BCC' : 'Add CC/BCC'}
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="mt-2 space-y-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="email-cc-standard" className="text-xs text-muted-foreground">CC (comma-separated emails)</Label>
+                        <Input
+                          id="email-cc-standard"
+                          value={ccEmails}
+                          onChange={(e) => setCcEmails(e.target.value)}
+                          placeholder="email1@example.com, email2@example.com"
+                          className="h-8 text-sm"
+                          data-testid="input-email-cc-standard"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="email-bcc-standard" className="text-xs text-muted-foreground">BCC (comma-separated emails)</Label>
+                        <Input
+                          id="email-bcc-standard"
+                          value={bccEmails}
+                          onChange={(e) => setBccEmails(e.target.value)}
+                          placeholder="email1@example.com, email2@example.com"
+                          className="h-8 text-sm"
+                          data-testid="input-email-bcc-standard"
+                        />
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                  
                   <div className="space-y-1.5">
                     <Label htmlFor="email-content" className="text-sm">Message <span className="text-destructive">*</span></Label>
                     <div data-testid="input-email-content-editor-standard" className="border rounded-md">

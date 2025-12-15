@@ -13,6 +13,8 @@ export const emailAttachmentSchema = z.object({
 // Email sending schema
 export const sendEmailSchema = z.object({
   to: z.string().email("Invalid email address"),
+  cc: z.array(z.string().email("Invalid CC email address")).optional(),
+  bcc: z.array(z.string().email("Invalid BCC email address")).optional(),
   subject: z.string().min(1, "Subject is required"),
   content: z.string().min(1, "Email content is required"),
   clientId: z.string().optional(),
