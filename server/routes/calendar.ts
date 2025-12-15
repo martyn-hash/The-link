@@ -5,6 +5,7 @@ import { eq, and, gte, lte, or, isNull, isNotNull, ne, inArray } from "drizzle-o
 import { alias } from "drizzle-orm/pg-core";
 import type { CalendarEvent, CalendarEventsResponse, MSCalendarEvent } from "@shared/schema";
 import { calendarAccessStorage } from "../storage/users";
+import { storage } from "../storage";
 import {
   getUserCalendarEvents,
   createUserCalendarEvent,
@@ -540,7 +541,12 @@ export function registerCalendarRoutes(
   app.get("/api/users/:id/calendar-access", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const { id } = req.params;
-      const currentUser = req.user;
+      const sessionUser = req.user;
+      
+      const currentUser = await storage.getUser(sessionUser.id);
+      if (!currentUser) {
+        return res.status(401).json({ message: "User not found" });
+      }
 
       if (!currentUser.superAdmin && currentUser.id !== id) {
         return res.status(403).json({ message: "Only super admins can view other users' calendar access" });
@@ -558,7 +564,12 @@ export function registerCalendarRoutes(
     try {
       const { id } = req.params;
       const { canAccessUserIds } = req.body;
-      const currentUser = req.user;
+      const sessionUser = req.user;
+      
+      const currentUser = await storage.getUser(sessionUser.id);
+      if (!currentUser) {
+        return res.status(401).json({ message: "User not found" });
+      }
 
       if (!currentUser.superAdmin) {
         return res.status(403).json({ message: "Only super admins can modify calendar access" });
