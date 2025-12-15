@@ -202,3 +202,15 @@ export const userProjectPreferences = pgTable("user_project_preferences", {
 }, (table) => [
   index("idx_user_project_preferences_user_id").on(table.userId),
 ]);
+
+export const userCalendarAccess = pgTable("user_calendar_access", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  canAccessUserId: varchar("can_access_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  grantedBy: varchar("granted_by").references(() => users.id),
+  grantedAt: timestamp("granted_at").defaultNow(),
+}, (table) => [
+  index("idx_user_calendar_access_user_id").on(table.userId),
+  index("idx_user_calendar_access_can_access_user_id").on(table.canAccessUserId),
+  unique("unique_user_calendar_access").on(table.userId, table.canAccessUserId),
+]);

@@ -11,6 +11,7 @@ import {
   dashboards,
   dashboardCache,
   userProjectPreferences,
+  userCalendarAccess,
 } from './tables';
 
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -93,5 +94,23 @@ export const userProjectPreferencesRelations = relations(userProjectPreferences,
   user: one(users, {
     fields: [userProjectPreferences.userId],
     references: [users.id],
+  }),
+}));
+
+export const userCalendarAccessRelations = relations(userCalendarAccess, ({ one }) => ({
+  user: one(users, {
+    fields: [userCalendarAccess.userId],
+    references: [users.id],
+    relationName: "calendarAccessOwner",
+  }),
+  canAccessUser: one(users, {
+    fields: [userCalendarAccess.canAccessUserId],
+    references: [users.id],
+    relationName: "calendarAccessTarget",
+  }),
+  grantedByUser: one(users, {
+    fields: [userCalendarAccess.grantedBy],
+    references: [users.id],
+    relationName: "calendarAccessGranter",
   }),
 }));

@@ -1,9 +1,19 @@
 import type { Express } from "express";
 import { db } from "../db";
-import { projects, projectTypes, services, clients, users, internalTasks, kanbanStages } from "@shared/schema";
+import { projects, projectTypes, services, clients, users, internalTasks, kanbanStages, createMeetingSchema } from "@shared/schema";
 import { eq, and, gte, lte, or, isNull, isNotNull, ne, inArray } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import type { CalendarEvent, CalendarEventsResponse } from "@shared/schema";
+import type { CalendarEvent, CalendarEventsResponse, MSCalendarEvent } from "@shared/schema";
+import { calendarAccessStorage } from "../storage/users";
+import {
+  getUserCalendarEvents,
+  createUserCalendarEvent,
+  updateUserCalendarEvent,
+  deleteUserCalendarEvent,
+  getUserByEmail,
+  isApplicationGraphConfigured,
+  type CalendarEvent as GraphCalendarEvent,
+} from "../utils/applicationGraphClient";
 
 function generateUserColor(userId: string): string {
   let hash = 0;
@@ -308,6 +318,262 @@ export function registerCalendarRoutes(
     } catch (error) {
       console.error("Error fetching calendar events:", error instanceof Error ? error.message : error);
       res.status(500).json({ message: "Failed to fetch calendar events" });
+    }
+  });
+
+  app.get("/api/ms-calendar/status", isAuthenticated, async (req: any, res: any) => {
+    res.json({ configured: isApplicationGraphConfigured() });
+  });
+
+  app.get("/api/ms-calendar/events", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      if (!isApplicationGraphConfigured()) {
+        return res.json({ events: [], message: "MS Graph not configured" });
+      }
+
+      const { start, end, selectedUserIds } = req.query;
+      const currentUser = req.user;
+
+      if (!start || !end) {
+        return res.status(400).json({ message: "Start and end dates are required" });
+      }
+
+      const userIdsToFetch: string[] = selectedUserIds 
+        ? (selectedUserIds as string).split(',').filter(Boolean)
+        : [currentUser.id];
+
+      const msEvents: MSCalendarEvent[] = [];
+      const userColors: Record<string, string> = {};
+
+      for (const userId of userIdsToFetch) {
+        if (userId !== currentUser.id) {
+          const hasAccess = await calendarAccessStorage.canUserAccessCalendar(currentUser.id, userId);
+          if (!hasAccess) continue;
+        }
+
+        const [targetUser] = await db.select().from(users).where(eq(users.id, userId));
+        if (!targetUser?.email) continue;
+
+        userColors[userId] = generateUserColor(userId);
+
+        try {
+          const { events } = await getUserCalendarEvents(targetUser.email, {
+            startDateTime: new Date(start as string).toISOString(),
+            endDateTime: new Date(end as string).toISOString(),
+            top: 100,
+          });
+
+          for (const event of events) {
+            msEvents.push({
+              id: event.id || `ms_${Date.now()}_${Math.random()}`,
+              type: "ms_calendar",
+              subject: event.subject,
+              body: event.body,
+              start: event.start,
+              end: event.end,
+              location: event.location,
+              attendees: event.attendees,
+              isOnlineMeeting: event.isOnlineMeeting,
+              onlineMeeting: event.onlineMeeting,
+              isAllDay: event.isAllDay,
+              showAs: event.showAs,
+              importance: event.importance,
+              sensitivity: event.sensitivity,
+              organizer: event.organizer,
+              webLink: event.webLink,
+              createdDateTime: event.createdDateTime,
+              lastModifiedDateTime: event.lastModifiedDateTime,
+              calendarOwnerEmail: targetUser.email,
+              calendarOwnerName: `${targetUser.firstName || ''} ${targetUser.lastName || ''}`.trim(),
+              calendarOwnerId: userId,
+              color: userColors[userId],
+            });
+          }
+        } catch (error) {
+          console.error(`Error fetching calendar for ${targetUser.email}:`, error);
+        }
+      }
+
+      res.json({ events: msEvents, userColors });
+    } catch (error) {
+      console.error("Error fetching MS calendar events:", error);
+      res.status(500).json({ message: "Failed to fetch MS calendar events" });
+    }
+  });
+
+  app.post("/api/ms-calendar/events", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      if (!isApplicationGraphConfigured()) {
+        return res.status(400).json({ message: "MS Graph not configured" });
+      }
+
+      const parseResult = createMeetingSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ message: "Invalid request", errors: parseResult.error.errors });
+      }
+
+      const { subject, description, startDateTime, endDateTime, timeZone, location, attendeeEmails, isTeamsMeeting, isAllDay, reminderMinutes } = parseResult.data;
+      const currentUser = req.user;
+
+      if (!currentUser.email) {
+        return res.status(400).json({ message: "User email not found" });
+      }
+
+      const eventData: Parameters<typeof createUserCalendarEvent>[1] = {
+        subject,
+        start: { dateTime: startDateTime, timeZone },
+        end: { dateTime: endDateTime, timeZone },
+        isAllDay,
+      };
+
+      if (description) {
+        eventData.body = { contentType: "html", content: description };
+      }
+
+      if (location) {
+        eventData.location = { displayName: location };
+      }
+
+      if (attendeeEmails && attendeeEmails.length > 0) {
+        eventData.attendees = attendeeEmails.map(email => ({
+          emailAddress: { address: email },
+          type: "required" as const,
+        }));
+      }
+
+      if (isTeamsMeeting) {
+        eventData.isOnlineMeeting = true;
+        eventData.onlineMeetingProvider = "teamsForBusiness";
+      }
+
+      if (reminderMinutes !== undefined) {
+        eventData.reminderMinutesBeforeStart = reminderMinutes;
+      }
+
+      const createdEvent = await createUserCalendarEvent(currentUser.email, eventData);
+
+      res.json({
+        success: true,
+        event: createdEvent,
+        teamsLink: createdEvent.onlineMeeting?.joinUrl,
+      });
+    } catch (error) {
+      console.error("Error creating calendar event:", error);
+      res.status(500).json({ message: "Failed to create calendar event" });
+    }
+  });
+
+  app.patch("/api/ms-calendar/events/:eventId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      if (!isApplicationGraphConfigured()) {
+        return res.status(400).json({ message: "MS Graph not configured" });
+      }
+
+      const { eventId } = req.params;
+      const currentUser = req.user;
+
+      if (!currentUser.email) {
+        return res.status(400).json({ message: "User email not found" });
+      }
+
+      const { subject, description, startDateTime, endDateTime, timeZone, location, attendeeEmails, isTeamsMeeting, isAllDay } = req.body;
+
+      const updates: Parameters<typeof updateUserCalendarEvent>[2] = {};
+
+      if (subject !== undefined) updates.subject = subject;
+      if (description !== undefined) updates.body = { contentType: "html", content: description };
+      if (startDateTime && timeZone) updates.start = { dateTime: startDateTime, timeZone };
+      if (endDateTime && timeZone) updates.end = { dateTime: endDateTime, timeZone };
+      if (location !== undefined) updates.location = { displayName: location };
+      if (isAllDay !== undefined) updates.isAllDay = isAllDay;
+      if (isTeamsMeeting !== undefined) {
+        updates.isOnlineMeeting = isTeamsMeeting;
+        if (isTeamsMeeting) updates.onlineMeetingProvider = "teamsForBusiness";
+      }
+      if (attendeeEmails) {
+        updates.attendees = attendeeEmails.map((email: string) => ({
+          emailAddress: { address: email },
+          type: "required" as const,
+        }));
+      }
+
+      const updatedEvent = await updateUserCalendarEvent(currentUser.email, eventId, updates);
+      res.json({ success: true, event: updatedEvent });
+    } catch (error) {
+      console.error("Error updating calendar event:", error);
+      res.status(500).json({ message: "Failed to update calendar event" });
+    }
+  });
+
+  app.delete("/api/ms-calendar/events/:eventId", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      if (!isApplicationGraphConfigured()) {
+        return res.status(400).json({ message: "MS Graph not configured" });
+      }
+
+      const { eventId } = req.params;
+      const currentUser = req.user;
+
+      if (!currentUser.email) {
+        return res.status(400).json({ message: "User email not found" });
+      }
+
+      await deleteUserCalendarEvent(currentUser.email, eventId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting calendar event:", error);
+      res.status(500).json({ message: "Failed to delete calendar event" });
+    }
+  });
+
+  app.get("/api/users/my-calendar-access", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const currentUser = req.user;
+      const accessList = await calendarAccessStorage.getCalendarAccessForUser(currentUser.id);
+      res.json(accessList);
+    } catch (error) {
+      console.error("Error fetching calendar access:", error);
+      res.status(500).json({ message: "Failed to fetch calendar access" });
+    }
+  });
+
+  app.get("/api/users/:id/calendar-access", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      const currentUser = req.user;
+
+      if (!currentUser.superAdmin && currentUser.id !== id) {
+        return res.status(403).json({ message: "Only super admins can view other users' calendar access" });
+      }
+
+      const accessList = await calendarAccessStorage.getCalendarAccessForUser(id);
+      res.json(accessList);
+    } catch (error) {
+      console.error("Error fetching user calendar access:", error);
+      res.status(500).json({ message: "Failed to fetch calendar access" });
+    }
+  });
+
+  app.post("/api/users/:id/calendar-access", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { id } = req.params;
+      const { canAccessUserIds } = req.body;
+      const currentUser = req.user;
+
+      if (!currentUser.superAdmin) {
+        return res.status(403).json({ message: "Only super admins can modify calendar access" });
+      }
+
+      if (!Array.isArray(canAccessUserIds)) {
+        return res.status(400).json({ message: "canAccessUserIds must be an array" });
+      }
+
+      await calendarAccessStorage.setCalendarAccessForUser(id, canAccessUserIds, currentUser.id);
+      const accessList = await calendarAccessStorage.getCalendarAccessForUser(id);
+      res.json(accessList);
+    } catch (error) {
+      console.error("Error setting calendar access:", error);
+      res.status(500).json({ message: "Failed to set calendar access" });
     }
   });
 }

@@ -13,6 +13,7 @@ import {
   dashboards,
   dashboardCache,
   userProjectPreferences,
+  userCalendarAccess,
 } from './tables';
 
 export const insertUserSchema = createInsertSchema(users).omit({
@@ -110,3 +111,8 @@ export const insertUserProjectPreferencesSchema = createInsertSchema(userProject
 });
 
 export const updateUserProjectPreferencesSchema = insertUserProjectPreferencesSchema.partial().omit({ userId: true });
+
+export const insertUserCalendarAccessSchema = createInsertSchema(userCalendarAccess).omit({
+  id: true,
+  grantedAt: true,
+});

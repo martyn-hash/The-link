@@ -12,6 +12,7 @@ import {
   dashboards,
   dashboardCache,
   userProjectPreferences,
+  userCalendarAccess,
 } from './tables';
 import {
   insertUserSchema,
@@ -33,6 +34,7 @@ import {
   updateDashboardCacheSchema,
   insertUserProjectPreferencesSchema,
   updateUserProjectPreferencesSchema,
+  insertUserCalendarAccessSchema,
 } from './schemas';
 
 export type User = typeof users.$inferSelect;
@@ -82,6 +84,9 @@ export type UpdateDashboardCache = z.infer<typeof updateDashboardCacheSchema>;
 export type UserProjectPreference = typeof userProjectPreferences.$inferSelect;
 export type InsertUserProjectPreference = z.infer<typeof insertUserProjectPreferencesSchema>;
 export type UpdateUserProjectPreference = z.infer<typeof updateUserProjectPreferencesSchema>;
+
+export type UserCalendarAccess = typeof userCalendarAccess.$inferSelect;
+export type InsertUserCalendarAccess = z.infer<typeof insertUserCalendarAccessSchema>;
 
 // Backward compatibility aliases (legacy used plural names)
 export type UserNotificationPreferences = UserNotificationPreference;
