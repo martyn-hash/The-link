@@ -135,7 +135,14 @@ Multi-channel outbound campaign system with client-first targeting, personalized
 -   `GET /api/campaigns/:id/sequence/steps`: Get all steps in a sequence
 -   `POST /api/campaigns/:id/sequence/process`: Manually trigger sequence progression
 
-### Next Phase - Analytics & Polish
--   Comprehensive campaign analytics dashboard
--   Engagement scoring across sequences
--   Voice channel (Dialora.ai) integration refinements
+### Phase 5 - Analytics & Polish (Complete)
+-   **Analytics Service** (`server/services/campaigns/campaignAnalyticsService.ts`): Full campaign metrics (sent, delivered, opened, clicked, actioned), delivery/engagement rates, manager breakdowns, engagement timeline by date
+-   **Engagement Score Service** (`server/services/campaigns/engagementScoreService.ts`): Client engagement scoring with weights (opened +1, clicked +2, page_viewed +2, action_completed +5, ignored -1), consecutive ignored tracking, score decay
+-   **Voice Delivery** (`server/services/campaigns/campaignDeliveryService.ts`): Dialora.ai integration for voice channel campaigns with webhook support
+-   **Engagement Cron** (`server/engagement-cron.ts`): Runs weekly at 07:00 UK time on Sundays to process ignored campaigns and update engagement scores
+
+### Phase 5 API Endpoints
+-   `GET /api/campaigns/:id/analytics`: Full campaign analytics (metrics, rates, breakdowns, timeline)
+-   `GET /api/campaigns/:id/sequence/analytics`: Sequence-specific analytics with step-by-step tracking
+-   `GET /api/campaigns/analytics/overview`: Dashboard overview stats (total campaigns, monthly sent, average rates, top performers)
+-   `GET /api/client-engagement/:clientId`: Get client engagement summary and score

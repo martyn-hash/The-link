@@ -14,6 +14,7 @@ import { startSignatureReminderCron } from "./signature-reminder-cron";
 import { startReminderNotificationCron } from "./reminder-notification-cron";
 import { startQueryReminderCron } from "./query-reminder-cron";
 import { startSequenceCron } from "./sequence-cron";
+import { startEngagementCron } from "./engagement-cron";
 import { recoverPendingTranscriptions } from "./transcription-service";
 import fs from "fs";
 import path from "path";
@@ -260,6 +261,10 @@ app.use((req, res, next) => {
     // Setup campaign sequence progression cron job
     // Runs daily at 06:00 UK time to progress multi-step campaign sequences
     startSequenceCron();
+    
+    // Setup engagement score cron job
+    // Runs weekly at 07:00 UK time on Sundays to process ignored campaigns
+    startEngagementCron();
     
     // Setup dashboard cache updates
     // Overnight update: Runs at 03:00 UK time (3:00 AM GMT/BST) - Europe/London timezone

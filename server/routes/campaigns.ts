@@ -584,7 +584,7 @@ export function registerCampaignRoutes(
   app.get('/api/client-engagement/:clientId', isAuthenticated, resolveEffectiveUser, async (req: any, res) => {
     try {
       const engagementService = await import('../services/campaigns/engagementScoreService.js');
-      const score = await engagementService.getClientEngagementScore(req.params.clientId);
+      const score = await engagementService.getClientEngagementSummary(req.params.clientId);
       res.json(score);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
