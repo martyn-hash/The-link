@@ -195,6 +195,35 @@ export class CampaignRecipientStorage extends BaseStorage {
     
     return recipient;
   }
+
+  async exists(campaignId: string, personId: string): Promise<boolean> {
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(campaignRecipients)
+      .where(and(
+        eq(campaignRecipients.campaignId, campaignId),
+        eq(campaignRecipients.personId, personId)
+      ));
+    
+    return (result[0]?.count ?? 0) > 0;
+  }
+
+  async bulkCreateForStep(stepCampaignId: string, sourceRecipients: CampaignRecipient[]): Promise<CampaignRecipient[]> {
+    if (sourceRecipients.length === 0) return [];
+    
+    const dataToInsert = sourceRecipients.map(r => ({
+      campaignId: stepCampaignId,
+      clientId: r.clientId,
+      personId: r.personId,
+      channel: r.channel,
+      channelAddress: r.channelAddress,
+      inclusionReason: `Progressed from previous step (ID: ${r.campaignId})`,
+      resolvedMergeData: r.resolvedMergeData,
+      status: 'pending' as const,
+    }));
+    
+    return db.insert(campaignRecipients).values(dataToInsert).returning();
+  }
 }
 
 export const campaignRecipientStorage = new CampaignRecipientStorage();

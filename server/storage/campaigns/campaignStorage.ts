@@ -108,6 +108,15 @@ export class CampaignStorage extends BaseStorage {
       .orderBy(asc(campaigns.sequenceOrder));
   }
 
+  async getActiveSequences(): Promise<Campaign[]> {
+    return db.select().from(campaigns)
+      .where(and(
+        eq(campaigns.isSequence, true),
+        inArray(campaigns.status, ['approved', 'sending', 'scheduled'])
+      ))
+      .orderBy(desc(campaigns.createdAt));
+  }
+
   async countByStatus(): Promise<Record<string, number>> {
     const results = await db
       .select({

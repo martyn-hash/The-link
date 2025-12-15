@@ -123,6 +123,21 @@ export class PageVisitStorage extends BaseStorage {
       return acc;
     }, {} as Record<string, number>);
   }
+
+  async existsForRecipient(recipientId: string, actionType?: string): Promise<boolean> {
+    const conditions = [eq(pageActionLogs.recipientId, recipientId)];
+    
+    if (actionType) {
+      conditions.push(eq(pageActionLogs.actionType, actionType));
+    }
+    
+    const result = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(pageActionLogs)
+      .where(and(...conditions));
+    
+    return (result[0]?.count ?? 0) > 0;
+  }
 }
 
 export const pageVisitStorage = new PageVisitStorage();
