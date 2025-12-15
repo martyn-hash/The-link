@@ -7,189 +7,151 @@ import { campaignTargetStorage } from '../../storage/campaigns/index.js';
 export interface FilterDefinition {
   type: string;
   label: string;
-  category: 'client_status' | 'services' | 'projects' | 'data_completeness' | 'engagement';
+  description?: string;
+  category: 'Client Profile' | 'Services' | 'Projects & Deadlines' | 'Data Completeness' | 'Engagement';
   operators: string[];
-  valueType: 'boolean' | 'select' | 'multi_select' | 'number' | 'number_range' | 'date_range' | 'user_select' | 'service_select' | 'project_type_select' | 'stage_select';
+  valueType: 'boolean' | 'select' | 'multi_select' | 'number' | 'days' | 'range' | 'date_range' | 'user' | 'service' | 'service_pair' | 'project_type' | 'stage' | 'tag';
   options?: { value: string; label: string }[];
+  min?: number;
+  max?: number;
 }
 
 export const FILTER_REGISTRY: FilterDefinition[] = [
   {
-    type: 'client_type',
-    label: 'Client Type',
-    category: 'client_status',
-    operators: ['equals'],
-    valueType: 'select',
-    options: [
-      { value: 'company', label: 'Company' },
-      { value: 'individual', label: 'Individual' }
-    ]
-  },
-  {
-    type: 'client_status',
-    label: 'Company Status',
-    category: 'client_status',
-    operators: ['equals', 'not_equals', 'in', 'not_in'],
-    valueType: 'multi_select',
-    options: [
-      { value: 'Active', label: 'Active' },
-      { value: 'Dormant', label: 'Dormant' },
-      { value: 'Dissolved', label: 'Dissolved' },
-      { value: 'Liquidation', label: 'Liquidation' },
-      { value: 'Prospect', label: 'Prospect' }
-    ]
-  },
-  {
     type: 'client_manager',
-    label: 'Client Manager',
-    category: 'client_status',
-    operators: ['equals', 'not_equals', 'in'],
-    valueType: 'user_select'
-  },
-  {
-    type: 'monthly_fee_range',
-    label: 'Monthly Fee',
-    category: 'client_status',
-    operators: ['between', 'gt', 'lt', 'gte', 'lte'],
-    valueType: 'number_range'
+    label: 'Assigned Manager',
+    description: 'Filter by the manager assigned to the client',
+    category: 'Client Profile',
+    operators: ['in', 'not_in'],
+    valueType: 'user'
   },
   {
     type: 'has_tag',
-    label: 'Has Tag',
-    category: 'client_status',
-    operators: ['equals', 'not_equals'],
-    valueType: 'select'
+    label: 'Client Tag',
+    description: 'Filter by tags assigned to clients',
+    category: 'Client Profile',
+    operators: ['in', 'not_in'],
+    valueType: 'tag'
   },
   {
     type: 'has_service',
     label: 'Has Service',
-    category: 'services',
-    operators: ['equals'],
-    valueType: 'service_select'
+    description: 'Include clients who have this service active',
+    category: 'Services',
+    operators: ['in'],
+    valueType: 'service'
   },
   {
     type: 'missing_service',
     label: 'Does NOT Have Service',
-    category: 'services',
-    operators: ['equals'],
-    valueType: 'service_select'
+    description: 'Include clients who do not have this service',
+    category: 'Services',
+    operators: ['in'],
+    valueType: 'service'
   },
   {
     type: 'has_service_not_other',
     label: 'Has Service A but not B',
-    category: 'services',
+    description: 'Include clients with specific services but exclude those with others',
+    category: 'Services',
     operators: ['equals'],
-    valueType: 'multi_select'
+    valueType: 'service_pair'
   },
   {
     type: 'has_project_type',
     label: 'Has Active Project Type',
-    category: 'projects',
-    operators: ['equals', 'not_equals'],
-    valueType: 'project_type_select'
+    description: 'Include clients with active projects of specific types',
+    category: 'Projects & Deadlines',
+    operators: ['in', 'not_in'],
+    valueType: 'project_type'
   },
   {
     type: 'project_at_stage',
     label: 'Has Project at Stage',
-    category: 'projects',
+    description: 'Include clients with projects at specific workflow stages',
+    category: 'Projects & Deadlines',
     operators: ['equals'],
-    valueType: 'stage_select'
+    valueType: 'stage'
   },
   {
     type: 'accounts_due_range',
     label: 'Accounts Due Within',
-    category: 'projects',
-    operators: ['between'],
+    description: 'Filter by when accounts are due for filing',
+    category: 'Projects & Deadlines',
+    operators: ['within'],
     valueType: 'date_range'
   },
   {
     type: 'confirmation_statement_due_range',
     label: 'Confirmation Statement Due Within',
-    category: 'projects',
-    operators: ['between'],
+    description: 'Filter by when confirmation statement is due',
+    category: 'Projects & Deadlines',
+    operators: ['within'],
     valueType: 'date_range'
-  },
-  {
-    type: 'has_overdue_project',
-    label: 'Has Overdue Project',
-    category: 'projects',
-    operators: ['equals'],
-    valueType: 'boolean'
   },
   {
     type: 'vat_quarter_due_range',
     label: 'VAT Quarter Due Within',
-    category: 'projects',
-    operators: ['between'],
+    description: 'Filter by when VAT returns are due (from VAT service)',
+    category: 'Projects & Deadlines',
+    operators: ['within'],
     valueType: 'date_range'
   },
   {
     type: 'missing_utr',
     label: 'Missing Company UTR',
-    category: 'data_completeness',
+    description: 'Include clients without a Unique Taxpayer Reference',
+    category: 'Data Completeness',
     operators: ['equals'],
     valueType: 'boolean'
   },
   {
     type: 'missing_auth_code',
     label: 'Missing Companies House Auth Code',
-    category: 'data_completeness',
+    description: 'Include clients without Companies House authentication code',
+    category: 'Data Completeness',
     operators: ['equals'],
     valueType: 'boolean'
-  },
-  {
-    type: 'missing_company_number',
-    label: 'Missing Company Number',
-    category: 'data_completeness',
-    operators: ['equals'],
-    valueType: 'boolean'
-  },
-  {
-    type: 'docs_outstanding_days',
-    label: 'Docs Outstanding More Than X Days',
-    category: 'data_completeness',
-    operators: ['gt'],
-    valueType: 'number'
   },
   {
     type: 'opened_last_campaign',
     label: 'Opened Last Campaign',
-    category: 'engagement',
+    description: 'Filter by whether they opened your last campaign',
+    category: 'Engagement',
     operators: ['equals'],
     valueType: 'boolean'
   },
   {
     type: 'clicked_last_campaign',
     label: 'Clicked Last Campaign',
-    category: 'engagement',
+    description: 'Filter by whether they clicked a link in your last campaign',
+    category: 'Engagement',
     operators: ['equals'],
     valueType: 'boolean'
   },
   {
-    type: 'last_contact_days',
-    label: 'Last Contact More Than X Days Ago',
-    category: 'engagement',
-    operators: ['gt', 'lt'],
-    valueType: 'number'
-  },
-  {
     type: 'portal_login_days',
     label: 'Portal Login Within X Days',
-    category: 'engagement',
-    operators: ['equals', 'not_equals'],
-    valueType: 'number'
+    description: 'Filter by recent portal login activity',
+    category: 'Engagement',
+    operators: ['within', 'not_within'],
+    valueType: 'days'
   },
   {
     type: 'engagement_score',
     label: 'Engagement Score',
-    category: 'engagement',
-    operators: ['gt', 'lt', 'between'],
-    valueType: 'number_range'
+    description: 'Filter by overall client engagement level (0-100)',
+    category: 'Engagement',
+    operators: ['between'],
+    valueType: 'range',
+    min: 0,
+    max: 100
   },
   {
     type: 'consecutive_ignored',
     label: 'Ignored X Consecutive Campaigns',
-    category: 'engagement',
+    description: 'Include clients who have ignored multiple campaigns in a row',
+    category: 'Engagement',
     operators: ['gte'],
     valueType: 'number'
   }
@@ -543,12 +505,49 @@ export function getAvailableFilters(): FilterDefinition[] {
 
 export async function getFilterOptions(filterType: string): Promise<any[]> {
   const filter = FILTER_REGISTRY.find(f => f.type === filterType);
-  if (!filter || !filter.options) return [];
-  return typeof filter.options === 'function' ? await filter.options() : filter.options;
+  if (filter?.options) return filter.options;
+  
+  switch (filterType) {
+    case 'user':
+    case 'client_manager': {
+      const users = await db.query.users.findMany({
+        columns: { id: true, firstName: true, lastName: true, email: true },
+        where: (users: any, { eq }: any) => eq(users.isActive, true)
+      });
+      return users.map((u: any) => ({
+        value: u.id,
+        label: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email
+      }));
+    }
+    case 'service':
+    case 'has_service':
+    case 'missing_service': {
+      const services = await db.query.services.findMany({
+        columns: { id: true, name: true },
+        where: (services: any, { eq }: any) => eq(services.isActive, true)
+      });
+      return services.map((s: any) => ({ value: s.id, label: s.name }));
+    }
+    case 'project_type':
+    case 'has_project_type': {
+      const types = await db.query.projectTypes.findMany({
+        columns: { id: true, name: true },
+        where: (pt: any, { eq }: any) => eq(pt.isActive, true)
+      });
+      return types.map((t: any) => ({ value: t.id, label: t.name }));
+    }
+    case 'tag':
+    case 'has_tag': {
+      const result = await db.execute(sql`SELECT id, name FROM client_tags WHERE deleted_at IS NULL ORDER BY name`);
+      return (result.rows as any[]).map((t: any) => ({ value: t.id, label: t.name }));
+    }
+    default:
+      return [];
+  }
 }
 
 export async function applyFilters(filters: Array<{ filterType: string; operator: string; value: any }>): Promise<any[]> {
-  const conditions = filters.map(f => buildFilterCondition(f.filterType, f.operator, f.value)).filter(Boolean);
+  const conditions = filters.map(f => buildFilterClause(f.filterType, f.operator, f.value)).filter(Boolean);
   
   if (conditions.length === 0) {
     return db.select().from(clients);

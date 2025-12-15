@@ -3,27 +3,47 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { 
   Target, 
   Plus, 
   X, 
   Loader2, 
-  Users, 
   RefreshCw,
   ChevronDown,
-  ChevronUp,
+  ChevronRight,
   AlertCircle,
-  Building2
+  Building2,
+  GripVertical,
+  Search,
+  Info,
+  Trash2
 } from 'lucide-react';
 import { apiRequest } from '@/lib/queryClient';
-import type { WizardState, FilterGroup, Filter } from '../CampaignWizard';
+import { useWizardSidebar, type WizardState, type FilterGroup, type Filter } from '../CampaignWizard';
+import {
+  DndContext,
+  DragOverlay,
+  useSensor,
+  useSensors,
+  PointerSensor,
+  KeyboardSensor,
+  closestCenter,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import {
+  useDraggable,
+  useDroppable,
+} from '@dnd-kit/core';
+import { FilterInputControl } from './targeting/FilterInputControl';
 
 interface StepTargetingProps {
   state: WizardState;
@@ -35,25 +55,33 @@ function generateId(): string {
   return Math.random().toString(36).substring(2, 9);
 }
 
-const OPERATOR_LABELS: Record<string, string> = {
-  equals: 'is',
-  not_equals: 'is not',
-  in: 'is one of',
-  not_in: 'is not one of',
-  contains: 'contains',
-  greater_than: 'is greater than',
-  less_than: 'is less than',
-  between: 'is between',
-  is_true: 'is true',
-  is_false: 'is false',
-  within_days: 'is within',
-  before: 'is before',
-  after: 'is after',
-};
+const FILTER_CATEGORIES = [
+  { id: 'Client Profile', label: 'Client Profile', icon: '👤' },
+  { id: 'Services', label: 'Services', icon: '📋' },
+  { id: 'Projects & Deadlines', label: 'Projects & Deadlines', icon: '📅' },
+  { id: 'Data Completeness', label: 'Data Completeness', icon: '✓' },
+  { id: 'Engagement', label: 'Engagement', icon: '📊' },
+  { id: 'UDFs', label: 'Service Fields', icon: '📝' },
+];
 
 export function StepTargeting({ state, updateState, campaignId }: StepTargetingProps) {
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
+  const { setSidebarContent } = useWizardSidebar();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
+    'Client Profile': true,
+    'Services': true,
+    'Projects & Deadlines': true,
+    'Data Completeness': false,
+    'Engagement': false,
+    'UDFs': false,
+  });
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [previewPage, setPreviewPage] = useState(0);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor)
+  );
 
   const { data: availableFilters, isLoading: loadingFilters } = useQuery<any[]>({
     queryKey: ['/api/campaign-targeting/available-filters'],
@@ -117,15 +145,44 @@ export function StepTargeting({ state, updateState, campaignId }: StepTargetingP
     return () => clearTimeout(timer);
   }, [state.targeting.filterGroups, campaignId]);
 
+  const addFilter = useCallback((filterType: string) => {
+    const filterDef = availableFilters?.find(f => f.type === filterType);
+    const defaultOperator = filterDef?.operators?.[0] || 'equals';
+    
+    const newFilter: Filter = {
+      id: generateId(),
+      filterType,
+      operator: defaultOperator,
+      value: null,
+    };
+
+    if (state.targeting.filterGroups.length === 0) {
+      const newGroup: FilterGroup = {
+        id: generateId(),
+        filters: [newFilter],
+      };
+      updateState(prev => ({
+        targeting: {
+          ...prev.targeting,
+          filterGroups: [newGroup],
+        },
+      }));
+    } else {
+      updateState(prev => ({
+        targeting: {
+          ...prev.targeting,
+          filterGroups: prev.targeting.filterGroups.map((g, i) =>
+            i === 0 ? { ...g, filters: [...g.filters, newFilter] } : g
+          ),
+        },
+      }));
+    }
+  }, [availableFilters, state.targeting.filterGroups.length, updateState]);
+
   const addFilterGroup = () => {
     const newGroup: FilterGroup = {
       id: generateId(),
-      filters: [{
-        id: generateId(),
-        filterType: '',
-        operator: 'equals',
-        value: null,
-      }],
+      filters: [],
     };
     updateState(prev => ({
       targeting: {
@@ -133,7 +190,6 @@ export function StepTargeting({ state, updateState, campaignId }: StepTargetingP
         filterGroups: [...prev.targeting.filterGroups, newGroup],
       },
     }));
-    setExpandedGroups(prev => ({ ...prev, [newGroup.id]: true }));
   };
 
   const removeFilterGroup = (groupId: string) => {
@@ -141,27 +197,6 @@ export function StepTargeting({ state, updateState, campaignId }: StepTargetingP
       targeting: {
         ...prev.targeting,
         filterGroups: prev.targeting.filterGroups.filter(g => g.id !== groupId),
-      },
-    }));
-  };
-
-  const addFilterToGroup = (groupId: string) => {
-    updateState(prev => ({
-      targeting: {
-        ...prev.targeting,
-        filterGroups: prev.targeting.filterGroups.map(g =>
-          g.id === groupId
-            ? {
-                ...g,
-                filters: [...g.filters, {
-                  id: generateId(),
-                  filterType: '',
-                  operator: 'equals',
-                  value: null,
-                }],
-              }
-            : g
-        ),
       },
     }));
   };
@@ -197,357 +232,436 @@ export function StepTargeting({ state, updateState, campaignId }: StepTargetingP
     }));
   };
 
-  const toggleGroupExpanded = (groupId: string) => {
-    setExpandedGroups(prev => ({ ...prev, [groupId]: !prev[groupId] }));
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveDragId(event.active.id as string);
   };
 
-  const categorizedFilters = availableFilters ? categorizeFilters(availableFilters) : {} as Record<string, any[]>;
+  const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDragId(null);
+    
+    if (event.over && event.active.id) {
+      const filterType = event.active.id as string;
+      if (filterType.startsWith('palette-')) {
+        const actualFilterType = filterType.replace('palette-', '');
+        addFilter(actualFilterType);
+      }
+    }
+  };
+
+  const categorizedFilters = availableFilters ? categorizeFilters(availableFilters) : {};
+
+  const filteredFilters = searchQuery
+    ? Object.fromEntries(
+        Object.entries(categorizedFilters).map(([cat, filters]) => [
+          cat,
+          (filters as any[]).filter(f =>
+            f.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            f.description?.toLowerCase().includes(searchQuery.toLowerCase())
+          ),
+        ]).filter(([_, filters]) => (filters as any[]).length > 0)
+      )
+    : categorizedFilters;
+
+  useEffect(() => {
+    setSidebarContent(
+      <div className="p-4 space-y-4">
+        <div>
+          <h3 className="font-semibold text-sm mb-2">Available Filters</h3>
+          <p className="text-xs text-muted-foreground mb-3">
+            Click a filter to add it to your targeting criteria
+          </p>
+        </div>
+        
+        <div className="relative">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search filters..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 h-9"
+            data-testid="input-filter-search"
+          />
+        </div>
+
+        <ScrollArea className="h-[calc(100vh-320px)]">
+          <div className="space-y-2 pr-2">
+            {FILTER_CATEGORIES.map((category) => {
+              const filters = (filteredFilters as Record<string, any[]>)[category.id] || [];
+              if (filters.length === 0 && searchQuery) return null;
+              
+              return (
+                <Collapsible
+                  key={category.id}
+                  open={expandedCategories[category.id]}
+                  onOpenChange={(open) => setExpandedCategories(prev => ({ ...prev, [category.id]: open }))}
+                >
+                  <CollapsibleTrigger asChild>
+                    <button className="flex items-center justify-between w-full px-2 py-1.5 text-sm font-medium hover:bg-muted rounded-md transition-colors">
+                      <span className="flex items-center gap-2">
+                        <span>{category.icon}</span>
+                        <span>{category.label}</span>
+                        <Badge variant="secondary" className="text-xs h-5">
+                          {filters.length}
+                        </Badge>
+                      </span>
+                      {expandedCategories[category.id] ? (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="pl-2 space-y-0.5 mt-1">
+                      {filters.map((filter: any) => (
+                        <FilterPaletteItem
+                          key={filter.type}
+                          filter={filter}
+                          onAdd={() => addFilter(filter.type)}
+                        />
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })}
+          </div>
+        </ScrollArea>
+
+        <div className="pt-4 border-t">
+          <div className="flex items-start gap-2 text-xs text-muted-foreground">
+            <Info className="h-4 w-4 shrink-0 mt-0.5" />
+            <p>
+              Click filters to add them. Filters within a group use AND logic.
+              Add multiple groups for OR logic.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+
+    return () => setSidebarContent(null);
+  }, [setSidebarContent, searchQuery, expandedCategories, filteredFilters, addFilter]);
 
   return (
-    <div className="space-y-6" data-testid="step-targeting">
-      <div>
-        <h2 className="text-2xl font-bold tracking-tight" data-testid="text-step-title">
-          Who should receive this campaign?
-        </h2>
-        <p className="text-muted-foreground mt-1">
-          Define your target audience using filters. Clients matching ALL filters within a group are included.
-        </p>
-      </div>
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+    >
+      <div className="space-y-6" data-testid="step-targeting">
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight" data-testid="text-step-title">
+            Who should receive this campaign?
+          </h2>
+          <p className="text-muted-foreground mt-1">
+            Define your target audience using filters. Click filters from the left panel to add them.
+          </p>
+        </div>
 
-      <Card className="bg-primary/5 border-primary/20">
-        <CardContent className="py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-primary/10">
-                <Target className="h-5 w-5 text-primary" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-lg">
-                    {state.targeting.matchedClientCount !== null
-                      ? state.targeting.matchedClientCount.toLocaleString()
-                      : '—'}
-                  </span>
-                  <span className="text-muted-foreground">clients match your criteria</span>
-                </div>
-                {loadingPreview && (
-                  <span className="text-sm text-muted-foreground flex items-center gap-1">
-                    <Loader2 className="h-3 w-3 animate-spin" />
-                    Calculating...
-                  </span>
-                )}
-              </div>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => refetchPreview()}
-              disabled={loadingPreview || !campaignId}
-              data-testid="button-refresh-count"
-            >
-              <RefreshCw className={cn("h-4 w-4 mr-2", loadingPreview && "animate-spin")} />
-              Refresh
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="space-y-4">
-        {state.targeting.filterGroups.length === 0 ? (
-          <Card className="border-dashed">
-            <CardContent className="py-12 text-center">
-              <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
-                <Target className="h-6 w-6 text-muted-foreground" />
-              </div>
-              <h3 className="font-semibold mb-1">No filters added</h3>
-              <p className="text-muted-foreground text-sm mb-4">
-                Add your first filter to start building your audience
-              </p>
-              <Button onClick={addFilterGroup} data-testid="button-add-first-filter">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Filter
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          state.targeting.filterGroups.map((group, groupIndex) => (
-            <div key={group.id}>
-              {groupIndex > 0 && (
-                <div className="flex items-center gap-4 my-4">
-                  <Separator className="flex-1" />
-                  <Badge variant="secondary" className="text-sm font-medium">
-                    OR
-                  </Badge>
-                  <Separator className="flex-1" />
-                </div>
-              )}
-              
-              <Card data-testid={`filter-group-${groupIndex}`}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <button
-                      onClick={() => toggleGroupExpanded(group.id)}
-                      className="flex items-center gap-2 hover:text-primary transition-colors"
-                    >
-                      {expandedGroups[group.id] !== false ? (
-                        <ChevronUp className="h-4 w-4" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4" />
-                      )}
-                      <CardTitle className="text-base">
-                        Filter Group {groupIndex + 1}
-                      </CardTitle>
-                      <Badge variant="outline" className="ml-2">
-                        {group.filters.length} {group.filters.length === 1 ? 'filter' : 'filters'}
-                      </Badge>
-                    </button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                      onClick={() => removeFilterGroup(group.id)}
-                      data-testid={`button-remove-group-${groupIndex}`}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <CardDescription>
-                    All conditions in this group must match (AND logic)
-                  </CardDescription>
-                </CardHeader>
-
-                {expandedGroups[group.id] !== false && (
-                  <CardContent className="space-y-3">
-                    {group.filters.map((filter, filterIndex) => (
-                      <div key={filter.id}>
-                        {filterIndex > 0 && (
-                          <div className="flex items-center gap-2 my-2">
-                            <Badge variant="outline" className="text-xs">AND</Badge>
-                          </div>
-                        )}
-                        <FilterRow
-                          filter={filter}
-                          availableFilters={availableFilters || []}
-                          categorizedFilters={categorizedFilters}
-                          onUpdate={(updates) => updateFilter(group.id, filter.id, updates)}
-                          onRemove={() => removeFilter(group.id, filter.id)}
-                          canRemove={group.filters.length > 1}
-                          testId={`filter-${groupIndex}-${filterIndex}`}
-                        />
-                      </div>
-                    ))}
-
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => addFilterToGroup(group.id)}
-                      className="mt-2"
-                      data-testid={`button-add-filter-to-group-${groupIndex}`}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Filter to Group
-                    </Button>
-                  </CardContent>
-                )}
-              </Card>
-            </div>
-          ))
-        )}
-
-        {state.targeting.filterGroups.length > 0 && (
-          <Button
-            variant="outline"
-            onClick={addFilterGroup}
-            className="w-full border-dashed"
-            data-testid="button-add-filter-group"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Another Filter Group (OR)
-          </Button>
-        )}
-      </div>
-
-      {state.targeting.filterGroups.length > 0 && (
-        <Card>
-          <CardHeader>
+        <Card className="bg-primary/5 border-primary/20">
+          <CardContent className="py-4">
             <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Building2 className="h-5 w-5" />
-                  Preview Matched Clients
-                </CardTitle>
-                <CardDescription>
-                  Showing first {previewData?.preview?.length || 0} of {previewData?.totalMatched || 0} matched clients
-                </CardDescription>
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-primary/10">
+                  <Target className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-lg">
+                      {state.targeting.matchedClientCount !== null
+                        ? state.targeting.matchedClientCount.toLocaleString()
+                        : '—'}
+                    </span>
+                    <span className="text-muted-foreground">clients match your criteria</span>
+                  </div>
+                  {loadingPreview && (
+                    <span className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      Calculating...
+                    </span>
+                  )}
+                </div>
               </div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => refetchPreview()}
-                disabled={loadingPreview}
-                data-testid="button-refresh-preview"
+                disabled={loadingPreview || !campaignId}
+                data-testid="button-refresh-count"
               >
                 <RefreshCw className={cn("h-4 w-4 mr-2", loadingPreview && "animate-spin")} />
                 Refresh
               </Button>
             </div>
-          </CardHeader>
-          <CardContent>
-            {loadingPreview ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : previewData?.preview?.length > 0 ? (
-              <ScrollArea className="h-[300px]">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Client</TableHead>
-                      <TableHead>Email</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {previewData.preview.map((client: any) => (
-                      <TableRow key={client.id} data-testid={`preview-row-${client.id}`}>
-                        <TableCell className="font-medium">{client.name}</TableCell>
-                        <TableCell className="text-muted-foreground">{client.email || '—'}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </ScrollArea>
-            ) : (
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  No clients match your current filters. Try adjusting your criteria.
-                </AlertDescription>
-              </Alert>
-            )}
           </CardContent>
         </Card>
+
+        <DropZone isEmpty={state.targeting.filterGroups.length === 0}>
+          {state.targeting.filterGroups.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center mb-4">
+                <Target className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <h3 className="font-semibold mb-1">No filters added</h3>
+              <p className="text-muted-foreground text-sm mb-4">
+                Click filters from the left panel to start building your audience
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {state.targeting.filterGroups.map((group, groupIndex) => (
+                <div key={group.id}>
+                  {groupIndex > 0 && (
+                    <div className="flex items-center gap-4 my-4">
+                      <Separator className="flex-1" />
+                      <Badge variant="secondary" className="text-sm font-medium px-3 py-1">
+                        OR
+                      </Badge>
+                      <Separator className="flex-1" />
+                    </div>
+                  )}
+                  
+                  <Card data-testid={`filter-group-${groupIndex}`}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-base">
+                            Filter Group {groupIndex + 1}
+                          </CardTitle>
+                          <Badge variant="outline">
+                            {group.filters.length} {group.filters.length === 1 ? 'filter' : 'filters'}
+                          </Badge>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => removeFilterGroup(group.id)}
+                          data-testid={`button-remove-group-${groupIndex}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <CardDescription>
+                        All conditions must match (AND logic)
+                      </CardDescription>
+                    </CardHeader>
+
+                    <CardContent className="space-y-3">
+                      {group.filters.map((filter, filterIndex) => (
+                        <div key={filter.id}>
+                          {filterIndex > 0 && (
+                            <div className="flex items-center gap-2 my-2 ml-2">
+                              <Badge variant="outline" className="text-xs bg-background">AND</Badge>
+                            </div>
+                          )}
+                          <FilterCard
+                            filter={filter}
+                            availableFilters={availableFilters || []}
+                            onUpdate={(updates) => updateFilter(group.id, filter.id, updates)}
+                            onRemove={() => removeFilter(group.id, filter.id)}
+                            testId={`filter-${groupIndex}-${filterIndex}`}
+                          />
+                        </div>
+                      ))}
+
+                      {group.filters.length === 0 && (
+                        <div className="text-center py-6 text-muted-foreground text-sm">
+                          Click a filter from the left panel to add it to this group
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              ))}
+
+              <Button
+                variant="outline"
+                onClick={addFilterGroup}
+                className="w-full border-dashed"
+                data-testid="button-add-filter-group"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Another Filter Group (OR)
+              </Button>
+            </div>
+          )}
+        </DropZone>
+
+        {state.targeting.filterGroups.length > 0 && state.targeting.filterGroups.some(g => g.filters.length > 0) && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Building2 className="h-5 w-5" />
+                    Preview Matched Clients
+                  </CardTitle>
+                  <CardDescription>
+                    Showing first {previewData?.preview?.length || 0} of {previewData?.totalMatched || 0} matched clients
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => refetchPreview()}
+                  disabled={loadingPreview}
+                  data-testid="button-refresh-preview"
+                >
+                  <RefreshCw className={cn("h-4 w-4 mr-2", loadingPreview && "animate-spin")} />
+                  Refresh
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loadingPreview ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : previewData?.preview?.length > 0 ? (
+                <ScrollArea className="h-[300px]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Client</TableHead>
+                        <TableHead>Email</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {previewData.preview.map((client: any) => (
+                        <TableRow key={client.id} data-testid={`preview-row-${client.id}`}>
+                          <TableCell className="font-medium">{client.name}</TableCell>
+                          <TableCell className="text-muted-foreground">{client.email || '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </ScrollArea>
+              ) : (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    No clients match your current filters. Try adjusting your criteria.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      <DragOverlay>
+        {activeDragId && (
+          <div className="bg-primary text-primary-foreground px-3 py-2 rounded-md shadow-lg text-sm font-medium">
+            {activeDragId.replace('palette-', '')}
+          </div>
+        )}
+      </DragOverlay>
+    </DndContext>
+  );
+}
+
+interface FilterPaletteItemProps {
+  filter: any;
+  onAdd: () => void;
+}
+
+function FilterPaletteItem({ filter, onAdd }: FilterPaletteItemProps) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            onClick={onAdd}
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors text-left group"
+            data-testid={`palette-filter-${filter.type}`}
+          >
+            <Plus className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+            <span className="truncate">{filter.label}</span>
+          </button>
+        </TooltipTrigger>
+        {filter.description && (
+          <TooltipContent side="right" className="max-w-[200px]">
+            <p className="text-xs">{filter.description}</p>
+          </TooltipContent>
+        )}
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+interface DropZoneProps {
+  children: React.ReactNode;
+  isEmpty: boolean;
+}
+
+function DropZone({ children, isEmpty }: DropZoneProps) {
+  const { isOver, setNodeRef } = useDroppable({ id: 'filter-drop-zone' });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "min-h-[200px] rounded-lg transition-all",
+        isEmpty && "border-2 border-dashed border-muted-foreground/25",
+        isOver && "border-primary bg-primary/5"
       )}
+    >
+      {children}
     </div>
   );
 }
 
-interface FilterRowProps {
+interface FilterCardProps {
   filter: Filter;
   availableFilters: any[];
-  categorizedFilters: Record<string, any[]>;
   onUpdate: (updates: Partial<Filter>) => void;
   onRemove: () => void;
-  canRemove: boolean;
   testId: string;
 }
 
-function FilterRow({ filter, availableFilters, categorizedFilters, onUpdate, onRemove, canRemove, testId }: FilterRowProps) {
-  const selectedFilter = availableFilters.find(f => f.type === filter.filterType);
-  const operators = selectedFilter?.operators || ['equals'];
-
-  const { data: filterOptions } = useQuery({
-    queryKey: ['/api/campaign-targeting/filter-options', filter.filterType],
-    enabled: !!filter.filterType && selectedFilter?.valueType === 'select',
-  });
+function FilterCard({ filter, availableFilters, onUpdate, onRemove, testId }: FilterCardProps) {
+  const filterDef = availableFilters.find(f => f.type === filter.filterType);
 
   return (
-    <div className="flex items-center gap-2" data-testid={testId}>
-      <Select
-        value={filter.filterType}
-        onValueChange={(value) => onUpdate({ filterType: value, value: null })}
-      >
-        <SelectTrigger className="w-[220px]" data-testid={`${testId}-type`}>
-          <SelectValue placeholder="Select filter..." />
-        </SelectTrigger>
-        <SelectContent>
-          {Object.entries(categorizedFilters).map(([category, filters]) => (
-            <div key={category}>
-              <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                {category}
-              </div>
-              {filters.map((f: any) => (
-                <SelectItem key={f.type} value={f.type}>
-                  {f.label}
-                </SelectItem>
-              ))}
-            </div>
-          ))}
-        </SelectContent>
-      </Select>
+    <div 
+      className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg border"
+      data-testid={testId}
+    >
+      <div className="flex-1 space-y-3">
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary" className="font-medium">
+            {filterDef?.label || filter.filterType}
+          </Badge>
+          {filterDef?.description && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger>
+                  <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs max-w-[200px]">{filterDef.description}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
 
-      <Select
-        value={filter.operator}
-        onValueChange={(value) => onUpdate({ operator: value })}
-        disabled={!filter.filterType}
-      >
-        <SelectTrigger className="w-[140px]" data-testid={`${testId}-operator`}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {operators.map((op: string) => (
-            <SelectItem key={op} value={op}>
-              {OPERATOR_LABELS[op] || op}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      {selectedFilter?.valueType === 'select' ? (
-        <Select
-          value={filter.value || ''}
-          onValueChange={(value) => onUpdate({ value })}
-          disabled={!filter.filterType}
-        >
-          <SelectTrigger className="flex-1" data-testid={`${testId}-value`}>
-            <SelectValue placeholder="Select value..." />
-          </SelectTrigger>
-          <SelectContent>
-            {(filterOptions || []).map((opt: any) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ) : selectedFilter?.valueType === 'boolean' ? (
-        <Select
-          value={filter.value?.toString() || 'true'}
-          onValueChange={(value) => onUpdate({ value: value === 'true' })}
-        >
-          <SelectTrigger className="flex-1" data-testid={`${testId}-value`}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="true">Yes</SelectItem>
-            <SelectItem value="false">No</SelectItem>
-          </SelectContent>
-        </Select>
-      ) : selectedFilter?.valueType === 'number' ? (
-        <Input
-          type="number"
-          value={filter.value || ''}
-          onChange={(e) => onUpdate({ value: e.target.value ? parseInt(e.target.value) : null })}
-          placeholder="Enter number..."
-          className="flex-1"
-          data-testid={`${testId}-value`}
+        <FilterInputControl
+          filter={filter}
+          filterDef={filterDef}
+          onUpdate={onUpdate}
+          testId={testId}
         />
-      ) : (
-        <Input
-          value={filter.value || ''}
-          onChange={(e) => onUpdate({ value: e.target.value })}
-          placeholder="Enter value..."
-          className="flex-1"
-          disabled={!filter.filterType}
-          data-testid={`${testId}-value`}
-        />
-      )}
+      </div>
 
       <Button
         variant="ghost"
         size="icon"
-        className="h-9 w-9 text-muted-foreground hover:text-destructive shrink-0"
+        className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0"
         onClick={onRemove}
-        disabled={!canRemove}
         data-testid={`${testId}-remove`}
       >
         <X className="h-4 w-4" />
@@ -558,20 +672,20 @@ function FilterRow({ filter, availableFilters, categorizedFilters, onUpdate, onR
 
 function categorizeFilters(filters: any[]): Record<string, any[]> {
   const categories: Record<string, any[]> = {
-    'Client Basics': [],
+    'Client Profile': [],
     'Services': [],
-    'Projects': [],
+    'Projects & Deadlines': [],
     'Data Completeness': [],
     'Engagement': [],
-    'Other': [],
+    'UDFs': [],
   };
 
   filters.forEach((filter: any) => {
-    const category = filter.category || 'Other';
+    const category = filter.category || 'Client Profile';
     if (categories[category]) {
       categories[category].push(filter);
     } else {
-      categories['Other'].push(filter);
+      categories['Client Profile'].push(filter);
     }
   });
 

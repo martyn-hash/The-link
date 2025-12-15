@@ -1,27 +1,24 @@
 # The Link - CRM & Project Management Application
 
 ## Overview
-The Link is a full-stack CRM and project management application designed for accounting and bookkeeping firms. Its primary purpose is to automate recurring service delivery, streamline client relationship management, and provide a secure client portal. The application aims to enhance efficiency and client satisfaction through features like intelligent scheduling, automated project generation, Companies House integration, and a mobile-first user experience, all within a multi-tenant architecture. It focuses on improving firm operations and client engagement, recognizing market potential and ambitious project goals.
+The Link is a full-stack CRM and project management application for accounting and bookkeeping firms. Its core purpose is to automate recurring service delivery, streamline client relationship management, and provide a secure client portal. It aims to boost efficiency and client satisfaction through features like intelligent scheduling, automated project generation, Companies House integration, and a mobile-first user experience within a multi-tenant architecture. The project emphasizes improving firm operations and client engagement, recognizing its market potential and ambitious goals.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
-## Testing Credentials
-- **Staff Login**: Root page → Passwords tab → admin@example.com | admin123
-
 ## System Architecture
 
 ### UI/UX
-The application's UI/UX is inspired by modern SaaS platforms like Linear, Stripe, and Notion, utilizing a specific brand palette and DM Sans font. Design principles emphasize increased spacing, soft modern shadows, and consistent 1rem border-radius. Components are mobile-first, responsive, and adhere to a consistent Phase 3 layout with standardized header blocks, body regions, and tab-based designs. Full-width layouts are used for data-heavy pages, while detail and form pages remain centered.
+The UI/UX is inspired by modern SaaS platforms, using a specific brand palette and DM Sans font. Design principles include increased spacing, soft modern shadows, and consistent 1rem border-radius. Components are mobile-first, responsive, and follow a consistent layout with standardized headers, body regions, and tab-based designs. Full-width layouts are used for data-heavy pages, while detail and form pages are centered.
 
 ### Technical Implementation
-The frontend is built with React, TypeScript, Wouter for routing, TanStack Query for server state management, and `shadcn/ui` with Tailwind CSS for styling. The backend is an Express.js server in TypeScript, providing a modular RESTful API with middleware for authentication, authorization, and validation. It handles service mapping, project creation, sophisticated scheduling with UTC normalization, and comprehensive audit trails. A nightly scheduler automates project generation. The backend storage layer employs 52 domain-focused modules using a facade pattern. Performance optimizations include batch operations and optimistic updates for stage changes, background prefetching, and state persistence for list view settings.
+The frontend uses React, TypeScript, Wouter for routing, TanStack Query for server state management, and `shadcn/ui` with Tailwind CSS for styling. The backend is an Express.js server in TypeScript, providing a modular RESTful API with middleware for authentication, authorization, and validation. It handles service mapping, project creation, sophisticated scheduling with UTC normalization, and comprehensive audit trails. A nightly scheduler automates project generation. The storage layer employs 52 domain-focused modules using a facade pattern. Performance is optimized with batch operations, optimistic updates, background prefetching, and state persistence.
 
 ### Feature Specifications
-The system includes advanced communication tools like RingCentral VoIP integration with AI transcription, AI Magic Call/SMS for natural language interactions, email image pasting, and a new SMS Templates feature with variable support. It supports shared Outlook inbox access via Microsoft Graph API with granular permissions and a dedicated Comms Workspace for email management. **MS Calendar integration** allows viewing and creating calendar events (with Teams meeting support) for users with `accessCalendar` permission, with shared calendar access managed by super admins via the `userCalendarAccess` table. Project management features include a dynamic "Client Also Has" filter, Tasks filter ownership permissions, and Bookkeeping Query Grouping. For data analysis, a drag-and-drop Pivot Table builder is available.
+The system includes advanced communication tools like RingCentral VoIP integration with AI transcription, AI Magic Call/SMS, email image pasting, and SMS Templates. It supports shared Outlook inbox access via Microsoft Graph API with granular permissions and a dedicated Comms Workspace. MS Calendar integration allows viewing and creating calendar events (with Teams meeting support) for authorized users, with shared calendar access managed by super admins. Project management features include a dynamic "Client Also Has" filter, Tasks filter ownership permissions, and Bookkeeping Query Grouping. A drag-and-drop Pivot Table builder is available for data analysis. The system also features a multi-channel outbound campaign system with client-first targeting, personalized action pages, and comprehensive analytics, supporting email (SendGrid), SMS (VoodooSMS), and Voice (Dialora.ai). This campaign system includes a 7-step creation wizard, multi-step campaign sequences, and detailed analytics.
 
 ### System Design
-The application uses PostgreSQL (Neon) with Drizzle ORM for data persistence, employing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) manages object storage with secure signed URLs. Authentication for staff uses Replit Auth (OIDC) with session-based, role-based access control, while the client portal uses passwordless email verification. The multi-tenant system emphasizes modularity, extensive database indexing, and a resilient project scheduling orchestrator. Additional features include UK eIDAS-compliant electronic signatures, workflow and status management with Kanban views, AI Audio Transcription, AI-assisted client value notifications, Zapier integration, and an enhanced data import system. A user-friendly error handling system replaces technical errors.
+The application uses PostgreSQL (Neon) with Drizzle ORM for data persistence, employing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) manages object storage with secure signed URLs. Authentication for staff uses Replit Auth (OIDC) with session-based, role-based access control, while the client portal uses passwordless email verification. The multi-tenant system emphasizes modularity, extensive database indexing, and a resilient project scheduling orchestrator. Additional features include UK eIDAS-compliant electronic signatures, workflow and status management with Kanban views, AI Audio Transcription, AI-assisted client value notifications, Zapier integration, and an enhanced data import system. A user-friendly error handling system is also implemented.
 
 ## External Dependencies
 
@@ -29,142 +26,12 @@ The application uses PostgreSQL (Neon) with Drizzle ORM for data persistence, em
 -   **Companies House API**: UK company data integration.
 -   **Microsoft Graph API**: Email and calendar access.
 -   **RingCentral**: VoIP phone system.
--   **SendGrid**: Transactional email.
--   **VoodooSMS**: Client SMS delivery.
--   **Dialora.ai**: AI-powered voice call reminders.
+-   **SendGrid**: Transactional email and email campaigns.
+-   **VoodooSMS**: Client SMS delivery and SMS campaigns.
+-   **Dialora.ai**: AI-powered voice call reminders and voice campaigns.
 -   **OpenAI API**: Audio transcription (Whisper), AI text processing (GPT-4o-mini), and AI Magic Assistant.
 -   **Replit Platform Services**: Object storage, authentication, and deployment.
 
 ### Frontend Libraries
 -   **UI Components**: `@radix-ui/*`, `@dnd-kit/*`, `@tiptap/*`, `react-hook-form` with `zod`, `sonner`.
 -   **Utilities**: `date-fns`, `clsx`, `tailwind-merge`, `@getaddress/autocomplete`.
-
-## MS Graph Calendar Integration
-
-### Overview
-The calendar integration allows staff with `accessCalendar` permission to view and manage Outlook calendar events alongside project/task events. Super admins can grant shared calendar access to other users.
-
-### Key Components
--   **Backend Routes** (`server/routes/calendar.ts`): CRUD endpoints for MS calendar events at `/api/ms-calendar/*`
--   **Storage** (`server/storage/users/calendarAccessStorage.ts`): Calendar access permission management
--   **Database Table** (`userCalendarAccess`): Stores which users can view other users' calendars
--   **Application Graph Client** (`server/utils/applicationGraphClient.ts`): MS Graph API integration
-
-### Frontend Components
--   `CalendarView.tsx`: Merges MS calendar events with project/task events
--   `CalendarHeader.tsx`: Calendar selector dropdown, Outlook toggle, New Meeting button
--   `CreateMeetingModal.tsx`: Create meetings with attendees and Teams meeting support
--   `MSCalendarEventDetailModal.tsx`: View event details, join Teams, delete events
--   `useOutlookCalendarEvents.tsx`: Hook for fetching MS calendar events
-
-### API Endpoints
--   `GET /api/ms-calendar/status`: Check if MS Graph is configured
--   `GET /api/ms-calendar/events`: Fetch events for selected calendars
--   `POST /api/ms-calendar/events`: Create new calendar event
--   `PATCH /api/ms-calendar/events/:eventId`: Update event
--   `DELETE /api/ms-calendar/events/:eventId`: Delete event
--   `GET /api/users/my-calendar-access`: Get accessible calendars for current user
--   `GET /api/users/:id/calendar-access`: Get user's calendar access (admin)
--   `POST /api/users/:id/calendar-access`: Set user's calendar access (super admin)
-
-## Campaigns & Pages Communications Module (In Progress)
-
-### Overview
-Multi-channel outbound campaign system with client-first targeting, personalized action pages, and comprehensive analytics. Enables targeted communications via Email (SendGrid), SMS (VoodooSMS), and Voice (Dialora.ai).
-
-### Phase 1 - Foundation (Complete)
--   14 database tables for campaigns, pages, recipients, analytics, preferences
--   12 storage modules with facade pattern
--   3 API route modules with authentication
-
-### Phase 2 - Campaign Engine (Complete)
--   **Targeting Service** (`server/services/campaigns/campaignTargetingService.ts`): 16+ client-first filter types (client status, services, projects, data completeness, engagement history)
--   **Recipient Service** (`server/services/campaigns/campaignRecipientService.ts`): Contact resolution with deduplication, opt-out filtering, E.164 phone normalization
--   **Merge Field Service** (`server/services/campaigns/mergeFieldService.ts`): Client, person, campaign, and firm merge fields with fallback syntax `{{field|default}}`
--   **Workflow Service** (`server/services/campaigns/campaignWorkflowService.ts`): State machine (draft→review→approved→scheduled→sending→sent) with mandatory preview confirmation
--   **Delivery Service** (`server/services/campaigns/campaignDeliveryService.ts`): Queue processing with retry logic (3 attempts, exponential backoff: 1min, 5min, 15min)
--   **Webhook Handlers** (`server/routes/campaigns/webhooks.ts`): Delivery status from SendGrid, VoodooSMS, Dialora with signature verification
-
-### API Endpoints
--   `GET/POST/PATCH/DELETE /api/campaigns`: Campaign CRUD
--   `GET /api/campaigns/:id/workflow`: Get workflow state and allowed transitions
--   `POST /api/campaigns/:id/workflow/transition`: Transition campaign status
--   `POST /api/campaigns/:id/workflow/preview-confirm`: Confirm preview before approval
--   `POST /api/campaigns/:id/targeting/preview`: Preview matched clients with pagination
--   `POST /api/campaigns/:id/recipients/resolve`: Resolve contacts from targeting
--   `POST /api/campaigns/:id/preview-message`: Preview rendered message with merge data
--   `POST /api/campaigns/:id/send`: Queue campaign for delivery
--   `GET /api/campaigns/:id/delivery-stats`: Get delivery statistics
--   `POST /api/campaigns/:id/pause`: Pause active delivery
--   `POST /api/campaigns/:id/resume`: Resume paused delivery
--   `GET /api/campaign-targeting/available-filters`: List available filter types
--   `GET /api/merge-fields`: List available merge fields
--   `POST /api/public/webhooks/campaigns/sendgrid`: SendGrid delivery events
--   `POST /api/public/webhooks/campaigns/voodoosms`: VoodooSMS delivery events
--   `POST /api/public/webhooks/campaigns/dialora`: Dialora voice call events
-
-### Phase 3 - Campaign Pages (Complete)
--   **Page Rendering Service** (`server/services/pages/pageRenderingService.ts`): Renders personalized pages with merge field substitution for all 14 component types
--   **Page Action Service** (`server/services/pages/pageActionService.ts`): Handles 9 action types (interested, not_interested, request_callback, book_call, confirm_details, documents_uploaded, request_extension, custom_form, custom_webhook)
--   **OTP Verification Service** (`server/services/pages/pageOtpService.ts`): 6-digit OTP generation with 10-minute expiry, email delivery via SendGrid
--   **Public Page Routes** (`server/routes/pages/publicRoutes.ts`): Public endpoints at `/api/public/p/*` for page rendering and actions
-
-### Phase 3 API Endpoints
--   `GET /api/public/p/:slug?t=TOKEN`: Render personalized page for recipient
--   `GET /api/public/p/:slug/info`: Get page metadata (no auth)
--   `POST /api/public/p/:slug/action`: Execute page action with visit token
--   `POST /api/public/p/:slug/otp/send`: Request OTP verification code
--   `POST /api/public/p/:slug/otp/verify`: Verify OTP code
-
-### Phase 3 Frontend Components
--   **Page Builder** (`client/src/pages/page-builder/`): Visual page editor with drag-and-drop
-    -   `ComponentPalette.tsx`: 14 draggable component types (heading, text_block, image, button, callout, status_widget, table, timeline, faq_accordion, comparison_table, video_embed, document_list, form, spacer)
-    -   `PageCanvas.tsx`: Sortable drop zone with component ordering
-    -   `ComponentEditor.tsx`: Type-specific content editors for each component
-    -   `ActionEditor.tsx`: Configure page actions with OTP requirements and task creation
--   **Campaign Page View** (`client/src/pages/campaign-page-view.tsx`): Public page renderer with OTP modal and action execution
-
-### Phase 4 - Multi-Step Campaign Sequences (Complete)
--   **Sequence Service** (`server/services/campaigns/campaignSequenceService.ts`): Processes multi-step campaign progression with 5 condition types
--   **Condition Types**: `no_open` (no email open), `no_click` (no link click), `no_action` (no page action), `action_completed` (specific action taken), `time_elapsed` (waitDays elapsed)
--   **Cron Job** (`server/sequence-cron.ts`): Runs daily at 06:00 UK time to process sequence progression
--   **Database Fields** on campaigns table: `isSequence`, `parentCampaignId`, `sequenceOrder`, `sequenceCondition` (JSONB)
-
-### Phase 4 API Endpoints
--   `GET /api/campaigns/:id/sequence`: Get sequence configuration for a campaign
--   `GET /api/campaigns/:id/sequence/steps`: Get all steps in a sequence
--   `POST /api/campaigns/:id/sequence/process`: Manually trigger sequence progression
-
-### Phase 5 - Analytics & Polish (Complete)
--   **Analytics Service** (`server/services/campaigns/campaignAnalyticsService.ts`): Full campaign metrics (sent, delivered, opened, clicked, actioned), delivery/engagement rates, manager breakdowns, engagement timeline by date
--   **Engagement Score Service** (`server/services/campaigns/engagementScoreService.ts`): Client engagement scoring with weights (opened +1, clicked +2, page_viewed +2, action_completed +5, ignored -1), consecutive ignored tracking, score decay
--   **Voice Delivery** (`server/services/campaigns/campaignDeliveryService.ts`): Dialora.ai integration for voice channel campaigns with webhook support
--   **Engagement Cron** (`server/engagement-cron.ts`): Runs weekly at 07:00 UK time on Sundays to process ignored campaigns and update engagement scores
-
-### Phase 5 API Endpoints
--   `GET /api/campaigns/:id/analytics`: Full campaign analytics (metrics, rates, breakdowns, timeline)
--   `GET /api/campaigns/:id/sequence/analytics`: Sequence-specific analytics with step-by-step tracking
--   `GET /api/campaigns/analytics/overview`: Dashboard overview stats (total campaigns, monthly sent, average rates, top performers)
--   `GET /api/client-engagement/:clientId`: Get client engagement summary and score
-
-### Phase 6 - Campaign Creation Wizard (Complete)
--   **7-Step Wizard** (`client/src/pages/campaign-wizard/`): Mailchimp/HubSpot-inspired campaign creation flow
-    1. **Overview** (`StepOverview.tsx`): Campaign name, category (chase/informational/upsell/engagement), description, template selection
-    2. **Targeting** (`StepTargeting.tsx`): Visual filter builder with 16+ client-first filters, live preview with matched client count
-    3. **Recipients** (`StepRecipients.tsx`): Contact strategy (primary_only/all_contacts/role_based), channel selection (Email/SMS/Voice)
-    4. **Messages** (`StepMessages.tsx`): Multi-channel message composer with merge field insertion and live preview
-    5. **Page** (`StepPage.tsx`): Optional landing page attachment (skip/create new/use existing)
-    6. **Testing** (`StepTesting.tsx`): Deliverability checklist, send test messages, preview all channels
-    7. **Launch** (`StepLaunch.tsx`): Send now or schedule, campaign summary, confirmation dialog
-
--   **Key Features**:
-    -   Persistent sidebar navigation with progress tracking and step validation
-    -   Autosave with 2-second debounce (creates campaign on first save, updates thereafter)
-    -   Creation guard ensures campaign is persisted before moving to step 2+
-    -   Real-time recipient count and channel availability stats
-    -   Merge field picker with categories (client, person, campaign, firm)
-    -   Quick-start page templates (document collection, book call, confirm details, interested/not interested)
-
--   **Routes**:
-    -   `GET /super-admin/campaigns/new`: Create new campaign
-    -   `GET /super-admin/campaigns/:id/edit`: Edit existing campaign

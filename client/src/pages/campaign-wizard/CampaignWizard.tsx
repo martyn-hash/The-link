@@ -1,7 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, createContext, useContext, ReactNode } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useLocation, useParams } from 'wouter';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -12,7 +11,6 @@ import {
   Save, 
   X, 
   Check,
-  Circle,
   Bell,
   Megaphone,
   TrendingUp,
@@ -27,10 +25,13 @@ import {
   ChevronRight,
   ChevronLeft,
   HelpCircle,
-  Clock
+  Clock,
+  GripVertical
 } from 'lucide-react';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+import TopNavigation from '@/components/top-navigation';
+import { useAuth } from '@/hooks/useAuth';
 
 import { StepOverview } from './steps/StepOverview';
 import { StepTargeting } from './steps/StepTargeting';
@@ -98,13 +99,13 @@ export interface Filter {
 }
 
 const WIZARD_STEPS = [
-  { id: 1, name: 'Overview', icon: FileText, description: 'Name and type' },
-  { id: 2, name: 'Targeting', icon: Target, description: 'Select audience' },
-  { id: 3, name: 'Recipients', icon: Users, description: 'Resolve contacts' },
-  { id: 4, name: 'Messages', icon: MessageSquare, description: 'Compose content' },
-  { id: 5, name: 'Page', icon: FileText, description: 'Optional landing page' },
-  { id: 6, name: 'Testing', icon: TestTube, description: 'Quality assurance' },
-  { id: 7, name: 'Launch', icon: Rocket, description: 'Schedule & send' },
+  { id: 1, name: 'Overview', icon: FileText, shortName: 'Overview' },
+  { id: 2, name: 'Targeting', icon: Target, shortName: 'Target' },
+  { id: 3, name: 'Recipients', icon: Users, shortName: 'Recipients' },
+  { id: 4, name: 'Messages', icon: MessageSquare, shortName: 'Messages' },
+  { id: 5, name: 'Page', icon: FileText, shortName: 'Page' },
+  { id: 6, name: 'Testing', icon: TestTube, shortName: 'Testing' },
+  { id: 7, name: 'Launch', icon: Rocket, shortName: 'Launch' },
 ];
 
 const CATEGORY_ICONS: Record<CampaignCategory, any> = {
@@ -167,12 +168,27 @@ const initialState: WizardState = {
   },
 };
 
+interface WizardSidebarContextType {
+  sidebarContent: ReactNode | null;
+  setSidebarContent: (content: ReactNode | null) => void;
+}
+
+const WizardSidebarContext = createContext<WizardSidebarContextType>({
+  sidebarContent: null,
+  setSidebarContent: () => {},
+});
+
+export function useWizardSidebar() {
+  return useContext(WizardSidebarContext);
+}
+
 export default function CampaignWizard() {
   const [, setLocation] = useLocation();
   const params = useParams<{ id?: string }>();
   const { toast } = useToast();
+  const { user } = useAuth();
   const [state, setState] = useState<WizardState>(initialState);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarContent, setSidebarContent] = useState<ReactNode | null>(null);
 
   const isNewCampaign = !params.id || params.id === 'new';
   const campaignId = isNewCampaign ? state.campaignId : params.id;
@@ -289,7 +305,6 @@ export default function CampaignWizard() {
       return;
     }
     
-    // Ensure campaign is persisted before moving to step 2+
     if (step > 1 && !campaignId && state.overview.name && state.overview.category) {
       const campaignData = {
         name: state.overview.name,
@@ -346,16 +361,6 @@ export default function CampaignWizard() {
     switch (step) {
       case 1:
         return !!state.overview.name && !!state.overview.category;
-      case 2:
-        return true;
-      case 3:
-        return true;
-      case 4:
-        return true;
-      case 5:
-        return true;
-      case 6:
-        return true;
       default:
         return true;
     }
@@ -370,7 +375,6 @@ export default function CampaignWizard() {
     return date.toLocaleTimeString();
   };
 
-  const currentStepData = WIZARD_STEPS[state.currentStep - 1];
   const CategoryIcon = state.overview.category ? CATEGORY_ICONS[state.overview.category] : null;
 
   if (isLoadingCampaign && !isNewCampaign) {
@@ -385,283 +389,234 @@ export default function CampaignWizard() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30 flex flex-col" data-testid="campaign-wizard">
-      <header className="bg-background border-b px-4 py-3 flex items-center justify-between sticky top-0 z-50">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setLocation('/super-admin/campaigns')}
-            data-testid="button-back-to-campaigns"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Campaigns
-          </Button>
-          <Separator orientation="vertical" className="h-6" />
-          <div className="flex items-center gap-2">
-            {CategoryIcon && (
-              <CategoryIcon className={cn("h-5 w-5", state.overview.category && CATEGORY_COLORS[state.overview.category])} />
-            )}
-            <h1 className="font-semibold text-lg" data-testid="text-campaign-name">
-              {state.overview.name || 'Create New Campaign'}
-            </h1>
-            {state.overview.category && (
-              <Badge variant="outline" className="capitalize">
-                {state.overview.category}
-              </Badge>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            {state.isSaving ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Saving...</span>
-              </>
-            ) : (
-              <>
-                <Clock className="h-4 w-4" />
-                <span>{formatLastSaved(state.lastSaved)}</span>
-              </>
-            )}
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => autoSave()}
-            disabled={!state.isDirty || state.isSaving}
-            data-testid="button-save-draft"
-          >
-            <Save className="h-4 w-4 mr-2" />
-            Save Draft
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setLocation('/super-admin/campaigns')}
-            data-testid="button-exit"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      </header>
-
-      <div className="flex flex-1 overflow-hidden">
-        <aside 
-          className={cn(
-            "bg-background border-r flex flex-col transition-all duration-200",
-            sidebarCollapsed ? "w-16" : "w-72"
-          )}
-        >
-          <ScrollArea className="flex-1">
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-4">
-                {!sidebarCollapsed && (
-                  <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-                    Progress
-                  </span>
-                )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                >
-                  {sidebarCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-                </Button>
-              </div>
-
-              <nav className="space-y-1" role="navigation" aria-label="Campaign wizard steps">
-                {WIZARD_STEPS.map((step, index) => {
-                  const Icon = step.icon;
-                  const isActive = state.currentStep === step.id;
-                  const isComplete = isStepComplete(step.id);
-                  const isAccessible = step.id === 1 || canProceedFromStep(step.id - 1);
-
-                  return (
-                    <button
-                      key={step.id}
-                      onClick={() => isAccessible && goToStep(step.id)}
-                      disabled={!isAccessible}
-                      className={cn(
-                        "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors",
-                        isActive && "bg-primary text-primary-foreground",
-                        !isActive && isComplete && "bg-green-50 text-green-700 hover:bg-green-100",
-                        !isActive && !isComplete && isAccessible && "hover:bg-muted",
-                        !isAccessible && "opacity-50 cursor-not-allowed"
-                      )}
-                      aria-current={isActive ? 'step' : undefined}
-                      data-testid={`step-${step.id}-${step.name.toLowerCase()}`}
-                    >
-                      <div className={cn(
-                        "flex items-center justify-center w-8 h-8 rounded-full shrink-0",
-                        isActive && "bg-primary-foreground/20",
-                        !isActive && isComplete && "bg-green-200",
-                        !isActive && !isComplete && "bg-muted"
-                      )}>
-                        {isComplete && !isActive ? (
-                          <Check className="h-4 w-4" />
-                        ) : (
-                          <Icon className="h-4 w-4" />
-                        )}
-                      </div>
-                      {!sidebarCollapsed && (
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm">{step.name}</div>
-                          <div className={cn(
-                            "text-xs truncate",
-                            isActive ? "text-primary-foreground/70" : "text-muted-foreground"
-                          )}>
-                            {step.description}
-                          </div>
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </nav>
-            </div>
-          </ScrollArea>
-
-          {!sidebarCollapsed && (
-            <div className="p-4 border-t">
-              <div className="text-sm space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-muted-foreground">Status</span>
-                  <Badge variant="secondary">Draft</Badge>
-                </div>
-                {state.targeting.matchedClientCount !== null && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Clients</span>
-                    <span className="font-medium">{state.targeting.matchedClientCount}</span>
-                  </div>
-                )}
-                {state.recipients.recipientCount !== null && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Recipients</span>
-                    <span className="font-medium">{state.recipients.recipientCount}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {!sidebarCollapsed && (
-            <div className="p-4 border-t bg-muted/30">
-              <div className="flex items-start gap-2">
-                <HelpCircle className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                <div className="text-xs text-muted-foreground">
-                  <strong className="font-medium text-foreground">Quick tip:</strong>
-                  <p className="mt-1">{getStepTip(state.currentStep)}</p>
-                </div>
-              </div>
-            </div>
-          )}
-        </aside>
-
-        <main className="flex-1 overflow-auto">
-          <div className="max-w-4xl mx-auto p-6">
-            {state.currentStep === 1 && (
-              <StepOverview
-                state={state}
-                updateState={updateState}
-                campaignId={campaignId || null}
-              />
-            )}
-            {state.currentStep === 2 && (
-              <StepTargeting
-                state={state}
-                updateState={updateState}
-                campaignId={campaignId || null}
-              />
-            )}
-            {state.currentStep === 3 && (
-              <StepRecipients
-                state={state}
-                updateState={updateState}
-                campaignId={campaignId || null}
-              />
-            )}
-            {state.currentStep === 4 && (
-              <StepMessages
-                state={state}
-                updateState={updateState}
-                campaignId={campaignId || null}
-              />
-            )}
-            {state.currentStep === 5 && (
-              <StepPage
-                state={state}
-                updateState={updateState}
-                campaignId={campaignId || null}
-              />
-            )}
-            {state.currentStep === 6 && (
-              <StepTesting
-                state={state}
-                updateState={updateState}
-                campaignId={campaignId || null}
-              />
-            )}
-            {state.currentStep === 7 && (
-              <StepLaunch
-                state={state}
-                updateState={updateState}
-                campaignId={campaignId || null}
-              />
-            )}
-
-            <div className="flex items-center justify-between mt-8 pt-6 border-t">
-              <Button
-                variant="outline"
-                onClick={prevStep}
-                disabled={state.currentStep === 1}
-                data-testid="button-previous-step"
-              >
-                <ChevronLeft className="h-4 w-4 mr-2" />
-                Back
-              </Button>
-
-              <div className="flex items-center gap-2">
-                {WIZARD_STEPS.map((step) => (
-                  <div
-                    key={step.id}
-                    className={cn(
-                      "w-2 h-2 rounded-full transition-colors",
-                      state.currentStep === step.id && "bg-primary",
-                      state.currentStep !== step.id && isStepComplete(step.id) && "bg-green-500",
-                      state.currentStep !== step.id && !isStepComplete(step.id) && "bg-muted-foreground/30"
-                    )}
-                  />
-                ))}
-              </div>
-
-              {state.currentStep < 7 ? (
-                <Button
-                  onClick={nextStep}
-                  disabled={!canProceedFromStep(state.currentStep)}
-                  data-testid="button-next-step"
-                >
-                  Continue
-                  <ChevronRight className="h-4 w-4 ml-2" />
-                </Button>
-              ) : (
-                <Button
-                  onClick={() => {}}
-                  disabled={!state.testing.checklistComplete}
-                  className="bg-green-600 hover:bg-green-700"
-                  data-testid="button-launch-campaign"
-                >
-                  <Rocket className="h-4 w-4 mr-2" />
-                  Launch Campaign
-                </Button>
+    <WizardSidebarContext.Provider value={{ sidebarContent, setSidebarContent }}>
+      <div className="min-h-screen bg-muted/30 flex flex-col" data-testid="campaign-wizard">
+        <TopNavigation user={user} />
+        
+        <header className="bg-background border-b px-4 py-3 flex items-center justify-between sticky top-0 z-40">
+          <div className="flex items-center gap-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setLocation('/super-admin/campaigns')}
+              data-testid="button-back-to-campaigns"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Campaigns
+            </Button>
+            <Separator orientation="vertical" className="h-6" />
+            <div className="flex items-center gap-2">
+              {CategoryIcon && (
+                <CategoryIcon className={cn("h-5 w-5", state.overview.category && CATEGORY_COLORS[state.overview.category])} />
+              )}
+              <h1 className="font-semibold text-lg" data-testid="text-campaign-name">
+                {state.overview.name || 'New Campaign'}
+              </h1>
+              {state.overview.category && (
+                <Badge variant="outline" className="capitalize">
+                  {state.overview.category}
+                </Badge>
               )}
             </div>
           </div>
-        </main>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              {state.isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Clock className="h-4 w-4" />
+                  <span>{formatLastSaved(state.lastSaved)}</span>
+                </>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => autoSave()}
+              disabled={!state.isDirty || state.isSaving}
+              data-testid="button-save-draft"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Save Draft
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setLocation('/super-admin/campaigns')}
+              data-testid="button-exit"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </header>
+
+        <nav className="bg-background border-b px-6 py-3" data-testid="horizontal-stepper">
+          <div className="flex items-center justify-center gap-1">
+            {WIZARD_STEPS.map((step, index) => {
+              const Icon = step.icon;
+              const isActive = state.currentStep === step.id;
+              const isComplete = isStepComplete(step.id);
+              const isAccessible = step.id === 1 || canProceedFromStep(step.id - 1);
+
+              return (
+                <div key={step.id} className="flex items-center">
+                  <button
+                    onClick={() => isAccessible && goToStep(step.id)}
+                    disabled={!isAccessible}
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-2 rounded-lg transition-all",
+                      isActive && "bg-primary text-primary-foreground shadow-sm",
+                      !isActive && isComplete && "bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400",
+                      !isActive && !isComplete && isAccessible && "hover:bg-muted text-muted-foreground",
+                      !isAccessible && "opacity-40 cursor-not-allowed text-muted-foreground"
+                    )}
+                    data-testid={`step-nav-${step.id}`}
+                  >
+                    <div className={cn(
+                      "flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium",
+                      isActive && "bg-primary-foreground/20 text-primary-foreground",
+                      !isActive && isComplete && "bg-green-200 dark:bg-green-800",
+                      !isActive && !isComplete && "bg-muted"
+                    )}>
+                      {isComplete && !isActive ? (
+                        <Check className="h-3.5 w-3.5" />
+                      ) : (
+                        step.id
+                      )}
+                    </div>
+                    <span className="text-sm font-medium hidden md:inline">{step.name}</span>
+                  </button>
+                  {index < WIZARD_STEPS.length - 1 && (
+                    <div className={cn(
+                      "w-8 h-px mx-1",
+                      isComplete ? "bg-green-300 dark:bg-green-700" : "bg-border"
+                    )} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </nav>
+
+        <div className="flex flex-1 overflow-hidden">
+          {sidebarContent && (
+            <aside className="w-72 bg-background border-r flex flex-col overflow-hidden">
+              <ScrollArea className="flex-1">
+                {sidebarContent}
+              </ScrollArea>
+            </aside>
+          )}
+
+          <main className="flex-1 overflow-auto">
+            <div className={cn(
+              "mx-auto p-6",
+              sidebarContent ? "max-w-4xl" : "max-w-5xl"
+            )}>
+              {state.currentStep === 1 && (
+                <StepOverview
+                  state={state}
+                  updateState={updateState}
+                  campaignId={campaignId || null}
+                />
+              )}
+              {state.currentStep === 2 && (
+                <StepTargeting
+                  state={state}
+                  updateState={updateState}
+                  campaignId={campaignId || null}
+                />
+              )}
+              {state.currentStep === 3 && (
+                <StepRecipients
+                  state={state}
+                  updateState={updateState}
+                  campaignId={campaignId || null}
+                />
+              )}
+              {state.currentStep === 4 && (
+                <StepMessages
+                  state={state}
+                  updateState={updateState}
+                  campaignId={campaignId || null}
+                />
+              )}
+              {state.currentStep === 5 && (
+                <StepPage
+                  state={state}
+                  updateState={updateState}
+                  campaignId={campaignId || null}
+                />
+              )}
+              {state.currentStep === 6 && (
+                <StepTesting
+                  state={state}
+                  updateState={updateState}
+                  campaignId={campaignId || null}
+                />
+              )}
+              {state.currentStep === 7 && (
+                <StepLaunch
+                  state={state}
+                  updateState={updateState}
+                  campaignId={campaignId || null}
+                />
+              )}
+
+              <div className="flex items-center justify-between mt-8 pt-6 border-t">
+                <Button
+                  variant="outline"
+                  onClick={prevStep}
+                  disabled={state.currentStep === 1}
+                  data-testid="button-previous-step"
+                >
+                  <ChevronLeft className="h-4 w-4 mr-2" />
+                  Back
+                </Button>
+
+                <div className="flex items-center gap-2 px-4 py-2 bg-muted/50 rounded-full">
+                  <span className="text-sm text-muted-foreground">
+                    Step {state.currentStep} of {WIZARD_STEPS.length}
+                  </span>
+                  {state.targeting.matchedClientCount !== null && (
+                    <>
+                      <Separator orientation="vertical" className="h-4" />
+                      <span className="text-sm font-medium">
+                        {state.targeting.matchedClientCount} clients
+                      </span>
+                    </>
+                  )}
+                </div>
+
+                {state.currentStep < 7 ? (
+                  <Button
+                    onClick={nextStep}
+                    disabled={!canProceedFromStep(state.currentStep)}
+                    data-testid="button-next-step"
+                  >
+                    Continue
+                    <ChevronRight className="h-4 w-4 ml-2" />
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => {}}
+                    disabled={!state.testing.checklistComplete}
+                    className="bg-green-600 hover:bg-green-700"
+                    data-testid="button-launch-campaign"
+                  >
+                    <Rocket className="h-4 w-4 mr-2" />
+                    Launch Campaign
+                  </Button>
+                )}
+              </div>
+            </div>
+          </main>
+        </div>
       </div>
-    </div>
+    </WizardSidebarContext.Provider>
   );
 }
 
@@ -700,25 +655,4 @@ function parseMessages(messages: any[]): WizardState['messages'] {
   });
 
   return result;
-}
-
-function getStepTip(step: number): string {
-  switch (step) {
-    case 1:
-      return 'Choose a clear, descriptive name that helps you identify this campaign later.';
-    case 2:
-      return 'Use filters to narrow down your audience. Clients matching ALL filters within a group are included.';
-    case 3:
-      return 'Select which contacts to reach and via which channels. Email is most reliable for first contact.';
-    case 4:
-      return 'Use merge fields like {{person.firstName}} to personalize your messages.';
-    case 5:
-      return 'Pages give recipients a place to take action, like confirming details or uploading documents.';
-    case 6:
-      return 'Always send a test message to yourself before launching to catch any issues.';
-    case 7:
-      return 'Review everything carefully. Once launched, messages will begin sending immediately.';
-    default:
-      return '';
-  }
 }
