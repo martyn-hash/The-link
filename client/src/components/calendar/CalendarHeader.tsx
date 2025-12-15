@@ -10,6 +10,7 @@ import {
 import {
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { format } from "date-fns";
@@ -192,24 +193,24 @@ export default function CalendarHeader({
                 )}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-64" align="end">
+            <PopoverContent className="w-72" align="end">
               <div className="space-y-2">
                 <h4 className="font-medium text-sm mb-3">Show Calendars</h4>
                 {accessibleCalendars.map((user) => (
                   <div
                     key={user.id}
-                    className="flex items-center gap-1"
+                    className="flex items-center gap-2"
                   >
                     <button
                       onClick={() => toggleCalendarUser(user.id)}
                       className={cn(
-                        "flex items-center flex-1 px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors",
+                        "flex items-center flex-1 px-2 py-1.5 text-sm rounded-md hover:bg-muted transition-colors min-w-0",
                         selectedCalendarUserIds.includes(user.id) && "bg-muted"
                       )}
                       data-testid={`button-toggle-calendar-${user.id}`}
                     >
                       <div className={cn(
-                        "w-4 h-4 border rounded mr-2 flex items-center justify-center",
+                        "w-4 h-4 border rounded mr-2 flex items-center justify-center flex-shrink-0",
                         selectedCalendarUserIds.includes(user.id) 
                           ? "bg-primary border-primary" 
                           : "border-input"
@@ -218,47 +219,50 @@ export default function CalendarHeader({
                           <Check className="h-3 w-3 text-primary-foreground" />
                         )}
                       </div>
-                      <span className="flex-1 text-left">{getUserDisplayName(user)}</span>
+                      <span className="flex-1 text-left truncate">{getUserDisplayName(user)}</span>
                       {user.id === currentUserId && (
-                        <span className="ml-1 text-muted-foreground text-xs">(You)</span>
+                        <span className="ml-1 text-muted-foreground text-xs flex-shrink-0">(You)</span>
                       )}
                     </button>
                     {onCalendarColorChange && (
                       <Popover>
                         <PopoverTrigger asChild>
                           <button
-                            className="p-1.5 rounded-md hover:bg-muted transition-colors"
+                            className="p-1.5 rounded-md hover:bg-muted transition-colors flex-shrink-0"
                             data-testid={`button-calendar-color-${user.id}`}
+                            title="Change calendar color"
                           >
                             <div 
-                              className="w-4 h-4 rounded-full border border-border"
+                              className="w-5 h-5 rounded-full border-2 border-border"
                               style={{ backgroundColor: calendarColors[user.id] || CALENDAR_COLORS[0].value }}
                             />
                           </button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-2" align="end" side="right">
-                          <div className="grid grid-cols-4 gap-1.5">
-                            {CALENDAR_COLORS.map((color) => (
-                              <Tooltip key={color.value}>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    onClick={() => onCalendarColorChange(user.id, color.value)}
-                                    className={cn(
-                                      "w-6 h-6 rounded-full border-2 transition-transform hover:scale-110",
-                                      calendarColors[user.id] === color.value 
-                                        ? "border-foreground" 
-                                        : "border-transparent"
-                                    )}
-                                    style={{ backgroundColor: color.value }}
-                                    data-testid={`button-color-${user.id}-${color.name.toLowerCase()}`}
-                                  />
-                                </TooltipTrigger>
-                                <TooltipContent side="top">
-                                  <p>{color.name}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            ))}
-                          </div>
+                          <TooltipProvider>
+                            <div className="grid grid-cols-4 gap-1.5">
+                              {CALENDAR_COLORS.map((color) => (
+                                <Tooltip key={color.value}>
+                                  <TooltipTrigger asChild>
+                                    <button
+                                      onClick={() => onCalendarColorChange(user.id, color.value)}
+                                      className={cn(
+                                        "w-6 h-6 rounded-full border-2 transition-transform hover:scale-110",
+                                        calendarColors[user.id] === color.value 
+                                          ? "border-foreground" 
+                                          : "border-transparent"
+                                      )}
+                                      style={{ backgroundColor: color.value }}
+                                      data-testid={`button-color-${user.id}-${color.name.toLowerCase()}`}
+                                    />
+                                  </TooltipTrigger>
+                                  <TooltipContent side="top">
+                                    <p>{color.name}</p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              ))}
+                            </div>
+                          </TooltipProvider>
                         </PopoverContent>
                       </Popover>
                     )}
