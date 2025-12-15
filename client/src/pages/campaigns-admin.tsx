@@ -176,7 +176,7 @@ export default function CampaignsAdmin() {
 
   const pauseMutation = useMutation({
     mutationFn: async (campaignId: string) => {
-      return apiRequest(`/api/campaigns/${campaignId}/pause`, { method: 'POST' });
+      return apiRequest('POST', `/api/campaigns/${campaignId}/pause`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
@@ -190,7 +190,7 @@ export default function CampaignsAdmin() {
 
   const resumeMutation = useMutation({
     mutationFn: async (campaignId: string) => {
-      return apiRequest(`/api/campaigns/${campaignId}/resume`, { method: 'POST' });
+      return apiRequest('POST', `/api/campaigns/${campaignId}/resume`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
@@ -204,7 +204,7 @@ export default function CampaignsAdmin() {
 
   const deleteMutation = useMutation({
     mutationFn: async (campaignId: string) => {
-      return apiRequest(`/api/campaigns/${campaignId}`, { method: 'DELETE' });
+      return apiRequest('DELETE', `/api/campaigns/${campaignId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/campaigns'] });
@@ -221,7 +221,7 @@ export default function CampaignsAdmin() {
   const bulkDeleteMutation = useMutation({
     mutationFn: async (campaignIds: string[]) => {
       await Promise.all(campaignIds.map(id => 
-        apiRequest(`/api/campaigns/${id}`, { method: 'DELETE' })
+        apiRequest('DELETE', `/api/campaigns/${id}`)
       ));
     },
     onSuccess: () => {
@@ -717,8 +717,8 @@ export default function CampaignsAdmin() {
                           )}
                         </div>
                         <div className="flex items-center gap-2">
-                          <Button variant="outline" size="sm" disabled data-testid={`button-view-${campaign.id}`}>
-                            View
+                          <Button variant="outline" size="sm" asChild data-testid={`button-view-${campaign.id}`}>
+                            <Link href={`/super-admin/campaigns/${campaign.id}`}>View</Link>
                           </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
