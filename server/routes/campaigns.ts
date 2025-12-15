@@ -538,5 +538,58 @@ export function registerCampaignRoutes(
     }
   });
 
+  app.get('/api/campaigns/:id/analytics', isAuthenticated, resolveEffectiveUser, async (req: any, res) => {
+    try {
+      const analyticsService = await import('../services/campaigns/campaignAnalyticsService.js');
+      const analytics = await analyticsService.getCampaignAnalytics(req.params.id);
+      res.json(analytics);
+    } catch (error: any) {
+      if (error.message === 'Campaign not found') {
+        return res.status(404).json({ error: 'Campaign not found' });
+      }
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get('/api/campaigns/:id/sequence/analytics', isAuthenticated, resolveEffectiveUser, async (req: any, res) => {
+    try {
+      const campaign = await campaignStorage.getById(req.params.id);
+      if (!campaign) {
+        return res.status(404).json({ error: 'Campaign not found' });
+      }
+      
+      if (!campaign.isSequence) {
+        return res.status(400).json({ error: 'Campaign is not a sequence' });
+      }
+      
+      const parentId = campaign.parentCampaignId || campaign.id;
+      const analyticsService = await import('../services/campaigns/campaignAnalyticsService.js');
+      const analytics = await analyticsService.getSequenceAnalytics(parentId);
+      res.json(analytics);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get('/api/campaigns/analytics/overview', isAuthenticated, resolveEffectiveUser, async (_req: any, res) => {
+    try {
+      const analyticsService = await import('../services/campaigns/campaignAnalyticsService.js');
+      const stats = await analyticsService.getCampaignOverviewStats();
+      res.json(stats);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get('/api/client-engagement/:clientId', isAuthenticated, resolveEffectiveUser, async (req: any, res) => {
+    try {
+      const engagementService = await import('../services/campaigns/engagementScoreService.js');
+      const score = await engagementService.getClientEngagementScore(req.params.clientId);
+      res.json(score);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.use('/api/public/webhooks/campaigns', campaignWebhooks);
 }

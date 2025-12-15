@@ -157,7 +157,12 @@ async function sendToChannel(recipient: any): Promise<{ success: boolean; messag
       });
 
     case 'voice':
-      return { success: false, error: 'Voice channel not yet implemented' };
+      return sendVoiceViaDialora({
+        to: recipient.channelAddress,
+        message: rendered?.voiceScript || rendered?.body || '',
+        reference: recipient.id,
+        campaignId: recipient.campaignId,
+      });
 
     default:
       return { success: false, error: `Unknown channel: ${recipient.channel}` };
@@ -236,6 +241,62 @@ async function sendSmsViaVoodoo(params: {
   } catch (error: any) {
     console.error('[Campaign Delivery] VoodooSMS error:', error);
     return { success: false, error: error.message || 'VoodooSMS delivery failed' };
+  }
+}
+
+async function sendVoiceViaDialora(params: {
+  to: string;
+  message: string;
+  reference: string;
+  campaignId: string;
+}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  try {
+    const apiKey = process.env.DIALORA_API_KEY;
+    const agentId = process.env.DIALORA_AGENT_ID;
+
+    if (!apiKey || !agentId) {
+      return { success: false, error: 'Dialora API key or agent ID not configured' };
+    }
+
+    const webhookUrl = process.env.REPLIT_DEPLOYMENT_URL 
+      ? `${process.env.REPLIT_DEPLOYMENT_URL}/api/public/webhooks/campaigns/dialora`
+      : null;
+
+    const response = await fetch('https://api.dialora.ai/v1/calls', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        agent_id: agentId,
+        phone_number: params.to,
+        prompt: params.message,
+        metadata: {
+          campaign_id: params.campaignId,
+          recipient_id: params.reference,
+        },
+        webhook_url: webhookUrl,
+        max_duration_seconds: 300,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[Campaign Delivery] Dialora API error:', errorText);
+      return { success: false, error: `Dialora API error: ${response.status}` };
+    }
+
+    const result = await response.json();
+
+    if (result.call_id) {
+      return { success: true, messageId: result.call_id };
+    }
+
+    return { success: false, error: result.error || 'Voice call initiation failed' };
+  } catch (error: any) {
+    console.error('[Campaign Delivery] Dialora error:', error);
+    return { success: false, error: error.message || 'Dialora delivery failed' };
   }
 }
 
