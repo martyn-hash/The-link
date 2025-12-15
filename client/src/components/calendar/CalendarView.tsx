@@ -54,7 +54,7 @@ export default function CalendarView({
 }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [viewType, setViewType] = useState<"month" | "week">(
-    initialSettings?.calendarViewType || "month"
+    initialSettings?.calendarViewType || "week"
   );
 
   const [showProjectDues, setShowProjectDues] = useState(
@@ -72,7 +72,12 @@ export default function CalendarView({
   const [showMSCalendar, setShowMSCalendar] = useState(
     initialSettings?.showMSCalendar ?? true
   );
-  const [selectedCalendarUserIds, setSelectedCalendarUserIds] = useState<string[]>([]);
+  const [selectedCalendarUserIds, setSelectedCalendarUserIds] = useState<string[]>(
+    initialSettings?.selectedCalendarUserIds || []
+  );
+  const [calendarSelectionsInitialized, setCalendarSelectionsInitialized] = useState(
+    Boolean(initialSettings?.selectedCalendarUserIds?.length)
+  );
   const [createMeetingOpen, setCreateMeetingOpen] = useState(false);
   const [selectedMSEvent, setSelectedMSEvent] = useState<MSCalendarEvent | null>(null);
   const [msEventDetailOpen, setMsEventDetailOpen] = useState(false);
@@ -143,10 +148,11 @@ export default function CalendarView({
   }, [myCalendarAccess, currentUserId]);
 
   useEffect(() => {
-    if (currentUserId && selectedCalendarUserIds.length === 0 && accessibleCalendars.length > 0) {
+    if (!calendarSelectionsInitialized && currentUserId && selectedCalendarUserIds.length === 0 && accessibleCalendars.length > 0) {
       setSelectedCalendarUserIds([currentUserId]);
+      setCalendarSelectionsInitialized(true);
     }
-  }, [currentUserId, accessibleCalendars]);
+  }, [currentUserId, accessibleCalendars, calendarSelectionsInitialized, selectedCalendarUserIds.length]);
 
   const dateRange = useMemo(() => {
     if (viewType === "month") {
@@ -245,6 +251,7 @@ export default function CalendarView({
         showStageDeadlines,
         showTaskDueDates: showTasks,
         showMSCalendar,
+        selectedCalendarUserIds,
       });
     }
   };
@@ -263,8 +270,24 @@ export default function CalendarView({
         showStageDeadlines: key === "showStageDeadlines" ? value : showStageDeadlines,
         showTaskDueDates: key === "showTaskDueDates" ? value : showTasks,
         showMSCalendar: key === "showMSCalendar" ? value : showMSCalendar,
+        selectedCalendarUserIds,
       };
       onSettingsChange(settings);
+    }
+  };
+
+  const handleSelectedCalendarUserIdsChange = (userIds: string[]) => {
+    setSelectedCalendarUserIds(userIds);
+    if (onSettingsChange) {
+      onSettingsChange({
+        calendarViewType: viewType,
+        showProjectDueDates: showProjectDues,
+        showProjectTargetDates: showTargetDates,
+        showStageDeadlines,
+        showTaskDueDates: showTasks,
+        showMSCalendar,
+        selectedCalendarUserIds: userIds,
+      });
     }
   };
 
@@ -314,7 +337,7 @@ export default function CalendarView({
         msCalendarConfigured={msCalendarConfigured}
         accessibleCalendars={accessibleCalendars}
         selectedCalendarUserIds={selectedCalendarUserIds}
-        onSelectedCalendarUserIdsChange={setSelectedCalendarUserIds}
+        onSelectedCalendarUserIdsChange={handleSelectedCalendarUserIdsChange}
         currentUserId={currentUserId}
         onCreateMeeting={() => setCreateMeetingOpen(true)}
         calendarColors={calendarColors}

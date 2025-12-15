@@ -175,11 +175,13 @@ export function useViewManagement(
         stateSetters.setPivotConfig(null);
         if (filters.calendarSettings) {
           stateSetters.setCalendarSettings({
-            calendarViewType: filters.calendarSettings.calendarViewType || "month",
+            calendarViewType: filters.calendarSettings.calendarViewType || "week",
             showProjectDueDates: filters.calendarSettings.showProjectDueDates ?? true,
             showProjectTargetDates: filters.calendarSettings.showProjectTargetDates ?? true,
             showStageDeadlines: filters.calendarSettings.showStageDeadlines ?? false,
             showTaskDueDates: filters.calendarSettings.showTaskDueDates ?? true,
+            showMSCalendar: filters.calendarSettings.showMSCalendar ?? true,
+            selectedCalendarUserIds: filters.calendarSettings.selectedCalendarUserIds,
           });
         } else {
           stateSetters.setCalendarSettings(undefined);

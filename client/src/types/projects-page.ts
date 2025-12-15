@@ -43,6 +43,8 @@ export interface CalendarSettings {
   showProjectTargetDates: boolean;
   showStageDeadlines: boolean;
   showTaskDueDates: boolean;
+  showMSCalendar?: boolean;
+  selectedCalendarUserIds?: string[];
 }
 
 export interface ListViewSettings {
