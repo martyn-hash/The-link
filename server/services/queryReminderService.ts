@@ -533,9 +533,19 @@ async function sendVoiceReminder(
  * Process a single scheduled reminder
  */
 export async function processReminder(reminder: ScheduledQueryReminder): Promise<ReminderSendResult> {
+  console.log(`[QueryReminder] Processing ${reminder.channel} reminder ${reminder.id}:`, {
+    tokenId: reminder.tokenId,
+    recipientName: reminder.recipientName,
+    recipientEmail: reminder.recipientEmail,
+    recipientPhone: reminder.recipientPhone,
+    scheduledAt: reminder.scheduledAt,
+    projectId: reminder.projectId
+  });
+
   const queryStatus = await getQueryStatusForToken(reminder.tokenId);
   
   if (!queryStatus) {
+    console.error(`[QueryReminder] Failed reminder ${reminder.id}: Query token ${reminder.tokenId} not found`);
     return { success: false, error: 'Query token not found' };
   }
 
@@ -718,7 +728,16 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
 export async function getDueReminders(): Promise<ScheduledQueryReminder[]> {
   const now = new Date();
   
-  return db
+  // Get start of today in UK time
+  const ukNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/London' }));
+  const startOfTodayUK = new Date(ukNow);
+  startOfTodayUK.setHours(0, 0, 0, 0);
+  
+  // Convert back to UTC for DB comparison
+  const ukOffset = ukNow.getTime() - now.getTime();
+  const startOfTodayUTC = new Date(startOfTodayUK.getTime() - ukOffset);
+  
+  const allDue = await db
     .select()
     .from(scheduledQueryReminders)
     .where(
@@ -727,6 +746,35 @@ export async function getDueReminders(): Promise<ScheduledQueryReminder[]> {
         lte(scheduledQueryReminders.scheduledAt, now)
       )
     );
+  
+  // Filter out reminders scheduled before today (missed from previous days)
+  const todayOnwards = allDue.filter(r => {
+    if (!r.scheduledAt) return false;
+    return new Date(r.scheduledAt) >= startOfTodayUTC;
+  });
+  
+  // Cancel old missed reminders
+  const missedReminders = allDue.filter(r => {
+    if (!r.scheduledAt) return false;
+    return new Date(r.scheduledAt) < startOfTodayUTC;
+  });
+  
+  for (const missed of missedReminders) {
+    await db
+      .update(scheduledQueryReminders)
+      .set({
+        status: 'cancelled',
+        cancelledAt: now
+      })
+      .where(eq(scheduledQueryReminders.id, missed.id));
+    console.log(`[QueryReminder] Cancelled missed reminder ${missed.id} (scheduled ${missed.scheduledAt?.toISOString()})`);
+  }
+  
+  if (missedReminders.length > 0) {
+    console.log(`[QueryReminder] Cancelled ${missedReminders.length} missed reminder(s) from previous days`);
+  }
+  
+  return todayOnwards;
 }
 
 /**

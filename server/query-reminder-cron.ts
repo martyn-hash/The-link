@@ -1,13 +1,14 @@
 /**
  * Query Reminder Cron Job
  * 
- * Processes scheduled query reminders every 5 minutes.
+ * Processes scheduled query reminders every hour.
  * Checks for due reminders and sends them via the appropriate channel.
  * 
  * Features:
  * - Only runs 07:00-22:00 UK time
  * - Smart cessation when all queries answered
  * - Full audit trail logging
+ * - Hourly monitoring email to martyn@growth.accountants
  */
 
 import cron from 'node-cron';
@@ -15,6 +16,29 @@ import { getDueReminders, processReminder, checkAndCancelRemindersIfComplete } f
 import { db } from './db';
 import { projectChronology, scheduledQueryReminders } from '@shared/schema';
 import { eq } from 'drizzle-orm';
+import { getUncachableSendGridClient } from './lib/sendgrid';
+
+interface ReminderProcessingResult {
+  reminderId: string;
+  channel: string;
+  recipientName: string | null;
+  recipientEmail: string | null;
+  recipientPhone: string | null;
+  success: boolean;
+  error?: string;
+}
+
+interface CronRunStats {
+  runTime: Date;
+  withinOperatingHours: boolean;
+  totalDue: number;
+  voiceRescheduled: number;
+  processed: number;
+  sent: number;
+  cancelled: number;
+  failed: number;
+  results: ReminderProcessingResult[];
+}
 
 let isRunning = false;
 
@@ -89,12 +113,24 @@ async function rescheduleAndFilterWeekendVoiceReminders(reminders: any[]): Promi
  * Process all due query reminders
  */
 async function processQueryReminders(): Promise<void> {
+  const stats: CronRunStats = {
+    runTime: new Date(),
+    withinOperatingHours: isWithinOperatingHours(),
+    totalDue: 0,
+    voiceRescheduled: 0,
+    processed: 0,
+    sent: 0,
+    cancelled: 0,
+    failed: 0,
+    results: []
+  };
+
   if (isRunning) {
     console.log('[QueryReminderCron] Previous run still in progress, skipping');
     return;
   }
 
-  if (!isWithinOperatingHours()) {
+  if (!stats.withinOperatingHours) {
     console.log('[QueryReminderCron] Outside operating hours (07:00-22:00 UK), skipping');
     return;
   }
@@ -103,26 +139,40 @@ async function processQueryReminders(): Promise<void> {
 
   try {
     const allDueReminders = await getDueReminders();
+    stats.totalDue = allDueReminders.length;
     
     if (allDueReminders.length === 0) {
       return;
     }
 
     const dueReminders = await rescheduleAndFilterWeekendVoiceReminders(allDueReminders);
+    stats.voiceRescheduled = allDueReminders.length - dueReminders.length;
     
     if (dueReminders.length === 0) {
       console.log(`[QueryReminderCron] ${allDueReminders.length} reminder(s) due but all rescheduled (weekend voice restriction)`);
       return;
     }
 
-    console.log(`[QueryReminderCron] Processing ${dueReminders.length} due reminder(s)${allDueReminders.length > dueReminders.length ? ` (${allDueReminders.length - dueReminders.length} voice rescheduled for weekend)` : ''}`);
+    console.log(`[QueryReminderCron] Processing ${dueReminders.length} due reminder(s)${stats.voiceRescheduled > 0 ? ` (${stats.voiceRescheduled} voice rescheduled for weekend)` : ''}`);
 
     for (const reminder of dueReminders) {
+      stats.processed++;
+      
       try {
         const wasComplete = await checkAndCancelRemindersIfComplete(reminder.tokenId);
         
         if (wasComplete) {
           console.log(`[QueryReminderCron] Skipped reminder ${reminder.id} - queries already complete`);
+          stats.cancelled++;
+          stats.results.push({
+            reminderId: reminder.id,
+            channel: reminder.channel,
+            recipientName: reminder.recipientName,
+            recipientEmail: reminder.recipientEmail,
+            recipientPhone: reminder.recipientPhone,
+            success: true,
+            error: 'Cancelled - queries complete'
+          });
           continue;
         }
 
@@ -130,6 +180,15 @@ async function processQueryReminders(): Promise<void> {
         
         if (result.success) {
           console.log(`[QueryReminderCron] Sent ${reminder.channel} reminder ${reminder.id}`);
+          stats.sent++;
+          stats.results.push({
+            reminderId: reminder.id,
+            channel: reminder.channel,
+            recipientName: reminder.recipientName,
+            recipientEmail: reminder.recipientEmail,
+            recipientPhone: reminder.recipientPhone,
+            success: true
+          });
           
           if (reminder.projectId) {
             try {
@@ -146,15 +205,135 @@ async function processQueryReminders(): Promise<void> {
           }
         } else {
           console.error(`[QueryReminderCron] Failed to send reminder ${reminder.id}:`, result.error);
+          stats.failed++;
+          stats.results.push({
+            reminderId: reminder.id,
+            channel: reminder.channel,
+            recipientName: reminder.recipientName,
+            recipientEmail: reminder.recipientEmail,
+            recipientPhone: reminder.recipientPhone,
+            success: false,
+            error: result.error
+          });
         }
       } catch (reminderError) {
         console.error(`[QueryReminderCron] Error processing reminder ${reminder.id}:`, reminderError);
+        stats.failed++;
+        stats.results.push({
+          reminderId: reminder.id,
+          channel: reminder.channel,
+          recipientName: reminder.recipientName,
+          recipientEmail: reminder.recipientEmail,
+          recipientPhone: reminder.recipientPhone,
+          success: false,
+          error: reminderError instanceof Error ? reminderError.message : 'Unknown error'
+        });
       }
     }
   } catch (error) {
     console.error('[QueryReminderCron] Error in reminder processing:', error);
   } finally {
     isRunning = false;
+    await sendMonitoringEmail(stats);
+  }
+}
+
+/**
+ * Send monitoring email to martyn@growth.accountants
+ * Shows summary of the cron run with all reminder details
+ */
+async function sendMonitoringEmail(stats: CronRunStats): Promise<void> {
+  try {
+    const { client, fromEmail } = await getUncachableSendGridClient();
+    if (!client) {
+      console.log('[QueryReminderCron] SendGrid not configured, skipping monitoring email');
+      return;
+    }
+
+    const ukTime = stats.runTime.toLocaleString('en-GB', { timeZone: 'Europe/London' });
+    
+    const statusEmoji = stats.failed > 0 ? '⚠️' : (stats.sent > 0 ? '✅' : '📋');
+    const subject = `${statusEmoji} Query Reminder Cron Report - ${ukTime}`;
+
+    let resultsTableHtml = '';
+    if (stats.results.length > 0) {
+      resultsTableHtml = `
+        <h3 style="margin-top: 20px;">Reminder Details:</h3>
+        <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; font-size: 14px;">
+          <tr style="background-color: #f0f0f0;">
+            <th>Channel</th>
+            <th>Recipient</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Status</th>
+            <th>Error</th>
+          </tr>
+          ${stats.results.map(r => `
+            <tr style="background-color: ${r.success ? '#e8f5e9' : '#ffebee'};">
+              <td>${r.channel}</td>
+              <td>${r.recipientName || '-'}</td>
+              <td>${r.recipientEmail || '-'}</td>
+              <td>${r.recipientPhone || '-'}</td>
+              <td>${r.success ? '✅ Sent' : '❌ Failed'}</td>
+              <td>${r.error || '-'}</td>
+            </tr>
+          `).join('')}
+        </table>
+      `;
+    }
+
+    const body = `
+      <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; padding: 20px;">
+        <h2>Query Reminder Cron Report</h2>
+        <p><strong>Run Time:</strong> ${ukTime}</p>
+        <p><strong>Operating Hours:</strong> ${stats.withinOperatingHours ? 'Yes (07:00-22:00 UK)' : 'No - Outside operating hours'}</p>
+        
+        <h3>Summary:</h3>
+        <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; font-size: 14px;">
+          <tr>
+            <td><strong>Total Due Reminders</strong></td>
+            <td>${stats.totalDue}</td>
+          </tr>
+          <tr>
+            <td><strong>Voice Rescheduled (Weekend)</strong></td>
+            <td>${stats.voiceRescheduled}</td>
+          </tr>
+          <tr>
+            <td><strong>Processed</strong></td>
+            <td>${stats.processed}</td>
+          </tr>
+          <tr style="background-color: #e8f5e9;">
+            <td><strong>Successfully Sent</strong></td>
+            <td>${stats.sent}</td>
+          </tr>
+          <tr>
+            <td><strong>Cancelled (queries complete)</strong></td>
+            <td>${stats.cancelled}</td>
+          </tr>
+          <tr style="background-color: ${stats.failed > 0 ? '#ffebee' : 'inherit'};">
+            <td><strong>Failed</strong></td>
+            <td>${stats.failed}</td>
+          </tr>
+        </table>
+        
+        ${resultsTableHtml}
+        
+        <p style="margin-top: 30px; color: #666; font-size: 12px;">
+          This is an automated monitoring email from the Query Reminder System.
+        </p>
+      </div>
+    `;
+
+    await client.send({
+      to: 'martyn@growth.accountants',
+      from: fromEmail,
+      subject,
+      html: body
+    });
+
+    console.log('[QueryReminderCron] Monitoring email sent to martyn@growth.accountants');
+  } catch (error) {
+    console.error('[QueryReminderCron] Failed to send monitoring email:', error);
   }
 }
 
