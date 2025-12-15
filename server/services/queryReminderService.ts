@@ -543,11 +543,15 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
     projectId: reminder.projectId
   });
 
-  // Check for and fix placeholder recipients before processing
-  if (reminder.recipientEmail?.includes('placeholder') || reminder.recipientEmail?.includes('pending@')) {
+  // Check for and fix placeholder recipients or missing phone for SMS/voice
+  const needsEmailFix = reminder.recipientEmail?.includes('placeholder') || reminder.recipientEmail?.includes('pending@');
+  const needsPhoneFix = (reminder.channel === 'sms' || reminder.channel === 'voice') && !reminder.recipientPhone;
+  
+  if (needsEmailFix || needsPhoneFix) {
+    console.log(`[QueryReminder] Reminder ${reminder.id} needs hydration: email=${needsEmailFix}, phone=${needsPhoneFix}`);
     const fixedReminder = await fixPlaceholderRecipient(reminder);
     if (!fixedReminder) {
-      return { success: false, error: 'Could not resolve placeholder recipient' };
+      return { success: false, error: needsPhoneFix ? 'No phone number available for SMS/voice reminder' : 'Could not resolve placeholder recipient' };
     }
     reminder = fixedReminder;
   }
@@ -927,16 +931,34 @@ export async function hydrateRecipientFromProjectData(
  * Updates both the reminder and the token with real data
  */
 export async function fixPlaceholderRecipient(reminder: ScheduledQueryReminder): Promise<ScheduledQueryReminder | null> {
-  if (!isPlaceholderEmail(reminder.recipientEmail)) {
+  const needsEmailFix = isPlaceholderEmail(reminder.recipientEmail);
+  const needsPhoneFix = (reminder.channel === 'sms' || reminder.channel === 'voice') && !reminder.recipientPhone;
+  
+  if (!needsEmailFix && !needsPhoneFix) {
     return reminder;
   }
   
-  console.log(`[QueryReminder] Attempting to hydrate placeholder recipient for reminder ${reminder.id}`);
+  console.log(`[QueryReminder] Attempting to hydrate recipient for reminder ${reminder.id} (email=${needsEmailFix}, phone=${needsPhoneFix})`);
   
   const realRecipient = await hydrateRecipientFromProjectData(reminder.projectId);
   
-  if (!realRecipient) {
-    console.error(`[QueryReminder] Cannot hydrate recipient for reminder ${reminder.id} - cancelling`);
+  // For phone-only fix, we need at least a phone number
+  if (needsPhoneFix && !realRecipient?.phone) {
+    console.error(`[QueryReminder] Cannot hydrate phone for ${reminder.channel} reminder ${reminder.id} - no phone found, cancelling`);
+    await db
+      .update(scheduledQueryReminders)
+      .set({
+        status: 'cancelled',
+        cancelledAt: new Date(),
+        errorMessage: `No phone number available for ${reminder.channel} reminder`
+      })
+      .where(eq(scheduledQueryReminders.id, reminder.id));
+    return null;
+  }
+  
+  // For email fix, we need at least an email
+  if (needsEmailFix && !realRecipient?.email) {
+    console.error(`[QueryReminder] Cannot hydrate email for reminder ${reminder.id} - no email found, cancelling`);
     await db
       .update(scheduledQueryReminders)
       .set({
@@ -948,37 +970,63 @@ export async function fixPlaceholderRecipient(reminder: ScheduledQueryReminder):
     return null;
   }
   
-  await db
-    .update(scheduledQueryReminders)
-    .set({
-      recipientEmail: realRecipient.email,
-      recipientName: realRecipient.name,
-      recipientPhone: realRecipient.phone
-    })
-    .where(eq(scheduledQueryReminders.id, reminder.id));
+  // Build update object based on what needs fixing
+  const reminderUpdate: Record<string, any> = {};
+  const tokenUpdate: Record<string, any> = {};
   
-  await db
-    .update(queryResponseTokens)
-    .set({
-      recipientEmail: realRecipient.email,
-      recipientName: realRecipient.name
-    })
-    .where(eq(queryResponseTokens.id, reminder.tokenId));
+  if (needsEmailFix && realRecipient) {
+    reminderUpdate.recipientEmail = realRecipient.email;
+    reminderUpdate.recipientName = realRecipient.name;
+    tokenUpdate.recipientEmail = realRecipient.email;
+    tokenUpdate.recipientName = realRecipient.name;
+  }
   
-  console.log(`[QueryReminder] Hydrated reminder ${reminder.id} with real recipient: ${realRecipient.email}`);
+  if (needsPhoneFix && realRecipient?.phone) {
+    reminderUpdate.recipientPhone = realRecipient.phone;
+  }
+  
+  if (Object.keys(reminderUpdate).length > 0) {
+    await db
+      .update(scheduledQueryReminders)
+      .set(reminderUpdate)
+      .where(eq(scheduledQueryReminders.id, reminder.id));
+  }
+  
+  if (Object.keys(tokenUpdate).length > 0) {
+    await db
+      .update(queryResponseTokens)
+      .set(tokenUpdate)
+      .where(eq(queryResponseTokens.id, reminder.tokenId));
+  }
+  
+  const fixedEmail = needsEmailFix ? realRecipient!.email : reminder.recipientEmail;
+  const fixedPhone = needsPhoneFix ? realRecipient!.phone : reminder.recipientPhone;
+  
+  console.log(`[QueryReminder] Hydrated reminder ${reminder.id}: email=${fixedEmail}, phone=${fixedPhone}`);
   
   return {
     ...reminder,
-    recipientEmail: realRecipient.email,
-    recipientName: realRecipient.name,
-    recipientPhone: realRecipient.phone
+    recipientEmail: fixedEmail,
+    recipientName: needsEmailFix ? realRecipient!.name : reminder.recipientName,
+    recipientPhone: fixedPhone
   };
 }
 
 /**
- * Startup migration: Clean up placeholder reminders
+ * Check if reminder needs phone number but doesn't have one
+ */
+function needsPhoneHydration(reminder: ScheduledQueryReminder): boolean {
+  if (reminder.channel === 'sms' || reminder.channel === 'voice') {
+    return !reminder.recipientPhone;
+  }
+  return false;
+}
+
+/**
+ * Startup migration: Clean up placeholder reminders and fix missing phone numbers
  * - Cancels reminders scheduled before today
  * - Hydrates today's reminders with real recipient data
+ * - Fixes SMS/voice reminders with null phone numbers
  */
 export async function migrateePlaceholderReminders(): Promise<void> {
   console.log('[QueryReminder] Running placeholder reminder migration...');
@@ -990,26 +1038,23 @@ export async function migrateePlaceholderReminders(): Promise<void> {
   const ukOffset = ukNow.getTime() - now.getTime();
   const startOfTodayUTC = new Date(startOfTodayUK.getTime() - ukOffset);
   
-  const placeholderReminders = await db
+  // Find reminders with placeholder emails OR SMS/voice with null phone
+  const allPendingReminders = await db
     .select()
     .from(scheduledQueryReminders)
-    .where(
-      and(
-        eq(scheduledQueryReminders.status, 'pending'),
-        or(
-          eq(scheduledQueryReminders.recipientEmail, 'pending@placeholder.com'),
-          eq(scheduledQueryReminders.recipientEmail, 'placeholder@example.com')
-        )
-      )
-    );
+    .where(eq(scheduledQueryReminders.status, 'pending'));
   
-  console.log(`[QueryReminder] Found ${placeholderReminders.length} placeholder reminder(s)`);
+  const remindersToFix = allPendingReminders.filter(r => 
+    isPlaceholderEmail(r.recipientEmail) || needsPhoneHydration(r)
+  );
+  
+  console.log(`[QueryReminder] Found ${remindersToFix.length} reminder(s) needing fix (placeholder emails or missing phone)`);
   
   let cancelled = 0;
   let hydrated = 0;
   let failed = 0;
   
-  for (const reminder of placeholderReminders) {
+  for (const reminder of remindersToFix) {
     const scheduledTime = reminder.scheduledAt ? new Date(reminder.scheduledAt) : null;
     
     if (!scheduledTime || scheduledTime < startOfTodayUTC) {
