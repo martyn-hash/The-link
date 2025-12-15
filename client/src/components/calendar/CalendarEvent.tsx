@@ -1,4 +1,4 @@
-import { CheckSquare, Target, Clock, AlertCircle } from "lucide-react";
+import { CheckSquare, Target, Clock, AlertCircle, Repeat, Calendar } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -81,22 +81,35 @@ export default function CalendarEvent({ event, onClick, compact = false }: Calen
             }}
             data-testid={`calendar-event-${event.id}`}
           >
-            {getEventIcon(event.type)}
+            {event.meta?.isMsCalendar ? (
+              <Calendar className="h-3 w-3 flex-shrink-0" />
+            ) : (
+              getEventIcon(event.type)
+            )}
+            {event.meta?.isRecurring && (
+              <Repeat className="h-3 w-3 flex-shrink-0 opacity-70" />
+            )}
             {event.isOverdue && <AlertCircle className="h-3 w-3 flex-shrink-0 text-red-500" />}
             <span className="truncate">{event.title}</span>
           </button>
         </TooltipTrigger>
         <TooltipContent side="top" className="max-w-xs">
           <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Badge 
                 variant={isTask ? "secondary" : "default"} 
                 className="text-xs"
               >
-                {isTask ? "Task" : "Project"}
+                {event.meta?.isMsCalendar ? "Calendar" : isTask ? "Task" : "Project"}
               </Badge>
+              {event.meta?.isRecurring && (
+                <Badge variant="outline" className="text-xs">
+                  <Repeat className="h-2.5 w-2.5 mr-1" />
+                  Recurring
+                </Badge>
+              )}
               <span className="text-xs text-muted-foreground">
-                {getEventTypeLabel(event.type)}
+                {event.meta?.isMsCalendar ? "Outlook Event" : getEventTypeLabel(event.type)}
               </span>
             </div>
             

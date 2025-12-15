@@ -209,6 +209,8 @@ export default function CalendarView({
       meta: {
         description: msEvent.body?.content,
         msCalendarEvent: msEvent,
+        isRecurring: Boolean(msEvent.recurrence || msEvent.seriesMasterId),
+        isMsCalendar: true,
       } as any,
     }));
   }, [msCalendarData, showMSCalendar]);

@@ -30,6 +30,9 @@ export const calendarEventSchema = z.object({
     serviceId: z.string().optional(),
     priority: z.string().optional(),
     description: z.string().optional(),
+    isMsCalendar: z.boolean().optional(),
+    isRecurring: z.boolean().optional(),
+    msCalendarEvent: z.any().optional(),
   }).optional(),
 });
 
@@ -70,6 +73,27 @@ export const calendarViewSettingsSchema = z.object({
 export type CalendarViewSettings = z.infer<typeof calendarViewSettingsSchema>;
 
 export type ViewMode = "kanban" | "list" | "dashboard" | "calendar";
+
+export const recurrencePatternSchema = z.object({
+  type: z.enum(["daily", "weekly", "absoluteMonthly", "relativeMonthly", "absoluteYearly", "relativeYearly"]),
+  interval: z.number(),
+  daysOfWeek: z.array(z.string()).optional(),
+  dayOfMonth: z.number().optional(),
+  month: z.number().optional(),
+  firstDayOfWeek: z.string().optional(),
+});
+
+export const recurrenceRangeSchema = z.object({
+  type: z.enum(["endDate", "noEnd", "numbered"]),
+  startDate: z.string(),
+  endDate: z.string().optional(),
+  numberOfOccurrences: z.number().optional(),
+});
+
+export const recurrenceSchema = z.object({
+  pattern: recurrencePatternSchema,
+  range: recurrenceRangeSchema,
+});
 
 export const msCalendarEventSchema = z.object({
   id: z.string(),
@@ -121,6 +145,8 @@ export const msCalendarEventSchema = z.object({
   calendarOwnerName: z.string(),
   calendarOwnerId: z.string(),
   color: z.string(),
+  recurrence: recurrenceSchema.nullable().optional(),
+  seriesMasterId: z.string().nullable().optional(),
 });
 
 export type MSCalendarEvent = z.infer<typeof msCalendarEventSchema>;
