@@ -6,7 +6,21 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, ToggleLeft, Hash, Type, ListTodo, ListChecks, Calendar } from "lucide-react";
+
+type FieldType = "boolean" | "number" | "short_text" | "long_text" | "single_select" | "multi_select" | "date";
+type ComparisonType = "equal_to" | "less_than" | "greater_than";
+type DateComparisonType = "before" | "after" | "on" | "between";
+
+const FIELD_TYPES = [
+  { value: "boolean", label: "Yes/No", icon: ToggleLeft },
+  { value: "number", label: "Number", icon: Hash },
+  { value: "short_text", label: "Short Text", icon: Type },
+  { value: "long_text", label: "Long Text", icon: Type },
+  { value: "single_select", label: "Single Select", icon: ListTodo },
+  { value: "multi_select", label: "Multi Select", icon: ListChecks },
+  { value: "date", label: "Date", icon: Calendar },
+] as const;
 
 interface ApprovalFieldFormProps {
   stageApprovalId: string;
@@ -29,30 +43,32 @@ export function ApprovalFieldForm({
 }: ApprovalFieldFormProps) {
   const [fieldName, setFieldName] = useState(editingField?.fieldName || "");
   const [description, setDescription] = useState(editingField?.description || "");
-  const [fieldType, setFieldType] = useState<"boolean" | "number" | "long_text" | "multi_select">(editingField?.fieldType || "boolean");
+  const [fieldType, setFieldType] = useState<FieldType>(editingField?.fieldType || "boolean");
   const [isRequired, setIsRequired] = useState(editingField?.isRequired || false);
   const [placeholder, setPlaceholder] = useState(editingField?.placeholder || "");
   const [options, setOptions] = useState<string[]>(editingField?.options || [""]);
   
   const [expectedValueBoolean, setExpectedValueBoolean] = useState<boolean>(editingField?.expectedValueBoolean !== undefined ? editingField.expectedValueBoolean : true);
   
-  const [comparisonType, setComparisonType] = useState<"equal_to" | "less_than" | "greater_than">(editingField?.comparisonType || "equal_to");
+  const [comparisonType, setComparisonType] = useState<ComparisonType>(editingField?.comparisonType || "equal_to");
   const [expectedValueNumber, setExpectedValueNumber] = useState<number>(editingField?.expectedValueNumber || 0);
 
-  const handleSubmit = () => {
-    if (!fieldName.trim()) {
-      return;
-    }
+  const [dateComparisonType, setDateComparisonType] = useState<DateComparisonType>(editingField?.dateComparisonType || "on");
+  const [expectedDate, setExpectedDate] = useState<string>(editingField?.expectedDate || "");
+  const [expectedDateEnd, setExpectedDateEnd] = useState<string>(editingField?.expectedDateEnd || "");
 
-    if (fieldType === "boolean" && expectedValueBoolean === undefined) {
-      return;
-    }
-    if (fieldType === "number" && (!comparisonType || expectedValueNumber === undefined)) {
-      return;
-    }
-    if (fieldType === "multi_select" && options.filter(o => o.trim()).length === 0) {
-      return;
-    }
+  const isSelectType = fieldType === "single_select" || fieldType === "multi_select";
+
+  const validateForm = (): boolean => {
+    if (!fieldName.trim()) return false;
+    if (fieldType === "boolean" && expectedValueBoolean === undefined) return false;
+    if (fieldType === "number" && (!comparisonType || expectedValueNumber === undefined)) return false;
+    if (isSelectType && options.filter(o => o.trim()).length === 0) return false;
+    return true;
+  };
+
+  const handleSubmit = () => {
+    if (!validateForm()) return;
 
     const fieldData = {
       stageApprovalId,
@@ -64,7 +80,10 @@ export function ApprovalFieldForm({
       expectedValueBoolean: fieldType === "boolean" ? expectedValueBoolean : undefined,
       comparisonType: fieldType === "number" ? comparisonType : undefined,
       expectedValueNumber: fieldType === "number" ? expectedValueNumber : undefined,
-      options: fieldType === "multi_select" ? options.filter(o => o.trim()) : undefined,
+      dateComparisonType: fieldType === "date" ? dateComparisonType : undefined,
+      expectedDate: fieldType === "date" && expectedDate ? expectedDate : undefined,
+      expectedDateEnd: fieldType === "date" && dateComparisonType === "between" && expectedDateEnd ? expectedDateEnd : undefined,
+      options: isSelectType ? options.filter(o => o.trim()) : undefined,
       order: editingField ? editingField.order : existingFields.length
     };
 
@@ -97,6 +116,13 @@ export function ApprovalFieldForm({
     setOptions(options.filter((_, i) => i !== index));
   };
 
+  const getFieldTypeIcon = (type: string) => {
+    const fieldTypeInfo = FIELD_TYPES.find(t => t.value === type);
+    if (!fieldTypeInfo) return null;
+    const Icon = fieldTypeInfo.icon;
+    return <Icon className="w-4 h-4 mr-2" />;
+  };
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-4">
@@ -115,16 +141,20 @@ export function ApprovalFieldForm({
           <Label htmlFor="approval-field-type">Field Type</Label>
           <Select
             value={fieldType}
-            onValueChange={(value: any) => setFieldType(value)}
+            onValueChange={(value: FieldType) => setFieldType(value)}
           >
             <SelectTrigger data-testid="select-approval-field-type">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="boolean">Boolean</SelectItem>
-              <SelectItem value="number">Number</SelectItem>
-              <SelectItem value="long_text">Long Text</SelectItem>
-              <SelectItem value="multi_select">Multi Select</SelectItem>
+              {FIELD_TYPES.map((type) => (
+                <SelectItem key={type.value} value={type.value}>
+                  <div className="flex items-center">
+                    {getFieldTypeIcon(type.value)}
+                    {type.label}
+                  </div>
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -174,7 +204,7 @@ export function ApprovalFieldForm({
               data-testid="switch-expected-value-boolean"
             />
             <Label htmlFor="expected-value-boolean">
-              Field must be {expectedValueBoolean ? "true" : "false"} for approval
+              Field must be {expectedValueBoolean ? "Yes" : "No"} for approval
             </Label>
           </div>
         </div>
@@ -186,7 +216,7 @@ export function ApprovalFieldForm({
             <Label htmlFor="comparison-type">Comparison Type</Label>
             <Select
               value={comparisonType}
-              onValueChange={(value: any) => setComparisonType(value)}
+              onValueChange={(value: ComparisonType) => setComparisonType(value)}
             >
               <SelectTrigger data-testid="select-comparison-type">
                 <SelectValue />
@@ -212,9 +242,61 @@ export function ApprovalFieldForm({
         </div>
       )}
 
-      {fieldType === "multi_select" && (
+      {fieldType === "date" && (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="date-comparison-type">Date Comparison</Label>
+            <Select
+              value={dateComparisonType}
+              onValueChange={(value: DateComparisonType) => setDateComparisonType(value)}
+            >
+              <SelectTrigger data-testid="select-date-comparison-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="on">On (exact date)</SelectItem>
+                <SelectItem value="before">Before</SelectItem>
+                <SelectItem value="after">After</SelectItem>
+                <SelectItem value="between">Between</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="expected-date">
+              {dateComparisonType === "between" ? "Start Date" : "Expected Date"}
+            </Label>
+            <Input
+              id="expected-date"
+              type="date"
+              value={expectedDate}
+              onChange={(e) => setExpectedDate(e.target.value)}
+              data-testid="input-expected-date"
+            />
+          </div>
+          {dateComparisonType === "between" && (
+            <div className="space-y-2">
+              <Label htmlFor="expected-date-end">End Date</Label>
+              <Input
+                id="expected-date-end"
+                type="date"
+                value={expectedDateEnd}
+                onChange={(e) => setExpectedDateEnd(e.target.value)}
+                data-testid="input-expected-date-end"
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {isSelectType && (
         <div className="space-y-2">
           <Label>Options</Label>
+          <p className="text-xs text-muted-foreground">
+            {fieldType === "single_select" 
+              ? "Users will select one option from this list"
+              : "Users can select multiple options from this list"
+            }
+          </p>
           <div className="space-y-2">
             {options.map((option, index) => (
               <div key={index} className="flex items-center space-x-2">
@@ -262,12 +344,7 @@ export function ApprovalFieldForm({
         <Button
           type="button"
           onClick={handleSubmit}
-          disabled={
-            !fieldName.trim() || 
-            (fieldType === "boolean" && expectedValueBoolean === undefined) ||
-            (fieldType === "number" && (!comparisonType || expectedValueNumber === undefined)) ||
-            (fieldType === "multi_select" && options.filter(o => o.trim()).length === 0)
-          }
+          disabled={!validateForm()}
           data-testid="button-save-approval-field"
         >
           {editingField ? "Update Field" : "Add Field"}
