@@ -14,9 +14,21 @@
 import cron from 'node-cron';
 import { getDueReminders, processReminder, checkAndCancelRemindersIfComplete, migrateePlaceholderReminders } from './services/queryReminderService';
 import { db } from './db';
-import { projectChronology, scheduledQueryReminders, communications, queryResponseTokens, projects } from '@shared/schema';
+import { projectChronology, scheduledQueryReminders, communications, queryResponseTokens, projects, companySettings } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { getUncachableSendGridClient } from './lib/sendgrid';
+
+async function getProjectName(projectId: string | null): Promise<string | null> {
+  if (!projectId) return null;
+  try {
+    const result = await db.select({ description: projects.description, projectMonth: projects.projectMonth }).from(projects).where(eq(projects.id, projectId)).limit(1);
+    if (!result[0]) return null;
+    const month = result[0].projectMonth ? ` (${result[0].projectMonth})` : '';
+    return `${result[0].description}${month}`;
+  } catch {
+    return null;
+  }
+}
 
 interface ReminderProcessingResult {
   reminderId: string;
@@ -24,6 +36,7 @@ interface ReminderProcessingResult {
   recipientName: string | null;
   recipientEmail: string | null;
   recipientPhone: string | null;
+  projectName: string | null;
   success: boolean;
   error?: string;
 }
@@ -164,12 +177,14 @@ async function processQueryReminders(): Promise<void> {
         if (wasComplete) {
           console.log(`[QueryReminderCron] Skipped reminder ${reminder.id} - queries already complete`);
           stats.cancelled++;
+          const projectName = await getProjectName(reminder.projectId);
           stats.results.push({
             reminderId: reminder.id,
             channel: reminder.channel,
             recipientName: reminder.recipientName,
             recipientEmail: reminder.recipientEmail,
             recipientPhone: reminder.recipientPhone,
+            projectName,
             success: true,
             error: 'Cancelled - queries complete'
           });
@@ -181,12 +196,14 @@ async function processQueryReminders(): Promise<void> {
         if (result.success) {
           console.log(`[QueryReminderCron] Sent ${reminder.channel} reminder ${reminder.id}`);
           stats.sent++;
+          const projectName = await getProjectName(reminder.projectId);
           stats.results.push({
             reminderId: reminder.id,
             channel: reminder.channel,
             recipientName: reminder.recipientName,
             recipientEmail: reminder.recipientEmail,
             recipientPhone: reminder.recipientPhone,
+            projectName,
             success: true
           });
           
@@ -272,12 +289,14 @@ async function processQueryReminders(): Promise<void> {
         } else {
           console.error(`[QueryReminderCron] Failed to send reminder ${reminder.id}:`, result.error);
           stats.failed++;
+          const projectName = await getProjectName(reminder.projectId);
           stats.results.push({
             reminderId: reminder.id,
             channel: reminder.channel,
             recipientName: reminder.recipientName,
             recipientEmail: reminder.recipientEmail,
             recipientPhone: reminder.recipientPhone,
+            projectName,
             success: false,
             error: result.error
           });
@@ -285,12 +304,14 @@ async function processQueryReminders(): Promise<void> {
       } catch (reminderError) {
         console.error(`[QueryReminderCron] Error processing reminder ${reminder.id}:`, reminderError);
         stats.failed++;
+        const projectName = await getProjectName(reminder.projectId);
         stats.results.push({
           reminderId: reminder.id,
           channel: reminder.channel,
           recipientName: reminder.recipientName,
           recipientEmail: reminder.recipientEmail,
           recipientPhone: reminder.recipientPhone,
+          projectName,
           success: false,
           error: reminderError instanceof Error ? reminderError.message : 'Unknown error'
         });
@@ -316,11 +337,19 @@ async function sendMonitoringEmail(stats: CronRunStats): Promise<void> {
       return;
     }
 
+    const settings = await db.select().from(companySettings).limit(1);
+    const firmName = settings[0]?.firmName || 'Unknown Firm';
+
     const ukTime = stats.runTime.toLocaleString('en-GB', { timeZone: 'Europe/London' });
     
     const isProduction = !!process.env.REPLIT_DEPLOYMENT;
     const envLabel = isProduction ? 'LIVE' : 'DEV';
     const envColor = isProduction ? '#28a745' : '#dc3545';
+    
+    const emailCount = stats.results.filter(r => r.channel === 'email').length;
+    const smsCount = stats.results.filter(r => r.channel === 'sms').length;
+    const voiceCount = stats.results.filter(r => r.channel === 'voice').length;
+    const successfullyDelivered = stats.results.filter(r => r.success && !r.error?.includes('Cancelled')).length;
     
     const statusEmoji = stats.failed > 0 ? '⚠️' : (stats.sent > 0 ? '✅' : '📋');
     const subject = `[${envLabel}] ${statusEmoji} Query Reminder Cron Report - ${ukTime}`;
@@ -333,6 +362,7 @@ async function sendMonitoringEmail(stats: CronRunStats): Promise<void> {
           <tr style="background-color: #f0f0f0;">
             <th>Channel</th>
             <th>Recipient</th>
+            <th>Project</th>
             <th>Email</th>
             <th>Phone</th>
             <th>Status</th>
@@ -342,6 +372,7 @@ async function sendMonitoringEmail(stats: CronRunStats): Promise<void> {
             <tr style="background-color: ${r.success ? '#e8f5e9' : '#ffebee'};">
               <td>${r.channel}</td>
               <td>${r.recipientName || '-'}</td>
+              <td>${r.projectName || '-'}</td>
               <td>${r.recipientEmail || '-'}</td>
               <td>${r.recipientPhone || '-'}</td>
               <td>${r.success ? '✅ Sent' : '❌ Failed'}</td>
@@ -352,8 +383,22 @@ async function sendMonitoringEmail(stats: CronRunStats): Promise<void> {
       `;
     }
 
+    const sentReminders = stats.results.filter(r => r.success && !r.error?.includes('Cancelled'));
+    let sentListHtml = '';
+    if (sentReminders.length > 0) {
+      sentListHtml = `
+        <h3 style="margin-top: 20px;">People and Projects Sent Reminders:</h3>
+        <ul style="font-size: 14px;">
+          ${sentReminders.map(r => `<li><strong>${r.recipientName || 'Unknown'}</strong> - ${r.projectName || 'Unknown Project'} (${r.channel})</li>`).join('')}
+        </ul>
+      `;
+    }
+
     const body = `
       <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; padding: 20px;">
+        <div style="background-color: #0f7b94; color: white; padding: 12px 20px; border-radius: 6px; font-size: 18px; font-weight: bold; margin-bottom: 20px;">
+          ${firmName}
+        </div>
         <div style="display: inline-block; background-color: ${envColor}; color: white; padding: 8px 16px; border-radius: 4px; font-weight: bold; font-size: 16px; margin-bottom: 15px;">
           ${envLabel} ENVIRONMENT
         </div>
@@ -389,6 +434,28 @@ async function sendMonitoringEmail(stats: CronRunStats): Promise<void> {
             <td>${stats.failed}</td>
           </tr>
         </table>
+        
+        <h3 style="margin-top: 20px;">Channel Breakdown:</h3>
+        <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; font-size: 14px;">
+          <tr>
+            <td><strong>Email Reminders</strong></td>
+            <td>${emailCount}</td>
+          </tr>
+          <tr>
+            <td><strong>SMS Reminders</strong></td>
+            <td>${smsCount}</td>
+          </tr>
+          <tr>
+            <td><strong>Voice Call Reminders</strong></td>
+            <td>${voiceCount}</td>
+          </tr>
+          <tr style="background-color: #e8f5e9;">
+            <td><strong>Successfully Delivered</strong></td>
+            <td>${successfullyDelivered}</td>
+          </tr>
+        </table>
+        
+        ${sentListHtml}
         
         ${resultsTableHtml}
         
