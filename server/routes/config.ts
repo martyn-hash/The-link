@@ -1214,6 +1214,27 @@ export function registerConfigRoutes(
         return res.status(404).json({ message: "Stage approval not found" });
       }
       
+      // Provide sensible defaults for validation fields based on field type
+      // Library fields are templates and may not have validation values set
+      let expectedValueBoolean = libraryField.expectedValueBoolean;
+      let comparisonType = libraryField.comparisonType;
+      let expectedValueNumber = libraryField.expectedValueNumber;
+      
+      // Boolean fields require expectedValueBoolean - default to true ("yes" expected)
+      if (libraryField.fieldType === 'boolean' && expectedValueBoolean === null) {
+        expectedValueBoolean = true;
+      }
+      
+      // Number fields require comparison settings - default to "equal_to 0"
+      if (libraryField.fieldType === 'number') {
+        if (comparisonType === null) {
+          comparisonType = 'equal_to';
+        }
+        if (expectedValueNumber === null) {
+          expectedValueNumber = 0;
+        }
+      }
+      
       const fieldData = insertStageApprovalFieldSchema.parse({
         stageApprovalId: approvalId,
         libraryFieldId,
@@ -1221,9 +1242,9 @@ export function registerConfigRoutes(
         fieldType: libraryField.fieldType,
         description: libraryField.description,
         placeholder: libraryField.placeholder,
-        expectedValueBoolean: libraryField.expectedValueBoolean,
-        comparisonType: libraryField.comparisonType,
-        expectedValueNumber: libraryField.expectedValueNumber,
+        expectedValueBoolean,
+        comparisonType,
+        expectedValueNumber,
         dateComparisonType: libraryField.dateComparisonType,
         expectedDate: libraryField.expectedDate,
         expectedDateEnd: libraryField.expectedDateEnd,
