@@ -1076,58 +1076,6 @@ export async function fixPlaceholderRecipient(reminder: ScheduledQueryReminder):
 }
 
 /**
- * Check if reminder needs phone number but doesn't have one
- */
-function needsPhoneHydration(reminder: ScheduledQueryReminder): boolean {
-  if (reminder.channel === 'sms' || reminder.channel === 'voice') {
-    return !reminder.recipientPhone;
-  }
-  return false;
-}
-
-/**
- * Startup migration: Fix placeholder reminders with missing recipient data
- * CONSERVATIVE: Only hydrates reminders, never cancels them
- * - Fixes SMS/voice reminders with null phone numbers
- * - Fixes reminders with placeholder emails
- */
-export async function migrateePlaceholderReminders(): Promise<void> {
-  console.log('[QueryReminder] Running placeholder reminder migration (hydration only)...');
-  
-  // Find pending reminders that need hydration (placeholder emails or missing phone)
-  const allPendingReminders = await db
-    .select()
-    .from(scheduledQueryReminders)
-    .where(eq(scheduledQueryReminders.status, 'pending'));
-  
-  const remindersToFix = allPendingReminders.filter(r => 
-    isPlaceholderEmail(r.recipientEmail) || needsPhoneHydration(r)
-  );
-  
-  console.log(`[QueryReminder] Found ${remindersToFix.length} reminder(s) needing hydration`);
-  
-  let hydrated = 0;
-  let failed = 0;
-  
-  // Process in small batches to avoid blocking event loop
-  for (const reminder of remindersToFix) {
-    try {
-      const fixed = await fixPlaceholderRecipient(reminder);
-      if (fixed) {
-        hydrated++;
-      } else {
-        failed++;
-      }
-    } catch (error) {
-      console.error(`[QueryReminder] Error hydrating reminder ${reminder.id}:`, error);
-      failed++;
-    }
-  }
-  
-  console.log(`[QueryReminder] Migration complete: ${hydrated} hydrated, ${failed} failed`);
-}
-
-/**
  * Schedule reminders for a new query token
  */
 export async function scheduleReminders(
