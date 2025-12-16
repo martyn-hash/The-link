@@ -137,11 +137,11 @@ export function ReminderScheduleEditor({
     const date = new Date(reminder.scheduledAt);
     const newDate = setMinutes(setHours(date, hours), minutes);
 
-    onScheduleChange(
-      schedule.map((r) =>
-        r.id === id ? { ...r, scheduledAt: newDate.toISOString() } : r
-      )
-    );
+    const updatedSchedule = schedule
+      .map((r) => r.id === id ? { ...r, scheduledAt: newDate.toISOString() } : r)
+      .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+
+    onScheduleChange(updatedSchedule);
   };
 
   const removeReminder = (id: string) => {
@@ -154,7 +154,7 @@ export function ReminderScheduleEditor({
     const [hours, minutes] = newReminderTime.split(':').map(Number);
     const newDate = setMinutes(setHours(newReminderDate, hours), minutes);
 
-    onScheduleChange([
+    const newSchedule = [
       ...schedule,
       {
         id: `reminder-new-${Date.now()}`,
@@ -162,7 +162,9 @@ export function ReminderScheduleEditor({
         channel: newReminderChannel,
         enabled: true,
       },
-    ]);
+    ].sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime());
+
+    onScheduleChange(newSchedule);
     
     // Reset form and hide it
     setShowAddForm(false);
