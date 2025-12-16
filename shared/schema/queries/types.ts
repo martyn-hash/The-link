@@ -59,6 +59,9 @@ export type ReminderChannel = 'email' | 'sms' | 'voice';
 // Reminder status type
 export type ReminderStatus = 'pending' | 'sent' | 'failed' | 'cancelled' | 'skipped';
 
+// On completion trigger type (for auto-stage-change)
+export type OnCompletionTrigger = 'all_answered' | 'submitted';
+
 // Query Answer History types (for auto-suggest feature)
 export type QueryAnswerHistory = typeof queryAnswerHistory.$inferSelect;
 

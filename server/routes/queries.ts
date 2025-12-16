@@ -810,7 +810,16 @@ export function registerQueryRoutes(
         return res.status(401).json({ message: "User not authenticated" });
       }
 
-      const { queryIds, expiryDays, includeOnlineLink = true, notifyOnResponseUserIds } = req.body;
+      const { 
+        queryIds, 
+        expiryDays, 
+        includeOnlineLink = true, 
+        notifyOnResponseUserIds,
+        // Auto-stage-change on completion fields
+        onCompletionTrigger,
+        onCompletionStageId,
+        onCompletionStageReasonId,
+      } = req.body;
       
       if (!queryIds || !Array.isArray(queryIds) || queryIds.length === 0) {
         return res.status(400).json({ message: "queryIds is required and must be a non-empty array" });
@@ -819,6 +828,16 @@ export function registerQueryRoutes(
       // Validate notifyOnResponseUserIds if provided
       if (notifyOnResponseUserIds && (!Array.isArray(notifyOnResponseUserIds) || notifyOnResponseUserIds.some((id: any) => typeof id !== 'string'))) {
         return res.status(400).json({ message: "notifyOnResponseUserIds must be an array of strings" });
+      }
+      
+      // Validate onCompletionTrigger if provided
+      if (onCompletionTrigger && !['all_answered', 'submitted'].includes(onCompletionTrigger)) {
+        return res.status(400).json({ message: "onCompletionTrigger must be 'all_answered' or 'submitted'" });
+      }
+      
+      // If trigger is set, stage is required
+      if (onCompletionTrigger && !onCompletionStageId) {
+        return res.status(400).json({ message: "onCompletionStageId is required when onCompletionTrigger is set" });
       }
       
       // Validate expiryDays if link is included
@@ -896,6 +915,9 @@ export function registerQueryRoutes(
         // Calculate expiry date
         expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + effectiveExpiryDays);
+        
+        // Capture the current stage at send time for auto-stage-change comparison
+        const currentStageId = project?.stageId || null;
 
         // Create token (we'll use a placeholder email for now, updated when actually sent)
         token = await storage.createQueryResponseToken({
@@ -907,6 +929,11 @@ export function registerQueryRoutes(
           queryCount: queryIds.length,
           queryIds,
           notifyOnResponseUserIds: effectiveNotifyUserIds.length > 0 ? effectiveNotifyUserIds : null,
+          // Auto-stage-change on completion fields
+          onCompletionTrigger: onCompletionTrigger || null,
+          onCompletionStageId: onCompletionStageId || null,
+          onCompletionStageReasonId: onCompletionStageReasonId || null,
+          stageAtSendTime: onCompletionTrigger ? currentStageId : null,
         });
 
         // Build the response URL with proper domain handling
@@ -1675,6 +1702,47 @@ ${emailSignoff}`;
       // Only update if there's something to update
       if (Object.keys(updateData).length > 0) {
         await storage.updateQuery(queryId, updateData);
+        
+        // Check for 'all_answered' trigger when a query becomes answered
+        if (updateData.status === 'answered_by_client') {
+          try {
+            const tokenWithOnCompletion = await storage.getQueryResponseTokenById(tokenData.id);
+            if (tokenWithOnCompletion?.onCompletionTrigger === 'all_answered' && 
+                tokenWithOnCompletion.onCompletionStageId) {
+              // Check if all queries in the token are now answered
+              const updatedQueries = await storage.getQueriesForToken(token);
+              const allAnswered = updatedQueries.every(q => 
+                q.status === 'answered_by_client' || q.status === 'resolved'
+              );
+              
+              if (allAnswered) {
+                const currentProject = await storage.getProjectById(tokenData.projectId);
+                
+                // Only change stage if project is still in same stage as when queries were sent
+                if (currentProject && currentProject.stageId === tokenWithOnCompletion.stageAtSendTime) {
+                  await storage.updateProject(tokenData.projectId, {
+                    stageId: tokenWithOnCompletion.onCompletionStageId,
+                  });
+                  
+                  // Create chronology entry for the stage change
+                  await storage.createChronologyEntry({
+                    projectId: tokenData.projectId,
+                    entryType: 'stage_change',
+                    toStatus: tokenWithOnCompletion.onCompletionStageId,
+                    changedById: null,
+                    notes: 'Stage changed automatically - all queries answered by client',
+                    stageReasonId: tokenWithOnCompletion.onCompletionStageReasonId || undefined,
+                  });
+                  
+                  console.log(`[Query Auto-save] Auto-stage-change triggered: all queries answered, project ${tokenData.projectId} moved to stage ${tokenWithOnCompletion.onCompletionStageId}`);
+                }
+              }
+            }
+          } catch (stageError) {
+            console.error('[Query Auto-save] Error checking on-completion trigger:', stageError);
+            // Don't fail the auto-save operation
+          }
+        }
       }
 
       res.json({
@@ -1835,6 +1903,62 @@ ${emailSignoff}`;
 
       // Mark the token as completed
       await storage.markQueryTokenCompleted(tokenData.id);
+      
+      // Handle on-completion action: auto-stage-change if configured
+      // We need to re-fetch the token to get the on-completion fields
+      const tokenWithOnCompletion = await storage.getQueryResponseTokenById(tokenData.id);
+      if (tokenWithOnCompletion?.onCompletionStageId && tokenWithOnCompletion.onCompletionTrigger) {
+        let shouldTrigger = false;
+        let triggerReason = '';
+        
+        if (tokenWithOnCompletion.onCompletionTrigger === 'submitted') {
+          // Trigger when client submits the form (now)
+          shouldTrigger = true;
+          triggerReason = 'client submitted query responses';
+        } else if (tokenWithOnCompletion.onCompletionTrigger === 'all_answered') {
+          // Trigger only if all queries in the token have been answered
+          const updatedQueries = await storage.getQueriesForToken(token);
+          const allAnswered = updatedQueries.every(q => 
+            q.status === 'answered_by_client' || q.status === 'resolved'
+          );
+          if (allAnswered) {
+            shouldTrigger = true;
+            triggerReason = 'all queries answered by client';
+          } else {
+            console.log(`[Query Submit] Auto-stage-change not triggered: not all queries answered yet`);
+          }
+        }
+        
+        if (shouldTrigger) {
+          try {
+            const currentProject = await storage.getProjectById(tokenData.projectId);
+            
+            // Only change stage if project is still in the same stage as when queries were sent
+            if (currentProject && currentProject.stageId === tokenWithOnCompletion.stageAtSendTime) {
+              await storage.updateProject(tokenData.projectId, {
+                stageId: tokenWithOnCompletion.onCompletionStageId,
+              });
+              
+              // Create chronology entry for the stage change
+              await storage.createChronologyEntry({
+                projectId: tokenData.projectId,
+                entryType: 'stage_change',
+                toStatus: tokenWithOnCompletion.onCompletionStageId,
+                changedById: null,
+                notes: `Stage changed automatically - ${triggerReason}`,
+                stageReasonId: tokenWithOnCompletion.onCompletionStageReasonId || undefined,
+              });
+              
+              console.log(`[Query Submit] Auto-stage-change triggered: project ${tokenData.projectId} moved to stage ${tokenWithOnCompletion.onCompletionStageId}`);
+            } else {
+              console.log(`[Query Submit] Skipped auto-stage-change: project stage has changed since queries were sent (was ${tokenWithOnCompletion.stageAtSendTime}, now ${currentProject?.stageId})`);
+            }
+          } catch (stageChangeError) {
+            console.error('[Query Submit] Error executing on-completion stage change:', stageChangeError);
+            // Don't fail the overall operation
+          }
+        }
+      }
 
       // Get project and client info for chronology and notifications
       const project = await storage.getProject(tokenData.projectId);
@@ -2316,6 +2440,12 @@ ${tableHtml}
     recipientEmail: z.string().email().optional(),
     recipientName: z.string().optional(),
     recipientPhone: z.string().optional(),
+    // On-completion action configuration
+    onCompletionAction: z.object({
+      trigger: z.enum(['all_answered', 'submitted']),
+      stageId: z.string().uuid(),
+      stageReasonId: z.string().uuid().nullable(),
+    }).nullable().optional(),
   });
 
   app.post("/api/projects/:projectId/queries/reminders", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
@@ -2376,12 +2506,29 @@ ${tableHtml}
         return res.status(400).json({ message: "Cannot schedule SMS/voice reminders without a recipient phone number" });
       }
       
-      // Also update the token with the real recipient data for future reference
+      // Also update the token with the real recipient data and on-completion action for future reference
+      const tokenUpdateData: any = {};
+      
       if (recipientEmail && recipientEmail !== 'pending@placeholder.com') {
-        await storage.updateQueryResponseToken(data.tokenId, {
-          recipientEmail,
-          recipientName: recipientName !== 'Client' ? recipientName : token.recipientName,
-        });
+        tokenUpdateData.recipientEmail = recipientEmail;
+        if (recipientName !== 'Client') {
+          tokenUpdateData.recipientName = recipientName;
+        }
+      }
+      
+      // Handle on-completion action - store in token for later processing
+      if (data.onCompletionAction) {
+        // Get current project stage to store as stageAtSendTime
+        const project = await storage.getProjectById(projectId);
+        
+        tokenUpdateData.onCompletionTrigger = data.onCompletionAction.trigger;
+        tokenUpdateData.onCompletionStageId = data.onCompletionAction.stageId;
+        tokenUpdateData.onCompletionStageReasonId = data.onCompletionAction.stageReasonId;
+        tokenUpdateData.stageAtSendTime = project?.stageId || null;
+      }
+      
+      if (Object.keys(tokenUpdateData).length > 0) {
+        await storage.updateQueryResponseToken(data.tokenId, tokenUpdateData);
       }
 
       const { scheduleReminders } = await import('../services/queryReminderService');

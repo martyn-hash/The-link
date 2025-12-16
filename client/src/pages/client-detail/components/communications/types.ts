@@ -188,6 +188,14 @@ export interface QueryEmailOptions {
   recipientPhone?: string;
   /** Whether Voice AI is available for this project (based on project type settings + active webhooks) */
   voiceAiAvailable?: boolean;
+  /** Project type ID for fetching stages */
+  projectTypeId?: string;
+}
+
+export interface OnCompletionAction {
+  trigger: 'all_answered' | 'submitted' | null;
+  stageId: string | null;
+  stageReasonId: string | null;
 }
 
 /** Data about the recipient of an email - passed back through onSuccess for reminder scheduling */
@@ -215,6 +223,8 @@ export interface EmailDialogProps extends DialogBaseProps {
   queryEmailOptions?: QueryEmailOptions;
   /** Callback when reminders are configured */
   onRemindersConfigured?: (reminders: ReminderScheduleItem[]) => void;
+  /** Callback when on-completion action is configured */
+  onCompletionActionConfigured?: (action: OnCompletionAction | null) => void;
   /** Override onSuccess to optionally receive recipient data for query emails */
   onSuccess?: (recipientData?: EmailRecipientData) => void;
 }

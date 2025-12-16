@@ -61,6 +61,7 @@ const baseTokenInsertSchema = createInsertSchema(queryResponseTokens).omit({
   createdAt: true,
   accessedAt: true,
   completedAt: true,
+  stageChangeCompletedAt: true,
 });
 
 export const insertQueryResponseTokenSchema = baseTokenInsertSchema.extend({
@@ -68,6 +69,11 @@ export const insertQueryResponseTokenSchema = baseTokenInsertSchema.extend({
     if (val instanceof Date) return val;
     return new Date(val);
   }),
+  // Auto-stage-change fields (optional)
+  onCompletionTrigger: z.enum(['all_answered', 'submitted']).nullable().optional(),
+  onCompletionStageId: z.string().nullable().optional(),
+  onCompletionStageReasonId: z.string().nullable().optional(),
+  stageAtSendTime: z.string().nullable().optional(),
 });
 
 export const sendToClientSchema = z.object({

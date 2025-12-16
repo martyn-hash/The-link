@@ -14,6 +14,9 @@ export const reminderStatusEnum = pgEnum('reminder_status', ['pending', 'sent', 
 // Answered by type enum (for suggestion history)
 export const answeredByTypeEnum = pgEnum('answered_by_type', ['staff', 'client']);
 
+// On completion trigger enum (for auto-stage-change)
+export const onCompletionTriggerEnum = pgEnum('on_completion_trigger', ['all_answered', 'submitted']);
+
 export interface QueryAttachment {
   objectPath: string;
   fileName: string;
@@ -81,6 +84,12 @@ export const queryResponseTokens = pgTable("query_response_tokens", {
   queryCount: integer("query_count").notNull(),
   queryIds: text("query_ids").array(),
   notifyOnResponseUserIds: text("notify_on_response_user_ids").array(),
+  // Auto-stage-change on completion fields
+  onCompletionTrigger: onCompletionTriggerEnum("on_completion_trigger"),
+  onCompletionStageId: varchar("on_completion_stage_id"),
+  onCompletionStageReasonId: varchar("on_completion_stage_reason_id"),
+  stageAtSendTime: varchar("stage_at_send_time"),
+  stageChangeCompletedAt: timestamp("stage_change_completed_at"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_query_response_tokens_token").on(table.token),

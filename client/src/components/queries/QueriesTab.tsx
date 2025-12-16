@@ -110,7 +110,7 @@ import { cn } from "@/lib/utils";
 import type { BookkeepingQueryWithRelations, User, QuerySuggestion } from "@shared/schema";
 import { QueryBulkImport, type ParsedQuery } from "./QueryBulkImport";
 import { EmailDialog } from "@/pages/client-detail/components/communications/dialogs/EmailDialog";
-import type { EmailRecipientData } from "@/pages/client-detail/components/communications/types";
+import type { EmailRecipientData, OnCompletionAction } from "@/pages/client-detail/components/communications/types";
 import { ScheduledRemindersPanel } from "./ScheduledRemindersPanel";
 
 type QueryStatus = "open" | "answered_by_staff" | "sent_to_client" | "answered_by_client" | "resolved";
@@ -233,6 +233,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   const [pendingEmailExpiryDays, setPendingEmailExpiryDays] = useState<number | null>(null);
   const [pendingEmailVoiceAiAvailable, setPendingEmailVoiceAiAvailable] = useState<boolean>(false);
   const [configuredReminders, setConfiguredReminders] = useState<Array<{ id: string; scheduledAt: string; channel: 'email' | 'sms' | 'voice'; enabled: boolean }>>([]);
+  const [configuredOnCompletionAction, setConfiguredOnCompletionAction] = useState<OnCompletionAction | null>(null);
   const [isPreparingEmail, setIsPreparingEmail] = useState(false);
   
   // Send Options dialog state
@@ -398,6 +399,13 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   });
   
   const pendingReminderCount = scheduledReminders?.filter(r => r.status === 'pending').length || 0;
+  
+  // Query for project data (to get projectTypeId for on-completion actions)
+  const { data: projectData } = useQuery<{ id: string; projectTypeId: string | null; stageId: string | null }>({
+    queryKey: ['/api/projects', projectId],
+    select: (data: any) => ({ id: data.id, projectTypeId: data.projectTypeId, stageId: data.stageId }),
+    enabled: !!projectId,
+  });
 
   // Query for project assignees (for notify functionality in Send Options and Notify dialogs)
   const { data: projectAssignees, isLoading: isLoadingAssignees } = useQuery<{
@@ -1017,6 +1025,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
       setPendingEmailExpiryDays(includeOnlineLink ? linkExpiryDays : null);
       setPendingEmailVoiceAiAvailable(response.voiceAiAvailable ?? false);
       setConfiguredReminders([]);
+      setConfiguredOnCompletionAction(null);
       
       // Set initial values for email dialog with structured content for protected HTML
       setEmailInitialValues({
@@ -1070,6 +1079,8 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
                 recipientEmail: recipientData?.email,
                 recipientName: recipientData?.name,
                 recipientPhone: recipientData?.phone,
+                // Pass on-completion action if configured
+                onCompletionAction: configuredOnCompletionAction,
               });
               console.log(`Saved ${enabledReminders.length} scheduled reminders for token ${pendingEmailTokenId} to ${recipientData?.email}`);
             } catch (reminderError) {
@@ -1101,6 +1112,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     setPendingEmailTokenId(null);
     setPendingEmailExpiryDays(null);
     setConfiguredReminders([]);
+    setConfiguredOnCompletionAction(null);
     setEmailInitialValues({});
     setIsEmailDialogOpen(false);
     setReminderTokenId(null);
@@ -2797,8 +2809,11 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
             expiryDays: pendingEmailExpiryDays,
             expiryDate: new Date(Date.now() + pendingEmailExpiryDays * 24 * 60 * 60 * 1000).toISOString(),
             voiceAiAvailable: pendingEmailVoiceAiAvailable,
+            projectTypeId: projectData?.projectTypeId ?? undefined,
+            currentStageId: projectData?.stageId ?? undefined,
           } : undefined}
           onRemindersConfigured={setConfiguredReminders}
+          onCompletionActionConfigured={setConfiguredOnCompletionAction}
         />
       )}
 
