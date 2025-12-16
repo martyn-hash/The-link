@@ -1,0 +1,54 @@
+We have a PROD issue in The Link (Replit Deployments, Autoscale). Node-cron is logging missed executions at the top of the hour, e.g.:
+
+* 08:00:03 and 08:00:05: `[NODE-CRON] missed execution at 08:00:00 ... Possible blocking IO or high CPU ...`
+  Immediately after, other hourly jobs start at ~08:00:07:
+* `[Dashboard Cache] Starting hourly cache update...`
+* `[Sent Items Detection] Starting periodic check...`
+
+Diagnosis so far (likely):
+
+1. Node-cron is unreliable in an autoscaled web process because the Node event loop can be delayed (GC, synchronous CPU, bursts of work, DB pool churn), so the tick at HH:00:00 is missed even if work starts a few seconds later.
+2. We have a “top-of-hour traffic jam”: multiple cron jobs scheduled for the same moment (HH:00) + normal API traffic → event loop lag.
+3. This is not necessarily “scheduler logic failing”, it’s “clock tick precision failing”.
+
+What I need you to do:
+A) Confirm which cron jobs exist and their exact schedules (cron expressions) for:
+
+* project scheduler
+* dashboard cache update
+* sent items detection
+* any other periodic jobs
+  Output a list: job name → cron expression → what it does → expected runtime → whether it hits DB heavily.
+
+B) Instrumentation (must be added in code, minimal + safe for prod):
+
+1. Add drift logging for each cron handler:
+
+   * at handler start: log expected_time vs actual_time, compute drift_ms (difference from the intended tick).
+   * log process uptime, memory usage, and event loop lag.
+2. Add event loop lag telemetry using Node perf_hooks:
+
+   * monitorEventLoopDelay, log p50/p95/max periodically and when a cron handler starts.
+3. Add “job overlap” logs:
+
+   * log when each job starts/ends with a job_run_id, so we can see collisions.
+
+C) Recommended fixes to implement (ranked, prefer smallest change first):
+
+1. Move away from “exact HH:00 tick required”:
+
+   * run a lightweight “scheduler tick” every 1 minute (or every 5 minutes),
+   * inside it: check DB `last_run_at` / `last_successful_run_at` per job and run if due (idempotent).
+   * keep DB-backed lock so only one instance runs it.
+2. Stagger existing hourly jobs to avoid collisions:
+
+   * e.g. scheduler at HH:00, dashboard cache at HH:02, sent items at HH:04 (or similar).
+3. Ensure no cron job does heavy synchronous work; push heavy tasks behind async + batching.
+4. If possible on Replit: identify whether we can run scheduler outside the web process (worker/background). If not possible, confirm and keep within-process approach using frequent tick + DB gating.
+
+Deliverables:
+
+* A short root-cause summary based on the code you find.
+* The exact code changes (file paths) to add instrumentation.
+* The proposed updated cron schedules OR the minute-tick + DB “due” gating implementation.
+* Any risks (e.g., multiple autoscale instances) and how DB locks + idempotency address them.
