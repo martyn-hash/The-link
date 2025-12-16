@@ -28,7 +28,7 @@ import {
   type DialoraSettings,
   type DialoraOutboundWebhook
 } from "@shared/schema";
-import { eq, and, lte, inArray, or } from "drizzle-orm";
+import { eq, and, lte, inArray, or, isNull, sql } from "drizzle-orm";
 import { getUncachableSendGridClient } from "../lib/sendgrid";
 import { 
   triggerDialoraCall, 
@@ -49,6 +49,155 @@ function validateSelectColumns(columns: Record<string, unknown>, context: string
       console.error(`[QueryReminder] SCHEMA ERROR: ${error}`);
       throw new Error(error);
     }
+  }
+}
+
+/**
+ * Check if an error is non-retryable (permanent configuration/validation issue)
+ * Uses specific keywords that indicate the sender won't succeed even with retries
+ */
+function isNonRetryableError(errorMessage: string): boolean {
+  const lowerError = errorMessage.toLowerCase();
+  
+  // Explicit configuration/missing resource errors - these won't fix themselves
+  const nonRetryablePatterns = [
+    'not configured',
+    'no email address',
+    'no phone number',
+    'no voice ai webhook',
+    'no webhook configured',
+    'sendgrid not configured',
+    'voodoosms not configured',
+    'api key not found',
+    'authentication failed',
+    'unauthorized',
+    'forbidden'
+  ];
+  
+  return nonRetryablePatterns.some(pattern => lowerError.includes(pattern));
+}
+
+/**
+ * Retry wrapper for transient network failures
+ * Retries up to maxRetries times with exponential backoff
+ * Works with functions that return ReminderSendResult (success/error pattern)
+ * Only skips retry for explicit configuration/validation errors, NOT generic HTTP errors
+ */
+async function withRetry(
+  operation: () => Promise<ReminderSendResult>,
+  maxRetries: number = 2,
+  context: string = 'operation'
+): Promise<ReminderSendResult> {
+  let lastResult: ReminderSendResult = { success: false, error: 'No attempts made' };
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const result = await operation();
+      
+      // If successful, return immediately
+      if (result.success) {
+        return result;
+      }
+      
+      lastResult = result;
+      
+      // Only skip retry for explicit configuration/validation errors
+      // Don't skip for generic HTTP errors (502, 503, "invalid response from upstream", etc.)
+      if (isNonRetryableError(result.error || '')) {
+        console.log(`[QueryReminder] ${context} failed with non-retryable error: ${result.error}`);
+        return result;
+      }
+      
+      if (attempt < maxRetries) {
+        const delayMs = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+        console.log(`[QueryReminder] ${context} failed (attempt ${attempt + 1}/${maxRetries + 1}): ${result.error}, retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      lastResult = { success: false, error: errorMessage };
+      
+      // Only skip retry for explicit configuration errors
+      if (isNonRetryableError(errorMessage)) {
+        console.log(`[QueryReminder] ${context} threw non-retryable error: ${errorMessage}`);
+        return lastResult;
+      }
+      
+      if (attempt < maxRetries) {
+        const delayMs = Math.pow(2, attempt) * 1000;
+        console.log(`[QueryReminder] ${context} threw error (attempt ${attempt + 1}/${maxRetries + 1}): ${errorMessage}, retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  
+  return lastResult;
+}
+
+/**
+ * Atomically claim a reminder for processing to prevent double-sends
+ * Uses a status-based approach with time-window check
+ * Returns true if this process successfully claimed the reminder
+ */
+async function claimReminder(reminderId: string): Promise<boolean> {
+  try {
+    // Use a time-window check: if another process claimed it in the last 5 minutes,
+    // skip processing (the other process is likely still working on it)
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+    
+    // Atomically update only if still 'pending' and not recently claimed
+    // We add a processing marker to errorMessage temporarily
+    const processingMarker = `__PROCESSING__${Date.now()}`;
+    const result = await db
+      .update(scheduledQueryReminders)
+      .set({ 
+        errorMessage: processingMarker
+      })
+      .where(
+        and(
+          eq(scheduledQueryReminders.id, reminderId),
+          eq(scheduledQueryReminders.status, 'pending'),
+          // Only claim if not already being processed (no __PROCESSING__ marker)
+          or(
+            isNull(scheduledQueryReminders.errorMessage),
+            sql`${scheduledQueryReminders.errorMessage} NOT LIKE '__PROCESSING__%'`
+          )
+        )
+      )
+      .returning({ id: scheduledQueryReminders.id });
+    
+    if (result.length > 0) {
+      console.log(`[QueryReminder] Claimed reminder ${reminderId} for processing`);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error(`[QueryReminder] Failed to claim reminder ${reminderId}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Release a reminder claim without marking it as failed
+ * Called when we skip processing (e.g., already answered, token expired)
+ * or when an unexpected error occurs before we update the final status
+ */
+async function releaseReminderClaim(reminderId: string): Promise<void> {
+  try {
+    await db
+      .update(scheduledQueryReminders)
+      .set({ 
+        errorMessage: null
+      })
+      .where(
+        and(
+          eq(scheduledQueryReminders.id, reminderId),
+          // Only clear if still has our processing marker
+          sql`${scheduledQueryReminders.errorMessage} LIKE '__PROCESSING__%'`
+        )
+      );
+  } catch (error) {
+    console.error(`[QueryReminder] Failed to release claim for ${reminderId}:`, error);
   }
 }
 
@@ -632,72 +781,91 @@ async function sendVoiceReminder(
  * Process a single scheduled reminder
  */
 export async function processReminder(reminder: ScheduledQueryReminder): Promise<ReminderSendResult> {
-  console.log(`[QueryReminder] Processing ${reminder.channel} reminder ${reminder.id}:`, {
-    tokenId: reminder.tokenId,
-    recipientName: reminder.recipientName,
-    recipientEmail: reminder.recipientEmail,
-    recipientPhone: reminder.recipientPhone,
-    scheduledAt: reminder.scheduledAt,
-    projectId: reminder.projectId
-  });
+  // Idempotency check: Atomically claim this reminder to prevent double-sends
+  // in autoscaled environments where multiple instances might pick up the same reminder
+  const claimed = await claimReminder(reminder.id);
+  if (!claimed) {
+    console.log(`[QueryReminder] Reminder ${reminder.id} already being processed by another instance`);
+    return { success: false, error: 'Already being processed by another instance' };
+  }
 
-  // Check for and fix placeholder recipients or missing phone for SMS/voice
-  const needsEmailFix = reminder.recipientEmail?.includes('placeholder') || reminder.recipientEmail?.includes('pending@');
-  const needsPhoneFix = (reminder.channel === 'sms' || reminder.channel === 'voice') && !reminder.recipientPhone;
-  
-  if (needsEmailFix || needsPhoneFix) {
-    console.log(`[QueryReminder] Reminder ${reminder.id} needs hydration: email=${needsEmailFix}, phone=${needsPhoneFix}`);
-    const fixedReminder = await fixPlaceholderRecipient(reminder);
-    if (!fixedReminder) {
-      return { success: false, error: needsPhoneFix ? 'No phone number available for SMS/voice reminder' : 'Could not resolve placeholder recipient' };
+  // Track whether we've updated the reminder to a final state
+  // If we exit early without updating, we must release the claim
+  let finalStateUpdated = false;
+
+  try {
+    console.log(`[QueryReminder] Processing ${reminder.channel} reminder ${reminder.id}:`, {
+      tokenId: reminder.tokenId,
+      recipientName: reminder.recipientName,
+      recipientEmail: reminder.recipientEmail,
+      recipientPhone: reminder.recipientPhone,
+      scheduledAt: reminder.scheduledAt,
+      projectId: reminder.projectId
+    });
+
+    // Check for and fix placeholder recipients or missing phone for SMS/voice
+    const needsEmailFix = reminder.recipientEmail?.includes('placeholder') || reminder.recipientEmail?.includes('pending@');
+    const needsPhoneFix = (reminder.channel === 'sms' || reminder.channel === 'voice') && !reminder.recipientPhone;
+    
+    if (needsEmailFix || needsPhoneFix) {
+      console.log(`[QueryReminder] Reminder ${reminder.id} needs hydration: email=${needsEmailFix}, phone=${needsPhoneFix}`);
+      const fixedReminder = await fixPlaceholderRecipient(reminder);
+      if (!fixedReminder) {
+        await releaseReminderClaim(reminder.id);
+        return { success: false, error: needsPhoneFix ? 'No phone number available for SMS/voice reminder' : 'Could not resolve placeholder recipient' };
+      }
+      reminder = fixedReminder;
     }
-    reminder = fixedReminder;
-  }
 
-  const queryStatus = await getQueryStatusForToken(reminder.tokenId);
-  
-  if (!queryStatus) {
-    console.error(`[QueryReminder] Failed reminder ${reminder.id}: Query token ${reminder.tokenId} not found`);
-    return { success: false, error: 'Query token not found' };
-  }
-
-  if (queryStatus.allAnswered) {
-    await db
-      .update(scheduledQueryReminders)
-      .set({ 
-        status: 'cancelled',
-        cancelledAt: new Date()
-      })
-      .where(eq(scheduledQueryReminders.id, reminder.id));
+    const queryStatus = await getQueryStatusForToken(reminder.tokenId);
     
-    console.log(`[QueryReminder] Cancelled reminder ${reminder.id} - all queries answered`);
-    return { success: true, error: 'Cancelled - all queries answered' };
-  }
+    if (!queryStatus) {
+      console.error(`[QueryReminder] Failed reminder ${reminder.id}: Query token ${reminder.tokenId} not found`);
+      await releaseReminderClaim(reminder.id);
+      return { success: false, error: 'Query token not found' };
+    }
 
-  const token = await db
-    .select()
-    .from(queryResponseTokens)
-    .where(eq(queryResponseTokens.id, reminder.tokenId))
-    .limit(1);
+    if (queryStatus.allAnswered) {
+      await db
+        .update(scheduledQueryReminders)
+        .set({ 
+          status: 'cancelled',
+          cancelledAt: new Date(),
+          errorMessage: null // Clear the processing marker
+        })
+        .where(eq(scheduledQueryReminders.id, reminder.id));
+      finalStateUpdated = true;
+      
+      console.log(`[QueryReminder] Cancelled reminder ${reminder.id} - all queries answered`);
+      return { success: true, error: 'Cancelled - all queries answered' };
+    }
 
-  if (token.length === 0 || !token[0].token) {
-    return { success: false, error: 'Invalid query token' };
-  }
+    const token = await db
+      .select()
+      .from(queryResponseTokens)
+      .where(eq(queryResponseTokens.id, reminder.tokenId))
+      .limit(1);
 
-  // Check if token has expired - don't send reminders for expired links
-  if (token[0].expiresAt && new Date(token[0].expiresAt) < new Date()) {
-    await db
-      .update(scheduledQueryReminders)
-      .set({ 
-        status: 'cancelled',
-        cancelledAt: new Date(),
-        errorMessage: 'Token expired - link no longer valid'
-      })
-      .where(eq(scheduledQueryReminders.id, reminder.id));
-    
-    console.log(`[QueryReminder] Cancelled reminder ${reminder.id} - token expired at ${token[0].expiresAt}`);
-    return { success: true, error: 'Cancelled - token expired' };
-  }
+    if (token.length === 0 || !token[0].token) {
+      await releaseReminderClaim(reminder.id);
+      return { success: false, error: 'Invalid query token' };
+    }
+
+    // Check if token has expired - don't send reminders for expired links
+    if (token[0].expiresAt && new Date(token[0].expiresAt) < new Date()) {
+      await db
+        .update(scheduledQueryReminders)
+        .set({ 
+          status: 'cancelled',
+          cancelledAt: new Date(),
+          errorMessage: 'Token expired - link no longer valid'
+        })
+        .where(eq(scheduledQueryReminders.id, reminder.id));
+      finalStateUpdated = true;
+      
+      console.log(`[QueryReminder] Cancelled reminder ${reminder.id} - token expired at ${token[0].expiresAt}`);
+      return { success: true, error: 'Cancelled - token expired' };
+    }
 
   // Always use production URL for emails
   const responseLink = `${getAppUrl()}/queries/respond/${token[0].token}`;
@@ -748,17 +916,22 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
         result = { success: false, error: 'No email address for recipient' };
       } else {
         const unansweredQueries = await getUnansweredQueriesForToken(reminder.tokenId);
-        result = await sendEmailReminder(
-          reminder.recipientEmail,
-          reminder.recipientName || '',
-          clientName,
-          queryStatus.pendingQueries,
-          queryStatus.totalQueries,
-          responseLink,
-          unansweredQueries,
-          token[0].expiresAt,
-          reminder.messageIntro,
-          reminder.messageSignoff
+        // Apply retry logic for transient network failures (up to 2 retries)
+        result = await withRetry(
+          () => sendEmailReminder(
+            reminder.recipientEmail!,
+            reminder.recipientName || '',
+            clientName,
+            queryStatus.pendingQueries,
+            queryStatus.totalQueries,
+            responseLink,
+            unansweredQueries,
+            token[0].expiresAt,
+            reminder.messageIntro,
+            reminder.messageSignoff
+          ),
+          2,
+          'email send'
         );
       }
       break;
@@ -767,11 +940,16 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
       if (!reminder.recipientPhone) {
         result = { success: false, error: 'No phone number for SMS' };
       } else {
-        result = await sendSMSReminder(
-          reminder.recipientPhone,
-          reminder.recipientName || '',
-          queryStatus.pendingQueries,
-          responseLink
+        // Apply retry logic for transient network failures (up to 2 retries)
+        result = await withRetry(
+          () => sendSMSReminder(
+            reminder.recipientPhone!,
+            reminder.recipientName || '',
+            queryStatus.pendingQueries,
+            responseLink
+          ),
+          2,
+          'SMS send'
         );
       }
       break;
@@ -783,8 +961,12 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
         const nextWeekdayTime = getNextWeekdayMorning();
         await db
           .update(scheduledQueryReminders)
-          .set({ scheduledAt: nextWeekdayTime })
+          .set({ 
+            scheduledAt: nextWeekdayTime,
+            errorMessage: null // Clear the processing marker
+          })
           .where(eq(scheduledQueryReminders.id, reminder.id));
+        finalStateUpdated = true; // Status stays pending but claim is released via errorMessage clear
         console.log(`[QueryReminder] Rescheduling voice call ${reminder.id} to ${nextWeekdayTime.toISOString()} - weekend restriction`);
         return { success: false, error: 'Rescheduled to next weekday morning (weekend restriction)' };
       } else {
@@ -823,15 +1005,20 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
           }
         };
         
-        result = await sendVoiceReminder(
-          reminder.recipientPhone,
-          reminder.recipientName || '',
-          reminder.recipientEmail || '',
-          clientName,
-          queryStatus.pendingQueries,
-          queryStatus.totalQueries,
-          webhookConfig,
-          dialoraContext
+        // Apply retry logic for transient network failures (up to 2 retries)
+        result = await withRetry(
+          () => sendVoiceReminder(
+            reminder.recipientPhone!,
+            reminder.recipientName || '',
+            reminder.recipientEmail || '',
+            clientName,
+            queryStatus.pendingQueries,
+            queryStatus.totalQueries,
+            webhookConfig,
+            dialoraContext
+          ),
+          2,
+          'voice call'
         );
       }
       break;
@@ -840,19 +1027,29 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
       result = { success: false, error: `Unknown communication channel: ${reminder.channel}` };
   }
 
-  await db
-    .update(scheduledQueryReminders)
-    .set({
-      status: result.success ? 'sent' : 'failed',
-      sentAt: result.success ? new Date() : null,
-      dialoraCallId: reminder.channel === 'voice' ? result.externalId : null,
-      errorMessage: result.error || null,
-      queriesRemaining: queryStatus.pendingQueries,
-      queriesTotal: queryStatus.totalQueries
-    })
-    .where(eq(scheduledQueryReminders.id, reminder.id));
+    await db
+      .update(scheduledQueryReminders)
+      .set({
+        status: result.success ? 'sent' : 'failed',
+        sentAt: result.success ? new Date() : null,
+        dialoraCallId: reminder.channel === 'voice' ? result.externalId : null,
+        errorMessage: result.error || null,
+        queriesRemaining: queryStatus.pendingQueries,
+        queriesTotal: queryStatus.totalQueries
+      })
+      .where(eq(scheduledQueryReminders.id, reminder.id));
+    finalStateUpdated = true;
 
-  return result;
+    return result;
+  } catch (error) {
+    // Unexpected error - release claim and return failure
+    console.error(`[QueryReminder] Unexpected error processing reminder ${reminder.id}:`, error);
+    await releaseReminderClaim(reminder.id);
+    return { 
+      success: false, 
+      error: error instanceof Error ? error.message : 'Unexpected processing error' 
+    };
+  }
 }
 
 /**
