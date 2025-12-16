@@ -30,6 +30,7 @@ import {
 } from "@shared/schema";
 import { eq, and, lte, inArray, or, isNull, sql } from "drizzle-orm";
 import { getUncachableSendGridClient } from "../lib/sendgrid";
+import { storage } from "../storage";
 import { 
   triggerDialoraCall, 
   generateVoiceCallMessage,
@@ -426,6 +427,10 @@ async function sendEmailReminder(
       return { success: false, error: 'SendGrid not configured' };
     }
 
+    // Get firm name from company settings for sender name
+    const companySettings = await storage.getCompanySettings();
+    const senderName = companySettings?.firmName || 'The Link';
+
     const subject = pendingQueries === totalQueries 
       ? `Reminder: ${pendingQueries} Bookkeeping ${pendingQueries === 1 ? 'Query' : 'Queries'} Awaiting Your Response`
       : `Reminder: ${pendingQueries} of ${totalQueries} Queries Still Need Your Response`;
@@ -434,7 +439,10 @@ async function sendEmailReminder(
 
     await client.send({
       to: recipientEmail,
-      from: fromEmail,
+      from: {
+        email: fromEmail,
+        name: senderName
+      },
       subject,
       html: body
     });
