@@ -2479,7 +2479,7 @@ ${tableHtml}
     // Accept real recipient data from the email dialog (not from stale token)
     recipientEmail: z.string().email().optional(),
     recipientName: z.string().optional(),
-    recipientPhone: z.string().optional(),
+    recipientPhone: z.string().nullable().optional(),
     // On-completion action configuration
     onCompletionAction: z.object({
       trigger: z.enum(['all_answered', 'submitted']),
@@ -2534,16 +2534,38 @@ ${tableHtml}
         }
       }
       
-      // Validate we have at least an email for email reminders
-      const hasEmailReminder = data.reminders.some(r => r.channel === 'email');
-      const hasSmsReminder = data.reminders.some(r => r.channel === 'sms');
-      const hasVoiceReminder = data.reminders.some(r => r.channel === 'voice');
-      
-      if (hasEmailReminder && (!recipientEmail || recipientEmail === 'pending@placeholder.com')) {
-        return res.status(400).json({ message: "Cannot schedule email reminders without a valid recipient email address" });
+      // If no reminders to schedule, just update token and return early
+      if (data.reminders.length === 0) {
+        // Still update token with recipient data if provided
+        const tokenUpdateData: any = {};
+        if (recipientEmail && recipientEmail !== 'pending@placeholder.com') {
+          tokenUpdateData.recipientEmail = recipientEmail;
+          if (recipientName !== 'Client') {
+            tokenUpdateData.recipientName = recipientName;
+          }
+        }
+        if (Object.keys(tokenUpdateData).length > 0) {
+          await storage.updateQueryResponseToken(data.tokenId, tokenUpdateData);
+        }
+        return res.json({ success: true, reminders: [] });
       }
-      if ((hasSmsReminder || hasVoiceReminder) && !recipientPhone) {
-        return res.status(400).json({ message: "Cannot schedule SMS/voice reminders without a recipient phone number" });
+      
+      // Validate we have at least an email for reminders (only when reminders exist)
+      if (!recipientEmail || recipientEmail === 'pending@placeholder.com') {
+        return res.status(400).json({ message: "Cannot schedule reminders without a valid recipient email address" });
+      }
+      
+      // If no phone number available, convert SMS/voice reminders to email
+      // This allows scheduling reminders even when only email is available
+      let remindersToSchedule = data.reminders;
+      const hasSmsOrVoice = data.reminders.some(r => r.channel === 'sms' || r.channel === 'voice');
+      
+      if (hasSmsOrVoice && !recipientPhone) {
+        console.log(`[QueryReminders] No phone number available for token ${data.tokenId} - converting SMS/voice reminders to email`);
+        remindersToSchedule = data.reminders.map(r => ({
+          ...r,
+          channel: r.channel === 'sms' || r.channel === 'voice' ? 'email' as const : r.channel,
+        }));
       }
       
       // Also update the token with the real recipient data and on-completion action for future reference
@@ -2579,7 +2601,7 @@ ${tableHtml}
         recipientName,
         recipientEmail,
         recipientPhone,
-        data.reminders.map(r => ({
+        remindersToSchedule.map(r => ({
           scheduledAt: new Date(r.scheduledAt),
           channel: r.channel,
           message: undefined,
