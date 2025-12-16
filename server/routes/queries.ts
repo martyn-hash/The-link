@@ -916,8 +916,9 @@ export function registerQueryRoutes(
         expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + effectiveExpiryDays);
         
-        // Capture the current stage at send time for auto-stage-change comparison
-        const currentStageId = project?.stageId || null;
+        // Capture the current stage NAME at send time for auto-stage-change comparison
+        // NOTE: We use currentStatus (stage name) not stageId because that's what the auto-change logic compares against
+        const currentStageName = project?.currentStatus || null;
 
         // Create token (we'll use a placeholder email for now, updated when actually sent)
         token = await storage.createQueryResponseToken({
@@ -933,7 +934,7 @@ export function registerQueryRoutes(
           onCompletionTrigger: onCompletionTrigger || null,
           onCompletionStageId: onCompletionStageId || null,
           onCompletionStageReasonId: onCompletionStageReasonId || null,
-          stageAtSendTime: onCompletionTrigger ? currentStageId : null,
+          stageAtSendTime: onCompletionTrigger ? currentStageName : null,
         });
 
         // Build the response URL with proper domain handling
