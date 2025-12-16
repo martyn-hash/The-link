@@ -172,14 +172,18 @@ export function registerIntegrationRoutes(
 
       // Log the communication with original content (not CID-processed) for readability
       if (clientId) {
+        // Build subject with recipient for clearer chronology display
+        const displaySubject = `${subject} - sent to ${to}`;
+        
         await storage.createCommunication({
           clientId,
           personId: personId || null,
           type: 'email_sent',
-          subject: subject,
+          subject: displaySubject,
           content: content,
           actualContactTime: new Date(),
-          userId
+          userId,
+          metadata: { originalSubject: subject }
         });
       }
 
@@ -1412,12 +1416,17 @@ export function registerIntegrationRoutes(
         const recipientPersonIds = personIds && personIds.length > 0 ? personIds : (personId ? [personId] : []);
         const primaryPersonId = recipientPersonIds[0] || null;
         
+        // Build subject with recipients for clearer chronology display
+        // Format: "Original Subject - sent to recipient1, recipient2"
+        const recipientEmails = toRecipients.slice(0, 3).join(', ') + (toRecipients.length > 3 ? ` +${toRecipients.length - 3} more` : '');
+        const displaySubject = `${subject} - sent to ${recipientEmails}`;
+        
         communication = await storage.createCommunication({
           clientId,
           personId: primaryPersonId,
           projectId: projectId || null,
           type: 'email_sent',
-          subject: subject,
+          subject: displaySubject,
           content: content,
           actualContactTime: new Date(),
           userId: effectiveUserId,
@@ -1425,8 +1434,9 @@ export function registerIntegrationRoutes(
             allRecipients: toRecipients,
             allPersonIds: recipientPersonIds,
             cc: cc || [],
-            bcc: bcc || []
-          } : undefined
+            bcc: bcc || [],
+            originalSubject: subject
+          } : { originalSubject: subject }
         });
         console.log('[EMAIL SEND] Communication logged with ID:', communication.id, 'Recipients:', toRecipients.length, projectId ? `(linked to project ${projectId})` : '');
       }

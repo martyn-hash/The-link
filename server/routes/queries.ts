@@ -1392,6 +1392,8 @@ ${emailSignoff}`;
       // On first access: send notifications and create chronology entry
       if (isFirstAccess) {
         const projectName = project?.description || 'Bookkeeping Queries';
+        // Use recipient name from token for chronology entry
+        const personName = tokenData.recipientName || 'Client';
         
         // Create chronology entry for "Client opened queries"
         try {
@@ -1400,7 +1402,7 @@ ${emailSignoff}`;
             entryType: 'queries',
             toStatus: 'no_change',
             changedById: null,
-            notes: `Client opened queries - ${projectName}`,
+            notes: `Client opened queries - ${personName}`,
           });
           console.log(`[Query Access] Created chronology entry for client opening queries`);
         } catch (chronologyError) {
@@ -2156,6 +2158,8 @@ ${emailSignoff}`;
       }
       
       const projectName = project?.description || 'Bookkeeping Queries';
+      // Use recipient name from token for chronology entry
+      const personName = tokenData.recipientName || 'Client';
       
       // Create chronology entry for "Client submitted queries"
       try {
@@ -2164,7 +2168,7 @@ ${emailSignoff}`;
           entryType: 'queries',
           toStatus: 'no_change',
           changedById: null,
-          notes: `Client submitted queries - ${projectName}`,
+          notes: `Client submitted queries - ${personName}`,
         });
         console.log(`[Query Submit] Created chronology entry for client submitting queries`);
       } catch (chronologyError) {
