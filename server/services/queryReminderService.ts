@@ -589,7 +589,7 @@ function generateReminderEmailBody(
 </table>` : '';
 
   const expiryText = expiresAt 
-    ? `<p style="color: #64748b; font-size: 14px; text-align: center;"><strong>This link will expire on ${formatDateForEmail(expiresAt)}.</strong></p>` 
+    ? `<p style="font-size: 14px; text-align: center; margin-bottom: 20px;"><strong>This link will expire on ${formatDateForEmail(expiresAt)}.</strong></p>` 
     : '';
 
   return `
@@ -598,13 +598,13 @@ function generateReminderEmailBody(
       
       ${queriesTableHtml}
       
+      ${expiryText}
+      
       <div style="text-align: center; margin: 30px 0;">
-        <a href="${responseLink}" style="background-color: #0f7b94; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">
+        <a href="${responseLink}" style="background-color: #76CA23; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: 500;">
           View Queries
         </a>
       </div>
-      
-      ${expiryText}
       
       ${signoffHtml}
     </div>
