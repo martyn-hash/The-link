@@ -190,6 +190,8 @@ export interface QueryEmailOptions {
   voiceAiAvailable?: boolean;
   /** Project type ID for fetching stages */
   projectTypeId?: string;
+  /** Current stage name (to exclude from stage dropdown - can't move to same stage) */
+  currentStageName?: string;
 }
 
 export interface OnCompletionAction {

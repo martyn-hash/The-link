@@ -400,7 +400,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
   
   const pendingReminderCount = scheduledReminders?.filter(r => r.status === 'pending').length || 0;
   
-  // Query for project data (to get projectTypeId for on-completion actions)
+  // Query for project data (to get projectTypeId and currentStatus for on-completion actions)
   const { data: projectData } = useQuery<{ id: string; projectTypeId: string | null; currentStatus: string | null }>({
     queryKey: ['/api/projects', projectId],
     select: (data: any) => ({ id: data.id, projectTypeId: data.projectTypeId, currentStatus: data.currentStatus }),
@@ -2810,6 +2810,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
             expiryDate: new Date(Date.now() + pendingEmailExpiryDays * 24 * 60 * 60 * 1000).toISOString(),
             voiceAiAvailable: pendingEmailVoiceAiAvailable,
             projectTypeId: projectData?.projectTypeId ?? undefined,
+            currentStageName: projectData?.currentStatus ?? undefined,
           } : undefined}
           onRemindersConfigured={setConfiguredReminders}
           onCompletionActionConfigured={setConfiguredOnCompletionAction}

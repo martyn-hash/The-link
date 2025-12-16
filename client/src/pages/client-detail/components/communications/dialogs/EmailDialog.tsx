@@ -140,10 +140,11 @@ export function EmailDialog({
   const [onCompletionStageId, setOnCompletionStageId] = useState<string>('');
   const [onCompletionStageReasonId, setOnCompletionStageReasonId] = useState<string>('');
 
-  // Fetch project stages when in query email mode
+  // Fetch project stages when in query email mode - preload immediately for faster UX
   const { data: projectStages } = useQuery<Array<{ id: string; name: string; order: number }>>({
     queryKey: [`/api/config/project-types/${queryEmailOptions?.projectTypeId}/stages`],
-    enabled: isQueryEmailMode && !!queryEmailOptions?.projectTypeId,
+    enabled: isOpen && isQueryEmailMode && !!queryEmailOptions?.projectTypeId,
+    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
   
   // Fetch stage reasons when a stage is selected
@@ -1183,11 +1184,13 @@ export function EmailDialog({
                                 <SelectValue placeholder="Select stage..." />
                               </SelectTrigger>
                               <SelectContent>
-                                {projectStages?.map((stage) => (
-                                  <SelectItem key={stage.id} value={stage.id}>
-                                    {stage.name}
-                                  </SelectItem>
-                                ))}
+                                {projectStages
+                                  ?.filter((stage) => stage.name !== queryEmailOptions?.currentStageName)
+                                  .map((stage) => (
+                                    <SelectItem key={stage.id} value={stage.id}>
+                                      {stage.name}
+                                    </SelectItem>
+                                  ))}
                               </SelectContent>
                             </Select>
                           </div>
