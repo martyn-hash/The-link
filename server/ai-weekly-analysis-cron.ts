@@ -1,7 +1,8 @@
 import * as cron from "node-cron";
 import OpenAI from "openai";
-import { storage } from "./storage";
+import { storage } from "./storage/index";
 import type { AggregatedFailure } from "@shared/schema/ai-interactions/types";
+import { wrapCronHandler } from "./cron-telemetry";
 
 let cronJob: ReturnType<typeof cron.schedule> | null = null;
 
@@ -235,17 +236,18 @@ export function startAIWeeklyAnalysisCron(): void {
     return;
   }
 
-  cronJob = cron.schedule("0 6 * * 1", async () => {
+  // Run at 06:25 UK time on Mondays (staggered from :00)
+  cronJob = cron.schedule("25 6 * * 1", wrapCronHandler('AIWeeklyAnalysis', '25 6 * * 1', async () => {
     try {
       await runWeeklyAnalysis();
     } catch (error) {
       console.error("[AIWeeklyAnalysis] Cron job error:", error);
     }
-  }, {
+  }), {
     timezone: "Europe/London"
   });
 
-  console.log("[AIWeeklyAnalysis] Weekly analysis cron job started (runs Mondays at 06:00 UK time)");
+  console.log("[AIWeeklyAnalysis] Weekly analysis cron job started (runs Mondays at 06:25 UK time)");
 }
 
 export function stopAIWeeklyAnalysisCron(): void {

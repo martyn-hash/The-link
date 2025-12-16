@@ -1,5 +1,6 @@
 import * as cron from "node-cron";
 import { processDueReminders } from "./reminder-notification-service";
+import { wrapCronHandler } from "./cron-telemetry";
 
 let cronJob: ReturnType<typeof cron.schedule> | null = null;
 
@@ -9,17 +10,18 @@ export function startReminderNotificationCron(): void {
     return;
   }
 
-  cronJob = cron.schedule("*/15 7-22 * * *", async () => {
+  // Run at :04, :19, :34, :49 (staggered from :00/:15/:30/:45)
+  cronJob = cron.schedule("4,19,34,49 7-22 * * *", wrapCronHandler('ReminderNotificationCron', '4,19,34,49 7-22 * * *', async () => {
     try {
       await processDueReminders();
     } catch (error) {
       console.error("[ReminderNotificationCron] Error processing due reminders:", error);
     }
-  }, {
+  }), {
     timezone: "Europe/London"
   });
 
-  console.log("[ReminderNotificationCron] Reminder notification cron job started (runs every 15 minutes 07:00-22:00 UK time)");
+  console.log("[ReminderNotificationCron] Reminder notification cron job started (runs at :04, :19, :34, :49 07:00-22:00 UK time)");
 }
 
 export function stopReminderNotificationCron(): void {

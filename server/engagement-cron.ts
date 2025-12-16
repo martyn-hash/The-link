@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { processIgnoredCampaigns } from './services/campaigns/engagementScoreService.js';
+import { wrapCronHandler } from './cron-telemetry';
 
 let isRunning = false;
 
@@ -23,13 +24,14 @@ async function runIgnoredCampaignProcessing(): Promise<void> {
 }
 
 export function startEngagementCron(): void {
-  cron.schedule('0 7 * * 0', async () => {
+  // Run at 07:20 UK time on Sundays (staggered from :00)
+  cron.schedule('20 7 * * 0', wrapCronHandler('EngagementCron', '20 7 * * 0', async () => {
     await runIgnoredCampaignProcessing();
-  }, {
+  }), {
     timezone: "Europe/London"
   });
 
-  console.log('[EngagementCron] Ignored campaign processor initialized (runs weekly at 07:00 UK time on Sundays)');
+  console.log('[EngagementCron] Ignored campaign processor initialized (runs weekly at 07:20 UK time on Sundays)');
 }
 
 export { runIgnoredCampaignProcessing };

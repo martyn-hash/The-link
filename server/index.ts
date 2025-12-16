@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import cron from "node-cron";
+import { initEventLoopMonitor, wrapCronHandler, tryAcquireJobLock, releaseJobLock } from "./cron-telemetry";
 import { runChSync } from "./ch-sync-service";
 import { executeScheduledRun, runStartupCatchup } from "./scheduling-orchestrator";
 import { waitForDatabaseReady } from "./db";
@@ -133,6 +134,9 @@ app.use((req, res, next) => {
   }, async () => {
     log(`serving on port ${port}`);
     
+    // Initialize event loop monitoring for cron telemetry
+    initEventLoopMonitor();
+    
     // Seed initial task types
     await seedTaskTypes();
     
@@ -179,7 +183,7 @@ app.use((req, res, next) => {
     // Setup nightly project scheduling via orchestrator
     // Runs every day at 1:00 AM UTC (before CH sync to ensure projects are created first)
     // The orchestrator handles duplicate prevention and email notifications
-    cron.schedule('0 1 * * *', async () => {
+    cron.schedule('0 1 * * *', wrapCronHandler('SchedulingOrchestrator', '0 1 * * *', async () => {
       try {
         log('[Scheduling Orchestrator] Starting scheduled nightly run...');
         const result = await executeScheduledRun();
@@ -191,7 +195,7 @@ app.use((req, res, next) => {
       } catch (error) {
         console.error('[Scheduling Orchestrator] Fatal error in nightly run:', error);
       }
-    }, {
+    }), {
       timezone: "UTC"
     });
     
@@ -199,7 +203,7 @@ app.use((req, res, next) => {
     
     // Setup nightly Companies House data synchronization
     // Runs every day at 2:00 AM UTC (after project scheduling)
-    cron.schedule('0 2 * * *', async () => {
+    cron.schedule('0 2 * * *', wrapCronHandler('CHSync', '0 2 * * *', async () => {
       try {
         log('[CH Sync] Starting scheduled nightly sync...');
         const result = await runChSync();
@@ -210,7 +214,7 @@ app.use((req, res, next) => {
       } catch (error) {
         console.error('[CH Sync] Fatal error in nightly sync:', error);
       }
-    }, {
+    }), {
       timezone: "UTC"
     });
     
@@ -218,7 +222,7 @@ app.use((req, res, next) => {
     
     // Setup nightly email resolver
     // Runs every day at 3:00 AM UTC (after Companies House sync)
-    cron.schedule('0 3 * * *', async () => {
+    cron.schedule('0 3 * * *', wrapCronHandler('EmailResolver', '0 3 * * *', async () => {
       try {
         log('[Email Resolver] Starting nightly quarantine resolution...');
         const { emailResolverService } = await import('./services/emailResolverService');
@@ -232,15 +236,15 @@ app.use((req, res, next) => {
         console.error('[Email Resolver] Error in nightly resolution:', error);
         log('[Email Resolver] Error in nightly resolution:', error instanceof Error ? error.message : String(error));
       }
-    }, {
+    }), {
       timezone: "UTC"
     });
     
     log('[Email Resolver] Nightly scheduler initialized (runs daily at 3:00 AM UTC)');
     
     // Setup project message reminder checks
-    // Runs every 10 minutes to check for unread messages >10 minutes old
-    cron.schedule('*/10 * * * *', async () => {
+    // Runs at :02, :12, :22, :32, :42, :52 to avoid top-of-minute/hour collisions
+    cron.schedule('2,12,22,32,42,52 * * * *', wrapCronHandler('ProjectMessageReminders', '2,12,22,32,42,52 * * * *', async () => {
       try {
         log('[Project Message Reminders] Starting reminder check...');
         const result = await sendProjectMessageReminders();
@@ -251,7 +255,7 @@ app.use((req, res, next) => {
       } catch (error) {
         console.error('[Project Message Reminders] Fatal error:', error);
       }
-    });
+    }));
     
     log('[Project Message Reminders] Scheduler initialized (runs every 10 minutes)');
     
@@ -280,8 +284,8 @@ app.use((req, res, next) => {
     startEngagementCron();
     
     // Setup dashboard cache updates
-    // Overnight update: Runs at 03:00 UK time (3:00 AM GMT/BST) - Europe/London timezone
-    cron.schedule('0 3 * * *', async () => {
+    // Overnight update: Runs at 03:05 UK time (staggered to avoid :00 collision) - Europe/London timezone
+    cron.schedule('5 3 * * *', wrapCronHandler('DashboardCacheOvernight', '5 3 * * *', async () => {
       try {
         log('[Dashboard Cache] Starting overnight cache update...');
         const result = await updateDashboardCache();
@@ -292,14 +296,15 @@ app.use((req, res, next) => {
       } catch (error) {
         console.error('[Dashboard Cache] Fatal error in overnight update:', error);
       }
-    }, {
+    }), {
       timezone: "Europe/London" // UK timezone (handles GMT/BST automatically)
     });
     
-    log('[Dashboard Cache] Overnight scheduler initialized (runs daily at 03:00 UK time)');
+    log('[Dashboard Cache] Overnight scheduler initialized (runs daily at 03:05 UK time)');
     
-    // Hourly updates during business hours: 08:00-18:00 UK time
-    cron.schedule('0 8-18 * * *', async () => {
+    // Hourly updates during business hours: HH:02 between 08:00-18:00 UK time (staggered from :00)
+    // Uses distributed lock to prevent duplicate runs in autoscale
+    cron.schedule('2 8-18 * * *', wrapCronHandler('DashboardCacheHourly', '2 8-18 * * *', async () => {
       try {
         log('[Dashboard Cache] Starting hourly cache update...');
         const result = await updateDashboardCache();
@@ -310,17 +315,17 @@ app.use((req, res, next) => {
       } catch (error) {
         console.error('[Dashboard Cache] Fatal error in hourly update:', error);
       }
-    }, {
+    }, { useLock: true, timezone: 'Europe/London' }), {
       timezone: "Europe/London" // UK timezone (handles GMT/BST automatically)
     });
     
-    log('[Dashboard Cache] Hourly scheduler initialized (runs every hour 08:00-18:00 UK time)');
+    log('[Dashboard Cache] Hourly scheduler initialized (runs at HH:02 between 08:00-18:00 UK time)');
     
-    // Setup view cache warming
-    // Runs at 04:00 UK time to pre-compute project views for instant loading
-    cron.schedule('0 4 * * *', async () => {
+    // Setup view cache warming (heavy DB operation - uses distributed lock)
+    // Runs at 04:20 UK time to pre-compute project views (well-spaced from other jobs)
+    cron.schedule('20 4 * * *', wrapCronHandler('ViewCacheMorning', '20 4 * * *', async () => {
       try {
-        log('[View Cache] Starting early morning view cache warming (04:00)...');
+        log('[View Cache] Starting early morning view cache warming (04:20)...');
         const result = await warmViewCache();
         log(`[View Cache] Warming completed: ${result.status} - ${result.viewsCached}/${result.usersProcessed} views cached in ${result.executionTimeMs}ms`);
         if (result.errors.length > 0) {
@@ -329,13 +334,14 @@ app.use((req, res, next) => {
       } catch (error) {
         console.error('[View Cache] Fatal error in view cache warming:', error);
       }
-    }, {
+    }, { useLock: true, timezone: 'Europe/London' }), {
       timezone: "Europe/London"
     });
     
-    cron.schedule('30 8 * * *', async () => {
+    // 08:45 - spaced 43 minutes after dashboard cache at 08:02, well clear of 08:08 sent items
+    cron.schedule('45 8 * * *', wrapCronHandler('ViewCacheMidMorning', '45 8 * * *', async () => {
       try {
-        log('[View Cache] Starting morning view cache warming (08:30)...');
+        log('[View Cache] Starting morning view cache warming (08:45)...');
         const result = await warmViewCache();
         log(`[View Cache] Warming completed: ${result.status} - ${result.viewsCached}/${result.usersProcessed} views cached in ${result.executionTimeMs}ms`);
         if (result.errors.length > 0) {
@@ -344,13 +350,14 @@ app.use((req, res, next) => {
       } catch (error) {
         console.error('[View Cache] Fatal error in view cache warming:', error);
       }
-    }, {
+    }, { useLock: true, timezone: 'Europe/London' }), {
       timezone: "Europe/London"
     });
     
-    cron.schedule('0 12 * * *', async () => {
+    // 12:25 - spaced well away from hourly dashboard cache at 12:02
+    cron.schedule('25 12 * * *', wrapCronHandler('ViewCacheMidday', '25 12 * * *', async () => {
       try {
-        log('[View Cache] Starting midday view cache warming (12:00)...');
+        log('[View Cache] Starting midday view cache warming (12:25)...');
         const result = await warmViewCache();
         log(`[View Cache] Warming completed: ${result.status} - ${result.viewsCached}/${result.usersProcessed} views cached in ${result.executionTimeMs}ms`);
         if (result.errors.length > 0) {
@@ -359,13 +366,14 @@ app.use((req, res, next) => {
       } catch (error) {
         console.error('[View Cache] Fatal error in view cache warming:', error);
       }
-    }, {
+    }, { useLock: true, timezone: 'Europe/London' }), {
       timezone: "Europe/London"
     });
     
-    cron.schedule('0 15 * * *', async () => {
+    // 15:25 - spaced well away from hourly dashboard cache at 15:02
+    cron.schedule('25 15 * * *', wrapCronHandler('ViewCacheAfternoon', '25 15 * * *', async () => {
       try {
-        log('[View Cache] Starting afternoon view cache warming (15:00)...');
+        log('[View Cache] Starting afternoon view cache warming (15:25)...');
         const result = await warmViewCache();
         log(`[View Cache] Warming completed: ${result.status} - ${result.viewsCached}/${result.usersProcessed} views cached in ${result.executionTimeMs}ms`);
         if (result.errors.length > 0) {
@@ -374,15 +382,15 @@ app.use((req, res, next) => {
       } catch (error) {
         console.error('[View Cache] Fatal error in view cache warming:', error);
       }
-    }, {
+    }, { useLock: true, timezone: 'Europe/London' }), {
       timezone: "Europe/London"
     });
     
-    log('[View Cache] Scheduler initialized (runs daily at 04:00, 08:30, 12:00 & 15:00 UK time)');
+    log('[View Cache] Scheduler initialized (runs daily at 04:20, 08:45, 12:25 & 15:25 UK time)');
     
     // Setup activity logs cleanup
-    // Runs daily at 4:00 AM UTC (after project scheduling, CH sync, and email resolver)
-    cron.schedule('0 4 * * *', async () => {
+    // Runs daily at 4:15 AM UTC (staggered from :00 to avoid collision)
+    cron.schedule('15 4 * * *', wrapCronHandler('ActivityCleanup', '15 4 * * *', async () => {
       try {
         log('[Activity Cleanup] Starting cleanup job...');
         
@@ -402,17 +410,17 @@ app.use((req, res, next) => {
       } catch (error) {
         console.error('[Activity Cleanup] Fatal error in cleanup job:', error);
       }
-    }, {
+    }), {
       timezone: "UTC"
     });
     
-    log('[Activity Cleanup] Nightly scheduler initialized (runs daily at 4:00 AM UTC, 90-day retention)');
+    log('[Activity Cleanup] Nightly scheduler initialized (runs daily at 4:15 AM UTC, 90-day retention)');
     
     // Setup sent items reply detection
-    // Runs every 10 minutes during business hours (08:00-19:00 UK time)
+    // Runs at :08, :18, :28, :38, :48, :58 during business hours (spaced 6 minutes from dashboard cache)
     // Scans Outlook Sent Items folders to detect replies sent directly from Outlook
     const { sentItemsReplyDetectionService } = await import('./services/sentItemsReplyDetectionService');
-    cron.schedule('*/10 8-19 * * *', async () => {
+    cron.schedule('8,18,28,38,48,58 8-19 * * *', wrapCronHandler('SentItemsDetection', '8,18,28,38,48,58 8-19 * * *', async () => {
       try {
         log('[Sent Items Detection] Starting periodic check...');
         const result = await sentItemsReplyDetectionService.runDetection();
@@ -420,16 +428,16 @@ app.use((req, res, next) => {
       } catch (error) {
         console.error('[Sent Items Detection] Fatal error in detection job:', error);
       }
-    }, {
+    }, { timezone: 'Europe/London' }), {
       timezone: "Europe/London"
     });
     
-    log('[Sent Items Detection] Scheduler initialized (runs every 10 minutes 08:00-19:00 UK time)');
+    log('[Sent Items Detection] Scheduler initialized (runs at :08, :18, :28... 08:00-19:00 UK time)');
     
     // Setup SLA breach detection
-    // Runs every 15 minutes during business hours (08:00-18:00 UK time)
+    // Runs at :14, :29, :44, :59 during business hours (well-spaced from other jobs)
     // Detects and marks emails that have exceeded their SLA deadline
-    cron.schedule('*/15 8-18 * * *', async () => {
+    cron.schedule('14,29,44,59 8-18 * * *', wrapCronHandler('SLABreachDetection', '14,29,44,59 8-18 * * *', async () => {
       try {
         const { checkForSlaBreaches, markEmailsAsBreached } = await import('./services/slaService');
         const breaches = await checkForSlaBreaches();
@@ -441,10 +449,10 @@ app.use((req, res, next) => {
       } catch (error) {
         console.error('[SLA Breach Detection] Fatal error in detection job:', error);
       }
-    }, {
+    }, { timezone: 'Europe/London' }), {
       timezone: "Europe/London"
     });
     
-    log('[SLA Breach Detection] Scheduler initialized (runs every 15 minutes 08:00-18:00 UK time)');
+    log('[SLA Breach Detection] Scheduler initialized (runs at :14, :29, :44, :59 08:00-18:00 UK time)');
   });
 })();

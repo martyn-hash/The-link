@@ -17,6 +17,7 @@ import { db } from './db';
 import { projectChronology, scheduledQueryReminders, communications, queryResponseTokens, projects, companySettings } from '@shared/schema';
 import { eq } from 'drizzle-orm';
 import { getUncachableSendGridClient } from './lib/sendgrid';
+import { wrapCronHandler } from './cron-telemetry';
 
 async function getProjectName(projectId: string | null): Promise<string | null> {
   if (!projectId) return null;
@@ -480,7 +481,7 @@ async function sendMonitoringEmail(stats: CronRunStats): Promise<void> {
 
 /**
  * Start the query reminder cron job
- * Runs every hour on the hour
+ * Runs at HH:10 every hour (staggered from :00)
  */
 export async function startQueryReminderCron(): Promise<void> {
   // Run migration to fix placeholder reminders on startup
@@ -490,9 +491,10 @@ export async function startQueryReminderCron(): Promise<void> {
     console.error('[QueryReminderCron] Error running placeholder migration:', error);
   }
 
-  cron.schedule('0 * * * *', async () => {
+  // Run at :10 past each hour (staggered from :00)
+  cron.schedule('10 * * * *', wrapCronHandler('QueryReminderCron', '10 * * * *', async () => {
     await processQueryReminders();
-  });
+  }));
 
-  console.log('[QueryReminderCron] Started - running hourly during 07:00-22:00 UK time');
+  console.log('[QueryReminderCron] Started - running at HH:10 hourly during 07:00-22:00 UK time');
 }

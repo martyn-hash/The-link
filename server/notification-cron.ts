@@ -1,5 +1,6 @@
 import * as cron from "node-cron";
 import { processDueNotifications } from "./notification-sender";
+import { wrapCronHandler } from "./cron-telemetry";
 
 /**
  * Notification Cron Service
@@ -12,7 +13,7 @@ let cronJob: ReturnType<typeof cron.schedule> | null = null;
 /**
  * Start the notification cron job
  * 
- * This will check for due notifications every hour between 07:00-19:00 UK time.
+ * This will check for due notifications at HH:08 between 07:00-19:00 UK time (staggered from :00).
  */
 export function startNotificationCron(): void {
   if (cronJob) {
@@ -20,18 +21,18 @@ export function startNotificationCron(): void {
     return;
   }
 
-  // Run every hour between 07:00-19:00 UK time
-  cronJob = cron.schedule("0 7-19 * * *", async () => {
+  // Run at :08 past each hour between 07:00-19:00 UK time (staggered from :00)
+  cronJob = cron.schedule("8 7-19 * * *", wrapCronHandler('NotificationCron', '8 7-19 * * *', async () => {
     try {
       await processDueNotifications();
     } catch (error) {
       console.error("[NotificationCron] Error processing due notifications:", error);
     }
-  }, {
+  }), {
     timezone: "Europe/London"
   });
 
-  console.log("[NotificationCron] Notification cron job started (runs hourly 07:00-19:00 UK time)");
+  console.log("[NotificationCron] Notification cron job started (runs at HH:08 between 07:00-19:00 UK time)");
 }
 
 /**

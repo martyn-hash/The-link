@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { processSequenceProgression } from './services/campaigns/campaignSequenceService.js';
+import { wrapCronHandler } from './cron-telemetry';
 
 let isRunning = false;
 
@@ -27,13 +28,14 @@ async function runSequenceProgression(): Promise<void> {
 }
 
 export function startSequenceCron(): void {
-  cron.schedule('0 6 * * *', async () => {
+  // Run at 06:15 UK time (staggered from :00)
+  cron.schedule('15 6 * * *', wrapCronHandler('SequenceCron', '15 6 * * *', async () => {
     await runSequenceProgression();
-  }, {
+  }), {
     timezone: "Europe/London"
   });
 
-  console.log('[SequenceCron] Sequence progression scheduler initialized (runs daily at 06:00 UK time)');
+  console.log('[SequenceCron] Sequence progression scheduler initialized (runs daily at 06:15 UK time)');
 }
 
 export { runSequenceProgression };

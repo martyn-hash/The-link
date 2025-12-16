@@ -35,3 +35,28 @@ The application uses PostgreSQL (Neon) with Drizzle ORM for data persistence, em
 ### Frontend Libraries
 -   **UI Components**: `@radix-ui/*`, `@dnd-kit/*`, `@tiptap/*`, `react-hook-form` with `zod`, `sonner`.
 -   **Utilities**: `date-fns`, `clsx`, `tailwind-merge`, `@getaddress/autocomplete`.
+
+## Cron Job Telemetry & Scheduling
+
+### Overview
+The application uses node-cron for scheduling background jobs. A comprehensive telemetry system (`server/cron-telemetry.ts`) monitors job execution, detects drift, and coordinates distributed execution across autoscaled instances.
+
+### Key Features
+-   **Event Loop Monitoring**: 20ms resolution delay histogram (min, p50, p95, max) reported every 5 minutes.
+-   **Drift Detection**: Accurate drift calculation using cron-parser to find expected tick vs actual start time.
+-   **Job Overlap Detection**: Tracks concurrent jobs via run IDs to detect resource contention.
+-   **Distributed Locking**: PostgreSQL advisory locks prevent duplicate execution in autoscaled deployments.
+-   **Memory/Uptime Telemetry**: Heap, RSS, and process uptime logged at each job start.
+
+### Schedule Staggering (UK Timezone)
+Heavy jobs are staggered to avoid collisions:
+-   **HH:02**: Dashboard Cache (hourly, locked)
+-   **HH:04, :19, :34, :49**: Reminder Notifications
+-   **HH:08**: Notification Cron + Sent Items Detection (starts)
+-   **HH:10**: Query Reminder (hourly)
+-   **HH:14, :29, :44, :59**: SLA Breach Detection
+-   **08:45**: View Cache morning run (locked)
+-   Heavy jobs (Dashboard Cache, View Cache) are 43+ minutes apart.
+
+### Usage
+Wrap cron handlers with `wrapCronHandler(name, expression, handler, options)` for automatic telemetry. Set `useLock: true` for jobs requiring distributed coordination.
