@@ -172,8 +172,20 @@ export function registerIntegrationRoutes(
 
       // Log the communication with original content (not CID-processed) for readability
       if (clientId) {
-        // Build subject with recipient for clearer chronology display
-        const displaySubject = `${subject} - sent to ${to}`;
+        // Get client name for clearer chronology display
+        const client = await storage.getClientById(clientId);
+        const clientName = client?.name || 'Client';
+        
+        // Build simplified subject for chronology display
+        // For bookkeeping queries, use simplified format: "Bookkeeping Queries - sent to [client name]"
+        let displaySubject: string;
+        if (subject.toLowerCase().startsWith('bookkeeping queries')) {
+          displaySubject = `Bookkeeping Queries - sent to ${clientName}`;
+        } else if (subject.toLowerCase().startsWith('reminder: bookkeeping queries')) {
+          displaySubject = `Reminder: Bookkeeping Queries - sent to ${clientName}`;
+        } else {
+          displaySubject = `${subject} - sent to ${clientName}`;
+        }
         
         await storage.createCommunication({
           clientId,
@@ -1416,10 +1428,21 @@ export function registerIntegrationRoutes(
         const recipientPersonIds = personIds && personIds.length > 0 ? personIds : (personId ? [personId] : []);
         const primaryPersonId = recipientPersonIds[0] || null;
         
-        // Build subject with recipients for clearer chronology display
-        // Format: "Original Subject - sent to recipient1, recipient2"
-        const recipientEmails = toRecipients.slice(0, 3).join(', ') + (toRecipients.length > 3 ? ` +${toRecipients.length - 3} more` : '');
-        const displaySubject = `${subject} - sent to ${recipientEmails}`;
+        // Get client name for clearer chronology display
+        const client = await storage.getClientById(clientId);
+        const clientName = client?.name || 'Client';
+        
+        // Build simplified subject for chronology display
+        // For bookkeeping queries, use simplified format: "Bookkeeping Queries - sent to [client name]"
+        // For other emails, use: "[subject] - sent to [client name]"
+        let displaySubject: string;
+        if (subject.toLowerCase().startsWith('bookkeeping queries')) {
+          displaySubject = `Bookkeeping Queries - sent to ${clientName}`;
+        } else if (subject.toLowerCase().startsWith('reminder: bookkeeping queries')) {
+          displaySubject = `Reminder: Bookkeeping Queries - sent to ${clientName}`;
+        } else {
+          displaySubject = `${subject} - sent to ${clientName}`;
+        }
         
         communication = await storage.createCommunication({
           clientId,
