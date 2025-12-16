@@ -91,8 +91,8 @@ export function StageApprovalsTab({
       });
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/config/stage-approval-fields"] });
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: ["/api/config/stage-approval-fields"] });
       setShowLibraryPicker(false);
       toast({ title: "Field added from library" });
     },
@@ -392,8 +392,14 @@ export function StageApprovalsTab({
             </DialogDescription>
           </DialogHeader>
           <div className="py-4 space-y-2 max-h-96 overflow-y-auto">
-            {libraryFields && libraryFields.length > 0 ? (
-              libraryFields.map((field) => (
+            {(() => {
+              // Filter out library fields already added to this approval
+              const currentApprovalFields = allStageApprovalFields?.filter(f => f.stageApprovalId === editingStageApproval?.id) || [];
+              const addedLibraryFieldIds = new Set(currentApprovalFields.map(f => f.libraryFieldId).filter(Boolean));
+              const availableLibraryFields = libraryFields?.filter(lf => !addedLibraryFieldIds.has(lf.id)) || [];
+              
+              return availableLibraryFields.length > 0 ? (
+                availableLibraryFields.map((field) => (
                 <div
                   key={field.id}
                   className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 cursor-pointer"
@@ -409,13 +415,14 @@ export function StageApprovalsTab({
                   </Badge>
                 </div>
               ))
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <Library className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No library fields available yet.</p>
-                <p className="text-xs mt-1">Add fields to the library in the Field Library tab.</p>
-              </div>
-            )}
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Library className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">No library fields available yet.</p>
+                  <p className="text-xs mt-1">Add fields to the library in the Field Library tab.</p>
+                </div>
+              );
+            })()}
           </div>
         </DialogContent>
       </Dialog>
