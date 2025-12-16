@@ -1,0 +1,168 @@
+2025-12-16 03:20:18.52
+ed764893
+User
+at fn.emit (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:397:12)
+2025-12-16 03:20:18.52
+ed764893
+User
+connect",o),this._clients=this._clients.filter(u=>u!==t),s&&(o.message="Connect\
+2025-12-16 03:20:18.52
+ed764893
+User
+at v.reportStreamError (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1201:46)
+2025-12-16 03:20:18.52
+ed764893
+User
+file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1384
+2025-12-16 03:20:18.52
+ed764893
+User
+Node.js v20.19.3
+2025-12-16 03:20:18.52
+ed764893
+User
+at An._connectionCallback (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1384:72)
+2025-12-16 03:20:18.52
+ed764893
+User
+at v.emit (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:397:12)
+2025-12-16 03:20:18.52
+ed764893
+User
+at WebSocket.onError (/home/runner/workspace/node_modules/ws/lib/event-target.js:230:9)
+2025-12-16 03:20:18.52
+ed764893
+User
+TypeError: Cannot set property message of # which has only a getter
+2025-12-16 03:20:18.52
+ed764893
+User
+at An._handleErrorWhileConnecting (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1290:38)
+2025-12-16 03:20:18.52
+ed764893
+User
+at An._handleErrorEvent (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1291:33)
+2025-12-16 03:20:18.52
+ed764893
+User
+at WebSocket.emit (node:events:524:28)
+2025-12-16 03:20:18.59
+ed764893
+System
+command finished with error [npm run start]: exit status 1
+2025-12-16 03:21:55.66
+ed764893
+User
+[Database Retry] getAllPeopleServicesWithDetails failed after 1 attempt(s): timeout exceeded when trying to connect
+2025-12-16 03:21:57.37
+ed764893
+User
+at async runProjectScheduling (file:///home/runner/workspace/dist/index.js:43461:48)
+2025-12-16 03:21:57.37
+ed764893
+User
+at async NeonPreparedQuery.execute (file:///home/runner/workspace/node_modules/drizzle-orm/neon-serverless/session.js:76:20)
+2025-12-16 03:21:57.37
+ed764893
+User
+at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1345:74
+2025-12-16 03:21:57.37
+ed764893
+User
+at async withRetry (file:///home/runner/workspace/dist/index.js:7179:14)
+2025-12-16 03:21:57.37
+ed764893
+User
+at async runStartupCatchup (file:///home/runner/workspace/dist/index.js:70925:29)
+2025-12-16 03:21:57.37
+ed764893
+User
+at async Promise.all (index 1)
+2025-12-16 03:21:57.37
+ed764893
+User
+at async ServiceAssignmentStorage.getAllPeopleServicesWithDetails (file:///home/runner/workspace/dist/index.js:14686:25)
+2025-12-16 03:21:57.37
+ed764893
+User
+at async Server. (file:///home/runner/workspace/dist/index.js:72274:31)
+2025-12-16 03:21:57.37
+ed764893
+User
+at async ensureRunForDate (file:///home/runner/workspace/dist/index.js:70775:32)
+2025-12-16 03:21:57.37
+ed764893
+User
+[Project Scheduler] Critical error during scheduling run: Error: timeout exceeded when trying to connect
+2025-12-16 03:22:01.86
+ed764893
+User
+at fn.emit (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:397:12)
+2025-12-16 03:22:01.86
+ed764893
+User
+at An._connectionCallback (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1384:72)
+2025-12-16 03:22:01.86
+ed764893
+User
+file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1384
+2025-12-16 03:22:01.86
+ed764893
+User
+TypeError: Cannot set property message of # which has only a getter
+2025-12-16 03:22:01.86
+ed764893
+User
+at v.emit (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:397:12)
+2025-12-16 03:22:01.86
+ed764893
+User
+^
+2025-12-16 03:22:01.86
+ed764893
+User
+at callListener (/home/runner/workspace/node_modules/ws/lib/event-target.js:290:14)
+2025-12-16 03:22:01.86
+ed764893
+User
+at An._handleErrorWhileConnecting (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1290:38)
+2025-12-16 03:22:01.86
+ed764893
+User
+at v.reportStreamError (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1201:46)
+2025-12-16 03:22:01.86
+ed764893
+User
+connect",o),this._clients=this._clients.filter(u=>u!==t),s&&(o.message="Connect\
+2025-12-16 03:22:01.86
+ed764893
+User
+at WebSocket. (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:986:42)
+2025-12-16 03:22:01.86
+ed764893
+User
+Node.js v20.19.3
+2025-12-16 03:22:01.86
+ed764893
+User
+at WebSocket.emit (node:events:524:28)
+2025-12-16 03:22:01.86
+ed764893
+User
+at An._handleErrorEvent (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1291:33)
+2025-12-16 03:22:01.86
+ed764893
+User
+at WebSocket.onError (/home/runner/workspace/node_modules/ws/lib/event-target.js:230:9)
+2025-12-16 03:22:08.76
+ed764893
+System
+command finished with error [npm run start]: exit status 1
+2025-12-16 04:00:01.66
+ed764893
+User
+[2025-12-16T04:00:01.669Z] [PID: 110] [NODE-CRON] [WARN] missed execution at Tue Dec 16 2025 04:00:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2025-12-16 04:10:04.16
+ed764893
+User
+[2025-12-16T04:10:04.169Z] [PID: 110] [NODE-CRON] 
