@@ -318,8 +318,12 @@ async function sendMonitoringEmail(stats: CronRunStats): Promise<void> {
 
     const ukTime = stats.runTime.toLocaleString('en-GB', { timeZone: 'Europe/London' });
     
+    const isProduction = !!process.env.REPLIT_DEPLOYMENT;
+    const envLabel = isProduction ? 'LIVE' : 'DEV';
+    const envColor = isProduction ? '#28a745' : '#dc3545';
+    
     const statusEmoji = stats.failed > 0 ? '⚠️' : (stats.sent > 0 ? '✅' : '📋');
-    const subject = `${statusEmoji} Query Reminder Cron Report - ${ukTime}`;
+    const subject = `[${envLabel}] ${statusEmoji} Query Reminder Cron Report - ${ukTime}`;
 
     let resultsTableHtml = '';
     if (stats.results.length > 0) {
@@ -350,7 +354,11 @@ async function sendMonitoringEmail(stats: CronRunStats): Promise<void> {
 
     const body = `
       <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; padding: 20px;">
+        <div style="display: inline-block; background-color: ${envColor}; color: white; padding: 8px 16px; border-radius: 4px; font-weight: bold; font-size: 16px; margin-bottom: 15px;">
+          ${envLabel} ENVIRONMENT
+        </div>
         <h2>Query Reminder Cron Report</h2>
+        <p><strong>Environment:</strong> ${isProduction ? 'Production (Live)' : 'Development'}</p>
         <p><strong>Run Time:</strong> ${ukTime}</p>
         <p><strong>Operating Hours:</strong> ${stats.withinOperatingHours ? 'Yes (07:00-22:00 UK)' : 'No - Outside operating hours'}</p>
         
@@ -385,7 +393,7 @@ async function sendMonitoringEmail(stats: CronRunStats): Promise<void> {
         ${resultsTableHtml}
         
         <p style="margin-top: 30px; color: #666; font-size: 12px;">
-          This is an automated monitoring email from the Query Reminder System.
+          This is an automated monitoring email from the Query Reminder System (${isProduction ? 'Production' : 'Development'} environment).
         </p>
       </div>
     `;
