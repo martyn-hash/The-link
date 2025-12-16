@@ -116,12 +116,14 @@ export function EmailDialog({
   const isQueryEmailMode = Boolean(queryEmailOptions);
   const [reminderSchedule, setReminderSchedule] = useState<import('../types').ReminderScheduleItem[]>([]);
   
-  // Tab state for query email mode (Compose vs Scheduling)
-  const [activeTab, setActiveTab] = useState<'compose' | 'scheduling'>('compose');
+  // Tab state for query email mode (Compose, Scheduling, Actions)
+  const [activeTab, setActiveTab] = useState<'compose' | 'scheduling' | 'actions'>('compose');
   const [hasVisitedSchedulingTab, setHasVisitedSchedulingTab] = useState(false);
+  const [hasVisitedActionsTab, setHasVisitedActionsTab] = useState(false);
   
   // Multiple recipient selection - start empty, will be populated by useEffect after peopleWithEmail is ready
   const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(new Set());
+  const hasSelectedRecipients = selectedRecipients.size > 0;
   
   // AI prompt state
   const [aiPrompt, setAiPrompt] = useState("");
@@ -135,29 +137,28 @@ export function EmailDialog({
   
   // On-completion action state (auto-stage-change when client completes queries)
   const [enableOnCompletion, setEnableOnCompletion] = useState(false);
-  const [onCompletionTrigger, setOnCompletionTrigger] = useState<'all_answered' | 'submitted'>('submitted');
   const [onCompletionStageId, setOnCompletionStageId] = useState<string>('');
   const [onCompletionStageReasonId, setOnCompletionStageReasonId] = useState<string>('');
-  const [isOnCompletionOpen, setIsOnCompletionOpen] = useState(false);
 
   // Fetch project stages when in query email mode
   const { data: projectStages } = useQuery<Array<{ id: string; name: string; order: number }>>({
-    queryKey: ['/api/project-types', queryEmailOptions?.projectTypeId, 'stages'],
+    queryKey: [`/api/config/project-types/${queryEmailOptions?.projectTypeId}/stages`],
     enabled: isQueryEmailMode && !!queryEmailOptions?.projectTypeId,
   });
   
   // Fetch stage reasons when a stage is selected
   const { data: stageReasons } = useQuery<Array<{ id: string; reason: string }>>({
-    queryKey: ['/api/stages', onCompletionStageId, 'reasons'],
+    queryKey: [`/api/config/stages/${onCompletionStageId}/reasons`],
     enabled: !!onCompletionStageId,
   });
   
   // Notify parent when on-completion action configuration changes
+  // Always use 'submitted' trigger - fires when client submits the form
   useEffect(() => {
     if (onCompletionActionConfigured) {
       if (enableOnCompletion && onCompletionStageId) {
         onCompletionActionConfigured({
-          trigger: onCompletionTrigger,
+          trigger: 'submitted',
           stageId: onCompletionStageId,
           stageReasonId: onCompletionStageReasonId || null,
         });
@@ -165,7 +166,7 @@ export function EmailDialog({
         onCompletionActionConfigured(null);
       }
     }
-  }, [enableOnCompletion, onCompletionTrigger, onCompletionStageId, onCompletionStageReasonId, onCompletionActionConfigured]);
+  }, [enableOnCompletion, onCompletionStageId, onCompletionStageReasonId, onCompletionActionConfigured]);
 
   // Auto-save draft for email composition
   const { savedContent: savedDraft, additionalFields: savedFields, hasDraft, saveDraft, clearDraft } = useDraftAutoSave({
@@ -312,19 +313,38 @@ export function EmailDialog({
   
   const channelAvailability = getChannelAvailability();
   
-  // Handle tab change and track scheduling tab visit
-  // Use setTimeout to delay the hasVisitedSchedulingTab state change
-  // This prevents the button swap from happening during the same click event cycle,
-  // which was causing auto-form-submission when the type="button" Review Scheduling
-  // button was replaced by the type="submit" Send button
+  // Handle tab change and track tab visits
+  // Sequential progression is enforced via disabled tab triggers AND this handler
+  // Guard against keyboard navigation bypassing disabled tabs
+  // Use setTimeout to delay the state change - this prevents the button swap 
+  // from happening during the same click event cycle
   const handleTabChange = useCallback((value: string) => {
-    setActiveTab(value as 'compose' | 'scheduling');
+    // Guard: In query mode, enforce tab prerequisites to prevent keyboard bypass
+    if (isQueryEmailMode) {
+      // Scheduling requires recipients
+      if (value === 'scheduling' && !hasSelectedRecipients) {
+        return; // Block navigation
+      }
+      // Actions requires Scheduling to have been visited
+      if (value === 'actions' && !hasVisitedSchedulingTab) {
+        return; // Block navigation
+      }
+    }
+    
+    setActiveTab(value as 'compose' | 'scheduling' | 'actions');
+    
+    // Track tab visits with delay to prevent button swap during same click cycle
     if (value === 'scheduling') {
       setTimeout(() => {
         setHasVisitedSchedulingTab(true);
       }, 0);
     }
-  }, []);
+    if (value === 'actions') {
+      setTimeout(() => {
+        setHasVisitedActionsTab(true);
+      }, 0);
+    }
+  }, [isQueryEmailMode, hasSelectedRecipients, hasVisitedSchedulingTab]);
 
   // Helper function to extract first name from various formats
   const extractFirstName = (fullName: string): string => {
@@ -635,8 +655,6 @@ export function EmailDialog({
     }
   };
 
-  const hasSelectedRecipients = selectedRecipients.size > 0;
-
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(open) => {
@@ -651,6 +669,10 @@ export function EmailDialog({
           setReminderSchedule([]);
           setActiveTab('compose');
           setHasVisitedSchedulingTab(false);
+          setHasVisitedActionsTab(false);
+          setEnableOnCompletion(false);
+          setOnCompletionStageId('');
+          setOnCompletionStageReasonId('');
         }
       }}>
         <DialogContent className={`w-full max-h-[90vh] overflow-hidden flex flex-col ${isQueryEmailMode ? 'max-w-7xl' : 'max-w-5xl'}`}>
@@ -688,6 +710,21 @@ export function EmailDialog({
                     <Clock className="h-4 w-4 mr-1.5" />
                     Scheduling
                     {hasSelectedRecipients && !hasVisitedSchedulingTab && (
+                      <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                        Review
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                  <TabsTrigger 
+                    type="button"
+                    value="actions" 
+                    disabled={!hasSelectedRecipients || !hasVisitedSchedulingTab}
+                    className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={!hasSelectedRecipients ? "Select at least one recipient first" : !hasVisitedSchedulingTab ? "Review Scheduling tab first" : undefined}
+                  >
+                    <ArrowRightCircle className="h-4 w-4 mr-1.5" />
+                    Actions
+                    {hasSelectedRecipients && hasVisitedSchedulingTab && !hasVisitedActionsTab && (
                       <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
                         Review
                       </Badge>
@@ -1074,122 +1111,6 @@ export function EmailDialog({
                       />
                     )}
 
-                    {/* On Completion Actions - Auto stage change */}
-                    {queryEmailOptions?.projectTypeId && (
-                      <Collapsible open={isOnCompletionOpen} onOpenChange={setIsOnCompletionOpen}>
-                        <div className="border rounded-lg bg-muted/20">
-                          <CollapsibleTrigger asChild>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              className="w-full flex items-center justify-between p-3 h-auto hover:bg-muted/40"
-                              data-testid="button-toggle-on-completion"
-                            >
-                              <div className="flex items-center gap-2">
-                                <ArrowRightCircle className="h-4 w-4 text-muted-foreground" />
-                                <span className="text-sm font-medium">On Completion Actions</span>
-                                {enableOnCompletion && onCompletionStageId && (
-                                  <Badge variant="secondary" className="text-xs">
-                                    Auto-move enabled
-                                  </Badge>
-                                )}
-                              </div>
-                              {isOnCompletionOpen ? (
-                                <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                              ) : (
-                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                              )}
-                            </Button>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent>
-                            <div className="px-3 pb-3 space-y-3">
-                              <div className="flex items-center justify-between">
-                                <Label htmlFor="enable-on-completion" className="text-sm cursor-pointer">
-                                  Move project when complete
-                                </Label>
-                                <Switch
-                                  id="enable-on-completion"
-                                  checked={enableOnCompletion}
-                                  onCheckedChange={setEnableOnCompletion}
-                                  data-testid="switch-enable-on-completion"
-                                />
-                              </div>
-                              
-                              {enableOnCompletion && (
-                                <div className="space-y-3 pt-2 border-t">
-                                  {/* Trigger selection */}
-                                  <div className="space-y-1.5">
-                                    <Label className="text-xs text-muted-foreground">Trigger when</Label>
-                                    <Select
-                                      value={onCompletionTrigger}
-                                      onValueChange={(val) => setOnCompletionTrigger(val as 'all_answered' | 'submitted')}
-                                    >
-                                      <SelectTrigger className="h-8 text-sm" data-testid="select-completion-trigger">
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="submitted">Client submits responses</SelectItem>
-                                        <SelectItem value="all_answered">All queries are answered</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  
-                                  {/* Stage selection */}
-                                  <div className="space-y-1.5">
-                                    <Label className="text-xs text-muted-foreground">Move to stage</Label>
-                                    <Select
-                                      value={onCompletionStageId}
-                                      onValueChange={(val) => {
-                                        setOnCompletionStageId(val);
-                                        setOnCompletionStageReasonId('');
-                                      }}
-                                    >
-                                      <SelectTrigger className="h-8 text-sm" data-testid="select-completion-stage">
-                                        <SelectValue placeholder="Select stage..." />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {projectStages?.map((stage) => (
-                                          <SelectItem key={stage.id} value={stage.id}>
-                                            {stage.name}
-                                          </SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-                                  
-                                  {/* Stage reason selection */}
-                                  {onCompletionStageId && stageReasons && stageReasons.length > 0 && (
-                                    <div className="space-y-1.5">
-                                      <Label className="text-xs text-muted-foreground">Stage change reason</Label>
-                                      <Select
-                                        value={onCompletionStageReasonId}
-                                        onValueChange={setOnCompletionStageReasonId}
-                                      >
-                                        <SelectTrigger className="h-8 text-sm" data-testid="select-completion-reason">
-                                          <SelectValue placeholder="Select reason..." />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {stageReasons.map((reason) => (
-                                            <SelectItem key={reason.id} value={reason.id}>
-                                              {reason.reason}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
-                                    </div>
-                                  )}
-                                  
-                                  <p className="text-xs text-muted-foreground">
-                                    The project will only be moved if it's still in the same stage as when queries were sent.
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          </CollapsibleContent>
-                        </div>
-                      </Collapsible>
-                    )}
-
                     {/* Info panel about reminders */}
                     <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 space-y-2">
                       <div className="flex items-center gap-2">
@@ -1201,6 +1122,115 @@ export function EmailDialog({
                         Reminders stop automatically when all queries are answered.
                       </p>
                     </div>
+                  </div>
+                </TabsContent>
+                
+                {/* Actions Tab Content */}
+                <TabsContent value="actions" className="flex-1 mt-0">
+                  <div className="space-y-4 overflow-y-auto max-h-[55vh]">
+                    <div className="space-y-2">
+                      <h4 className="text-sm font-medium">On Completion Actions</h4>
+                      <p className="text-xs text-muted-foreground">
+                        Configure automatic actions when the client completes their queries.
+                      </p>
+                    </div>
+
+                    {/* Auto-move project section */}
+                    <div className="border rounded-lg p-4 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div className="space-y-1">
+                          <Label htmlFor="enable-on-completion" className="text-sm font-medium cursor-pointer">
+                            Move project when complete
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            Automatically move the project to a different stage when the client submits their responses.
+                          </p>
+                        </div>
+                        <Switch
+                          id="enable-on-completion"
+                          checked={enableOnCompletion}
+                          onCheckedChange={setEnableOnCompletion}
+                          data-testid="switch-enable-on-completion"
+                        />
+                      </div>
+                      
+                      {enableOnCompletion && (
+                        <div className="space-y-4 pt-3 border-t">
+                          {/* Stage selection */}
+                          <div className="space-y-2">
+                            <Label className="text-sm">Move to stage</Label>
+                            <Select
+                              value={onCompletionStageId}
+                              onValueChange={(val) => {
+                                setOnCompletionStageId(val);
+                                setOnCompletionStageReasonId('');
+                              }}
+                            >
+                              <SelectTrigger className="w-full" data-testid="select-completion-stage">
+                                <SelectValue placeholder="Select stage..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {projectStages?.map((stage) => (
+                                  <SelectItem key={stage.id} value={stage.id}>
+                                    {stage.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          
+                          {/* Stage reason selection */}
+                          {onCompletionStageId && stageReasons && stageReasons.length > 0 && (
+                            <div className="space-y-2">
+                              <Label className="text-sm">Stage change reason</Label>
+                              <Select
+                                value={onCompletionStageReasonId}
+                                onValueChange={setOnCompletionStageReasonId}
+                              >
+                                <SelectTrigger className="w-full" data-testid="select-completion-reason">
+                                  <SelectValue placeholder="Select reason (optional)..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {stageReasons.map((reason) => (
+                                    <SelectItem key={reason.id} value={reason.id}>
+                                      {reason.reason}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+                          
+                          <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3">
+                            <p className="text-xs text-amber-800 dark:text-amber-200">
+                              The project will only be moved if it's still in the same stage as when queries were sent.
+                              This prevents overriding any manual stage changes made in the meantime.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Summary of configured action */}
+                    {enableOnCompletion && onCompletionStageId && (
+                      <div className="bg-green-50 dark:bg-green-950/30 rounded-lg p-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <ArrowRightCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                          <span className="text-sm font-medium text-green-900 dark:text-green-100">Action Configured</span>
+                        </div>
+                        <p className="text-xs text-green-800 dark:text-green-200">
+                          When the client submits their responses, the project will automatically move to "{projectStages?.find(s => s.id === onCompletionStageId)?.name}".
+                        </p>
+                      </div>
+                    )}
+
+                    {!enableOnCompletion && (
+                      <div className="bg-muted/30 rounded-lg p-3">
+                        <p className="text-xs text-muted-foreground">
+                          No actions configured. The project will remain in its current stage when queries are completed.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </TabsContent>
               </Tabs>
@@ -1427,23 +1457,33 @@ export function EmailDialog({
 
             {/* Footer */}
             <DialogFooter className="mt-4 pt-4 border-t gap-2 sm:gap-2">
-              <Button type="button" variant="outline" onClick={handleClose}>
+              <Button type="button" variant="outline" onClick={() => handleClose()}>
                 Cancel
               </Button>
               {isQueryEmailMode && hasSelectedRecipients && !hasVisitedSchedulingTab ? (
                 <Button 
                   type="button" 
                   onClick={() => handleTabChange('scheduling')}
-                  data-testid="button-review-scheduling"
+                  data-testid="button-next-scheduling"
                   className="bg-amber-600 hover:bg-amber-700 text-white font-medium gap-2"
                 >
                   <Clock className="h-4 w-4" />
-                  Review Scheduling
+                  Next: Scheduling
+                </Button>
+              ) : isQueryEmailMode && hasSelectedRecipients && !hasVisitedActionsTab ? (
+                <Button 
+                  type="button" 
+                  onClick={() => handleTabChange('actions')}
+                  data-testid="button-next-actions"
+                  className="bg-amber-600 hover:bg-amber-700 text-white font-medium gap-2"
+                >
+                  <ArrowRightCircle className="h-4 w-4" />
+                  Next: Actions
                 </Button>
               ) : (
                 <Button 
                   type="submit" 
-                  disabled={sendEmailMutation.isPending || !hasSelectedRecipients || (isQueryEmailMode && !hasVisitedSchedulingTab)} 
+                  disabled={sendEmailMutation.isPending || !hasSelectedRecipients || (isQueryEmailMode && (!hasVisitedSchedulingTab || !hasVisitedActionsTab))} 
                   data-testid="button-send-email-dialog"
                   className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
                 >
