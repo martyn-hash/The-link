@@ -361,6 +361,7 @@ export function applyMiscFacade<TBase extends Constructor<MiscFacadeDeps>>(Base:
       moneyDirection: 'in' | 'out' | null;
       answerText: string;
       answeredByType: 'staff' | 'client';
+      answeredById?: string;
       answeredAt: Date;
       sourceQueryId: string;
     }) {

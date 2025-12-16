@@ -684,6 +684,21 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
     return { success: false, error: 'Invalid query token' };
   }
 
+  // Check if token has expired - don't send reminders for expired links
+  if (token[0].expiresAt && new Date(token[0].expiresAt) < new Date()) {
+    await db
+      .update(scheduledQueryReminders)
+      .set({ 
+        status: 'cancelled',
+        cancelledAt: new Date(),
+        errorMessage: 'Token expired - link no longer valid'
+      })
+      .where(eq(scheduledQueryReminders.id, reminder.id));
+    
+    console.log(`[QueryReminder] Cancelled reminder ${reminder.id} - token expired at ${token[0].expiresAt}`);
+    return { success: true, error: 'Cancelled - token expired' };
+  }
+
   // Always use production URL for emails
   const responseLink = `${getAppUrl()}/queries/respond/${token[0].token}`;
   

@@ -832,7 +832,7 @@ export function registerQueryRoutes(
       const { projectId } = req.params;
 
       // Verify all queries exist and belong to this project
-      const queries = [];
+      const queries: Awaited<ReturnType<typeof storage.getQueryById>>[] = [];
       for (const queryId of queryIds) {
         const query = await storage.getQueryById(queryId);
         if (!query) {
