@@ -12,7 +12,7 @@
  */
 
 import cron from 'node-cron';
-import { getDueReminders, processReminder, checkAndCancelRemindersIfComplete } from './services/queryReminderService';
+import { getDueReminders, processReminder, checkAndCancelRemindersIfComplete, markReminderFailed } from './services/queryReminderService';
 import { db } from './db';
 import { projectChronology, scheduledQueryReminders, communications, queryResponseTokens, projects, companySettings } from '@shared/schema';
 import { eq } from 'drizzle-orm';
@@ -303,7 +303,12 @@ async function processQueryReminders(): Promise<void> {
           });
         }
       } catch (reminderError) {
+        const errorMessage = reminderError instanceof Error ? reminderError.message : 'Unknown error';
         console.error(`[QueryReminderCron] Error processing reminder ${reminder.id}:`, reminderError);
+        
+        // Mark reminder as failed in database so it doesn't retry indefinitely
+        await markReminderFailed(reminder.id, errorMessage);
+        
         stats.failed++;
         const projectName = await getProjectName(reminder.projectId);
         stats.results.push({
@@ -314,7 +319,7 @@ async function processQueryReminders(): Promise<void> {
           recipientPhone: reminder.recipientPhone,
           projectName,
           success: false,
-          error: reminderError instanceof Error ? reminderError.message : 'Unknown error'
+          error: errorMessage
         });
       }
     }

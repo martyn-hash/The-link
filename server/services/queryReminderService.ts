@@ -22,6 +22,7 @@ import {
   projectTypes,
   users,
   people,
+  clientPeople,
   type ScheduledQueryReminder,
   type InsertScheduledQueryReminder,
   type DialoraSettings,
@@ -36,6 +37,40 @@ import {
   DialoraCallContext
 } from "./dialoraService";
 import { getAppUrl } from "../utils/getAppUrl";
+
+/**
+ * Fail-fast validation for Drizzle select columns
+ * Catches schema mismatches early with clear error messages instead of cryptic Drizzle stack traces
+ */
+function validateSelectColumns(columns: Record<string, unknown>, context: string): void {
+  for (const [key, value] of Object.entries(columns)) {
+    if (value === undefined || value === null) {
+      const error = `Invalid select column: ${key} (undefined). Check schema mismatch in ${context}`;
+      console.error(`[QueryReminder] SCHEMA ERROR: ${error}`);
+      throw new Error(error);
+    }
+  }
+}
+
+/**
+ * Mark a reminder as failed without crashing the whole job
+ * Exported for use by cron job error handling
+ */
+export async function markReminderFailed(reminderId: string, errorMessage: string): Promise<void> {
+  try {
+    await db
+      .update(scheduledQueryReminders)
+      .set({
+        status: 'failed',
+        errorMessage
+        // Note: sentAt intentionally left null for failures to distinguish from successful sends
+      })
+      .where(eq(scheduledQueryReminders.id, reminderId));
+    console.error(`[QueryReminder] Marked reminder ${reminderId} as failed: ${errorMessage}`);
+  } catch (updateError) {
+    console.error(`[QueryReminder] Failed to update reminder ${reminderId} status:`, updateError);
+  }
+}
 
 interface ReminderSendResult {
   success: boolean;
@@ -652,30 +687,37 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
   // Always use production URL for emails
   const responseLink = `${getAppUrl()}/queries/respond/${token[0].token}`;
   
+  // Validate select columns before querying to catch schema mismatches early
+  const clientSelectCols = { 
+    name: clients.name,
+    tradingAs: clients.tradingAs,
+    companyNumber: clients.companyNumber,
+    companyUtr: clients.companyUtr,
+    telephone: clients.companyTelephone,
+    email: clients.email
+  };
+  validateSelectColumns(clientSelectCols, 'clientData query');
+  
+  // Get client data by joining through projects (queryResponseTokens has projectId, not clientId)
   const clientData = await db
-    .select({ 
-      name: clients.name,
-      tradingAs: clients.tradingAs,
-      companyNumber: clients.companyNumber,
-      companyUtr: clients.companyUtr,
-      telephone: clients.telephone,
-      email: clients.primaryContactEmail
-    })
+    .select(clientSelectCols)
     .from(clients)
-    .innerJoin(queryResponseTokens, eq(queryResponseTokens.clientId, clients.id))
-    .where(eq(queryResponseTokens.id, reminder.tokenId))
+    .innerJoin(projects, eq(projects.clientId, clients.id))
+    .where(eq(projects.id, token[0].projectId))
     .limit(1);
 
   const clientName = clientData[0]?.name || 'Your Company';
   const clientInfo = clientData[0];
   
+  const projectSelectCols = {
+    description: projects.description,
+    dueDate: projects.dueDate,
+    currentStatus: projects.currentStatus
+  };
+  validateSelectColumns(projectSelectCols, 'projectData query');
+  
   const projectData = token[0].projectId ? await db
-    .select({
-      name: projects.name,
-      reference: projects.reference,
-      dueDate: projects.dueDate,
-      status: projects.status
-    })
+    .select(projectSelectCols)
     .from(projects)
     .where(eq(projects.id, token[0].projectId))
     .limit(1)
@@ -753,12 +795,11 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
             email: clientInfo?.email || undefined
           },
           project: projectInfo ? {
-            name: projectInfo.name || undefined,
-            reference: projectInfo.reference || undefined,
+            name: projectInfo.description || undefined,
             dueDate: projectInfo.dueDate 
               ? new Date(projectInfo.dueDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
               : undefined,
-            status: projectInfo.status || undefined
+            status: projectInfo.currentStatus || undefined
           } : undefined,
           queries: {
             pending: queryStatus.pendingQueries,
@@ -907,6 +948,9 @@ function isPlaceholderEmail(email: string | null): boolean {
 /**
  * Attempt to hydrate placeholder recipient data from project/client contacts
  * Returns updated recipient info or null if cannot be resolved
+ * 
+ * Note: Staff already selects the person when creating reminders, so this is only
+ * a fallback for legacy reminders with placeholder/missing data.
  */
 export async function hydrateRecipientFromProjectData(
   projectId: string | null
@@ -926,16 +970,22 @@ export async function hydrateRecipientFromProjectData(
     
     const clientId = projectData[0].clientId;
     
+    // Validate columns before queries
+    const personSelectCols = {
+      firstName: people.firstName,
+      email: people.email,
+      phone: people.telephone
+    };
+    validateSelectColumns(personSelectCols, 'hydrateRecipient person query');
+    
+    // Try to find primary contact via clientPeople junction table
     const primaryPerson = await db
-      .select({
-        firstName: people.firstName,
-        email: people.email,
-        mobile: people.mobile
-      })
+      .select(personSelectCols)
       .from(people)
+      .innerJoin(clientPeople, eq(clientPeople.personId, people.id))
       .where(and(
-        eq(people.clientId, clientId),
-        eq(people.isPrimary, true)
+        eq(clientPeople.clientId, clientId),
+        eq(clientPeople.isPrimaryContact, true)
       ))
       .limit(1);
     
@@ -943,33 +993,35 @@ export async function hydrateRecipientFromProjectData(
       return {
         email: primaryPerson[0].email,
         name: primaryPerson[0].firstName || 'Client',
-        phone: primaryPerson[0].mobile || null
+        phone: primaryPerson[0].phone || null
       };
     }
     
+    // Fallback: any person linked to this client
     const anyPerson = await db
-      .select({
-        firstName: people.firstName,
-        email: people.email,
-        mobile: people.mobile
-      })
+      .select(personSelectCols)
       .from(people)
-      .where(eq(people.clientId, clientId))
+      .innerJoin(clientPeople, eq(clientPeople.personId, people.id))
+      .where(eq(clientPeople.clientId, clientId))
       .limit(1);
     
     if (anyPerson[0]?.email) {
       return {
         email: anyPerson[0].email,
         name: anyPerson[0].firstName || 'Client',
-        phone: anyPerson[0].mobile || null
+        phone: anyPerson[0].phone || null
       };
     }
     
+    // Last resort: client's own email
+    const clientFallbackCols = {
+      name: clients.name,
+      email: clients.email
+    };
+    validateSelectColumns(clientFallbackCols, 'hydrateRecipient client fallback query');
+    
     const clientData = await db
-      .select({
-        name: clients.name,
-        email: clients.email
-      })
+      .select(clientFallbackCols)
       .from(clients)
       .where(eq(clients.id, clientId))
       .limit(1);
