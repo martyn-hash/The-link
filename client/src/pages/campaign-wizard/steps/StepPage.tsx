@@ -73,13 +73,13 @@ export function StepPage({ state, updateState, campaignId }: StepPageProps) {
 
   const handleModeChange = (mode: 'skip' | 'create' | 'existing') => {
     updateState(prev => ({
-      page: { ...prev.page, mode, pageId: mode === 'skip' ? null : prev.page.pageId },
+      page: { ...prev.page, mode, pageId: mode === 'skip' ? null : prev.page.pageId, confirmed: true },
     }));
   };
 
   const handlePageSelect = (pageId: string) => {
     updateState(prev => ({
-      page: { ...prev.page, pageId: pageId === 'none' ? null : pageId },
+      page: { ...prev.page, pageId: pageId === 'none' ? null : pageId, confirmed: true },
     }));
   };
 

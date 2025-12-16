@@ -61,7 +61,7 @@ const FILTER_CATEGORIES = [
   { id: 'Projects & Deadlines', label: 'Projects & Deadlines', icon: '📅' },
   { id: 'Data Completeness', label: 'Data Completeness', icon: '✓' },
   { id: 'Engagement', label: 'Engagement', icon: '📊' },
-  { id: 'UDFs', label: 'Service Fields', icon: '📝' },
+  { id: 'UDFs', label: 'Service Fields (UDFs)', icon: '📝' },
 ];
 
 export function StepTargeting({ state, updateState, campaignId }: StepTargetingProps) {
@@ -125,11 +125,12 @@ export function StepTargeting({ state, updateState, campaignId }: StepTargetingP
     if (!campaignId) return;
     
     const flatCriteria = state.targeting.filterGroups.flatMap((group, groupIndex) =>
-      group.filters.map(filter => ({
+      group.filters.map((filter, filterIndex) => ({
         filterType: filter.filterType,
         operator: filter.operator,
-        filterValue: filter.value,
-        groupNumber: groupIndex,
+        value: filter.value,
+        filterGroup: groupIndex,
+        sortOrder: filterIndex,
       }))
     );
     

@@ -1,5 +1,5 @@
 import { db } from '../../db.js';
-import { clients, clientServices, projects, projectTypes, clientTagAssignments, clientPeople, clientPortalUsers, communications, campaignRecipients, campaigns, clientEngagementScores } from '@shared/schema';
+import { clients, clientServices, projects, projectTypes, clientTagAssignments, clientPeople, clientPortalUsers, communications, campaignRecipients, campaigns, clientEngagementScores, services } from '@shared/schema';
 import { eq, and, sql, inArray, isNull, isNotNull, gte, lte, gt, lt, ne, or } from 'drizzle-orm';
 import type { CampaignTargetCriteria } from '@shared/schema';
 import { campaignTargetStorage } from '../../storage/campaigns/index.js';
@@ -8,12 +8,14 @@ export interface FilterDefinition {
   type: string;
   label: string;
   description?: string;
-  category: 'Client Profile' | 'Services' | 'Projects & Deadlines' | 'Data Completeness' | 'Engagement';
+  category: 'Client Profile' | 'Services' | 'Projects & Deadlines' | 'Data Completeness' | 'Engagement' | 'UDFs';
   operators: string[];
-  valueType: 'boolean' | 'select' | 'multi_select' | 'number' | 'days' | 'range' | 'date_range' | 'user' | 'service' | 'service_pair' | 'project_type' | 'stage' | 'tag';
+  valueType: 'boolean' | 'select' | 'multi_select' | 'number' | 'days' | 'range' | 'date_range' | 'user' | 'service' | 'service_pair' | 'project_type' | 'stage' | 'tag' | 'udf_dropdown' | 'udf_boolean' | 'udf_text' | 'udf_number' | 'udf_date';
   options?: { value: string; label: string }[];
   min?: number;
   max?: number;
+  serviceId?: string;
+  udfId?: string;
 }
 
 export const FILTER_REGISTRY: FilterDefinition[] = [
@@ -509,6 +511,130 @@ function buildFilterClause(filterType: string, operator: string, value: any): an
       return sql`(SELECT consecutive_ignored FROM ${clientEngagementScores} WHERE ${clientEngagementScores.clientId} = ${clients.id}) >= ${value}`;
   }
 
+  // Handle UDF filters (format: udf_<serviceId>_<udfId>)
+  if (filterType.startsWith('udf_')) {
+    const parts = filterType.split('_');
+    if (parts.length >= 3) {
+      // Extract serviceId and udfId - format is udf_<serviceId>_<udfId>
+      const serviceIdAndUdf = filterType.substring(4); // Remove 'udf_'
+      
+      // UUIDs are 36 chars with format: 8-4-4-4-12
+      // Parse by finding the serviceId UUID pattern
+      const uuidPattern = /^([a-f0-9\-]{36})_(.+)$/i;
+      const match = serviceIdAndUdf.match(uuidPattern);
+      
+      if (!match) return null;
+      
+      const serviceId = match[1];
+      const udfId = match[2];
+      
+      // Extract simple value from complex objects if needed
+      const simpleValue = typeof value === 'object' && value !== null 
+        ? (value.value ?? value) 
+        : value;
+      
+      // Build the JSON path query for udf_values->>'udfId'
+      // Note: The ->> operator returns text, so we need proper casting for numeric/date comparisons
+      if (operator === 'has_value') {
+        return sql`EXISTS (
+          SELECT 1 FROM client_services cs 
+          WHERE cs.client_id = ${clients.id} 
+          AND cs.service_id = ${serviceId}
+          AND cs.is_active = true
+          AND cs.udf_values->${udfId} IS NOT NULL
+          AND cs.udf_values->>${udfId} != ''
+        )`;
+      }
+      
+      if (operator === 'no_value') {
+        return sql`NOT EXISTS (
+          SELECT 1 FROM client_services cs 
+          WHERE cs.client_id = ${clients.id} 
+          AND cs.service_id = ${serviceId}
+          AND cs.is_active = true
+          AND cs.udf_values->${udfId} IS NOT NULL
+          AND cs.udf_values->>${udfId} != ''
+        )`;
+      }
+      
+      if (operator === 'equals') {
+        return sql`EXISTS (
+          SELECT 1 FROM client_services cs 
+          WHERE cs.client_id = ${clients.id} 
+          AND cs.service_id = ${serviceId}
+          AND cs.is_active = true
+          AND cs.udf_values->>${udfId} = ${String(simpleValue)}
+        )`;
+      }
+      
+      if (operator === 'not_equals') {
+        return sql`EXISTS (
+          SELECT 1 FROM client_services cs 
+          WHERE cs.client_id = ${clients.id} 
+          AND cs.service_id = ${serviceId}
+          AND cs.is_active = true
+          AND (cs.udf_values->${udfId} IS NULL OR cs.udf_values->>${udfId} != ${String(simpleValue)})
+        )`;
+      }
+      
+      if (operator === 'contains') {
+        return sql`EXISTS (
+          SELECT 1 FROM client_services cs 
+          WHERE cs.client_id = ${clients.id} 
+          AND cs.service_id = ${serviceId}
+          AND cs.is_active = true
+          AND cs.udf_values->>${udfId} ILIKE ${'%' + String(simpleValue) + '%'}
+        )`;
+      }
+      
+      if (operator === 'gt') {
+        const numVal = Number(simpleValue);
+        if (isNaN(numVal)) return null;
+        return sql`EXISTS (
+          SELECT 1 FROM client_services cs 
+          WHERE cs.client_id = ${clients.id} 
+          AND cs.service_id = ${serviceId}
+          AND cs.is_active = true
+          AND (cs.udf_values->>${udfId})::numeric > ${numVal}
+        )`;
+      }
+      
+      if (operator === 'lt') {
+        const numVal = Number(simpleValue);
+        if (isNaN(numVal)) return null;
+        return sql`EXISTS (
+          SELECT 1 FROM client_services cs 
+          WHERE cs.client_id = ${clients.id} 
+          AND cs.service_id = ${serviceId}
+          AND cs.is_active = true
+          AND (cs.udf_values->>${udfId})::numeric < ${numVal}
+        )`;
+      }
+      
+      if (operator === 'before') {
+        const dateStr = typeof simpleValue === 'string' ? simpleValue : String(simpleValue);
+        return sql`EXISTS (
+          SELECT 1 FROM client_services cs 
+          WHERE cs.client_id = ${clients.id} 
+          AND cs.service_id = ${serviceId}
+          AND cs.is_active = true
+          AND (cs.udf_values->>${udfId})::date < ${dateStr}::date
+        )`;
+      }
+      
+      if (operator === 'after') {
+        const dateStr = typeof simpleValue === 'string' ? simpleValue : String(simpleValue);
+        return sql`EXISTS (
+          SELECT 1 FROM client_services cs 
+          WHERE cs.client_id = ${clients.id} 
+          AND cs.service_id = ${serviceId}
+          AND cs.is_active = true
+          AND (cs.udf_values->>${udfId})::date > ${dateStr}::date
+        )`;
+      }
+    }
+  }
+
   // Return null for unhandled cases - these will be filtered out by the caller
   return null;
 }
@@ -654,8 +780,78 @@ export function getFiltersByCategory(category: string): FilterDefinition[] {
   return FILTER_REGISTRY.filter(f => f.category === category);
 }
 
+export async function getUdfFilters(): Promise<FilterDefinition[]> {
+  const allServices = await db.select({
+    id: services.id,
+    name: services.name,
+    udfDefinitions: services.udfDefinitions,
+  }).from(services).where(eq(services.isActive, true));
+
+  const udfFilters: FilterDefinition[] = [];
+
+  for (const service of allServices) {
+    const udfs = service.udfDefinitions as any[] || [];
+    for (const udf of udfs) {
+      // Map UDF type to filter value type
+      let valueType: FilterDefinition['valueType'];
+      let operators: string[];
+      const options: { value: string; label: string }[] = [];
+
+      switch (udf.type) {
+        case 'dropdown':
+          valueType = 'udf_dropdown';
+          operators = ['equals', 'not_equals', 'has_value', 'no_value'];
+          if (udf.options && Array.isArray(udf.options)) {
+            udf.options.forEach((opt: string) => {
+              options.push({ value: opt, label: opt });
+            });
+          }
+          break;
+        case 'boolean':
+          valueType = 'udf_boolean';
+          operators = ['has_value', 'no_value'];
+          break;
+        case 'number':
+          valueType = 'udf_number';
+          operators = ['equals', 'gt', 'lt', 'has_value', 'no_value'];
+          break;
+        case 'date':
+          valueType = 'udf_date';
+          operators = ['equals', 'before', 'after', 'has_value', 'no_value'];
+          break;
+        case 'short_text':
+        case 'long_text':
+        default:
+          valueType = 'udf_text';
+          operators = ['contains', 'has_value', 'no_value'];
+          break;
+      }
+
+      udfFilters.push({
+        type: `udf_${service.id}_${udf.id}`,
+        label: `${service.name}: ${udf.name}`,
+        description: `Filter by ${udf.name} field from ${service.name} service`,
+        category: 'UDFs',
+        operators,
+        valueType,
+        options: options.length > 0 ? options : undefined,
+        serviceId: service.id,
+        udfId: udf.id,
+      });
+    }
+  }
+
+  return udfFilters;
+}
+
 export function getAvailableFilters(): FilterDefinition[] {
+  // Return static filters synchronously - UDF filters are fetched separately
   return FILTER_REGISTRY;
+}
+
+export async function getAvailableFiltersWithUdfs(): Promise<FilterDefinition[]> {
+  const udfFilters = await getUdfFilters();
+  return [...FILTER_REGISTRY, ...udfFilters];
 }
 
 export async function getFilterOptions(filterType: string): Promise<any[]> {

@@ -439,7 +439,8 @@ export function registerCampaignRoutes(
 
   app.get('/api/campaign-targeting/available-filters', isAuthenticated, resolveEffectiveUser, async (req: any, res) => {
     try {
-      const filters = targetingService.getAvailableFilters();
+      // Use async version to include dynamically generated UDF filters
+      const filters = await targetingService.getAvailableFiltersWithUdfs();
       res.json(filters);
     } catch (error: any) {
       res.status(500).json({ error: error.message });

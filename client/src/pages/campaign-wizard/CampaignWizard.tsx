@@ -75,6 +75,7 @@ export interface WizardState {
   page: {
     mode: 'skip' | 'create' | 'existing';
     pageId: string | null;
+    confirmed: boolean;
   };
   testing: {
     checklistComplete: boolean;
@@ -157,6 +158,7 @@ const initialState: WizardState = {
   page: {
     mode: 'skip',
     pageId: null,
+    confirmed: false,
   },
   testing: {
     checklistComplete: false,
@@ -225,6 +227,7 @@ export default function CampaignWizard() {
         page: {
           mode: campaign.attachedPageId ? 'existing' : 'skip',
           pageId: campaign.attachedPageId || null,
+          confirmed: true,
         },
       }));
     }
@@ -347,7 +350,9 @@ export default function CampaignWizard() {
       case 4:
         return !!(state.messages.email?.body || state.messages.sms?.body || state.messages.voice?.script);
       case 5:
-        return true;
+        // Page step is complete if user has explicitly confirmed their choice
+        // This tracks whether they've made an active decision (skip, create, or existing)
+        return state.page.confirmed;
       case 6:
         return state.testing.checklistComplete;
       case 7:
