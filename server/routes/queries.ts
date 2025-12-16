@@ -2050,6 +2050,19 @@ ${emailSignoff}`;
         }
       }
 
+      // Cancel any pending reminders if all queries are now answered
+      // Note: Must check before markQueryTokenCompleted to ensure queryIds are still available
+      try {
+        const { cancelRemindersForCompletedQueriesWithChronology } = await import('../services/queryReminderService');
+        const reminderResult = await cancelRemindersForCompletedQueriesWithChronology(tokenData.id);
+        if (reminderResult.cancelled > 0) {
+          console.log(`[Query Submit] Auto-stopped ${reminderResult.cancelled} reminder(s) for token ${tokenData.id}`);
+        }
+      } catch (reminderError) {
+        console.error('[Query Submit] Failed to auto-stop reminders:', reminderError);
+        // Don't fail the submission if reminder cancellation fails
+      }
+      
       // Mark the token as completed
       await storage.markQueryTokenCompleted(tokenData.id);
       

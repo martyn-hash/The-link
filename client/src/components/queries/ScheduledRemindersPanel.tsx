@@ -107,13 +107,26 @@ const channelLabels: Record<string, string> = {
   voice: 'Voice Call',
 };
 
-const statusBadgeVariants: Record<string, { variant: 'default' | 'outline' | 'secondary' | 'destructive'; label: string }> = {
+const statusBadgeVariants: Record<string, { variant: 'default' | 'outline' | 'secondary' | 'destructive'; label: string; className?: string }> = {
   pending: { variant: 'outline', label: 'Pending' },
   sent: { variant: 'default', label: 'Sent' },
   failed: { variant: 'destructive', label: 'Failed' },
   cancelled: { variant: 'secondary', label: 'Cancelled' },
   skipped: { variant: 'secondary', label: 'Skipped' },
+  auto_stopped: { variant: 'secondary', label: 'Auto-Stopped', className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-green-300 dark:border-green-700' },
 };
+
+/**
+ * Get the effective status info for a reminder
+ * Auto-stopped reminders are cancelled but have "Auto-stopped" in errorMessage
+ */
+function getEffectiveStatusInfo(reminder: ReminderWithCreator) {
+  // Check if this is an auto-stopped reminder (cancelled by system when queries were answered)
+  if (reminder.status === 'cancelled' && reminder.errorMessage?.includes('Auto-stopped')) {
+    return statusBadgeVariants.auto_stopped;
+  }
+  return statusBadgeVariants[reminder.status] || statusBadgeVariants.pending;
+}
 
 export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelProps) {
   const { toast } = useToast();
@@ -437,7 +450,7 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
               .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
               .map((reminder) => {
                 const ChannelIcon = channelIcons[reminder.channel] || Mail;
-                const statusInfo = statusBadgeVariants[reminder.status] || statusBadgeVariants.pending;
+                const statusInfo = getEffectiveStatusInfo(reminder);
                 const scheduledDate = new Date(reminder.scheduledAt);
                 const isOverdue = reminder.status === 'pending' && isPast(scheduledDate);
 
@@ -479,13 +492,22 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
                     
                     <TableCell>
                       <div className="flex flex-col gap-1">
-                        <Badge variant={statusInfo.variant} className="text-xs w-fit">
+                        <Badge 
+                          variant={statusInfo.variant} 
+                          className={`text-xs w-fit ${statusInfo.className || ''}`}
+                        >
                           {reminder.status === 'pending' && isOverdue ? 'Due' : statusInfo.label}
                         </Badge>
                         {reminder.errorMessage && reminder.status === 'failed' && (
                           <div className="flex items-center gap-1 text-xs text-destructive">
                             <AlertCircle className="h-3 w-3" />
                             <span className="line-clamp-1">{reminder.errorMessage}</span>
+                          </div>
+                        )}
+                        {reminder.status === 'cancelled' && reminder.errorMessage?.includes('Auto-stopped') && (
+                          <div className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
+                            <CheckCircle className="h-3 w-3" />
+                            <span>Queries answered</span>
                           </div>
                         )}
                       </div>
@@ -543,7 +565,11 @@ export function ScheduledRemindersPanel({ projectId }: ScheduledRemindersPanelPr
                         )}
 
                         {reminder.status === 'cancelled' && (
-                          <XCircle className="h-5 w-5 text-muted-foreground" />
+                          reminder.errorMessage?.includes('Auto-stopped') ? (
+                            <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                          ) : (
+                            <XCircle className="h-5 w-5 text-muted-foreground" />
+                          )
                         )}
                       </div>
                     </TableCell>

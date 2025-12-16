@@ -310,6 +310,9 @@ export async function getQueryStatusForToken(tokenId: string): Promise<QueryStat
 
     const queryIds = token[0].queryIds || [];
     if (queryIds.length === 0) {
+      // No queryIds means either zero-query token or all queries were removed
+      // Either way, consider it complete (no outstanding items to answer)
+      console.log(`[QueryReminder] Token ${tokenId} has no queryIds - treating as complete`);
       return { totalQueries: 0, answeredQueries: 0, pendingQueries: 0, allAnswered: true };
     }
 
@@ -1117,17 +1120,22 @@ export async function getDueReminders(): Promise<ScheduledQueryReminder[]> {
 
 /**
  * Cancel all pending reminders for a token
+ * @param tokenId - The token ID to cancel reminders for
+ * @param cancelledById - User ID if manually cancelled, null for system auto-stop
+ * @param autoStopReason - Reason message when auto-stopped by system
  */
 export async function cancelAllRemindersForToken(
   tokenId: string, 
-  cancelledById?: string
+  cancelledById?: string,
+  autoStopReason?: string
 ): Promise<number> {
   const result = await db
     .update(scheduledQueryReminders)
     .set({
       status: 'cancelled',
       cancelledAt: new Date(),
-      cancelledById: cancelledById || null
+      cancelledById: cancelledById || null,
+      errorMessage: autoStopReason || null
     })
     .where(
       and(
@@ -1135,7 +1143,7 @@ export async function cancelAllRemindersForToken(
         eq(scheduledQueryReminders.status, 'pending')
       )
     )
-    .returning({ id: scheduledQueryReminders.id });
+    .returning({ id: scheduledQueryReminders.id, projectId: scheduledQueryReminders.projectId });
 
   return result.length;
 }
@@ -1147,14 +1155,78 @@ export async function checkAndCancelRemindersIfComplete(tokenId: string): Promis
   const status = await getQueryStatusForToken(tokenId);
   
   if (status?.allAnswered) {
-    const cancelled = await cancelAllRemindersForToken(tokenId);
+    const cancelled = await cancelAllRemindersForToken(
+      tokenId, 
+      undefined, 
+      'Auto-stopped: all queries answered by client'
+    );
     if (cancelled > 0) {
-      console.log(`[QueryReminder] Cancelled ${cancelled} reminders for token ${tokenId} - all queries answered`);
+      console.log(`[QueryReminder] Auto-stopped ${cancelled} reminders for token ${tokenId} - all queries answered`);
     }
     return true;
   }
   
   return false;
+}
+
+/**
+ * Cancel reminders for completed queries and log to chronology
+ * Called when client submits responses - ONLY cancels if ALL queries are answered
+ * Uses the centralized cancelAllRemindersForToken helper for actual cancellation
+ */
+export async function cancelRemindersForCompletedQueriesWithChronology(
+  tokenId: string
+): Promise<{ cancelled: number; chronologyLogged: boolean; allAnswered: boolean }> {
+  const AUTO_STOP_REASON = 'Auto-stopped: all queries answered by client';
+  
+  // First check if all queries are actually answered
+  const status = await getQueryStatusForToken(tokenId);
+  
+  if (!status?.allAnswered) {
+    // Not all queries are answered yet - don't cancel reminders
+    console.log(`[QueryReminder] Skipping auto-stop for token ${tokenId} - ${status?.pendingQueries || 'some'} queries still pending`);
+    return { cancelled: 0, chronologyLogged: false, allAnswered: false };
+  }
+  
+  // Get project info from token for chronology logging
+  const tokenData = await db
+    .select({
+      projectId: queryResponseTokens.projectId
+    })
+    .from(queryResponseTokens)
+    .where(eq(queryResponseTokens.id, tokenId))
+    .limit(1);
+  
+  const projectId = tokenData[0]?.projectId;
+  
+  // Use the centralized cancellation helper with auto-stop reason
+  const cancelledCount = await cancelAllRemindersForToken(tokenId, undefined, AUTO_STOP_REASON);
+  
+  let chronologyLogged = false;
+  
+  // Log to chronology if reminders were cancelled and we have a project
+  if (cancelledCount > 0 && projectId) {
+    try {
+      const { projectChronology } = await import('@shared/schema');
+      await db.insert(projectChronology).values({
+        projectId,
+        entryType: 'communication_added',
+        toStatus: 'no_change',
+        notes: `${cancelledCount} scheduled reminder${cancelledCount === 1 ? '' : 's'} auto-stopped - client answered all queries`,
+        changeReason: 'Reminders Auto-Stopped'
+      });
+      chronologyLogged = true;
+      console.log(`[QueryReminder] Logged chronology entry for ${cancelledCount} auto-stopped reminders on project ${projectId}`);
+    } catch (chronError) {
+      console.error('[QueryReminder] Failed to log chronology for auto-stopped reminders:', chronError);
+    }
+  }
+  
+  if (cancelledCount > 0) {
+    console.log(`[QueryReminder] Auto-stopped ${cancelledCount} reminder(s) for token ${tokenId} - all queries answered`);
+  }
+  
+  return { cancelled: cancelledCount, chronologyLogged, allAnswered: true };
 }
 
 /**
