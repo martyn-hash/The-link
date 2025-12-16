@@ -1010,7 +1010,18 @@ export default function QueryResponsePage() {
   }
 
   if (isError || !data) {
-    const errorData = error as any;
+    // Parse the error response - the queryClient throws errors like "400: {...json...}"
+    let errorData: any = {};
+    try {
+      const errorMessage = (error as Error)?.message || '';
+      const jsonStartIndex = errorMessage.indexOf('{');
+      if (jsonStartIndex !== -1) {
+        errorData = JSON.parse(errorMessage.substring(jsonStartIndex));
+      }
+    } catch {
+      // If parsing fails, use empty object
+    }
+    
     const isExpired = errorData?.expired;
     const isCompleted = errorData?.completed;
     const expiresAt = errorData?.expiresAt;
