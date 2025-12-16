@@ -266,6 +266,68 @@ async function sendEmailReminder(
 }
 
 /**
+ * Extract first name from various name formats
+ * Handles: "SURNAME, FirstName MiddleName" -> "FirstName"
+ * Handles: "FirstName LastName" -> "FirstName"
+ * Handles: "FirstName" -> "FirstName"
+ */
+function extractFirstName(fullName: string | null | undefined): string {
+  if (!fullName) return '';
+  
+  const trimmed = fullName.trim();
+  
+  // Check if name is in "SURNAME, FirstName MiddleName" format
+  if (trimmed.includes(',')) {
+    const afterComma = trimmed.split(',')[1]?.trim();
+    if (afterComma) {
+      // Get the first word after the comma (the actual first name)
+      const firstName = afterComma.split(' ')[0];
+      // Capitalize properly (handle ALL CAPS)
+      return firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+    }
+  }
+  
+  // Standard "FirstName LastName" format - take first word
+  const firstName = trimmed.split(' ')[0];
+  
+  // If it's all uppercase (like a surname), return empty to use generic greeting
+  if (firstName === firstName.toUpperCase() && firstName.length > 2) {
+    return '';
+  }
+  
+  return firstName;
+}
+
+/**
+ * Parse full name into first and last name components
+ * Handles: "SURNAME, FirstName MiddleName" -> { firstName: "Firstname", lastName: "Surname" }
+ * Handles: "FirstName LastName" -> { firstName: "FirstName", lastName: "LastName" }
+ */
+function parseFullName(fullName: string): { firstName: string; lastName: string } {
+  if (!fullName) return { firstName: '', lastName: '' };
+  
+  const trimmed = fullName.trim();
+  
+  // Check if name is in "SURNAME, FirstName MiddleName" format
+  if (trimmed.includes(',')) {
+    const [surnameRaw, restRaw] = trimmed.split(',').map(s => s.trim());
+    const restParts = restRaw?.split(' ').filter(Boolean) || [];
+    const firstName = restParts[0] || '';
+    // Capitalize properly
+    const formattedFirst = firstName ? firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase() : '';
+    const formattedLast = surnameRaw ? surnameRaw.charAt(0).toUpperCase() + surnameRaw.slice(1).toLowerCase() : '';
+    return { firstName: formattedFirst, lastName: formattedLast };
+  }
+  
+  // Standard "FirstName LastName" format
+  const parts = trimmed.split(' ').filter(Boolean);
+  return {
+    firstName: parts[0] || '',
+    lastName: parts.slice(1).join(' ') || ''
+  };
+}
+
+/**
  * Format currency for email display
  */
 function formatCurrencyForEmail(amount: string | null): string {
@@ -298,7 +360,7 @@ function generateReminderEmailBody(
   customIntro?: string | null,
   customSignoff?: string | null
 ): string {
-  const firstName = recipientName?.split(' ')[0] || '';
+  const firstName = extractFirstName(recipientName);
   const greeting = firstName ? `Hi ${firstName}` : 'Hello';
   
   const introHtml = customIntro 
@@ -373,7 +435,8 @@ async function sendSMSReminder(
     }
 
     const formattedPhone = formatPhoneForVoodooSMS(recipientPhone);
-    const name = recipientName ? ` ${recipientName.split(' ')[0]}` : '';
+    const firstName = extractFirstName(recipientName);
+    const name = firstName ? ` ${firstName}` : '';
     
     const message = pendingQueries === 1
       ? `Hi${name}, you have 1 bookkeeping query awaiting your response. Please click here to respond: ${responseLink}`
@@ -672,11 +735,11 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
           ? await getDialoraWebhookConfig(token[0].projectId, reminder.tokenId)
           : null;
         
-        const nameParts = (reminder.recipientName || '').split(' ');
+        const parsedName = parseFullName(reminder.recipientName || '');
         const dialoraContext: DialoraCallContext = {
           recipient: {
-            firstName: nameParts[0] || '',
-            lastName: nameParts.slice(1).join(' ') || '',
+            firstName: parsedName.firstName,
+            lastName: parsedName.lastName,
             fullName: reminder.recipientName || '',
             email: reminder.recipientEmail || '',
             phone: reminder.recipientPhone || ''
