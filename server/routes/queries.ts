@@ -2664,9 +2664,8 @@ ${tableHtml}
         }
       }
       
-      // If no reminders to schedule, just update token and return early
+      // If no reminders to schedule, still update token with recipient data AND on-completion action
       if (data.reminders.length === 0) {
-        // Still update token with recipient data if provided
         const tokenUpdateData: any = {};
         if (recipientEmail && recipientEmail !== 'pending@placeholder.com') {
           tokenUpdateData.recipientEmail = recipientEmail;
@@ -2674,6 +2673,18 @@ ${tableHtml}
             tokenUpdateData.recipientName = recipientName;
           }
         }
+        
+        // IMPORTANT: Save on-completion action even when no reminders are scheduled
+        // This was a bug - we were returning early without saving the stage change config
+        if (data.onCompletionAction) {
+          const project = await storage.getProjectById(projectId);
+          tokenUpdateData.onCompletionTrigger = data.onCompletionAction.trigger;
+          tokenUpdateData.onCompletionStageId = data.onCompletionAction.stageId;
+          tokenUpdateData.onCompletionStageReasonId = data.onCompletionAction.stageReasonId;
+          tokenUpdateData.stageAtSendTime = project?.currentStatus || null;
+          console.log(`[QueryReminders] Saving on-completion action: trigger=${data.onCompletionAction.trigger}, stageId=${data.onCompletionAction.stageId}, stageAtSendTime=${project?.currentStatus}`);
+        }
+        
         if (Object.keys(tokenUpdateData).length > 0) {
           await storage.updateQueryResponseToken(data.tokenId, tokenUpdateData);
         }
