@@ -59,10 +59,19 @@ export function ApprovalFieldForm({
 
   const isSelectType = fieldType === "single_select" || fieldType === "multi_select";
 
+  const handleDateComparisonChange = (value: DateComparisonType) => {
+    setDateComparisonType(value);
+    if (value !== "between") {
+      setExpectedDateEnd("");
+    }
+  };
+
   const validateForm = (): boolean => {
     if (!fieldName.trim()) return false;
     if (fieldType === "boolean" && expectedValueBoolean === undefined) return false;
     if (fieldType === "number" && (!comparisonType || expectedValueNumber === undefined)) return false;
+    if (fieldType === "date" && !expectedDate) return false;
+    if (fieldType === "date" && dateComparisonType === "between" && !expectedDateEnd) return false;
     if (isSelectType && options.filter(o => o.trim()).length === 0) return false;
     return true;
   };
@@ -248,7 +257,7 @@ export function ApprovalFieldForm({
             <Label htmlFor="date-comparison-type">Date Comparison</Label>
             <Select
               value={dateComparisonType}
-              onValueChange={(value: DateComparisonType) => setDateComparisonType(value)}
+              onValueChange={handleDateComparisonChange}
             >
               <SelectTrigger data-testid="select-date-comparison-type">
                 <SelectValue />
