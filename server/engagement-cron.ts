@@ -27,7 +27,7 @@ export function startEngagementCron(): void {
   // Run at 07:20 UK time on Sundays (staggered from :00)
   cron.schedule('20 7 * * 0', wrapCronHandler('EngagementCron', '20 7 * * 0', async () => {
     await runIgnoredCampaignProcessing();
-  }), {
+  }, { useLock: true, timezone: 'Europe/London' }), {
     timezone: "Europe/London"
   });
 

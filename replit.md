@@ -39,24 +39,52 @@ The application uses PostgreSQL (Neon) with Drizzle ORM for data persistence, em
 ## Cron Job Telemetry & Scheduling
 
 ### Overview
-The application uses node-cron for scheduling background jobs. A comprehensive telemetry system (`server/cron-telemetry.ts`) monitors job execution, detects drift, and coordinates distributed execution across autoscaled instances.
+The application uses node-cron for scheduling background jobs. A comprehensive telemetry system (`server/cron-telemetry.ts`) monitors job execution, detects drift, coordinates distributed execution, and handles errors with automatic retries.
 
 ### Key Features
 -   **Event Loop Monitoring**: 20ms resolution delay histogram (min, p50, p95, max) reported every 5 minutes.
 -   **Drift Detection**: Accurate drift calculation using cron-parser to find expected tick vs actual start time.
 -   **Job Overlap Detection**: Tracks concurrent jobs via run IDs to detect resource contention.
--   **Distributed Locking**: PostgreSQL advisory locks prevent duplicate execution in autoscaled deployments.
--   **Memory/Uptime Telemetry**: Heap, RSS, and process uptime logged at each job start.
+-   **Distributed Locking**: PostgreSQL advisory locks prevent duplicate execution in autoscaled deployments. All side-effect jobs use `useLock: true`.
+-   **Automatic Retries**: 2 retries with exponential backoff (1s, 2s, 4s) on failure. Errors never crash the process.
+-   **Structured JSON Telemetry**: Each job emits `[CronTelemetry:JSON] {...}` with actionable metrics.
+
+### JSON Telemetry Schema
+```json
+{
+  "job_name": "string",
+  "run_id": "string",
+  "timestamp": "ISO8601",
+  "status": "started|success|error|skipped|retrying",
+  "drift_ms": 0,
+  "duration_ms": 0,
+  "lock_acquired": true,
+  "lock_wait_ms": 0,
+  "retry_count": 0,
+  "error_message": "string",
+  "event_loop": { "p50_ms": 0, "p95_ms": 0, "max_ms": 0 },
+  "memory": { "heap_used_mb": 0, "heap_total_mb": 0, "rss_mb": 0 },
+  "process_uptime_sec": 0,
+  "concurrent_jobs": ["JobA", "JobB"]
+}
+```
 
 ### Schedule Staggering (UK Timezone)
 Heavy jobs are staggered to avoid collisions:
 -   **HH:02**: Dashboard Cache (hourly, locked)
--   **HH:04, :19, :34, :49**: Reminder Notifications
--   **HH:08**: Notification Cron + Sent Items Detection (starts)
--   **HH:10**: Query Reminder (hourly)
--   **HH:14, :29, :44, :59**: SLA Breach Detection
+-   **HH:04, :19, :34, :49**: Reminder Notifications (locked)
+-   **HH:08**: Notification Cron + Sent Items Detection (locked)
+-   **HH:10**: Query Reminder (hourly, locked)
+-   **HH:14, :29, :44, :59**: SLA Breach Detection (locked)
 -   **08:45**: View Cache morning run (locked)
 -   Heavy jobs (Dashboard Cache, View Cache) are 43+ minutes apart.
 
 ### Usage
-Wrap cron handlers with `wrapCronHandler(name, expression, handler, options)` for automatic telemetry. Set `useLock: true` for jobs requiring distributed coordination.
+Wrap cron handlers with `wrapCronHandler(name, expression, handler, options)` for automatic telemetry, error handling, and retries:
+```typescript
+wrapCronHandler('JobName', '0 * * * *', async () => {
+  // Job logic - no try/catch needed
+}, { useLock: true, timezone: 'Europe/London', maxRetries: 2 })
+```
+
+All side-effect jobs (notifications, reminders, sync, etc.) use `useLock: true` for distributed coordination.

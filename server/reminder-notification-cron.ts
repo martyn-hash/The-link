@@ -12,12 +12,8 @@ export function startReminderNotificationCron(): void {
 
   // Run at :04, :19, :34, :49 (staggered from :00/:15/:30/:45)
   cronJob = cron.schedule("4,19,34,49 7-22 * * *", wrapCronHandler('ReminderNotificationCron', '4,19,34,49 7-22 * * *', async () => {
-    try {
-      await processDueReminders();
-    } catch (error) {
-      console.error("[ReminderNotificationCron] Error processing due reminders:", error);
-    }
-  }), {
+    await processDueReminders();
+  }, { useLock: true, timezone: 'Europe/London' }), {
     timezone: "Europe/London"
   });
 

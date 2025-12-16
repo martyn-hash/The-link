@@ -184,18 +184,14 @@ app.use((req, res, next) => {
     // Runs every day at 1:00 AM UTC (before CH sync to ensure projects are created first)
     // The orchestrator handles duplicate prevention and email notifications
     cron.schedule('0 1 * * *', wrapCronHandler('SchedulingOrchestrator', '0 1 * * *', async () => {
-      try {
-        log('[Scheduling Orchestrator] Starting scheduled nightly run...');
-        const result = await executeScheduledRun();
-        log(`[Scheduling Orchestrator] Nightly run ${result.status}: ${result.message}`);
-        
-        if (result.schedulingResult?.errorsEncountered && result.schedulingResult.errorsEncountered > 0) {
-          console.error(`[Scheduling Orchestrator] Nightly run had ${result.schedulingResult.errorsEncountered} errors:`, result.schedulingResult.errors);
-        }
-      } catch (error) {
-        console.error('[Scheduling Orchestrator] Fatal error in nightly run:', error);
+      log('[Scheduling Orchestrator] Starting scheduled nightly run...');
+      const result = await executeScheduledRun();
+      log(`[Scheduling Orchestrator] Nightly run ${result.status}: ${result.message}`);
+      
+      if (result.schedulingResult?.errorsEncountered && result.schedulingResult.errorsEncountered > 0) {
+        console.error(`[Scheduling Orchestrator] Nightly run had ${result.schedulingResult.errorsEncountered} errors:`, result.schedulingResult.errors);
       }
-    }), {
+    }, { useLock: true }), {
       timezone: "UTC"
     });
     
@@ -204,17 +200,13 @@ app.use((req, res, next) => {
     // Setup nightly Companies House data synchronization
     // Runs every day at 2:00 AM UTC (after project scheduling)
     cron.schedule('0 2 * * *', wrapCronHandler('CHSync', '0 2 * * *', async () => {
-      try {
-        log('[CH Sync] Starting scheduled nightly sync...');
-        const result = await runChSync();
-        log(`[CH Sync] Nightly sync completed: ${result.processedClients} clients, ${result.createdRequests} requests, ${result.errors.length} errors`);
-        if (result.errors.length > 0) {
-          console.error('[CH Sync] Nightly sync errors:', result.errors);
-        }
-      } catch (error) {
-        console.error('[CH Sync] Fatal error in nightly sync:', error);
+      log('[CH Sync] Starting scheduled nightly sync...');
+      const result = await runChSync();
+      log(`[CH Sync] Nightly sync completed: ${result.processedClients} clients, ${result.createdRequests} requests, ${result.errors.length} errors`);
+      if (result.errors.length > 0) {
+        console.error('[CH Sync] Nightly sync errors:', result.errors);
       }
-    }), {
+    }, { useLock: true }), {
       timezone: "UTC"
     });
     
@@ -223,20 +215,15 @@ app.use((req, res, next) => {
     // Setup nightly email resolver
     // Runs every day at 3:00 AM UTC (after Companies House sync)
     cron.schedule('0 3 * * *', wrapCronHandler('EmailResolver', '0 3 * * *', async () => {
-      try {
-        log('[Email Resolver] Starting nightly quarantine resolution...');
-        const { emailResolverService } = await import('./services/emailResolverService');
-        const stats = await emailResolverService.resolveQuarantinedEmails();
-        log(`[Email Resolver] Nightly resolution complete: ${stats.matched} matched, ${stats.stillUnmatched} still unmatched, ${stats.errors} errors`);
-        
-        // Also run cleanup of old quarantined emails (>90 days old with >5 retry attempts)
-        const cleanedCount = await emailResolverService.cleanupOldQuarantinedEmails(90);
-        log(`[Email Resolver] Cleaned up ${cleanedCount} old quarantined emails`);
-      } catch (error) {
-        console.error('[Email Resolver] Error in nightly resolution:', error);
-        log('[Email Resolver] Error in nightly resolution:', error instanceof Error ? error.message : String(error));
-      }
-    }), {
+      log('[Email Resolver] Starting nightly quarantine resolution...');
+      const { emailResolverService } = await import('./services/emailResolverService');
+      const stats = await emailResolverService.resolveQuarantinedEmails();
+      log(`[Email Resolver] Nightly resolution complete: ${stats.matched} matched, ${stats.stillUnmatched} still unmatched, ${stats.errors} errors`);
+      
+      // Also run cleanup of old quarantined emails (>90 days old with >5 retry attempts)
+      const cleanedCount = await emailResolverService.cleanupOldQuarantinedEmails(90);
+      log(`[Email Resolver] Cleaned up ${cleanedCount} old quarantined emails`);
+    }, { useLock: true }), {
       timezone: "UTC"
     });
     
@@ -245,17 +232,13 @@ app.use((req, res, next) => {
     // Setup project message reminder checks
     // Runs at :02, :12, :22, :32, :42, :52 to avoid top-of-minute/hour collisions
     cron.schedule('2,12,22,32,42,52 * * * *', wrapCronHandler('ProjectMessageReminders', '2,12,22,32,42,52 * * * *', async () => {
-      try {
-        log('[Project Message Reminders] Starting reminder check...');
-        const result = await sendProjectMessageReminders();
-        log(`[Project Message Reminders] Check completed: ${result.emailsSent}/${result.usersProcessed} emails sent`);
-        if (result.errors.length > 0) {
-          console.error('[Project Message Reminders] Errors:', result.errors);
-        }
-      } catch (error) {
-        console.error('[Project Message Reminders] Fatal error:', error);
+      log('[Project Message Reminders] Starting reminder check...');
+      const result = await sendProjectMessageReminders();
+      log(`[Project Message Reminders] Check completed: ${result.emailsSent}/${result.usersProcessed} emails sent`);
+      if (result.errors.length > 0) {
+        console.error('[Project Message Reminders] Errors:', result.errors);
       }
-    }));
+    }, { useLock: true }));
     
     log('[Project Message Reminders] Scheduler initialized (runs every 10 minutes)');
     
@@ -286,17 +269,13 @@ app.use((req, res, next) => {
     // Setup dashboard cache updates
     // Overnight update: Runs at 03:05 UK time (staggered to avoid :00 collision) - Europe/London timezone
     cron.schedule('5 3 * * *', wrapCronHandler('DashboardCacheOvernight', '5 3 * * *', async () => {
-      try {
-        log('[Dashboard Cache] Starting overnight cache update...');
-        const result = await updateDashboardCache();
-        log(`[Dashboard Cache] Overnight update completed: ${result.status} - ${result.usersUpdated}/${result.usersProcessed} users updated in ${result.executionTimeMs}ms`);
-        if (result.errors.length > 0) {
-          console.error('[Dashboard Cache] Overnight update errors:', result.errors);
-        }
-      } catch (error) {
-        console.error('[Dashboard Cache] Fatal error in overnight update:', error);
+      log('[Dashboard Cache] Starting overnight cache update...');
+      const result = await updateDashboardCache();
+      log(`[Dashboard Cache] Overnight update completed: ${result.status} - ${result.usersUpdated}/${result.usersProcessed} users updated in ${result.executionTimeMs}ms`);
+      if (result.errors.length > 0) {
+        console.error('[Dashboard Cache] Overnight update errors:', result.errors);
       }
-    }), {
+    }, { useLock: true, timezone: 'Europe/London' }), {
       timezone: "Europe/London" // UK timezone (handles GMT/BST automatically)
     });
     
@@ -305,15 +284,11 @@ app.use((req, res, next) => {
     // Hourly updates during business hours: HH:02 between 08:00-18:00 UK time (staggered from :00)
     // Uses distributed lock to prevent duplicate runs in autoscale
     cron.schedule('2 8-18 * * *', wrapCronHandler('DashboardCacheHourly', '2 8-18 * * *', async () => {
-      try {
-        log('[Dashboard Cache] Starting hourly cache update...');
-        const result = await updateDashboardCache();
-        log(`[Dashboard Cache] Hourly update completed: ${result.status} - ${result.usersUpdated}/${result.usersProcessed} users updated in ${result.executionTimeMs}ms`);
-        if (result.errors.length > 0) {
-          console.error('[Dashboard Cache] Hourly update errors:', result.errors);
-        }
-      } catch (error) {
-        console.error('[Dashboard Cache] Fatal error in hourly update:', error);
+      log('[Dashboard Cache] Starting hourly cache update...');
+      const result = await updateDashboardCache();
+      log(`[Dashboard Cache] Hourly update completed: ${result.status} - ${result.usersUpdated}/${result.usersProcessed} users updated in ${result.executionTimeMs}ms`);
+      if (result.errors.length > 0) {
+        console.error('[Dashboard Cache] Hourly update errors:', result.errors);
       }
     }, { useLock: true, timezone: 'Europe/London' }), {
       timezone: "Europe/London" // UK timezone (handles GMT/BST automatically)
@@ -324,15 +299,11 @@ app.use((req, res, next) => {
     // Setup view cache warming (heavy DB operation - uses distributed lock)
     // Runs at 04:20 UK time to pre-compute project views (well-spaced from other jobs)
     cron.schedule('20 4 * * *', wrapCronHandler('ViewCacheMorning', '20 4 * * *', async () => {
-      try {
-        log('[View Cache] Starting early morning view cache warming (04:20)...');
-        const result = await warmViewCache();
-        log(`[View Cache] Warming completed: ${result.status} - ${result.viewsCached}/${result.usersProcessed} views cached in ${result.executionTimeMs}ms`);
-        if (result.errors.length > 0) {
-          console.error('[View Cache] Warming errors:', result.errors.slice(0, 10));
-        }
-      } catch (error) {
-        console.error('[View Cache] Fatal error in view cache warming:', error);
+      log('[View Cache] Starting early morning view cache warming (04:20)...');
+      const result = await warmViewCache();
+      log(`[View Cache] Warming completed: ${result.status} - ${result.viewsCached}/${result.usersProcessed} views cached in ${result.executionTimeMs}ms`);
+      if (result.errors.length > 0) {
+        console.error('[View Cache] Warming errors:', result.errors.slice(0, 10));
       }
     }, { useLock: true, timezone: 'Europe/London' }), {
       timezone: "Europe/London"
@@ -340,15 +311,11 @@ app.use((req, res, next) => {
     
     // 08:45 - spaced 43 minutes after dashboard cache at 08:02, well clear of 08:08 sent items
     cron.schedule('45 8 * * *', wrapCronHandler('ViewCacheMidMorning', '45 8 * * *', async () => {
-      try {
-        log('[View Cache] Starting morning view cache warming (08:45)...');
-        const result = await warmViewCache();
-        log(`[View Cache] Warming completed: ${result.status} - ${result.viewsCached}/${result.usersProcessed} views cached in ${result.executionTimeMs}ms`);
-        if (result.errors.length > 0) {
-          console.error('[View Cache] Warming errors:', result.errors.slice(0, 10));
-        }
-      } catch (error) {
-        console.error('[View Cache] Fatal error in view cache warming:', error);
+      log('[View Cache] Starting morning view cache warming (08:45)...');
+      const result = await warmViewCache();
+      log(`[View Cache] Warming completed: ${result.status} - ${result.viewsCached}/${result.usersProcessed} views cached in ${result.executionTimeMs}ms`);
+      if (result.errors.length > 0) {
+        console.error('[View Cache] Warming errors:', result.errors.slice(0, 10));
       }
     }, { useLock: true, timezone: 'Europe/London' }), {
       timezone: "Europe/London"
@@ -356,15 +323,11 @@ app.use((req, res, next) => {
     
     // 12:25 - spaced well away from hourly dashboard cache at 12:02
     cron.schedule('25 12 * * *', wrapCronHandler('ViewCacheMidday', '25 12 * * *', async () => {
-      try {
-        log('[View Cache] Starting midday view cache warming (12:25)...');
-        const result = await warmViewCache();
-        log(`[View Cache] Warming completed: ${result.status} - ${result.viewsCached}/${result.usersProcessed} views cached in ${result.executionTimeMs}ms`);
-        if (result.errors.length > 0) {
-          console.error('[View Cache] Warming errors:', result.errors.slice(0, 10));
-        }
-      } catch (error) {
-        console.error('[View Cache] Fatal error in view cache warming:', error);
+      log('[View Cache] Starting midday view cache warming (12:25)...');
+      const result = await warmViewCache();
+      log(`[View Cache] Warming completed: ${result.status} - ${result.viewsCached}/${result.usersProcessed} views cached in ${result.executionTimeMs}ms`);
+      if (result.errors.length > 0) {
+        console.error('[View Cache] Warming errors:', result.errors.slice(0, 10));
       }
     }, { useLock: true, timezone: 'Europe/London' }), {
       timezone: "Europe/London"
@@ -372,15 +335,11 @@ app.use((req, res, next) => {
     
     // 15:25 - spaced well away from hourly dashboard cache at 15:02
     cron.schedule('25 15 * * *', wrapCronHandler('ViewCacheAfternoon', '25 15 * * *', async () => {
-      try {
-        log('[View Cache] Starting afternoon view cache warming (15:25)...');
-        const result = await warmViewCache();
-        log(`[View Cache] Warming completed: ${result.status} - ${result.viewsCached}/${result.usersProcessed} views cached in ${result.executionTimeMs}ms`);
-        if (result.errors.length > 0) {
-          console.error('[View Cache] Warming errors:', result.errors.slice(0, 10));
-        }
-      } catch (error) {
-        console.error('[View Cache] Fatal error in view cache warming:', error);
+      log('[View Cache] Starting afternoon view cache warming (15:25)...');
+      const result = await warmViewCache();
+      log(`[View Cache] Warming completed: ${result.status} - ${result.viewsCached}/${result.usersProcessed} views cached in ${result.executionTimeMs}ms`);
+      if (result.errors.length > 0) {
+        console.error('[View Cache] Warming errors:', result.errors.slice(0, 10));
       }
     }, { useLock: true, timezone: 'Europe/London' }), {
       timezone: "Europe/London"
@@ -391,26 +350,22 @@ app.use((req, res, next) => {
     // Setup activity logs cleanup
     // Runs daily at 4:15 AM UTC (staggered from :00 to avoid collision)
     cron.schedule('15 4 * * *', wrapCronHandler('ActivityCleanup', '15 4 * * *', async () => {
-      try {
-        log('[Activity Cleanup] Starting cleanup job...');
-        
-        // Mark sessions without activity in 24+ hours as inactive
-        const inactiveSessions = await storage.markInactiveSessions();
-        log(`[Activity Cleanup] Marked ${inactiveSessions} stale sessions as inactive`);
-        
-        // Delete sessions older than 90 days
-        const deletedSessions = await storage.cleanupOldSessions(90);
-        log(`[Activity Cleanup] Deleted ${deletedSessions} sessions older than 90 days`);
-        
-        // Delete login attempts older than 90 days
-        const deletedAttempts = await storage.cleanupOldLoginAttempts(90);
-        log(`[Activity Cleanup] Deleted ${deletedAttempts} login attempts older than 90 days`);
-        
-        log('[Activity Cleanup] Cleanup completed successfully');
-      } catch (error) {
-        console.error('[Activity Cleanup] Fatal error in cleanup job:', error);
-      }
-    }), {
+      log('[Activity Cleanup] Starting cleanup job...');
+      
+      // Mark sessions without activity in 24+ hours as inactive
+      const inactiveSessions = await storage.markInactiveSessions();
+      log(`[Activity Cleanup] Marked ${inactiveSessions} stale sessions as inactive`);
+      
+      // Delete sessions older than 90 days
+      const deletedSessions = await storage.cleanupOldSessions(90);
+      log(`[Activity Cleanup] Deleted ${deletedSessions} sessions older than 90 days`);
+      
+      // Delete login attempts older than 90 days
+      const deletedAttempts = await storage.cleanupOldLoginAttempts(90);
+      log(`[Activity Cleanup] Deleted ${deletedAttempts} login attempts older than 90 days`);
+      
+      log('[Activity Cleanup] Cleanup completed successfully');
+    }, { useLock: true }), {
       timezone: "UTC"
     });
     
@@ -421,14 +376,10 @@ app.use((req, res, next) => {
     // Scans Outlook Sent Items folders to detect replies sent directly from Outlook
     const { sentItemsReplyDetectionService } = await import('./services/sentItemsReplyDetectionService');
     cron.schedule('8,18,28,38,48,58 8-19 * * *', wrapCronHandler('SentItemsDetection', '8,18,28,38,48,58 8-19 * * *', async () => {
-      try {
-        log('[Sent Items Detection] Starting periodic check...');
-        const result = await sentItemsReplyDetectionService.runDetection();
-        log(`[Sent Items Detection] Check completed: ${result.checked} checked, ${result.matched} matched, ${result.completed} completed, ${result.errors} errors`);
-      } catch (error) {
-        console.error('[Sent Items Detection] Fatal error in detection job:', error);
-      }
-    }, { timezone: 'Europe/London' }), {
+      log('[Sent Items Detection] Starting periodic check...');
+      const result = await sentItemsReplyDetectionService.runDetection();
+      log(`[Sent Items Detection] Check completed: ${result.checked} checked, ${result.matched} matched, ${result.completed} completed, ${result.errors} errors`);
+    }, { useLock: true, timezone: 'Europe/London' }), {
       timezone: "Europe/London"
     });
     
@@ -438,18 +389,14 @@ app.use((req, res, next) => {
     // Runs at :14, :29, :44, :59 during business hours (well-spaced from other jobs)
     // Detects and marks emails that have exceeded their SLA deadline
     cron.schedule('14,29,44,59 8-18 * * *', wrapCronHandler('SLABreachDetection', '14,29,44,59 8-18 * * *', async () => {
-      try {
-        const { checkForSlaBreaches, markEmailsAsBreached } = await import('./services/slaService');
-        const breaches = await checkForSlaBreaches();
-        if (breaches.length > 0) {
-          const emailIds = breaches.map(b => b.emailId);
-          await markEmailsAsBreached(emailIds);
-          log(`[SLA Breach Detection] Marked ${breaches.length} email(s) as breached`);
-        }
-      } catch (error) {
-        console.error('[SLA Breach Detection] Fatal error in detection job:', error);
+      const { checkForSlaBreaches, markEmailsAsBreached } = await import('./services/slaService');
+      const breaches = await checkForSlaBreaches();
+      if (breaches.length > 0) {
+        const emailIds = breaches.map(b => b.emailId);
+        await markEmailsAsBreached(emailIds);
+        log(`[SLA Breach Detection] Marked ${breaches.length} email(s) as breached`);
       }
-    }, { timezone: 'Europe/London' }), {
+    }, { useLock: true, timezone: 'Europe/London' }), {
       timezone: "Europe/London"
     });
     

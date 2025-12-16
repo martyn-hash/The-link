@@ -31,7 +31,7 @@ export function startSequenceCron(): void {
   // Run at 06:15 UK time (staggered from :00)
   cron.schedule('15 6 * * *', wrapCronHandler('SequenceCron', '15 6 * * *', async () => {
     await runSequenceProgression();
-  }), {
+  }, { useLock: true, timezone: 'Europe/London' }), {
     timezone: "Europe/London"
   });
 

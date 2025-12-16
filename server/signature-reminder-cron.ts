@@ -23,12 +23,8 @@ export function startSignatureReminderCron(): void {
 
   // Run daily at 9:12 AM UK time (staggered from :00)
   cronJob = cron.schedule("12 9 * * *", wrapCronHandler('SignatureReminderCron', '12 9 * * *', async () => {
-    try {
-      await processPendingReminders();
-    } catch (error) {
-      console.error("[SignatureReminderCron] Error processing signature reminders:", error);
-    }
-  }), {
+    await processPendingReminders();
+  }, { useLock: true, timezone: 'Europe/London' }), {
     timezone: "Europe/London"
   });
 

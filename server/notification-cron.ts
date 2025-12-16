@@ -23,12 +23,8 @@ export function startNotificationCron(): void {
 
   // Run at :08 past each hour between 07:00-19:00 UK time (staggered from :00)
   cronJob = cron.schedule("8 7-19 * * *", wrapCronHandler('NotificationCron', '8 7-19 * * *', async () => {
-    try {
-      await processDueNotifications();
-    } catch (error) {
-      console.error("[NotificationCron] Error processing due notifications:", error);
-    }
-  }), {
+    await processDueNotifications();
+  }, { useLock: true, timezone: 'Europe/London' }), {
     timezone: "Europe/London"
   });
 

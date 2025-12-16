@@ -494,7 +494,7 @@ export async function startQueryReminderCron(): Promise<void> {
   // Run at :10 past each hour (staggered from :00)
   cron.schedule('10 * * * *', wrapCronHandler('QueryReminderCron', '10 * * * *', async () => {
     await processQueryReminders();
-  }));
+  }, { useLock: true }));
 
   console.log('[QueryReminderCron] Started - running at HH:10 hourly during 07:00-22:00 UK time');
 }

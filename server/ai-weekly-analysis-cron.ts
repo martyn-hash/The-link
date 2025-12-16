@@ -238,12 +238,8 @@ export function startAIWeeklyAnalysisCron(): void {
 
   // Run at 06:25 UK time on Mondays (staggered from :00)
   cronJob = cron.schedule("25 6 * * 1", wrapCronHandler('AIWeeklyAnalysis', '25 6 * * 1', async () => {
-    try {
-      await runWeeklyAnalysis();
-    } catch (error) {
-      console.error("[AIWeeklyAnalysis] Cron job error:", error);
-    }
-  }), {
+    await runWeeklyAnalysis();
+  }, { useLock: true, timezone: 'Europe/London' }), {
     timezone: "Europe/London"
   });
 

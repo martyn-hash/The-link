@@ -301,15 +301,60 @@ export function endCronJob(context: JobRunContext, status: 'success' | 'error' |
 interface WrapOptions {
   useLock?: boolean;  // Whether to use pg_advisory_lock for distributed coordination
   timezone?: string;  // Timezone for cron expression parsing
+  maxRetries?: number; // Maximum retry attempts (default: 2)
+  retryDelayMs?: number; // Base delay between retries in ms (default: 1000, uses exponential backoff)
+}
+
+interface CronJobTelemetry {
+  job_name: string;
+  run_id: string;
+  timestamp: string;
+  status: 'started' | 'success' | 'error' | 'skipped' | 'retrying';
+  drift_ms: number;
+  duration_ms?: number;
+  lock_acquired?: boolean;
+  lock_wait_ms?: number;
+  retry_count?: number;
+  error_message?: string;
+  event_loop: {
+    p50_ms: number;
+    p95_ms: number;
+    max_ms: number;
+  };
+  memory: {
+    heap_used_mb: number;
+    heap_total_mb: number;
+    rss_mb: number;
+  };
+  process_uptime_sec: number;
+  concurrent_jobs: string[];
 }
 
 /**
- * Create a wrapped cron handler with automatic telemetry
+ * Emit structured JSON telemetry for monitoring systems
+ */
+function emitTelemetry(telemetry: CronJobTelemetry): void {
+  console.log(`[CronTelemetry:JSON] ${JSON.stringify(telemetry)}`);
+}
+
+/**
+ * Sleep utility for retry backoff
+ */
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Create a wrapped cron handler with automatic telemetry, error handling, and retries
  * Usage: cron.schedule('0 * * * *', wrapCronHandler('MyJob', '0 * * * *', async () => { ... }))
  * 
  * Options:
  * - useLock: Enable pg_advisory_lock to prevent duplicate runs across autoscale instances
  * - timezone: Timezone for accurate drift calculation (e.g., 'Europe/London')
+ * - maxRetries: Maximum retry attempts on failure (default: 2)
+ * - retryDelayMs: Base delay between retries with exponential backoff (default: 1000ms)
+ * 
+ * SAFETY: Handler errors are ALWAYS caught - the wrapper never throws to prevent process crashes
  */
 export function wrapCronHandler(
   jobName: string,
@@ -317,33 +362,149 @@ export function wrapCronHandler(
   handler: () => Promise<void>,
   options: WrapOptions = {}
 ): () => Promise<void> {
-  const { useLock = false, timezone } = options;
+  const { 
+    useLock = false, 
+    timezone,
+    maxRetries = 2,
+    retryDelayMs = 1000
+  } = options;
   
   return async () => {
     const ctx = startCronJob(jobName, cronExpression, timezone);
+    const concurrentJobNames = Array.from(activeJobs.values())
+      .filter(j => j.runId !== ctx.runId)
+      .map(j => j.jobName);
+    
+    let lockWaitMs = 0;
+    let retryCount = 0;
+    let lastError: Error | null = null;
+    
+    // Build base telemetry object
+    const baseTelemetry: Omit<CronJobTelemetry, 'status' | 'duration_ms' | 'error_message' | 'retry_count'> = {
+      job_name: jobName,
+      run_id: ctx.runId,
+      timestamp: ctx.actualStartTime.toISOString(),
+      drift_ms: ctx.driftMs,
+      event_loop: {
+        p50_ms: ctx.eventLoopStats.p50Ms,
+        p95_ms: ctx.eventLoopStats.p95Ms,
+        max_ms: ctx.eventLoopStats.maxMs,
+      },
+      memory: {
+        heap_used_mb: ctx.memoryUsageMB.heapUsed,
+        heap_total_mb: ctx.memoryUsageMB.heapTotal,
+        rss_mb: ctx.memoryUsageMB.rss,
+      },
+      process_uptime_sec: ctx.processUptimeSec,
+      concurrent_jobs: concurrentJobNames,
+    };
+    
+    // Emit start telemetry
+    emitTelemetry({ ...baseTelemetry, status: 'started' });
     
     // If distributed locking is enabled, try to acquire lock first
     if (useLock) {
-      const acquired = await tryAcquireJobLock(jobName);
-      if (!acquired) {
-        endCronJob(ctx, 'skipped', 'Lock held by another instance');
-        return;
+      const lockStartTime = Date.now();
+      try {
+        const acquired = await tryAcquireJobLock(jobName);
+        lockWaitMs = Date.now() - lockStartTime;
+        
+        if (!acquired) {
+          const skipTelemetry: CronJobTelemetry = {
+            ...baseTelemetry,
+            status: 'skipped',
+            lock_acquired: false,
+            lock_wait_ms: lockWaitMs,
+            duration_ms: Date.now() - ctx.actualStartTime.getTime(),
+            error_message: 'Lock held by another instance',
+          };
+          emitTelemetry(skipTelemetry);
+          endCronJob(ctx, 'skipped', 'Lock held by another instance');
+          return;
+        }
+        ctx.lockAcquired = true;
+      } catch (lockError) {
+        // Lock acquisition failed - log but continue (fail-open)
+        console.error(`[CronTelemetry] [${jobName}] Lock acquisition error, proceeding anyway:`, lockError);
+        lockWaitMs = Date.now() - lockStartTime;
       }
-      ctx.lockAcquired = true;
     }
     
-    try {
-      await handler();
-      endCronJob(ctx, 'success');
-    } catch (error) {
-      endCronJob(ctx, 'error', error instanceof Error ? error.message : String(error));
-      throw error;
-    } finally {
-      // Release lock if we acquired one
-      if (ctx.lockAcquired) {
-        await releaseJobLock(jobName);
+    // Execute handler with retry logic
+    while (retryCount <= maxRetries) {
+      try {
+        await handler();
+        
+        // Success - emit telemetry and exit
+        const successTelemetry: CronJobTelemetry = {
+          ...baseTelemetry,
+          status: 'success',
+          lock_acquired: ctx.lockAcquired,
+          lock_wait_ms: useLock ? lockWaitMs : undefined,
+          duration_ms: Date.now() - ctx.actualStartTime.getTime(),
+          retry_count: retryCount,
+        };
+        emitTelemetry(successTelemetry);
+        endCronJob(ctx, 'success');
+        
+        // Release lock if we acquired one
+        if (ctx.lockAcquired) {
+          await releaseJobLock(jobName).catch(e => 
+            console.error(`[CronTelemetry] [${jobName}] Failed to release lock:`, e)
+          );
+        }
+        return;
+        
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        retryCount++;
+        
+        if (retryCount <= maxRetries) {
+          // Emit retry telemetry
+          const retryTelemetry: CronJobTelemetry = {
+            ...baseTelemetry,
+            status: 'retrying',
+            lock_acquired: ctx.lockAcquired,
+            lock_wait_ms: useLock ? lockWaitMs : undefined,
+            duration_ms: Date.now() - ctx.actualStartTime.getTime(),
+            retry_count: retryCount,
+            error_message: lastError.message,
+          };
+          emitTelemetry(retryTelemetry);
+          
+          console.warn(`[CronTelemetry] [${jobName}] [${ctx.runId}] Retry ${retryCount}/${maxRetries} after error: ${lastError.message}`);
+          
+          // Exponential backoff: 1s, 2s, 4s...
+          const backoffMs = retryDelayMs * Math.pow(2, retryCount - 1);
+          await sleep(backoffMs);
+        }
       }
     }
+    
+    // All retries exhausted - emit error telemetry
+    const errorTelemetry: CronJobTelemetry = {
+      ...baseTelemetry,
+      status: 'error',
+      lock_acquired: ctx.lockAcquired,
+      lock_wait_ms: useLock ? lockWaitMs : undefined,
+      duration_ms: Date.now() - ctx.actualStartTime.getTime(),
+      retry_count: retryCount,
+      error_message: lastError?.message || 'Unknown error',
+    };
+    emitTelemetry(errorTelemetry);
+    
+    console.error(`[CronTelemetry] [${jobName}] [${ctx.runId}] FAILED after ${retryCount} attempts: ${lastError?.message}`);
+    endCronJob(ctx, 'error', lastError?.message);
+    
+    // Release lock if we acquired one
+    if (ctx.lockAcquired) {
+      await releaseJobLock(jobName).catch(e => 
+        console.error(`[CronTelemetry] [${jobName}] Failed to release lock:`, e)
+      );
+    }
+    
+    // IMPORTANT: Do NOT rethrow - this prevents process crashes
+    // The error is logged and telemetry is emitted, but the cron scheduler continues
   };
 }
 
