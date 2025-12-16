@@ -255,7 +255,13 @@ export default function ProjectChronology({ project }: ProjectChronologyProps) {
           // Activity log entries (emails, queries, tasks) should show their notes
           detail = entry.notes || 'Activity logged';
         } else if (entry.fromStatus) {
-          detail = `${formatStageName(entry.fromStatus)} → ${formatStageName(entry.toStatus)}`;
+          // For stage changes, use notes if it contains the full transition info (e.g., auto-stage-change notes)
+          // Otherwise construct from fromStatus/toStatus
+          if (entry.notes && entry.notes.includes('→')) {
+            detail = entry.notes;
+          } else {
+            detail = `${formatStageName(entry.fromStatus)} → ${formatStageName(entry.toStatus)}`;
+          }
         } else {
           detail = `Project created in ${formatStageName(entry.toStatus)}`;
         }
