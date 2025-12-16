@@ -205,6 +205,7 @@ export interface EmailRecipientData {
   email: string;
   name: string;
   phone?: string | null;
+  reminders?: ReminderScheduleItem[];
 }
 
 export interface EmailDialogProps extends DialogBaseProps {

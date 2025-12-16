@@ -1058,35 +1058,39 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     if (pendingEmailQueryIds.length > 0) {
       try {
         // Mark queries as sent and log to chronology
+        // Pass recipient email/name to update the token with real data (not placeholder)
         await apiRequest('POST', `/api/projects/${projectId}/queries/mark-sent`, {
           queryIds: pendingEmailQueryIds,
           tokenId: pendingEmailTokenId,
+          recipientEmail: recipientData?.email,
+          recipientName: recipientData?.name,
         });
         
+        // Use reminders from recipientData (passed from EmailDialog) to avoid stale state issues
+        const remindersToSave = recipientData?.reminders || [];
+        const enabledReminders = remindersToSave.filter(r => r.enabled);
+        
         // Save configured reminders if we have a token and enabled reminders
-        if (pendingEmailTokenId && configuredReminders.length > 0) {
-          const enabledReminders = configuredReminders.filter(r => r.enabled);
-          if (enabledReminders.length > 0) {
-            try {
-              // Pass real recipient data from the email dialog for reminder scheduling
-              await apiRequest('POST', `/api/projects/${projectId}/queries/reminders`, {
-                tokenId: pendingEmailTokenId,
-                reminders: enabledReminders.map(r => ({
-                  scheduledAt: r.scheduledAt,
-                  channel: r.channel,
-                })),
-                // Pass recipient data from the email - this is the REAL data, not placeholder
-                recipientEmail: recipientData?.email,
-                recipientName: recipientData?.name,
-                recipientPhone: recipientData?.phone,
-                // Pass on-completion action if configured
-                onCompletionAction: configuredOnCompletionAction,
-              });
-              console.log(`Saved ${enabledReminders.length} scheduled reminders for token ${pendingEmailTokenId} to ${recipientData?.email}`);
-            } catch (reminderError) {
-              console.error('Error saving reminders:', reminderError);
-              // Don't fail the overall operation if reminder saving fails
-            }
+        if (pendingEmailTokenId && enabledReminders.length > 0) {
+          try {
+            // Pass real recipient data from the email dialog for reminder scheduling
+            await apiRequest('POST', `/api/projects/${projectId}/queries/reminders`, {
+              tokenId: pendingEmailTokenId,
+              reminders: enabledReminders.map(r => ({
+                scheduledAt: r.scheduledAt,
+                channel: r.channel,
+              })),
+              // Pass recipient data from the email - this is the REAL data, not placeholder
+              recipientEmail: recipientData?.email,
+              recipientName: recipientData?.name,
+              recipientPhone: recipientData?.phone,
+              // Pass on-completion action if configured
+              onCompletionAction: configuredOnCompletionAction,
+            });
+            console.log(`Saved ${enabledReminders.length} scheduled reminders for token ${pendingEmailTokenId} to ${recipientData?.email}`);
+          } catch (reminderError) {
+            console.error('Error saving reminders:', reminderError);
+            // Don't fail the overall operation if reminder saving fails
           }
         }
         
@@ -1095,7 +1099,7 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
         queryClient.invalidateQueries({ queryKey: ['/api/projects', projectId, 'queries', 'reminders'] });
         queryClient.invalidateQueries({ queryKey: ['/api/queries/counts'] });
         
-        const reminderCount = configuredReminders.filter(r => r.enabled).length;
+        const reminderCount = enabledReminders.length;
         toast({ 
           title: "Queries sent", 
           description: `${pendingEmailQueryIds.length} queries sent to client${reminderCount > 0 ? ` with ${reminderCount} scheduled reminder${reminderCount !== 1 ? 's' : ''}` : ''}.` 

@@ -514,6 +514,7 @@ export function EmailDialog({
         email: primaryRecipient.email,
         name: primaryRecipient.fullName || 'Client',
         phone: primaryRecipient.phone || null,
+        reminders: reminderSchedule,
       } : undefined;
       
       handleClose(true);
