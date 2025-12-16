@@ -1706,7 +1706,7 @@ ${emailSignoff}`;
         // Check for 'all_answered' trigger when a query becomes answered
         if (updateData.status === 'answered_by_client') {
           try {
-            const tokenWithOnCompletion = await storage.getQueryResponseTokenById(tokenData.id);
+            const tokenWithOnCompletion = await storage.getQueryResponseTokenById(validation.tokenData!.id);
             if (tokenWithOnCompletion?.onCompletionTrigger === 'all_answered' && 
                 tokenWithOnCompletion.onCompletionStageId) {
               // Check if all queries in the token are now answered
@@ -1716,25 +1716,28 @@ ${emailSignoff}`;
               );
               
               if (allAnswered) {
-                const currentProject = await storage.getProjectById(tokenData.projectId);
+                const currentProject = await storage.getProjectById(validation.tokenData!.projectId);
+                const targetStage = await storage.getStageById(tokenWithOnCompletion.onCompletionStageId);
                 
-                // Only change stage if project is still in same stage as when queries were sent
-                if (currentProject && currentProject.stageId === tokenWithOnCompletion.stageAtSendTime) {
-                  await storage.updateProject(tokenData.projectId, {
-                    stageId: tokenWithOnCompletion.onCompletionStageId,
+                if (!targetStage) {
+                  console.log(`[Query Auto-save] Auto-stage-change skipped: target stage not found`);
+                } else if (currentProject && currentProject.currentStatus === tokenWithOnCompletion.stageAtSendTime) {
+                  // Only change stage if project is still in same stage as when queries were sent
+                  await storage.updateProject(validation.tokenData!.projectId, {
+                    currentStatus: targetStage.name,
                   });
                   
                   // Create chronology entry for the stage change
                   await storage.createChronologyEntry({
-                    projectId: tokenData.projectId,
+                    projectId: validation.tokenData!.projectId,
                     entryType: 'stage_change',
-                    toStatus: tokenWithOnCompletion.onCompletionStageId,
+                    toStatus: targetStage.name,
                     changedById: null,
                     notes: 'Stage changed automatically - all queries answered by client',
                     stageReasonId: tokenWithOnCompletion.onCompletionStageReasonId || undefined,
                   });
                   
-                  console.log(`[Query Auto-save] Auto-stage-change triggered: all queries answered, project ${tokenData.projectId} moved to stage ${tokenWithOnCompletion.onCompletionStageId}`);
+                  console.log(`[Query Auto-save] Auto-stage-change triggered: all queries answered, project ${validation.tokenData!.projectId} moved to stage "${targetStage.name}"`);
                 }
               }
             }
@@ -1933,25 +1936,32 @@ ${emailSignoff}`;
           try {
             const currentProject = await storage.getProjectById(tokenData.projectId);
             
-            // Only change stage if project is still in the same stage as when queries were sent
-            if (currentProject && currentProject.stageId === tokenWithOnCompletion.stageAtSendTime) {
-              await storage.updateProject(tokenData.projectId, {
-                stageId: tokenWithOnCompletion.onCompletionStageId,
-              });
-              
-              // Create chronology entry for the stage change
-              await storage.createChronologyEntry({
-                projectId: tokenData.projectId,
-                entryType: 'stage_change',
-                toStatus: tokenWithOnCompletion.onCompletionStageId,
-                changedById: null,
-                notes: `Stage changed automatically - ${triggerReason}`,
-                stageReasonId: tokenWithOnCompletion.onCompletionStageReasonId || undefined,
-              });
-              
-              console.log(`[Query Submit] Auto-stage-change triggered: project ${tokenData.projectId} moved to stage ${tokenWithOnCompletion.onCompletionStageId}`);
+            // Get the target stage details to get its name
+            const targetStage = await storage.getStageById(tokenWithOnCompletion.onCompletionStageId);
+            if (!targetStage) {
+              console.log(`[Query Submit] Auto-stage-change skipped: target stage ${tokenWithOnCompletion.onCompletionStageId} not found`);
             } else {
-              console.log(`[Query Submit] Skipped auto-stage-change: project stage has changed since queries were sent (was ${tokenWithOnCompletion.stageAtSendTime}, now ${currentProject?.stageId})`);
+              // Only change stage if project is still in the same stage as when queries were sent
+              // Compare currentStatus (stage name) with stored stageAtSendTime (also stage name)
+              if (currentProject && currentProject.currentStatus === tokenWithOnCompletion.stageAtSendTime) {
+                await storage.updateProject(tokenData.projectId, {
+                  currentStatus: targetStage.name,
+                });
+                
+                // Create chronology entry for the stage change
+                await storage.createChronologyEntry({
+                  projectId: tokenData.projectId,
+                  entryType: 'stage_change',
+                  toStatus: targetStage.name,
+                  changedById: null,
+                  notes: `Stage changed automatically - ${triggerReason}`,
+                  stageReasonId: tokenWithOnCompletion.onCompletionStageReasonId || undefined,
+                });
+                
+                console.log(`[Query Submit] Auto-stage-change triggered: project ${tokenData.projectId} moved to stage "${targetStage.name}"`);
+              } else {
+                console.log(`[Query Submit] Skipped auto-stage-change: project stage has changed since queries were sent (was "${tokenWithOnCompletion.stageAtSendTime}", now "${currentProject?.currentStatus}")`);
+              }
             }
           } catch (stageChangeError) {
             console.error('[Query Submit] Error executing on-completion stage change:', stageChangeError);
@@ -2518,13 +2528,14 @@ ${tableHtml}
       
       // Handle on-completion action - store in token for later processing
       if (data.onCompletionAction) {
-        // Get current project stage to store as stageAtSendTime
+        // Get current project to store currentStatus (stage name) as stageAtSendTime
         const project = await storage.getProjectById(projectId);
         
         tokenUpdateData.onCompletionTrigger = data.onCompletionAction.trigger;
         tokenUpdateData.onCompletionStageId = data.onCompletionAction.stageId;
         tokenUpdateData.onCompletionStageReasonId = data.onCompletionAction.stageReasonId;
-        tokenUpdateData.stageAtSendTime = project?.stageId || null;
+        // Store the stage NAME (currentStatus), not the stage ID
+        tokenUpdateData.stageAtSendTime = project?.currentStatus || null;
       }
       
       if (Object.keys(tokenUpdateData).length > 0) {
