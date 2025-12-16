@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Mail, Paperclip, Sparkles, Mic, Eye, Edit3, Lock, Clock, Phone, MessageSquare, Users, ArrowRightCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Mail, Paperclip, Sparkles, Mic, Eye, Edit3, Lock, Clock, Phone, MessageSquare, Users, ArrowRightCircle, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
 import { useDraftAutoSave } from "@/hooks/useDraftAutoSave";
 import { ReminderScheduleEditor } from "@/components/reminders/ReminderScheduleEditor";
 import { Button } from "@/components/ui/button";
@@ -154,13 +154,14 @@ export function EmailDialog({
   
   // Notify parent when on-completion action configuration changes
   // Always use 'submitted' trigger - fires when client submits the form
+  // BOTH stage AND reason are REQUIRED for auto-stage-change
   useEffect(() => {
     if (onCompletionActionConfigured) {
-      if (enableOnCompletion && onCompletionStageId) {
+      if (enableOnCompletion && onCompletionStageId && onCompletionStageReasonId) {
         onCompletionActionConfigured({
           trigger: 'submitted',
           stageId: onCompletionStageId,
-          stageReasonId: onCompletionStageReasonId || null,
+          stageReasonId: onCompletionStageReasonId,
         });
       } else {
         onCompletionActionConfigured(null);
@@ -554,6 +555,18 @@ export function EmailDialog({
     if (selectedRecipients.size === 0) {
       showFriendlyError({ error: 'Please select at least one recipient.' });
       return;
+    }
+    
+    // Validate auto-stage-change configuration - reason is REQUIRED
+    if (isQueryEmailMode && enableOnCompletion) {
+      if (!onCompletionStageId) {
+        showFriendlyError({ error: 'Please select a stage for the auto-move action, or disable it.' });
+        return;
+      }
+      if (!onCompletionStageReasonId) {
+        showFriendlyError({ error: 'Please select a stage change reason. This is required for auto-move actions.' });
+        return;
+      }
     }
 
     // Get selected recipients with their emails
@@ -1179,25 +1192,31 @@ export function EmailDialog({
                             </Select>
                           </div>
                           
-                          {/* Stage reason selection */}
-                          {onCompletionStageId && stageReasons && stageReasons.length > 0 && (
+                          {/* Stage reason selection - REQUIRED */}
+                          {onCompletionStageId && (
                             <div className="space-y-2">
-                              <Label className="text-sm">Stage change reason</Label>
-                              <Select
-                                value={onCompletionStageReasonId}
-                                onValueChange={setOnCompletionStageReasonId}
-                              >
-                                <SelectTrigger className="w-full" data-testid="select-completion-reason">
-                                  <SelectValue placeholder="Select reason (optional)..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {stageReasons.map((reason) => (
-                                    <SelectItem key={reason.id} value={reason.id}>
-                                      {reason.reason}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              <Label className="text-sm">Stage change reason <span className="text-destructive">*</span></Label>
+                              {stageReasons && stageReasons.length > 0 ? (
+                                <Select
+                                  value={onCompletionStageReasonId}
+                                  onValueChange={setOnCompletionStageReasonId}
+                                >
+                                  <SelectTrigger className="w-full" data-testid="select-completion-reason">
+                                    <SelectValue placeholder="Select reason..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {stageReasons.map((reason) => (
+                                      <SelectItem key={reason.id} value={reason.id}>
+                                        {reason.reason}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <p className="text-xs text-amber-600 dark:text-amber-400">
+                                  No reasons configured for this stage. Please configure stage reasons in Settings.
+                                </p>
+                              )}
                             </div>
                           )}
                           
@@ -1211,15 +1230,28 @@ export function EmailDialog({
                       )}
                     </div>
 
-                    {/* Summary of configured action */}
-                    {enableOnCompletion && onCompletionStageId && (
+                    {/* Summary of configured action - requires both stage AND reason */}
+                    {enableOnCompletion && onCompletionStageId && onCompletionStageReasonId && (
                       <div className="bg-green-50 dark:bg-green-950/30 rounded-lg p-3 space-y-2">
                         <div className="flex items-center gap-2">
                           <ArrowRightCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                           <span className="text-sm font-medium text-green-900 dark:text-green-100">Action Configured</span>
                         </div>
                         <p className="text-xs text-green-800 dark:text-green-200">
-                          When the client submits their responses, the project will automatically move to "{projectStages?.find(s => s.id === onCompletionStageId)?.name}".
+                          When the client submits their responses, the project will automatically move to "{projectStages?.find(s => s.id === onCompletionStageId)?.name}" with reason "{stageReasons?.find(r => r.id === onCompletionStageReasonId)?.reason}".
+                        </p>
+                      </div>
+                    )}
+                    
+                    {/* Incomplete configuration warning */}
+                    {enableOnCompletion && onCompletionStageId && !onCompletionStageReasonId && stageReasons && stageReasons.length > 0 && (
+                      <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                          <span className="text-sm font-medium text-amber-900 dark:text-amber-100">Action Incomplete</span>
+                        </div>
+                        <p className="text-xs text-amber-800 dark:text-amber-200">
+                          Please select a stage change reason to complete the configuration.
                         </p>
                       </div>
                     )}
@@ -1483,9 +1515,19 @@ export function EmailDialog({
               ) : (
                 <Button 
                   type="submit" 
-                  disabled={sendEmailMutation.isPending || !hasSelectedRecipients || (isQueryEmailMode && (!hasVisitedSchedulingTab || !hasVisitedActionsTab))} 
+                  disabled={
+                    sendEmailMutation.isPending || 
+                    !hasSelectedRecipients || 
+                    (isQueryEmailMode && (!hasVisitedSchedulingTab || !hasVisitedActionsTab)) ||
+                    (isQueryEmailMode && enableOnCompletion && (!onCompletionStageId || !onCompletionStageReasonId))
+                  } 
                   data-testid="button-send-email-dialog"
                   className="bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
+                  title={
+                    isQueryEmailMode && enableOnCompletion && (!onCompletionStageId || !onCompletionStageReasonId)
+                      ? "Please complete the auto-move configuration (stage and reason required)"
+                      : undefined
+                  }
                 >
                   {sendEmailMutation.isPending 
                     ? 'Sending...' 
