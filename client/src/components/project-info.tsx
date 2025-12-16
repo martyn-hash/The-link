@@ -124,19 +124,43 @@ export default function ProjectInfo({ project, user, currentStage, currentAssign
     return { status: 'On Track', color: 'bg-green-600 text-white' };
   }, [currentBusinessHours, currentStage?.maxInstanceTime, project.dueDate]);
 
-  // Calculate time remaining until deadline
+  // Calculate time remaining until project due date
   const timeRemaining = useMemo(() => {
-    if (!currentStage?.maxInstanceTime || currentStage.maxInstanceTime === 0) {
+    if (!project.dueDate) {
       return "No deadline";
     }
 
-    const remaining = currentStage.maxInstanceTime - currentBusinessHours;
-    if (remaining <= 0) {
+    const now = new Date();
+    const dueDate = new Date(project.dueDate);
+    const diffMs = dueDate.getTime() - now.getTime();
+    
+    // If current time is past the due date, show Overdue
+    if (diffMs <= 0) {
       return "Overdue";
     }
 
-    return formatBusinessHours(remaining);
-  }, [currentBusinessHours, currentStage?.maxInstanceTime]);
+    // Calculate days and hours remaining
+    const diffHours = diffMs / (1000 * 60 * 60);
+    const days = Math.floor(diffHours / 24);
+    const hours = Math.round(diffHours % 24);
+    
+    if (days === 0) {
+      if (hours <= 1) {
+        return "< 1 hour";
+      }
+      return `${hours} hours`;
+    } else if (days === 1) {
+      if (hours === 0) {
+        return "1 day";
+      }
+      return `1 day, ${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+    } else {
+      if (hours === 0) {
+        return `${days} days`;
+      }
+      return `${days} days, ${hours} ${hours === 1 ? 'hour' : 'hours'}`;
+    }
+  }, [project.dueDate]);
 
   // Calculate stage deadline date
   const stageDeadline = useMemo(() => {
