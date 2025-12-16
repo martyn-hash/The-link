@@ -1858,21 +1858,21 @@ ${emailSignoff}`;
                     currentStatus: targetStage.name,
                   });
                   
-                  // Create chronology entry for the stage change
+                  // Create chronology entry for the stage change with proper from/to stages
+                  const oldStageName = currentProject.currentStatus;
                   await storage.createChronologyEntry({
                     projectId: validation.tokenData!.projectId,
                     entryType: 'stage_change',
+                    fromStatus: oldStageName,
                     toStatus: targetStage.name,
                     changedById: null,
-                    notes: 'Stage changed automatically - all queries answered by client',
+                    notes: `${oldStageName} → ${targetStage.name} - Auto Change Due to Queries Answered`,
                     stageReasonId: tokenWithOnCompletion.onCompletionStageReasonId || undefined,
                   });
                   
                   console.log(`[Query Auto-save] Auto-stage-change triggered: all queries answered, project ${validation.tokenData!.projectId} moved to stage "${targetStage.name}"`);
                   
                   // Send notification email to the new stage assignee
-                  // Use currentProject.currentStatus as the old stage (verified to match stageAtSendTime above)
-                  const oldStageName = currentProject.currentStatus;
                   try {
                     await storage.sendStageChangeNotifications(
                       validation.tokenData!.projectId,
@@ -2094,26 +2094,26 @@ ${emailSignoff}`;
                   currentStatus: targetStage.name,
                 });
                 
-                // Create chronology entry for the stage change
+                // Create chronology entry for the stage change with proper from/to stages
+                const oldStageForChronology = currentProject.currentStatus;
                 await storage.createChronologyEntry({
                   projectId: tokenData.projectId,
                   entryType: 'stage_change',
+                  fromStatus: oldStageForChronology,
                   toStatus: targetStage.name,
                   changedById: null,
-                  notes: `Stage changed automatically - ${triggerReason}`,
+                  notes: `${oldStageForChronology} → ${targetStage.name} - Auto Change Due to Queries Answered`,
                   stageReasonId: tokenWithOnCompletion.onCompletionStageReasonId || undefined,
                 });
                 
                 console.log(`[Query Submit] Auto-stage-change triggered: project ${tokenData.projectId} moved to stage "${targetStage.name}"`);
                 
                 // Send notification email to the new stage assignee
-                // Use currentProject.currentStatus as the old stage (verified to match stageAtSendTime above)
-                const oldStageName = currentProject.currentStatus;
                 try {
                   await storage.sendStageChangeNotifications(
                     tokenData.projectId,
                     targetStage.name,
-                    oldStageName || undefined
+                    oldStageForChronology || undefined
                   );
                   console.log(`[Query Submit] Stage change notification sent for project ${tokenData.projectId}`);
                 } catch (notificationError) {
