@@ -1070,8 +1070,11 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
         const remindersToSave = recipientData?.reminders || [];
         const enabledReminders = remindersToSave.filter(r => r.enabled);
         
-        // Save configured reminders if we have a token and enabled reminders
-        if (pendingEmailTokenId && enabledReminders.length > 0) {
+        // Save reminders AND/OR on-completion action if we have a token and either:
+        // - There are enabled reminders to schedule, OR
+        // - There's an on-completion action configured (e.g. auto-change stage when answered)
+        const hasOnCompletionAction = !!configuredOnCompletionAction;
+        if (pendingEmailTokenId && (enabledReminders.length > 0 || hasOnCompletionAction)) {
           try {
             // Pass real recipient data from the email dialog for reminder scheduling
             await apiRequest('POST', `/api/projects/${projectId}/queries/reminders`, {
@@ -1087,9 +1090,14 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
               // Pass on-completion action if configured
               onCompletionAction: configuredOnCompletionAction,
             });
-            console.log(`Saved ${enabledReminders.length} scheduled reminders for token ${pendingEmailTokenId} to ${recipientData?.email}`);
+            if (enabledReminders.length > 0) {
+              console.log(`Saved ${enabledReminders.length} scheduled reminders for token ${pendingEmailTokenId} to ${recipientData?.email}`);
+            }
+            if (hasOnCompletionAction) {
+              console.log(`Saved on-completion action (trigger: ${configuredOnCompletionAction?.trigger}) for token ${pendingEmailTokenId}`);
+            }
           } catch (reminderError) {
-            console.error('Error saving reminders:', reminderError);
+            console.error('Error saving reminders/on-completion action:', reminderError);
             // Don't fail the overall operation if reminder saving fails
           }
         }
