@@ -156,6 +156,142 @@ function groupQueriesForDisplay(queries: Query[]): DisplayItem[] {
   return displayItems;
 }
 
+interface ExpiredLinkViewProps {
+  isCompleted: boolean;
+  isExpired: boolean;
+  expiresAt?: string;
+  tokenId?: string;
+  projectId?: string;
+  createdById?: string;
+  canRequestNewLink: boolean;
+}
+
+function ExpiredLinkView({ 
+  isCompleted, 
+  isExpired, 
+  expiresAt, 
+  tokenId, 
+  projectId, 
+  createdById,
+  canRequestNewLink 
+}: ExpiredLinkViewProps) {
+  const { toast } = useToast();
+  const [isRequesting, setIsRequesting] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
+
+  const formattedExpiryDate = expiresAt 
+    ? format(new Date(expiresAt), "d MMMM yyyy 'at' h:mm a")
+    : null;
+
+  const handleRequestNewLink = async () => {
+    if (!tokenId || !projectId || !createdById) return;
+    
+    setIsRequesting(true);
+    try {
+      const response = await fetch('/api/query-response/request-new-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tokenId, projectId, createdById }),
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok) {
+        setRequestSent(true);
+        toast({
+          title: "Request Sent!",
+          description: "Your accountant has been notified and will send you a new link soon.",
+        });
+      } else {
+        toast({
+          title: "Couldn't send request",
+          description: result.message || "Please try again or contact your accountant directly.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Something went wrong",
+        description: "Please try again or contact your accountant directly.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsRequesting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
+      <Card className="max-w-md w-full">
+        <CardContent className="pt-6 text-center">
+          <div className={cn(
+            "w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center",
+            isCompleted ? "bg-green-100" : "bg-red-100"
+          )}>
+            {isCompleted ? (
+              <CheckCircle2 className="w-8 h-8 text-green-600" />
+            ) : isExpired ? (
+              <Clock className="w-8 h-8 text-red-600" />
+            ) : (
+              <XCircle className="w-8 h-8 text-red-600" />
+            )}
+          </div>
+          <h2 className="text-xl font-semibold mb-2">
+            {isCompleted ? "All Done!" : isExpired ? "Oh no!" : "Oh no!"}
+          </h2>
+          <p className="text-muted-foreground mb-4">
+            {isCompleted 
+              ? "Thank you! Your responses have already been submitted successfully."
+              : isExpired && formattedExpiryDate
+                ? `This link expired on ${formattedExpiryDate}.`
+                : isExpired
+                  ? "This link has expired."
+                  : "This link doesn't work any more, but please contact us if you need some assistance."
+            }
+          </p>
+          
+          {canRequestNewLink && !requestSent && (
+            <Button
+              onClick={handleRequestNewLink}
+              disabled={isRequesting}
+              className="w-full mb-4"
+              data-testid="button-request-new-link"
+            >
+              {isRequesting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Requesting...
+                </>
+              ) : (
+                "Request a New Link"
+              )}
+            </Button>
+          )}
+          
+          {requestSent && (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+              <div className="flex items-center gap-2 text-green-700">
+                <CheckCircle2 className="w-5 h-5" />
+                <span className="font-medium">Request sent!</span>
+              </div>
+              <p className="text-sm text-green-600 mt-1">
+                Your accountant has been notified and will send you a new link soon.
+              </p>
+            </div>
+          )}
+          
+          <p className="text-sm text-muted-foreground">
+            {isCompleted 
+              ? "You can close this page now."
+              : "Need help? Just get in touch with your accountant."
+            }
+          </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export default function QueryResponsePage() {
   const { token } = useParams<{ token: string }>();
   const { toast } = useToast();
@@ -877,40 +1013,24 @@ export default function QueryResponsePage() {
     const errorData = error as any;
     const isExpired = errorData?.expired;
     const isCompleted = errorData?.completed;
+    const expiresAt = errorData?.expiresAt;
+    const tokenId = errorData?.tokenId;
+    const projectId = errorData?.projectId;
+    const createdById = errorData?.createdById;
+    
+    // Can request a new link if we have the necessary token info
+    const canRequestNewLink = isExpired && tokenId && projectId && createdById;
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
-        <Card className="max-w-md w-full">
-          <CardContent className="pt-6 text-center">
-            <div className={cn(
-              "w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center",
-              isCompleted ? "bg-green-100" : "bg-red-100"
-            )}>
-              {isCompleted ? (
-                <CheckCircle2 className="w-8 h-8 text-green-600" />
-              ) : isExpired ? (
-                <Clock className="w-8 h-8 text-red-600" />
-              ) : (
-                <XCircle className="w-8 h-8 text-red-600" />
-              )}
-            </div>
-            <h2 className="text-xl font-semibold mb-2">
-              {isCompleted ? "All Done!" : isExpired ? "Link Expired" : "Oh no!"}
-            </h2>
-            <p className="text-muted-foreground mb-4">
-              {isCompleted 
-                ? "Thank you! Your responses have already been submitted successfully."
-                : isExpired 
-                  ? "This link has expired. Please get in touch if you still need to respond to these queries."
-                  : "This link doesn't work any more, but please contact us if you need some assistance."
-              }
-            </p>
-            <p className="text-sm text-muted-foreground">
-              Need help? Just get in touch with your accountant.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <ExpiredLinkView 
+        isCompleted={isCompleted}
+        isExpired={isExpired}
+        expiresAt={expiresAt}
+        tokenId={tokenId}
+        projectId={projectId}
+        createdById={createdById}
+        canRequestNewLink={canRequestNewLink}
+      />
     );
   }
 

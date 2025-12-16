@@ -31,6 +31,7 @@ const MAX_REQUESTS_PER_WINDOW = 60; // 60 requests per 15 minutes per IP
 const MAX_FAILED_ATTEMPTS_PER_TOKEN = 10; // Lock after 10 failed attempts
 const TOKEN_LOCKOUT_DURATION = 60 * 60 * 1000; // 1 hour lockout after too many failed attempts
 const SAVE_REQUEST_LIMIT = 120; // Higher limit for auto-save requests
+const REQUEST_LINK_LIMIT = 2; // Very low limit for requesting new links (prevent abuse)
 
 // Cleanup old entries every 10 minutes
 setInterval(() => {
@@ -59,14 +60,19 @@ function getTokenKey(token: string): string {
  */
 export function checkQueryTokenRateLimit(
   ip: string, 
-  endpoint: 'access' | 'save' | 'upload' | 'submit'
+  endpoint: 'access' | 'save' | 'upload' | 'submit' | 'request_link'
 ): { allowed: boolean; retryAfter?: number } {
   const now = Date.now();
   const key = `query_${endpoint}_${ip}`;
   const entry = ipRateLimits.get(key);
   
   // Determine limit based on endpoint type
-  const limit = endpoint === 'save' ? SAVE_REQUEST_LIMIT : MAX_REQUESTS_PER_WINDOW;
+  let limit = MAX_REQUESTS_PER_WINDOW;
+  if (endpoint === 'save') {
+    limit = SAVE_REQUEST_LIMIT;
+  } else if (endpoint === 'request_link') {
+    limit = REQUEST_LINK_LIMIT;
+  }
 
   if (!entry || now > entry.resetTime) {
     // First request or window expired

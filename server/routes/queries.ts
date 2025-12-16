@@ -1347,10 +1347,21 @@ ${emailSignoff}`;
       if (!validation.valid) {
         // Record failed attempt for lockout tracking
         recordFailedTokenAttempt(token);
+        
+        // Include additional data for expired/completed tokens to help users
+        const isExpired = validation.reason === 'Token has expired';
+        const isCompleted = validation.reason === 'Responses already submitted';
+        const tokenData = validation.tokenData;
+        
         return res.status(400).json({ 
           message: validation.reason,
-          expired: validation.reason === 'Token has expired',
-          completed: validation.reason === 'Responses already submitted'
+          expired: isExpired,
+          completed: isCompleted,
+          // Include token details for better UX on expired/completed links
+          tokenId: tokenData?.id,
+          expiresAt: tokenData?.expiresAt?.toISOString(),
+          projectId: tokenData?.projectId,
+          createdById: tokenData?.createdById,
         });
       }
 
@@ -1489,6 +1500,125 @@ ${emailSignoff}`;
     } catch (error) {
       console.error("Error validating query response token:", error);
       res.status(500).json({ message: "Something went wrong loading the page. Please refresh and try again." });
+    }
+  });
+
+  // POST /api/query-response/request-new-link - Request a new query link (public endpoint)
+  // Creates a task for the token creator and sends them an email
+  app.post("/api/query-response/request-new-link", async (req: any, res: any) => {
+    try {
+      const { tokenId, projectId, createdById } = req.body;
+      
+      if (!tokenId || !projectId || !createdById) {
+        return res.status(400).json({ 
+          message: "Missing required information to request a new link." 
+        });
+      }
+      
+      const clientIP = req.ip || req.connection?.remoteAddress || 'unknown';
+      
+      // Rate limiting - only allow 2 requests per hour per IP
+      const rateLimit = checkQueryTokenRateLimit(clientIP, 'request_link');
+      if (!rateLimit.allowed) {
+        return res.status(429).json({
+          message: "You've already requested a new link recently. Please wait before trying again.",
+          retryAfter: rateLimit.retryAfter
+        });
+      }
+      
+      // Get the token to verify it exists
+      const token = await storage.getQueryResponseTokenById(tokenId);
+      if (!token) {
+        return res.status(404).json({ message: "Link not found." });
+      }
+      
+      // Get project and client details
+      const project = await storage.getProjectById(projectId);
+      if (!project) {
+        return res.status(404).json({ message: "Project not found." });
+      }
+      
+      const client = await storage.getClientById(project.clientId);
+      const clientName = client?.name || 'Unknown Client';
+      const projectName = project.description || 'Bookkeeping Queries';
+      
+      // Get the token creator
+      const creator = await storage.getUser(createdById);
+      if (!creator) {
+        return res.status(404).json({ message: "Could not find the team member to contact." });
+      }
+      
+      // Create a task for the creator to generate a new link
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 1); // Due tomorrow
+      
+      const task = await storage.createInternalTask({
+        title: `Generate new query link for ${clientName}`,
+        description: `A client has requested a new query link for the project "${projectName}".\n\nThe previous link has expired or is no longer working. Please generate a new query link and send it to the client.`,
+        createdBy: createdById,
+        assignedTo: createdById,
+        dueDate: dueDate,
+        priority: 'medium',
+        isQuickReminder: true,
+      });
+      
+      // Create a task connection to link the task to the project and client
+      await storage.createTaskConnection({
+        taskId: task.id,
+        entityType: 'project',
+        entityId: projectId,
+      });
+      
+      await storage.createTaskConnection({
+        taskId: task.id,
+        entityType: 'client',
+        entityId: project.clientId,
+      });
+      
+      // Send email notification to the creator
+      try {
+        const { getUncachableSendGridClient } = await import('../sendgridService');
+        const sgResult = await getUncachableSendGridClient();
+        const sgClient = sgResult.client;
+        const fromEmail = sgResult.fromEmail;
+        
+        if (sgClient && fromEmail && creator.email) {
+          const baseUrl = getAppUrl();
+          const taskUrl = `${baseUrl}/tasks/${task.id}`;
+          const projectUrl = `${baseUrl}/clients/${project.clientId}/projects/${projectId}`;
+          
+          await sgClient.send({
+            to: creator.email,
+            from: fromEmail,
+            subject: `New Query Link Requested: ${clientName}`,
+            html: `
+              <p>Hi ${creator.firstName || 'Team Member'},</p>
+              <p>A client has requested a new query link for <strong>${projectName}</strong> (${clientName}).</p>
+              <p>The previous link has expired or is no longer working.</p>
+              <p><strong>Next Steps:</strong></p>
+              <ol>
+                <li><a href="${projectUrl}">Open the project</a></li>
+                <li>Go to the Queries tab</li>
+                <li>Generate a new query link</li>
+                <li>Send it to the client</li>
+              </ol>
+              <p>A task has been created for you: <a href="${taskUrl}">View Task</a></p>
+              <p>Best regards,<br/>The Link</p>
+            `,
+          });
+        }
+      } catch (emailError) {
+        console.error("[Request New Link] Failed to send email notification:", emailError);
+        // Continue anyway - the task was created
+      }
+      
+      res.json({ 
+        success: true,
+        message: "Request sent successfully. Your accountant has been notified." 
+      });
+    } catch (error) {
+      console.error("Error processing new link request:", error);
+      res.status(500).json({ message: "Something went wrong. Please try again later." });
     }
   });
 

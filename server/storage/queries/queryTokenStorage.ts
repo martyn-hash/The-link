@@ -195,11 +195,12 @@ export class QueryTokenStorage extends BaseStorage {
     }
 
     if (tokenData.expiresAt < new Date()) {
-      return { valid: false, reason: 'Token has expired' };
+      // Return tokenData even when expired so we can show expiry info to users
+      return { valid: false, reason: 'Token has expired', tokenData };
     }
 
     if (tokenData.completedAt) {
-      return { valid: false, reason: 'Responses already submitted' };
+      return { valid: false, reason: 'Responses already submitted', tokenData };
     }
 
     return { valid: true, tokenData };
