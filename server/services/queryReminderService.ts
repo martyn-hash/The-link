@@ -928,7 +928,7 @@ export async function hydrateRecipientFromProjectData(
     
     const primaryPerson = await db
       .select({
-        name: people.name,
+        firstName: people.firstName,
         email: people.email,
         mobile: people.mobile
       })
@@ -942,14 +942,14 @@ export async function hydrateRecipientFromProjectData(
     if (primaryPerson[0]?.email) {
       return {
         email: primaryPerson[0].email,
-        name: primaryPerson[0].name || 'Client',
+        name: primaryPerson[0].firstName || 'Client',
         phone: primaryPerson[0].mobile || null
       };
     }
     
     const anyPerson = await db
       .select({
-        name: people.name,
+        firstName: people.firstName,
         email: people.email,
         mobile: people.mobile
       })
@@ -960,7 +960,7 @@ export async function hydrateRecipientFromProjectData(
     if (anyPerson[0]?.email) {
       return {
         email: anyPerson[0].email,
-        name: anyPerson[0].name || 'Client',
+        name: anyPerson[0].firstName || 'Client',
         phone: anyPerson[0].mobile || null
       };
     }

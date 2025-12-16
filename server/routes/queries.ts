@@ -2354,7 +2354,8 @@ ${tableHtml}
               recipientEmail = primaryContact.person.primaryEmail || primaryContact.person.email || null;
             }
             if (!recipientName || recipientName === 'Client') {
-              recipientName = `${primaryContact.person.firstName || ''} ${primaryContact.person.lastName || ''}`.trim() || 'Client';
+              // Use firstName directly for greeting purposes
+              recipientName = primaryContact.person.firstName || 'Client';
             }
             if (!recipientPhone) {
               recipientPhone = primaryContact.person.telephone || primaryContact.person.primaryPhone || null;
