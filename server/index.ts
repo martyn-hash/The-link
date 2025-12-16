@@ -4,6 +4,7 @@ import { setupVite, serveStatic, log } from "./vite";
 import cron from "node-cron";
 import { runChSync } from "./ch-sync-service";
 import { executeScheduledRun, runStartupCatchup } from "./scheduling-orchestrator";
+import { waitForDatabaseReady } from "./db";
 import { sendProjectMessageReminders } from "./projectMessageReminderService";
 import { updateDashboardCache } from "./dashboard-cache-service";
 import { warmViewCache } from "./view-cache-service";
@@ -141,19 +142,31 @@ app.use((req, res, next) => {
     // Run startup catch-up to detect and execute any missed scheduling runs
     // This ensures server restarts don't cause missed overnight scheduling
     // Only runs if startupCatchUp setting is enabled (defaults to true)
+    // IMPORTANT: This is wrapped in a non-fatal block - scheduler failures must NEVER crash the process
     try {
-      const settings = await storage.getCompanySettings();
-      const startupCatchUpEnabled = settings?.startupCatchUp !== false;
+      // DB Readiness Gate: Wait for database to be ready before attempting catch-up
+      // This prevents crash loops when the database is slow to start (e.g., Neon cold start)
+      log('[Scheduling Orchestrator] Checking database readiness before catch-up...');
+      const dbReady = await waitForDatabaseReady({ maxWaitMs: 120000 });
       
-      if (startupCatchUpEnabled) {
-        log('[Scheduling Orchestrator] Running startup catch-up check...');
-        const catchupResult = await runStartupCatchup();
-        log(`[Scheduling Orchestrator] ${catchupResult.message}`);
+      if (!dbReady) {
+        console.error('[Scheduling Orchestrator] Database not ready after 2 minutes - skipping startup catch-up (will retry on next scheduled run)');
       } else {
-        log('[Scheduling Orchestrator] Startup catch-up check disabled via company settings');
+        const settings = await storage.getCompanySettings();
+        const startupCatchUpEnabled = settings?.startupCatchUp !== false;
+        
+        if (startupCatchUpEnabled) {
+          log('[Scheduling Orchestrator] Running startup catch-up check...');
+          const catchupResult = await runStartupCatchup();
+          log(`[Scheduling Orchestrator] ${catchupResult.message}`);
+        } else {
+          log('[Scheduling Orchestrator] Startup catch-up check disabled via company settings');
+        }
       }
     } catch (catchupError) {
-      console.error('[Scheduling Orchestrator] Error in startup catch-up:', catchupError);
+      // NON-FATAL: Log and continue - scheduler failures must never crash the web server
+      console.error('[Scheduling Orchestrator] Error in startup catch-up (non-fatal, will retry on next scheduled run):', 
+        catchupError instanceof Error ? catchupError.message : catchupError);
     }
     
     // Recover any pending transcription jobs that were interrupted by server restart

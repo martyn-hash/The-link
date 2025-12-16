@@ -548,8 +548,10 @@ export async function runStartupCatchup(): Promise<CatchupResult> {
 }
 
 const MIN_TRIGGER_INTERVAL_MS = 30000; // 30 seconds minimum between triggers
-const MAX_ORCHESTRATOR_RETRIES = 2;
-const ORCHESTRATOR_RETRY_DELAY_MS = 30000; // 30 seconds between retries
+const MAX_ORCHESTRATOR_RETRIES = 3; // Total of 4 attempts: initial + 3 retries
+const BASE_RETRY_DELAY_MS = 5000; // Start with 5 seconds
+const MAX_RETRY_DELAY_MS = 30000; // Cap at 30 seconds
+const MAX_TOTAL_RETRY_TIME_MS = 120000; // Give up after 2 minutes total
 let lastTriggerTime: number = 0;
 
 /**
@@ -575,7 +577,12 @@ function isTransientSchedulingError(message: string): boolean {
  * Execute scheduling via the orchestrator (for use in cron job)
  * This wraps the scheduling run with proper tracking and duplicate prevention
  * Includes protection against rapid double-triggers (e.g., from cron race conditions)
- * Also includes orchestrator-level retry for transient failures
+ * Also includes orchestrator-level retry for transient failures with exponential backoff + jitter
+ * 
+ * Retry Policy:
+ * - Uses exponential backoff: 5s, 10s, 20s, capped at 30s
+ * - Adds jitter (0-2s) to prevent thundering herd
+ * - Total retry time capped at 2 minutes - after that, gives up and lets next scheduled run try
  */
 export async function executeScheduledRun(): Promise<OrchestrationResult> {
   const now = new Date();
@@ -598,6 +605,7 @@ export async function executeScheduledRun(): Promise<OrchestrationResult> {
   
   // Attempt the run with orchestrator-level retry for transient failures
   let lastResult: OrchestrationResult | null = null;
+  const startTime = Date.now();
   
   for (let attempt = 1; attempt <= MAX_ORCHESTRATOR_RETRIES + 1; attempt++) {
     const result = await ensureRunForDate(now, 'scheduled');
@@ -611,6 +619,13 @@ export async function executeScheduledRun(): Promise<OrchestrationResult> {
     // Check if the error is transient and worth retrying
     const isTransient = isTransientSchedulingError(result.message);
     
+    // Check if we've exceeded total retry time
+    const elapsedTime = Date.now() - startTime;
+    if (elapsedTime >= MAX_TOTAL_RETRY_TIME_MS) {
+      console.error(`[Orchestrator] Scheduling failed after ${attempt} attempt(s), ${Math.round(elapsedTime / 1000)}s elapsed (max ${MAX_TOTAL_RETRY_TIME_MS / 1000}s) - giving up until next scheduled run: ${result.message}`);
+      return result;
+    }
+    
     if (!isTransient || attempt > MAX_ORCHESTRATOR_RETRIES) {
       // Not transient or exhausted retries
       if (attempt > 1) {
@@ -619,9 +634,21 @@ export async function executeScheduledRun(): Promise<OrchestrationResult> {
       return result;
     }
     
-    // Transient error - wait and retry
-    console.warn(`[Orchestrator] Transient error on attempt ${attempt}/${MAX_ORCHESTRATOR_RETRIES + 1}, retrying in ${ORCHESTRATOR_RETRY_DELAY_MS / 1000}s: ${result.message}`);
-    await new Promise(resolve => setTimeout(resolve, ORCHESTRATOR_RETRY_DELAY_MS));
+    // Calculate delay with exponential backoff + jitter
+    const exponentialDelay = Math.min(BASE_RETRY_DELAY_MS * Math.pow(2, attempt - 1), MAX_RETRY_DELAY_MS);
+    const jitter = Math.random() * 2000; // Up to 2s jitter
+    const delay = exponentialDelay + jitter;
+    
+    // Don't wait if it would exceed our time budget
+    const remainingTime = MAX_TOTAL_RETRY_TIME_MS - elapsedTime;
+    if (delay > remainingTime) {
+      console.error(`[Orchestrator] Not enough time remaining for retry (need ${Math.round(delay / 1000)}s, have ${Math.round(remainingTime / 1000)}s) - giving up until next scheduled run: ${result.message}`);
+      return result;
+    }
+    
+    // Transient error - wait and retry with backoff + jitter
+    console.warn(`[Orchestrator] Transient error on attempt ${attempt}/${MAX_ORCHESTRATOR_RETRIES + 1}, retrying in ${Math.round(delay / 1000)}s: ${result.message}`);
+    await new Promise(resolve => setTimeout(resolve, delay));
   }
   
   return lastResult!;

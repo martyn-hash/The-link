@@ -118,7 +118,69 @@ function isRetryableError(error: Error): boolean {
     'too many connections',
     'connection pool',
     'unable to acquire',
+    'timeout exceeded',
   ];
 
   return retryablePatterns.some(pattern => message.includes(pattern));
+}
+
+/**
+ * Wait for database to be ready before proceeding with startup operations.
+ * Uses exponential backoff with jitter to poll the database.
+ * 
+ * @param maxWaitMs Maximum time to wait (default 2 minutes)
+ * @param baseDelayMs Initial delay between attempts (default 1s)
+ * @param maxDelayMs Maximum delay between attempts (default 30s)
+ * @returns true if database is ready, false if timed out
+ */
+export async function waitForDatabaseReady(options: {
+  maxWaitMs?: number;
+  baseDelayMs?: number;
+  maxDelayMs?: number;
+} = {}): Promise<boolean> {
+  const {
+    maxWaitMs = 120000, // 2 minutes max wait
+    baseDelayMs = 1000,  // Start with 1s delay
+    maxDelayMs = 30000   // Cap at 30s delay
+  } = options;
+
+  const startTime = Date.now();
+  let attempt = 0;
+
+  console.log('[Database] Waiting for database to be ready...');
+
+  while (Date.now() - startTime < maxWaitMs) {
+    attempt++;
+    
+    try {
+      const isReady = await checkDatabaseConnection();
+      if (isReady) {
+        const elapsedMs = Date.now() - startTime;
+        console.log(`[Database] Database ready after ${attempt} attempt(s) (${Math.round(elapsedMs / 1000)}s)`);
+        return true;
+      }
+    } catch (error) {
+      // Silently continue - checkDatabaseConnection already logs errors
+    }
+
+    // Calculate delay with exponential backoff and jitter
+    const exponentialDelay = Math.min(baseDelayMs * Math.pow(2, attempt - 1), maxDelayMs);
+    const jitter = Math.random() * 1000; // Up to 1s jitter
+    const delay = exponentialDelay + jitter;
+
+    const elapsedMs = Date.now() - startTime;
+    const remainingMs = maxWaitMs - elapsedMs;
+
+    if (remainingMs <= delay) {
+      // Not enough time for another attempt
+      break;
+    }
+
+    console.log(`[Database] Connection attempt ${attempt} failed, retrying in ${Math.round(delay / 1000)}s (${Math.round(remainingMs / 1000)}s remaining)...`);
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
+
+  const totalElapsed = Date.now() - startTime;
+  console.error(`[Database] Database not ready after ${attempt} attempt(s) (${Math.round(totalElapsed / 1000)}s) - giving up`);
+  return false;
 }
