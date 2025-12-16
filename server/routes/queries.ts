@@ -1738,6 +1738,21 @@ ${emailSignoff}`;
                   });
                   
                   console.log(`[Query Auto-save] Auto-stage-change triggered: all queries answered, project ${validation.tokenData!.projectId} moved to stage "${targetStage.name}"`);
+                  
+                  // Send notification email to the new stage assignee
+                  // Use currentProject.currentStatus as the old stage (verified to match stageAtSendTime above)
+                  const oldStageName = currentProject.currentStatus;
+                  try {
+                    await storage.sendStageChangeNotifications(
+                      validation.tokenData!.projectId,
+                      targetStage.name,
+                      oldStageName || undefined
+                    );
+                    console.log(`[Query Auto-save] Stage change notification sent for project ${validation.tokenData!.projectId}`);
+                  } catch (notificationError) {
+                    console.error('[Query Auto-save] Error sending stage change notification:', notificationError);
+                    // Don't fail the operation if notification fails
+                  }
                 }
               }
             }
@@ -1959,6 +1974,21 @@ ${emailSignoff}`;
                 });
                 
                 console.log(`[Query Submit] Auto-stage-change triggered: project ${tokenData.projectId} moved to stage "${targetStage.name}"`);
+                
+                // Send notification email to the new stage assignee
+                // Use currentProject.currentStatus as the old stage (verified to match stageAtSendTime above)
+                const oldStageName = currentProject.currentStatus;
+                try {
+                  await storage.sendStageChangeNotifications(
+                    tokenData.projectId,
+                    targetStage.name,
+                    oldStageName || undefined
+                  );
+                  console.log(`[Query Submit] Stage change notification sent for project ${tokenData.projectId}`);
+                } catch (notificationError) {
+                  console.error('[Query Submit] Error sending stage change notification:', notificationError);
+                  // Don't fail the operation if notification fails
+                }
               } else {
                 console.log(`[Query Submit] Skipped auto-stage-change: project stage has changed since queries were sent (was "${tokenWithOnCompletion.stageAtSendTime}", now "${currentProject?.currentStatus}")`);
               }
