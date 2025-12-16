@@ -80,31 +80,6 @@ export function ReminderScheduleEditor({
   const [newReminderTime, setNewReminderTime] = useState('10:00');
   const [newReminderChannel, setNewReminderChannel] = useState<'email' | 'sms' | 'voice'>('email');
 
-  useEffect(() => {
-    if (schedule.length === 0 && expiryDays > 0) {
-      const generated = generateReminderSchedule(expiryDays);
-      // If Voice AI is not available, convert any voice reminders to email
-      if (!voiceAiAvailable) {
-        const filteredSchedule = generated.map(reminder => 
-          reminder.channel === 'voice' ? { ...reminder, channel: 'email' as const } : reminder
-        );
-        onScheduleChange(filteredSchedule);
-      } else {
-        onScheduleChange(generated);
-      }
-    }
-  }, [expiryDays, schedule.length, onScheduleChange, voiceAiAvailable]);
-  
-  // Also convert any existing voice reminders to email if Voice AI becomes unavailable
-  useEffect(() => {
-    if (!voiceAiAvailable && schedule.some(r => r.channel === 'voice')) {
-      const updatedSchedule = schedule.map(reminder =>
-        reminder.channel === 'voice' ? { ...reminder, channel: 'email' as const } : reminder
-      );
-      onScheduleChange(updatedSchedule);
-    }
-  }, [voiceAiAvailable, schedule, onScheduleChange]);
-
   // Use channel availability if provided AND has selected recipients, otherwise fall back to legacy props
   // This ensures that when channelAvailability is passed but no recipients are selected yet,
   // we still use the legacy fallback (which may have recipientEmail/recipientPhone from query options)
@@ -114,6 +89,46 @@ export function ReminderScheduleEditor({
   const totalRecipients = useChannelAvailability ? channelAvailability.totalSelected : (recipientEmail ? 1 : 0);
   const phoneCount = useChannelAvailability ? channelAvailability.sms.count : (hasPhone ? 1 : 0);
   const emailCount = useChannelAvailability ? channelAvailability.email.count : (hasEmail ? 1 : 0);
+
+  // Generate default schedule when component mounts
+  useEffect(() => {
+    if (schedule.length === 0 && expiryDays > 0) {
+      const generated = generateReminderSchedule(expiryDays);
+      // Convert unavailable channels to email:
+      // - Voice → Email if Voice AI is not available
+      // - SMS → Email if no phone number is available
+      const filteredSchedule = generated.map(reminder => {
+        if (reminder.channel === 'voice' && !voiceAiAvailable) {
+          return { ...reminder, channel: 'email' as const };
+        }
+        if (reminder.channel === 'sms' && !hasPhone) {
+          return { ...reminder, channel: 'email' as const };
+        }
+        return reminder;
+      });
+      onScheduleChange(filteredSchedule);
+    }
+  }, [expiryDays, schedule.length, onScheduleChange, voiceAiAvailable, hasPhone]);
+  
+  // Also convert unavailable channels to email when availability changes
+  useEffect(() => {
+    const needsUpdate = schedule.some(r => 
+      (r.channel === 'voice' && !voiceAiAvailable) ||
+      (r.channel === 'sms' && !hasPhone)
+    );
+    if (needsUpdate) {
+      const updatedSchedule = schedule.map(reminder => {
+        if (reminder.channel === 'voice' && !voiceAiAvailable) {
+          return { ...reminder, channel: 'email' as const };
+        }
+        if (reminder.channel === 'sms' && !hasPhone) {
+          return { ...reminder, channel: 'email' as const };
+        }
+        return reminder;
+      });
+      onScheduleChange(updatedSchedule);
+    }
+  }, [voiceAiAvailable, hasPhone, schedule, onScheduleChange]);
 
   const enabledCount = schedule.filter((r) => r.enabled).length;
 

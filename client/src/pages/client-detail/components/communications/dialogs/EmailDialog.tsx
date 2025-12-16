@@ -116,10 +116,9 @@ export function EmailDialog({
   const isQueryEmailMode = Boolean(queryEmailOptions);
   const [reminderSchedule, setReminderSchedule] = useState<import('../types').ReminderScheduleItem[]>([]);
   
-  // Tab state for query email mode (Compose, Scheduling, Actions)
-  const [activeTab, setActiveTab] = useState<'compose' | 'scheduling' | 'actions'>('compose');
+  // Tab state for query email mode (Compose, Scheduling & Actions)
+  const [activeTab, setActiveTab] = useState<'compose' | 'scheduling'>('compose');
   const [hasVisitedSchedulingTab, setHasVisitedSchedulingTab] = useState(false);
-  const [hasVisitedActionsTab, setHasVisitedActionsTab] = useState(false);
   
   // Multiple recipient selection - start empty, will be populated by useEffect after peopleWithEmail is ready
   const [selectedRecipients, setSelectedRecipients] = useState<Set<string>>(new Set());
@@ -327,13 +326,9 @@ export function EmailDialog({
       if (value === 'scheduling' && !hasSelectedRecipients) {
         return; // Block navigation
       }
-      // Actions requires Scheduling to have been visited
-      if (value === 'actions' && !hasVisitedSchedulingTab) {
-        return; // Block navigation
-      }
     }
     
-    setActiveTab(value as 'compose' | 'scheduling' | 'actions');
+    setActiveTab(value as 'compose' | 'scheduling');
     
     // Track tab visits with delay to prevent button swap during same click cycle
     if (value === 'scheduling') {
@@ -341,12 +336,7 @@ export function EmailDialog({
         setHasVisitedSchedulingTab(true);
       }, 0);
     }
-    if (value === 'actions') {
-      setTimeout(() => {
-        setHasVisitedActionsTab(true);
-      }, 0);
-    }
-  }, [isQueryEmailMode, hasSelectedRecipients, hasVisitedSchedulingTab]);
+  }, [isQueryEmailMode, hasSelectedRecipients]);
 
   // Helper function to extract first name from various formats
   const extractFirstName = (fullName: string): string => {
@@ -684,7 +674,6 @@ export function EmailDialog({
           setReminderSchedule([]);
           setActiveTab('compose');
           setHasVisitedSchedulingTab(false);
-          setHasVisitedActionsTab(false);
           setEnableOnCompletion(false);
           setOnCompletionStageId('');
           setOnCompletionStageReasonId('');
@@ -723,23 +712,8 @@ export function EmailDialog({
                     title={!hasSelectedRecipients ? "Select at least one recipient first" : undefined}
                   >
                     <Clock className="h-4 w-4 mr-1.5" />
-                    Scheduling
+                    Scheduling & Actions
                     {hasSelectedRecipients && !hasVisitedSchedulingTab && (
-                      <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
-                        Review
-                      </Badge>
-                    )}
-                  </TabsTrigger>
-                  <TabsTrigger 
-                    type="button"
-                    value="actions" 
-                    disabled={!hasSelectedRecipients || !hasVisitedSchedulingTab}
-                    className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title={!hasSelectedRecipients ? "Select at least one recipient first" : !hasVisitedSchedulingTab ? "Review Scheduling tab first" : undefined}
-                  >
-                    <ArrowRightCircle className="h-4 w-4 mr-1.5" />
-                    Actions
-                    {hasSelectedRecipients && hasVisitedSchedulingTab && !hasVisitedActionsTab && (
                       <Badge variant="secondary" className="ml-2 h-5 px-1.5 text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
                         Review
                       </Badge>
@@ -1076,14 +1050,24 @@ export function EmailDialog({
                   </div>
                 </TabsContent>
                 
-                {/* Scheduling Tab Content */}
+                {/* Scheduling & Actions Tab Content - Two Column Layout */}
                 <TabsContent value="scheduling" className="flex-1 mt-0">
-                  <div className="space-y-4 overflow-y-auto max-h-[55vh]">
-                    {/* Compact header with expiry badge and recipient summary */}
+                  <div className="overflow-y-auto max-h-[55vh]">
+                    {/* Header with expiry badge and recipient summary */}
                     {queryEmailOptions && (
-                      <div className="space-y-2">
+                      <div className="space-y-2 mb-4">
                         <div className="flex items-center justify-between">
-                          <h4 className="text-sm font-medium">Automated Reminders</h4>
+                          <div className="text-xs text-muted-foreground flex items-center gap-1.5">
+                            <Users className="h-3 w-3" />
+                            <span>
+                              Sending to: {selectedRecipients.size > 0 
+                                ? Array.from(selectedRecipients).slice(0, 3).map(recipientId => {
+                                    const person = peopleWithEmail.find(p => p.id === recipientId);
+                                    return person?.fullName?.split(' ')[0] || person?.email?.split('@')[0] || 'Unknown';
+                                  }).join(', ') + (selectedRecipients.size > 3 ? ` +${selectedRecipients.size - 3} more` : '')
+                                : 'No recipients selected'}
+                            </span>
+                          </div>
                           <Badge variant="outline" className="text-xs bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300">
                             <Clock className="h-3 w-3 mr-1" />
                             Expires: {queryEmailOptions.expiryDate 
@@ -1091,182 +1075,170 @@ export function EmailDialog({
                               : `in ${queryEmailOptions.expiryDays} days`}
                           </Badge>
                         </div>
-                        {/* Recipient preview */}
-                        <div className="text-xs text-muted-foreground flex items-center gap-1.5">
-                          <Users className="h-3 w-3" />
-                          <span>
-                            Sending to: {selectedRecipients.size > 0 
-                              ? Array.from(selectedRecipients).slice(0, 3).map(recipientId => {
-                                  const person = peopleWithEmail.find(p => p.id === recipientId);
-                                  return person?.fullName?.split(' ')[0] || person?.email?.split('@')[0] || 'Unknown';
-                                }).join(', ') + (selectedRecipients.size > 3 ? ` +${selectedRecipients.size - 3} more` : '')
-                              : 'No recipients selected'}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Reminder Schedule */}
-                    {queryEmailOptions && (
-                      <ReminderScheduleEditor
-                        expiryDays={queryEmailOptions.expiryDays}
-                        recipientPhone={queryEmailOptions.recipientPhone}
-                        recipientEmail={selectedRecipients.size > 0 
-                          ? peopleWithEmail.find(p => selectedRecipients.has(p.id))?.email 
-                          : undefined}
-                        channelAvailability={channelAvailability}
-                        expiryDate={queryEmailOptions.expiryDate}
-                        schedule={reminderSchedule}
-                        onScheduleChange={(newSchedule) => {
-                          setReminderSchedule(newSchedule);
-                          onRemindersConfigured?.(newSchedule);
-                        }}
-                        disabled={sendEmailMutation.isPending}
-                        voiceAiAvailable={queryEmailOptions.voiceAiAvailable}
-                      />
-                    )}
-
-                    {/* Info panel about reminders */}
-                    <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 space-y-2">
-                      <div className="flex items-center gap-2">
-                        <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                        <span className="text-sm font-medium text-blue-900 dark:text-blue-100">Automated Follow-up</span>
-                      </div>
-                      <p className="text-xs text-blue-800 dark:text-blue-200">
-                        {reminderSchedule.filter(r => r.enabled).length} reminder{reminderSchedule.filter(r => r.enabled).length !== 1 ? 's' : ''} will be sent if queries remain unanswered.
-                        Reminders stop automatically when all queries are answered.
-                      </p>
-                    </div>
-                  </div>
-                </TabsContent>
-                
-                {/* Actions Tab Content */}
-                <TabsContent value="actions" className="flex-1 mt-0">
-                  <div className="space-y-4 overflow-y-auto max-h-[55vh]">
-                    <div className="space-y-2">
-                      <h4 className="text-sm font-medium">On Completion Actions</h4>
-                      <p className="text-xs text-muted-foreground">
-                        Configure automatic actions when the client completes their queries.
-                      </p>
-                    </div>
-
-                    {/* Auto-move project section */}
-                    <div className="border rounded-lg p-4 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                          <Label htmlFor="enable-on-completion" className="text-sm font-medium cursor-pointer">
-                            Move project when complete
-                          </Label>
-                          <p className="text-xs text-muted-foreground">
-                            Automatically move the project to a different stage when the client submits their responses.
-                          </p>
-                        </div>
-                        <Switch
-                          id="enable-on-completion"
-                          checked={enableOnCompletion}
-                          onCheckedChange={setEnableOnCompletion}
-                          data-testid="switch-enable-on-completion"
-                        />
-                      </div>
-                      
-                      {enableOnCompletion && (
-                        <div className="space-y-4 pt-3 border-t">
-                          {/* Stage selection */}
-                          <div className="space-y-2">
-                            <Label className="text-sm">Move to stage</Label>
-                            <Select
-                              value={onCompletionStageId}
-                              onValueChange={(val) => {
-                                setOnCompletionStageId(val);
-                                setOnCompletionStageReasonId('');
-                              }}
-                            >
-                              <SelectTrigger className="w-full" data-testid="select-completion-stage">
-                                <SelectValue placeholder="Select stage..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {projectStages
-                                  ?.filter((stage) => stage.name !== queryEmailOptions?.currentStageName)
-                                  .map((stage) => (
-                                    <SelectItem key={stage.id} value={stage.id}>
-                                      {stage.name}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          
-                          {/* Stage reason selection - REQUIRED */}
-                          {onCompletionStageId && (
-                            <div className="space-y-2">
-                              <Label className="text-sm">Stage change reason <span className="text-destructive">*</span></Label>
-                              {stageReasons && stageReasons.length > 0 ? (
-                                <Select
-                                  value={onCompletionStageReasonId}
-                                  onValueChange={setOnCompletionStageReasonId}
-                                >
-                                  <SelectTrigger className="w-full" data-testid="select-completion-reason">
-                                    <SelectValue placeholder="Select reason..." />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {stageReasons.map((reason) => (
-                                      <SelectItem key={reason.id} value={reason.id}>
-                                        {reason.reason}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              ) : (
-                                <p className="text-xs text-amber-600 dark:text-amber-400">
-                                  No reasons configured for this stage. Please configure stage reasons in Settings.
-                                </p>
-                              )}
-                            </div>
-                          )}
-                          
-                          <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3">
-                            <p className="text-xs text-amber-800 dark:text-amber-200">
-                              The project will only be moved if it's still in the same stage as when queries were sent.
-                              This prevents overriding any manual stage changes made in the meantime.
-                            </p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Summary of configured action - requires both stage AND reason */}
-                    {enableOnCompletion && onCompletionStageId && onCompletionStageReasonId && (
-                      <div className="bg-green-50 dark:bg-green-950/30 rounded-lg p-3 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <ArrowRightCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-                          <span className="text-sm font-medium text-green-900 dark:text-green-100">Action Configured</span>
-                        </div>
-                        <p className="text-xs text-green-800 dark:text-green-200">
-                          When the client submits their responses, the project will automatically move to "{projectStages?.find(s => s.id === onCompletionStageId)?.name}" with reason "{stageReasons?.find(r => r.id === onCompletionStageReasonId)?.reason}".
-                        </p>
                       </div>
                     )}
                     
-                    {/* Incomplete configuration warning */}
-                    {enableOnCompletion && onCompletionStageId && !onCompletionStageReasonId && stageReasons && stageReasons.length > 0 && (
-                      <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-                          <span className="text-sm font-medium text-amber-900 dark:text-amber-100">Action Incomplete</span>
-                        </div>
-                        <p className="text-xs text-amber-800 dark:text-amber-200">
-                          Please select a stage change reason to complete the configuration.
-                        </p>
-                      </div>
-                    )}
+                    {/* Two Column Grid: Reminders (left) | Actions (right) */}
+                    <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+                      {/* Left Column: Automated Reminders */}
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-medium">Automated Reminders</h4>
+                        
+                        {/* Reminder Schedule */}
+                        {queryEmailOptions && (
+                          <ReminderScheduleEditor
+                            expiryDays={queryEmailOptions.expiryDays}
+                            recipientPhone={queryEmailOptions.recipientPhone}
+                            recipientEmail={selectedRecipients.size > 0 
+                              ? peopleWithEmail.find(p => selectedRecipients.has(p.id))?.email 
+                              : undefined}
+                            channelAvailability={channelAvailability}
+                            expiryDate={queryEmailOptions.expiryDate}
+                            schedule={reminderSchedule}
+                            onScheduleChange={(newSchedule) => {
+                              setReminderSchedule(newSchedule);
+                              onRemindersConfigured?.(newSchedule);
+                            }}
+                            disabled={sendEmailMutation.isPending}
+                            voiceAiAvailable={queryEmailOptions.voiceAiAvailable}
+                          />
+                        )}
 
-                    {!enableOnCompletion && (
-                      <div className="bg-muted/30 rounded-lg p-3">
-                        <p className="text-xs text-muted-foreground">
-                          No actions configured. The project will remain in its current stage when queries are completed.
-                        </p>
+                        {/* Info panel about reminders */}
+                        <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            <span className="text-sm font-medium text-blue-900 dark:text-blue-100">Automated Follow-up</span>
+                          </div>
+                          <p className="text-xs text-blue-800 dark:text-blue-200">
+                            {reminderSchedule.filter(r => r.enabled).length} reminder{reminderSchedule.filter(r => r.enabled).length !== 1 ? 's' : ''} will be sent if queries remain unanswered.
+                            Reminders stop automatically when all queries are answered.
+                          </p>
+                        </div>
                       </div>
-                    )}
+                      
+                      {/* Right Column: On Completion Actions */}
+                      <div className="space-y-4">
+                        <h4 className="text-sm font-medium">On Completion Actions</h4>
+
+                        {/* Auto-move project section */}
+                        <div className="border rounded-lg p-4 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-1">
+                              <Label htmlFor="enable-on-completion" className="text-sm font-medium cursor-pointer">
+                                Move project when complete
+                              </Label>
+                              <p className="text-xs text-muted-foreground">
+                                Automatically move the project to a different stage when the client submits their responses.
+                              </p>
+                            </div>
+                            <Switch
+                              id="enable-on-completion"
+                              checked={enableOnCompletion}
+                              onCheckedChange={setEnableOnCompletion}
+                              data-testid="switch-enable-on-completion"
+                            />
+                          </div>
+                          
+                          {enableOnCompletion && (
+                            <div className="space-y-4 pt-3 border-t">
+                              {/* Stage selection */}
+                              <div className="space-y-2">
+                                <Label className="text-sm">Move to stage</Label>
+                                <Select
+                                  value={onCompletionStageId}
+                                  onValueChange={(val) => {
+                                    setOnCompletionStageId(val);
+                                    setOnCompletionStageReasonId('');
+                                  }}
+                                >
+                                  <SelectTrigger className="w-full" data-testid="select-completion-stage">
+                                    <SelectValue placeholder="Select stage..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {projectStages
+                                      ?.filter((stage) => stage.name !== queryEmailOptions?.currentStageName)
+                                      .map((stage) => (
+                                        <SelectItem key={stage.id} value={stage.id}>
+                                          {stage.name}
+                                        </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              
+                              {/* Stage reason selection - REQUIRED */}
+                              {onCompletionStageId && (
+                                <div className="space-y-2">
+                                  <Label className="text-sm">Stage change reason <span className="text-destructive">*</span></Label>
+                                  {stageReasons && stageReasons.length > 0 ? (
+                                    <Select
+                                      value={onCompletionStageReasonId}
+                                      onValueChange={setOnCompletionStageReasonId}
+                                    >
+                                      <SelectTrigger className="w-full" data-testid="select-completion-reason">
+                                        <SelectValue placeholder="Select reason..." />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {stageReasons.map((reason) => (
+                                          <SelectItem key={reason.id} value={reason.id}>
+                                            {reason.reason}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  ) : (
+                                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                                      No reasons configured for this stage. Please configure stage reasons in Settings.
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                              
+                              <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3">
+                                <p className="text-xs text-amber-800 dark:text-amber-200">
+                                  The project will only be moved if it's still in the same stage as when queries were sent.
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Summary of configured action - requires both stage AND reason */}
+                        {enableOnCompletion && onCompletionStageId && onCompletionStageReasonId && (
+                          <div className="bg-green-50 dark:bg-green-950/30 rounded-lg p-3 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <ArrowRightCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                              <span className="text-sm font-medium text-green-900 dark:text-green-100">Action Configured</span>
+                            </div>
+                            <p className="text-xs text-green-800 dark:text-green-200">
+                              When the client submits their responses, the project will automatically move to "{projectStages?.find(s => s.id === onCompletionStageId)?.name}" with reason "{stageReasons?.find(r => r.id === onCompletionStageReasonId)?.reason}".
+                            </p>
+                          </div>
+                        )}
+                        
+                        {/* Incomplete configuration warning */}
+                        {enableOnCompletion && onCompletionStageId && !onCompletionStageReasonId && stageReasons && stageReasons.length > 0 && (
+                          <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg p-3 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                              <span className="text-sm font-medium text-amber-900 dark:text-amber-100">Action Incomplete</span>
+                            </div>
+                            <p className="text-xs text-amber-800 dark:text-amber-200">
+                              Please select a stage change reason to complete the configuration.
+                            </p>
+                          </div>
+                        )}
+
+                        {!enableOnCompletion && (
+                          <div className="bg-muted/30 rounded-lg p-3">
+                            <p className="text-xs text-muted-foreground">
+                              No actions configured. The project will remain in its current stage when queries are completed.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </TabsContent>
               </Tabs>
@@ -1504,17 +1476,7 @@ export function EmailDialog({
                   className="bg-amber-600 hover:bg-amber-700 text-white font-medium gap-2"
                 >
                   <Clock className="h-4 w-4" />
-                  Next: Scheduling
-                </Button>
-              ) : isQueryEmailMode && hasSelectedRecipients && !hasVisitedActionsTab ? (
-                <Button 
-                  type="button" 
-                  onClick={() => handleTabChange('actions')}
-                  data-testid="button-next-actions"
-                  className="bg-amber-600 hover:bg-amber-700 text-white font-medium gap-2"
-                >
-                  <ArrowRightCircle className="h-4 w-4" />
-                  Next: Actions
+                  Next: Scheduling & Actions
                 </Button>
               ) : (
                 <Button 
@@ -1522,7 +1484,7 @@ export function EmailDialog({
                   disabled={
                     sendEmailMutation.isPending || 
                     !hasSelectedRecipients || 
-                    (isQueryEmailMode && (!hasVisitedSchedulingTab || !hasVisitedActionsTab)) ||
+                    (isQueryEmailMode && !hasVisitedSchedulingTab) ||
                     (isQueryEmailMode && enableOnCompletion && (!onCompletionStageId || !onCompletionStageReasonId))
                   } 
                   data-testid="button-send-email-dialog"
