@@ -8,7 +8,7 @@ import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Settings, Layers, List, ShieldCheck, Bell, BookOpen, ClipboardList } from "lucide-react";
+import { Settings, Layers, List, ShieldCheck, Bell, BookOpen } from "lucide-react";
 
 import type { EditingStage, EditingReason, EditingStageApproval, EditingStageApprovalField } from "./utils/types";
 import { SYSTEM_ROLE_OPTIONS } from "./utils/constants";
@@ -20,7 +20,6 @@ import {
   StageApprovalsTab, 
   NotificationsTab,
   FieldLibraryTab,
-  ClientTasksTab,
 } from "./components/tabs";
 import { 
   useProjectTypeQueries,
@@ -402,7 +401,7 @@ export default function ProjectTypeDetail() {
         <div className="flex-1 overflow-auto">
           <Tabs defaultValue="stages" className="h-full">
             <div className="border-b border-border bg-card px-6">
-              <TabsList className="grid w-full max-w-5xl grid-cols-7">
+              <TabsList className="grid w-full max-w-4xl grid-cols-6">
                 <TabsTrigger value="stages" className="flex items-center" data-testid="tab-stages">
                   <Layers className="w-4 h-4 mr-2" />
                   Stages
@@ -418,10 +417,6 @@ export default function ProjectTypeDetail() {
                 <TabsTrigger value="field-library" className="flex items-center" data-testid="tab-field-library">
                   <BookOpen className="w-4 h-4 mr-2" />
                   Field Library
-                </TabsTrigger>
-                <TabsTrigger value="client-tasks" className="flex items-center" data-testid="tab-client-tasks">
-                  <ClipboardList className="w-4 h-4 mr-2" />
-                  Client Tasks
                 </TabsTrigger>
                 <TabsTrigger value="notifications" className="flex items-center" data-testid="tab-notifications">
                   <Bell className="w-4 h-4 mr-2" />
@@ -495,14 +490,6 @@ export default function ProjectTypeDetail() {
             />
 
             <FieldLibraryTab projectTypeId={projectTypeId!} />
-
-            <ClientTasksTab
-              projectType={projectType}
-              projectTypeId={projectTypeId}
-              stages={stages}
-              reasons={reasons}
-              isAdmin={isAdmin === true}
-            />
             
             <NotificationsTab
               projectType={projectType}
