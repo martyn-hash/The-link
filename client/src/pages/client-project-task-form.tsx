@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { format } from "date-fns";
+import { useSwipeable } from "react-swipeable";
 import confetti from "canvas-confetti";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,8 +39,20 @@ import {
   Upload,
   HelpCircle,
   PartyPopper,
+  ArrowLeft,
+  ArrowRight,
+  Sparkles,
 } from "lucide-react";
 import type { MergedTaskQuestion, ClientProjectTaskResponse, ClientProjectTaskInstance } from "@shared/schema";
+
+const CARD_BACKGROUND_COLORS = [
+  'bg-blue-50/70',
+  'bg-green-50/70',
+  'bg-amber-50/70',
+  'bg-rose-50/70',
+  'bg-purple-50/70',
+  'bg-cyan-50/70',
+];
 
 interface TaskFormData {
   instance: ClientProjectTaskInstance;
@@ -433,6 +446,12 @@ export default function ClientProjectTaskFormPage() {
   const [submitterName, setSubmitterName] = useState('');
   const [submitterEmail, setSubmitterEmail] = useState('');
   const [instructionsOpen, setInstructionsOpen] = useState(true);
+  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [isPulsing, setIsPulsing] = useState(false);
+  const [showWelcomeBack, setShowWelcomeBack] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const hasDismissedCelebration = useRef(false);
   const saveTimeouts = useRef<Record<string, NodeJS.Timeout>>({});
   const DEBOUNCE_MS = 1500;
   const hasTriggeredConfetti = useRef(false);
@@ -566,6 +585,7 @@ export default function ClientProjectTaskFormPage() {
     if (data?.responses) {
       const initialResponses: Record<string, ResponseValue> = {};
       const initialSaveStatus: Record<string, SaveStatus> = {};
+      let hasSavedResponses = false;
       
       data.responses.forEach(r => {
         initialResponses[r.questionId] = {
@@ -580,10 +600,16 @@ export default function ClientProjectTaskFormPage() {
         };
         if (r.answeredAt) {
           initialSaveStatus[r.questionId] = 'saved';
+          hasSavedResponses = true;
         }
       });
       setResponses(initialResponses);
       setSaveStatus(initialSaveStatus);
+      
+      if (hasSavedResponses) {
+        setShowWelcomeBack(true);
+        setTimeout(() => setShowWelcomeBack(false), 4000);
+      }
     }
   }, [data?.responses]);
 
@@ -635,6 +661,64 @@ export default function ClientProjectTaskFormPage() {
 
   const canSubmit = requiredUnanswered.length === 0;
   const progressPercent = data?.questions?.length ? (answeredCount / data.questions.length) * 100 : 0;
+  const totalQuestions = data?.questions?.length || 0;
+  const currentQuestion = data?.questions?.[currentQuestionIndex];
+  const allQuestionsAnswered = answeredCount === totalQuestions && totalQuestions > 0;
+
+  const isQuestionAnswered = useCallback((questionId: string) => {
+    const response = responses[questionId];
+    if (!response) return false;
+    if (response.valueText) return true;
+    if (response.valueNumber !== null && response.valueNumber !== undefined) return true;
+    if (response.valueDate) return true;
+    if (response.valueBoolean !== null && response.valueBoolean !== undefined) return true;
+    if (response.valueMultiSelect && response.valueMultiSelect.length > 0) return true;
+    if (response.valueFile) return true;
+    return false;
+  }, [responses]);
+
+  const navigatePrev = useCallback(() => {
+    if (currentQuestionIndex > 0) {
+      setCurrentQuestionIndex(prev => prev - 1);
+      setIsPulsing(true);
+      setTimeout(() => setIsPulsing(false), 300);
+    }
+  }, [currentQuestionIndex]);
+
+  const navigateNext = useCallback(() => {
+    if (currentQuestionIndex < totalQuestions - 1) {
+      setCurrentQuestionIndex(prev => prev + 1);
+      setIsPulsing(true);
+      setTimeout(() => setIsPulsing(false), 300);
+    } else if (allQuestionsAnswered && !hasDismissedCelebration.current) {
+      setShowCelebration(true);
+      triggerConfetti();
+    }
+  }, [currentQuestionIndex, totalQuestions, allQuestionsAnswered, triggerConfetti]);
+
+  const swipeHandlers = useSwipeable({
+    onSwipedLeft: () => navigateNext(),
+    onSwipedRight: () => navigatePrev(),
+    preventScrollOnSwipe: true,
+    trackMouse: false,
+  });
+
+  const globalSaveStatus = useMemo(() => {
+    const statuses = Object.values(saveStatus);
+    if (statuses.length === 0) return null;
+    if (statuses.some(s => s === 'error')) return 'error';
+    if (statuses.some(s => s === 'saving')) return 'saving';
+    if (statuses.some(s => s === 'unsaved')) return 'unsaved';
+    if (statuses.every(s => s === 'saved')) return 'saved';
+    return null;
+  }, [saveStatus]);
+
+  useEffect(() => {
+    if (!allQuestionsAnswered) {
+      hasDismissedCelebration.current = false;
+      hasTriggeredConfetti.current = false;
+    }
+  }, [allQuestionsAnswered]);
 
   if (isLoading) {
     return (
@@ -694,168 +778,340 @@ export default function ClientProjectTaskFormPage() {
     return null;
   }
 
-  const template = data.instance;
+  // Celebration screen when all questions answered
+  if (showCelebration && !isSubmitted) {
+    return (
+      <div className="h-[100dvh] bg-gradient-to-br from-emerald-50 via-green-50 to-teal-50 flex flex-col items-center justify-center p-4 overflow-hidden">
+        <div className="text-center max-w-md mx-auto">
+          <div className="w-24 h-24 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 mx-auto mb-6 flex items-center justify-center shadow-lg animate-bounce">
+            <PartyPopper className="w-12 h-12 text-white" />
+          </div>
+          
+          <h1 className="text-3xl font-bold text-green-800 mb-3">
+            Amazing Work!
+          </h1>
+          
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <Sparkles className="w-5 h-5 text-yellow-500" />
+            <p className="text-lg text-green-700">
+              You've answered all {totalQuestions} {totalQuestions === 1 ? 'question' : 'questions'}!
+            </p>
+            <Sparkles className="w-5 h-5 text-yellow-500" />
+          </div>
+          
+          <div className="bg-white/80 backdrop-blur rounded-xl p-4 mb-6 border border-green-200 shadow-sm">
+            <div className="flex items-center justify-center gap-2 text-green-600 mb-2">
+              <Cloud className="w-4 h-4" />
+              <span className="text-sm font-medium">All your answers are safely saved</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Your progress is automatically saved to the cloud. You won't lose anything!
+            </p>
+          </div>
+          
+          <Button
+            onClick={() => {
+              setShowCelebration(false);
+              setShowConfirmation(true);
+            }}
+            size="lg"
+            className="w-full h-14 text-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 shadow-lg"
+            data-testid="button-submit-celebration"
+          >
+            <Send className="w-6 h-6 mr-2" />
+            Continue to Submit
+          </Button>
+          
+          <button
+            onClick={() => {
+              setShowCelebration(false);
+              hasDismissedCelebration.current = true;
+            }}
+            className="mt-4 text-sm text-muted-foreground hover:text-foreground underline"
+            data-testid="button-review-answers"
+          >
+            Wait, let me review my answers first
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        <div className="text-center mb-8">
-          <img 
-            src={logoPath} 
-            alt="Growth Accountants" 
-            className="h-12 mx-auto mb-4"
-          />
-          <h1 className="text-2xl font-bold text-gray-900" data-testid="task-title">
-            Client Task
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Please complete the questions below
-          </p>
-        </div>
-
-        <div className="mb-6">
-          <div className="flex items-center justify-between text-sm mb-2">
-            <span className="text-muted-foreground">
-              {answeredCount} of {data.questions.length} questions answered
-            </span>
-            <span className="font-medium">
-              {Math.round(progressPercent)}%
-            </span>
+    <div className="h-[100dvh] bg-gradient-to-br from-slate-50 to-slate-100 flex flex-col overflow-hidden fixed inset-0 overscroll-none touch-none">
+      {/* Welcome back toast */}
+      {showWelcomeBack && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-top-2 fade-in duration-300">
+          <div className="bg-green-50 border border-green-200 rounded-lg px-4 py-2 shadow-lg flex items-center gap-2">
+            <Cloud className="w-4 h-4 text-green-600" />
+            <span className="text-sm text-green-700 font-medium">Welcome back! Your progress is saved</span>
           </div>
-          <Progress value={progressPercent} className="h-2" data-testid="progress-bar" />
         </div>
+      )}
 
-        {template && (
-          <Collapsible open={instructionsOpen} onOpenChange={setInstructionsOpen} className="mb-6">
-            <Card>
-              <CollapsibleTrigger asChild>
-                <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-base">Instructions</CardTitle>
-                    {instructionsOpen ? (
-                      <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                    )}
-                  </div>
-                </CardHeader>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <CardContent className="pt-0">
-                  <p className="text-muted-foreground text-sm">
-                    Please answer all required questions marked with a red asterisk (*). 
-                    Your answers are saved automatically as you type. 
-                    Click "Submit" when you're finished.
-                  </p>
-                </CardContent>
-              </CollapsibleContent>
-            </Card>
-          </Collapsible>
-        )}
-
-        <div className="space-y-4">
-          {data.questions.map((question, index) => (
-            <QuestionInput
-              key={question.id}
-              question={question}
-              value={responses[question.id]}
-              onChange={handleResponseChange}
-              saveStatus={saveStatus[question.id]}
-            />
-          ))}
-        </div>
-
-        <div className="mt-8 space-y-4">
-          {requiredUnanswered.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-medium text-amber-800">Required questions incomplete</p>
-                  <p className="text-sm text-amber-700 mt-1">
-                    Please answer all required questions before submitting.
-                  </p>
+      {/* Compact header */}
+      <header className="bg-white border-b shrink-0">
+        <div className="max-w-4xl mx-auto px-3 py-2">
+          <div className="flex items-center justify-between">
+            <img src={logoPath} alt="Logo" className="h-7" />
+            <div className="flex items-center gap-3">
+              {/* Global save status */}
+              {globalSaveStatus && (
+                <div className="flex items-center gap-1 text-xs">
+                  {globalSaveStatus === 'saving' && (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />
+                      <span className="text-muted-foreground hidden sm:inline">Saving...</span>
+                    </>
+                  )}
+                  {globalSaveStatus === 'saved' && (
+                    <>
+                      <Cloud className="w-3 h-3 text-green-600" />
+                      <span className="text-green-600 hidden sm:inline">Saved</span>
+                    </>
+                  )}
+                  {globalSaveStatus === 'unsaved' && (
+                    <>
+                      <CloudOff className="w-3 h-3 text-amber-600" />
+                      <span className="text-amber-600 hidden sm:inline">Unsaved</span>
+                    </>
+                  )}
+                  {globalSaveStatus === 'error' && (
+                    <>
+                      <AlertCircle className="w-3 h-3 text-red-600" />
+                      <span className="text-red-600 hidden sm:inline">Error</span>
+                    </>
+                  )}
                 </div>
+              )}
+              <div className="text-right">
+                <p className="text-xs font-medium">Client Task</p>
+                <p className="text-[10px] text-muted-foreground">{answeredCount} of {totalQuestions} answered</p>
               </div>
             </div>
-          )}
+          </div>
+        </div>
+      </header>
 
-          {!showConfirmation ? (
-            <Button
-              data-testid="submit-button"
-              className="w-full h-12 text-lg"
-              disabled={!canSubmit}
-              onClick={() => setShowConfirmation(true)}
+      {/* Main content area */}
+      <main className={cn(
+        "flex-1 min-h-0 max-w-4xl mx-auto px-3 py-3 w-full flex flex-col",
+        viewMode === 'cards' ? "overflow-hidden" : "overflow-y-auto"
+      )}>
+        {/* View mode toggle - desktop only */}
+        <div className="hidden sm:flex justify-end gap-2 mb-3">
+          <Button
+            variant={viewMode === 'cards' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setViewMode('cards')}
+            data-testid="button-view-cards"
+          >
+            Cards
+          </Button>
+          <Button
+            variant={viewMode === 'list' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setViewMode('list')}
+            data-testid="button-view-list"
+          >
+            List
+          </Button>
+        </div>
+
+        {/* Confirmation card */}
+        {showConfirmation ? (
+          <Card className="border-primary/20 mb-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Confirm Your Submission</CardTitle>
+              <CardDescription>
+                Please confirm your details before submitting.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="submitter-name">Your Name</Label>
+                <Input
+                  id="submitter-name"
+                  data-testid="input-submitter-name"
+                  placeholder="Enter your name"
+                  value={submitterName}
+                  onChange={(e) => setSubmitterName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="submitter-email">Your Email</Label>
+                <Input
+                  id="submitter-email"
+                  data-testid="input-submitter-email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={submitterEmail}
+                  onChange={(e) => setSubmitterEmail(e.target.value)}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setShowConfirmation(false)}
+                >
+                  Back
+                </Button>
+                <Button
+                  data-testid="confirm-submit-button"
+                  className="flex-1"
+                  disabled={submitMutation.isPending}
+                  onClick={() => submitMutation.mutate()}
+                >
+                  {submitMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 mr-2" />
+                      Submit
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : viewMode === 'cards' && currentQuestion ? (
+          /* Card view - swipeable single question */
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden" {...swipeHandlers}>
+            <Card 
+              className={cn(
+                "flex-1 flex flex-col min-h-0 overflow-hidden transition-colors duration-300",
+                CARD_BACKGROUND_COLORS[currentQuestionIndex % CARD_BACKGROUND_COLORS.length]
+              )}
+              style={{ touchAction: 'pan-y' }} 
+              data-testid={`question-card-${currentQuestion.id}`}
             >
-              <Send className="w-5 h-5 mr-2" />
-              Continue to Submit
-            </Button>
-          ) : (
-            <Card className="border-primary/20">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Confirm Your Submission</CardTitle>
-                <CardDescription>
-                  Please confirm your details before submitting.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="submitter-name">Your Name</Label>
-                  <Input
-                    id="submitter-name"
-                    data-testid="input-submitter-name"
-                    placeholder="Enter your name"
-                    value={submitterName}
-                    onChange={(e) => setSubmitterName(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="submitter-email">Your Email</Label>
-                  <Input
-                    id="submitter-email"
-                    data-testid="input-submitter-email"
-                    type="email"
-                    placeholder="Enter your email"
-                    value={submitterEmail}
-                    onChange={(e) => setSubmitterEmail(e.target.value)}
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => setShowConfirmation(false)}
-                  >
-                    Back
-                  </Button>
-                  <Button
-                    data-testid="confirm-submit-button"
-                    className="flex-1"
-                    disabled={submitMutation.isPending}
-                    onClick={() => submitMutation.mutate()}
-                  >
-                    {submitMutation.isPending ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Submitting...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4 mr-2" />
-                        Submit
-                      </>
+              <CardHeader className="border-b py-2 px-3 bg-white/50 shrink-0">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant="outline" 
+                      className={cn(
+                        "text-xs transition-all duration-300",
+                        isPulsing && "scale-125 bg-primary text-primary-foreground animate-pulse"
+                      )}
+                    >
+                      {currentQuestionIndex + 1} of {totalQuestions}
+                    </Badge>
+                    {currentQuestion.isRequired && (
+                      <Badge variant="destructive" className="text-xs py-0">Required</Badge>
                     )}
-                  </Button>
+                  </div>
+                  {isQuestionAnswered(currentQuestion.id) && (
+                    <Badge variant="default" className="bg-green-600 text-xs py-0">
+                      <CheckCircle2 className="w-3 h-3 mr-1" />
+                      Answered
+                    </Badge>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 min-h-0 overflow-y-auto pt-3 pb-3 px-3 space-y-3 touch-pan-y overscroll-contain">
+                {/* Question label in blue box */}
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <HelpCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-blue-800">{currentQuestion.label}</p>
+                      {currentQuestion.helpText && (
+                        <p className="text-xs text-blue-600 mt-1">{currentQuestion.helpText}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Input field */}
+                <div className="bg-white rounded-lg p-3 border">
+                  <QuestionInput
+                    question={currentQuestion}
+                    value={responses[currentQuestion.id]}
+                    onChange={handleResponseChange}
+                    saveStatus={saveStatus[currentQuestion.id]}
+                  />
                 </div>
               </CardContent>
             </Card>
-          )}
-        </div>
+          </div>
+        ) : (
+          /* List view - all questions stacked */
+          <div className="space-y-4 pb-24">
+            {data.questions.map((question, index) => (
+              <QuestionInput
+                key={question.id}
+                question={question}
+                value={responses[question.id]}
+                onChange={handleResponseChange}
+                saveStatus={saveStatus[question.id]}
+              />
+            ))}
+          </div>
+        )}
+      </main>
 
-        <p className="text-center text-xs text-muted-foreground mt-8">
-          Powered by Growth Accountants
-        </p>
-      </div>
+      {/* Fixed footer with navigation/submit */}
+      {!showConfirmation && (
+        <footer className="bg-white border-t shrink-0 p-3">
+          <div className="max-w-4xl mx-auto">
+            {viewMode === 'cards' ? (
+              <div className="flex items-center justify-between gap-3">
+                <Button
+                  variant="outline"
+                  onClick={navigatePrev}
+                  disabled={currentQuestionIndex === 0}
+                  className="flex-1 sm:flex-none"
+                  data-testid="button-prev"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-1" />
+                  <span className="hidden sm:inline">Previous</span>
+                </Button>
+                
+                <div className="flex-1 max-w-xs hidden sm:block">
+                  <Progress value={progressPercent} className="h-2" data-testid="progress-bar" />
+                </div>
+                
+                {currentQuestionIndex === totalQuestions - 1 && canSubmit ? (
+                  <Button
+                    onClick={() => setShowConfirmation(true)}
+                    className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700"
+                    data-testid="submit-button"
+                  >
+                    <Send className="w-4 h-4 mr-1" />
+                    <span className="hidden sm:inline">Submit</span>
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={navigateNext}
+                    disabled={currentQuestionIndex === totalQuestions - 1}
+                    className="flex-1 sm:flex-none"
+                    data-testid="button-next"
+                  >
+                    <span className="hidden sm:inline">Next</span>
+                    <ArrowRight className="w-4 h-4 ml-1" />
+                  </Button>
+                )}
+              </div>
+            ) : (
+              /* List view footer */
+              <Button
+                onClick={() => setShowConfirmation(true)}
+                disabled={!canSubmit}
+                className="w-full bg-green-600 hover:bg-green-700 h-12 text-lg"
+                data-testid="submit-button"
+              >
+                <Send className="w-5 h-5 mr-2" />
+                Continue to Submit
+              </Button>
+            )}
+          </div>
+        </footer>
+      )}
     </div>
   );
 }
