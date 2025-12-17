@@ -1357,6 +1357,10 @@ export function registerConfigRoutes(
       };
       
       const override = await storage.createClientApprovalOverride(overrideData);
+      
+      // Invalidate stage config cache so the override takes effect immediately
+      stageConfigCache.invalidate(`projectType:${projectTypeId}`);
+      
       res.status(201).json(override);
     } catch (error) {
       console.error("Error creating client approval override:", error);
@@ -1378,7 +1382,17 @@ export function registerConfigRoutes(
 
   app.delete("/api/clients/:clientId/approval-overrides/:overrideId", isAuthenticated, requireAdmin, async (req, res) => {
     try {
+      // Get the override first to know which cache to invalidate
+      const overrides = await storage.getOverridesByClient(req.params.clientId);
+      const override = overrides.find(o => o.id === req.params.overrideId);
+      
       await storage.deleteClientApprovalOverride(req.params.overrideId);
+      
+      // Invalidate stage config cache so the removal takes effect immediately
+      if (override) {
+        stageConfigCache.invalidate(`projectType:${override.projectTypeId}`);
+      }
+      
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting client approval override:", error);
