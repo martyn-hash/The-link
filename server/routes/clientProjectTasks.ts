@@ -240,6 +240,21 @@ export function registerClientProjectTaskRoutes(
     }
   });
 
+  // POST /api/task-template-questions - Create a question (templateId in body)
+  app.post("/api/task-template-questions", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const validated = insertClientProjectTaskQuestionSchema.parse(req.body);
+      const question = await storage.createClientProjectTaskQuestion(validated);
+      res.status(201).json(question);
+    } catch (error: any) {
+      console.error("Error creating template question:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create template question" });
+    }
+  });
+
   // PATCH /api/task-template-questions/:id - Update a question
   app.patch("/api/task-template-questions/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
