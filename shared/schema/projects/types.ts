@@ -133,7 +133,9 @@ export type ProjectWithRelations = Project & {
     fieldResponses: (ReasonFieldResponse & { customField: ReasonCustomField })[];
   })[];
   stageApprovalResponses?: (StageApprovalResponse & { 
-    field: StageApprovalField;
+    field: StageApprovalField & {
+      stageApproval?: StageApproval;
+    };
   })[];
   progressMetrics?: {
     reasonId: string;

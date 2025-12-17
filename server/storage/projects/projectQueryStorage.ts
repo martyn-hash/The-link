@@ -649,6 +649,15 @@ export class ProjectQueryStorage {
             changedBy: true,
           },
         },
+        stageApprovalResponses: {
+          with: {
+            field: {
+              with: {
+                stageApproval: true,
+              },
+            },
+          },
+        },
       },
     });
     
@@ -670,6 +679,7 @@ export class ProjectQueryStorage {
           assignee: c.assignee || undefined,
           changedBy: c.changedBy || undefined,
         })),
+        stageApprovalResponses: project.stageApprovalResponses || [],
       };
     });
     

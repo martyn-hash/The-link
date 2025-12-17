@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Briefcase, Check } from "lucide-react";
-import { ProjectsList } from "../projects";
+import { ProjectsList, ApprovalResponsesCard } from "../projects";
 import type { ProjectWithRelations } from "@shared/schema";
 
 interface ProjectsTabProps {
@@ -12,6 +12,10 @@ interface ProjectsTabProps {
 export function ProjectsTab({ clientId, projects, isLoading }: ProjectsTabProps) {
   const openProjects = projects?.filter(p => !p.completionStatus && !p.inactive);
   const completedProjects = projects?.filter(p => p.completionStatus || p.inactive);
+  
+  const projectsWithApprovals = projects?.filter(
+    p => p.stageApprovalResponses && p.stageApprovalResponses.length > 0
+  );
 
   return (
     <div className="space-y-6">
@@ -48,6 +52,10 @@ export function ProjectsTab({ clientId, projects, isLoading }: ProjectsTabProps)
           />
         </CardContent>
       </Card>
+
+      {!isLoading && projectsWithApprovals && projectsWithApprovals.length > 0 && (
+        <ApprovalResponsesCard projects={projectsWithApprovals} />
+      )}
     </div>
   );
 }
