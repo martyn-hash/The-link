@@ -38,15 +38,34 @@ export function useStageMutations(
   });
 
   const updateStageMutation = useMutation({
-    mutationFn: async ({ id, ...stage }: EditingStage) => {
-      return await apiRequest("PATCH", `/api/config/stages/${id}`, stage);
+    mutationFn: async ({ id, data }: { id: string; data: Record<string, any> }) => {
+      return await apiRequest("PATCH", `/api/config/stages/${id}`, data);
     },
-    onSuccess: () => {
+    onMutate: async ({ id, data }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/config/project-types", projectTypeId, "stages"] });
+      const previousStages = queryClient.getQueryData(["/api/config/project-types", projectTypeId, "stages"]) as any[] | undefined;
+      
+      if (previousStages) {
+        const updatedStages = previousStages.map(stage => 
+          stage.id === id ? { ...stage, ...data } : stage
+        );
+        queryClient.setQueryData(["/api/config/project-types", projectTypeId, "stages"], updatedStages);
+      }
+      
+      return { previousStages };
+    },
+    onSuccess: (response, { id, data }) => {
       toast({ title: "Success", description: "Stage updated successfully" });
-      invalidateStages();
+      queryClient.setQueryData(["/api/config/project-types", projectTypeId, "stages"], (old: any[] | undefined) => {
+        if (!old) return old;
+        return old.map(stage => stage.id === id ? { ...stage, ...data, ...(response || {}) } : stage);
+      });
       callbacks.onStageUpdated?.();
     },
-    onError: (error: any) => {
+    onError: (error: any, _variables, context) => {
+      if (context?.previousStages) {
+        queryClient.setQueryData(["/api/config/project-types", projectTypeId, "stages"], context.previousStages);
+      }
       showFriendlyError({ error });
     },
   });

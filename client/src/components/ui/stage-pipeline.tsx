@@ -1,8 +1,11 @@
-import { useMemo } from "react";
+import { useMemo, useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { 
   GripVertical, 
@@ -13,7 +16,9 @@ import {
   User, 
   CheckCircle2,
   ChevronRight,
-  AlertCircle
+  AlertCircle,
+  Palette,
+  Settings2
 } from "lucide-react";
 import {
   DndContext,
@@ -53,9 +58,11 @@ interface StagePipelineProps {
   onEdit: (stage: StageItem) => void;
   onDelete: (stageId: string) => void;
   onAdd: () => void;
+  onInlineUpdate?: (stageId: string, updates: Partial<Pick<StageItem, 'name' | 'color' | 'slaHours' | 'isFinal'>>) => void;
   orientation?: "horizontal" | "vertical";
   showConnectors?: boolean;
   isLoading?: boolean;
+  allowInlineEdit?: boolean;
   className?: string;
 }
 
@@ -63,18 +70,29 @@ interface SortableStageNodeProps {
   stage: StageItem;
   onEdit: (stage: StageItem) => void;
   onDelete: (stageId: string) => void;
+  onInlineUpdate?: (stageId: string, updates: Partial<Pick<StageItem, 'name' | 'color' | 'slaHours' | 'isFinal'>>) => void;
   isLast: boolean;
   showConnector: boolean;
   orientation: "horizontal" | "vertical";
+  allowInlineEdit: boolean;
 }
+
+const STAGE_COLORS = [
+  "#6b7280", "#ef4444", "#f97316", "#f59e0b", "#eab308",
+  "#84cc16", "#22c55e", "#10b981", "#14b8a6", "#06b6d4",
+  "#0ea5e9", "#3b82f6", "#6366f1", "#8b5cf6", "#a855f7",
+  "#d946ef", "#ec4899", "#f43f5e"
+];
 
 function SortableStageNode({
   stage,
   onEdit,
   onDelete,
+  onInlineUpdate,
   isLast,
   showConnector,
   orientation,
+  allowInlineEdit,
 }: SortableStageNodeProps) {
   const {
     attributes,
@@ -84,6 +102,50 @@ function SortableStageNode({
     transition,
     isDragging,
   } = useSortable({ id: stage.id });
+
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editName, setEditName] = useState(stage.name);
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
+  const [slaPopoverOpen, setSlaPopoverOpen] = useState(false);
+  const [editSla, setEditSla] = useState(stage.slaHours?.toString() || "");
+  const nameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditingName && nameInputRef.current) {
+      nameInputRef.current.focus();
+      nameInputRef.current.select();
+    }
+  }, [isEditingName]);
+
+  useEffect(() => {
+    setEditName(stage.name);
+  }, [stage.name]);
+
+  useEffect(() => {
+    setEditSla(stage.slaHours?.toString() || "");
+  }, [stage.slaHours]);
+
+  const handleNameSubmit = () => {
+    if (editName.trim() && editName !== stage.name && onInlineUpdate) {
+      onInlineUpdate(stage.id, { name: editName.trim() });
+    }
+    setIsEditingName(false);
+  };
+
+  const handleColorSelect = (color: string) => {
+    if (onInlineUpdate) {
+      onInlineUpdate(stage.id, { color });
+    }
+    setColorPickerOpen(false);
+  };
+
+  const handleSlaSubmit = () => {
+    const slaValue = editSla ? parseInt(editSla, 10) : undefined;
+    if (onInlineUpdate && slaValue !== stage.slaHours) {
+      onInlineUpdate(stage.id, { slaHours: slaValue });
+    }
+    setSlaPopoverOpen(false);
+  };
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -122,16 +184,76 @@ function SortableStageNode({
           <GripVertical className="h-4 w-4 text-muted-foreground" />
         </button>
 
-        <div
-          className="h-8 w-8 rounded-full shrink-0 flex items-center justify-center text-white font-semibold text-sm shadow-inner"
-          style={{ backgroundColor: stage.color }}
-        >
-          {stage.order + 1}
-        </div>
+        {allowInlineEdit && onInlineUpdate ? (
+          <Popover open={colorPickerOpen} onOpenChange={setColorPickerOpen}>
+            <PopoverTrigger asChild>
+              <button
+                className="h-8 w-8 rounded-full shrink-0 flex items-center justify-center text-white font-semibold text-sm shadow-inner hover:ring-2 hover:ring-primary/50 transition-all cursor-pointer"
+                style={{ backgroundColor: stage.color }}
+                data-testid={`color-picker-trigger-${stage.id}`}
+              >
+                {stage.order + 1}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-3" align="start">
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">Stage Color</Label>
+                <div className="grid grid-cols-6 gap-1.5">
+                  {STAGE_COLORS.map((color) => (
+                    <button
+                      key={color}
+                      className={cn(
+                        "h-6 w-6 rounded-full transition-all hover:scale-110",
+                        stage.color === color && "ring-2 ring-offset-2 ring-primary"
+                      )}
+                      style={{ backgroundColor: color }}
+                      onClick={() => handleColorSelect(color)}
+                      data-testid={`color-option-${color}`}
+                    />
+                  ))}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        ) : (
+          <div
+            className="h-8 w-8 rounded-full shrink-0 flex items-center justify-center text-white font-semibold text-sm shadow-inner"
+            style={{ backgroundColor: stage.color }}
+          >
+            {stage.order + 1}
+          </div>
+        )}
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="font-medium text-sm truncate">{stage.name}</span>
+            {allowInlineEdit && isEditingName ? (
+              <Input
+                ref={nameInputRef}
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onBlur={handleNameSubmit}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleNameSubmit();
+                  if (e.key === "Escape") {
+                    setEditName(stage.name);
+                    setIsEditingName(false);
+                  }
+                }}
+                className="h-6 text-sm font-medium px-1 py-0 w-32"
+                data-testid={`input-inline-name-${stage.id}`}
+              />
+            ) : (
+              <span
+                className={cn(
+                  "font-medium text-sm truncate",
+                  allowInlineEdit && "cursor-text hover:bg-muted/50 px-1 -mx-1 rounded"
+                )}
+                onClick={() => allowInlineEdit && setIsEditingName(true)}
+                data-testid={`text-stage-name-${stage.id}`}
+              >
+                {stage.name}
+              </span>
+            )}
             {stage.isFinal && (
               <TooltipProvider>
                 <Tooltip>
@@ -160,25 +282,66 @@ function SortableStageNode({
                 {stage.assigneeLabel}
               </span>
             )}
-            {stage.slaHours && (
+            {allowInlineEdit && onInlineUpdate ? (
+              <Popover open={slaPopoverOpen} onOpenChange={setSlaPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    className="flex items-center gap-0.5 hover:text-foreground transition-colors cursor-pointer"
+                    data-testid={`sla-trigger-${stage.id}`}
+                  >
+                    <Clock className="h-3 w-3" />
+                    {stage.slaHours ? `${stage.slaHours}h` : "Set SLA"}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-3" align="start">
+                  <div className="space-y-2">
+                    <Label className="text-xs font-medium">SLA (hours)</Label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="number"
+                        min="0"
+                        value={editSla}
+                        onChange={(e) => setEditSla(e.target.value)}
+                        placeholder="Hours"
+                        className="h-8"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSlaSubmit();
+                        }}
+                        data-testid={`input-sla-${stage.id}`}
+                      />
+                      <Button size="sm" onClick={handleSlaSubmit} data-testid={`button-save-sla-${stage.id}`}>
+                        Save
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            ) : stage.slaHours ? (
               <span className="flex items-center gap-0.5">
                 <Clock className="h-3 w-3" />
                 {stage.slaHours}h
               </span>
-            )}
+            ) : null}
           </div>
         </div>
 
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => onEdit(stage)}
-            data-testid={`button-edit-pipeline-stage-${stage.id}`}
-          >
-            <Edit2 className="h-3.5 w-3.5" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => onEdit(stage)}
+                  data-testid={`button-edit-pipeline-stage-${stage.id}`}
+                >
+                  <Settings2 className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Full settings</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <Button
             variant="ghost"
             size="icon"
@@ -236,9 +399,11 @@ export function StagePipeline({
   onEdit,
   onDelete,
   onAdd,
+  onInlineUpdate,
   orientation = "horizontal",
   showConnectors = true,
   isLoading = false,
+  allowInlineEdit = false,
   className,
 }: StagePipelineProps) {
   const sensors = useSensors(
@@ -344,9 +509,11 @@ export function StagePipeline({
               stage={stage}
               onEdit={onEdit}
               onDelete={onDelete}
+              onInlineUpdate={onInlineUpdate}
               isLast={index === sortedStages.length - 1}
               showConnector={showConnectors}
               orientation={orientation}
+              allowInlineEdit={allowInlineEdit}
             />
           ))}
           <AddStageButton onClick={onAdd} orientation={orientation} />

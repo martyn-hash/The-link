@@ -312,7 +312,7 @@ export default function ProjectTypeDetail() {
   }, [projectTypeError]);
 
   // Mutation hooks with callbacks for state management
-  const { createStageMutation, updateStageMutation, deleteStageMutation } = useStageMutations(
+  const { createStageMutation, updateStageMutation, deleteStageMutation, reorderStagesMutation } = useStageMutations(
     projectTypeId,
     {
       onStageCreated: () => { setIsAddingStage(false); setEditingStage(null); },
@@ -501,7 +501,8 @@ export default function ProjectTypeDetail() {
       
       // Save the stage first
       if (editingStage.id) {
-        await updateStageMutation.mutateAsync(stageData);
+        const { id: _id, ...data } = stageData;
+        await updateStageMutation.mutateAsync({ id: editingStage.id, data });
       } else {
         // Strip id field for creation to avoid validation errors
         const { id, ...createData } = stageData;
@@ -534,8 +535,10 @@ export default function ProjectTypeDetail() {
       // Handle stage approval mapping
       if (editingStage.id && selectedStageApprovalId !== editingStage.stageApprovalId) {
         editingStage.stageApprovalId = selectedStageApprovalId || undefined;
-        const updateData = { ...editingStage, stageApprovalId: selectedStageApprovalId || undefined };
-        await updateStageMutation.mutateAsync(updateData);
+        await updateStageMutation.mutateAsync({ 
+          id: editingStage.id, 
+          data: { stageApprovalId: selectedStageApprovalId || null } 
+        });
       }
       
     } catch (error) {
@@ -667,7 +670,7 @@ export default function ProjectTypeDetail() {
               setSelectedStageReasons={setSelectedStageReasons}
               selectedStageApprovalId={selectedStageApprovalId}
               setSelectedStageApprovalId={setSelectedStageApprovalId}
-              stageMutations={{ createStageMutation, updateStageMutation, deleteStageMutation }}
+              stageMutations={{ createStageMutation, updateStageMutation, deleteStageMutation, reorderStagesMutation }}
               stageReasonMapMutations={{ createStageReasonMapMutation, deleteStageReasonMapMutation }}
               onStageSubmit={handleStageSubmit}
               getStageRoleLabel={getStageRoleLabel}
