@@ -41,19 +41,19 @@ Transform the Project Type configuration experience into a world-class, wizard-s
 
 ---
 
-## Phase 2: Task Template Sections
+## Phase 2: Task Template Sections ✅ COMPLETED
 
-### 2.1 Add Sections Concept
-**Inspiration:** Client task templates have sections for grouping related questions.
+### 2.1 Add Sections Concept ✅
 **Implementation:**
-- Add `client_project_task_sections` table:
-  - id, template_id, name, description, order
-- Questions belong to sections
-- Sections displayed as collapsible groups in staff view
-- Mobile: One section per page (card-based navigation)
+- ✅ `client_project_task_sections` table with id, templateId, name, description, order
+- ✅ Questions have `sectionId` foreign key to belong to sections
+- ✅ Sections displayed as collapsible groups in staff view
+- ✅ Full CRUD for sections (Add/Edit/Delete)
+- ✅ Questions can be moved between sections via dropdown
 
 ### 2.2 Section-Aware Mobile Form
-**Behavior:**
+**Status:** Pending - sections exist but mobile one-section-per-page view not yet implemented
+**Behavior (when implemented):**
 - Each section = one swipeable card/page
 - Progress indicator shows sections completed
 - Section title displayed prominently
