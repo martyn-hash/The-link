@@ -45,6 +45,7 @@ Access via: Passwords tab for additional credentials
 - on_completion_stage_id (FK to kanban_stages) - Move to this stage when completed
 - on_completion_stage_reason_id (FK to change_reasons) - Optional reason for stage change
 - require_all_questions (boolean, default true) - All questions must be answered
+- expiry_days_after_start (integer, default 7) - Token expires N days after project start date
 - is_active (boolean, default true)
 - created_at, updated_at
 ```
@@ -134,11 +135,12 @@ Access via: Passwords tab for additional credentials
 - id (varchar, PK)
 - instance_id (FK to client_project_task_instances)
 - token (varchar, unique) - Random access token
-- expires_at (timestamp)
+- expires_at (timestamp) - Calculated as project start date + template.expiryDaysAfterStart
 - accessed_at (timestamp)
 - recipient_email (varchar)
 - recipient_name (varchar)
 - created_by_id (FK to users)
+- is_reissued (boolean, default false) - True if this replaced an earlier token
 - created_at
 ```
 
@@ -578,19 +580,19 @@ Phase 8 (OTP) ──────────→ Enhancement, can be added after 
 
 ---
 
-## Open Questions for Implementation
+## Confirmed Design Decisions
 
-1. **File Storage**: Should task file uploads use the same object storage pattern as existing file uploads?
-   - Recommendation: Yes, use existing `@uppy` + object storage pattern
+1. **File Storage**: Use same object storage pattern as existing file uploads (`@uppy` + object storage)
 
-2. **Token Expiry Default**: How long should task links be valid?
-   - Recommendation: 14 days (longer than query tokens since these are pre-work)
+2. **Token Expiry**: Configurable as N days after project start date (set at template level)
+   - Template setting: "Link expires X days after project start date"
+   - For pre-project tasks: Calculate based on scheduled project start
 
-3. **Re-submission**: Can clients update their answers after submitting?
-   - Recommendation: No, but staff can "reopen" task for corrections
+3. **Re-submission**: Clients cannot edit after submitting
+   - Staff can "reopen" task which re-issues a new token
+   - Original responses preserved, client can update and re-submit
 
-4. **Notification Recipient**: Who receives completion notification?
-   - Recommendation: Project assignees (same as query notifications)
+4. **Completion Notification Recipient**: Service Owner (not project assignees)
 
 ---
 
