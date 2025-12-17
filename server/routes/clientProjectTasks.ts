@@ -700,7 +700,9 @@ export function registerClientProjectTaskRoutes(
         token: {
           expiresAt: tokenRecord.expiresAt,
           accessedAt: tokenRecord.accessedAt,
-        }
+        },
+        recipientName: tokenRecord.recipientName,
+        recipientEmail: tokenRecord.recipientEmail,
       });
     } catch (error) {
       console.error("Error fetching client task:", error);
@@ -746,7 +748,13 @@ export function registerClientProjectTaskRoutes(
         await storage.upsertClientProjectTaskResponse({
           instanceId: tokenRecord.instanceId,
           questionId: response.questionId,
-          value: response.value,
+          questionSource: response.questionSource || 'template',
+          valueText: response.valueText,
+          valueNumber: response.valueNumber,
+          valueDate: response.valueDate,
+          valueBoolean: response.valueBoolean,
+          valueMultiSelect: response.valueMultiSelect,
+          valueFile: response.valueFile,
         });
       }
 
@@ -796,14 +804,20 @@ export function registerClientProjectTaskRoutes(
         return res.status(403).json({ message: "This task has already been submitted" });
       }
 
-      const { responses } = req.body;
+      const { responses, completedByName, completedByEmail } = req.body;
       
       // Save final responses
       for (const response of responses) {
         await storage.upsertClientProjectTaskResponse({
           instanceId: tokenRecord.instanceId,
           questionId: response.questionId,
-          value: response.value,
+          questionSource: response.questionSource || 'template',
+          valueText: response.valueText,
+          valueNumber: response.valueNumber,
+          valueDate: response.valueDate,
+          valueBoolean: response.valueBoolean,
+          valueMultiSelect: response.valueMultiSelect,
+          valueFile: response.valueFile,
         });
       }
 
@@ -811,7 +825,11 @@ export function registerClientProjectTaskRoutes(
       await storage.updateClientProjectTaskInstance(tokenRecord.instanceId, {
         status: 'submitted',
         submittedAt: new Date(),
+        completedByName: completedByName || tokenRecord.recipientName,
+        completedByEmail: completedByEmail || tokenRecord.recipientEmail,
       });
+
+      // TODO: Phase 5 - Trigger stage change if configured on template
 
       res.json({ success: true, message: "Task submitted successfully" });
     } catch (error) {

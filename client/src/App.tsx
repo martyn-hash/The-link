@@ -86,6 +86,7 @@ const SignPage = lazy(() => import("@/pages/sign"));
 const SignatureRequestsPage = lazy(() => import("@/pages/signature-requests"));
 const SignatureRequestBuilder = lazy(() => import("@/pages/signature-request-builder"));
 const QueryResponsePage = lazy(() => import("@/pages/query-response"));
+const ClientProjectTaskFormPage = lazy(() => import("@/pages/client-project-task-form"));
 const InboxManagement = lazy(() => import("@/pages/inbox-management"));
 const PerformanceLeague = lazy(() => import("@/pages/performance-league"));
 const PageBuilder = lazy(() => import("@/pages/page-builder"));
@@ -168,6 +169,7 @@ function Router() {
         <Route path="/login">{() => <Landing />}</Route>
         <Route path="/sign" component={SignPage} />
         <Route path="/queries/respond/:token" component={QueryResponsePage} />
+        <Route path="/task/:token" component={ClientProjectTaskFormPage} />
         
         {/* Home route - conditional based on auth */}
         <Route path="/" component={isAuthenticated ? Projects : Landing} />
