@@ -106,7 +106,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Only track activity for authenticated staff users (use session.userId since req.user is populated later)
       if (isPageNavigation && req.session?.userId) {
         // Update session activity asynchronously (don't block the request)
-        storage.updateUserSessionActivity(req.session.userId).catch((err: Error) => {
+        // Pass sessionID to update the correct session and avoid deadlocks
+        storage.updateUserSessionActivity(req.session.userId, req.sessionID).catch((err: Error) => {
           console.error('Failed to update session activity:', err);
         });
       }

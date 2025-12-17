@@ -277,7 +277,7 @@ export interface IStorage {
   getUserActivityTracking(options?: { userId?: string; entityType?: string; dateFrom?: string; dateTo?: string; limit?: number }): Promise<(UserActivityTracking & { user: User; entityName: string | null })[]>;
   
   createUserSession(session: InsertUserSession): Promise<UserSession>;
-  updateUserSessionActivity(userId: string): Promise<void>;
+  updateUserSessionActivity(userId: string, sessionId?: string): Promise<void>;
   getUserSessions(userId?: string, options?: { limit?: number; onlyActive?: boolean }): Promise<(UserSession & { user: User })[]>;
   markSessionAsLoggedOut(sessionId: string): Promise<void>;
   

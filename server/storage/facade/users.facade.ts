@@ -74,8 +74,8 @@ export function applyUsersFacade<TBase extends Constructor<UsersFacadeDeps>>(Bas
       return this.userStorage.createUserSession(session);
     }
 
-    async updateUserSessionActivity(userId: string) {
-      return this.userStorage.updateUserSessionActivity(userId);
+    async updateUserSessionActivity(userId: string, sessionId?: string) {
+      return this.userStorage.updateUserSessionActivity(userId, sessionId);
     }
 
     async getUserSessions(userId?: string, options?: any) {

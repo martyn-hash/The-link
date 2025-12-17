@@ -218,16 +218,61 @@ export class UserStorage {
     return newSession;
   }
 
-  async updateUserSessionActivity(userId: string): Promise<void> {
-    await db
-      .update(userSessions)
-      .set({ lastActivity: new Date() })
-      .where(
-        and(
-          eq(userSessions.userId, userId),
-          eq(userSessions.isActive, true)
+  private lastActivityUpdateCache: Map<string, number> = new Map();
+  private readonly ACTIVITY_UPDATE_INTERVAL_MS = 30000; // 30 seconds
+
+  async updateUserSessionActivity(userId: string, _expressSessionId?: string): Promise<void> {
+    // Rate-limit activity updates to prevent database deadlocks from concurrent requests
+    // Use userId as cache key since we update the most recent session for the user
+    const cacheKey = userId;
+    const lastUpdate = this.lastActivityUpdateCache.get(cacheKey);
+    const now = Date.now();
+    
+    if (lastUpdate && (now - lastUpdate) < this.ACTIVITY_UPDATE_INTERVAL_MS) {
+      // Skip update if less than 30 seconds since last update
+      return;
+    }
+    
+    // Update cache immediately to prevent concurrent updates
+    this.lastActivityUpdateCache.set(cacheKey, now);
+    
+    try {
+      // Clean up old cache entries periodically (every 100 entries)
+      if (this.lastActivityUpdateCache.size > 100) {
+        const cutoff = now - this.ACTIVITY_UPDATE_INTERVAL_MS * 2;
+        const entries = Array.from(this.lastActivityUpdateCache.entries());
+        for (const [key, timestamp] of entries) {
+          if (timestamp < cutoff) {
+            this.lastActivityUpdateCache.delete(key);
+          }
+        }
+      }
+      
+      // Update only the most recent active session for this user
+      // Use SELECT then UPDATE to target a single row, preventing deadlocks
+      const activeSession = await db
+        .select({ id: userSessions.id })
+        .from(userSessions)
+        .where(
+          and(
+            eq(userSessions.userId, userId),
+            eq(userSessions.isActive, true)
+          )
         )
-      );
+        .orderBy(desc(userSessions.lastActivity))
+        .limit(1);
+      
+      if (activeSession.length > 0) {
+        await db
+          .update(userSessions)
+          .set({ lastActivity: new Date() })
+          .where(eq(userSessions.id, activeSession[0].id));
+      }
+    } catch (error) {
+      // Clear cache on failure so next attempt can retry
+      this.lastActivityUpdateCache.delete(cacheKey);
+      throw error;
+    }
   }
 
   async getUserSessions(userId?: string, options?: { limit?: number; onlyActive?: boolean }): Promise<(UserSession & { user: User })[]> {
