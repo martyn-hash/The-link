@@ -65,8 +65,7 @@ export function FieldLibraryTab({ projectTypeId }: FieldLibraryTabProps) {
 
   const createFieldMutation = useMutation({
     mutationFn: async (data: Omit<EditingField, "id">) => {
-      const res = await apiRequest("POST", `/api/project-types/${projectTypeId}/approval-field-library`, data);
-      return res.json();
+      return await apiRequest("POST", `/api/project-types/${projectTypeId}/approval-field-library`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/project-types", projectTypeId, "approval-field-library"] });
@@ -82,8 +81,7 @@ export function FieldLibraryTab({ projectTypeId }: FieldLibraryTabProps) {
   const updateFieldMutation = useMutation({
     mutationFn: async (data: EditingField) => {
       const { id, ...rest } = data;
-      const res = await apiRequest("PATCH", `/api/approval-field-library/${id}`, rest);
-      return res.json();
+      return await apiRequest("PATCH", `/api/approval-field-library/${id}`, rest);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/project-types", projectTypeId, "approval-field-library"] });
