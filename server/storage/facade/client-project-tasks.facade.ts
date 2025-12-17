@@ -176,6 +176,14 @@ export function applyClientProjectTasksFacade<T extends ClientProjectTasksFacade
       return (this as any).clientProjectTaskStorage.markTokenAccessed(tokenId);
     }
 
+    getClientProjectTaskTokenById(id: string): Promise<ClientProjectTaskToken | undefined> {
+      return (this as any).clientProjectTaskStorage.getTokenById(id);
+    }
+
+    updateClientProjectTaskToken(id: string, data: { expiresAt?: Date }): Promise<ClientProjectTaskToken> {
+      return (this as any).clientProjectTaskStorage.updateToken(id, data);
+    }
+
     getMergedClientProjectTaskQuestions(instanceId: string): Promise<MergedTaskQuestion[]> {
       return (this as any).clientProjectTaskStorage.getMergedQuestionsForInstance(instanceId);
     }

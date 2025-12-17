@@ -837,4 +837,148 @@ export function registerClientProjectTaskRoutes(
       res.status(500).json({ message: "Failed to submit task" });
     }
   });
+
+  // ============================================================================
+  // STAFF ACTION ROUTES
+  // ============================================================================
+
+  // POST /api/task-instances/:instanceId/resend - Resend task link
+  app.post("/api/task-instances/:instanceId/resend", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramInstanceIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid path parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      const { instanceId } = req.params;
+      const { recipientEmail, recipientName } = req.body;
+
+      const instance = await storage.getClientProjectTaskInstanceById(instanceId);
+      if (!instance) {
+        return res.status(404).json({ message: "Task instance not found" });
+      }
+
+      if (instance.status === 'submitted') {
+        return res.status(400).json({ message: "Cannot resend link for submitted task" });
+      }
+
+      // Create a new token (marking as reissued)
+      const newToken = await storage.createClientProjectTaskToken({
+        instanceId,
+        token: nanoid(32),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days default
+        recipientEmail: recipientEmail || instance.currentToken?.recipientEmail,
+        recipientName: recipientName || instance.currentToken?.recipientName,
+        createdById: req.user.id,
+        isReissued: true,
+      });
+
+      // Update instance status to sent if it was pending
+      if (instance.status === 'pending' || instance.status === 'expired') {
+        await storage.updateClientProjectTaskInstance(instanceId, {
+          status: 'sent',
+          sentAt: new Date(),
+        });
+      }
+
+      // TODO: Send email notification to recipient
+
+      res.json({ 
+        success: true, 
+        token: newToken.token,
+        message: "New link created successfully" 
+      });
+    } catch (error) {
+      console.error("Error resending task link:", error);
+      res.status(500).json({ message: "Failed to resend task link" });
+    }
+  });
+
+  // POST /api/task-tokens/:tokenId/extend - Extend token expiry
+  app.post("/api/task-tokens/:tokenId/extend", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const tokenId = req.params.tokenId;
+      const { additionalDays } = req.body;
+
+      if (!additionalDays || additionalDays < 1 || additionalDays > 30) {
+        return res.status(400).json({ message: "Invalid additional days (must be 1-30)" });
+      }
+
+      const token = await storage.getClientProjectTaskTokenById(tokenId);
+      if (!token) {
+        return res.status(404).json({ message: "Token not found" });
+      }
+
+      // Calculate new expiry date
+      const currentExpiry = token.expiresAt ? new Date(token.expiresAt) : new Date();
+      const newExpiry = new Date(currentExpiry.getTime() + additionalDays * 24 * 60 * 60 * 1000);
+
+      await storage.updateClientProjectTaskToken(tokenId, {
+        expiresAt: newExpiry,
+      });
+
+      res.json({ 
+        success: true, 
+        newExpiresAt: newExpiry.toISOString(),
+        message: `Token extended by ${additionalDays} days` 
+      });
+    } catch (error) {
+      console.error("Error extending token expiry:", error);
+      res.status(500).json({ message: "Failed to extend token expiry" });
+    }
+  });
+
+  // POST /api/projects/:projectId/task-instances - Create a new task instance with token
+  app.post("/api/projects/:projectId/task-instances", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramProjectIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid path parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      const { projectId } = req.params;
+      const { templateId, clientId, recipientEmail, recipientName, expiryDays = 7 } = req.body;
+
+      if (!templateId || !clientId) {
+        return res.status(400).json({ message: "templateId and clientId are required" });
+      }
+
+      // Create the instance
+      const instance = await storage.createClientProjectTaskInstance({
+        projectId,
+        clientId,
+        templateId,
+        status: 'sent',
+        sentAt: new Date(),
+      });
+
+      // Create a token for the instance
+      const token = await storage.createClientProjectTaskToken({
+        instanceId: instance.id,
+        token: nanoid(32),
+        expiresAt: new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000),
+        recipientEmail,
+        recipientName,
+        createdById: req.user.id,
+        isReissued: false,
+      });
+
+      // TODO: Send email notification to recipient
+
+      res.status(201).json({ 
+        ...instance, 
+        currentToken: token,
+        message: "Task created and sent successfully" 
+      });
+    } catch (error) {
+      console.error("Error creating task instance:", error);
+      res.status(500).json({ message: "Failed to create task instance" });
+    }
+  });
 }

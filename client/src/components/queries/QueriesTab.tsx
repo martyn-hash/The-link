@@ -12,6 +12,12 @@ import { Switch } from "@/components/ui/switch";
 import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
+import {
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -112,6 +118,7 @@ import { QueryBulkImport, type ParsedQuery } from "./QueryBulkImport";
 import { EmailDialog } from "@/pages/client-detail/components/communications/dialogs/EmailDialog";
 import type { EmailRecipientData, OnCompletionAction } from "@/pages/client-detail/components/communications/types";
 import { ScheduledRemindersPanel } from "./ScheduledRemindersPanel";
+import { ClientProjectTasksSection } from "./ClientProjectTasksSection";
 
 type QueryStatus = "open" | "answered_by_staff" | "sent_to_client" | "answered_by_client" | "resolved";
 
@@ -132,6 +139,7 @@ interface PersonOption {
 interface QueriesTabProps {
   projectId: string;
   clientId?: string;
+  projectTypeId?: string;
   clientPeople?: PersonOption[];
   user?: User | null;
   clientName?: string;
@@ -191,7 +199,7 @@ function AmountDisplay({ moneyIn, moneyOut }: { moneyIn?: string | null; moneyOu
   return <span className="text-muted-foreground">-</span>;
 }
 
-export function QueriesTab({ projectId, clientId, clientPeople, user, clientName }: QueriesTabProps) {
+export function QueriesTab({ projectId, clientId, projectTypeId, clientPeople, user, clientName }: QueriesTabProps) {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [selectedQueries, setSelectedQueries] = useState<string[]>([]);
@@ -443,6 +451,18 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
     queryKey: ['/api/queries', suggestionQueryId, 'suggestions'],
     enabled: !!suggestionQueryId && isSuggestionPopoverOpen,
   });
+
+  // Query for client project task instances
+  const { data: taskInstances } = useQuery<{
+    id: string;
+    status: string;
+    template?: { name: string };
+  }[]>({
+    queryKey: ['/api/projects', projectId, 'task-instances'],
+  });
+  
+  const hasTaskInstances = taskInstances && taskInstances.length > 0;
+  const effectiveProjectTypeId = projectTypeId || projectData?.projectTypeId || undefined;
 
   const extendTokenMutation = useMutation({
     mutationFn: async ({ tokenId, additionalDays }: { tokenId: string; additionalDays: number }) => {
@@ -1547,6 +1567,18 @@ export function QueriesTab({ projectId, clientId, clientPeople, user, clientName
           {/* Queries Tab Content */}
           <TabsContent value="queries" className="mt-0 flex-1 min-h-0 overflow-hidden">
             <CardContent className="pt-0 h-full overflow-y-auto">
+        {/* Client Project Tasks Section */}
+        {(hasTaskInstances || effectiveProjectTypeId) && (
+          <div className="mb-6 pb-6 border-b">
+            <ClientProjectTasksSection
+              projectId={projectId}
+              clientId={clientId}
+              projectTypeId={effectiveProjectTypeId}
+              clientName={clientName}
+            />
+          </div>
+        )}
+
         {/* Filters and Bulk Actions */}
         <div className="flex flex-col gap-4 mb-4">
           <div className="flex flex-col sm:flex-row gap-3">

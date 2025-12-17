@@ -892,6 +892,7 @@ export default function ProjectDetail() {
             <QueriesTab 
               projectId={project.id} 
               clientId={project.clientId}
+              projectTypeId={project.projectTypeId || undefined}
               clientPeople={clientPeople}
               user={user}
               clientName={project.client?.name}
@@ -1039,6 +1040,7 @@ export default function ProjectDetail() {
                 <QueriesTab 
                   projectId={project.id} 
                   clientId={project.clientId}
+                  projectTypeId={project.projectTypeId || undefined}
                   clientPeople={clientPeople}
                   user={user}
                   clientName={project.client?.name}

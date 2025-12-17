@@ -479,6 +479,23 @@ export class ClientProjectTaskStorage extends BaseStorage {
       .where(eq(clientProjectTaskTokens.id, tokenId));
   }
 
+  async getTokenById(id: string): Promise<ClientProjectTaskToken | undefined> {
+    const [token] = await db
+      .select()
+      .from(clientProjectTaskTokens)
+      .where(eq(clientProjectTaskTokens.id, id));
+    return token;
+  }
+
+  async updateToken(id: string, data: { expiresAt?: Date }): Promise<ClientProjectTaskToken> {
+    const [token] = await db
+      .update(clientProjectTaskTokens)
+      .set(data as any)
+      .where(eq(clientProjectTaskTokens.id, id))
+      .returning();
+    return token;
+  }
+
   async getMergedQuestionsForInstance(instanceId: string): Promise<MergedTaskQuestion[]> {
     const [instance] = await db
       .select()
