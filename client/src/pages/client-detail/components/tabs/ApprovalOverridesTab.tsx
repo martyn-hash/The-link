@@ -157,10 +157,11 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
     enabled: !!expandedOverride?.overrideApprovalId,
   });
 
-  const stagesWithApprovals = useMemo(() => {
-    if (!stages) return [];
-    return stages.filter(stage => stage.stageApprovalId);
-  }, [stages]);
+  const selectedStageHasStandardApproval = useMemo(() => {
+    if (!selectedStageId || !stages) return false;
+    const stage = stages.find(s => s.id === selectedStageId);
+    return !!stage?.stageApprovalId;
+  }, [selectedStageId, stages]);
 
   const existingOverrideForStage = useMemo(() => {
     if (!overrides || !selectedStageId || !selectedProjectTypeId) return null;
@@ -484,19 +485,26 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
             </div>
             
             <div className="space-y-2">
-              <Label>Stage (with approval)</Label>
-              <Select value={selectedStageId} onValueChange={setSelectedStageId} disabled={!selectedProjectTypeId}>
+              <Label>Stage</Label>
+              <Select value={selectedStageId} onValueChange={(v) => {
+                setSelectedStageId(v);
+                const stage = stages.find(s => s.id === v);
+                setCopyFromStandard(!!stage?.stageApprovalId);
+              }} disabled={!selectedProjectTypeId}>
                 <SelectTrigger data-testid="select-stage">
                   <SelectValue placeholder="Select stage" />
                 </SelectTrigger>
                 <SelectContent>
-                  {stagesWithApprovals.length === 0 ? (
+                  {stages.length === 0 ? (
                     <div className="p-2 text-sm text-muted-foreground">
-                      No stages with approvals in this project type
+                      No stages in this project type
                     </div>
                   ) : (
-                    stagesWithApprovals.map((stage) => (
-                      <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
+                    stages.map((stage) => (
+                      <SelectItem key={stage.id} value={stage.id}>
+                        {stage.name}
+                        {stage.stageApprovalId && <span className="ml-2 text-muted-foreground">(has standard approval)</span>}
+                      </SelectItem>
                     ))
                   )}
                 </SelectContent>
@@ -538,14 +546,17 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
                 id="copy-from-standard"
                 checked={copyFromStandard}
                 onCheckedChange={setCopyFromStandard}
+                disabled={!selectedStageHasStandardApproval}
                 data-testid="switch-copy-from-standard"
               />
               <div className="space-y-0.5">
-                <Label htmlFor="copy-from-standard" className="font-medium cursor-pointer">
+                <Label htmlFor="copy-from-standard" className={`font-medium cursor-pointer ${!selectedStageHasStandardApproval ? 'text-muted-foreground' : ''}`}>
                   Copy fields from standard approval
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Start with the same fields as the standard approval, then customize as needed.
+                  {selectedStageHasStandardApproval 
+                    ? "Start with the same fields as the standard approval, then customize as needed."
+                    : "This stage has no standard approval to copy from. You'll start with a blank form."}
                 </p>
               </div>
             </div>
