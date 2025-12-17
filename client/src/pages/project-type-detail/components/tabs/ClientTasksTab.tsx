@@ -18,7 +18,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { 
   Plus, Edit2, Trash2, Save, X, ClipboardList, GripVertical,
   Type, FileText, Mail, Hash, Calendar, CircleDot, CheckSquare, 
-  ChevronDown, ToggleLeft, Upload, HelpCircle
+  ChevronDown, ChevronRight, ToggleLeft, Upload, HelpCircle, Layers
 } from "lucide-react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -26,9 +26,12 @@ import { CSS } from "@dnd-kit/utilities";
 import type { 
   ClientProjectTaskTemplateWithRelations, 
   ClientProjectTaskQuestion,
+  ClientProjectTaskSection,
   KanbanStage,
   ChangeReason 
 } from "@shared/schema";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { nanoid } from "nanoid";
 
 const QUESTION_TYPES = [
   { type: "short_text", label: "Short Text", icon: Type },
@@ -54,6 +57,16 @@ interface EditingQuestion {
   order: number;
   options: string[];
   placeholder: string;
+  sectionId?: string | null;
+}
+
+interface EditingSection {
+  id?: string;
+  tempId?: string;
+  name: string;
+  description: string;
+  order: number;
+  isOpen?: boolean;
 }
 
 interface StageChangeRule {
@@ -73,6 +86,7 @@ interface EditingTemplate {
   requireAllQuestions: boolean;
   expiryDaysAfterStart: number;
   isActive: boolean;
+  sections: EditingSection[];
   questions: EditingQuestion[];
 }
 
@@ -84,6 +98,14 @@ const DEFAULT_QUESTION: EditingQuestion = {
   order: 0,
   options: [],
   placeholder: "",
+  sectionId: null,
+};
+
+const DEFAULT_SECTION: EditingSection = {
+  name: "",
+  description: "",
+  order: 0,
+  isOpen: true,
 };
 
 const DEFAULT_TEMPLATE: EditingTemplate = {
@@ -96,6 +118,7 @@ const DEFAULT_TEMPLATE: EditingTemplate = {
   requireAllQuestions: true,
   expiryDaysAfterStart: 7,
   isActive: true,
+  sections: [],
   questions: [],
 };
 
@@ -184,7 +207,7 @@ function SortableQuestionItem({
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center justify-between px-4 py-3 bg-card border rounded-lg hover:border-primary/50 transition-colors"
+      className="flex-1 flex items-center justify-between px-4 py-3 bg-card border rounded-lg hover:border-primary/50 transition-colors"
       data-testid={`question-item-${question.id || question.order}`}
     >
       <div className="flex items-center gap-3 flex-1">
@@ -371,6 +394,65 @@ function QuestionEditor({
   );
 }
 
+function SectionEditor({
+  section,
+  onSave,
+  onCancel,
+}: {
+  section: EditingSection;
+  onSave: (s: EditingSection) => void;
+  onCancel: () => void;
+}) {
+  const [editedSection, setEditedSection] = useState<EditingSection>(section);
+
+  return (
+    <Dialog open={true} onOpenChange={() => onCancel()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>{section.id ? "Edit Section" : "New Section"}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="section-name">Section Name *</Label>
+            <Input
+              id="section-name"
+              value={editedSection.name}
+              onChange={(e) => setEditedSection(prev => ({ ...prev, name: e.target.value }))}
+              placeholder="e.g., Business Information"
+              data-testid="input-section-name"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="section-description">Description (optional)</Label>
+            <Textarea
+              id="section-description"
+              value={editedSection.description}
+              onChange={(e) => setEditedSection(prev => ({ ...prev, description: e.target.value }))}
+              placeholder="Brief description shown to clients"
+              rows={2}
+              data-testid="input-section-description"
+            />
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel} data-testid="button-cancel-section">
+            Cancel
+          </Button>
+          <Button 
+            onClick={() => onSave(editedSection)} 
+            disabled={!editedSection.name.trim()}
+            data-testid="button-save-section"
+          >
+            Save Section
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 interface StageReasonMap {
   id: string;
   stageId: string;
@@ -382,9 +464,11 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<EditingTemplate | null>(null);
   const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null);
+  const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(null);
   const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isOverDropZone, setIsOverDropZone] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -416,8 +500,9 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
     mutationFn: async (data: { template: Omit<EditingTemplate, "questions">; questions: EditingQuestion[] }) => {
       console.log("[ClientTasks] Creating template with", data.questions.length, "questions");
       
+      const { sections: _, ...templateDataWithoutSections } = data.template as any;
       const templateRes = await apiRequest("POST", "/api/task-templates", {
-        ...data.template,
+        ...templateDataWithoutSections,
         projectTypeId,
       });
       const template = templateRes as { id: string };
@@ -428,11 +513,28 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
       
       console.log("[ClientTasks] Template created with ID:", template.id);
       
+      const sections = (data.template as any).sections || [];
+      const sectionIdMap: Record<string, string> = {};
+      
+      for (let i = 0; i < sections.length; i++) {
+        const s = sections[i];
+        const sectionRes = await apiRequest("POST", "/api/task-template-sections", {
+          templateId: template.id,
+          name: s.name,
+          description: s.description || null,
+          order: i,
+        }) as { id: string };
+        if (s.tempId) sectionIdMap[s.tempId] = sectionRes.id;
+        if (s.id) sectionIdMap[s.id] = sectionRes.id;
+      }
+      
       for (let i = 0; i < data.questions.length; i++) {
         const q = data.questions[i];
+        const sectionId = q.sectionId ? (sectionIdMap[q.sectionId] || q.sectionId) : null;
         console.log("[ClientTasks] Creating question", i, ":", q.label);
         await apiRequest("POST", "/api/task-template-questions", {
           templateId: template.id,
+          sectionId,
           questionType: q.questionType,
           label: q.label,
           helpText: q.helpText || null,
@@ -459,8 +561,42 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
 
   const updateTemplateMutation = useMutation({
     mutationFn: async (data: { template: EditingTemplate; questions: EditingQuestion[] }) => {
-      const { id, questions: _, ...templateData } = data.template;
+      const { id, questions: _, sections, ...templateData } = data.template;
       await apiRequest("PATCH", `/api/task-templates/${id}`, templateData);
+      
+      let existingSections: { id: string }[] = [];
+      try {
+        const res = await fetch(`/api/task-templates/${id}/sections`, { credentials: 'include' });
+        if (res.ok) existingSections = await res.json();
+      } catch (e) { /* ignore */ }
+      
+      const existingSectionIds = existingSections.map(s => s.id);
+      const newSectionIds = sections.filter(s => s.id).map(s => s.id!);
+      const sectionIdMap: Record<string, string> = {};
+      
+      for (const sId of existingSectionIds) {
+        if (!newSectionIds.includes(sId)) {
+          await apiRequest("DELETE", `/api/task-template-sections/${sId}`);
+        }
+      }
+      
+      for (let i = 0; i < sections.length; i++) {
+        const s = sections[i];
+        const sectionData = {
+          templateId: id,
+          name: s.name,
+          description: s.description || null,
+          order: i,
+        };
+        
+        if (s.id) {
+          await apiRequest("PATCH", `/api/task-template-sections/${s.id}`, sectionData);
+          sectionIdMap[s.id] = s.id;
+        } else {
+          const newSection = await apiRequest("POST", "/api/task-template-sections", sectionData) as { id: string };
+          if (s.tempId) sectionIdMap[s.tempId] = newSection.id;
+        }
+      }
       
       const existingTemplate = templates?.find(t => t.id === id);
       const existingQuestionIds = (existingTemplate?.questions || []).map(q => q.id);
@@ -474,8 +610,14 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
       
       for (let i = 0; i < data.questions.length; i++) {
         const q = data.questions[i];
+        let sectionId = q.sectionId;
+        if (sectionId && sectionIdMap[sectionId]) {
+          sectionId = sectionIdMap[sectionId];
+        }
+        
         const questionData = {
           templateId: id,
+          sectionId,
           questionType: q.questionType,
           label: q.label,
           helpText: q.helpText || null,
@@ -525,6 +667,14 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
   };
 
   const handleEditTemplate = (template: ClientProjectTaskTemplateWithRelations) => {
+    const sections: EditingSection[] = (template.sections || []).map((s: ClientProjectTaskSection) => ({
+      id: s.id,
+      name: s.name,
+      description: s.description || "",
+      order: s.order,
+      isOpen: true,
+    }));
+    
     setEditingTemplate({
       id: template.id,
       name: template.name,
@@ -536,6 +686,7 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
       requireAllQuestions: template.requireAllQuestions ?? true,
       expiryDaysAfterStart: template.expiryDaysAfterStart ?? 7,
       isActive: template.isActive ?? true,
+      sections,
       questions: (template.questions || []).map(q => ({
         id: q.id,
         questionType: q.questionType as QuestionType,
@@ -545,6 +696,7 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
         order: q.order,
         options: q.options || [],
         placeholder: q.placeholder || "",
+        sectionId: (q as any).sectionId || null,
       })),
     });
     setIsBuilderOpen(true);
@@ -600,9 +752,9 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
     const activeIndex = editingTemplate.questions.findIndex(
       q => (q.id || `temp-${q.order}`) === active.id
     );
-    const overIndex = editingTemplate.questions.findIndex(
+    const overIndex = over ? editingTemplate.questions.findIndex(
       q => (q.id || `temp-${q.order}`) === over.id
-    );
+    ) : -1;
 
     if (activeIndex !== -1 && overIndex !== -1 && activeIndex !== overIndex) {
       setEditingTemplate(prev => prev ? {
@@ -645,6 +797,73 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
     setEditingTemplate(prev => {
       if (!prev) return null;
       const newQuestions = prev.questions.filter((_, i) => i !== index).map((q, i) => ({ ...q, order: i }));
+      return { ...prev, questions: newQuestions };
+    });
+  };
+
+  const handleAddSection = () => {
+    if (!editingTemplate) return;
+    const tempId = `temp-section-${nanoid(8)}`;
+    const newSection: EditingSection = {
+      ...DEFAULT_SECTION,
+      tempId,
+      name: `Section ${editingTemplate.sections.length + 1}`,
+      order: editingTemplate.sections.length,
+      isOpen: true,
+    };
+    setEditingTemplate(prev => prev ? {
+      ...prev,
+      sections: [...prev.sections, newSection]
+    } : null);
+    setEditingSectionIndex(editingTemplate.sections.length);
+  };
+
+  const handleSaveSection = (updatedSection: EditingSection) => {
+    if (!editingTemplate || editingSectionIndex === null) return;
+    
+    setEditingTemplate(prev => {
+      if (!prev) return null;
+      const newSections = [...prev.sections];
+      newSections[editingSectionIndex] = updatedSection;
+      return { ...prev, sections: newSections };
+    });
+    setEditingSectionIndex(null);
+  };
+
+  const handleDeleteSection = (index: number) => {
+    if (!editingTemplate) return;
+    const sectionToDelete = editingTemplate.sections[index];
+    const sectionKey = sectionToDelete.id || sectionToDelete.tempId;
+    
+    setEditingTemplate(prev => {
+      if (!prev) return null;
+      const newSections = prev.sections.filter((_, i) => i !== index).map((s, i) => ({ ...s, order: i }));
+      const newQuestions = prev.questions.map(q => 
+        (q.sectionId === sectionKey) 
+          ? { ...q, sectionId: null } 
+          : q
+      );
+      return { ...prev, sections: newSections, questions: newQuestions };
+    });
+  };
+
+  const toggleSectionCollapse = (sectionKey: string) => {
+    setCollapsedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(sectionKey)) {
+        next.delete(sectionKey);
+      } else {
+        next.add(sectionKey);
+      }
+      return next;
+    });
+  };
+
+  const handleMoveQuestionToSection = (questionIndex: number, sectionId: string | null) => {
+    setEditingTemplate(prev => {
+      if (!prev) return null;
+      const newQuestions = [...prev.questions];
+      newQuestions[questionIndex] = { ...newQuestions[questionIndex], sectionId };
       return { ...prev, questions: newQuestions };
     });
   };
@@ -959,14 +1178,20 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
 
                   <QuestionsDropZone isOver={isOverDropZone}>
                     <Card>
-                      <CardHeader>
-                        <CardTitle className="text-base">Questions</CardTitle>
-                        <CardDescription>
-                          Drag question types from the left panel to add them, or drag to reorder
-                        </CardDescription>
+                      <CardHeader className="flex flex-row items-center justify-between">
+                        <div>
+                          <CardTitle className="text-base">Questions & Sections</CardTitle>
+                          <CardDescription>
+                            Organize questions into collapsible sections
+                          </CardDescription>
+                        </div>
+                        <Button variant="outline" size="sm" onClick={handleAddSection} data-testid="button-add-section">
+                          <Layers className="w-4 h-4 mr-1" />
+                          Add Section
+                        </Button>
                       </CardHeader>
-                      <CardContent>
-                        {editingTemplate.questions.length === 0 ? (
+                      <CardContent className="space-y-4">
+                        {editingTemplate.questions.length === 0 && editingTemplate.sections.length === 0 ? (
                           <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center">
                             <ClipboardList className="w-10 h-10 mx-auto text-muted-foreground/50 mb-3" />
                             <p className="text-sm text-muted-foreground">
@@ -974,21 +1199,130 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
                             </p>
                           </div>
                         ) : (
-                          <SortableContext
-                            items={editingTemplate.questions.map(q => q.id || `temp-${q.order}`)}
-                            strategy={verticalListSortingStrategy}
-                          >
-                            <div className="space-y-2">
-                              {editingTemplate.questions.map((question, index) => (
-                                <SortableQuestionItem
-                                  key={question.id || `temp-${index}`}
-                                  question={question}
-                                  onEdit={() => setEditingQuestionIndex(index)}
-                                  onDelete={() => handleDeleteQuestion(index)}
-                                />
-                              ))}
-                            </div>
-                          </SortableContext>
+                          <>
+                            {editingTemplate.sections.map((section, sectionIndex) => {
+                              const sectionKey = section.id || section.tempId || `temp-section-${sectionIndex}`;
+                              const sectionQuestions = editingTemplate.questions.filter(q => q.sectionId === sectionKey);
+                              const isCollapsed = collapsedSections.has(sectionKey);
+                              
+                              return (
+                                <div key={sectionKey} className="border rounded-lg">
+                                  <div 
+                                    className="flex items-center justify-between p-3 bg-muted/50 cursor-pointer"
+                                    onClick={() => toggleSectionCollapse(sectionKey)}
+                                    data-testid={`section-header-${sectionIndex}`}
+                                  >
+                                    <div className="flex items-center gap-2">
+                                      {isCollapsed ? (
+                                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                                      ) : (
+                                        <ChevronDown className="w-4 h-4 text-muted-foreground" />
+                                      )}
+                                      <span className="font-medium">{section.name}</span>
+                                      <span className="text-xs text-muted-foreground">({sectionQuestions.length} questions)</span>
+                                    </div>
+                                    <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-7 w-7 p-0"
+                                        onClick={() => setEditingSectionIndex(sectionIndex)}
+                                        data-testid={`button-edit-section-${sectionIndex}`}
+                                      >
+                                        <Edit2 className="w-3 h-3" />
+                                      </Button>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="h-7 w-7 p-0 text-destructive"
+                                        onClick={() => handleDeleteSection(sectionIndex)}
+                                        data-testid={`button-delete-section-${sectionIndex}`}
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  {!isCollapsed && (
+                                    <div className="p-3 space-y-2">
+                                      {sectionQuestions.length === 0 ? (
+                                        <p className="text-xs text-muted-foreground italic text-center py-2">
+                                          No questions in this section yet
+                                        </p>
+                                      ) : (
+                                        <SortableContext
+                                          items={sectionQuestions.map(q => q.id || `temp-${q.order}`)}
+                                          strategy={verticalListSortingStrategy}
+                                        >
+                                          {sectionQuestions.map((question) => {
+                                            const qIndex = editingTemplate.questions.findIndex(q => q === question);
+                                            return (
+                                              <SortableQuestionItem
+                                                key={question.id || `temp-${qIndex}`}
+                                                question={question}
+                                                onEdit={() => setEditingQuestionIndex(qIndex)}
+                                                onDelete={() => handleDeleteQuestion(qIndex)}
+                                              />
+                                            );
+                                          })}
+                                        </SortableContext>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+
+                            {(() => {
+                              const unsectionedQuestions = editingTemplate.questions.filter(q => !q.sectionId);
+                              if (unsectionedQuestions.length === 0 && editingTemplate.sections.length > 0) return null;
+                              
+                              return (
+                                <div className="space-y-2">
+                                  {editingTemplate.sections.length > 0 && (
+                                    <div className="text-sm font-medium text-muted-foreground mb-2">Unsectioned Questions</div>
+                                  )}
+                                  <SortableContext
+                                    items={unsectionedQuestions.map(q => q.id || `temp-${q.order}`)}
+                                    strategy={verticalListSortingStrategy}
+                                  >
+                                    {unsectionedQuestions.map((question) => {
+                                      const qIndex = editingTemplate.questions.findIndex(q => q === question);
+                                      return (
+                                        <div key={question.id || `temp-${qIndex}`} className="flex items-center gap-2">
+                                          <SortableQuestionItem
+                                            question={question}
+                                            onEdit={() => setEditingQuestionIndex(qIndex)}
+                                            onDelete={() => handleDeleteQuestion(qIndex)}
+                                          />
+                                          {editingTemplate.sections.length > 0 && (
+                                            <Select
+                                              value="unsectioned"
+                                              onValueChange={(value) => handleMoveQuestionToSection(qIndex, value === "unsectioned" ? null : value)}
+                                            >
+                                              <SelectTrigger className="w-32 h-8 text-xs" data-testid={`select-section-${qIndex}`}>
+                                                <SelectValue placeholder="Move to..." />
+                                              </SelectTrigger>
+                                              <SelectContent>
+                                                <SelectItem value="unsectioned">No section</SelectItem>
+                                                {editingTemplate.sections.map((s, i) => {
+                                                  const sectionVal = s.id || s.tempId || `temp-section-${i}`;
+                                                  return (
+                                                    <SelectItem key={sectionVal} value={sectionVal}>
+                                                      {s.name}
+                                                    </SelectItem>
+                                                  );
+                                                })}
+                                              </SelectContent>
+                                            </Select>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </SortableContext>
+                                </div>
+                              );
+                            })()}
+                          </>
                         )}
                       </CardContent>
                     </Card>
@@ -1004,6 +1338,14 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
             question={editingTemplate.questions[editingQuestionIndex]}
             onSave={handleSaveQuestion}
             onCancel={() => setEditingQuestionIndex(null)}
+          />
+        )}
+
+        {editingSectionIndex !== null && editingTemplate.sections[editingSectionIndex] && (
+          <SectionEditor
+            section={editingTemplate.sections[editingSectionIndex]}
+            onSave={handleSaveSection}
+            onCancel={() => setEditingSectionIndex(null)}
           />
         )}
       </TabsContent>

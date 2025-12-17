@@ -1,6 +1,7 @@
 import { db } from '../../db.js';
 import {
   clientProjectTaskTemplates,
+  clientProjectTaskSections,
   clientProjectTaskQuestions,
   clientProjectTaskOverrides,
   clientProjectTaskOverrideQuestions,
@@ -13,11 +14,14 @@ import {
   clients,
   users,
 } from '@shared/schema';
-import { eq, and, desc, inArray, sql, isNull, or } from 'drizzle-orm';
+import { eq, and, desc, inArray, sql, isNull, or, asc } from 'drizzle-orm';
 import type {
   ClientProjectTaskTemplate,
   InsertClientProjectTaskTemplate,
   UpdateClientProjectTaskTemplate,
+  ClientProjectTaskSection,
+  InsertClientProjectTaskSection,
+  UpdateClientProjectTaskSection,
   ClientProjectTaskQuestion,
   InsertClientProjectTaskQuestion,
   UpdateClientProjectTaskQuestion,
@@ -64,6 +68,12 @@ export class ClientProjectTaskStorage extends BaseStorage {
       .where(eq(clientProjectTaskQuestions.templateId, id))
       .orderBy(clientProjectTaskQuestions.order);
 
+    const sections = await db
+      .select()
+      .from(clientProjectTaskSections)
+      .where(eq(clientProjectTaskSections.templateId, id))
+      .orderBy(clientProjectTaskSections.order);
+
     let onCompletionStage = null;
     let onCompletionStageReason = null;
 
@@ -79,6 +89,7 @@ export class ClientProjectTaskStorage extends BaseStorage {
 
     return {
       ...template,
+      sections,
       questions,
       onCompletionStage,
       onCompletionStageReason,
@@ -100,7 +111,13 @@ export class ClientProjectTaskStorage extends BaseStorage {
         .where(eq(clientProjectTaskQuestions.templateId, template.id))
         .orderBy(clientProjectTaskQuestions.order);
       
-      result.push({ ...template, questions });
+      const sections = await db
+        .select()
+        .from(clientProjectTaskSections)
+        .where(eq(clientProjectTaskSections.templateId, template.id))
+        .orderBy(clientProjectTaskSections.order);
+      
+      result.push({ ...template, sections, questions });
     }
 
     return result;
@@ -153,6 +170,51 @@ export class ClientProjectTaskStorage extends BaseStorage {
 
   async deleteQuestionsByTemplateId(templateId: string): Promise<void> {
     await db.delete(clientProjectTaskQuestions).where(eq(clientProjectTaskQuestions.templateId, templateId));
+  }
+
+  // ============================================================================
+  // SECTION METHODS
+  // ============================================================================
+
+  async createSection(data: InsertClientProjectTaskSection): Promise<ClientProjectTaskSection> {
+    const [section] = await db.insert(clientProjectTaskSections).values(data as any).returning();
+    return section;
+  }
+
+  async getSectionById(id: string): Promise<ClientProjectTaskSection | undefined> {
+    const [section] = await db
+      .select()
+      .from(clientProjectTaskSections)
+      .where(eq(clientProjectTaskSections.id, id));
+    return section;
+  }
+
+  async getSectionsByTemplateId(templateId: string): Promise<ClientProjectTaskSection[]> {
+    return db
+      .select()
+      .from(clientProjectTaskSections)
+      .where(eq(clientProjectTaskSections.templateId, templateId))
+      .orderBy(asc(clientProjectTaskSections.order));
+  }
+
+  async updateSection(id: string, data: UpdateClientProjectTaskSection): Promise<ClientProjectTaskSection> {
+    const [section] = await db
+      .update(clientProjectTaskSections)
+      .set(data as any)
+      .where(eq(clientProjectTaskSections.id, id))
+      .returning();
+    return section;
+  }
+
+  async deleteSection(id: string): Promise<void> {
+    await db.update(clientProjectTaskQuestions)
+      .set({ sectionId: null } as any)
+      .where(eq(clientProjectTaskQuestions.sectionId, id));
+    await db.delete(clientProjectTaskSections).where(eq(clientProjectTaskSections.id, id));
+  }
+
+  async deleteSectionsByTemplateId(templateId: string): Promise<void> {
+    await db.delete(clientProjectTaskSections).where(eq(clientProjectTaskSections.templateId, templateId));
   }
 
   async createOverride(data: InsertClientProjectTaskOverride): Promise<ClientProjectTaskOverride> {

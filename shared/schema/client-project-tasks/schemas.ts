@@ -2,6 +2,7 @@ import { createInsertSchema } from 'drizzle-zod';
 import { z } from 'zod';
 import {
   clientProjectTaskTemplates,
+  clientProjectTaskSections,
   clientProjectTaskQuestions,
   clientProjectTaskOverrides,
   clientProjectTaskOverrideQuestions,
@@ -31,6 +32,13 @@ export const insertClientProjectTaskTemplateSchema = createInsertSchema(clientPr
 });
 
 export const updateClientProjectTaskTemplateSchema = insertClientProjectTaskTemplateSchema.partial();
+
+export const insertClientProjectTaskSectionSchema = createInsertSchema(clientProjectTaskSections).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const updateClientProjectTaskSectionSchema = insertClientProjectTaskSectionSchema.partial();
 
 export const insertClientProjectTaskQuestionSchema = createInsertSchema(clientProjectTaskQuestions).omit({
   id: true,

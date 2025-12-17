@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   clientProjectTaskTemplates,
+  clientProjectTaskSections,
   clientProjectTaskQuestions,
   clientProjectTaskOverrides,
   clientProjectTaskOverrideQuestions,
@@ -11,6 +12,8 @@ import {
 import {
   insertClientProjectTaskTemplateSchema,
   updateClientProjectTaskTemplateSchema,
+  insertClientProjectTaskSectionSchema,
+  updateClientProjectTaskSectionSchema,
   insertClientProjectTaskQuestionSchema,
   updateClientProjectTaskQuestionSchema,
   insertClientProjectTaskOverrideSchema,
@@ -34,6 +37,10 @@ import type { KanbanStage, ChangeReason } from '../projects/types';
 export type ClientProjectTaskTemplate = typeof clientProjectTaskTemplates.$inferSelect;
 export type InsertClientProjectTaskTemplate = z.infer<typeof insertClientProjectTaskTemplateSchema>;
 export type UpdateClientProjectTaskTemplate = z.infer<typeof updateClientProjectTaskTemplateSchema>;
+
+export type ClientProjectTaskSection = typeof clientProjectTaskSections.$inferSelect;
+export type InsertClientProjectTaskSection = z.infer<typeof insertClientProjectTaskSectionSchema>;
+export type UpdateClientProjectTaskSection = z.infer<typeof updateClientProjectTaskSectionSchema>;
 
 export type ClientProjectTaskQuestion = typeof clientProjectTaskQuestions.$inferSelect;
 export type InsertClientProjectTaskQuestion = z.infer<typeof insertClientProjectTaskQuestionSchema>;
@@ -65,8 +72,13 @@ export type SubmitTaskResponses = z.infer<typeof submitTaskResponsesSchema>;
 export type ClientProjectTaskStatus = 'pending' | 'sent' | 'in_progress' | 'submitted' | 'approved' | 'rejected' | 'expired';
 export type TaskQuestionSource = 'template' | 'override';
 
+export type ClientProjectTaskSectionWithRelations = ClientProjectTaskSection & {
+  questions?: ClientProjectTaskQuestion[];
+};
+
 export type ClientProjectTaskTemplateWithRelations = ClientProjectTaskTemplate & {
   projectType?: { id: string; name: string };
+  sections?: ClientProjectTaskSection[];
   questions?: ClientProjectTaskQuestion[];
   onCompletionStage?: KanbanStage | null;
   onCompletionStageReason?: ChangeReason | null;

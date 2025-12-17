@@ -1,6 +1,7 @@
 import { relations } from 'drizzle-orm';
 import {
   clientProjectTaskTemplates,
+  clientProjectTaskSections,
   clientProjectTaskQuestions,
   clientProjectTaskOverrides,
   clientProjectTaskOverrideQuestions,
@@ -18,6 +19,7 @@ export const clientProjectTaskTemplatesRelations = relations(clientProjectTaskTe
     fields: [clientProjectTaskTemplates.projectTypeId],
     references: [projectTypes.id],
   }),
+  sections: many(clientProjectTaskSections),
   questions: many(clientProjectTaskQuestions),
   overrides: many(clientProjectTaskOverrides),
   instances: many(clientProjectTaskInstances),
@@ -33,10 +35,22 @@ export const clientProjectTaskTemplatesRelations = relations(clientProjectTaskTe
   }),
 }));
 
+export const clientProjectTaskSectionsRelations = relations(clientProjectTaskSections, ({ one, many }) => ({
+  template: one(clientProjectTaskTemplates, {
+    fields: [clientProjectTaskSections.templateId],
+    references: [clientProjectTaskTemplates.id],
+  }),
+  questions: many(clientProjectTaskQuestions),
+}));
+
 export const clientProjectTaskQuestionsRelations = relations(clientProjectTaskQuestions, ({ one }) => ({
   template: one(clientProjectTaskTemplates, {
     fields: [clientProjectTaskQuestions.templateId],
     references: [clientProjectTaskTemplates.id],
+  }),
+  section: one(clientProjectTaskSections, {
+    fields: [clientProjectTaskQuestions.sectionId],
+    references: [clientProjectTaskSections.id],
   }),
 }));
 

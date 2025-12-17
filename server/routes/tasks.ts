@@ -318,8 +318,8 @@ export function registerTaskRoutes(
     }
   });
 
-  // PATCH /api/task-template-sections/:id - Update section (requireAdmin)
-  app.patch("/api/task-template-sections/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+  // PATCH /api/client-request-template-sections/:id - Update section (requireAdmin)
+  app.patch("/api/client-request-template-sections/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const paramValidation = validateParams(paramUuidSchema, req.params);
       if (!paramValidation.success) {
@@ -351,8 +351,8 @@ export function registerTaskRoutes(
     }
   });
 
-  // DELETE /api/task-template-sections/:id - Delete section (requireAdmin)
-  app.delete("/api/task-template-sections/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+  // DELETE /api/client-request-template-sections/:id - Delete section (requireAdmin)
+  app.delete("/api/client-request-template-sections/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const paramValidation = validateParams(paramUuidSchema, req.params);
       if (!paramValidation.success) {
@@ -372,8 +372,8 @@ export function registerTaskRoutes(
     }
   });
 
-  // POST /api/task-template-sections/reorder - Update section orders in bulk (requireAdmin)
-  app.post("/api/task-template-sections/reorder", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+  // POST /api/client-request-template-sections/reorder - Update section orders in bulk (requireAdmin)
+  app.post("/api/client-request-template-sections/reorder", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const reorderSchema = z.object({
         sections: z.array(z.object({
@@ -424,8 +424,8 @@ export function registerTaskRoutes(
     }
   });
 
-  // GET /api/task-template-sections/:sectionId/questions - Get questions for a section
-  app.get("/api/task-template-sections/:sectionId/questions", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+  // GET /api/client-request-template-sections/:sectionId/questions - Get questions for a section
+  app.get("/api/client-request-template-sections/:sectionId/questions", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
       const paramValidation = validateParams(paramUuidSchema, { id: req.params.sectionId });
       if (!paramValidation.success) {
@@ -445,8 +445,8 @@ export function registerTaskRoutes(
     }
   });
 
-  // POST /api/task-template-sections/:sectionId/questions - Create question (requireAdmin)
-  app.post("/api/task-template-sections/:sectionId/questions", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+  // POST /api/client-request-template-sections/:sectionId/questions - Create question (requireAdmin)
+  app.post("/api/client-request-template-sections/:sectionId/questions", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const paramValidation = validateParams(paramUuidSchema, { id: req.params.sectionId });
       if (!paramValidation.success) {
@@ -477,8 +477,8 @@ export function registerTaskRoutes(
     }
   });
 
-  // PATCH /api/task-template-questions/:id - Update question (requireAdmin)
-  app.patch("/api/task-template-questions/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+  // PATCH /api/client-request-template-questions/:id - Update question (requireAdmin)
+  app.patch("/api/client-request-template-questions/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const paramValidation = validateParams(paramUuidSchema, req.params);
       if (!paramValidation.success) {
@@ -510,8 +510,8 @@ export function registerTaskRoutes(
     }
   });
 
-  // DELETE /api/task-template-questions/:id - Delete question (requireAdmin)
-  app.delete("/api/task-template-questions/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+  // DELETE /api/client-request-template-questions/:id - Delete question (requireAdmin)
+  app.delete("/api/client-request-template-questions/:id", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const paramValidation = validateParams(paramUuidSchema, req.params);
       if (!paramValidation.success) {
@@ -531,8 +531,8 @@ export function registerTaskRoutes(
     }
   });
 
-  // POST /api/task-template-questions/reorder - Update question orders in bulk (requireAdmin)
-  app.post("/api/task-template-questions/reorder", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
+  // POST /api/client-request-template-questions/reorder - Update question orders in bulk (requireAdmin)
+  app.post("/api/client-request-template-questions/reorder", isAuthenticated, resolveEffectiveUser, requireAdmin, async (req: any, res: any) => {
     try {
       const reorderSchema = z.object({
         questions: z.array(z.object({

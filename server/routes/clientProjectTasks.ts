@@ -8,6 +8,8 @@ import {
 import {
   insertClientProjectTaskTemplateSchema,
   updateClientProjectTaskTemplateSchema,
+  insertClientProjectTaskSectionSchema,
+  updateClientProjectTaskSectionSchema,
   insertClientProjectTaskQuestionSchema,
   updateClientProjectTaskQuestionSchema,
   insertClientProjectTaskOverrideSchema,
@@ -294,6 +296,109 @@ export function registerClientProjectTaskRoutes(
     } catch (error) {
       console.error("Error deleting template question:", error);
       res.status(500).json({ message: "Failed to delete template question" });
+    }
+  });
+
+  // ============================================================================
+  // TEMPLATE SECTION ROUTES
+  // ============================================================================
+
+  // GET /api/task-templates/:templateId/sections - Get all sections for a template
+  app.get("/api/task-templates/:templateId/sections", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramTemplateIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid path parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      const { templateId } = req.params;
+      const sections = await storage.getClientProjectTaskSectionsByTemplateId(templateId);
+      res.json(sections);
+    } catch (error) {
+      console.error("Error fetching template sections:", error);
+      res.status(500).json({ message: "Failed to fetch template sections" });
+    }
+  });
+
+  // POST /api/task-template-sections - Create a section (templateId in body)
+  app.post("/api/task-template-sections", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const validated = insertClientProjectTaskSectionSchema.parse(req.body);
+      const section = await storage.createClientProjectTaskSection(validated);
+      res.status(201).json(section);
+    } catch (error: any) {
+      console.error("Error creating template section:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create template section" });
+    }
+  });
+
+  // GET /api/task-template-sections/:id - Get a section by ID
+  app.get("/api/task-template-sections/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid path parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      const section = await storage.getClientProjectTaskSectionById(req.params.id);
+      if (!section) {
+        return res.status(404).json({ message: "Section not found" });
+      }
+      res.json(section);
+    } catch (error) {
+      console.error("Error fetching template section:", error);
+      res.status(500).json({ message: "Failed to fetch template section" });
+    }
+  });
+
+  // PATCH /api/task-template-sections/:id - Update a section
+  app.patch("/api/task-template-sections/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid path parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      const validated = updateClientProjectTaskSectionSchema.parse(req.body);
+      const section = await storage.updateClientProjectTaskSection(req.params.id, validated);
+      res.json(section);
+    } catch (error: any) {
+      console.error("Error updating template section:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update template section" });
+    }
+  });
+
+  // DELETE /api/task-template-sections/:id - Delete a section
+  app.delete("/api/task-template-sections/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid path parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      await storage.deleteClientProjectTaskSection(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting template section:", error);
+      res.status(500).json({ message: "Failed to delete template section" });
     }
   });
 

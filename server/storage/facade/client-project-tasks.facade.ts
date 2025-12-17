@@ -3,6 +3,9 @@ import type {
   ClientProjectTaskTemplate,
   InsertClientProjectTaskTemplate,
   UpdateClientProjectTaskTemplate,
+  ClientProjectTaskSection,
+  InsertClientProjectTaskSection,
+  UpdateClientProjectTaskSection,
   ClientProjectTaskQuestion,
   InsertClientProjectTaskQuestion,
   UpdateClientProjectTaskQuestion,
@@ -74,6 +77,30 @@ export function applyClientProjectTasksFacade<T extends ClientProjectTasksFacade
 
     deleteClientProjectTaskQuestionsByTemplateId(templateId: string): Promise<void> {
       return (this as any).clientProjectTaskStorage.deleteQuestionsByTemplateId(templateId);
+    }
+
+    createClientProjectTaskSection(data: InsertClientProjectTaskSection): Promise<ClientProjectTaskSection> {
+      return (this as any).clientProjectTaskStorage.createSection(data);
+    }
+
+    getClientProjectTaskSectionById(id: string): Promise<ClientProjectTaskSection | undefined> {
+      return (this as any).clientProjectTaskStorage.getSectionById(id);
+    }
+
+    getClientProjectTaskSectionsByTemplateId(templateId: string): Promise<ClientProjectTaskSection[]> {
+      return (this as any).clientProjectTaskStorage.getSectionsByTemplateId(templateId);
+    }
+
+    updateClientProjectTaskSection(id: string, data: UpdateClientProjectTaskSection): Promise<ClientProjectTaskSection> {
+      return (this as any).clientProjectTaskStorage.updateSection(id, data);
+    }
+
+    deleteClientProjectTaskSection(id: string): Promise<void> {
+      return (this as any).clientProjectTaskStorage.deleteSection(id);
+    }
+
+    deleteClientProjectTaskSectionsByTemplateId(templateId: string): Promise<void> {
+      return (this as any).clientProjectTaskStorage.deleteSectionsByTemplateId(templateId);
     }
 
     createClientProjectTaskOverride(data: InsertClientProjectTaskOverride): Promise<ClientProjectTaskOverride> {

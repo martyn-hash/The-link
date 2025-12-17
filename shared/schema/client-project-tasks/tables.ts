@@ -39,9 +39,22 @@ export const clientProjectTaskTemplates = pgTable("client_project_task_templates
   index("idx_cpt_templates_is_active").on(table.isActive),
 ]);
 
+export const clientProjectTaskSections = pgTable("client_project_task_sections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").notNull().references(() => clientProjectTaskTemplates.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  order: integer("order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_cpt_sections_template_id").on(table.templateId),
+  index("idx_cpt_sections_order").on(table.templateId, table.order),
+]);
+
 export const clientProjectTaskQuestions = pgTable("client_project_task_questions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   templateId: varchar("template_id").notNull().references(() => clientProjectTaskTemplates.id, { onDelete: "cascade" }),
+  sectionId: varchar("section_id").references(() => clientProjectTaskSections.id, { onDelete: "set null" }),
   questionType: questionTypeEnum("question_type").notNull(),
   label: varchar("label", { length: 500 }).notNull(),
   helpText: text("help_text"),
@@ -53,6 +66,7 @@ export const clientProjectTaskQuestions = pgTable("client_project_task_questions
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_cpt_questions_template_id").on(table.templateId),
+  index("idx_cpt_questions_section_id").on(table.sectionId),
   index("idx_cpt_questions_order").on(table.templateId, table.order),
 ]);
 
