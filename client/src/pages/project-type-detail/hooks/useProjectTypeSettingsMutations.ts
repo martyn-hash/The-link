@@ -11,6 +11,7 @@ interface ProjectTypeSettingsCallbacks {
   onSingleProjectUpdated?: () => void;
   onDialoraSettingsUpdated?: () => void;
   onVoiceAiToggled?: () => void;
+  onDescriptionUpdated?: () => void;
 }
 
 export function useProjectTypeSettingsMutations(
@@ -154,6 +155,26 @@ export function useProjectTypeSettingsMutations(
     },
   });
 
+  const updateDescriptionMutation = useMutation({
+    mutationFn: async (description: string) => {
+      if (!projectTypeId) throw new Error("No project type ID");
+      return await apiRequest("PATCH", `/api/config/project-types/${projectTypeId}`, {
+        description
+      });
+    },
+    onSuccess: () => {
+      toast({
+        title: "Success",
+        description: "Description updated successfully",
+      });
+      invalidateProjectType();
+      callbacks.onDescriptionUpdated?.();
+    },
+    onError: (error: any) => {
+      showFriendlyError({ error });
+    },
+  });
+
   return {
     updateProjectTypeServiceLinkageMutation,
     toggleNotificationsActiveMutation,
@@ -161,5 +182,6 @@ export function useProjectTypeSettingsMutations(
     updateProjectTypeSingleProjectMutation,
     updateDialoraSettingsMutation,
     toggleVoiceAiMutation,
+    updateDescriptionMutation,
   };
 }

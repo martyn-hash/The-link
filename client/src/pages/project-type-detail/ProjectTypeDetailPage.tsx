@@ -345,6 +345,7 @@ export default function ProjectTypeDetail() {
     updateProjectTypeSingleProjectMutation,
     updateDialoraSettingsMutation,
     toggleVoiceAiMutation,
+    updateDescriptionMutation,
   } = useProjectTypeSettingsMutations(
     projectTypeId,
     {
@@ -387,6 +388,23 @@ export default function ProjectTypeDetail() {
 
   const handleSingleProjectToggle = (checked: boolean) => {
     updateProjectTypeSingleProjectMutation.mutate(checked);
+  };
+
+  const handleNotificationsToggle = (checked: boolean) => {
+    toggleNotificationsActiveMutation.mutate(checked);
+  };
+
+  const handleVoiceAiToggle = (checked: boolean) => {
+    toggleVoiceAiMutation.mutate(checked);
+  };
+
+  const handleDescriptionSave = (description: string) => {
+    updateDescriptionMutation.mutate(description);
+  };
+
+  const handleConfigureDialora = () => {
+    handleTabChange("settings");
+    setTimeout(() => setIsEditingDialora(true), 100);
   };
 
   if (authLoading || !user) {
@@ -603,18 +621,29 @@ export default function ProjectTypeDetail() {
                 projectType={projectType ? {
                   id: projectType.id,
                   name: projectType.name,
+                  description: projectType.description,
                   active: projectType.active !== false,
                   singleProjectPerClient: projectType.singleProjectPerClient === true,
+                  notificationsActive: projectType.notificationsActive !== false,
+                  useVoiceAiForQueries: projectType.useVoiceAiForQueries === true,
                   serviceId: projectType.serviceId,
                   serviceName: allServices?.find(s => s.id === projectType.serviceId)?.name,
+                  dialoraConfigured: !!(projectType.dialoraSettings?.outboundWebhooks?.length),
                 } : null}
                 isLoading={projectTypeLoading}
                 stages={stageItems}
                 configSections={configSections}
                 isActiveTogglePending={updateProjectTypeActiveMutation.isPending}
                 isSingleProjectTogglePending={updateProjectTypeSingleProjectMutation.isPending}
+                isNotificationsTogglePending={toggleNotificationsActiveMutation.isPending}
+                isVoiceAiTogglePending={toggleVoiceAiMutation.isPending}
+                isDescriptionSaving={updateDescriptionMutation.isPending}
                 onActiveToggle={handleActiveToggle}
                 onSingleProjectToggle={handleSingleProjectToggle}
+                onNotificationsToggle={handleNotificationsToggle}
+                onVoiceAiToggle={handleVoiceAiToggle}
+                onDescriptionSave={handleDescriptionSave}
+                onConfigureDialora={handleConfigureDialora}
                 onSectionClick={handleSectionClick}
               />
             </TabsContent>
