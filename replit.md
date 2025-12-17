@@ -7,8 +7,16 @@ The Link is a full-stack CRM and project management application for accounting a
 Preferred communication style: Simple, everyday language.
 
 ## Testing Credentials
+
+**HOW TO LOGIN (IMPORTANT):**
+1. Go to root page (/)
+2. Click on "Passwords" tab (NOT Replit Auth)
+3. Enter: admin@example.com | admin123
+
 - **Login page**: Root page (/) → Passwords tab
 - **Admin user**: admin@example.com | admin123
+
+Note: The login page has multiple auth methods. For development testing, always use the "Passwords" tab.
 
 ## System Architecture
 

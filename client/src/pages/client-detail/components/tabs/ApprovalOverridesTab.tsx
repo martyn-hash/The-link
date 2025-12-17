@@ -64,6 +64,7 @@ import type {
   ClientStageApprovalOverride,
   ApprovalFieldLibrary,
 } from "@shared/schema";
+import { ClientTaskOverridesSection } from "./ClientTaskOverridesSection";
 
 interface ApprovalOverridesTabProps {
   clientId: string;
@@ -1006,6 +1007,8 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ClientTaskOverridesSection clientId={clientId} />
     </div>
   );
 }

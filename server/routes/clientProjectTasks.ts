@@ -404,6 +404,87 @@ export function registerClientProjectTaskRoutes(
   });
 
   // ============================================================================
+  // OVERRIDE QUESTION ROUTES
+  // ============================================================================
+
+  // GET /api/task-overrides/:overrideId/questions - Get all questions for an override
+  app.get("/api/task-overrides/:overrideId/questions", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramOverrideIdSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid path parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      const { overrideId } = req.params;
+      const questions = await storage.getClientProjectTaskOverrideQuestionsByOverrideId(overrideId);
+      res.json(questions);
+    } catch (error) {
+      console.error("Error fetching override questions:", error);
+      res.status(500).json({ message: "Failed to fetch override questions" });
+    }
+  });
+
+  // POST /api/task-override-questions - Create a new override question
+  app.post("/api/task-override-questions", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const validated = insertClientProjectTaskOverrideQuestionSchema.parse(req.body);
+      const question = await storage.createClientProjectTaskOverrideQuestion(validated);
+      res.status(201).json(question);
+    } catch (error: any) {
+      console.error("Error creating override question:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create override question" });
+    }
+  });
+
+  // PATCH /api/task-override-questions/:id - Update an override question
+  app.patch("/api/task-override-questions/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid path parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      const validated = updateClientProjectTaskOverrideQuestionSchema.parse(req.body);
+      const question = await storage.updateClientProjectTaskOverrideQuestion(req.params.id, validated);
+      res.json(question);
+    } catch (error: any) {
+      console.error("Error updating override question:", error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ message: "Validation error", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update override question" });
+    }
+  });
+
+  // DELETE /api/task-override-questions/:id - Delete an override question
+  app.delete("/api/task-override-questions/:id", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramUuidSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid path parameters",
+          errors: paramValidation.errors
+        });
+      }
+
+      await storage.deleteClientProjectTaskOverrideQuestion(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting override question:", error);
+      res.status(500).json({ message: "Failed to delete override question" });
+    }
+  });
+
+  // ============================================================================
   // TASK INSTANCE ROUTES
   // ============================================================================
 

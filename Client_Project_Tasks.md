@@ -15,11 +15,16 @@
 
 ## Testing Credentials
 
+**HOW TO LOGIN:**
+1. Go to root page (/)
+2. Click on "Passwords" tab
+3. Enter: admin@example.com | admin123
+
 | Environment | URL | Email | Password |
 |-------------|-----|-------|----------|
-| Development | Root page | admin@example.com | admin123 |
+| Development | Root page → Passwords tab | admin@example.com | admin123 |
 
-Access via: Passwords tab for additional credentials
+**Note**: The login page has multiple tabs (Replit Auth, Passwords, etc.). Always use the "Passwords" tab for development testing.
 
 ---
 
@@ -169,6 +174,8 @@ Create storage files following existing patterns:
 
 ## Phase 2: Project Type Configuration UI
 
+> **Testing Login**: Root page (/) → Passwords tab → admin@example.com | admin123
+
 ### Success Criteria
 - [ ] New "Client Tasks" tab visible in Project Type detail page
 - [ ] Can create/edit/delete task templates
@@ -227,6 +234,8 @@ In the Project Notification form, add option:
 
 ## Phase 3: Client Override System
 
+> **Testing Login**: Root page (/) → Passwords tab → admin@example.com | admin123
+
 ### Success Criteria
 - [ ] Client Approval Overrides tab shows "Client Project Tasks" section
 - [ ] Can create override that inherits from project type template
@@ -264,6 +273,8 @@ Add new section "Client Project Task Overrides":
 ---
 
 ## Phase 4: Task Instance & Client Form
+
+> **Testing Login**: Root page (/) → Passwords tab → admin@example.com | admin123
 
 ### Success Criteria
 - [ ] Task instances created when notification fires
@@ -336,6 +347,8 @@ On submit:
 
 ## Phase 5: Staff-Facing Views
 
+> **Testing Login**: Root page (/) → Passwords tab → admin@example.com | admin123
+
 ### Success Criteria
 - [ ] Queries tab shows Client Tasks section (accordion if both exist)
 - [ ] Can see task status, responses, completion details
@@ -392,6 +405,8 @@ Add task status indicator:
 ---
 
 ## Phase 6: Reminder Integration
+
+> **Testing Login**: Root page (/) → Passwords tab → admin@example.com | admin123
 
 ### Success Criteria
 - [ ] Scheduled reminders work for client tasks (email/SMS/voice)
