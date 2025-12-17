@@ -214,5 +214,9 @@ export function applyClientProjectTasksFacade<T extends ClientProjectTasksFacade
     getMergedClientProjectTaskQuestions(instanceId: string): Promise<MergedTaskQuestion[]> {
       return (this as any).clientProjectTaskStorage.getMergedQuestionsForInstance(instanceId);
     }
+
+    getClientProjectTaskSectionsForInstance(instanceId: string): Promise<{ id: string; name: string; description: string | null; order: number }[]> {
+      return (this as any).clientProjectTaskStorage.getSectionsForInstance(instanceId);
+    }
   } as any;
 }

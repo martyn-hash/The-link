@@ -795,12 +795,16 @@ export function registerClientProjectTaskRoutes(
       // Get merged questions
       const questions = await storage.getMergedClientProjectTaskQuestions(tokenRecord.instanceId);
 
+      // Get sections for the template
+      const sections = await storage.getClientProjectTaskSectionsForInstance(tokenRecord.instanceId);
+
       // Get existing responses
       const responses = await storage.getClientProjectTaskResponsesByInstanceId(tokenRecord.instanceId);
 
       res.json({
         instance: tokenRecord.instance,
         questions,
+        sections,
         responses,
         token: {
           expiresAt: tokenRecord.expiresAt,

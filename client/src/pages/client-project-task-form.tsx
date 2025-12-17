@@ -43,7 +43,7 @@ import {
   ArrowRight,
   Sparkles,
 } from "lucide-react";
-import type { MergedTaskQuestion, ClientProjectTaskResponse, ClientProjectTaskInstance } from "@shared/schema";
+import type { MergedTaskQuestion, ClientProjectTaskResponse, ClientProjectTaskInstance, TaskFormSection } from "@shared/schema";
 
 const CARD_BACKGROUND_COLORS = [
   'bg-blue-50/70',
@@ -57,6 +57,7 @@ const CARD_BACKGROUND_COLORS = [
 interface TaskFormData {
   instance: ClientProjectTaskInstance;
   questions: MergedTaskQuestion[];
+  sections: TaskFormSection[];
   responses: ClientProjectTaskResponse[];
   token: {
     expiresAt: string | null;
@@ -446,8 +447,9 @@ export default function ClientProjectTaskFormPage() {
   const [submitterName, setSubmitterName] = useState('');
   const [submitterEmail, setSubmitterEmail] = useState('');
   const [instructionsOpen, setInstructionsOpen] = useState(true);
-  const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
+  const [viewMode, setViewMode] = useState<'cards' | 'list' | 'sections'>('cards');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
   const [isPulsing, setIsPulsing] = useState(false);
   const [showWelcomeBack, setShowWelcomeBack] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
@@ -665,6 +667,61 @@ export default function ClientProjectTaskFormPage() {
   const currentQuestion = data?.questions?.[currentQuestionIndex];
   const allQuestionsAnswered = answeredCount === totalQuestions && totalQuestions > 0;
 
+  // Group questions by section for section-based navigation
+  const sectionGroups = useMemo(() => {
+    if (!data?.questions) return [];
+    
+    const sections = data.sections || [];
+    const groups: { id: string | null; name: string; description: string | null; questions: MergedTaskQuestion[] }[] = [];
+    
+    // Group questions by sectionId
+    const questionsBySection = new Map<string | null, MergedTaskQuestion[]>();
+    data.questions.forEach(q => {
+      const sectionId = q.sectionId || null;
+      if (!questionsBySection.has(sectionId)) {
+        questionsBySection.set(sectionId, []);
+      }
+      questionsBySection.get(sectionId)!.push(q);
+    });
+    
+    // Add sections in order (only if they have questions)
+    sections.forEach(section => {
+      const questions = questionsBySection.get(section.id) || [];
+      if (questions.length > 0) {
+        groups.push({
+          id: section.id,
+          name: section.name,
+          description: section.description,
+          questions,
+        });
+        questionsBySection.delete(section.id);
+      }
+    });
+    
+    // Add unsectioned questions as "General Questions" only if:
+    // 1. There are unsectioned questions AND
+    // 2. There is at least one actual section with questions (otherwise, no sections view)
+    const unsectionedQuestions = questionsBySection.get(null) || [];
+    if (unsectionedQuestions.length > 0 && groups.length > 0) {
+      groups.unshift({
+        id: null,
+        name: 'General Questions',
+        description: null,
+        questions: unsectionedQuestions,
+      });
+    }
+    
+    return groups;
+  }, [data?.questions, data?.sections]);
+
+  const totalSections = sectionGroups.length;
+  // hasSections: true if any sections exist (enables section UI)
+  const hasSections = totalSections > 0;
+  // hasMultipleSections: true if navigating between sections makes sense
+  const hasMultipleSections = totalSections >= 2;
+  const currentSection = sectionGroups[Math.min(currentSectionIndex, Math.max(0, totalSections - 1))];
+  const currentSectionQuestions = currentSection?.questions || [];
+
   const isQuestionAnswered = useCallback((questionId: string) => {
     const response = responses[questionId];
     if (!response) return false;
@@ -696,9 +753,30 @@ export default function ClientProjectTaskFormPage() {
     }
   }, [currentQuestionIndex, totalQuestions, allQuestionsAnswered, triggerConfetti]);
 
+  const navigatePrevSection = useCallback(() => {
+    if (!hasSections) return;
+    if (currentSectionIndex > 0) {
+      setCurrentSectionIndex(prev => prev - 1);
+      setIsPulsing(true);
+      setTimeout(() => setIsPulsing(false), 300);
+    }
+  }, [currentSectionIndex, hasSections]);
+
+  const navigateNextSection = useCallback(() => {
+    if (!hasSections) return;
+    if (currentSectionIndex < totalSections - 1) {
+      setCurrentSectionIndex(prev => prev + 1);
+      setIsPulsing(true);
+      setTimeout(() => setIsPulsing(false), 300);
+    } else if (allQuestionsAnswered && !hasDismissedCelebration.current) {
+      setShowCelebration(true);
+      triggerConfetti();
+    }
+  }, [currentSectionIndex, totalSections, hasSections, allQuestionsAnswered, triggerConfetti]);
+
   const swipeHandlers = useSwipeable({
-    onSwipedLeft: () => navigateNext(),
-    onSwipedRight: () => navigatePrev(),
+    onSwipedLeft: () => (viewMode === 'sections' && hasSections) ? navigateNextSection() : navigateNext(),
+    onSwipedRight: () => (viewMode === 'sections' && hasSections) ? navigatePrevSection() : navigatePrev(),
     preventScrollOnSwipe: true,
     trackMouse: false,
   });
@@ -719,6 +797,34 @@ export default function ClientProjectTaskFormPage() {
       hasTriggeredConfetti.current = false;
     }
   }, [allQuestionsAnswered]);
+
+  // Track if initial view mode has been set based on sections availability
+  const hasInitializedViewMode = useRef(false);
+
+  // Initialize view mode once when data loads - if multiple sections available, use sections on mobile
+  useEffect(() => {
+    if (!data || hasInitializedViewMode.current) return;
+    
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 640;
+    if (hasMultipleSections && isMobile) {
+      setViewMode('sections');
+    }
+    hasInitializedViewMode.current = true;
+  }, [data, hasMultipleSections]);
+
+  // Fallback: if currently in sections mode but no sections available, switch to cards
+  useEffect(() => {
+    if (!hasSections && viewMode === 'sections') {
+      setViewMode('cards');
+    }
+  }, [hasSections, viewMode]);
+
+  // Clamp currentSectionIndex when sectionGroups change
+  useEffect(() => {
+    if (totalSections > 0 && currentSectionIndex >= totalSections) {
+      setCurrentSectionIndex(Math.max(0, totalSections - 1));
+    }
+  }, [totalSections, currentSectionIndex]);
 
   if (isLoading) {
     return (
@@ -896,10 +1002,20 @@ export default function ClientProjectTaskFormPage() {
       {/* Main content area */}
       <main className={cn(
         "flex-1 min-h-0 max-w-4xl mx-auto px-3 py-3 w-full flex flex-col",
-        viewMode === 'cards' ? "overflow-hidden" : "overflow-y-auto"
+        viewMode === 'cards' || viewMode === 'sections' ? "overflow-hidden" : "overflow-y-auto"
       )}>
         {/* View mode toggle - desktop only */}
         <div className="hidden sm:flex justify-end gap-2 mb-3">
+          {hasSections && (
+            <Button
+              variant={viewMode === 'sections' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setViewMode('sections')}
+              data-testid="button-view-sections"
+            >
+              Sections
+            </Button>
+          )}
           <Button
             variant={viewMode === 'cards' ? 'default' : 'outline'}
             size="sm"
@@ -978,6 +1094,72 @@ export default function ClientProjectTaskFormPage() {
               </div>
             </CardContent>
           </Card>
+        ) : viewMode === 'sections' && hasSections && currentSection ? (
+          /* Sections view - one section at a time with all its questions */
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden" {...swipeHandlers}>
+            <Card 
+              className={cn(
+                "flex-1 flex flex-col min-h-0 overflow-hidden transition-colors duration-300",
+                CARD_BACKGROUND_COLORS[currentSectionIndex % CARD_BACKGROUND_COLORS.length]
+              )}
+              style={{ touchAction: 'pan-y' }} 
+              data-testid={`section-card-${currentSection.id || 'general'}`}
+            >
+              <CardHeader className="border-b py-2 px-3 bg-white/50 shrink-0">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Badge 
+                      variant="outline" 
+                      className={cn(
+                        "text-xs transition-all duration-300",
+                        isPulsing && "scale-125 bg-primary text-primary-foreground animate-pulse"
+                      )}
+                    >
+                      Section {currentSectionIndex + 1} of {totalSections}
+                    </Badge>
+                  </div>
+                  <div className="text-sm font-medium">{currentSection.name}</div>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 min-h-0 overflow-y-auto pt-3 pb-3 px-3 space-y-4 touch-pan-y overscroll-contain">
+                {/* Section description if present */}
+                {currentSection.description && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-700">{currentSection.description}</p>
+                  </div>
+                )}
+
+                {/* All questions in this section */}
+                {currentSectionQuestions.map((question, qIndex) => (
+                  <div key={question.id} className="bg-white rounded-lg p-3 border">
+                    <div className="flex items-start gap-2 mb-2">
+                      <HelpCircle className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium text-foreground">{question.label}</p>
+                          {isQuestionAnswered(question.id) && (
+                            <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+                          )}
+                        </div>
+                        {question.helpText && (
+                          <p className="text-xs text-muted-foreground mt-0.5">{question.helpText}</p>
+                        )}
+                        {question.isRequired && (
+                          <Badge variant="destructive" className="text-[10px] py-0 mt-1">Required</Badge>
+                        )}
+                      </div>
+                    </div>
+                    <QuestionInput
+                      question={question}
+                      value={responses[question.id]}
+                      onChange={handleResponseChange}
+                      saveStatus={saveStatus[question.id]}
+                    />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
         ) : viewMode === 'cards' && currentQuestion ? (
           /* Card view - swipeable single question */
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden" {...swipeHandlers}>
@@ -1059,7 +1241,45 @@ export default function ClientProjectTaskFormPage() {
       {!showConfirmation && (
         <footer className="bg-white border-t shrink-0 p-3">
           <div className="max-w-4xl mx-auto">
-            {viewMode === 'cards' ? (
+            {viewMode === 'sections' && hasSections ? (
+              <div className="flex items-center justify-between gap-3">
+                <Button
+                  variant="outline"
+                  onClick={navigatePrevSection}
+                  disabled={currentSectionIndex === 0}
+                  className="flex-1 sm:flex-none"
+                  data-testid="button-prev-section"
+                >
+                  <ArrowLeft className="w-4 h-4 mr-1" />
+                  <span className="hidden sm:inline">Previous</span>
+                </Button>
+                
+                <div className="flex-1 max-w-xs hidden sm:block">
+                  <Progress value={progressPercent} className="h-2" data-testid="progress-bar" />
+                </div>
+                
+                {currentSectionIndex === totalSections - 1 && canSubmit ? (
+                  <Button
+                    onClick={() => setShowConfirmation(true)}
+                    className="flex-1 sm:flex-none bg-green-600 hover:bg-green-700"
+                    data-testid="submit-button"
+                  >
+                    <Send className="w-4 h-4 mr-1" />
+                    <span className="hidden sm:inline">Submit</span>
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={navigateNextSection}
+                    disabled={currentSectionIndex === totalSections - 1}
+                    className="flex-1 sm:flex-none"
+                    data-testid="button-next-section"
+                  >
+                    <span className="hidden sm:inline">Next</span>
+                    <ArrowRight className="w-4 h-4 ml-1" />
+                  </Button>
+                )}
+              </div>
+            ) : viewMode === 'cards' ? (
               <div className="flex items-center justify-between gap-3">
                 <Button
                   variant="outline"

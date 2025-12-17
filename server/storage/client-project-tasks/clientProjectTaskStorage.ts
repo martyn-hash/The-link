@@ -572,6 +572,14 @@ export class ClientProjectTaskStorage extends BaseStorage {
       .where(eq(clientProjectTaskQuestions.templateId, instance.templateId))
       .orderBy(clientProjectTaskQuestions.order);
 
+    const sections = await db
+      .select()
+      .from(clientProjectTaskSections)
+      .where(eq(clientProjectTaskSections.templateId, instance.templateId))
+      .orderBy(clientProjectTaskSections.order);
+
+    const sectionMap = new Map(sections.map(s => [s.id, { name: s.name, order: s.order }]));
+
     let removedQuestionIds: string[] = [];
     let overrideQuestions: ClientProjectTaskOverrideQuestion[] = [];
 
@@ -595,18 +603,24 @@ export class ClientProjectTaskStorage extends BaseStorage {
     const filteredTemplateQuestions = templateQuestions.filter(q => !removedQuestionIds.includes(q.id));
 
     const merged: MergedTaskQuestion[] = [
-      ...filteredTemplateQuestions.map(q => ({
-        id: q.id,
-        source: 'template' as const,
-        questionType: q.questionType,
-        label: q.label,
-        helpText: q.helpText,
-        isRequired: q.isRequired,
-        order: q.order,
-        options: q.options,
-        placeholder: q.placeholder,
-        conditionalLogic: q.conditionalLogic,
-      })),
+      ...filteredTemplateQuestions.map(q => {
+        const sectionInfo = q.sectionId ? sectionMap.get(q.sectionId) : null;
+        return {
+          id: q.id,
+          source: 'template' as const,
+          questionType: q.questionType,
+          label: q.label,
+          helpText: q.helpText,
+          isRequired: q.isRequired,
+          order: q.order,
+          options: q.options,
+          placeholder: q.placeholder,
+          conditionalLogic: q.conditionalLogic,
+          sectionId: q.sectionId,
+          sectionName: sectionInfo?.name || null,
+          sectionOrder: sectionInfo?.order ?? null,
+        };
+      }),
       ...overrideQuestions.map(q => ({
         id: q.id,
         source: 'override' as const,
@@ -618,9 +632,32 @@ export class ClientProjectTaskStorage extends BaseStorage {
         options: q.options,
         placeholder: q.placeholder,
         conditionalLogic: q.conditionalLogic,
+        sectionId: null,
+        sectionName: null,
+        sectionOrder: null,
       })),
     ];
 
     return merged.sort((a, b) => a.order - b.order);
+  }
+
+  async getSectionsForInstance(instanceId: string): Promise<{ id: string; name: string; description: string | null; order: number }[]> {
+    const [instance] = await db
+      .select()
+      .from(clientProjectTaskInstances)
+      .where(eq(clientProjectTaskInstances.id, instanceId));
+
+    if (!instance) return [];
+
+    return db
+      .select({
+        id: clientProjectTaskSections.id,
+        name: clientProjectTaskSections.name,
+        description: clientProjectTaskSections.description,
+        order: clientProjectTaskSections.order,
+      })
+      .from(clientProjectTaskSections)
+      .where(eq(clientProjectTaskSections.templateId, instance.templateId))
+      .orderBy(clientProjectTaskSections.order);
   }
 }

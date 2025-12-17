@@ -117,6 +117,16 @@ export interface MergedTaskQuestion {
   options: string[] | null;
   placeholder: string | null;
   conditionalLogic: unknown | null;
+  sectionId: string | null;
+  sectionName: string | null;
+  sectionOrder: number | null;
+}
+
+export interface TaskFormSection {
+  id: string;
+  name: string;
+  description: string | null;
+  order: number;
 }
 
 export interface ConditionalLogic {
