@@ -14,6 +14,12 @@ export interface TaskFileAttachment {
   uploadedAt: string;
 }
 
+export interface StageChangeRule {
+  ifStageId: string;
+  thenStageId: string;
+  thenReasonId?: string | null;
+}
+
 export const clientProjectTaskTemplates = pgTable("client_project_task_templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   projectTypeId: varchar("project_type_id").notNull().references(() => projectTypes.id, { onDelete: "cascade" }),
@@ -22,6 +28,7 @@ export const clientProjectTaskTemplates = pgTable("client_project_task_templates
   instructions: text("instructions"),
   onCompletionStageId: varchar("on_completion_stage_id").references(() => kanbanStages.id, { onDelete: "set null" }),
   onCompletionStageReasonId: varchar("on_completion_stage_reason_id").references(() => changeReasons.id, { onDelete: "set null" }),
+  stageChangeRules: jsonb("stage_change_rules").$type<StageChangeRule[]>(),
   requireAllQuestions: boolean("require_all_questions").default(true),
   expiryDaysAfterStart: integer("expiry_days_after_start").default(7),
   isActive: boolean("is_active").default(true),

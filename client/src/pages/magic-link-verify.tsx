@@ -11,9 +11,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { useToast } from "@/hooks/use-toast";
 import { showFriendlyError } from "@/lib/friendlyErrors";
-import { Mail, CheckCircle, AlertCircle, Loader2, KeyRound, ArrowLeft } from "lucide-react";
+import { Mail, CheckCircle, AlertCircle, Loader2, KeyRound, ArrowLeft, Wrench } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import maintenanceImagePath from "@assets/image_1764278395182.png";
 
 const manualVerifySchema = z.object({
   email: z.string().email("Please enter a valid email address"),
@@ -196,12 +195,10 @@ export default function MagicLinkVerify() {
     return (
       <div className="min-h-screen bg-[#f5f0e6] flex flex-col items-center justify-center px-4">
         <div className="max-w-md w-full text-center space-y-6">
-          <img 
-            src={maintenanceImagePath} 
-            alt="Maintenance Mode" 
-            className="w-full max-w-sm mx-auto"
-            data-testid="img-maintenance"
-          />
+          <div className="w-full max-w-sm mx-auto flex flex-col items-center justify-center" data-testid="img-maintenance">
+            <Wrench className="w-24 h-24 text-primary mb-4" />
+            <h2 className="text-2xl font-bold text-foreground">Maintenance Mode</h2>
+          </div>
           
           {maintenanceMessage && (
             <div className="bg-white rounded-lg p-6 shadow-md">

@@ -3,13 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LogIn, ArrowLeft } from "lucide-react";
+import { LogIn, ArrowLeft, Wrench } from "lucide-react";
 import MagicLinkLoginForm from "@/components/magic-link-login-form";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { showFriendlyError } from "@/lib/friendlyErrors";
 import logoPath from "@assets/full_logo_transparent_600_1761924125378.png";
-import maintenanceImagePath from "@assets/image_1764278395182.png";
 
 export default function Landing() {
   const [loginFormData, setLoginFormData] = useState({
@@ -71,12 +70,10 @@ export default function Landing() {
     return (
       <div className="min-h-screen bg-[#f5f0e6] flex flex-col items-center justify-center px-4">
         <div className="max-w-md w-full text-center space-y-6">
-          <img 
-            src={maintenanceImagePath} 
-            alt="Maintenance Mode" 
-            className="w-full max-w-sm mx-auto"
-            data-testid="img-maintenance"
-          />
+          <div className="w-full max-w-sm mx-auto flex flex-col items-center justify-center" data-testid="img-maintenance">
+            <Wrench className="w-24 h-24 text-primary mb-4" />
+            <h2 className="text-2xl font-bold text-foreground">Maintenance Mode</h2>
+          </div>
           
           {maintenanceMessage && (
             <div className="bg-white rounded-lg p-6 shadow-md">

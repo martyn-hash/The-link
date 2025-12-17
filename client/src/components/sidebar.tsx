@@ -22,7 +22,7 @@ import {
 import ImpersonationPanel from "@/components/impersonation-panel";
 import { useAuth } from "@/hooks/useAuth";
 import type { User } from "@shared/schema";
-import logoPath from "@assets/resized_logo_1758262615320.png";
+import logoPath from "@assets/G_icon_transparent_600_1761924134748.png";
 
 interface SidebarProps {
   user: User;

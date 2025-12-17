@@ -56,6 +56,12 @@ interface EditingQuestion {
   placeholder: string;
 }
 
+interface StageChangeRule {
+  ifStageId: string;
+  thenStageId: string;
+  thenReasonId?: string | null;
+}
+
 interface EditingTemplate {
   id?: string;
   name: string;
@@ -63,6 +69,7 @@ interface EditingTemplate {
   instructions: string;
   onCompletionStageId: string | null;
   onCompletionStageReasonId: string | null;
+  stageChangeRules: StageChangeRule[];
   requireAllQuestions: boolean;
   expiryDaysAfterStart: number;
   isActive: boolean;
@@ -85,6 +92,7 @@ const DEFAULT_TEMPLATE: EditingTemplate = {
   instructions: "",
   onCompletionStageId: null,
   onCompletionStageReasonId: null,
+  stageChangeRules: [],
   requireAllQuestions: true,
   expiryDaysAfterStart: 7,
   isActive: true,
@@ -123,6 +131,21 @@ function PaletteItem({ type, label, icon: Icon, onClick }: { type: string; label
     >
       <Icon className="w-4 h-4 text-muted-foreground" />
       <span>{label}</span>
+    </div>
+  );
+}
+
+function QuestionsDropZone({ children, isOver }: { children: React.ReactNode; isOver: boolean }) {
+  const { setNodeRef } = useDroppable({
+    id: 'questions-drop-zone',
+  });
+
+  return (
+    <div 
+      ref={setNodeRef} 
+      className={`transition-colors ${isOver ? 'ring-2 ring-primary ring-offset-2 rounded-lg' : ''}`}
+    >
+      {children}
     </div>
   );
 }
@@ -348,6 +371,12 @@ function QuestionEditor({
   );
 }
 
+interface StageReasonMap {
+  id: string;
+  stageId: string;
+  reasonId: string;
+}
+
 export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: ClientTasksTabProps) {
   const { toast } = useToast();
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
@@ -355,6 +384,7 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
   const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null);
   const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [isOverDropZone, setIsOverDropZone] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -369,6 +399,18 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
       return res.json();
     },
   });
+
+  const { data: stageReasonMaps = [] } = useQuery<StageReasonMap[]>({
+    queryKey: ["/api/config/stage-reason-maps"],
+  });
+
+  const getFilteredReasonsForStage = (stageId: string | null) => {
+    if (!stageId) return [];
+    const validReasonIds = stageReasonMaps
+      .filter(map => map.stageId === stageId)
+      .map(map => map.reasonId);
+    return reasons.filter(reason => validReasonIds.includes(reason.id));
+  };
 
   const createTemplateMutation = useMutation({
     mutationFn: async (data: { template: Omit<EditingTemplate, "questions">; questions: EditingQuestion[] }) => {
@@ -490,6 +532,7 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
       instructions: template.instructions || "",
       onCompletionStageId: template.onCompletionStageId,
       onCompletionStageReasonId: template.onCompletionStageReasonId,
+      stageChangeRules: (template.stageChangeRules as StageChangeRule[] | null) || [],
       requireAllQuestions: template.requireAllQuestions ?? true,
       expiryDaysAfterStart: template.expiryDaysAfterStart ?? 7,
       isActive: template.isActive ?? true,
@@ -524,13 +567,22 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
     setActiveId(event.active.id as string);
   };
 
+  const handleDragOver = (event: any) => {
+    const { over } = event;
+    setIsOverDropZone(over?.id === 'questions-drop-zone' || over?.data?.current?.type === 'question');
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     setActiveId(null);
+    setIsOverDropZone(false);
 
-    if (!over || !editingTemplate) return;
+    if (!editingTemplate) return;
 
+    // Handle dropping palette item onto drop zone
     if (active.id.toString().startsWith('palette-')) {
+      // Accept drop on the drop zone or on any existing question
+      if (!over || (over.id !== 'questions-drop-zone' && !over.data?.current?.type)) return;
       const questionType = active.data.current?.type as QuestionType;
       const newQuestion: EditingQuestion = {
         ...DEFAULT_QUESTION,
@@ -633,6 +685,13 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
             </Button>
           </div>
 
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+          >
           <div className="flex-1 flex overflow-hidden">
             <div className="w-64 border-r border-border bg-muted/30 p-4 overflow-y-auto">
               <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
@@ -653,12 +712,6 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
               </div>
             </div>
 
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-            >
               <div className="flex-1 p-6 overflow-y-auto">
                 <div className="max-w-2xl mx-auto space-y-6">
                   <Card>
@@ -705,7 +758,8 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
                             value={editingTemplate.onCompletionStageId || "none"}
                             onValueChange={(value) => setEditingTemplate(prev => prev ? { 
                               ...prev, 
-                              onCompletionStageId: value === "none" ? null : value 
+                              onCompletionStageId: value === "none" ? null : value,
+                              onCompletionStageReasonId: null
                             } : null)}
                           >
                             <SelectTrigger id="completion-stage" data-testid="select-completion-stage">
@@ -734,13 +788,129 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
                             </SelectTrigger>
                             <SelectContent>
                               <SelectItem value="none">No reason</SelectItem>
-                              {reasons.map(reason => (
+                              {getFilteredReasonsForStage(editingTemplate.onCompletionStageId).map(reason => (
                                 <SelectItem key={reason.id} value={reason.id}>{reason.reason}</SelectItem>
                               ))}
+                              {editingTemplate.onCompletionStageId && getFilteredReasonsForStage(editingTemplate.onCompletionStageId).length === 0 && (
+                                <div className="px-2 py-1.5 text-xs text-muted-foreground italic">
+                                  No reasons configured for this stage
+                                </div>
+                              )}
                             </SelectContent>
                           </Select>
                         </div>
                       </div>
+
+                      {/* Conditional Stage Change Rules */}
+                      <div className="border rounded-lg p-4 bg-muted/30">
+                        <div className="flex items-center justify-between mb-3">
+                          <div>
+                            <Label className="text-sm font-medium">Conditional Stage Changes</Label>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Override the default based on the project's current stage
+                            </p>
+                          </div>
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => setEditingTemplate(prev => prev ? {
+                              ...prev,
+                              stageChangeRules: [...prev.stageChangeRules, { ifStageId: '', thenStageId: '', thenReasonId: null }]
+                            } : null)}
+                            data-testid="button-add-rule"
+                          >
+                            <Plus className="w-3 h-3 mr-1" />
+                            Add Rule
+                          </Button>
+                        </div>
+                        
+                        {editingTemplate.stageChangeRules.length === 0 ? (
+                          <p className="text-xs text-muted-foreground italic text-center py-2">
+                            No conditional rules. The default stage change will always apply.
+                          </p>
+                        ) : (
+                          <div className="space-y-3">
+                            {editingTemplate.stageChangeRules.map((rule, index) => (
+                              <div key={index} className="flex items-center gap-2 p-2 bg-background rounded border">
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">IF stage is</span>
+                                <Select
+                                  value={rule.ifStageId || "none"}
+                                  onValueChange={(value) => {
+                                    const newRules = [...editingTemplate.stageChangeRules];
+                                    newRules[index] = { ...rule, ifStageId: value === "none" ? '' : value };
+                                    setEditingTemplate(prev => prev ? { ...prev, stageChangeRules: newRules } : null);
+                                  }}
+                                >
+                                  <SelectTrigger className="w-36 h-8 text-xs" data-testid={`select-if-stage-${index}`}>
+                                    <SelectValue placeholder="Select stage" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">Select stage</SelectItem>
+                                    {stages.map(stage => (
+                                      <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">THEN move to</span>
+                                <Select
+                                  value={rule.thenStageId || "none"}
+                                  onValueChange={(value) => {
+                                    const newRules = [...editingTemplate.stageChangeRules];
+                                    newRules[index] = { ...rule, thenStageId: value === "none" ? '' : value, thenReasonId: null };
+                                    setEditingTemplate(prev => prev ? { ...prev, stageChangeRules: newRules } : null);
+                                  }}
+                                >
+                                  <SelectTrigger className="w-36 h-8 text-xs" data-testid={`select-then-stage-${index}`}>
+                                    <SelectValue placeholder="Select stage" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">Select stage</SelectItem>
+                                    {stages.map(stage => (
+                                      <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">with</span>
+                                <Select
+                                  value={rule.thenReasonId || "none"}
+                                  onValueChange={(value) => {
+                                    const newRules = [...editingTemplate.stageChangeRules];
+                                    newRules[index] = { ...rule, thenReasonId: value === "none" ? null : value };
+                                    setEditingTemplate(prev => prev ? { ...prev, stageChangeRules: newRules } : null);
+                                  }}
+                                  disabled={!rule.thenStageId}
+                                >
+                                  <SelectTrigger className="w-32 h-8 text-xs" data-testid={`select-then-reason-${index}`}>
+                                    <SelectValue placeholder="No reason" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="none">No reason</SelectItem>
+                                    {getFilteredReasonsForStage(rule.thenStageId).map(reason => (
+                                      <SelectItem key={reason.id} value={reason.id}>{reason.reason}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 text-destructive"
+                                  onClick={() => {
+                                    const newRules = editingTemplate.stageChangeRules.filter((_, i) => i !== index);
+                                    setEditingTemplate(prev => prev ? { ...prev, stageChangeRules: newRules } : null);
+                                  }}
+                                  data-testid={`button-delete-rule-${index}`}
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <Label htmlFor="expiry-days">Link Expires After (days)</Label>
@@ -787,44 +957,46 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
                     </CardContent>
                   </Card>
 
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base">Questions</CardTitle>
-                      <CardDescription>
-                        Drag question types from the left panel to add them, or drag to reorder
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      {editingTemplate.questions.length === 0 ? (
-                        <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center">
-                          <ClipboardList className="w-10 h-10 mx-auto text-muted-foreground/50 mb-3" />
-                          <p className="text-sm text-muted-foreground">
-                            Drag question types from the left panel to add them to your form
-                          </p>
-                        </div>
-                      ) : (
-                        <SortableContext
-                          items={editingTemplate.questions.map(q => q.id || `temp-${q.order}`)}
-                          strategy={verticalListSortingStrategy}
-                        >
-                          <div className="space-y-2">
-                            {editingTemplate.questions.map((question, index) => (
-                              <SortableQuestionItem
-                                key={question.id || `temp-${index}`}
-                                question={question}
-                                onEdit={() => setEditingQuestionIndex(index)}
-                                onDelete={() => handleDeleteQuestion(index)}
-                              />
-                            ))}
+                  <QuestionsDropZone isOver={isOverDropZone}>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">Questions</CardTitle>
+                        <CardDescription>
+                          Drag question types from the left panel to add them, or drag to reorder
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        {editingTemplate.questions.length === 0 ? (
+                          <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center">
+                            <ClipboardList className="w-10 h-10 mx-auto text-muted-foreground/50 mb-3" />
+                            <p className="text-sm text-muted-foreground">
+                              Drag question types from the left panel to add them to your form
+                            </p>
                           </div>
-                        </SortableContext>
-                      )}
-                    </CardContent>
-                  </Card>
+                        ) : (
+                          <SortableContext
+                            items={editingTemplate.questions.map(q => q.id || `temp-${q.order}`)}
+                            strategy={verticalListSortingStrategy}
+                          >
+                            <div className="space-y-2">
+                              {editingTemplate.questions.map((question, index) => (
+                                <SortableQuestionItem
+                                  key={question.id || `temp-${index}`}
+                                  question={question}
+                                  onEdit={() => setEditingQuestionIndex(index)}
+                                  onDelete={() => handleDeleteQuestion(index)}
+                                />
+                              ))}
+                            </div>
+                          </SortableContext>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </QuestionsDropZone>
                 </div>
               </div>
-            </DndContext>
           </div>
+          </DndContext>
         </div>
 
         {editingQuestionIndex !== null && editingTemplate.questions[editingQuestionIndex] && (
