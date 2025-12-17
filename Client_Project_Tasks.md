@@ -272,17 +272,25 @@ Add new section "Client Project Task Overrides":
 
 ---
 
-## Phase 4: Task Instance & Client Form
+## Phase 4: Task Instance & Client Form ✅ COMPLETED
 
 > **Testing Login**: Root page (/) → Passwords tab → admin@example.com | admin123
 
 ### Success Criteria
-- [ ] Task instances created when notification fires
-- [ ] Client receives email with branded button to open form
-- [ ] Form UI matches bookkeeping queries style (auto-save, clean design)
-- [ ] Responses saved per question
-- [ ] Submit button validates all required questions answered
-- [ ] On submit: stage change triggers, notifications sent
+- [x] Task instances created when notification fires
+- [x] Client receives email with branded button to open form
+- [x] Form UI matches bookkeeping queries style (auto-save, clean design)
+- [x] Responses saved per question
+- [x] Submit button validates all required questions answered
+- [x] On submit: stage change triggers, notifications sent
+
+### Implementation Notes
+- **Route**: `/task/:token` - Token-based public access
+- **Auto-save**: 500ms debounce with visual save status indicator
+- **Question types**: text, long_text, email, number, date, single_choice, multi_choice, dropdown, yes_no
+- **File uploads**: Deferred to Phase 5 (shows "coming soon" message in form)
+- **Confirmation step**: Collects submitter name/email before final submission
+- **Pre-filled data**: Token recipient name/email pre-populate confirmation fields
 
 ### Tasks
 
