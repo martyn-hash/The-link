@@ -154,17 +154,23 @@ export function StageApprovalForm({
 
                       {field.fieldType === "boolean" && (
                         <div className="space-y-3">
-                          <FormDescription className="flex items-center gap-2">
-                            {field.expectedValueBoolean ? (
-                              <CheckCircle className="h-4 w-4 text-green-500" />
-                            ) : (
-                              <AlertCircle className="h-4 w-4 text-red-500" />
-                            )}
-                            This field must be set to:{" "}
-                            <strong>
-                              {field.expectedValueBoolean ? "Yes" : "No"}
-                            </strong>
-                          </FormDescription>
+                          {field.expectedValueBoolean !== null && field.expectedValueBoolean !== undefined ? (
+                            <FormDescription className="flex items-center gap-2">
+                              {field.expectedValueBoolean ? (
+                                <CheckCircle className="h-4 w-4 text-green-500" />
+                              ) : (
+                                <AlertCircle className="h-4 w-4 text-red-500" />
+                              )}
+                              This field must be set to:{" "}
+                              <strong>
+                                {field.expectedValueBoolean ? "Yes" : "No"}
+                              </strong>
+                            </FormDescription>
+                          ) : (
+                            <FormDescription className="text-muted-foreground">
+                              Any value is accepted
+                            </FormDescription>
+                          )}
                           <FormControl>
                             <div className="flex items-center space-x-3">
                               <Switch

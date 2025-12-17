@@ -13,6 +13,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -46,6 +54,8 @@ import {
   ChevronDown,
   ChevronUp,
   Library,
+  Eye,
+  Pencil,
 } from "lucide-react";
 import type {
   ProjectType,
@@ -119,6 +129,8 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
   const [expandedOverrideId, setExpandedOverrideId] = useState<string | null>(null);
   const [isAddingField, setIsAddingField] = useState(false);
   const [editingField, setEditingField] = useState<EditingField | null>(null);
+  const [isEditingExistingField, setIsEditingExistingField] = useState(false);
+  const [viewingField, setViewingField] = useState<any | null>(null);
   const [showLibraryPicker, setShowLibraryPicker] = useState(false);
 
   const { data: projectTypes, isLoading: projectTypesLoading } = useQuery<ProjectType[]>({
@@ -252,6 +264,41 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
     },
   });
 
+  const updateFieldMutation = useMutation({
+    mutationFn: async (data: { fieldId: string; field: EditingField }) => {
+      const payload: Record<string, any> = {
+        fieldName: data.field.fieldName,
+        description: data.field.description || null,
+        isRequired: data.field.isRequired,
+      };
+      
+      // Only include type-specific fields for the current field type
+      if (data.field.fieldType === "boolean") {
+        payload.expectedValueBoolean = data.field.expectedValueBoolean;
+      } else if (data.field.fieldType === "number") {
+        payload.comparisonType = data.field.comparisonType;
+        payload.expectedValueNumber = data.field.expectedValueNumber;
+      } else if (data.field.fieldType === "single_select" || data.field.fieldType === "multi_select") {
+        payload.options = data.field.options;
+      }
+      
+      const res = await apiRequest("PATCH", `/api/config/stage-approval-fields/${data.fieldId}`, payload);
+      return res;
+    },
+    onSuccess: () => {
+      if (expandedOverride?.overrideApprovalId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/stage-approvals", expandedOverride.overrideApprovalId, "resolved-fields"] });
+      }
+      setIsAddingField(false);
+      setEditingField(null);
+      setIsEditingExistingField(false);
+      toast({ title: "Field updated" });
+    },
+    onError: (error: Error) => {
+      showFriendlyError({ error });
+    },
+  });
+
   const handleCreateOverride = () => {
     if (!selectedProjectTypeId || !selectedStageId || !newApprovalName.trim()) {
       toast({ title: "Missing information", description: "Please select a project type, stage, and enter an approval name.", variant: "destructive" });
@@ -282,7 +329,30 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
 
   const handleSaveField = () => {
     if (!editingField || !expandedOverrideId) return;
-    addFieldMutation.mutate({ overrideId: expandedOverrideId, field: editingField });
+    
+    if (isEditingExistingField && editingField.id) {
+      updateFieldMutation.mutate({ fieldId: editingField.id, field: editingField });
+    } else {
+      addFieldMutation.mutate({ overrideId: expandedOverrideId, field: editingField });
+    }
+  };
+
+  const handleEditField = (field: any) => {
+    setEditingField({
+      id: field.id,
+      fieldName: field.fieldName,
+      fieldType: field.fieldType as FieldType,
+      description: field.description || "",
+      isRequired: field.isRequired,
+      order: field.order,
+      options: field.options || [],
+      libraryFieldId: field.libraryFieldId,
+      expectedValueBoolean: field.expectedValueBoolean,
+      expectedValueNumber: field.expectedValueNumber,
+      comparisonType: field.comparisonType,
+    });
+    setIsEditingExistingField(true);
+    setIsAddingField(true);
   };
 
   const enrichedOverrides: OverrideWithDetails[] = useMemo(() => {
@@ -407,42 +477,85 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
                     </div>
                     
                     {resolvedFields && resolvedFields.length > 0 ? (
-                      <div className="space-y-2">
-                        {resolvedFields.map((field: any) => (
-                          <div
-                            key={field.id}
-                            className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
-                            data-testid={`field-row-${field.id}`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div>
-                                <p className="font-medium text-sm">{field.fieldName}</p>
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="border rounded-lg">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Field Name</TableHead>
+                              <TableHead>Type</TableHead>
+                              <TableHead>Required</TableHead>
+                              <TableHead>Source</TableHead>
+                              <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {resolvedFields.map((field: any) => (
+                              <TableRow key={field.id} data-testid={`row-field-${field.id}`}>
+                                <TableCell className="font-medium">
+                                  <span data-testid={`text-field-name-${field.id}`}>
+                                    {field.fieldName}
+                                  </span>
+                                  {field.description && (
+                                    <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
+                                      {field.description}
+                                    </p>
+                                  )}
+                                </TableCell>
+                                <TableCell>
                                   <Badge variant="outline" className="text-xs">
                                     {FIELD_TYPES.find(t => t.value === field.fieldType)?.label || field.fieldType}
                                   </Badge>
-                                  {field.isRequired && (
+                                </TableCell>
+                                <TableCell>
+                                  {field.isRequired ? (
                                     <Badge variant="secondary" className="text-xs">Required</Badge>
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground">-</span>
                                   )}
-                                  {field.libraryFieldId && (
+                                </TableCell>
+                                <TableCell>
+                                  {field.libraryFieldId ? (
                                     <Badge variant="outline" className="text-xs bg-blue-50">
                                       <Library className="w-3 h-3 mr-1" />
                                       Library
                                     </Badge>
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground">Custom</span>
                                   )}
-                                </div>
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => deleteFieldMutation.mutate(field.id)}
-                              data-testid={`button-delete-field-${field.id}`}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        ))}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Button
+                                      variant="default"
+                                      size="sm"
+                                      onClick={() => setViewingField(field)}
+                                      data-testid={`button-view-field-${field.id}`}
+                                    >
+                                      <Eye className="h-4 w-4 mr-2" />
+                                      View
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => handleEditField(field)}
+                                      data-testid={`button-edit-field-${field.id}`}
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => deleteFieldMutation.mutate(field.id)}
+                                      data-testid={`button-delete-field-${field.id}`}
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
                       </div>
                     ) : (
                       <div className="text-center py-8 text-muted-foreground">
@@ -612,10 +725,22 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isAddingField} onOpenChange={setIsAddingField}>
+      <Dialog open={isAddingField} onOpenChange={(open) => {
+        setIsAddingField(open);
+        if (!open) {
+          setEditingField(null);
+          setIsEditingExistingField(false);
+        }
+      }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>{editingField?.libraryFieldId ? "Configure Library Field" : "Add Custom Field"}</DialogTitle>
+            <DialogTitle>
+              {isEditingExistingField 
+                ? "Edit Field" 
+                : editingField?.libraryFieldId 
+                  ? "Configure Library Field" 
+                  : "Add Custom Field"}
+            </DialogTitle>
           </DialogHeader>
           {editingField && (
             <div className="space-y-4 py-4">
@@ -745,15 +870,117 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setIsAddingField(false); setEditingField(null); }}>
+            <Button variant="outline" onClick={() => { 
+              setIsAddingField(false); 
+              setEditingField(null); 
+              setIsEditingExistingField(false);
+            }}>
               Cancel
             </Button>
             <Button
               onClick={handleSaveField}
-              disabled={addFieldMutation.isPending || !editingField?.fieldName.trim()}
+              disabled={(isEditingExistingField ? updateFieldMutation.isPending : addFieldMutation.isPending) || !editingField?.fieldName.trim()}
               data-testid="button-save-field"
             >
-              {addFieldMutation.isPending ? "Saving..." : "Add Field"}
+              {(isEditingExistingField ? updateFieldMutation.isPending : addFieldMutation.isPending) 
+                ? "Saving..." 
+                : isEditingExistingField 
+                  ? "Save Changes" 
+                  : "Add Field"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!viewingField} onOpenChange={(open) => !open && setViewingField(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Field Details</DialogTitle>
+          </DialogHeader>
+          {viewingField && (
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-muted-foreground text-xs">Field Name</Label>
+                  <p className="font-medium" data-testid="view-field-name">{viewingField.fieldName}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Type</Label>
+                  <Badge variant="outline">
+                    {FIELD_TYPES.find(t => t.value === viewingField.fieldType)?.label || viewingField.fieldType}
+                  </Badge>
+                </div>
+              </div>
+              
+              {viewingField.description && (
+                <div>
+                  <Label className="text-muted-foreground text-xs">Description</Label>
+                  <p className="text-sm" data-testid="view-field-description">{viewingField.description}</p>
+                </div>
+              )}
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-muted-foreground text-xs">Required</Label>
+                  <p className="text-sm">{viewingField.isRequired ? "Yes" : "No"}</p>
+                </div>
+                <div>
+                  <Label className="text-muted-foreground text-xs">Source</Label>
+                  <p className="text-sm">{viewingField.libraryFieldId ? "From Library" : "Custom"}</p>
+                </div>
+              </div>
+              
+              {viewingField.fieldType === "boolean" && (
+                <div>
+                  <Label className="text-muted-foreground text-xs">Expected Value</Label>
+                  <p className="text-sm">
+                    {viewingField.expectedValueBoolean === null || viewingField.expectedValueBoolean === undefined
+                      ? "Any value"
+                      : viewingField.expectedValueBoolean 
+                        ? "Must be Yes" 
+                        : "Must be No"}
+                  </p>
+                </div>
+              )}
+              
+              {viewingField.fieldType === "number" && viewingField.comparisonType && (
+                <div>
+                  <Label className="text-muted-foreground text-xs">Validation</Label>
+                  <p className="text-sm">
+                    {viewingField.comparisonType === "equal_to" && `Equal to ${viewingField.expectedValueNumber}`}
+                    {viewingField.comparisonType === "less_than" && `Less than ${viewingField.expectedValueNumber}`}
+                    {viewingField.comparisonType === "greater_than" && `Greater than ${viewingField.expectedValueNumber}`}
+                  </p>
+                </div>
+              )}
+              
+              {(viewingField.fieldType === "single_select" || viewingField.fieldType === "multi_select") && 
+               viewingField.options && viewingField.options.length > 0 && (
+                <div>
+                  <Label className="text-muted-foreground text-xs">Options</Label>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {viewingField.options.map((opt: string, idx: number) => (
+                      <Badge key={idx} variant="secondary" className="text-xs">{opt}</Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button 
+              variant="outline"
+              onClick={() => {
+                handleEditField(viewingField);
+                setViewingField(null);
+              }}
+              data-testid="button-edit-from-view"
+            >
+              <Pencil className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+            <Button onClick={() => setViewingField(null)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
