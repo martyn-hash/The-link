@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -5,9 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
 import { TabsContent } from "@/components/ui/tabs";
-import { Plus, Edit2, Trash2, Save, X, Layers } from "lucide-react";
+import { Save, X, Layers } from "lucide-react";
+import { StagePipeline, type StageItem } from "@/components/ui/stage-pipeline";
 import type { ProjectType, KanbanStage, ChangeReason, StageApproval } from "@shared/schema";
 import type { EditingStage } from "../../utils/types";
 import { DEFAULT_STAGE, STAGE_COLORS } from "../../utils/constants";
@@ -61,13 +62,44 @@ export function KanbanStagesTab({
   onStageSubmit,
   getStageRoleLabel,
 }: KanbanStagesTabProps) {
-  const { createStageMutation, updateStageMutation, deleteStageMutation } = stageMutations;
+  const { createStageMutation, updateStageMutation, deleteStageMutation, reorderStagesMutation } = stageMutations;
+
+  const stageItems: StageItem[] = useMemo(() => {
+    if (!stages) return [];
+    return stages.map(stage => ({
+      id: stage.id,
+      name: stage.name,
+      color: stage.color || '#6b7280',
+      order: stage.order,
+      assigneeLabel: getStageRoleLabel(stage),
+      slaHours: stage.maxInstanceTime || undefined,
+      totalTimeHours: stage.maxTotalTime || undefined,
+      isFinal: (stage as any).canBeFinalStage || false,
+      hasApproval: !!stage.stageApprovalId,
+      reasonCount: allStageReasonMaps?.filter((m: any) => m.stageId === stage.id).length || 0,
+    }));
+  }, [stages, allStageReasonMaps, getStageRoleLabel]);
 
   const handleAddStage = () => {
     setEditingStage({ ...DEFAULT_STAGE, order: (stages?.length || 0) });
     setIsAddingStage(true);
     setSelectedStageReasons([]);
     setSelectedStageApprovalId(null);
+  };
+
+  const handleReorderStages = (reorderedItems: StageItem[]) => {
+    const updates = reorderedItems.map(item => ({ id: item.id, order: item.order }));
+    const orderedIds = reorderedItems.map(item => item.id);
+    reorderStagesMutation.mutate({ updates, orderedIds });
+  };
+
+  const handlePipelineEdit = (item: StageItem) => {
+    const stage = stages?.find(s => s.id === item.id);
+    if (stage) handleEditStage(stage);
+  };
+
+  const handlePipelineDelete = (stageId: string) => {
+    deleteStageMutation.mutate(stageId);
   };
 
   const handleEditStage = (stage: KanbanStage) => {
@@ -101,93 +133,21 @@ export function KanbanStagesTab({
 
   return (
     <TabsContent value="stages" className="page-container py-6 md:py-8 space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">Kanban Stages</h2>
-          <p className="text-muted-foreground">Configure the workflow stages for this project type</p>
-        </div>
-        <Button onClick={handleAddStage} data-testid="button-add-stage">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Stage
-        </Button>
+      <div>
+        <h2 className="text-xl font-semibold">Workflow Pipeline</h2>
+        <p className="text-muted-foreground">Drag to reorder stages, click to edit. Projects flow through these stages from left to right.</p>
       </div>
 
-      {stagesLoading ? (
-        <div className="grid gap-4">
-          {[...Array(3)].map((_, i) => (
-            <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-6 w-32" />
-                <Skeleton className="h-4 w-24" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-4 w-full" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : stages && stages.length > 0 ? (
-        <div className="grid gap-4">
-          {stages.map((stage) => (
-            <Card key={stage.id} data-testid={`card-stage-${stage.id}`}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <div className="flex items-center space-x-3">
-                  <div 
-                    className="w-4 h-4 rounded-full" 
-                    style={{ backgroundColor: stage.color || '#6b7280' }}
-                  />
-                  <CardTitle className="text-base" data-testid={`text-stage-name-${stage.id}`}>
-                    {stage.name}
-                  </CardTitle>
-                  <Badge variant="secondary" data-testid={`badge-stage-role-${stage.id}`}>
-                    {getStageRoleLabel(stage)}
-                  </Badge>
-                  {(stage as any).canBeFinalStage && (
-                    <Badge variant="default" className="bg-green-600 hover:bg-green-700" data-testid={`badge-final-stage-${stage.id}`}>
-                      Final Stage
-                    </Badge>
-                  )}
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleEditStage(stage)}
-                    data-testid={`button-edit-stage-${stage.id}`}
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => deleteStageMutation.mutate(stage.id)}
-                    data-testid={`button-delete-stage-${stage.id}`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                  <span>Order: {stage.order}</span>
-                  {stage.maxInstanceTime && <span>Max time: {stage.maxInstanceTime}h</span>}
-                  {stage.maxTotalTime && <span>Total time: {stage.maxTotalTime}h</span>}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : (
-        <div className="text-center py-12">
-          <Layers className="w-12 h-12 text-muted-foreground mb-4 mx-auto" />
-          <h3 className="text-lg font-medium text-foreground mb-2">No stages configured</h3>
-          <p className="text-muted-foreground mb-4">Add your first kanban stage to start configuring the workflow.</p>
-          <Button onClick={handleAddStage}>
-            <Plus className="w-4 h-4 mr-2" />
-            Add First Stage
-          </Button>
-        </div>
-      )}
+      <StagePipeline
+        stages={stageItems}
+        onReorder={handleReorderStages}
+        onEdit={handlePipelineEdit}
+        onDelete={handlePipelineDelete}
+        onAdd={handleAddStage}
+        orientation="vertical"
+        showConnectors={true}
+        isLoading={stagesLoading}
+      />
 
       {(editingStage || isAddingStage) && (
         <Card>

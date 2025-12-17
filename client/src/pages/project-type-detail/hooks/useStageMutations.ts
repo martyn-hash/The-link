@@ -8,6 +8,7 @@ interface StageMutationCallbacks {
   onStageCreated?: () => void;
   onStageUpdated?: () => void;
   onStageDeleted?: () => void;
+  onStagesReordered?: () => void;
 }
 
 export function useStageMutations(
@@ -64,9 +65,48 @@ export function useStageMutations(
     },
   });
 
+  const reorderStagesMutation = useMutation({
+    mutationFn: async ({ updates }: { updates: Array<{ id: string; order: number }>; orderedIds: string[] }) => {
+      await Promise.all(
+        updates.map(({ id, order }) => 
+          apiRequest("PATCH", `/api/config/stages/${id}`, { order })
+        )
+      );
+    },
+    onMutate: async ({ updates, orderedIds }) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/config/project-types", projectTypeId, "stages"] });
+      const previousStages = queryClient.getQueryData(["/api/config/project-types", projectTypeId, "stages"]) as any[] | undefined;
+      
+      if (previousStages) {
+        const orderMap = new Map(updates.map(s => [s.id, s.order]));
+        const stageMap = new Map(previousStages.map(s => [s.id, s]));
+        const reorderedStages = orderedIds.map(id => {
+          const stage = stageMap.get(id);
+          const newOrder = orderMap.get(id);
+          return stage ? { ...stage, order: newOrder ?? stage.order } : null;
+        }).filter(Boolean);
+        
+        queryClient.setQueryData(["/api/config/project-types", projectTypeId, "stages"], reorderedStages);
+      }
+      
+      return { previousStages };
+    },
+    onSuccess: () => {
+      invalidateStages();
+      callbacks.onStagesReordered?.();
+    },
+    onError: (error: any, _variables, context) => {
+      if (context?.previousStages) {
+        queryClient.setQueryData(["/api/config/project-types", projectTypeId, "stages"], context.previousStages);
+      }
+      showFriendlyError({ error });
+    },
+  });
+
   return {
     createStageMutation,
     updateStageMutation,
     deleteStageMutation,
+    reorderStagesMutation,
   };
 }
