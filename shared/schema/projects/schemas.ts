@@ -87,10 +87,18 @@ function validateStageApprovalFieldType(data: { fieldType?: string | null; expec
   if (!data.fieldType) return true;
   switch (data.fieldType) {
     case 'boolean':
-      return data.expectedValueBoolean !== null && data.expectedValueBoolean !== undefined;
+      // Allow null for "any value is acceptable" scenario
+      return true;
     case 'number':
-      return data.comparisonType !== null && data.comparisonType !== undefined &&
-             data.expectedValueNumber !== null && data.expectedValueNumber !== undefined;
+      // Number fields require comparison type and expected value if either is provided
+      if (data.comparisonType !== null && data.comparisonType !== undefined) {
+        return data.expectedValueNumber !== null && data.expectedValueNumber !== undefined;
+      }
+      if (data.expectedValueNumber !== null && data.expectedValueNumber !== undefined) {
+        return data.comparisonType !== null && data.comparisonType !== undefined;
+      }
+      // Both can be null for "any value"
+      return true;
     case 'multi_select':
     case 'single_select':
       return data.options !== null && data.options !== undefined && Array.isArray(data.options) && data.options.length > 0;

@@ -218,11 +218,11 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
       const override = overrides?.find(o => o.id === data.overrideId);
       if (!override) throw new Error("Override not found");
       
-      const res = await apiRequest("POST", `/api/config/stage-approvals/${override.overrideApprovalId}/fields`, {
+      const res = await apiRequest("POST", `/api/config/stage-approval-fields`, {
         ...data.field,
         stageApprovalId: override.overrideApprovalId,
       });
-      return res.json();
+      return res;
     },
     onSuccess: () => {
       if (expandedOverride?.overrideApprovalId) {

@@ -100,11 +100,14 @@ export const stageApprovalFields = pgTable("stage_approval_fields", {
 }, (table) => [
   index("idx_stage_approval_fields_stage_approval_id").on(table.stageApprovalId),
   index("idx_stage_approval_fields_library_field_id").on(table.libraryFieldId),
-  check("check_boolean_field_validation", sql`
-    (field_type != 'boolean' OR expected_value_boolean IS NOT NULL)
-  `),
-  check("check_number_field_validation", sql`
-    (field_type != 'number' OR (comparison_type IS NOT NULL AND expected_value_number IS NOT NULL))
+  // Boolean fields: null expectedValueBoolean = "any value is acceptable"
+  // No check constraint needed - null is a valid state
+  // Number fields: if comparison_type is set, expected_value_number must be set (and vice versa)
+  check("check_number_field_consistency", sql`
+    (field_type != 'number' OR (
+      (comparison_type IS NULL AND expected_value_number IS NULL) OR
+      (comparison_type IS NOT NULL AND expected_value_number IS NOT NULL)
+    ))
   `),
   check("check_multi_select_field_validation", sql`
     (field_type != 'multi_select' OR (options IS NOT NULL AND array_length(options, 1) > 0 AND options <> ARRAY[]::text[]))
