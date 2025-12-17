@@ -22,6 +22,7 @@ import {
   OverviewTab, 
   TasksTab,
   NotesTab,
+  ApprovalOverridesTab,
 } from "./components/tabs";
 import { useClientData, useClientMutations, useCompanyConnections } from "./hooks";
 import { ClientHeader } from "./components/ClientHeader";
@@ -182,7 +183,7 @@ export default function ClientDetail() {
           />
 
           <SwipeableTabsWrapper
-            tabs={["overview", "projects", "communications", "chronology", "documents", "tasks", "notes", "risk", "qc"]}
+            tabs={["overview", "projects", "communications", "chronology", "documents", "tasks", "notes", "risk", "customApprovals"]}
             currentTab={activeTab}
             onTabChange={setActiveTab}
             enabled={isMobile}
@@ -263,7 +264,9 @@ export default function ClientDetail() {
             />
           </TabsContent>
 
-          {/* Approvals tab hidden - work in progress */}
+          <TabsContent value="customApprovals" className="space-y-6 mt-6">
+            <ApprovalOverridesTab clientId={id!} />
+          </TabsContent>
 
           <TabsContent value="risk" className="space-y-6 mt-6">
             <RiskTab clientId={id!} riskView={riskView} />

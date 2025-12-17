@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const TAB_LIST = ["overview", "projects", "communications", "chronology", "documents", "tasks", "notes", "risk"] as const;
+const TAB_LIST = ["overview", "projects", "communications", "chronology", "documents", "tasks", "notes", "risk", "customApprovals"] as const;
 
 type TabValue = typeof TAB_LIST[number];
 
@@ -86,7 +86,7 @@ export function ClientTabNavigation({
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                variant={activeTab === "risk" ? "secondary" : "ghost"}
+                variant={activeTab === "risk" || activeTab === "customApprovals" ? "secondary" : "ghost"}
                 className="text-sm py-2 h-9 px-3 w-full"
                 data-testid="dropdown-risk-notifications"
               >
@@ -94,13 +94,13 @@ export function ClientTabNavigation({
                 <ChevronDown className="ml-1 h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent>
+            <DropdownMenuContent className="min-w-[160px]">
               <DropdownMenuItem
                 onClick={() => {
                   onTabChange("risk");
                   onRiskViewChange("risk");
                 }}
-                className="bg-blue-600 text-white hover:bg-blue-700 focus:bg-blue-700"
+                className="cursor-pointer text-sm font-medium py-2"
                 data-testid="menu-item-risk"
               >
                 Risk
@@ -110,10 +110,19 @@ export function ClientTabNavigation({
                   onTabChange("risk");
                   onRiskViewChange("notifications");
                 }}
-                className="bg-blue-600 text-white hover:bg-blue-700 focus:bg-blue-700"
+                className="cursor-pointer text-sm font-medium py-2"
                 data-testid="menu-item-notifications"
               >
                 Notifications
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  onTabChange("customApprovals");
+                }}
+                className="cursor-pointer text-sm font-medium py-2"
+                data-testid="menu-item-custom-approvals"
+              >
+                Custom Approvals
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -140,7 +149,7 @@ export function ClientTabNavigation({
           size="icon"
           className="absolute right-0 top-1/2 -translate-y-1/2 z-10 h-12 w-12 rounded-full bg-background/80 backdrop-blur-sm shadow-md"
           onClick={handleNextTab}
-          disabled={activeTab === "risk"}
+          disabled={activeTab === "customApprovals"}
           data-testid="tab-nav-right"
         >
           <ChevronRight className="h-6 w-6" />
@@ -158,7 +167,7 @@ export function ClientTabNavigation({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
-                  variant={activeTab === "risk" ? "secondary" : "ghost"}
+                  variant={activeTab === "risk" || activeTab === "customApprovals" ? "secondary" : "ghost"}
                   className="text-sm py-3 px-6 whitespace-nowrap snap-center flex-shrink-0"
                   style={{ width: '80vw' }}
                   data-testid="dropdown-risk-notifications-mobile"
@@ -167,13 +176,13 @@ export function ClientTabNavigation({
                   <ChevronDown className="ml-1 h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent>
+              <DropdownMenuContent className="min-w-[160px]">
                 <DropdownMenuItem
                   onClick={() => {
                     onTabChange("risk");
                     onRiskViewChange("risk");
                   }}
-                  className="bg-blue-600 text-white hover:bg-blue-700 focus:bg-blue-700"
+                  className="cursor-pointer text-sm font-medium py-2"
                   data-testid="menu-item-risk-mobile"
                 >
                   Risk
@@ -183,10 +192,19 @@ export function ClientTabNavigation({
                     onTabChange("risk");
                     onRiskViewChange("notifications");
                   }}
-                  className="bg-blue-600 text-white hover:bg-blue-700 focus:bg-blue-700"
+                  className="cursor-pointer text-sm font-medium py-2"
                   data-testid="menu-item-notifications-mobile"
                 >
                   Notifications
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    onTabChange("customApprovals");
+                  }}
+                  className="cursor-pointer text-sm font-medium py-2"
+                  data-testid="menu-item-custom-approvals-mobile"
+                >
+                  Custom Approvals
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -206,6 +224,7 @@ export function ClientTabNavigation({
             {activeTab === "tasks" && "Tasks"}
             {activeTab === "notes" && "Notes"}
             {activeTab === "risk" && (riskView === "risk" ? "Risk Assessment" : "Notifications")}
+            {activeTab === "customApprovals" && "Custom Approvals"}
           </h2>
         </div>
       )}
