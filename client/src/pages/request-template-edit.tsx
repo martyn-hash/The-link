@@ -229,7 +229,7 @@ function SortableSectionCard({
   });
 
   const { data: questionsData } = useQuery<ClientRequestTemplateQuestion[]>({
-    queryKey: ["/api/task-template-sections", section.id, "questions"],
+    queryKey: ["/api/client-request-template-sections", section.id, "questions"],
     queryFn: getQueryFn({ on401: "returnNull" }),
   });
 
@@ -366,7 +366,7 @@ function SectionModal({
   const saveMutation = useMutation({
     mutationFn: async (data: SectionForm) => {
       if (isEditing) {
-        return apiRequest("PATCH", `/api/task-template-sections/${section.id}`, data);
+        return apiRequest("PATCH", `/api/client-request-template-sections/${section.id}`, data);
       }
       return apiRequest("POST", `/api/client-request-templates/${templateId}/sections`, data);
     },
@@ -477,7 +477,7 @@ function DeleteSectionDialog({
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("DELETE", `/api/task-template-sections/${section.id}`);
+      return apiRequest("DELETE", `/api/client-request-template-sections/${section.id}`);
     },
     onSuccess: () => {
       toast({
@@ -612,7 +612,7 @@ export default function TaskTemplateEditPage() {
 
   const reorderSectionsMutation = useMutation({
     mutationFn: async (orderedSections: { id: string; sortOrder: number }[]) => {
-      return apiRequest("POST", "/api/task-template-sections/reorder", { sections: orderedSections });
+      return apiRequest("POST", "/api/client-request-template-sections/reorder", { sections: orderedSections });
     },
     onError: (error) => {
       showFriendlyError({ error });
@@ -652,14 +652,14 @@ export default function TaskTemplateEditPage() {
         payload.options = data.options;
       }
       
-      return apiRequest("POST", `/api/task-template-sections/${data.sectionId}/questions`, payload);
+      return apiRequest("POST", `/api/client-request-template-sections/${data.sectionId}/questions`, payload);
     },
     onSuccess: (_, variables) => {
       toast({
         title: "Success",
         description: "Question added successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", variables.sectionId, "questions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-request-template-sections", variables.sectionId, "questions"] });
       setCreatingQuestion(null);
       setCreateQuestionOptions([]);
     },
@@ -671,7 +671,7 @@ export default function TaskTemplateEditPage() {
   const updateQuestionMutation = useMutation({
     mutationFn: async (data: { id: string; sectionId?: string; [key: string]: any }) => {
       const { id: questionId, sectionId, ...updateData } = data;
-      return apiRequest("PATCH", `/api/task-template-questions/${questionId}`, updateData);
+      return apiRequest("PATCH", `/api/client-request-template-questions/${questionId}`, updateData);
     },
     onSuccess: (_, variables) => {
       toast({
@@ -680,14 +680,14 @@ export default function TaskTemplateEditPage() {
       });
       // Invalidate the specific section's questions if we know the section
       if (variables.sectionId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", variables.sectionId, "questions"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/client-request-template-sections", variables.sectionId, "questions"] });
       } else {
         // Otherwise invalidate all section questions
         queryClient.invalidateQueries({ 
           predicate: (query) => {
             const key = query.queryKey;
             return Array.isArray(key) && 
-                   key[0] === "/api/task-template-sections" && 
+                   key[0] === "/api/client-request-template-sections" && 
                    key[2] === "questions";
           }
         });
@@ -703,7 +703,7 @@ export default function TaskTemplateEditPage() {
 
   const deleteQuestionMutation = useMutation({
     mutationFn: async (questionId: string) => {
-      return apiRequest("DELETE", `/api/task-template-questions/${questionId}`, undefined);
+      return apiRequest("DELETE", `/api/client-request-template-questions/${questionId}`, undefined);
     },
     onSuccess: () => {
       toast({
@@ -715,7 +715,7 @@ export default function TaskTemplateEditPage() {
         predicate: (query) => {
           const key = query.queryKey;
           return Array.isArray(key) && 
-                 key[0] === "/api/task-template-sections" && 
+                 key[0] === "/api/client-request-template-sections" && 
                  key[2] === "questions";
         }
       });
@@ -727,12 +727,12 @@ export default function TaskTemplateEditPage() {
 
   const reorderQuestionsMutation = useMutation({
     mutationFn: async (data: { sectionId: string; questions: { id: string; sortOrder: number }[]; onError?: () => void }) => {
-      return apiRequest("POST", "/api/task-template-questions/reorder", {
+      return apiRequest("POST", "/api/client-request-template-questions/reorder", {
         questions: data.questions,
       });
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", variables.sectionId, "questions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-request-template-sections", variables.sectionId, "questions"] });
     },
     onError: (error, variables) => {
       showFriendlyError({ error });
@@ -741,13 +741,13 @@ export default function TaskTemplateEditPage() {
         variables.onError();
       }
       // Also invalidate to ensure UI syncs with server state
-      queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", variables.sectionId, "questions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-request-template-sections", variables.sectionId, "questions"] });
     },
   });
 
   const handleReorderQuestions = (sectionId: string, oldIndex: number, newIndex: number, onError?: () => void) => {
     // Get the questions for this section from the query cache
-    const questionsData = queryClient.getQueryData<ClientRequestTemplateQuestion[]>(["/api/task-template-sections", sectionId, "questions"]);
+    const questionsData = queryClient.getQueryData<ClientRequestTemplateQuestion[]>(["/api/client-request-template-sections", sectionId, "questions"]);
     if (!questionsData) return;
 
     const reordered = arrayMove(questionsData, oldIndex, newIndex);
@@ -817,7 +817,7 @@ export default function TaskTemplateEditPage() {
       // Make sure they're in the same section
       if (activeQuestion.sectionId === overQuestion.sectionId) {
         const sectionId = activeQuestion.sectionId;
-        const questionsData = queryClient.getQueryData<ClientRequestTemplateQuestion[]>(["/api/task-template-sections", sectionId, "questions"]);
+        const questionsData = queryClient.getQueryData<ClientRequestTemplateQuestion[]>(["/api/client-request-template-sections", sectionId, "questions"]);
         if (questionsData) {
           const oldIndex = questionsData.findIndex((q) => q.id === active.id);
           const newIndex = questionsData.findIndex((q) => q.id === over.id);
@@ -902,7 +902,7 @@ export default function TaskTemplateEditPage() {
   let editQuestion: any = null;
   if (editQuestionId) {
     for (const section of sections) {
-      const sectionQuestions = queryClient.getQueryData<ClientRequestTemplateQuestion[]>(["/api/task-template-sections", section.id, "questions"]);
+      const sectionQuestions = queryClient.getQueryData<ClientRequestTemplateQuestion[]>(["/api/client-request-template-sections", section.id, "questions"]);
       if (sectionQuestions) {
         const question = sectionQuestions.find((q: any) => q.id === editQuestionId);
         if (question) {
@@ -1059,7 +1059,7 @@ export default function TaskTemplateEditPage() {
                                   setCreatingQuestion({ sectionId, questionType });
                                 } else {
                                   // Editing existing question
-                                  const sectionQuestions = queryClient.getQueryData<ClientRequestTemplateQuestion[]>(["/api/task-template-sections", section.id, "questions"]);
+                                  const sectionQuestions = queryClient.getQueryData<ClientRequestTemplateQuestion[]>(["/api/client-request-template-sections", section.id, "questions"]);
                                   const question = sectionQuestions?.find((q: any) => q.id === questionId);
                                   if (question) {
                                     setEditQuestionId(questionId);
@@ -1105,7 +1105,7 @@ export default function TaskTemplateEditPage() {
                   const title = formData.get("title") as string;
                   const description = formData.get("description") as string;
                   
-                  apiRequest("PATCH", `/api/task-template-sections/${editingSection.id}`, {
+                  apiRequest("PATCH", `/api/client-request-template-sections/${editingSection.id}`, {
                     title,
                     description,
                   })
@@ -1192,7 +1192,7 @@ export default function TaskTemplateEditPage() {
                 <Button
                   variant="destructive"
                   onClick={() => {
-                    apiRequest("DELETE", `/api/task-template-sections/${deletingSection.id}`)
+                    apiRequest("DELETE", `/api/client-request-template-sections/${deletingSection.id}`)
                       .then(() => {
                         toast({
                           title: "Success",

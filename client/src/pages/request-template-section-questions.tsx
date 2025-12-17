@@ -146,7 +146,7 @@ export default function TaskTemplateSectionQuestionsPage() {
   });
 
   const { data: section } = useQuery<ClientRequestTemplateSection>({
-    queryKey: ["/api/task-template-sections", sectionId],
+    queryKey: ["/api/client-request-template-sections", sectionId],
     queryFn: async () => {
       const sections = await fetch(`/api/client-request-templates/${templateId}/sections`).then(r => r.json());
       return sections.find((s: ClientRequestTemplateSection) => s.id === sectionId);
@@ -155,7 +155,7 @@ export default function TaskTemplateSectionQuestionsPage() {
   });
 
   const { data: questionsData, isLoading: questionsLoading } = useQuery<ClientRequestTemplateQuestion[]>({
-    queryKey: ["/api/task-template-sections", sectionId, "questions"],
+    queryKey: ["/api/client-request-template-sections", sectionId, "questions"],
     queryFn: getQueryFn({ on401: "returnNull" }),
     enabled: !!sectionId,
   });
@@ -168,11 +168,11 @@ export default function TaskTemplateSectionQuestionsPage() {
 
   const reorderQuestionsMutation = useMutation({
     mutationFn: async (orderedQuestions: { id: string; sortOrder: number }[]) => {
-      return apiRequest("POST", "/api/task-template-questions/reorder", { questions: orderedQuestions });
+      return apiRequest("POST", "/api/client-request-template-questions/reorder", { questions: orderedQuestions });
     },
     onError: (error) => {
       showFriendlyError({ error });
-      queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", sectionId, "questions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-request-template-sections", sectionId, "questions"] });
     },
   });
 
@@ -265,20 +265,20 @@ export default function TaskTemplateSectionQuestionsPage() {
       }
 
       if (editingQuestion) {
-        await apiRequest("PATCH", `/api/task-template-questions/${editingQuestion.id}`, payload);
+        await apiRequest("PATCH", `/api/client-request-template-questions/${editingQuestion.id}`, payload);
         toast({
           title: "Success",
           description: "Question updated successfully",
         });
       } else {
-        await apiRequest("POST", `/api/task-template-sections/${sectionId}/questions`, payload);
+        await apiRequest("POST", `/api/client-request-template-sections/${sectionId}/questions`, payload);
         toast({
           title: "Success",
           description: "Question added successfully",
         });
       }
 
-      queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", sectionId, "questions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-request-template-sections", sectionId, "questions"] });
       setShowAddDialog(false);
       setEditingQuestion(null);
       resetForm();
@@ -291,12 +291,12 @@ export default function TaskTemplateSectionQuestionsPage() {
     if (!deletingQuestion) return;
 
     try {
-      await apiRequest("DELETE", `/api/task-template-questions/${deletingQuestion.id}`);
+      await apiRequest("DELETE", `/api/client-request-template-questions/${deletingQuestion.id}`);
       toast({
         title: "Success",
         description: "Question deleted successfully",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/task-template-sections", sectionId, "questions"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/client-request-template-sections", sectionId, "questions"] });
       setDeletingQuestion(null);
     } catch (error) {
       showFriendlyError({ error });
