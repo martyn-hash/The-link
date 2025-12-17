@@ -164,6 +164,7 @@ export default function ProjectTypeDetail() {
     allStageReasonMaps,
     allCustomFields,
     allServices,
+    approvalFieldLibrary,
   } = useProjectTypeQueries({
     projectTypeId,
     isAuthenticated,
@@ -228,6 +229,12 @@ export default function ProjectTypeDetail() {
       return (isActive && hasServiceLinked) ? "configured" : "needs-setup";
     };
 
+    // Field Library uses approvalFieldLibrary (project-type-specific)
+    const fieldLibraryCount = approvalFieldLibrary?.length || 0;
+    
+    // Client Tasks uses clientRequestTemplates (global templates)
+    const clientTasksCount = clientRequestTemplates?.length || 0;
+
     return [
       { 
         id: "stages", 
@@ -257,8 +264,8 @@ export default function ProjectTypeDetail() {
         id: "field-library", 
         label: "Field Library", 
         icon: BookOpen, 
-        count: allCustomFields?.length || 0, 
-        status: (allCustomFields?.length || 0) > 0 ? "configured" : "empty",
+        count: fieldLibraryCount, 
+        status: fieldLibraryCount > 0 ? "configured" : "empty",
         description: "Custom data fields" 
       },
       { 
@@ -273,8 +280,8 @@ export default function ProjectTypeDetail() {
         id: "client-tasks", 
         label: "Client Tasks", 
         icon: ClipboardList, 
-        count: clientRequestTemplates?.length || 0, 
-        status: (clientRequestTemplates?.length || 0) > 0 ? "configured" : "empty",
+        count: clientTasksCount,
+        status: clientTasksCount > 0 ? "configured" : "empty",
         description: "Client-facing forms" 
       },
       { 
@@ -286,7 +293,7 @@ export default function ProjectTypeDetail() {
         description: "General configuration" 
       },
     ];
-  }, [stages, reasons, stageApprovals, allCustomFields, notifications, clientRequestTemplates, projectType, allServices]);
+  }, [stages, reasons, stageApprovals, approvalFieldLibrary, notifications, clientRequestTemplates, projectType, allServices]);
 
   // Handle section click from overview
   const handleSectionClick = (sectionId: string) => {

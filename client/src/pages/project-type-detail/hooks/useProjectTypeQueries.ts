@@ -100,6 +100,12 @@ export function useProjectTypeQueries({
     enabled: globalEnabled,
   });
 
+  // Approval field library for this project type (for overview count)
+  const approvalFieldLibraryQuery = useQuery<any[]>({
+    queryKey: ["/api/project-types", projectTypeId, "approval-field-library"],
+    enabled,
+  });
+
   return {
     projectType: projectTypeQuery.data,
     projectTypeLoading: projectTypeQuery.isLoading,
@@ -133,5 +139,7 @@ export function useProjectTypeQueries({
     allCustomFields: allCustomFieldsQuery.data,
     
     allServices: allServicesQuery.data,
+    
+    approvalFieldLibrary: approvalFieldLibraryQuery.data,
   };
 }
