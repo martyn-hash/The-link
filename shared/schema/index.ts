@@ -47,3 +47,4 @@ export * from './audit';
 export * from './view-cache';
 export * from './campaigns';
 export * from './pages';
+export * from './client-project-tasks';

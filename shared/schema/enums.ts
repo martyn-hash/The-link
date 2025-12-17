@@ -100,3 +100,19 @@ export const queryStatusEnum = pgEnum("query_status", [
   "answered_by_client",
   "resolved"
 ]);
+
+// Client Project Task enums
+export const clientProjectTaskStatusEnum = pgEnum("client_project_task_status", [
+  "pending",      // Created but not sent
+  "sent",         // Email sent, awaiting client
+  "in_progress",  // Client has opened/started
+  "submitted",    // Client submitted all answers
+  "approved",     // Staff approved the submission
+  "rejected",     // Staff rejected, needs resubmission
+  "expired"       // Token expired without completion
+]);
+
+export const taskQuestionSourceEnum = pgEnum("task_question_source", [
+  "template",
+  "override"
+]);

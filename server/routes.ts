@@ -39,6 +39,7 @@ import { registerFriendlyErrorRoutes } from "./routes/friendlyErrors";
 import { registerQuickBooksRoutes } from "./routes/quickbooks";
 import { registerCalendarRoutes } from "./routes/calendar";
 import { registerQueryRoutes } from "./routes/queries";
+import { registerClientProjectTaskRoutes } from "./routes/clientProjectTasks";
 
 // Import new refactored route modules (from auth.ts refactoring)
 import { registerSystemRoutes } from "./routes/system";
@@ -142,6 +143,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerQuickBooksRoutes(app, isAuthenticated, resolveEffectiveUser, requireSuperAdmin);
   registerCalendarRoutes(app, isAuthenticated, resolveEffectiveUser);
   registerQueryRoutes(app, isAuthenticated, resolveEffectiveUser);
+  registerClientProjectTaskRoutes(app, isAuthenticated, resolveEffectiveUser);
 
   // Register new refactored route modules (from auth.ts refactoring)
   registerSystemRoutes(app, isAuthenticated);

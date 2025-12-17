@@ -89,6 +89,7 @@ import {
 import { WebhookStorage } from './webhooks/index.js';
 import { QboStorage, QcStorage } from './qbo/index.js';
 import { QueryStorage, QueryTokenStorage, ScheduledReminderStorage } from './queries/index.js';
+import { ClientProjectTaskStorage } from './client-project-tasks/index.js';
 import { AIInteractionStorage } from './ai-interactions/index.js';
 import { AuditChangelogStorage } from './audit/index.js';
 import { ViewCacheStorage } from './view-cache/index.js';
@@ -108,6 +109,7 @@ import { applyTasksFacade, type TasksFacadeDeps } from './facade/tasks.facade.js
 import { applyNotificationsFacade, type NotificationsFacadeDeps } from './facade/notifications.facade.js';
 import { applySettingsFacade, type SettingsFacadeDeps } from './facade/settings.facade.js';
 import { applyMiscFacade, type MiscFacadeDeps } from './facade/misc.facade.js';
+import { applyClientProjectTasksFacade, type ClientProjectTasksFacadeDeps } from './facade/client-project-tasks.facade.js';
 
 // Combined type that includes all facade dependencies
 // This allows TypeScript to properly type the mixin chain
@@ -124,7 +126,8 @@ type AllStorageDeps = UsersFacadeDeps &
   TasksFacadeDeps & 
   NotificationsFacadeDeps & 
   SettingsFacadeDeps & 
-  MiscFacadeDeps;
+  MiscFacadeDeps &
+  ClientProjectTasksFacadeDeps;
 
 // Export shared types (new modular architecture)
 export * from './base/types.js';
@@ -204,6 +207,7 @@ class StorageBase {
   public readonly aiInteractionStorage: AIInteractionStorage;
   public readonly auditChangelogStorage: AuditChangelogStorage;
   public readonly viewCacheStorage: ViewCacheStorage;
+  public readonly clientProjectTaskStorage: ClientProjectTaskStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -322,6 +326,9 @@ class StorageBase {
     
     // Initialize view cache storage
     this.viewCacheStorage = new ViewCacheStorage();
+    
+    // Initialize client project tasks storage
+    this.clientProjectTaskStorage = new ClientProjectTaskStorage();
     
     // Register cross-domain helpers
     this.registerClientHelpers();
@@ -487,9 +494,10 @@ const DatabaseStorageWithTasks = applyTasksFacade(DatabaseStorageWithRequests);
 const DatabaseStorageWithNotifications = applyNotificationsFacade(DatabaseStorageWithTasks);
 const DatabaseStorageWithSettings = applySettingsFacade(DatabaseStorageWithNotifications);
 const DatabaseStorageWithMisc = applyMiscFacade(DatabaseStorageWithSettings);
+const DatabaseStorageWithClientProjectTasks = applyClientProjectTasksFacade(DatabaseStorageWithMisc);
 
 // DatabaseStorage extends the composed class and implements IStorage
-export class DatabaseStorage extends DatabaseStorageWithMisc implements IStorage {
+export class DatabaseStorage extends DatabaseStorageWithClientProjectTasks implements IStorage {
   constructor() {
     super();
   }
