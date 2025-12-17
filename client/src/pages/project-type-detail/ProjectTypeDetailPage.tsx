@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -6,9 +6,11 @@ import { isUnauthorizedError } from "@/lib/authUtils";
 import { showFriendlyError } from "@/lib/friendlyErrors";
 import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Settings, Layers, List, ShieldCheck, Bell, BookOpen, ClipboardList } from "lucide-react";
+import { Settings, Layers, List, ShieldCheck, Bell, BookOpen, ClipboardList, LayoutDashboard } from "lucide-react";
+import { ProjectTypeOverview, type ConfigSectionStatus } from "@/components/ui/project-type-overview";
+import type { StageItem } from "@/components/ui/stage-pipeline";
 
 import type { EditingStage, EditingReason, EditingStageApproval, EditingStageApprovalField } from "./utils/types";
 import { SYSTEM_ROLE_OPTIONS } from "./utils/constants";
@@ -67,6 +69,66 @@ export default function ProjectTypeDetail() {
   const [isAddingProjectNotification, setIsAddingProjectNotification] = useState(false);
   const [isAddingStageNotification, setIsAddingStageNotification] = useState(false);
   const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
+  
+  // State for tab navigation with URL hash sync
+  const validTabs = ["overview", "stages", "reasons", "approvals", "field-library", "notifications", "client-tasks", "settings"];
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash.replace("#", "");
+      if (validTabs.includes(hash)) return hash;
+    }
+    return "overview";
+  });
+  
+  // Sync tab changes to URL hash with browser history support
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    if (typeof window !== "undefined") {
+      const newUrl = tab === "overview" 
+        ? window.location.pathname 
+        : `${window.location.pathname}#${tab}`;
+      window.history.pushState({ tab }, "", newUrl);
+    }
+  };
+  
+  // Set initial history state on mount so back navigation works properly
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash.replace("#", "");
+      const currentTab = hash && validTabs.includes(hash) ? hash : "overview";
+      if (!window.history.state?.tab) {
+        window.history.replaceState({ tab: currentTab }, "");
+      }
+    }
+  }, []);
+  
+  // Listen for browser back/forward navigation and hash changes
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state?.tab && validTabs.includes(event.state.tab)) {
+        setActiveTab(event.state.tab);
+      } else {
+        setActiveTab("overview");
+      }
+    };
+    
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace("#", "");
+      if (hash && validTabs.includes(hash)) {
+        setActiveTab(hash);
+      } else {
+        setActiveTab("overview");
+      }
+    };
+    
+    window.addEventListener("popstate", handlePopState);
+    window.addEventListener("hashchange", handleHashChange);
+    
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("hashchange", handleHashChange);
+    };
+  }, []);
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -139,6 +201,96 @@ export default function ProjectTypeDetail() {
     }
     
     return "Unknown";
+  };
+
+  // Compute stage items for the overview pipeline
+  const stageItems: StageItem[] = useMemo(() => {
+    if (!stages) return [];
+    return stages.map(stage => ({
+      id: stage.id,
+      name: stage.name,
+      color: stage.color || "#6b7280",
+      order: stage.order,
+      assigneeLabel: getStageRoleLabel(stage),
+      slaHours: stage.maxInstanceTime || undefined,
+      totalTimeHours: stage.maxTotalTime || undefined,
+      isFinal: (stage as any).canBeFinalStage || false,
+      hasApproval: !!stage.stageApprovalId,
+    }));
+  }, [stages, availableRoles, allUsers, projectType?.serviceId]);
+
+  // Compute configuration section statuses
+  const configSections: ConfigSectionStatus[] = useMemo(() => {
+    const getSettingsStatus = (): "configured" | "needs-setup" | "empty" => {
+      if (!projectType) return "empty";
+      const isActive = projectType.active === true;
+      const hasServiceLinked = projectType.serviceId ? allServices?.some(s => s.id === projectType.serviceId) : true;
+      return (isActive && hasServiceLinked) ? "configured" : "needs-setup";
+    };
+
+    return [
+      { 
+        id: "stages", 
+        label: "Workflow Stages", 
+        icon: Layers, 
+        count: stages?.length || 0, 
+        status: (stages?.length || 0) > 0 ? "configured" : "needs-setup",
+        description: "Define your project workflow" 
+      },
+      { 
+        id: "reasons", 
+        label: "Change Reasons", 
+        icon: List, 
+        count: reasons?.length || 0, 
+        status: (reasons?.length || 0) > 0 ? "configured" : "empty",
+        description: "Track why projects move" 
+      },
+      { 
+        id: "approvals", 
+        label: "Approval Gates", 
+        icon: ShieldCheck, 
+        count: stageApprovals?.length || 0, 
+        status: (stageApprovals?.length || 0) > 0 ? "configured" : "empty",
+        description: "Require sign-offs" 
+      },
+      { 
+        id: "field-library", 
+        label: "Field Library", 
+        icon: BookOpen, 
+        count: allCustomFields?.length || 0, 
+        status: (allCustomFields?.length || 0) > 0 ? "configured" : "empty",
+        description: "Custom data fields" 
+      },
+      { 
+        id: "notifications", 
+        label: "Notifications", 
+        icon: Bell, 
+        count: notifications?.length || 0, 
+        status: (notifications?.length || 0) > 0 ? "configured" : "empty",
+        description: "Automated alerts" 
+      },
+      { 
+        id: "client-tasks", 
+        label: "Client Tasks", 
+        icon: ClipboardList, 
+        count: clientRequestTemplates?.length || 0, 
+        status: (clientRequestTemplates?.length || 0) > 0 ? "configured" : "empty",
+        description: "Client-facing forms" 
+      },
+      { 
+        id: "settings", 
+        label: "Settings", 
+        icon: Settings, 
+        count: 0, 
+        status: getSettingsStatus(),
+        description: "General configuration" 
+      },
+    ];
+  }, [stages, reasons, stageApprovals, allCustomFields, notifications, clientRequestTemplates, projectType, allServices]);
+
+  // Handle section click from overview
+  const handleSectionClick = (sectionId: string) => {
+    handleTabChange(sectionId);
   };
 
   // Handle unauthorized errors only - project not found is handled inline
@@ -400,9 +552,13 @@ export default function ProjectTypeDetail() {
 
         {/* Content with tabs */}
         <div className="flex-1 overflow-auto">
-          <Tabs defaultValue="stages" className="h-full">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="h-full">
             <div className="border-b border-border bg-card px-6">
-              <TabsList className="grid w-full max-w-5xl grid-cols-7">
+              <TabsList className="flex flex-wrap w-full max-w-6xl gap-1">
+                <TabsTrigger value="overview" className="flex items-center" data-testid="tab-overview">
+                  <LayoutDashboard className="w-4 h-4 mr-2" />
+                  Overview
+                </TabsTrigger>
                 <TabsTrigger value="stages" className="flex items-center" data-testid="tab-stages">
                   <Layers className="w-4 h-4 mr-2" />
                   Stages
@@ -433,6 +589,28 @@ export default function ProjectTypeDetail() {
                 </TabsTrigger>
               </TabsList>
             </div>
+
+            {/* Overview Tab */}
+            <TabsContent value="overview" className="page-container py-6 md:py-8">
+              <ProjectTypeOverview
+                projectType={projectType ? {
+                  id: projectType.id,
+                  name: projectType.name,
+                  active: projectType.active !== false,
+                  singleProjectPerClient: projectType.singleProjectPerClient === true,
+                  serviceId: projectType.serviceId,
+                  serviceName: allServices?.find(s => s.id === projectType.serviceId)?.name,
+                } : null}
+                isLoading={projectTypeLoading}
+                stages={stageItems}
+                configSections={configSections}
+                isActiveTogglePending={updateProjectTypeActiveMutation.isPending}
+                isSingleProjectTogglePending={updateProjectTypeSingleProjectMutation.isPending}
+                onActiveToggle={handleActiveToggle}
+                onSingleProjectToggle={handleSingleProjectToggle}
+                onSectionClick={handleSectionClick}
+              />
+            </TabsContent>
 
             <KanbanStagesTab
               projectType={projectType}
