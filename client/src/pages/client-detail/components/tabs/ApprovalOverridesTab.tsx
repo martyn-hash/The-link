@@ -126,7 +126,7 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
   });
 
   const { data: allStages } = useQuery<KanbanStage[]>({
-    queryKey: ["/api/config/kanban-stages"],
+    queryKey: ["/api/config/stages"],
   });
 
   const stages = useMemo(() => {
