@@ -13,25 +13,31 @@ Transform the Project Type configuration experience into a world-class, wizard-s
 
 ---
 
-## Phase 1: Critical Bug Fixes
+## Phase 1: Critical Bug Fixes ✅ COMPLETED (Dec 17, 2025)
 
-### 1.1 Drag & Drop Not Working for Task Template Questions
+### 1.1 Drag & Drop Not Working for Task Template Questions ✅
 **Issue:** Questions cannot be reordered via drag and drop in the Client Tasks tab.
-**Root cause:** Likely missing @dnd-kit setup or improper sortable context.
-**Fix:** Implement proper SortableContext with DragOverlay for visual feedback.
+**Root cause:** DndContext was not wrapping both the palette sidebar and questions area.
+**Fix:** 
+- Moved DndContext to wrap palette and questions area
+- Added QuestionsDropZone component with useDroppable for proper drop target
+- Palette items now work via both click AND drag-to-drop
 
-### 1.2 Stage Reasons Not Filtering by Selected Stage
+### 1.2 Stage Reasons Not Filtering by Selected Stage ✅
 **Issue:** When selecting "On Completion: Move to Stage", the "With Reason" dropdown shows ALL reasons instead of filtering to reasons configured for the selected stage.
-**Fix:** Filter reasons by stage using the stage-reason mappings API.
+**Fix:** 
+- Added query for `/api/config/stage-reason-maps`
+- Created `getFilteredReasonsForStage()` function
+- Reasons dropdown now only shows valid reasons for the selected target stage
+- Shows "No reasons configured for this stage" when no mappings exist
 
-### 1.3 IF/THEN Stage Change Logic
+### 1.3 IF/THEN Stage Change Logic ✅
 **Issue:** Current implementation has a single "move to stage" setting, but depending on the PROJECT'S current stage when the task is completed, it might need to move to different target stages.
-**Fix:** Add conditional stage change rules:
-```
-IF current stage is [Stage A] THEN move to [Stage X]
-IF current stage is [Stage B] THEN move to [Stage Y]
-ELSE move to [Default Stage]
-```
+**Fix:** 
+- Added `stageChangeRules` JSONB column to `client_project_task_templates` table
+- Added `StageChangeRule` interface: `{ ifStageId, thenStageId, thenReasonId }`
+- Built UI for managing conditional rules with "Add Rule" button
+- Rules persist correctly through save/reload cycle
 
 ---
 
@@ -193,10 +199,10 @@ Each configuration area as a card with:
 
 ## Implementation Order
 
-### Sprint 1: Bug Fixes (Must do first)
-1. Fix drag & drop for task questions
-2. Fix stage reason filtering
-3. Add IF/THEN stage change logic
+### Sprint 1: Bug Fixes ✅ COMPLETED (Dec 17, 2025)
+1. ✅ Fix drag & drop for task questions
+2. ✅ Fix stage reason filtering  
+3. ✅ Add IF/THEN stage change logic
 
 ### Sprint 2: Task Template Sections
 1. Database schema for sections
@@ -231,9 +237,9 @@ Each configuration area as a card with:
 
 ## Success Metrics
 
-- [ ] All drag & drop operations work fluidly
-- [ ] Stage reasons filter correctly by stage
-- [ ] IF/THEN stage logic prevents incorrect transitions
+- [x] All drag & drop operations work fluidly ✅
+- [x] Stage reasons filter correctly by stage ✅
+- [x] IF/THEN stage logic prevents incorrect transitions ✅
 - [ ] Task templates support sections
 - [ ] Mobile displays one section per page
 - [ ] UI feels cohesive with Campaign Wizard quality
@@ -260,9 +266,9 @@ Each configuration area as a card with:
 - New components for wizard-style layout
 
 ### Database Changes
-- `client_project_task_sections` - New table for sections
-- `client_project_task_questions.section_id` - FK to sections
-- `client_project_task_templates.stage_change_rules` - JSONB for IF/THEN logic
+- `client_project_task_sections` - New table for sections (pending)
+- `client_project_task_questions.section_id` - FK to sections (pending)
+- `client_project_task_templates.stage_change_rules` - JSONB for IF/THEN logic ✅ ADDED
 
 ---
 
