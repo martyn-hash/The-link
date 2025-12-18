@@ -27,6 +27,10 @@ export function applyIntegrationsFacade<TBase extends Constructor<IntegrationsFa
       return this.integrationStorage.getUserIntegrationByType(userId, provider as any);
     }
 
+    async getActiveIntegrationsByType(integrationType: 'office365' | 'voodoo_sms' | 'ringcentral') {
+      return this.integrationStorage.getActiveIntegrationsByType(integrationType);
+    }
+
     async createUserIntegration(integration: any) {
       return this.integrationStorage.createUserIntegration(integration);
     }

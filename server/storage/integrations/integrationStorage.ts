@@ -40,6 +40,16 @@ export class IntegrationStorage {
     return integration;
   }
 
+  async getActiveIntegrationsByType(integrationType: 'office365' | 'voodoo_sms' | 'ringcentral'): Promise<UserIntegration[]> {
+    return await db
+      .select()
+      .from(userIntegrations)
+      .where(and(
+        eq(userIntegrations.integrationType, integrationType),
+        eq(userIntegrations.isActive, true)
+      ));
+  }
+
   async createUserIntegration(integration: InsertUserIntegration): Promise<UserIntegration> {
     const [newIntegration] = await db
       .insert(userIntegrations)

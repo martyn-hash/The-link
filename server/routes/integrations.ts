@@ -37,7 +37,8 @@ import {
   getCallRecordingUrl,
   requestCallTranscription,
   getTranscriptionResult,
-  findCallRecording
+  findCallRecording,
+  RingCentralReauthRequiredError
 } from "../utils/userRingCentralClient";
 import { scheduleTranscription } from "../transcription-service";
 import { sendPushNotificationToMultiple, getVapidPublicKey, type PushNotificationPayload } from "../push-service";
@@ -444,9 +445,28 @@ export function registerIntegrationRoutes(
       const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
       const integration = await storage.getUserIntegrationByType(effectiveUserId, 'ringcentral');
 
+      const isConnected = !!integration && integration.isActive;
+      const hasTokens = !!(integration?.accessToken);
+      
+      // Check if tokens might be stale (not used in 7+ days - RingCentral refresh tokens expire after 7 days of inactivity)
+      let mayBeStale = false;
+      let lastUsedAt: string | null = null;
+      
+      if (isConnected && hasTokens && integration?.metadata) {
+        const metadata = integration.metadata as { lastUsedAt?: string };
+        if (metadata.lastUsedAt) {
+          lastUsedAt = metadata.lastUsedAt;
+          const lastUsed = new Date(metadata.lastUsedAt);
+          const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+          mayBeStale = lastUsed < sevenDaysAgo;
+        }
+      }
+
       res.json({
-        connected: !!integration && integration.isActive,
-        hasTokens: !!(integration?.accessToken)
+        connected: isConnected,
+        hasTokens,
+        mayBeStale,
+        lastUsedAt
       });
     } catch (error) {
       console.error("Error checking RingCentral status:", error);
@@ -477,8 +497,22 @@ export function registerIntegrationRoutes(
       console.error('\n========== [SERVER] SIP PROVISION ERROR ==========');
       console.error('[SERVER] ✗ Error getting SIP provision:', error);
       console.error('==================================================\n');
+      
+      // Handle reauth required - tokens expired, integration was auto-disconnected
+      if (error instanceof RingCentralReauthRequiredError) {
+        return res.status(401).json({ 
+          message: error.message,
+          reauthRequired: true,
+          code: 'REAUTH_REQUIRED'
+        });
+      }
+      
       if (error instanceof Error && error.message.includes('not connected')) {
-        return res.status(401).json({ message: "RingCentral account not connected. Please authenticate first." });
+        return res.status(401).json({ 
+          message: "RingCentral account not connected. Please authenticate first.",
+          reauthRequired: true,
+          code: 'NOT_CONNECTED'
+        });
       }
       res.status(500).json({ message: "Failed to get SIP provision credentials" });
     }
@@ -586,8 +620,21 @@ export function registerIntegrationRoutes(
       });
     } catch (error) {
       console.error("Error requesting transcription:", error);
+      
+      if (error instanceof RingCentralReauthRequiredError) {
+        return res.status(401).json({ 
+          message: error.message,
+          reauthRequired: true,
+          code: 'REAUTH_REQUIRED'
+        });
+      }
+      
       if (error instanceof Error && error.message.includes('not connected')) {
-        return res.status(401).json({ message: "RingCentral account not connected. Please authenticate first." });
+        return res.status(401).json({ 
+          message: "RingCentral account not connected. Please authenticate first.",
+          reauthRequired: true,
+          code: 'NOT_CONNECTED'
+        });
       }
       res.status(500).json({ message: "Failed to request transcription" });
     }
@@ -607,6 +654,15 @@ export function registerIntegrationRoutes(
       res.json(transcriptionResult);
     } catch (error) {
       console.error("Error getting transcription:", error);
+      
+      if (error instanceof RingCentralReauthRequiredError) {
+        return res.status(401).json({ 
+          message: error.message,
+          reauthRequired: true,
+          code: 'REAUTH_REQUIRED'
+        });
+      }
+      
       res.status(500).json({ message: "Failed to get transcription" });
     }
   });

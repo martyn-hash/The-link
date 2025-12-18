@@ -31,6 +31,7 @@ import { startQueryReminderCron } from "./query-reminder-cron";
 import { startSequenceCron } from "./sequence-cron";
 import { startEngagementCron } from "./engagement-cron";
 import { startAIWeeklyAnalysisCron } from "./ai-weekly-analysis-cron";
+import { refreshAllActiveRingCentralTokens } from "./utils/userRingCentralClient";
 
 const CRONS_ENABLED = process.env.CRONS_ENABLED !== 'false';
 
@@ -112,6 +113,21 @@ async function main() {
     timezone: "UTC"
   });
   log('[EmailResolver] Scheduled (03:00 UTC)');
+  
+  // RingCentral Token Refresh - 03:30 UTC daily
+  // Proactively refresh tokens for active integrations to prevent 7-day refresh token expiry
+  cron.schedule('30 3 * * *', wrapCronHandler('RingCentralTokenRefresh', '30 3 * * *', async () => {
+    log('[RingCentral Token Refresh] Starting daily token refresh...');
+    try {
+      const result = await refreshAllActiveRingCentralTokens();
+      log(`[RingCentral Token Refresh] Complete - Refreshed: ${result.refreshed}, Failed: ${result.failed}, Skipped: ${result.skipped}`);
+    } catch (error) {
+      console.error('[RingCentral Token Refresh] Error:', error);
+    }
+  }, { useLock: true }), {
+    timezone: "UTC"
+  });
+  log('[RingCentralTokenRefresh] Scheduled (03:30 UTC daily)');
   
   // Missed Query Reminder Cleanup - 01:00 UK daily
   // Cancels reminders scheduled for previous days that were never processed

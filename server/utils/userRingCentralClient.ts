@@ -10,6 +10,13 @@ interface RingCentralTokens {
   token_type: string;
 }
 
+export class RingCentralReauthRequiredError extends Error {
+  constructor(message: string = 'RingCentral re-authentication required') {
+    super(message);
+    this.name = 'RingCentralReauthRequiredError';
+  }
+}
+
 // RingCentral OAuth configuration
 const CLIENT_ID = process.env.RINGCENTRAL_CLIENT_ID;
 const CLIENT_SECRET = process.env.RINGCENTRAL_CLIENT_SECRET;
@@ -82,10 +89,18 @@ export async function getUserRingCentralSDK(userId: string): Promise<SDK> {
       console.log('RingCentral access token expired, refreshing...');
       
       if (!refreshToken) {
-        throw new Error('No refresh token available, user needs to re-authenticate');
+        // No refresh token - auto-disconnect and require re-auth
+        console.log('[RingCentral] No refresh token available, disconnecting integration...');
+        await storage.updateUserIntegration(integration.id, {
+          isActive: false,
+          accessToken: null,
+          refreshToken: null,
+          tokenExpiry: null,
+        });
+        throw new RingCentralReauthRequiredError('No refresh token available. Please reconnect your RingCentral account.');
       }
       
-      const newTokens = await refreshAccessToken(refreshToken);
+      const newTokens = await refreshAccessToken(refreshToken, integration.id);
       
       // Update the stored tokens and recalculate expiry
       const newExpiresAt = new Date(now.getTime() + (newTokens.expires_in * 1000));
@@ -95,6 +110,10 @@ export async function getUserRingCentralSDK(userId: string): Promise<SDK> {
         accessToken: encryptTokenForStorage(newTokens.access_token),
         refreshToken: newTokens.refresh_token ? encryptTokenForStorage(newTokens.refresh_token) : integration.refreshToken,
         tokenExpiry: newExpiresAt,
+        metadata: {
+          ...(integration.metadata as object || {}),
+          lastUsedAt: new Date().toISOString()
+        }
       });
       
       accessToken = newTokens.access_token;
@@ -135,7 +154,7 @@ export async function getUserRingCentralSDK(userId: string): Promise<SDK> {
 }
 
 // Refresh access token using refresh token
-async function refreshAccessToken(refreshToken: string): Promise<RingCentralTokens> {
+async function refreshAccessToken(refreshToken: string, integrationId?: string): Promise<RingCentralTokens> {
   const clientId = process.env.RINGCENTRAL_CLIENT_ID;
   const clientSecret = process.env.RINGCENTRAL_CLIENT_SECRET;
   const serverUrl = process.env.RINGCENTRAL_SERVER_URL || SDK.server.production;
@@ -165,6 +184,28 @@ async function refreshAccessToken(refreshToken: string): Promise<RingCentralToke
   if (!response.ok) {
     const errorText = await response.text();
     console.error('RingCentral token refresh error:', errorText);
+    
+    // Check if this is a token expiration error (refresh token expired after 7 days of inactivity)
+    const isTokenExpired = errorText.includes('Token is expired') || 
+                           errorText.includes('token_invalid') ||
+                           errorText.includes('invalid_grant') ||
+                           response.status === 400;
+    
+    if (isTokenExpired && integrationId) {
+      console.log('[RingCentral] Refresh token expired, auto-disconnecting integration...');
+      // Auto-disconnect the integration since tokens are no longer valid
+      await storage.updateUserIntegration(integrationId, {
+        isActive: false,
+        accessToken: null,
+        refreshToken: null,
+        tokenExpiry: null,
+      });
+    }
+    
+    if (isTokenExpired) {
+      throw new RingCentralReauthRequiredError('RingCentral session expired. Please reconnect your RingCentral account.');
+    }
+    
     throw new Error(`Failed to refresh RingCentral token: ${response.status} ${response.statusText}`);
   }
 
@@ -485,6 +526,7 @@ export async function storeRingCentralTokens(
   expiresIn: number
 ): Promise<void> {
   const expiresAt = new Date(Date.now() + expiresIn * 1000);
+  const now = new Date().toISOString();
 
   // Check if integration already exists
   const existingIntegration = await storage.getUserIntegrationByType(userId, 'ringcentral');
@@ -496,6 +538,10 @@ export async function storeRingCentralTokens(
       refreshToken: refreshToken ? encryptTokenForStorage(refreshToken) : existingIntegration.refreshToken,
       tokenExpiry: expiresAt,
       isActive: true,
+      metadata: {
+        ...(existingIntegration.metadata as object || {}),
+        lastUsedAt: now
+      }
     });
   } else {
     // Create new
@@ -506,7 +552,85 @@ export async function storeRingCentralTokens(
       refreshToken: refreshToken ? encryptTokenForStorage(refreshToken) : null,
       tokenExpiry: expiresAt,
       isActive: true,
-      metadata: {},
+      metadata: { lastUsedAt: now },
     });
+  }
+}
+
+// Proactively refresh tokens for all active RingCentral integrations
+// This should be run as a cron job every 5 days to keep tokens alive
+export async function refreshAllActiveRingCentralTokens(): Promise<{ refreshed: number; failed: number; skipped: number }> {
+  const results = { refreshed: 0, failed: 0, skipped: 0 };
+  
+  try {
+    // Get all active RingCentral integrations
+    const integrations = await storage.getActiveIntegrationsByType('ringcentral');
+    
+    if (!integrations || integrations.length === 0) {
+      console.log('[RingCentral Token Refresh] No active integrations found');
+      return results;
+    }
+    
+    console.log(`[RingCentral Token Refresh] Processing ${integrations.length} active integrations`);
+    
+    const fiveDaysAgo = Date.now() - 5 * 24 * 60 * 60 * 1000;
+    
+    for (const integration of integrations) {
+      try {
+        // Check if we should refresh (not used in last 5 days, or tokens expire soon)
+        const metadata = integration.metadata as { lastUsedAt?: string } | null;
+        const lastUsedAt = metadata?.lastUsedAt ? new Date(metadata.lastUsedAt).getTime() : 0;
+        const tokenExpiry = integration.tokenExpiry ? new Date(integration.tokenExpiry).getTime() : 0;
+        const now = Date.now();
+        
+        // Skip if used recently (within last 5 days) and tokens not expiring soon
+        if (lastUsedAt > fiveDaysAgo && tokenExpiry > now + 24 * 60 * 60 * 1000) {
+          console.log(`[RingCentral Token Refresh] Skipping user ${integration.userId} - recently used`);
+          results.skipped++;
+          continue;
+        }
+        
+        if (!integration.refreshToken) {
+          console.log(`[RingCentral Token Refresh] Skipping user ${integration.userId} - no refresh token`);
+          results.skipped++;
+          continue;
+        }
+        
+        const refreshToken = decryptTokenFromStorage(integration.refreshToken);
+        
+        try {
+          const newTokens = await refreshAccessToken(refreshToken, integration.id);
+          
+          const newExpiresAt = new Date(now + (newTokens.expires_in * 1000));
+          
+          await storage.updateUserIntegration(integration.id, {
+            accessToken: encryptTokenForStorage(newTokens.access_token),
+            refreshToken: newTokens.refresh_token ? encryptTokenForStorage(newTokens.refresh_token) : integration.refreshToken,
+            tokenExpiry: newExpiresAt,
+            metadata: {
+              ...(integration.metadata as object || {}),
+              lastUsedAt: new Date().toISOString(),
+              lastProactiveRefresh: new Date().toISOString()
+            }
+          });
+          
+          console.log(`[RingCentral Token Refresh] Successfully refreshed tokens for user ${integration.userId}`);
+          results.refreshed++;
+        } catch (refreshError) {
+          // Token refresh failed - integration was auto-disconnected by refreshAccessToken
+          console.error(`[RingCentral Token Refresh] Failed for user ${integration.userId}:`, refreshError);
+          results.failed++;
+        }
+      } catch (integrationError) {
+        console.error(`[RingCentral Token Refresh] Error processing integration ${integration.id}:`, integrationError);
+        results.failed++;
+      }
+    }
+    
+    console.log(`[RingCentral Token Refresh] Complete - Refreshed: ${results.refreshed}, Failed: ${results.failed}, Skipped: ${results.skipped}`);
+    return results;
+  } catch (error) {
+    console.error('[RingCentral Token Refresh] Error in refresh job:', error);
+    throw error;
   }
 }
