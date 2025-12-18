@@ -279,11 +279,13 @@ function SortableQuestionItem({
 
 function QuestionEditor({
   question,
+  questionIndex,
   allQuestions,
   onSave,
   onCancel,
 }: {
   question: EditingQuestion;
+  questionIndex: number;
   allQuestions: EditingQuestion[];
   onSave: (q: EditingQuestion) => void;
   onCancel: () => void;
@@ -294,15 +296,14 @@ function QuestionEditor({
 
   const needsOptions = ["single_choice", "multi_choice", "dropdown"].includes(editedQuestion.questionType);
   
-  const getQuestionKey = (q: EditingQuestion) => q.id || `temp-${q.order}`;
-  const currentQuestionKey = getQuestionKey(editedQuestion);
+  const getQuestionKey = (q: EditingQuestion, idx: number) => q.id || `temp-${idx}`;
   
-  const previousQuestions = allQuestions.filter(q => 
-    q.order < editedQuestion.order && getQuestionKey(q) !== currentQuestionKey && q.label.trim()
-  );
+  const previousQuestions = allQuestions
+    .map((q, idx) => ({ ...q, _arrayIndex: idx }))
+    .filter((q, idx) => idx < questionIndex && q.label.trim());
   
   const selectedSourceQuestion = previousQuestions.find(q => {
-    const qKey = getQuestionKey(q);
+    const qKey = getQuestionKey(q, q._arrayIndex);
     return qKey === editedQuestion.conditionalLogic?.showIf?.questionId;
   });
   
@@ -314,11 +315,12 @@ function QuestionEditor({
     if (!enabled) {
       setEditedQuestion(prev => ({ ...prev, conditionalLogic: null }));
     } else if (!editedQuestion.conditionalLogic?.showIf && previousQuestions.length > 0) {
+      const firstPrev = previousQuestions[0];
       setEditedQuestion(prev => ({
         ...prev,
         conditionalLogic: {
           showIf: {
-            questionId: getQuestionKey(previousQuestions[0]),
+            questionId: getQuestionKey(firstPrev, firstPrev._arrayIndex),
             operator: 'equals',
             value: '',
           },
@@ -487,7 +489,7 @@ function QuestionEditor({
                       </SelectTrigger>
                       <SelectContent>
                         {previousQuestions.map(q => {
-                          const qKey = getQuestionKey(q);
+                          const qKey = getQuestionKey(q, q._arrayIndex);
                           return (
                             <SelectItem key={qKey} value={qKey}>
                               {q.label || 'Untitled question'}
@@ -1542,6 +1544,7 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
         {editingQuestionIndex !== null && editingTemplate.questions[editingQuestionIndex] && (
           <QuestionEditor
             question={editingTemplate.questions[editingQuestionIndex]}
+            questionIndex={editingQuestionIndex}
             allQuestions={editingTemplate.questions}
             onSave={handleSaveQuestion}
             onCancel={() => setEditingQuestionIndex(null)}

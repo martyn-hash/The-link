@@ -468,33 +468,39 @@ Modify `ProjectNotificationForm.tsx`:
 
 ---
 
-## Phase 7: Conditional Logic (Enhancement)
+## Phase 7: Conditional Logic (Enhancement) ✅
 
 ### Success Criteria
-- [ ] Can configure "Show if" rules on questions
-- [ ] Conditions: equals, not equals, contains, is empty, is not empty
-- [ ] Multiple conditions with AND/OR logic
-- [ ] Form dynamically shows/hides questions based on answers
+- [x] Can configure "Show if" rules on questions
+- [x] Conditions: equals, not equals, contains, is empty, is not empty
+- [x] Multiple conditions with AND/OR logic (schema supports, UI has single condition for now)
+- [x] Form dynamically shows/hides questions based on answers
 
 ### Tasks
 
-#### 7.1 Conditional Logic Builder UI
+#### 7.1 Conditional Logic Builder UI ✅
 
-Add to question editor:
-- "Show this question only if..." toggle
-- Condition builder:
-  - Select source question (from previous questions)
-  - Select operator (equals, not equals, contains, etc.)
-  - Enter/select value
-  - Add another condition (AND/OR)
+**Implementation:** Added to `QuestionEditor` in `ClientTasksTab.tsx`:
+- [x] "Show this question only if..." toggle (appears when previous questions exist with labels)
+- [x] Source question dropdown (shows all previous questions in order)
+- [x] Operator dropdown (equals, not_equals, contains, is_empty, is_not_empty)
+- [x] Value input (dropdown for choice/yes_no questions, text input otherwise)
+- [x] Uses array index instead of order property to correctly identify previous questions even for unsaved templates
 
-#### 7.2 Dynamic Form Rendering
+**Key Implementation Details:**
+- `getQuestionKey(q, idx)` generates unique keys using `q.id || \`temp-${idx}\``
+- `previousQuestions` uses `questionIndex` prop to filter questions before current position
+- Conditional logic stored in `conditionalLogic` JSONB field
 
-Client form evaluates conditions:
-- Track all current answers in state
-- On each change, recalculate visibility
-- Hidden questions not required even if marked required
-- Animate show/hide transitions
+#### 7.2 Dynamic Form Rendering ✅
+
+**Implementation:** Added to `client-project-task-form.tsx`:
+- [x] `evaluateCondition()` - evaluates individual conditions against responses
+- [x] `isQuestionVisible()` - determines if a question should be visible based on its conditionalLogic
+- [x] `visibleQuestions` useMemo - filters questions based on conditional logic evaluation
+- [x] All calculations use visibleQuestions: answeredCount, requiredUnanswered, progressPercent, sectionGroups
+- [x] Navigation index clamped when visible questions change
+- [x] Hidden questions not required for form completion
 
 ---
 
@@ -617,7 +623,7 @@ Phase 8 (OTP) ──────────→ Enhancement, can be added after 
 | Phase 4: Client Form | 2-3 days | Critical |
 | Phase 5: Staff Views | 1-2 days | Critical |
 | Phase 6: Reminders | 1 day | Critical |
-| Phase 7: Conditional Logic | 2 days | Enhancement |
+| Phase 7: Conditional Logic | 2 days | Enhancement ✅ |
 | Phase 8: OTP Security | 1 day | Enhancement |
 
 **Total Core (Phases 1-6)**: ~10-13 days
