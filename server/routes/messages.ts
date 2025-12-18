@@ -1041,35 +1041,9 @@ export function registerMessageRoutes(
 
       const messages = await storage.getProjectMessagesByThreadId(threadId);
       
-      // Add signed URLs to attachments
-      const messagesWithUrls = await Promise.all(
-        messages.map(async (message) => {
-          if (message.attachments && Array.isArray(message.attachments)) {
-            const attachmentsWithUrls = await Promise.all(
-              message.attachments.map(async (attachment: any) => {
-                if (attachment.objectPath) {
-                  try {
-                    // Ensure objectPath has /objects/ prefix
-                    const fullObjectPath = attachment.objectPath.startsWith('/objects/') 
-                      ? attachment.objectPath 
-                      : `/objects${attachment.objectPath}`;
-                    const url = await ObjectStorageService.generateSignedUrl(fullObjectPath);
-                    return { ...attachment, url };
-                  } catch (error) {
-                    console.error(`Failed to generate signed URL for ${attachment.objectPath}:`, error);
-                    return attachment;
-                  }
-                }
-                return attachment;
-              })
-            );
-            return { ...message, attachments: attachmentsWithUrls };
-          }
-          return message;
-        })
-      );
-      
-      res.json(messagesWithUrls);
+      // Return messages with attachment metadata only (no eager signed URL generation)
+      // Signed URLs are generated on-demand when user downloads via the attachments endpoint
+      res.json(messages);
     } catch (error) {
       console.error("Error fetching project messages:", error);
       res.status(500).json({ message: "Failed to fetch messages" });
@@ -1327,6 +1301,57 @@ export function registerMessageRoutes(
     } catch (error) {
       console.error("Error generating upload URL:", error);
       res.status(500).json({ message: "Failed to generate upload URL" });
+    }
+  });
+
+  // Generate on-demand signed download URL for project message attachments
+  // This endpoint is called when user clicks download/preview, NOT when loading messages
+  app.post("/api/internal/project-messages/attachments/signed-url", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      const { objectPath, threadId } = req.body;
+
+      if (!objectPath || !threadId) {
+        return res.status(400).json({ message: "objectPath and threadId are required" });
+      }
+
+      const effectiveUserId = req.user?.effectiveUserId || req.user?.id;
+
+      // Check if thread exists
+      const thread = await storage.getProjectMessageThreadById(threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Thread not found" });
+      }
+
+      // Verify user is a participant in this thread
+      const participants = await storage.getProjectMessageParticipantsByThreadId(threadId);
+      const isParticipant = participants.some((p: any) => p.userId === effectiveUserId);
+      if (!isParticipant) {
+        return res.status(403).json({ message: "Access denied - not a participant" });
+      }
+
+      // Generate signed URL on-demand
+      const objectStorageService = new ObjectStorageService();
+      try {
+        const fullObjectPath = objectPath.startsWith('/objects/') 
+          ? objectPath 
+          : `/objects${objectPath}`;
+        const url = await objectStorageService.getSignedDownloadURL(fullObjectPath, 900); // 15 minutes
+        res.json({ url });
+      } catch (error) {
+        if (error instanceof ObjectNotFoundError) {
+          // Return 404 with clear message - file no longer exists in storage
+          console.warn(`[SignedURL] File not found: ${objectPath} (threadId: ${threadId}, user: ${effectiveUserId})`);
+          return res.status(404).json({ 
+            message: "File not found", 
+            fileUnavailable: true,
+            objectPath 
+          });
+        }
+        throw error;
+      }
+    } catch (error) {
+      console.error("Error generating signed download URL:", error);
+      res.status(500).json({ message: "Failed to generate download URL" });
     }
   });
 
