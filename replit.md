@@ -115,13 +115,21 @@ The application uses node-cron for scheduling background jobs. A comprehensive t
 
 ### Schedule Staggering (UK Timezone)
 Heavy jobs are staggered to avoid collisions:
+-   **HH:02, :32**: Project Message Reminders (every 30 min, locked)
 -   **HH:02**: Dashboard Cache (hourly, locked)
 -   **HH:04, :19, :34, :49**: Reminder Notifications (locked)
--   **HH:08**: Notification Cron + Sent Items Detection (locked)
+-   **HH:08, :23, :38, :53**: Sent Items Detection (every 15 min during 08:00-19:00, locked)
 -   **HH:10**: Query Reminder (hourly, locked)
 -   **HH:14, :29, :44, :59**: SLA Breach Detection (locked)
--   **08:45**: View Cache morning run (locked)
+-   **04:20, 08:45, 12:25, 15:25**: View Cache runs (locked)
 -   Heavy jobs (Dashboard Cache, View Cache) are 43+ minutes apart.
+
+### Timeout Protection
+Heavy jobs are wrapped with execution timeouts to prevent runaway execution:
+-   **Cache rebuilds**: 60 second timeout
+-   **Detection jobs**: 45 second timeout  
+-   **Notification jobs**: 30 second timeout
+-   Jobs log warnings when using >80% of their time budget.
 
 ### Usage
 Wrap cron handlers with `wrapCronHandler(name, expression, handler, options)` for automatic telemetry, error handling, and retries:
