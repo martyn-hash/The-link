@@ -7,6 +7,7 @@ import { storage } from "./storage/index";
 import { sendMagicLinkEmail } from "./emailService";
 import type { User } from "@shared/schema";
 import { extractSessionMetadata } from "./utils/session-tracker";
+import { pool } from "./db";
 
 // Extend express-session to include our custom session properties
 declare module "express-session" {
@@ -25,11 +26,13 @@ export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
-    conString: process.env.DATABASE_URL,
+    pool: pool,
     createTableIfMissing: false,
     ttl: sessionTtl,
     tableName: "sessions",
   });
+  
+  console.log('[Session Store] Using shared database pool for session management');
   
   return session({
     secret: process.env.SESSION_SECRET || 'your-secret-key-change-this-in-production',
