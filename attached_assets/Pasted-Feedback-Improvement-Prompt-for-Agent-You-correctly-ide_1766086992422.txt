@@ -1,0 +1,95 @@
+Feedback & Improvement Prompt for Agent
+
+You correctly identified the root cause of the cron failures:
+ProjectMessageReminders is suffering from an N+1 query pattern that causes long runtimes, event-loop blocking, retries, and missed cron executions. Good diagnosis.
+
+I’d like you to refine the solution with the following considerations and improvements:
+
+⸻
+
+Key Improvements to Consider
+
+1) Don’t just “one big SQL” — aim for bounded work
+
+Replacing N+1 with a single giant JOIN helps, but the real goal is predictable, bounded execution, not just fewer queries.
+
+Instead of:
+	•	One monolithic query joining participants, threads, messages, users, projects
+
+Prefer a two-phase, batched approach:
+
+Phase A — Candidate selection (cheap, indexed, bounded)
+	•	Select a limited set of participants who actually need reminders:
+	•	unread_count > 0
+	•	reminder cooldown respected (last_reminder_sent_at)
+	•	Order by recent activity
+	•	Hard cap (e.g. 100–200 rows)
+
+This query must be fast and fully index-backed.
+
+Phase B — Batch hydration
+	•	Fetch related users in one query
+	•	Fetch related projects in one query
+	•	Fetch thread summaries in one query
+	•	No awaited DB calls inside loops
+
+This avoids both N+1 and runaway memory usage.
+
+⸻
+
+2) Enforce a hard execution budget
+
+Cron jobs must be time-boxed.
+
+Please add:
+	•	A maximum runtime per run (e.g. 5–10s)
+	•	A maximum number of participants processed
+	•	Early exit when budget is exceeded (partial progress is success)
+
+Do not rely on cron frequency to control load.
+
+⸻
+
+3) Yield the event loop during processing
+
+Use yieldIfNeeded (or equivalent) between batches (e.g. every 25 reminders) to prevent:
+	•	multi-second event-loop stalls
+	•	missed cron executions
+	•	node-cron warnings
+
+This is especially important in reminder jobs.
+
+⸻
+
+4) Reduce retries; prefer incremental progress
+
+Retries on timeout amplify load.
+
+Instead:
+	•	Treat partial completion as success
+	•	Persist progress via last_reminder_sent_at
+	•	Let the next run continue where the previous stopped
+
+⸻
+
+5) Improve unread-count performance (separate concern)
+
+The /api/project-messages/unread-count endpoint is not the cron culprit, but ~600ms is still too slow for a badge.
+
+Please consider:
+	•	Maintaining per-user unread counts (e.g. via message_thread_participants)
+	•	Updating counts on message insert / mark-as-read
+	•	Making unread-count queries O(1), not JOIN-heavy
+
+This also simplifies the reminder job’s candidate selection.
+
+⸻
+
+Outcome Goals
+
+Please ensure that after refactor:
+	•	ProjectMessageReminders completes in <5s under normal load
+	•	No event-loop blocks >100ms
+	•	No retries due to timeout
+	•	/unread-count is <50ms p95
+	•	Cron-worker remains stable under growth

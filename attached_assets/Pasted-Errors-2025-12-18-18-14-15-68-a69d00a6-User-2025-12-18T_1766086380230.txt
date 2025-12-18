@@ -1,0 +1,122 @@
+Errors: 
+
+2025-12-18 18:14:15.68
+a69d00a6
+User
+[2025-12-18T18:14:15.685Z] [PID: 66] [NODE-CRON] [WARN] missed execution at Thu Dec 18 2025 18:14:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2025-12-18 18:19:14.58
+a69d00a6
+User
+[2025-12-18T18:19:14.184Z] [PID: 66] [NODE-CRON] [WARN] missed execution at Thu Dec 18 2025 18:19:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2025-12-18 18:32:34.52
+a69d00a6
+User
+[CronTelemetry] [ProjectMessageReminders] [7rr1VhBI] Retry 1/2 after error: ProjectMessageReminders exceeded 30000ms timeout
+2025-12-18 18:33:05.72
+a69d00a6
+User
+[CronTelemetry] [ProjectMessageReminders] [7rr1VhBI] Retry 2/2 after error: ProjectMessageReminders exceeded 30000ms timeout
+2025-12-18 18:33:38.02
+a69d00a6
+User
+[CronTelemetry] [ProjectMessageReminders] [7rr1VhBI] FAILED after 3 attempts: ProjectMessageReminders exceeded 30000ms timeout
+2025-12-18 19:02:31.79
+70186bbe
+User
+[CronTelemetry] [ProjectMessageReminders] [-3d-2pgd] Retry 1/2 after error: ProjectMessageReminders exceeded 30000ms timeout
+2025-12-18 19:03:02.69
+70186bbe
+User
+[CronTelemetry] [ProjectMessageReminders] [-3d-2pgd] Retry 2/2 after error: ProjectMessageReminders exceeded 30000ms timeout
+2025-12-18 19:03:34.69
+70186bbe
+User
+[CronTelemetry] [ProjectMessageReminders] [-3d-2pgd] FAILED after 3 attempts: ProjectMessageReminders exceeded 30000ms timeout
+
+
+Log Sample: 
+
+2025-12-18 19:02:01.69
+70186bbe
+User
+[Project Message Reminders] Starting reminder check...
+2025-12-18 19:02:02.44
+70186bbe
+User
+7:02:02 PM [express] GET /api/project-messages/unread-count 200 in 628ms :: {"unreadCount":0}
+2025-12-18 19:02:21.99
+70186bbe
+User
+[CronTelemetry] Event loop delay: min=0.02ms, p50=20.14ms, p95=20.53ms, max=8300.53ms
+2025-12-18 19:02:31.79
+70186bbe
+User
+[CronTelemetry:JSON] {"job_name":"ProjectMessageReminders","run_id":"-3d-2pgd","timestamp":"2025-12-18T19:02:00.592Z","process_role":"cron-worker","drift_ms":592,"event_loop":{"p50_ms":20.14,"p95_ms":20.27,"max_ms":8300.53},"memory":{"heap_used_mb":63.21,"heap_total_mb":66.05,"rss_mb":185.64},"process_uptime_sec":283,"concurrent_jobs":[],"status":"retrying","lock_acquired":true,"lock_wait_ms":801,"duration_ms":31101,"retry_count":1,"error_message":"ProjectMessageReminders exceeded 30000ms timeout"}
+2025-12-18 19:02:31.79
+70186bbe
+User
+[CronTelemetry] [ProjectMessageReminders] [-3d-2pgd] Retry 1/2 after error: ProjectMessageReminders exceeded 30000ms timeout
+2025-12-18 19:02:32.69
+70186bbe
+User
+[2025-12-18T19:02:32.693Z] [cron-worker] [Project Message Reminders] Starting reminder check...
+2025-12-18 19:02:32.69
+70186bbe
+User
+[Project Message Reminders] Starting reminder check...
+2025-12-18 19:02:33.79
+70186bbe
+User
+[Database Pool] Stats: total=2, idle=0, waiting=0, created=4
+2025-12-18 19:03:02.69
+70186bbe
+User
+[CronTelemetry] [ProjectMessageReminders] [-3d-2pgd] Retry 2/2 after error: ProjectMessageReminders exceeded 30000ms timeout
+2025-12-18 19:03:02.69
+70186bbe
+User
+[CronTelemetry:JSON] {"job_name":"ProjectMessageReminders","run_id":"-3d-2pgd","timestamp":"2025-12-18T19:02:00.592Z","process_role":"cron-worker","drift_ms":592,"event_loop":{"p50_ms":20.14,"p95_ms":20.27,"max_ms":8300.53},"memory":{"heap_used_mb":63.21,"heap_total_mb":66.05,"rss_mb":185.64},"process_uptime_sec":283,"concurrent_jobs":[],"status":"retrying","lock_acquired":true,"lock_wait_ms":801,"duration_ms":62101,"retry_count":2,"error_message":"ProjectMessageReminders exceeded 30000ms timeout"}
+2025-12-18 19:03:03.01
+70186bbe
+User
+[Database Pool] Stats: total=1, idle=0, waiting=0, created=15
+2025-12-18 19:03:03.33
+70186bbe
+User
+7:03:03 PM [express] GET /api/project-messages/unread-count 200 in 665ms :: {"unreadCount":0}
+2025-12-18 19:03:04.69
+70186bbe
+User
+[Project Message Reminders] Starting reminder check...
+2025-12-18 19:03:04.69
+70186bbe
+User
+[2025-12-18T19:03:04.693Z] [cron-worker] [Project Message Reminders] Starting reminder check...
+2025-12-18 19:03:34.69
+70186bbe
+User
+[CronTelemetry:JSON] {"job_name":"ProjectMessageReminders","run_id":"-3d-2pgd","timestamp":"2025-12-18T19:02:00.592Z","process_role":"cron-worker","drift_ms":592,"event_loop":{"p50_ms":20.14,"p95_ms":20.27,"max_ms":8300.53},"memory":{"heap_used_mb":63.21,"heap_total_mb":66.05,"rss_mb":185.64},"process_uptime_sec":283,"concurrent_jobs":[],"status":"error","lock_acquired":true,"lock_wait_ms":801,"duration_ms":94101,"retry_count":3,"error_message":"ProjectMessageReminders exceeded 30000ms timeout"}
+2025-12-18 19:03:34.69
+70186bbe
+User
+[CronTelemetry] [ProjectMessageReminders] [-3d-2pgd] FAILED after 3 attempts: ProjectMessageReminders exceeded 30000ms timeout
+2025-12-18 19:03:34.99
+70186bbe
+User
+[CronTelemetry] [ProjectMessageReminders] [-3d-2pgd] END (ERROR) | duration=94101ms | error=ProjectMessageReminders exceeded 30000ms timeout
+2025-12-18 19:03:36.79
+70186bbe
+User
+[CronTelemetry] [ProjectMessageReminders] Advisory lock 1207399421 released
+2025-12-18 19:04:03.55
+70186bbe
+User
+[CronTelemetry:JSON] {"job_name":"ReminderNotificationCron","run_id":"moemGkB1","timestamp":"2025-12-18T19:04:03.553Z","process_role":"cron-worker","drift_ms":3553,"event_loop":{"p50_ms":199.36,"p95_ms":599.26,"max_ms":9504.29},"memory":{"heap_used_mb":65.43,"heap_total_mb":72.8,"rss_mb":193.7},"process_uptime_sec":406,"concurrent_jobs":[],"status":"started"}
+2025-12-18 19:04:03.55
+70186bbe
+User
+[CronTelemetry] [ReminderNotificationCron] [moemGkB1] START | drift=3553ms | uptime=406s | heap=65.43/72.8MB | rss=193.7MB | eventLoop: p50=199.36ms, p95=599.26ms, max=9504.29ms
+2025-12-18 19:04:03.58
+70186bbe
+User
+[CronTelemetry] [ReminderNotificationCron] Advisory lock 140323962 acquired
