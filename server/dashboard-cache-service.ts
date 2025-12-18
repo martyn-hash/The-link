@@ -1,6 +1,6 @@
 import { storage } from "./storage/index";
 import { db } from "./db";
-import { dashboardCache, users } from "@shared/schema";
+import { dashboardCache, users, type Project } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 export interface DashboardCacheUpdateResult {
@@ -12,9 +12,19 @@ export interface DashboardCacheUpdateResult {
 }
 
 /**
+ * Yield to event loop if we've been running for too long
+ * This prevents blocking other cron jobs and keeps the process responsive
+ */
+async function yieldToEventLoop(): Promise<void> {
+  await new Promise(resolve => setImmediate(resolve));
+}
+
+/**
  * Update dashboard cache for all users
  * This function calculates My Tasks, My Projects, Overdue Tasks, and Behind Schedule counts
- * for each user and stores them in the dashboard_cache table
+ * for each user and stores them in the dashboard_cache table.
+ * 
+ * Uses event loop yields between users to prevent blocking the Node.js event loop.
  */
 export async function updateDashboardCache(userIdFilter?: string): Promise<DashboardCacheUpdateResult> {
   const startTime = Date.now();
@@ -53,25 +63,25 @@ export async function updateDashboardCache(userIdFilter?: string): Promise<Dashb
         const allProjects = (await storage.getProjectsByUser(
           user.id, 
           user.isAdmin ? 'admin' : 'user'
-        )).filter(p => !p.archived);
+        )).filter((p: Project) => !p.archived);
 
         // Filter projects where user is the current assignee (My Tasks)
-        const myTasks = allProjects.filter(p => p.currentAssigneeId === user.id);
+        const myTasks = allProjects.filter((p: Project) => p.currentAssigneeId === user.id);
         const myTasksCount = myTasks.length;
 
         // Filter projects where user is the service owner (My Projects)
-        const myProjects = allProjects.filter(p => p.projectOwnerId === user.id);
+        const myProjects = allProjects.filter((p: Project) => p.projectOwnerId === user.id);
         const myProjectsCount = myProjects.length;
 
         // Create union of user's relevant projects (owned OR assigned)
-        const myRelevantProjects = allProjects.filter(p => 
+        const myRelevantProjects = allProjects.filter((p: Project) => 
           p.projectOwnerId === user.id || p.currentAssigneeId === user.id
         );
 
         // Calculate overdue tasks (due date in the past)
         // Exclude benched and completed projects from overdue calculations
         const now = new Date();
-        const overdueProjects = myRelevantProjects.filter(p => {
+        const overdueProjects = myRelevantProjects.filter((p: Project) => {
           if (!p.dueDate || p.completionStatus || p.isBenched) return false;
           return new Date(p.dueDate) < now;
         });
@@ -86,7 +96,7 @@ export async function updateDashboardCache(userIdFilter?: string): Promise<Dashb
 
           // Get stage config from pre-fetched cache (fixes N+1 query problem)
           const stages = await getStagesForProjectType(project.projectTypeId);
-          const currentStageConfig = stages.find(s => s.name === project.currentStatus);
+          const currentStageConfig = stages.find((s: { name: string }) => s.name === project.currentStatus);
           
           if (currentStageConfig?.maxInstanceTime && currentStageConfig.maxInstanceTime > 0) {
             // Calculate current business hours in stage
@@ -96,11 +106,11 @@ export async function updateDashboardCache(userIdFilter?: string): Promise<Dashb
             );
             
             const lastEntry = sortedChronology.find(entry => entry.toStatus === project.currentStatus);
-            const startTime = lastEntry?.timestamp || project.createdAt;
+            const startTimeForStage = lastEntry?.timestamp || project.createdAt;
             
-            if (startTime) {
+            if (startTimeForStage) {
               const currentHours = calculateBusinessHours(
-                new Date(startTime).toISOString(),
+                new Date(startTimeForStage).toISOString(),
                 new Date().toISOString()
               );
 
@@ -138,8 +148,14 @@ export async function updateDashboardCache(userIdFilter?: string): Promise<Dashb
 
         usersUpdated++;
         
-        if (usersProcessed % 10 === 0) {
-          console.log(`[Dashboard Cache] Processed ${usersProcessed}/${allUsers.length} users...`);
+        // Yield to event loop every 5 users to prevent blocking
+        // This allows other cron jobs and async operations to proceed
+        if (usersProcessed % 5 === 0) {
+          await yieldToEventLoop();
+          
+          if (usersProcessed % 10 === 0) {
+            console.log(`[Dashboard Cache] Processed ${usersProcessed}/${allUsers.length} users...`);
+          }
         }
       } catch (userError) {
         const errorMsg = `Error updating cache for user ${user.email || user.id}: ${userError instanceof Error ? userError.message : String(userError)}`;

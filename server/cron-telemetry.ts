@@ -11,7 +11,7 @@
 
 import { monitorEventLoopDelay } from 'perf_hooks';
 import { CronExpressionParser, CronExpression } from 'cron-parser';
-import { db } from './db';
+import { db, pool } from './db';
 import { sql } from 'drizzle-orm';
 type EventLoopDelayMonitor = ReturnType<typeof monitorEventLoopDelay>;
 import { nanoid } from 'nanoid';
@@ -325,14 +325,31 @@ export async function tryAcquireJobLock(jobName: string): Promise<boolean> {
 
 /**
  * Release an advisory lock for a job
+ * Uses a fresh connection from the pool to avoid stale connection issues
+ * that can occur after job timeouts
  */
 export async function releaseJobLock(jobName: string): Promise<void> {
+  const lockId = hashJobName(jobName);
+  
+  // Use a fresh connection from the pool to avoid stale connection issues
+  // This is critical when releasing locks after timeouts, as the original
+  // connection may have been closed/terminated
+  let client;
   try {
-    const lockId = hashJobName(jobName);
-    await db.execute(sql`SELECT pg_advisory_unlock(${lockId})`);
+    client = await pool.connect();
+    await client.query(`SELECT pg_advisory_unlock(${lockId})`);
     console.log(`[CronTelemetry] [${jobName}] Advisory lock ${lockId} released`);
   } catch (error) {
-    console.error(`[CronTelemetry] [${jobName}] Error releasing lock:`, error);
+    // Log error but don't throw - lock will auto-release when connection closes
+    console.error(`[CronTelemetry] [${jobName}] Error releasing lock (will auto-release on connection close):`, error instanceof Error ? error.message : error);
+  } finally {
+    if (client) {
+      try {
+        client.release();
+      } catch {
+        // Ignore release errors
+      }
+    }
   }
 }
 
