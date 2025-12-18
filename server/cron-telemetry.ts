@@ -25,7 +25,7 @@ interface EventLoopStats {
   p99Ms: number;
 }
 
-interface JobRunContext {
+export interface JobRunContext {
   jobName: string;
   runId: string;
   expectedTime: Date;
@@ -46,6 +46,91 @@ interface ActiveJob {
   jobName: string;
   runId: string;
   startTime: Date;
+}
+
+/**
+ * Job metrics for tracking rows processed and batches completed
+ */
+export interface JobMetrics {
+  rowsProcessed: number;
+  batchesCompleted: number;
+  budgetUsedPct?: number;
+}
+
+/**
+ * Storage for job metrics keyed by runId
+ */
+const jobMetricsStore: Map<string, JobMetrics> = new Map();
+
+/**
+ * Update job metrics for the current run
+ * Call this during job execution to track progress
+ */
+export function updateJobMetrics(runId: string, metrics: Partial<JobMetrics>): void {
+  const existing = jobMetricsStore.get(runId) || { rowsProcessed: 0, batchesCompleted: 0 };
+  jobMetricsStore.set(runId, { ...existing, ...metrics });
+}
+
+/**
+ * Increment rows processed count
+ */
+export function incrementRowsProcessed(runId: string, count: number = 1): void {
+  const existing = jobMetricsStore.get(runId) || { rowsProcessed: 0, batchesCompleted: 0 };
+  existing.rowsProcessed += count;
+  jobMetricsStore.set(runId, existing);
+}
+
+/**
+ * Increment batches completed count
+ */
+export function incrementBatchesCompleted(runId: string, count: number = 1): void {
+  const existing = jobMetricsStore.get(runId) || { rowsProcessed: 0, batchesCompleted: 0 };
+  existing.batchesCompleted += count;
+  jobMetricsStore.set(runId, existing);
+}
+
+/**
+ * Get job metrics for a run
+ */
+export function getJobMetrics(runId: string): JobMetrics | undefined {
+  return jobMetricsStore.get(runId);
+}
+
+/**
+ * Clear job metrics for a run (called when job ends)
+ */
+function clearJobMetrics(runId: string): JobMetrics | undefined {
+  const metrics = jobMetricsStore.get(runId);
+  jobMetricsStore.delete(runId);
+  return metrics;
+}
+
+/**
+ * Wrap a database operation with timing and log warning if it exceeds threshold
+ * @param operationName - Name of the operation for logging
+ * @param operation - The async database operation to execute
+ * @param warningThresholdMs - Threshold in ms to log warning (default: 5000)
+ */
+export async function trackDbOperation<T>(
+  operationName: string,
+  operation: () => Promise<T>,
+  warningThresholdMs: number = 5000
+): Promise<T> {
+  const start = Date.now();
+  try {
+    const result = await operation();
+    const elapsed = Date.now() - start;
+    
+    if (elapsed > warningThresholdMs) {
+      console.warn(`[CronTelemetry] SLOW DB OPERATION: ${operationName} took ${elapsed}ms (threshold: ${warningThresholdMs}ms)`);
+    }
+    
+    return result;
+  } catch (error) {
+    const elapsed = Date.now() - start;
+    console.error(`[CronTelemetry] DB OPERATION FAILED: ${operationName} failed after ${elapsed}ms`, error);
+    throw error;
+  }
 }
 
 const activeJobs: Map<string, ActiveJob> = new Map();
@@ -306,15 +391,23 @@ export function endCronJob(context: JobRunContext, status: 'success' | 'error' |
   // Unregister from active jobs
   activeJobs.delete(context.runId);
   
+  // Get and clear job metrics
+  const metrics = clearJobMetrics(context.runId);
+  
   const currentMemory = getMemoryUsage();
   const heapDelta = currentMemory.heapUsed - context.memoryUsageMB.heapUsed;
   
+  // Build metrics string if we have metrics
+  const metricsStr = metrics 
+    ? ` | rows=${metrics.rowsProcessed} | batches=${metrics.batchesCompleted}${metrics.budgetUsedPct ? ` | budget=${metrics.budgetUsedPct.toFixed(0)}%` : ''}`
+    : '';
+  
   if (status === 'error') {
-    console.log(`[CronTelemetry] [${context.jobName}] [${context.runId}] END (ERROR) | duration=${durationMs}ms | error=${errorMessage}`);
+    console.log(`[CronTelemetry] [${context.jobName}] [${context.runId}] END (ERROR) | duration=${durationMs}ms${metricsStr} | error=${errorMessage}`);
   } else if (status === 'skipped') {
     console.warn(`[CronTelemetry] [${context.jobName}] [${context.runId}] WARN: END (SKIPPED) | reason=${errorMessage}`);
   } else {
-    console.log(`[CronTelemetry] [${context.jobName}] [${context.runId}] END | duration=${durationMs}ms | heapDelta=${heapDelta > 0 ? '+' : ''}${heapDelta.toFixed(2)}MB`);
+    console.log(`[CronTelemetry] [${context.jobName}] [${context.runId}] END | duration=${durationMs}ms${metricsStr} | heapDelta=${heapDelta > 0 ? '+' : ''}${heapDelta.toFixed(2)}MB`);
   }
 }
 
@@ -337,6 +430,9 @@ interface CronJobTelemetry {
   lock_wait_ms?: number;
   retry_count?: number;
   error_message?: string;
+  rows_processed?: number;
+  batches_completed?: number;
+  budget_used_pct?: number;
   event_loop: {
     p50_ms: number;
     p95_ms: number;
@@ -458,6 +554,7 @@ export function wrapCronHandler(
         await handler();
         
         // Success - emit telemetry and exit
+        const metrics = getJobMetrics(ctx.runId);
         const successTelemetry: CronJobTelemetry = {
           ...baseTelemetry,
           status: 'success',
@@ -465,6 +562,9 @@ export function wrapCronHandler(
           lock_wait_ms: useLock ? lockWaitMs : undefined,
           duration_ms: Date.now() - ctx.actualStartTime.getTime(),
           retry_count: retryCount,
+          rows_processed: metrics?.rowsProcessed,
+          batches_completed: metrics?.batchesCompleted,
+          budget_used_pct: metrics?.budgetUsedPct,
         };
         emitTelemetry(successTelemetry);
         endCronJob(ctx, 'success');
@@ -504,6 +604,7 @@ export function wrapCronHandler(
     }
     
     // All retries exhausted - emit error telemetry
+    const finalMetrics = getJobMetrics(ctx.runId);
     const errorTelemetry: CronJobTelemetry = {
       ...baseTelemetry,
       status: 'error',
@@ -512,6 +613,9 @@ export function wrapCronHandler(
       duration_ms: Date.now() - ctx.actualStartTime.getTime(),
       retry_count: retryCount,
       error_message: lastError?.message || 'Unknown error',
+      rows_processed: finalMetrics?.rowsProcessed,
+      batches_completed: finalMetrics?.batchesCompleted,
+      budget_used_pct: finalMetrics?.budgetUsedPct,
     };
     emitTelemetry(errorTelemetry);
     
