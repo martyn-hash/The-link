@@ -48,6 +48,18 @@ const QUESTION_TYPES = [
 
 type QuestionType = typeof QUESTION_TYPES[number]["type"];
 
+interface ConditionalLogicCondition {
+  questionId: string;
+  operator: 'equals' | 'not_equals' | 'contains' | 'is_empty' | 'is_not_empty';
+  value?: string | number | boolean | string[];
+}
+
+interface ConditionalLogic {
+  showIf?: ConditionalLogicCondition;
+  logic?: 'and' | 'or';
+  conditions?: ConditionalLogicCondition[];
+}
+
 interface EditingQuestion {
   id?: string;
   questionType: QuestionType;
@@ -58,6 +70,7 @@ interface EditingQuestion {
   options: string[];
   placeholder: string;
   sectionId?: string | null;
+  conditionalLogic?: ConditionalLogic | null;
 }
 
 interface EditingSection {
@@ -99,7 +112,16 @@ const DEFAULT_QUESTION: EditingQuestion = {
   options: [],
   placeholder: "",
   sectionId: null,
+  conditionalLogic: null,
 };
+
+const CONDITION_OPERATORS = [
+  { value: 'equals', label: 'Equals' },
+  { value: 'not_equals', label: 'Does not equal' },
+  { value: 'contains', label: 'Contains' },
+  { value: 'is_empty', label: 'Is empty' },
+  { value: 'is_not_empty', label: 'Is not empty' },
+] as const;
 
 const DEFAULT_SECTION: EditingSection = {
   name: "",
@@ -257,17 +279,64 @@ function SortableQuestionItem({
 
 function QuestionEditor({
   question,
+  allQuestions,
   onSave,
   onCancel,
 }: {
   question: EditingQuestion;
+  allQuestions: EditingQuestion[];
   onSave: (q: EditingQuestion) => void;
   onCancel: () => void;
 }) {
   const [editedQuestion, setEditedQuestion] = useState<EditingQuestion>(question);
   const [newOption, setNewOption] = useState("");
+  const [showConditionalLogic, setShowConditionalLogic] = useState(!!question.conditionalLogic?.showIf);
 
   const needsOptions = ["single_choice", "multi_choice", "dropdown"].includes(editedQuestion.questionType);
+  
+  const previousQuestions = allQuestions.filter(q => 
+    q.order < editedQuestion.order && q.id !== editedQuestion.id && q.label.trim()
+  );
+  
+  const selectedSourceQuestion = previousQuestions.find(
+    q => q.id === editedQuestion.conditionalLogic?.showIf?.questionId
+  );
+  
+  const sourceQuestionHasOptions = selectedSourceQuestion && 
+    ["single_choice", "multi_choice", "dropdown", "yes_no"].includes(selectedSourceQuestion.questionType);
+  
+  const handleConditionalLogicToggle = (enabled: boolean) => {
+    setShowConditionalLogic(enabled);
+    if (!enabled) {
+      setEditedQuestion(prev => ({ ...prev, conditionalLogic: null }));
+    } else if (!editedQuestion.conditionalLogic?.showIf && previousQuestions.length > 0) {
+      setEditedQuestion(prev => ({
+        ...prev,
+        conditionalLogic: {
+          showIf: {
+            questionId: previousQuestions[0].id || '',
+            operator: 'equals',
+            value: '',
+          },
+        },
+      }));
+    }
+  };
+  
+  const handleConditionChange = (field: keyof ConditionalLogicCondition, value: any) => {
+    setEditedQuestion(prev => ({
+      ...prev,
+      conditionalLogic: {
+        ...prev.conditionalLogic,
+        showIf: {
+          questionId: prev.conditionalLogic?.showIf?.questionId || '',
+          operator: prev.conditionalLogic?.showIf?.operator || 'equals',
+          ...prev.conditionalLogic?.showIf,
+          [field]: value,
+        },
+      },
+    }));
+  };
 
   const handleAddOption = () => {
     if (newOption.trim()) {
@@ -386,6 +455,102 @@ function QuestionEditor({
             />
             <Label htmlFor="question-required">Required</Label>
           </div>
+
+          {previousQuestions.length > 0 && (
+            <div className="border-t pt-4 mt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Switch
+                  id="conditional-logic"
+                  checked={showConditionalLogic}
+                  onCheckedChange={handleConditionalLogicToggle}
+                  data-testid="switch-conditional-logic"
+                />
+                <Label htmlFor="conditional-logic" className="text-sm font-medium">
+                  Show this question only if...
+                </Label>
+              </div>
+              
+              {showConditionalLogic && editedQuestion.conditionalLogic?.showIf && (
+                <div className="space-y-3 pl-4 border-l-2 border-primary/20">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">When this question</Label>
+                    <Select
+                      value={editedQuestion.conditionalLogic.showIf.questionId}
+                      onValueChange={(value) => handleConditionChange('questionId', value)}
+                    >
+                      <SelectTrigger className="mt-1" data-testid="select-condition-question">
+                        <SelectValue placeholder="Select a question" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {previousQuestions.map(q => (
+                          <SelectItem key={q.id || `q-${q.order}`} value={q.id || `q-${q.order}`}>
+                            {q.label || 'Untitled question'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Condition</Label>
+                    <Select
+                      value={editedQuestion.conditionalLogic.showIf.operator}
+                      onValueChange={(value) => handleConditionChange('operator', value)}
+                    >
+                      <SelectTrigger className="mt-1" data-testid="select-condition-operator">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CONDITION_OPERATORS.map(op => (
+                          <SelectItem key={op.value} value={op.value}>
+                            {op.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  {!['is_empty', 'is_not_empty'].includes(editedQuestion.conditionalLogic.showIf.operator) && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Value</Label>
+                      {sourceQuestionHasOptions ? (
+                        <Select
+                          value={String(editedQuestion.conditionalLogic.showIf.value || '')}
+                          onValueChange={(value) => handleConditionChange('value', value)}
+                        >
+                          <SelectTrigger className="mt-1" data-testid="select-condition-value">
+                            <SelectValue placeholder="Select value" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {selectedSourceQuestion?.questionType === 'yes_no' ? (
+                              <>
+                                <SelectItem value="yes">Yes</SelectItem>
+                                <SelectItem value="no">No</SelectItem>
+                              </>
+                            ) : (
+                              selectedSourceQuestion?.options?.map((opt, i) => (
+                                <SelectItem key={i} value={opt}>
+                                  {opt}
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          className="mt-1"
+                          value={String(editedQuestion.conditionalLogic.showIf.value || '')}
+                          onChange={(e) => handleConditionChange('value', e.target.value)}
+                          placeholder="Enter value to match"
+                          data-testid="input-condition-value"
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <DialogFooter>
@@ -1370,6 +1535,7 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
         {editingQuestionIndex !== null && editingTemplate.questions[editingQuestionIndex] && (
           <QuestionEditor
             question={editingTemplate.questions[editingQuestionIndex]}
+            allQuestions={editingTemplate.questions}
             onSave={handleSaveQuestion}
             onCancel={() => setEditingQuestionIndex(null)}
           />

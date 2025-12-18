@@ -659,5 +659,20 @@ Phase 8 (OTP) ──────────→ Enhancement, can be added after 
 
 ---
 
+## Known Technical Debt
+
+### TypeScript Implicit 'any' Errors
+The following files have implicit 'any' type errors that should be addressed in a future cleanup:
+
+| File | Approximate Count | Notes |
+|------|------------------|-------|
+| `server/routes/messages.ts` | ~23 | Route handler parameters |
+| `server/scheduling-orchestrator.ts` | ~3 | Callback parameters |
+| `server/db.ts` | ~1 | Configuration object |
+
+These don't block functionality but should be typed properly for better type safety.
+
+---
+
 *Document created: December 2024*
 *Last updated: December 2024*
