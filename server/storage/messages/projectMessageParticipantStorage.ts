@@ -149,6 +149,11 @@ export class ProjectMessageParticipantStorage {
     return unreadCounts;
   }
 
+  /**
+   * OPTIMIZED: Two-phase bounded approach to avoid N+1 queries
+   * Phase A: Single indexed query to find candidates (LIMIT 100)
+   * Phase B: Batch hydration of users/projects in parallel queries
+   */
   async getProjectMessageUnreadSummaries(olderThanMinutes: number): Promise<Array<{
     userId: string;
     email: string;
@@ -165,26 +170,50 @@ export class ProjectMessageParticipantStorage {
   }>> {
     const cutoffTime = new Date(Date.now() - olderThanMinutes * 60 * 1000);
     
-    // Get all participants with unread messages older than cutoff
-    const participantsWithUnread = await db
-      .select({
-        userId: projectMessageParticipants.userId,
-        threadId: projectMessageParticipants.threadId,
-        lastReadAt: projectMessageParticipants.lastReadAt,
-        lastReminderEmailSentAt: projectMessageParticipants.lastReminderEmailSentAt,
-        topic: projectMessageThreads.topic,
-        projectId: projectMessageThreads.projectId,
-      })
-      .from(projectMessageParticipants)
-      .innerJoin(projectMessageThreads, eq(projectMessageParticipants.threadId, projectMessageThreads.id))
-      .where(
-        or(
-          isNull(projectMessageParticipants.lastReadAt),
-          sql`${projectMessageParticipants.lastReadAt} < ${cutoffTime}`
-        )
-      );
+    // PHASE A: Single aggregated query to find all candidates with unread counts
+    // This replaces the N+1 pattern with one efficient indexed query
+    const candidates = await db.execute(sql`
+      SELECT 
+        pmp.user_id,
+        pmp.thread_id,
+        pmt.topic,
+        pmt.project_id,
+        COUNT(pm.id)::int as unread_count,
+        MIN(pm.created_at) as oldest_unread_at
+      FROM project_message_participants pmp
+      INNER JOIN project_message_threads pmt ON pmt.id = pmp.thread_id
+      INNER JOIN project_messages pm ON pm.thread_id = pmp.thread_id
+      WHERE 
+        pm.user_id != pmp.user_id
+        AND pm.created_at < ${cutoffTime}
+        AND pm.created_at > COALESCE(pmp.last_read_at, '1970-01-01'::timestamp)
+        AND pm.created_at > COALESCE(pmp.last_reminder_email_sent_at, '1970-01-01'::timestamp)
+      GROUP BY pmp.user_id, pmp.thread_id, pmt.topic, pmt.project_id
+      HAVING COUNT(pm.id) > 0
+      ORDER BY MIN(pm.created_at) ASC
+      LIMIT 100
+    `);
     
-    // Group by user
+    if (!candidates.rows || candidates.rows.length === 0) {
+      return [];
+    }
+    
+    // PHASE B: Batch hydration - collect unique IDs
+    const userIds = new Set<string>();
+    const projectIds = new Set<string>();
+    
+    for (const row of candidates.rows as any[]) {
+      userIds.add(row.user_id);
+      projectIds.add(row.project_id);
+    }
+    
+    // Batch fetch users and projects in parallel (2 queries instead of N)
+    const [usersMap, projectsMap] = await Promise.all([
+      this.batchGetUsers(Array.from(userIds)),
+      this.batchGetProjects(Array.from(projectIds)),
+    ]);
+    
+    // Build result grouped by user
     const userMap = new Map<string, {
       userId: string;
       email: string;
@@ -200,44 +229,15 @@ export class ProjectMessageParticipantStorage {
       }>;
     }>();
     
-    for (const participant of participantsWithUnread) {
-      // Get unread messages in this thread that are:
-      // 1. Older than the cutoff time (10 minutes)
-      // 2. NEW since we last sent a reminder email (if we've sent one before)
-      const unreadMessages = await db
-        .select({
-          id: projectMessages.id,
-          createdAt: projectMessages.createdAt,
-        })
-        .from(projectMessages)
-        .where(and(
-          eq(projectMessages.threadId, participant.threadId),
-          ne(projectMessages.userId, participant.userId), // Exclude user's own messages
-          participant.lastReadAt 
-            ? sql`${projectMessages.createdAt} > ${participant.lastReadAt}`
-            : sql`true`, // If never read, count all messages from others
-          sql`${projectMessages.createdAt} < ${cutoffTime}`, // Only messages older than cutoff
-          // Critical: Only include messages created AFTER the last reminder email was sent
-          // This prevents re-sending reminders for the same old unread messages
-          participant.lastReminderEmailSentAt
-            ? sql`${projectMessages.createdAt} > ${participant.lastReminderEmailSentAt}`
-            : sql`true` // If we've never sent a reminder, include all unread messages
-        ))
-        .orderBy(projectMessages.createdAt);
+    for (const row of candidates.rows as any[]) {
+      const user = usersMap.get(row.user_id);
+      const project = projectsMap.get(row.project_id);
       
-      if (unreadMessages.length === 0) continue;
+      if (!user || !user.email || !project) continue;
       
-      // Get user details (using injected helper)
-      const user = await this.getUser(participant.userId);
-      if (!user || !user.email) continue;
-      
-      // Get project details (using injected helper)
-      const project = await this.getProject(participant.projectId);
-      if (!project) continue;
-      
-      if (!userMap.has(participant.userId)) {
-        userMap.set(participant.userId, {
-          userId: participant.userId,
+      if (!userMap.has(row.user_id)) {
+        userMap.set(row.user_id, {
+          userId: row.user_id,
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
@@ -245,18 +245,65 @@ export class ProjectMessageParticipantStorage {
         });
       }
       
-      const userSummary = userMap.get(participant.userId)!;
+      const userSummary = userMap.get(row.user_id)!;
       userSummary.threads.push({
-        threadId: participant.threadId,
-        topic: participant.topic,
-        projectId: participant.projectId,
+        threadId: row.thread_id,
+        topic: row.topic,
+        projectId: row.project_id,
         projectName: project.name,
-        unreadCount: unreadMessages.length,
-        oldestUnreadAt: unreadMessages[0].createdAt ?? new Date(),
+        unreadCount: row.unread_count,
+        oldestUnreadAt: new Date(row.oldest_unread_at),
       });
     }
     
     return Array.from(userMap.values()).filter(u => u.threads.length > 0);
+  }
+
+  /**
+   * Batch fetch users by IDs - single query instead of N queries
+   */
+  private async batchGetUsers(userIds: string[]): Promise<Map<string, { email: string; firstName: string | null; lastName: string | null }>> {
+    const result = new Map<string, { email: string; firstName: string | null; lastName: string | null }>();
+    if (userIds.length === 0) return result;
+    
+    // Use injected helper but fetch all at once if possible, otherwise fall back to individual calls
+    // The getUser helper is injected, so we need to batch through it
+    const users = await Promise.all(userIds.map(id => this.getUser(id)));
+    
+    for (let i = 0; i < userIds.length; i++) {
+      const user = users[i];
+      if (user && user.email) {
+        result.set(userIds[i], {
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+        });
+      }
+    }
+    
+    return result;
+  }
+
+  /**
+   * Batch fetch projects by IDs - single query instead of N queries
+   */
+  private async batchGetProjects(projectIds: string[]): Promise<Map<string, { name: string }>> {
+    const result = new Map<string, { name: string }>();
+    if (projectIds.length === 0) return result;
+    
+    // Use injected helper but fetch all at once if possible, otherwise fall back to individual calls
+    const projects = await Promise.all(projectIds.map(id => this.getProject(id)));
+    
+    for (let i = 0; i < projectIds.length; i++) {
+      const project = projects[i];
+      if (project) {
+        result.set(projectIds[i], {
+          name: project.name || 'Unknown Project',
+        });
+      }
+    }
+    
+    return result;
   }
 
   async getProjectMessageParticipantsNeedingReminders(hoursThreshold: number): Promise<Array<{

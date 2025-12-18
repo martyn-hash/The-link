@@ -207,20 +207,22 @@ async function main() {
   
   // === Business Hours Jobs ===
   
-  // Project Message Reminders - Every 30 min (with timeout protection)
-  cron.schedule('2,32 * * * *', wrapCronHandler('ProjectMessageReminders', '2,32 * * * *', async () => {
+  // Project Message Reminders - Hourly at :02 (with timeout protection)
+  // OPTIMIZED: Reduced from every 30 min to hourly since job now uses bounded candidates
+  // maxRetries: 0 because partial completion is success (progress tracked via last_reminder_sent_at)
+  cron.schedule('2 * * * *', wrapCronHandler('ProjectMessageReminders', '2 * * * *', async () => {
     log('[Project Message Reminders] Starting reminder check...');
     const result = await withTimeout(
       () => sendProjectMessageReminders(),
       JOB_TIMEOUTS.NOTIFICATION,
       'ProjectMessageReminders'
     );
-    log(`[Project Message Reminders] Check completed: ${result.emailsSent}/${result.usersProcessed} emails sent`);
+    log(`[Project Message Reminders] Check completed: ${result.emailsSent}/${result.usersProcessed} emails sent${result.budgetExceeded ? ' (budget exceeded, will continue next run)' : ''}`);
     if (result.errors.length > 0) {
       console.error('[Project Message Reminders] Errors:', result.errors);
     }
-  }, { useLock: true }));
-  log('[ProjectMessageReminders] Scheduled (every 30 min)');
+  }, { useLock: true, maxRetries: 0 }));
+  log('[ProjectMessageReminders] Scheduled (hourly at :02)');
   
   // Sent Items Detection - Every 15 min during business hours (with timeout protection)
   const { sentItemsReplyDetectionService } = await import('./services/sentItemsReplyDetectionService');

@@ -1,24 +1,54 @@
 import { storage } from './storage/index';
 import { sendProjectMessageReminderEmail } from './sendgridService';
 
+// Execution budget controls
+const MAX_RUNTIME_MS = 8000; // 8 second hard limit
+const YIELD_EVERY = 5; // Yield event loop every N users to prevent blocking
+
+/**
+ * Helper to yield the event loop - prevents multi-second blocks
+ */
+function yieldEventLoop(): Promise<void> {
+  return new Promise(resolve => setImmediate(resolve));
+}
+
 export async function sendProjectMessageReminders(): Promise<{
   emailsSent: number;
   usersProcessed: number;
   errors: string[];
+  budgetExceeded?: boolean;
 }> {
   const errors: string[] = [];
   let emailsSent = 0;
+  let budgetExceeded = false;
+  const startTime = Date.now();
   
   try {
     console.log('[Project Message Reminders] Starting reminder check...');
     
     // Get unread summaries for messages older than 10 minutes
-    // This will only return threads with NEW unread messages since the last reminder
+    // OPTIMIZED: Now uses bounded candidate selection (max 100) + batch hydration
     const summaries = await storage.getProjectMessageUnreadSummaries(10);
     
     console.log(`[Project Message Reminders] Found ${summaries.length} users with new unread messages older than 10 minutes`);
     
-    for (const summary of summaries) {
+    let usersActuallyProcessed = 0;
+    for (let i = 0; i < summaries.length; i++) {
+      // Check execution budget
+      const elapsed = Date.now() - startTime;
+      if (elapsed > MAX_RUNTIME_MS) {
+        console.log(`[Project Message Reminders] Budget exceeded at ${usersActuallyProcessed}/${summaries.length} users (${elapsed}ms), exiting gracefully`);
+        budgetExceeded = true;
+        break; // Partial completion is success - next run will continue
+      }
+      
+      // Yield event loop periodically to prevent blocking
+      if (i > 0 && i % YIELD_EVERY === 0) {
+        await yieldEventLoop();
+      }
+      
+      const summary = summaries[i];
+      
       try {
         await sendProjectMessageReminderEmail(summary);
         emailsSent++;
@@ -38,14 +68,18 @@ export async function sendProjectMessageReminders(): Promise<{
         console.error(`[Project Message Reminders] ${errorMsg}`);
         errors.push(errorMsg);
       }
+      
+      usersActuallyProcessed++;
     }
     
-    console.log(`[Project Message Reminders] Completed: ${emailsSent}/${summaries.length} emails sent`);
+    const duration = Date.now() - startTime;
+    console.log(`[Project Message Reminders] Completed in ${duration}ms: ${emailsSent}/${usersActuallyProcessed} emails sent (${summaries.length} candidates)${budgetExceeded ? ' (budget exceeded)' : ''}`);
     
     return {
       emailsSent,
-      usersProcessed: summaries.length,
+      usersProcessed: usersActuallyProcessed,
       errors,
+      budgetExceeded,
     };
   } catch (error) {
     const errorMsg = `Critical error in reminder service: ${error instanceof Error ? error.message : String(error)}`;
@@ -56,6 +90,7 @@ export async function sendProjectMessageReminders(): Promise<{
       emailsSent,
       usersProcessed: 0,
       errors,
+      budgetExceeded,
     };
   }
 }
