@@ -1,0 +1,111 @@
+1. Separation of Cron Worker – Clarify DB Pool Strategy
+
+You correctly propose separating cron execution into a dedicated worker. However, the plan should explicitly state:
+
+The cron worker must use its own database pool configuration
+
+Pool size should be smaller and capped than the web app
+
+The web process must never be starved by cron DB usage
+
+Please add:
+
+Explicit pool sizes (even provisional)
+
+Confirmation that pools are isolated per process
+
+Rationale: Without this, cron isolation can still degrade UI performance via shared DB pressure.
+
+2. Add a Global Cron Kill-Switch
+
+The plan lacks an emergency control.
+
+Please add:
+
+A global environment flag (e.g. CRONS_ENABLED=false)
+
+All cron scheduling should be gated behind this flag
+
+Flag should be readable without redeploying code
+
+Rationale: This is critical for production stability once clients depend on the system.
+
+3. Job-Level Concurrency Caps (Important Safety Rail)
+
+You mention advisory locks, but the plan should explicitly enforce per-job concurrency rules.
+
+Please clarify for each cron job:
+
+Whether overlapping executions are allowed
+
+Default behaviour if a job is still running when the next schedule fires:
+
+Skip + log
+
+Skip silently
+
+Warn
+
+Rationale: Prevents pile-ups after slow runs or restarts.
+
+4. SentItemsDetection – Add Explicit Overlap Buffer
+
+Delta scanning is correct, but the plan should explicitly include a safety overlap.
+
+Please confirm:
+
+A rolling overlap window (e.g. 2 minutes)
+
+last_checked_at only updates on full success
+
+First-run fallback behaviour is documented
+
+Rationale: Outlook APIs can return out-of-order timestamps.
+
+5. Batching Strategy – Clarify Transaction Scope
+
+Batching + setImmediate() is good, but the plan should state:
+
+Each batch runs in its own DB transaction
+
+Partial completion is persisted between batches
+
+Timeouts abort cleanly without leaving locks or open transactions
+
+Rationale: Prevents corrupted state if a job is aborted mid-run.
+
+6. Execution Timeouts – Define Defaults
+
+You introduce timeout wrappers but do not define standards.
+
+Please add:
+
+Default timeout per job class (e.g. 30s / 60s)
+
+Which jobs are allowed to exceed this (if any)
+
+Logging requirements when >80% of budget is used
+
+Rationale: Without standards, timeouts drift into inconsistency.
+
+7. Observability – Add Process Identity Tag
+
+Telemetry is strong, but missing one key field.
+
+Please add:
+
+process_role: "web" | "cron-worker" to all cron telemetry
+
+Rationale: Makes post-incident analysis dramatically easier.
+
+8. Scope Discipline (Positive Feedback)
+
+The following decisions are correct and should not expand unless revisited deliberately:
+
+No queue system (BullMQ, etc.)
+
+No catch-up execution logic
+
+No event-driven rewrite in this phase
+
+Please explicitly reaffirm these as non-goals in the plan to prevent scope creep.
