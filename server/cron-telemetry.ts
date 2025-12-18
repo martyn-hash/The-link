@@ -52,6 +52,26 @@ const activeJobs: Map<string, ActiveJob> = new Map();
 let eventLoopMonitor: EventLoopDelayMonitor | null = null;
 const REPORT_INTERVAL_MS = 5 * 60 * 1000; // Report event loop stats every 5 minutes
 
+// Process role for telemetry tagging (web vs cron-worker)
+let currentProcessRole: 'web' | 'cron-worker' = 'web';
+
+/**
+ * Set the process role for telemetry tagging
+ * Call this early in the process lifecycle to identify whether
+ * this is the web server or the cron worker
+ */
+export function setProcessRole(role: 'web' | 'cron-worker'): void {
+  currentProcessRole = role;
+  console.log(`[CronTelemetry] Process role set to: ${role}`);
+}
+
+/**
+ * Get the current process role
+ */
+export function getProcessRole(): 'web' | 'cron-worker' {
+  return currentProcessRole;
+}
+
 /**
  * Initialize the event loop delay monitor
  */
@@ -309,6 +329,7 @@ interface CronJobTelemetry {
   job_name: string;
   run_id: string;
   timestamp: string;
+  process_role: 'web' | 'cron-worker';
   status: 'started' | 'success' | 'error' | 'skipped' | 'retrying';
   drift_ms: number;
   duration_ms?: number;
@@ -384,6 +405,7 @@ export function wrapCronHandler(
       job_name: jobName,
       run_id: ctx.runId,
       timestamp: ctx.actualStartTime.toISOString(),
+      process_role: currentProcessRole,
       drift_ms: ctx.driftMs,
       event_loop: {
         p50_ms: ctx.eventLoopStats.p50Ms,

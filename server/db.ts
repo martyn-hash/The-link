@@ -23,24 +23,33 @@ const schemaWithRelations = {
   ),
 };
 
-// Pool configuration tuned for mixed web + cron workload
-// - 20 max connections to handle concurrent cron jobs + API traffic
+// Determine pool size based on process role
+// Web server: Higher pool (handles concurrent HTTP requests)
+// Cron worker: Smaller pool (sequential job execution)
+const PROCESS_ROLE = process.env.PROCESS_ROLE || 'web';
+const POOL_SIZE = PROCESS_ROLE === 'cron-worker' ? 8 : 15;
+
+// Pool configuration with isolated sizing per process type
+// - Web: 15 connections for concurrent HTTP requests
+// - Cron: 8 connections for sequential job processing
 // - 60s idle timeout to reduce connection churn during quiet periods
 // - 15s connection timeout for slow cold starts (Neon serverless)
 export const pool = new Pool({ 
   connectionString: process.env.DATABASE_URL,
-  max: 20,
+  max: POOL_SIZE,
   idleTimeoutMillis: 60000,
   connectionTimeoutMillis: 15000,
   allowExitOnIdle: false,
 });
+
+console.log(`[Database] Pool initialized for ${PROCESS_ROLE} (max: ${POOL_SIZE} connections)`);
 
 // Track pool metrics for observability
 let totalConnectionsCreated = 0;
 let lastPoolLogTime = 0;
 const POOL_LOG_INTERVAL_MS = 300000; // Log pool stats every 5 minutes max
 
-pool.on('error', (err) => {
+pool.on('error', (err: Error) => {
   console.error('[Database Pool] Unexpected pool error:', err.message);
 });
 
