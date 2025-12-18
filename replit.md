@@ -65,6 +65,23 @@ The application uses PostgreSQL (Neon) with Drizzle ORM for data persistence, em
 
 ## Cron Job Telemetry & Scheduling
 
+### Architecture (Updated December 2024)
+
+**Dual-Process Architecture**: The application runs as two separate processes:
+1. **Web Server** (`server/index.ts`): Handles HTTP requests only, no cron scheduling
+2. **Cron Worker** (`server/cron-worker.ts`): Handles all scheduled background jobs
+
+This separation prevents heavy cron jobs from blocking web requests and vice versa.
+
+**Process Configuration**:
+- Development: Configured via Replit Workflows (parallel mode)
+- Production: Requires similar parallel process configuration
+- Database pools are isolated: Web (15 connections), Cron (8 connections)
+
+**Kill Switch**: Set `CRONS_ENABLED=false` to disable all cron jobs without redeployment.
+
+**Process Role Telemetry**: All logs include `process_role` tag ("web" or "cron-worker") for filtering.
+
 ### Overview
 The application uses node-cron for scheduling background jobs. A comprehensive telemetry system (`server/cron-telemetry.ts`) monitors job execution, detects drift, coordinates distributed execution, and handles errors with automatic retries.
 

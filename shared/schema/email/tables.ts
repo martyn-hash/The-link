@@ -180,6 +180,7 @@ export const inboxes = pgTable("inboxes", {
   azureUserId: varchar("azure_user_id"),
   isActive: boolean("is_active").default(true),
   lastSyncAt: timestamp("last_sync_at"),
+  lastSentItemsCheckedAt: timestamp("last_sent_items_checked_at"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
