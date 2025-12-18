@@ -144,6 +144,8 @@ interface TaskFormData {
   };
   recipientName?: string | null;
   recipientEmail?: string | null;
+  requireOtp?: boolean;
+  otpVerified?: boolean;
 }
 
 type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error';
@@ -237,6 +239,243 @@ function SuccessView() {
           <p className="text-sm text-muted-foreground pt-4">
             You can close this page now.
           </p>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function OtpVerificationView({
+  token,
+  recipientEmail,
+  onVerified,
+}: {
+  token: string;
+  recipientEmail: string;
+  onVerified: () => void;
+}) {
+  const { toast } = useToast();
+  const [otpCode, setOtpCode] = useState('');
+  const [isCodeSent, setIsCodeSent] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
+
+  const maskedEmail = useMemo(() => {
+    if (!recipientEmail) return '';
+    const [localPart, domain] = recipientEmail.split('@');
+    if (!localPart || !domain) return recipientEmail;
+    const visible = localPart.slice(0, 2);
+    const masked = '*'.repeat(Math.max(localPart.length - 2, 0));
+    return `${visible}${masked}@${domain}`;
+  }, [recipientEmail]);
+
+  const sendOtp = async () => {
+    setIsSending(true);
+    try {
+      const response = await fetch(`/api/client-task/${token}/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to send verification code');
+      }
+      
+      setIsCodeSent(true);
+      setResendCooldown(60);
+      toast({
+        title: 'Code Sent',
+        description: `A verification code has been sent to ${maskedEmail}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to send verification code',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const verifyOtp = async () => {
+    if (otpCode.length !== 6) {
+      toast({
+        title: 'Invalid Code',
+        description: 'Please enter a 6-digit verification code',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsVerifying(true);
+    try {
+      const response = await fetch(`/api/client-task/${token}/verify-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: otpCode }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Invalid verification code');
+      }
+      
+      toast({
+        title: 'Verified',
+        description: 'Email verified successfully',
+      });
+      onVerified();
+    } catch (error: any) {
+      toast({
+        title: 'Verification Failed',
+        description: error.message || 'Invalid verification code',
+        variant: 'destructive',
+      });
+      setOtpCode('');
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleInputChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+    
+    const newCode = otpCode.split('');
+    newCode[index] = value.slice(-1);
+    const code = newCode.join('').slice(0, 6);
+    setOtpCode(code);
+    
+    if (value && index < 5) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !otpCode[index] && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    setOtpCode(pastedData);
+    if (pastedData.length === 6) {
+      inputRefs.current[5]?.focus();
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center p-4">
+      <Card className="max-w-md w-full">
+        <CardContent className="pt-8 pb-8 text-center space-y-6">
+          <img 
+            src={logoPath} 
+            alt="Growth Accountants" 
+            className="h-12 mx-auto mb-4"
+          />
+          
+          <div className="w-16 h-16 mx-auto rounded-full bg-blue-100 flex items-center justify-center">
+            <Mail className="w-8 h-8 text-blue-600" />
+          </div>
+          
+          <div className="space-y-2">
+            <h2 className="text-xl font-semibold">Email Verification Required</h2>
+            <p className="text-muted-foreground text-sm">
+              For security, please verify your email address before accessing this form.
+            </p>
+          </div>
+
+          {!isCodeSent ? (
+            <div className="space-y-4">
+              <p className="text-sm">
+                A verification code will be sent to:
+                <br />
+                <span className="font-medium">{maskedEmail}</span>
+              </p>
+              <Button 
+                onClick={sendOtp} 
+                disabled={isSending}
+                className="w-full"
+                data-testid="button-send-otp"
+              >
+                {isSending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  'Send Verification Code'
+                )}
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Enter the 6-digit code sent to {maskedEmail}
+              </p>
+              
+              <div className="flex justify-center gap-2" onPaste={handlePaste}>
+                {[0, 1, 2, 3, 4, 5].map((index) => (
+                  <Input
+                    key={index}
+                    ref={(el) => (inputRefs.current[index] = el)}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={otpCode[index] || ''}
+                    onChange={(e) => handleInputChange(index, e.target.value)}
+                    onKeyDown={(e) => handleKeyDown(index, e)}
+                    className="w-12 h-12 text-center text-xl font-semibold"
+                    data-testid={`input-otp-${index}`}
+                  />
+                ))}
+              </div>
+
+              <Button 
+                onClick={verifyOtp} 
+                disabled={isVerifying || otpCode.length !== 6}
+                className="w-full"
+                data-testid="button-verify-otp"
+              >
+                {isVerifying ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  'Verify & Continue'
+                )}
+              </Button>
+
+              <p className="text-sm text-muted-foreground">
+                Didn't receive the code?{' '}
+                {resendCooldown > 0 ? (
+                  <span>Resend in {resendCooldown}s</span>
+                ) : (
+                  <button
+                    onClick={sendOtp}
+                    disabled={isSending}
+                    className="text-primary hover:underline"
+                    data-testid="button-resend-otp"
+                  >
+                    Resend code
+                  </button>
+                )}
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -532,6 +771,7 @@ export default function ClientProjectTaskFormPage() {
   const [isPulsing, setIsPulsing] = useState(false);
   const [showWelcomeBack, setShowWelcomeBack] = useState(false);
   const [showCelebration, setShowCelebration] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
   const hasDismissedCelebration = useRef(false);
   const saveTimeouts = useRef<Record<string, NodeJS.Timeout>>({});
   const DEBOUNCE_MS = 1500;
@@ -971,6 +1211,16 @@ export default function ClientProjectTaskFormPage() {
 
   if (!data) {
     return null;
+  }
+
+  if (data.requireOtp && !data.otpVerified && !otpVerified) {
+    return (
+      <OtpVerificationView
+        token={token || ''}
+        recipientEmail={data.recipientEmail || ''}
+        onVerified={() => setOtpVerified(true)}
+      />
+    );
   }
 
   // Celebration screen when all questions answered

@@ -31,6 +31,7 @@ export const clientProjectTaskTemplates = pgTable("client_project_task_templates
   stageChangeRules: jsonb("stage_change_rules").$type<StageChangeRule[]>(),
   requireAllQuestions: boolean("require_all_questions").default(true),
   expiryDaysAfterStart: integer("expiry_days_after_start").default(7),
+  requireOtp: boolean("require_otp").default(false),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -161,9 +162,22 @@ export const clientProjectTaskTokens = pgTable("client_project_task_tokens", {
   recipientName: varchar("recipient_name", { length: 255 }),
   createdById: varchar("created_by_id").notNull().references(() => users.id),
   isReissued: boolean("is_reissued").default(false),
+  otpVerifiedAt: timestamp("otp_verified_at"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_cpt_tokens_instance_id").on(table.instanceId),
   index("idx_cpt_tokens_token").on(table.token),
   index("idx_cpt_tokens_expires_at").on(table.expiresAt),
+]);
+
+export const clientProjectTaskOtps = pgTable("client_project_task_otps", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tokenId: varchar("token_id").notNull().references(() => clientProjectTaskTokens.id, { onDelete: "cascade" }),
+  code: varchar("code", { length: 6 }).notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => [
+  index("idx_cpt_otps_token_id").on(table.tokenId),
+  index("idx_cpt_otps_expires_at").on(table.expiresAt),
 ]);

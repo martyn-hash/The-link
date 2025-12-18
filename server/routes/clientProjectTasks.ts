@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { storage } from "../storage/index";
 import { z } from "zod";
+import { sendClientTaskOtp, verifyClientTaskOtp } from "../services/clientProjectTaskOtpService";
 import {
   validateParams,
   paramUuidSchema,
@@ -801,6 +802,11 @@ export function registerClientProjectTaskRoutes(
       // Get existing responses
       const responses = await storage.getClientProjectTaskResponsesByInstanceId(tokenRecord.instanceId);
 
+      // Get template to check if OTP is required
+      const template = await storage.getClientProjectTaskTemplateById(tokenRecord.instance.templateId);
+      const requireOtp = template?.requireOtp ?? false;
+      const otpVerified = !!tokenRecord.otpVerifiedAt;
+
       res.json({
         instance: tokenRecord.instance,
         questions,
@@ -812,6 +818,8 @@ export function registerClientProjectTaskRoutes(
         },
         recipientName: tokenRecord.recipientName,
         recipientEmail: tokenRecord.recipientEmail,
+        requireOtp,
+        otpVerified,
       });
     } catch (error) {
       console.error("Error fetching client task:", error);
@@ -1110,6 +1118,86 @@ export function registerClientProjectTaskRoutes(
     } catch (error) {
       console.error("Error creating task instance:", error);
       res.status(500).json({ message: "Failed to create task instance" });
+    }
+  });
+
+  // ============================================================================
+  // OTP ROUTES (PUBLIC)
+  // ============================================================================
+
+  // POST /api/client-task/:token/send-otp - Send OTP to recipient email
+  app.post("/api/client-task/:token/send-otp", async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramTokenSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid token format",
+          errors: paramValidation.errors
+        });
+      }
+
+      const { token } = req.params;
+      const tokenRecord = await storage.getClientProjectTaskTokenByValue(token);
+
+      if (!tokenRecord) {
+        return res.status(404).json({ message: "Invalid or expired token" });
+      }
+
+      if (tokenRecord.expiresAt && new Date(tokenRecord.expiresAt) < new Date()) {
+        return res.status(403).json({ message: "Token has expired" });
+      }
+
+      const result = await sendClientTaskOtp(token, tokenRecord.recipientEmail);
+      
+      if (!result.sent) {
+        return res.status(500).json({ message: result.error || "Failed to send verification code" });
+      }
+
+      res.json({ success: true, message: "Verification code sent" });
+    } catch (error) {
+      console.error("Error sending OTP:", error);
+      res.status(500).json({ message: "Failed to send verification code" });
+    }
+  });
+
+  // POST /api/client-task/:token/verify-otp - Verify OTP code
+  app.post("/api/client-task/:token/verify-otp", async (req: any, res: any) => {
+    try {
+      const paramValidation = validateParams(paramTokenSchema, req.params);
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid token format",
+          errors: paramValidation.errors
+        });
+      }
+
+      const { token } = req.params;
+      const { code } = req.body;
+
+      if (!code || typeof code !== 'string' || code.length !== 6) {
+        return res.status(400).json({ message: "Please enter a valid 6-digit code" });
+      }
+
+      const tokenRecord = await storage.getClientProjectTaskTokenByValue(token);
+
+      if (!tokenRecord) {
+        return res.status(404).json({ message: "Invalid or expired token" });
+      }
+
+      if (tokenRecord.expiresAt && new Date(tokenRecord.expiresAt) < new Date()) {
+        return res.status(403).json({ message: "Token has expired" });
+      }
+
+      const result = await verifyClientTaskOtp(token, code);
+      
+      if (!result.valid) {
+        return res.status(400).json({ message: result.error || "Invalid verification code" });
+      }
+
+      res.json({ success: true, message: "Email verified successfully" });
+    } catch (error) {
+      console.error("Error verifying OTP:", error);
+      res.status(500).json({ message: "Failed to verify code" });
     }
   });
 }

@@ -98,6 +98,7 @@ interface EditingTemplate {
   stageChangeRules: StageChangeRule[];
   requireAllQuestions: boolean;
   expiryDaysAfterStart: number;
+  requireOtp: boolean;
   isActive: boolean;
   sections: EditingSection[];
   questions: EditingQuestion[];
@@ -139,6 +140,7 @@ const DEFAULT_TEMPLATE: EditingTemplate = {
   stageChangeRules: [],
   requireAllQuestions: true,
   expiryDaysAfterStart: 7,
+  requireOtp: false,
   isActive: true,
   sections: [],
   questions: [],
@@ -870,6 +872,7 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
       stageChangeRules: (template.stageChangeRules as StageChangeRule[] | null) || [],
       requireAllQuestions: template.requireAllQuestions ?? true,
       expiryDaysAfterStart: template.expiryDaysAfterStart ?? 7,
+      requireOtp: template.requireOtp ?? false,
       isActive: template.isActive ?? true,
       sections,
       questions: (template.questions || []).map(q => ({
@@ -1336,7 +1339,7 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
                             data-testid="input-expiry-days"
                           />
                         </div>
-                        <div className="flex items-end gap-4">
+                        <div className="flex items-end gap-4 flex-wrap">
                           <div className="flex items-center gap-2">
                             <Switch
                               id="require-all"
@@ -1348,6 +1351,18 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
                               data-testid="switch-require-all"
                             />
                             <Label htmlFor="require-all" className="text-sm">Require all questions</Label>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              id="require-otp"
+                              checked={editingTemplate.requireOtp}
+                              onCheckedChange={(checked) => setEditingTemplate(prev => prev ? { 
+                                ...prev, 
+                                requireOtp: checked 
+                              } : null)}
+                              data-testid="switch-require-otp"
+                            />
+                            <Label htmlFor="require-otp" className="text-sm" title="Clients must verify their email with a one-time code before accessing the form">Email verification (OTP)</Label>
                           </div>
                           <div className="flex items-center gap-2">
                             <Switch
