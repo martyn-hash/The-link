@@ -35,6 +35,15 @@ The query reminder service (`server/services/queryReminderService.ts`) includes 
 -   **markReminderFailed()**: Marks individual reminders as failed in the database without crashing the entire cron job, allowing other reminders to proceed.
 -   **Individual error isolation**: Each reminder is processed in a try/catch block so one failure doesn't prevent other reminders from being sent.
 
+### Client Project Tasks
+The Client Project Tasks system enables service owners to send customizable pre-work checklists to clients via token-based forms. Key features:
+-   **Template Management**: Create reusable task templates at project type level with various question types (short text, long text, email, number, date, single/multiple choice, file upload).
+-   **Client-Level Overrides**: Customize templates per client with additional questions or modified settings.
+-   **Conditional Logic**: Dynamic form questions that appear/hide based on previous answers.
+-   **Automated Stage Changes**: Projects automatically progress to next stage when tasks are completed.
+-   **Notification Integration**: Task notifications can include template attachments.
+-   **OTP Security (Optional)**: Email verification with 6-digit one-time passwords before form access. OTP codes stored in database (`client_project_task_otps` table), expire after 10 minutes, with automatic resend functionality. In development mode (no SendGrid), codes are logged to console.
+
 ### System Design
 The application uses PostgreSQL (Neon) with Drizzle ORM for data persistence, employing UUIDs, soft deletes, and JSONB fields. Google Cloud Storage (via Replit App Storage) manages object storage with secure signed URLs. Authentication for staff uses Replit Auth (OIDC) with session-based, role-based access control, while the client portal uses passwordless email verification. The multi-tenant system emphasizes modularity, extensive database indexing, and a resilient project scheduling orchestrator. Additional features include UK eIDAS-compliant electronic signatures, workflow and status management with Kanban views, AI Audio Transcription, AI-assisted client value notifications, Zapier integration, and an enhanced data import system. A user-friendly error handling system is also implemented.
 
