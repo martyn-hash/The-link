@@ -347,6 +347,7 @@ export default function ProjectTypeDetail() {
     updateDialoraSettingsMutation,
     toggleVoiceAiMutation,
     updateDescriptionMutation,
+    toggleClientProjectTasksMutation,
   } = useProjectTypeSettingsMutations(
     projectTypeId,
     {
@@ -397,6 +398,10 @@ export default function ProjectTypeDetail() {
 
   const handleVoiceAiToggle = (checked: boolean) => {
     toggleVoiceAiMutation.mutate(checked);
+  };
+
+  const handleClientProjectTasksToggle = (checked: boolean) => {
+    toggleClientProjectTasksMutation.mutate(checked);
   };
 
   const handleDescriptionSave = (description: string) => {
@@ -629,6 +634,7 @@ export default function ProjectTypeDetail() {
                   active: projectType.active !== false,
                   singleProjectPerClient: projectType.singleProjectPerClient === true,
                   notificationsActive: projectType.notificationsActive !== false,
+                  enableClientProjectTasks: projectType.enableClientProjectTasks !== false,
                   useVoiceAiForQueries: projectType.useVoiceAiForQueries === true,
                   serviceId: projectType.serviceId,
                   serviceName: allServices?.find(s => s.id === projectType.serviceId)?.name,
@@ -640,11 +646,13 @@ export default function ProjectTypeDetail() {
                 isActiveTogglePending={updateProjectTypeActiveMutation.isPending}
                 isSingleProjectTogglePending={updateProjectTypeSingleProjectMutation.isPending}
                 isNotificationsTogglePending={toggleNotificationsActiveMutation.isPending}
+                isClientProjectTasksTogglePending={toggleClientProjectTasksMutation.isPending}
                 isVoiceAiTogglePending={toggleVoiceAiMutation.isPending}
                 isDescriptionSaving={updateDescriptionMutation.isPending}
                 onActiveToggle={handleActiveToggle}
                 onSingleProjectToggle={handleSingleProjectToggle}
                 onNotificationsToggle={handleNotificationsToggle}
+                onClientProjectTasksToggle={handleClientProjectTasksToggle}
                 onVoiceAiToggle={handleVoiceAiToggle}
                 onDescriptionSave={handleDescriptionSave}
                 onConfigureDialora={handleConfigureDialora}
@@ -718,6 +726,7 @@ export default function ProjectTypeDetail() {
               projectTypeId={projectTypeId!}
               stages={stages}
               reasons={reasons}
+              enableClientProjectTasks={projectType?.enableClientProjectTasks !== false}
             />
             
             <NotificationsTab

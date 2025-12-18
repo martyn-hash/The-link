@@ -31,6 +31,7 @@ import type {
   ChangeReason 
 } from "@shared/schema";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { nanoid } from "nanoid";
 
 const QUESTION_TYPES = [
@@ -150,6 +151,7 @@ interface ClientTasksTabProps {
   projectTypeId: string;
   stages?: KanbanStage[];
   reasons?: ChangeReason[];
+  enableClientProjectTasks?: boolean;
 }
 
 function PaletteItem({ type, label, icon: Icon, color, onClick }: { type: string; label: string; icon: React.ElementType; color: string; onClick?: () => void }) {
@@ -646,7 +648,7 @@ interface StageReasonMap {
   reasonId: string;
 }
 
-export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: ClientTasksTabProps) {
+export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enableClientProjectTasks = true }: ClientTasksTabProps) {
   const { toast } = useToast();
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<EditingTemplate | null>(null);
@@ -1586,10 +1588,27 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
             Create pre-work checklists that clients must complete before work begins
           </p>
         </div>
-        <Button onClick={handleAddTemplate} data-testid="button-add-template">
-          <Plus className="w-4 h-4 mr-2" />
-          Add Template
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span tabIndex={!enableClientProjectTasks ? 0 : undefined}>
+                <Button 
+                  onClick={handleAddTemplate} 
+                  disabled={!enableClientProjectTasks}
+                  data-testid="button-add-template"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Template
+                </Button>
+              </span>
+            </TooltipTrigger>
+            {!enableClientProjectTasks && (
+              <TooltipContent>
+                <p>Client Project Tasks need to be enabled in Project Type Settings</p>
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       {!templates || templates.length === 0 ? (
@@ -1600,10 +1619,27 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
             <p className="text-muted-foreground mb-4">
               Create a task template to send pre-work checklists to clients
             </p>
-            <Button onClick={handleAddTemplate} data-testid="button-add-template-empty">
-              <Plus className="w-4 h-4 mr-2" />
-              Create First Template
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={!enableClientProjectTasks ? 0 : undefined}>
+                    <Button 
+                      onClick={handleAddTemplate} 
+                      disabled={!enableClientProjectTasks}
+                      data-testid="button-add-template-empty"
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Create First Template
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {!enableClientProjectTasks && (
+                  <TooltipContent>
+                    <p>Client Project Tasks need to be enabled in Project Type Settings</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            </TooltipProvider>
           </CardContent>
         </Card>
       ) : (

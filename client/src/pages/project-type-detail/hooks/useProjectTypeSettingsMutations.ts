@@ -12,6 +12,7 @@ interface ProjectTypeSettingsCallbacks {
   onDialoraSettingsUpdated?: () => void;
   onVoiceAiToggled?: () => void;
   onDescriptionUpdated?: () => void;
+  onClientProjectTasksToggled?: () => void;
 }
 
 export function useProjectTypeSettingsMutations(
@@ -175,6 +176,28 @@ export function useProjectTypeSettingsMutations(
     },
   });
 
+  const toggleClientProjectTasksMutation = useMutation({
+    mutationFn: async (enableClientProjectTasks: boolean) => {
+      if (!projectTypeId) throw new Error("No project type ID");
+      return await apiRequest("PATCH", `/api/config/project-types/${projectTypeId}`, {
+        enableClientProjectTasks
+      });
+    },
+    onSuccess: (_, enableClientProjectTasks) => {
+      toast({
+        title: enableClientProjectTasks ? "Client Project Tasks Enabled" : "Client Project Tasks Disabled",
+        description: enableClientProjectTasks 
+          ? "Client project tasks are now available for this project type" 
+          : "Client project tasks have been disabled for this project type",
+      });
+      invalidateProjectType();
+      callbacks.onClientProjectTasksToggled?.();
+    },
+    onError: (error: any) => {
+      showFriendlyError({ error });
+    },
+  });
+
   return {
     updateProjectTypeServiceLinkageMutation,
     toggleNotificationsActiveMutation,
@@ -183,5 +206,6 @@ export function useProjectTypeSettingsMutations(
     updateDialoraSettingsMutation,
     toggleVoiceAiMutation,
     updateDescriptionMutation,
+    toggleClientProjectTasksMutation,
   };
 }

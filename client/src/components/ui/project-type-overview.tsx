@@ -21,6 +21,7 @@ import {
   X,
   AlertCircle,
   Settings2,
+  ClipboardList,
 } from "lucide-react";
 
 export interface ConfigSectionStatus {
@@ -40,6 +41,7 @@ interface ProjectTypeOverviewProps {
     active: boolean;
     singleProjectPerClient: boolean;
     notificationsActive?: boolean;
+    enableClientProjectTasks?: boolean;
     useVoiceAiForQueries?: boolean;
     serviceId?: string | null;
     serviceName?: string | null;
@@ -56,11 +58,13 @@ interface ProjectTypeOverviewProps {
   isActiveTogglePending?: boolean;
   isSingleProjectTogglePending?: boolean;
   isNotificationsTogglePending?: boolean;
+  isClientProjectTasksTogglePending?: boolean;
   isVoiceAiTogglePending?: boolean;
   isDescriptionSaving?: boolean;
   onActiveToggle?: (active: boolean) => void;
   onSingleProjectToggle?: (singleProject: boolean) => void;
   onNotificationsToggle?: (active: boolean) => void;
+  onClientProjectTasksToggle?: (enabled: boolean) => void;
   onVoiceAiToggle?: (useVoiceAi: boolean) => void;
   onDescriptionSave?: (description: string) => void;
   onConfigureDialora?: () => void;
@@ -148,11 +152,13 @@ export function ProjectTypeOverview({
   isActiveTogglePending = false,
   isSingleProjectTogglePending = false,
   isNotificationsTogglePending = false,
+  isClientProjectTasksTogglePending = false,
   isVoiceAiTogglePending = false,
   isDescriptionSaving = false,
   onActiveToggle,
   onSingleProjectToggle,
   onNotificationsToggle,
+  onClientProjectTasksToggle,
   onVoiceAiToggle,
   onDescriptionSave,
   onConfigureDialora,
@@ -372,6 +378,17 @@ export function ProjectTypeOverview({
             disabled={isNotificationsTogglePending}
             onCheckedChange={onNotificationsToggle}
             testId="switch-notifications"
+          />
+
+          <SettingToggle
+            id="client-project-tasks-toggle"
+            icon={ClipboardList}
+            label="Enable Client Project Tasks"
+            description="Allow sending pre-work checklists to clients for projects"
+            checked={projectType.enableClientProjectTasks ?? true}
+            disabled={isClientProjectTasksTogglePending}
+            onCheckedChange={onClientProjectTasksToggle}
+            testId="switch-client-project-tasks"
           />
 
           <SettingToggle

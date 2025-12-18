@@ -464,6 +464,15 @@ export function QueriesTab({ projectId, clientId, projectTypeId, clientPeople, u
   const hasTaskInstances = taskInstances && taskInstances.length > 0;
   const effectiveProjectTypeId = projectTypeId || projectData?.projectTypeId || undefined;
 
+  // Query for project type data (to get enableClientProjectTasks setting)
+  const { data: projectTypeData } = useQuery<{ enableClientProjectTasks?: boolean }>({
+    queryKey: ['/api/project-types', effectiveProjectTypeId],
+    select: (data: any) => ({ enableClientProjectTasks: data?.enableClientProjectTasks }),
+    enabled: !!effectiveProjectTypeId,
+  });
+  
+  const enableClientProjectTasks = projectTypeData?.enableClientProjectTasks !== false;
+
   const extendTokenMutation = useMutation({
     mutationFn: async ({ tokenId, additionalDays }: { tokenId: string; additionalDays: number }) => {
       return apiRequest('POST', `/api/queries/tokens/${tokenId}/extend`, { additionalDays });
@@ -1567,18 +1576,6 @@ export function QueriesTab({ projectId, clientId, projectTypeId, clientPeople, u
           {/* Queries Tab Content */}
           <TabsContent value="queries" className="mt-0 flex-1 min-h-0 overflow-hidden">
             <CardContent className="pt-0 h-full overflow-y-auto">
-        {/* Client Project Tasks Section */}
-        {(hasTaskInstances || effectiveProjectTypeId) && (
-          <div className="mb-6 pb-6 border-b">
-            <ClientProjectTasksSection
-              projectId={projectId}
-              clientId={clientId}
-              projectTypeId={effectiveProjectTypeId}
-              clientName={clientName}
-            />
-          </div>
-        )}
-
         {/* Filters and Bulk Actions */}
         <div className="flex flex-col gap-4 mb-4">
           <div className="flex flex-col sm:flex-row gap-3">
@@ -2202,6 +2199,18 @@ export function QueriesTab({ projectId, clientId, projectTypeId, clientPeople, u
               ))}
             </div>
           </>
+        )}
+
+        {/* Client Project Tasks Section - shown below bookkeeping when enabled */}
+        {enableClientProjectTasks && (hasTaskInstances || effectiveProjectTypeId) && (
+          <div className="mt-6 pt-6 border-t">
+            <ClientProjectTasksSection
+              projectId={projectId}
+              clientId={clientId}
+              projectTypeId={effectiveProjectTypeId}
+              clientName={clientName}
+            />
+          </div>
         )}
 
         {/* Active Response Links Section */}
