@@ -111,6 +111,7 @@ All jobs are offset from :00 to avoid collisions. Heavy jobs (Dashboard Cache, V
 
 | Job Name | Schedule | Timezone | Description |
 |----------|----------|----------|-------------|
+| **MissedReminderCleanup** | `0 1 * * *` (01:00) | Europe/London | Cancels missed query reminders (scheduled >24h ago, still pending). Separated from QueryReminderCron for bounded processing. |
 | **SchedulingOrchestrator** | `0 1 * * *` (01:00) | UTC | Generates recurring projects based on service mappings and schedules. Core business logic for automated project creation. |
 | **CHSync** | `0 2 * * *` (02:00) | UTC | Synchronizes company data with Companies House API. Updates registered office, director changes, filing deadlines. |
 | **EmailResolver** | `0 3 * * *` (03:00) | UTC | Resolves pending email associations and cleans up orphaned email records. |
@@ -129,7 +130,7 @@ All jobs are offset from :00 to avoid collisions. Heavy jobs (Dashboard Cache, V
 | **ReminderNotificationCron** | `4,19,34,49 7-22 * * *` | Europe/London | Sends reminder notifications to clients. Runs every 15 minutes 07:00-22:00. |
 | **ViewCacheMidMorning** | `45 8 * * *` (08:45) | Europe/London | View cache refresh - spaced 43 minutes after dashboard cache. |
 | **SignatureReminderCron** | `12 9 * * *` (09:12) | Europe/London | Sends reminder emails for pending document signatures. |
-| **QueryReminderCron** | `10 * * * *` (HH:10) | Europe/London | Processes scheduled bookkeeping query reminders (email, SMS, voice). Only executes 07:00-22:00. |
+| **QueryReminderCron** | `10 * * * *` (HH:10) | Europe/London | Processes scheduled bookkeeping query reminders (email, SMS, voice). Bounded to 50 reminders/run with claim-first architecture. Only executes 07:00-22:00. |
 | **ViewCacheMidday** | `25 12 * * *` (12:25) | Europe/London | Midday view cache refresh. |
 | **ViewCacheAfternoon** | `25 15 * * *` (15:25) | Europe/London | Afternoon view cache refresh. |
 | **SentItemsDetection** | `8,23,38,53 8-19 * * *` | Europe/London | Scans Outlook Sent Items folders to detect replies sent directly from Outlook. Runs every 15 minutes 08:00-19:00. Uses delta scanning. |
@@ -143,7 +144,7 @@ All jobs are offset from :00 to avoid collisions. Heavy jobs (Dashboard Cache, V
 ```
 Hour   :02  :04  :08  :10  :14  :19  :23  :25  :29  :32  :34  :38  :45  :49  :53  :59
        ──────────────────────────────────────────────────────────────────────────────
-01:00  │SchedulingOrchestrator (UTC)
+01:00  │SchedulingOrchestrator (UTC), MissedReminderCleanup (UK)
 02:00  │ CHSync (UTC)
 03:00  │ EmailResolver (UTC)
 03:05  │ DashboardCacheOvernight
@@ -206,6 +207,7 @@ Hour   :02  :04  :08  :10  :14  :19  :23  :25  :29  :32  :34  :38  :45  :49  :53
 | Job | Frequency | Lock | Timeout | Purpose |
 |-----|-----------|------|---------|---------|
 | ActivityCleanup | Daily 04:15 | ✓ | 60s | Session & login cleanup (90-day retention) |
+| MissedReminderCleanup | Daily 01:00 UK | ✓ | 60s | Cancels query reminders scheduled >24h ago (stale/missed) |
 
 ---
 
@@ -329,6 +331,17 @@ ORDER BY budget_used_pct DESC;
 ### Frequency Reductions
 - **ProjectMessageReminders:** 10min → 30min (66% fewer executions)
 - **SentItemsDetection:** 10min → 15min (33% fewer executions)
+
+### QueryReminderCron Optimization
+Major refactor to ensure bounded, incremental, and predictable execution at 2k+ projects scale:
+- **Bounded processing:** Max 50 reminders per run (FIFO order), down from unbounded
+- **Claim-first architecture:** Batch claim immediately after fetch to prevent race conditions
+- **Batch pre-hydration:** Token statuses and project names fetched in batch (10-15 DB queries vs 500-750 at scale)
+- **External send timeouts:** 8s for email/SMS, 10s for voice calls - prevents individual sends from blocking entire batch
+- **25s time budget:** Graceful exit with unprocessed reminder release if budget exceeded
+- **Stranded reminder protection:** Failed sends and budget timeouts properly mark/release reminders
+- **Separated cleanup:** MissedReminderCleanup daily job (01:00 UK) handles stale reminders, removed from main loop
+- **JSON telemetry:** Lightweight structured logging instead of HTML monitoring emails
 
 ### New Protections Added
 - Timeout wrappers on all heavy jobs
