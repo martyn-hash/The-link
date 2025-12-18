@@ -20,7 +20,7 @@ import { Upload, FileSpreadsheet, AlertCircle, Check, X } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import Papa from "papaparse";
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 
 export interface ParsedQuery {
   date: Date | null;
@@ -83,25 +83,66 @@ export function QueryBulkImport({ onImport, trigger }: QueryBulkImportProps) {
       });
     } else if (extension === "xlsx" || extension === "xls") {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
-          const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: "array" });
-          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-          const jsonData: Record<string, string>[] = XLSX.utils.sheet_to_json(firstSheet, {
-            raw: false,
-            defval: "",
+          const buffer = e.target?.result as ArrayBuffer;
+          const workbook = new ExcelJS.Workbook();
+          await workbook.xlsx.load(buffer);
+          
+          const worksheet = workbook.worksheets[0];
+          if (!worksheet) {
+            setError("No worksheet found in the spreadsheet");
+            return;
+          }
+
+          // Get headers from first row
+          const headerRow = worksheet.getRow(1);
+          const columnHeaders: string[] = [];
+          headerRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+            const value = cell.value;
+            columnHeaders[colNumber - 1] = value != null ? String(value).trim() : `Column${colNumber}`;
           });
+
+          // Get data rows
+          const jsonData: Record<string, string>[] = [];
+          for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
+            const row = worksheet.getRow(rowNumber);
+            let hasData = false;
+            row.eachCell({ includeEmpty: false }, () => { hasData = true; });
+            
+            if (!hasData) continue;
+
+            const rowData: Record<string, string> = {};
+            for (let colNumber = 1; colNumber <= columnHeaders.length; colNumber++) {
+              const header = columnHeaders[colNumber - 1];
+              if (!header) continue;
+              
+              const cell = row.getCell(colNumber);
+              let value = "";
+              
+              if (cell.value !== null && cell.value !== undefined) {
+                if (typeof cell.value === 'object' && 'richText' in (cell.value as any)) {
+                  value = ((cell.value as any).richText || []).map((rt: any) => rt.text).join('');
+                } else if (typeof cell.value === 'object' && 'result' in (cell.value as any)) {
+                  value = (cell.value as any).result !== undefined ? String((cell.value as any).result) : '';
+                } else {
+                  value = String(cell.value);
+                }
+              }
+              
+              rowData[header] = value;
+            }
+            jsonData.push(rowData);
+          }
 
           if (jsonData.length === 0) {
             setError("No data found in the spreadsheet");
             return;
           }
 
-          const columnHeaders = Object.keys(jsonData[0] || {});
           setRawData(jsonData);
-          setHeaders(columnHeaders);
-          autoMapColumns(columnHeaders);
+          setHeaders(columnHeaders.filter(h => h));
+          autoMapColumns(columnHeaders.filter(h => h));
           setStep("mapping");
         } catch (err: any) {
           setError(`Failed to parse Excel file: ${err.message}`);

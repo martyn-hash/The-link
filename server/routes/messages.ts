@@ -15,7 +15,7 @@ import {
   validateParams,
 } from "./routeHelpers";
 import { convertOfficeToPDF, getCacheKey, isConvertibleOfficeDoc } from "../utils/documentConverter";
-import XLSX from "xlsx";
+import { readExcelBuffer, sheetToJson } from "../utils/excelParser";
 import { verifyMessageAttachmentAccessPost } from "../middleware/attachmentAccess";
 
 // Communications parameter validation schemas
@@ -1526,8 +1526,8 @@ export function registerMessageRoutes(
 
       const buffer = await objectStorageService.downloadObjectToBuffer(fullObjectPath);
 
-      // Parse the Excel file using SheetJS
-      const workbook = XLSX.read(buffer, { type: 'buffer' });
+      // Parse the Excel file using exceljs
+      const workbook = await readExcelBuffer(buffer);
 
       // Extract data from all sheets
       const sheets: Array<{
@@ -1540,19 +1540,60 @@ export function registerMessageRoutes(
       const MAX_ROWS_PER_SHEET = 500; // Limit rows for performance
 
       for (const sheetName of workbook.SheetNames) {
-        const worksheet = workbook.Sheets[sheetName];
+        const sheet = workbook.Sheets[sheetName];
+        const worksheet = sheet._worksheet;
         
-        // Get range to determine dimensions
-        const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
-        const totalRows = range.e.r - range.s.r + 1;
-        const totalCols = range.e.c - range.s.c + 1;
+        // Get actual dimensions - use actualRowCount/actualColumnCount for accuracy
+        const totalRows = worksheet.actualRowCount || worksheet.rowCount || 0;
+        
+        // Calculate column count by checking the first few rows
+        let totalCols = worksheet.actualColumnCount || worksheet.columnCount || 0;
+        if (totalCols === 0) {
+          // Fallback: calculate from first row
+          const firstRow = worksheet.getRow(1);
+          firstRow.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+            totalCols = Math.max(totalCols, colNumber);
+          });
+        }
 
-        // Convert to JSON array of arrays, limiting rows
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { 
-          header: 1, 
-          defval: '',
-          range: { s: { r: 0, c: 0 }, e: { r: Math.min(range.e.r, MAX_ROWS_PER_SHEET - 1), c: range.e.c } }
-        }) as any[][];
+        // Convert to array of arrays
+        const jsonData: any[][] = [];
+        const maxRows = Math.min(totalRows, MAX_ROWS_PER_SHEET);
+        
+        for (let rowNumber = 1; rowNumber <= maxRows; rowNumber++) {
+          const row = worksheet.getRow(rowNumber);
+          const rowData: any[] = [];
+          
+          // Determine columns to process for this row
+          let rowMaxCol = totalCols;
+          if (rowMaxCol === 0) {
+            row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+              rowMaxCol = Math.max(rowMaxCol, colNumber);
+            });
+          }
+          
+          for (let colNumber = 1; colNumber <= rowMaxCol; colNumber++) {
+            const cell = row.getCell(colNumber);
+            let value = '';
+            
+            if (cell.value !== null && cell.value !== undefined) {
+              if (cell.type === 2) { // Formula
+                const formulaCell = cell.value as any;
+                value = formulaCell.result !== undefined ? String(formulaCell.result) : '';
+              } else if (cell.type === 8) { // RichText
+                const richText = cell.value as any;
+                value = richText.richText?.map((rt: any) => rt.text).join('') || '';
+              } else {
+                value = String(cell.value);
+              }
+            }
+            rowData.push(value);
+          }
+          
+          if (rowData.length > 0) {
+            jsonData.push(rowData);
+          }
+        }
 
         sheets.push({
           name: sheetName,

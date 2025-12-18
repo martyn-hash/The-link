@@ -1,7 +1,7 @@
 import { Express, Request, Response } from "express";
 import multer from "multer";
 import Papa from "papaparse";
-import XLSX from "xlsx";
+import { readExcelBuffer, sheetToJson, createWorkbook, jsonToSheet, writeWorkbookToBuffer } from "../utils/excelParser";
 import { storage } from "../storage/index";
 import { nanoid } from "nanoid";
 import type {
@@ -171,9 +171,9 @@ export function registerServiceImportRoutes(
           data = parsed.data as Record<string, any>[];
           headers = parsed.meta.fields || [];
         } else {
-          const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+          const workbook = await readExcelBuffer(req.file.buffer);
           const firstSheet = workbook.SheetNames[0];
-          data = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]) as Record<string, any>[];
+          data = sheetToJson(workbook.Sheets[firstSheet]) as Record<string, any>[];
           if (data.length > 0) {
             headers = Object.keys(data[0]);
           }
@@ -902,7 +902,7 @@ export function registerServiceImportRoutes(
         const allServices = await storage.getAllServices();
         const workRoles = await storage.getAllWorkRoles();
 
-        const workbook = XLSX.utils.book_new();
+        const workbook = createWorkbook();
 
         const clientServiceHeaders = [
           "Company Number",
@@ -949,13 +949,11 @@ export function registerServiceImportRoutes(
           clientServiceExample.push("user@example.com");
         }
 
-        const clientServiceSheet = XLSX.utils.aoa_to_sheet([
-          clientServiceHeaders,
-          clientServiceInstructions,
-          clientServiceExample,
-        ]);
-        clientServiceSheet["!cols"] = clientServiceHeaders.map((h: string) => ({ wch: Math.max(h.length + 2, 15) }));
-        XLSX.utils.book_append_sheet(workbook, clientServiceSheet, "Client Services");
+        const clientServiceSheet = workbook.addWorksheet("Client Services");
+        [clientServiceHeaders, clientServiceInstructions, clientServiceExample].forEach(row => clientServiceSheet.addRow(row));
+        clientServiceHeaders.forEach((h: string, i: number) => {
+          clientServiceSheet.getColumn(i + 1).width = Math.max(h.length + 2, 15);
+        });
 
         const personalServiceHeaders = [
           "Person Email",
@@ -990,13 +988,11 @@ export function registerServiceImportRoutes(
           "Yes",
         ];
 
-        const personalServiceSheet = XLSX.utils.aoa_to_sheet([
-          personalServiceHeaders,
-          personalServiceInstructions,
-          personalServiceExample,
-        ]);
-        personalServiceSheet["!cols"] = personalServiceHeaders.map((h: string) => ({ wch: Math.max(h.length + 2, 15) }));
-        XLSX.utils.book_append_sheet(workbook, personalServiceSheet, "Personal Services");
+        const personalServiceSheet = workbook.addWorksheet("Personal Services");
+        [personalServiceHeaders, personalServiceInstructions, personalServiceExample].forEach(row => personalServiceSheet.addRow(row));
+        personalServiceHeaders.forEach((h: string, i: number) => {
+          personalServiceSheet.getColumn(i + 1).width = Math.max(h.length + 2, 15);
+        });
 
         const serviceListData = [["Service Name", "Applicable Client Types", "Type"]];
         for (const service of allServices) {
@@ -1008,11 +1004,13 @@ export function registerServiceImportRoutes(
             applicableType === 'individual' ? 'Personal' : (applicableType === 'both' ? 'Both' : 'Client'),
           ]);
         }
-        const serviceListSheet = XLSX.utils.aoa_to_sheet(serviceListData);
-        serviceListSheet["!cols"] = [{ wch: 40 }, { wch: 15 }, { wch: 18 }];
-        XLSX.utils.book_append_sheet(workbook, serviceListSheet, "Available Services");
+        const serviceListSheet = workbook.addWorksheet("Available Services");
+        serviceListData.forEach(row => serviceListSheet.addRow(row));
+        serviceListSheet.getColumn(1).width = 40;
+        serviceListSheet.getColumn(2).width = 15;
+        serviceListSheet.getColumn(3).width = 18;
 
-        const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+        const buffer = await writeWorkbookToBuffer(workbook);
 
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         res.setHeader("Content-Disposition", 'attachment; filename="service-import-template.xlsx"');

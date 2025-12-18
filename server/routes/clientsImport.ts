@@ -1,7 +1,7 @@
 import { Express, Response } from "express";
 import multer from "multer";
 import Papa from "papaparse";
-import XLSX from "xlsx";
+import { readExcelBuffer, sheetToJson } from "../utils/excelParser";
 import { storage } from "../storage/index";
 import { companiesHouseService } from "../companies-house-service";
 import { nanoid } from "nanoid";
@@ -85,9 +85,9 @@ export function registerClientsImportRoutes(
           data = parsed.data as Record<string, any>[];
           headers = parsed.meta.fields || [];
         } else {
-          const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+          const workbook = await readExcelBuffer(req.file.buffer);
           const firstSheet = workbook.SheetNames[0];
-          data = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet]) as Record<string, any>[];
+          data = sheetToJson(workbook.Sheets[firstSheet]) as Record<string, any>[];
           if (data.length > 0) {
             headers = Object.keys(data[0]);
           }

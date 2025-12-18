@@ -1,6 +1,6 @@
 import { Express, Request, Response } from "express";
 import multer from "multer";
-import XLSX from "xlsx";
+import { readExcelBuffer, sheetToJson, createWorkbook, jsonToSheet, writeWorkbookToBuffer } from "../utils/excelParser";
 import { storage } from "../storage/index";
 import { companiesHouseService } from "../companies-house-service";
 import { createClientServiceMapping } from "../core/service-mapper";
@@ -272,7 +272,7 @@ export function registerExcelImportRoutes(
           return res.status(400).json({ error: "No file uploaded" });
         }
 
-        const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+        const workbook = await readExcelBuffer(req.file.buffer);
         
         const clientSheetName = workbook.SheetNames.find(n => 
           n.toLowerCase().includes("client") && !n.toLowerCase().includes("person")
@@ -301,10 +301,10 @@ export function registerExcelImportRoutes(
           n.toLowerCase().includes("service") && n.toLowerCase().includes("data")
         );
 
-        const clientData: ClientRow[] = XLSX.utils.sheet_to_json(clientSheet);
-        const personData: PersonRow[] = XLSX.utils.sheet_to_json(personSheet);
+        const clientData: ClientRow[] = sheetToJson(clientSheet);
+        const personData: PersonRow[] = sheetToJson(personSheet);
         const serviceDataRows: ServiceDataRow[] = serviceDataSheetName 
-          ? XLSX.utils.sheet_to_json(workbook.Sheets[serviceDataSheetName])
+          ? sheetToJson(workbook.Sheets[serviceDataSheetName])
           : [];
 
         const users = await storage.getAllUsers();
@@ -1094,7 +1094,7 @@ export function registerExcelImportRoutes(
         const workRoles = await storage.getAllWorkRoles();
 
         // Create workbook
-        const workbook = XLSX.utils.book_new();
+        const workbook = createWorkbook();
 
         // ===== CLIENT SHEET =====
         const clientHeaders = [
@@ -1164,12 +1164,14 @@ export function registerExcelImportRoutes(
           "Example Trading Name"
         ];
         
-        const clientSheet = XLSX.utils.aoa_to_sheet([clientHeaders, clientInstructions, clientExample]);
+        const clientSheetData = [clientHeaders, clientInstructions, clientExample];
+        const clientSheet = workbook.addWorksheet("Clients");
+        clientSheetData.forEach(row => clientSheet.addRow(row));
         
         // Set column widths
-        clientSheet["!cols"] = clientHeaders.map((h: string) => ({ wch: Math.max(h.length + 2, 15) }));
-        
-        XLSX.utils.book_append_sheet(workbook, clientSheet, "Clients");
+        clientHeaders.forEach((h: string, i: number) => {
+          clientSheet.getColumn(i + 1).width = Math.max(h.length + 2, 15);
+        });
 
         // ===== PEOPLE SHEET =====
         const peopleHeaders = [
@@ -1227,10 +1229,14 @@ export function registerExcelImportRoutes(
           "07700900456"
         ];
         
-        const peopleSheet = XLSX.utils.aoa_to_sheet([peopleHeaders, peopleInstructions, peopleExample]);
-        peopleSheet["!cols"] = peopleHeaders.map((h: string) => ({ wch: Math.max(h.length + 2, 15) }));
+        const peopleSheetData = [peopleHeaders, peopleInstructions, peopleExample];
+        const peopleSheet = workbook.addWorksheet("People");
+        peopleSheetData.forEach(row => peopleSheet.addRow(row));
         
-        XLSX.utils.book_append_sheet(workbook, peopleSheet, "People");
+        // Set column widths
+        peopleHeaders.forEach((h: string, i: number) => {
+          peopleSheet.getColumn(i + 1).width = Math.max(h.length + 2, 15);
+        });
 
         // ===== SERVICE DATA SHEET =====
         // Simple format: base columns, then roles, then UDFs (2 columns each)
@@ -1321,14 +1327,13 @@ export function registerExcelImportRoutes(
           ...serviceDataRows
         ];
         
-        const serviceDataSheet = XLSX.utils.aoa_to_sheet(serviceSheetData);
+        const serviceDataSheet = workbook.addWorksheet("Service Data");
+        serviceSheetData.forEach(row => serviceDataSheet.addRow(row));
         
         // Set column widths
-        serviceDataSheet["!cols"] = serviceDataHeaders.map((h: string) => ({ 
-          wch: Math.min(Math.max(String(h).length + 2, 15), 30)
-        }));
-        
-        XLSX.utils.book_append_sheet(workbook, serviceDataSheet, "Service Data");
+        serviceDataHeaders.forEach((h: string, i: number) => {
+          serviceDataSheet.getColumn(i + 1).width = Math.min(Math.max(String(h).length + 2, 15), 30);
+        });
 
         // ===== UDF REFERENCE SHEET =====
         // Add a reference sheet with all UDFs organized by service
@@ -1358,13 +1363,16 @@ export function registerExcelImportRoutes(
           udfRefRows.push(["No UDF fields defined in any service", "", "", "", ""]);
         }
         
-        const udfRefSheet = XLSX.utils.aoa_to_sheet([udfRefHeaders, ...udfRefRows]);
-        udfRefSheet["!cols"] = udfRefHeaders.map((h: string) => ({ wch: Math.max(h.length + 2, 25) }));
+        const udfRefSheet = workbook.addWorksheet("UDF Reference");
+        [udfRefHeaders, ...udfRefRows].forEach(row => udfRefSheet.addRow(row));
         
-        XLSX.utils.book_append_sheet(workbook, udfRefSheet, "UDF Reference");
+        // Set column widths
+        udfRefHeaders.forEach((h: string, i: number) => {
+          udfRefSheet.getColumn(i + 1).width = Math.max(h.length + 2, 25);
+        });
 
         // Generate buffer
-        const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+        const buffer = await writeWorkbookToBuffer(workbook);
 
         // Send file
         res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
