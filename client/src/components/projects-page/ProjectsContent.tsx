@@ -332,14 +332,16 @@ function ViewContent({
 
   if (viewMode === "kanban") {
     return (
-      <KanbanBoard 
-        projects={paginatedProjects} 
-        user={user}
-        isCompactMode={kanbanCompactMode}
-        onToggleCompactMode={toggleKanbanCompactMode}
-        expandedStages={kanbanExpandedStages}
-        onExpandedStagesChange={setKanbanExpandedStages}
-      />
+      <div className="flex-1 min-h-0 flex flex-col">
+        <KanbanBoard 
+          projects={paginatedProjects} 
+          user={user}
+          isCompactMode={kanbanCompactMode}
+          onToggleCompactMode={toggleKanbanCompactMode}
+          expandedStages={kanbanExpandedStages}
+          onExpandedStagesChange={setKanbanExpandedStages}
+        />
+      </div>
     );
   }
 
