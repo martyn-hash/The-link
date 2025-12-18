@@ -34,16 +34,16 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { nanoid } from "nanoid";
 
 const QUESTION_TYPES = [
-  { type: "short_text", label: "Short Text", icon: Type },
-  { type: "long_text", label: "Long Text", icon: FileText },
-  { type: "email", label: "Email", icon: Mail },
-  { type: "number", label: "Number", icon: Hash },
-  { type: "date", label: "Date", icon: Calendar },
-  { type: "single_choice", label: "Single Choice", icon: CircleDot },
-  { type: "multi_choice", label: "Multi Choice", icon: CheckSquare },
-  { type: "dropdown", label: "Dropdown", icon: ChevronDown },
-  { type: "yes_no", label: "Yes/No", icon: ToggleLeft },
-  { type: "file_upload", label: "File Upload", icon: Upload },
+  { type: "short_text", label: "Short Text", icon: Type, color: "#3b82f6" },
+  { type: "long_text", label: "Long Text", icon: FileText, color: "#8b5cf6" },
+  { type: "email", label: "Email", icon: Mail, color: "#06b6d4" },
+  { type: "number", label: "Number", icon: Hash, color: "#22c55e" },
+  { type: "date", label: "Date", icon: Calendar, color: "#f59e0b" },
+  { type: "single_choice", label: "Single Choice", icon: CircleDot, color: "#ec4899" },
+  { type: "multi_choice", label: "Multi Choice", icon: CheckSquare, color: "#14b8a6" },
+  { type: "dropdown", label: "Dropdown", icon: ChevronDown, color: "#6366f1" },
+  { type: "yes_no", label: "Yes/No", icon: ToggleLeft, color: "#84cc16" },
+  { type: "file_upload", label: "File Upload", icon: Upload, color: "#f97316" },
 ] as const;
 
 type QuestionType = typeof QUESTION_TYPES[number]["type"];
@@ -128,7 +128,7 @@ interface ClientTasksTabProps {
   reasons?: ChangeReason[];
 }
 
-function PaletteItem({ type, label, icon: Icon, onClick }: { type: string; label: string; icon: React.ElementType; onClick?: () => void }) {
+function PaletteItem({ type, label, icon: Icon, color, onClick }: { type: string; label: string; icon: React.ElementType; color: string; onClick?: () => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `palette-${type}`,
     data: { type, label, isNew: true },
@@ -147,13 +147,18 @@ function PaletteItem({ type, label, icon: Icon, onClick }: { type: string; label
       {...listeners}
       {...attributes}
       onClick={handleClick}
-      className={`flex items-center gap-2 px-3 py-2 bg-card border rounded-lg cursor-pointer hover:bg-accent hover:border-primary transition-colors text-sm ${
-        isDragging ? 'opacity-50' : ''
+      className={`flex items-center gap-3 px-3 py-2.5 bg-card border rounded-lg cursor-pointer hover:bg-accent hover:border-primary hover:shadow-sm transition-all text-sm group ${
+        isDragging ? 'opacity-50 scale-95' : ''
       }`}
       data-testid={`palette-question-${type}`}
     >
-      <Icon className="w-4 h-4 text-muted-foreground" />
-      <span>{label}</span>
+      <div 
+        className="w-8 h-8 rounded-md flex items-center justify-center transition-transform group-hover:scale-110"
+        style={{ backgroundColor: `${color}15` }}
+      >
+        <Icon className="w-4 h-4" style={{ color }} />
+      </div>
+      <span className="font-medium">{label}</span>
     </div>
   );
 }
@@ -202,37 +207,43 @@ function SortableQuestionItem({
 
   const questionTypeInfo = QUESTION_TYPES.find(qt => qt.type === question.questionType);
   const QuestionIcon = questionTypeInfo?.icon || Type;
+  const iconColor = questionTypeInfo?.color || "#6b7280";
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="flex-1 flex items-center justify-between px-4 py-3 bg-card border rounded-lg hover:border-primary/50 transition-colors"
+      className="flex-1 flex items-center justify-between px-4 py-3 bg-card border rounded-lg hover:border-primary/50 hover:shadow-sm transition-all group"
       data-testid={`question-item-${question.id || question.order}`}
     >
       <div className="flex items-center gap-3 flex-1">
         <div
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+          className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
         >
           <GripVertical className="w-4 h-4" />
         </div>
-        <QuestionIcon className="w-4 h-4 text-muted-foreground" />
-        <div className="flex-1">
-          <p className="text-sm font-medium">{question.label || "Untitled question"}</p>
+        <div 
+          className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
+          style={{ backgroundColor: `${iconColor}15` }}
+        >
+          <QuestionIcon className="w-4 h-4" style={{ color: iconColor }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium truncate">{question.label || "Untitled question"}</p>
           {question.helpText && (
-            <p className="text-xs text-muted-foreground mt-0.5">{question.helpText}</p>
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">{question.helpText}</p>
           )}
         </div>
-        <Badge variant="outline" className="text-xs">
+        <Badge variant="outline" className="text-xs flex-shrink-0">
           {questionTypeInfo?.label || question.questionType}
         </Badge>
         {question.isRequired && (
-          <Badge variant="secondary" className="text-xs">Required</Badge>
+          <Badge variant="secondary" className="text-xs flex-shrink-0">Required</Badge>
         )}
       </div>
-      <div className="flex items-center gap-1 ml-2">
+      <div className="flex items-center gap-1 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
         <Button variant="ghost" size="sm" onClick={onEdit} data-testid={`button-edit-question-${question.order}`}>
           <Edit2 className="w-4 h-4" />
         </Button>
@@ -913,11 +924,15 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
           >
           <div className="flex-1 flex overflow-hidden">
             <div className="w-64 border-r border-border bg-muted/30 p-4 overflow-y-auto">
-              <h3 className="text-sm font-medium mb-3 flex items-center gap-2">
-                <HelpCircle className="w-4 h-4" />
-                Question Types
-              </h3>
-              <p className="text-xs text-muted-foreground mb-4">Click or drag questions to add them</p>
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <HelpCircle className="w-4 h-4 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold">Question Types</h3>
+                  <p className="text-xs text-muted-foreground">Click or drag to add</p>
+                </div>
+              </div>
               <div className="space-y-2">
                 {QUESTION_TYPES.map(qt => (
                   <PaletteItem 
@@ -925,6 +940,7 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
                     type={qt.type} 
                     label={qt.label} 
                     icon={qt.icon}
+                    color={qt.color}
                     onClick={() => handleAddQuestion(qt.type as QuestionType)}
                   />
                 ))}
@@ -1204,22 +1220,38 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
                               const sectionKey = section.id || section.tempId || `temp-section-${sectionIndex}`;
                               const sectionQuestions = editingTemplate.questions.filter(q => q.sectionId === sectionKey);
                               const isCollapsed = collapsedSections.has(sectionKey);
+                              const sectionColors = ["#3b82f6", "#8b5cf6", "#22c55e", "#f59e0b", "#ec4899"];
+                              const sectionColor = sectionColors[sectionIndex % sectionColors.length];
                               
                               return (
-                                <div key={sectionKey} className="border rounded-lg">
+                                <div 
+                                  key={sectionKey} 
+                                  className="border rounded-lg overflow-hidden shadow-sm"
+                                  style={{ borderLeftWidth: '3px', borderLeftColor: sectionColor }}
+                                >
                                   <div 
-                                    className="flex items-center justify-between p-3 bg-muted/50 cursor-pointer"
+                                    className="flex items-center justify-between p-3 bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
                                     onClick={() => toggleSectionCollapse(sectionKey)}
                                     data-testid={`section-header-${sectionIndex}`}
                                   >
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-3">
+                                      <div 
+                                        className="w-7 h-7 rounded-md flex items-center justify-center"
+                                        style={{ backgroundColor: `${sectionColor}15` }}
+                                      >
+                                        <Layers className="w-3.5 h-3.5" style={{ color: sectionColor }} />
+                                      </div>
+                                      <div>
+                                        <span className="font-semibold">{section.name}</span>
+                                        <span className="text-xs text-muted-foreground ml-2">
+                                          {sectionQuestions.length} {sectionQuestions.length === 1 ? 'question' : 'questions'}
+                                        </span>
+                                      </div>
                                       {isCollapsed ? (
                                         <ChevronRight className="w-4 h-4 text-muted-foreground" />
                                       ) : (
                                         <ChevronDown className="w-4 h-4 text-muted-foreground" />
                                       )}
-                                      <span className="font-medium">{section.name}</span>
-                                      <span className="text-xs text-muted-foreground">({sectionQuestions.length} questions)</span>
                                     </div>
                                     <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                                       <Button 
@@ -1243,11 +1275,13 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
                                     </div>
                                   </div>
                                   {!isCollapsed && (
-                                    <div className="p-3 space-y-2">
+                                    <div className="p-3 space-y-2 bg-card">
                                       {sectionQuestions.length === 0 ? (
-                                        <p className="text-xs text-muted-foreground italic text-center py-2">
-                                          No questions in this section yet
-                                        </p>
+                                        <div className="border-2 border-dashed border-muted-foreground/20 rounded-lg p-4 text-center">
+                                          <p className="text-xs text-muted-foreground">
+                                            No questions in this section yet. Drag questions here or move existing ones.
+                                          </p>
+                                        </div>
                                       ) : (
                                         <SortableContext
                                           items={sectionQuestions.map(q => q.id || `temp-${q.order}`)}
@@ -1382,55 +1416,78 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [] }: Cli
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-4">
-          {templates.map(template => (
-            <Card key={template.id}>
-              <CardContent className="py-4">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-medium" data-testid={`text-template-name-${template.id}`}>
-                        {template.name}
-                      </h3>
-                      <Badge variant={template.isActive ? "default" : "secondary"}>
-                        {template.isActive ? "Active" : "Inactive"}
-                      </Badge>
+        <div className="grid gap-4 md:grid-cols-2">
+          {templates.map(template => {
+            const questionCount = template.questions?.length || 0;
+            const sectionCount = template.sections?.length || 0;
+            
+            return (
+              <Card 
+                key={template.id} 
+                className="hover:shadow-md transition-shadow cursor-pointer group"
+                onClick={() => handleEditTemplate(template)}
+              >
+                <CardContent className="py-5">
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <ClipboardList className="w-6 h-6 text-primary" />
                     </div>
-                    {template.description && (
-                      <p className="text-sm text-muted-foreground mt-1">{template.description}</p>
-                    )}
-                    <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
-                      <span>{template.questions?.length || 0} questions</span>
-                      <span>Expires after {template.expiryDaysAfterStart} days</span>
-                      {template.onCompletionStage && (
-                        <span>Moves to: {template.onCompletionStage.name}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold truncate" data-testid={`text-template-name-${template.id}`}>
+                          {template.name}
+                        </h3>
+                        <Badge 
+                          variant={template.isActive ? "default" : "secondary"}
+                          className="flex-shrink-0"
+                        >
+                          {template.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </div>
+                      {template.description && (
+                        <p className="text-sm text-muted-foreground line-clamp-1 mb-2">{template.description}</p>
                       )}
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <FileText className="w-3 h-3" />
+                          {questionCount} {questionCount === 1 ? 'question' : 'questions'}
+                        </span>
+                        {sectionCount > 0 && (
+                          <span className="flex items-center gap-1">
+                            <Layers className="w-3 h-3" />
+                            {sectionCount} {sectionCount === 1 ? 'section' : 'sections'}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {template.expiryDaysAfterStart}d expiry
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => handleEditTemplate(template)}
+                        data-testid={`button-edit-template-${template.id}`}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-destructive"
+                        onClick={() => setDeleteTemplateId(template.id)}
+                        data-testid={`button-delete-template-${template.id}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => handleEditTemplate(template)}
-                      data-testid={`button-edit-template-${template.id}`}
-                    >
-                      <Edit2 className="w-4 h-4 mr-1" />
-                      Edit
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="text-destructive"
-                      onClick={() => setDeleteTemplateId(template.id)}
-                      data-testid={`button-delete-template-${template.id}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 

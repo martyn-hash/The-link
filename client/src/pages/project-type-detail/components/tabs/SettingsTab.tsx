@@ -13,8 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { TabsContent } from "@/components/ui/tabs";
-import { Edit2, Save, X, Plus, Trash2, Phone, Webhook } from "lucide-react";
+import { Edit2, Save, X, Plus, Trash2, Phone, Webhook, ChevronDown, HelpCircle, Link2, Users } from "lucide-react";
 import type { ProjectType, Service, DialoraSettings, DialoraOutboundWebhook, DialoraVariableMapping } from "@shared/schema";
 import { DIALORA_AVAILABLE_FIELDS } from "@shared/schema";
 import { nanoid } from "nanoid";
@@ -109,48 +114,69 @@ export function SettingsTab({
   };
 
   return (
-    <TabsContent value="settings" className="page-container py-6 md:py-8 space-y-8">
-      <div>
-        <h3 className="text-lg font-semibold mb-2">Project Type Settings</h3>
-        <p className="text-sm text-muted-foreground mb-6">
-          Configure the assignment system for this project type
-        </p>
+    <TabsContent value="settings" className="page-container py-6 md:py-8 space-y-6">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+          <Link2 className="w-5 h-5 text-primary" />
+        </div>
+        <div>
+          <h3 className="text-lg font-semibold">Project Type Settings</h3>
+          <p className="text-sm text-muted-foreground">
+            Configure assignment system and integrations
+          </p>
+        </div>
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Link2 className="w-4 h-4" />
             Service Linkage
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-2">
-            <Label>Current Assignment System</Label>
-            <div className="p-4 bg-muted rounded-lg">
-              {projectType?.serviceId ? (
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="default">Roles-Based</Badge>
-                    <span className="text-sm text-muted-foreground">
-                      Linked to service: <strong>{allServices?.find(s => s.id === projectType.serviceId)?.name || "Unknown Service"}</strong>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/20">
+            <div className="flex items-center gap-3">
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${projectType?.serviceId ? 'bg-primary/10' : 'bg-muted'}`}>
+                {projectType?.serviceId ? (
+                  <Link2 className="w-5 h-5 text-primary" />
+                ) : (
+                  <Users className="w-5 h-5 text-muted-foreground" />
+                )}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={projectType?.serviceId ? "default" : "secondary"}>
+                    {projectType?.serviceId ? "Roles-Based" : "User-Based"}
+                  </Badge>
+                  {projectType?.serviceId && (
+                    <span className="text-sm font-medium">
+                      {allServices?.find(s => s.id === projectType.serviceId)?.name || "Unknown Service"}
                     </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Stage assignments use work roles from the linked service. Users are assigned based on their role mappings in each client service.
-                  </p>
+                  )}
                 </div>
-              ) : (
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="secondary">User-Based</Badge>
-                    <span className="text-sm text-muted-foreground">Not linked to any service</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Stage assignments use direct user selection. Each stage must be assigned to a specific user.
-                  </p>
-                </div>
-              )}
+                <p className="text-xs text-muted-foreground mt-1">
+                  {projectType?.serviceId 
+                    ? "Stage assignments use work roles from the linked service"
+                    : "Stage assignments use direct user selection"
+                  }
+                </p>
+              </div>
             </div>
+            {!isEditingServiceLinkage && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setIsEditingServiceLinkage(true);
+                  setSelectedServiceId(projectType?.serviceId || null);
+                }}
+                data-testid="button-edit-service-linkage"
+              >
+                <Edit2 className="w-4 h-4 mr-1" />
+                Change
+              </Button>
+            )}
           </div>
 
           {isEditingServiceLinkage ? (
@@ -220,75 +246,72 @@ export function SettingsTab({
                 </Button>
               </div>
             </div>
-          ) : (
-            <div>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setIsEditingServiceLinkage(true);
-                  setSelectedServiceId(projectType?.serviceId || null);
-                }}
-                data-testid="button-edit-service-linkage"
-              >
-                <Edit2 className="w-4 h-4 mr-2" />
-                Change Assignment System
-              </Button>
-            </div>
-          )}
+          ) : null}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Assignment System Guide</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <h4 className="text-sm font-semibold mb-2">Roles-Based Assignments</h4>
-            <p className="text-xs text-muted-foreground">
-              When a project type is linked to a service, stage assignments use work roles. For each client service:
-            </p>
-            <ul className="text-xs text-muted-foreground list-disc list-inside mt-1 space-y-1 ml-2">
-              <li>Configure which users fill each work role</li>
-              <li>Projects automatically assign users based on role mappings</li>
-              <li>Changes to role assignments affect all projects using that client service</li>
-            </ul>
-          </div>
-          <div>
-            <h4 className="text-sm font-semibold mb-2">User-Based Assignments</h4>
-            <p className="text-xs text-muted-foreground">
-              When a project type is not linked to a service, stage assignments use direct user selection:
-            </p>
-            <ul className="text-xs text-muted-foreground list-disc list-inside mt-1 space-y-1 ml-2">
-              <li>Each stage template must specify a user directly</li>
-              <li>All projects inherit the same user assignments from the template</li>
-              <li>Simpler setup but less flexible for different client needs</li>
-            </ul>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Phone className="w-5 h-5" />
-            Voice AI Reminders (Dialora)
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <p className="text-sm text-muted-foreground">
-            Configure automated voice call reminders for bookkeeping queries. Multiple webhooks can be defined to cycle through different messages.
-          </p>
-
-          {/* Voice AI Master Toggle */}
-          <div className="p-4 bg-muted/50 border rounded-lg">
-            <div className="flex items-center justify-between">
-              <div className="space-y-1">
-                <Label className="text-sm font-medium">Enable Voice AI Reminders</Label>
-                <p className="text-xs text-muted-foreground">
-                  When enabled, voice call reminders will be automatically scheduled for bookkeeping queries
-                </p>
+      <Collapsible>
+        <Card className="overflow-hidden">
+          <CollapsibleTrigger className="w-full">
+            <CardHeader className="flex flex-row items-center justify-between py-4 hover:bg-muted/30 transition-colors cursor-pointer">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                  <HelpCircle className="w-4 h-4 text-blue-500" />
+                </div>
+                <CardTitle className="text-base">Assignment System Guide</CardTitle>
               </div>
+              <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform duration-200 [&[data-state=open]]:rotate-180" />
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0 pb-4 space-y-4 border-t">
+              <div className="grid md:grid-cols-2 gap-4 pt-4">
+                <div className="p-4 rounded-lg bg-muted/30 border">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Link2 className="w-4 h-4 text-primary" />
+                    <h4 className="text-sm font-semibold">Roles-Based</h4>
+                    <Badge variant="outline" className="text-xs">Service Linked</Badge>
+                  </div>
+                  <ul className="text-xs text-muted-foreground space-y-1">
+                    <li>• Stage assignments use work roles from the linked service</li>
+                    <li>• Projects auto-assign users based on role mappings</li>
+                    <li>• More flexible for different client needs</li>
+                  </ul>
+                </div>
+                <div className="p-4 rounded-lg bg-muted/30 border">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Users className="w-4 h-4 text-primary" />
+                    <h4 className="text-sm font-semibold">User-Based</h4>
+                    <Badge variant="outline" className="text-xs">No Service</Badge>
+                  </div>
+                  <ul className="text-xs text-muted-foreground space-y-1">
+                    <li>• Each stage specifies a user directly</li>
+                    <li>• All projects inherit the same assignments</li>
+                    <li>• Simpler setup for single-team workflows</li>
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      <Card>
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                <Phone className="w-4 h-4 text-purple-500" />
+              </div>
+              Voice AI Reminders
+            </CardTitle>
+            <div className="flex items-center gap-3">
+              <Badge 
+                variant={projectType?.useVoiceAiForQueries ? "default" : "secondary"}
+                className="text-xs"
+              >
+                {projectType?.useVoiceAiForQueries ? "Enabled" : "Disabled"}
+              </Badge>
               <Switch
                 checked={projectType?.useVoiceAiForQueries ?? false}
                 onCheckedChange={(checked) => toggleVoiceAiMutation?.mutate(checked)}
@@ -296,12 +319,17 @@ export function SettingsTab({
                 data-testid="switch-voice-ai-enabled"
               />
             </div>
-            {!projectType?.dialoraSettings?.outboundWebhooks?.some(w => w.active) && (
-              <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
-                Configure at least one active webhook below to enable voice reminders
-              </p>
-            )}
           </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Automated voice call reminders for bookkeeping queries via Dialora
+          </p>
+          {!projectType?.dialoraSettings?.outboundWebhooks?.some(w => w.active) && (
+            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+              Configure at least one active webhook to enable voice reminders
+            </p>
+          )}
+        </CardHeader>
+        <CardContent className="space-y-4 pt-0">
 
           {isEditingDialora ? (
             <div className="space-y-6">
