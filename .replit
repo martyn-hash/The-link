@@ -36,11 +36,15 @@ args = "Start application"
 [[workflows.workflow]]
 name = "Start application"
 author = "agent"
+mode = "parallel"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "npm run dev"
-waitForPort = 5000
+args = "PROCESS_ROLE=web NODE_ENV=development tsx server/index.ts"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PROCESS_ROLE=cron-worker NODE_ENV=development tsx server/cron-worker.ts"
 
 [[workflows.workflow]]
 name = "Start Application"
