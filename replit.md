@@ -74,11 +74,57 @@ The application uses PostgreSQL (Neon) with Drizzle ORM for data persistence, em
 This separation prevents heavy cron jobs from blocking web requests and vice versa.
 
 **Process Configuration**:
-- Development: Configured via Replit Workflows (parallel mode)
-- Production: Requires similar parallel process configuration
+- Development: Configured via Replit Workflows (parallel mode running both `tsx server/index.ts` and `tsx server/cron-worker.ts`)
+- Production: Uses Reserved VM deployment with custom run command (see Production Deployment section)
 - Database pools are isolated: Web (15 connections), Cron (8 connections)
 
-**Kill Switch**: Set `CRONS_ENABLED=false` to disable all cron jobs without redeployment.
+## Production Deployment
+
+### Deployment Steps
+
+1. **Click "Publish" button** in the Replit workspace (top right)
+
+2. **Select "Reserved VM"** deployment type
+   - This is required for dual-process architecture (web + cron worker)
+   - Autoscale deployments only run one process per instance
+
+3. **Configure Build Command** (if not already set):
+   ```bash
+   npm run build
+   ```
+
+4. **Configure Run Command**:
+   ```bash
+   NODE_ENV=production node dist/index.js & NODE_ENV=production npx tsx server/cron-worker.ts & wait
+   ```
+   This starts both the web server (compiled) and cron worker in parallel.
+   
+   Alternative using tsx for both (slower startup, but consistent):
+   ```bash
+   NODE_ENV=production npx tsx server/index.ts & NODE_ENV=production npx tsx server/cron-worker.ts & wait
+   ```
+
+5. **Set Machine Power**: Choose based on client load
+   - 0.5 vCPU / 512MB: Light usage (<50 clients)
+   - 1 vCPU / 1GB: Medium usage (50-200 clients)
+   - 2 vCPU / 2GB: Heavy usage (200+ clients)
+
+6. **Verify Secrets**: Ensure all production secrets are configured:
+   - DATABASE_URL (production Neon database)
+   - All third-party API keys (SendGrid, RingCentral, etc.)
+
+7. **Click "Publish"** to deploy
+
+### Post-Deployment Verification
+
+1. **Check web server**: Visit your deployed URL, confirm login works
+2. **Check cron worker**: Look for `[CronTelemetry] Process role set to: cron-worker` in logs
+3. **Monitor cron jobs**: Search logs for `[CronTelemetry:JSON]` to see structured telemetry
+
+### Emergency Controls
+
+- **Disable all crons**: Set `CRONS_ENABLED=false` in Secrets (no redeploy needed)
+- **Rollback**: Use Replit's checkpoint system to restore previous version
 
 **Process Role Telemetry**: All logs include `process_role` tag ("web" or "cron-worker") for filtering.
 
