@@ -44,6 +44,7 @@ export default function ClientDetail() {
   // State for person editing
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [isAddPersonModalOpen, setIsAddPersonModalOpen] = useState(false);
+  const [isLinkExistingPersonModalOpen, setIsLinkExistingPersonModalOpen] = useState(false);
   const [isNewRequestDialogOpen, setIsNewRequestDialogOpen] = useState(false);
   
   // State for company selection
@@ -196,6 +197,7 @@ export default function ClientDetail() {
               peopleLoading={peopleLoading}
               peopleError={peopleError}
               onAddPerson={() => setIsAddPersonModalOpen(true)}
+              onLinkExistingPerson={() => setIsLinkExistingPersonModalOpen(true)}
               companyConnections={companyConnections}
               connectionsLoading={connectionsLoading}
               onAddCompanyConnection={() => setShowCompanySelection(true)}
@@ -290,6 +292,8 @@ export default function ClientDetail() {
         personModals={{
           isAddPersonModalOpen,
           setIsAddPersonModalOpen,
+          isLinkExistingPersonModalOpen,
+          setIsLinkExistingPersonModalOpen,
           createPersonMutation,
         }}
         companyDialogs={{

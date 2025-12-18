@@ -308,4 +308,133 @@ export function registerClientPeopleRoutes(
       res.status(500).json({ message: "Failed to check duplicates" });
     }
   });
+
+  // GET /api/people/search - Search people by name or email for linking to clients
+  // Requires manager role to prevent unauthorized enumeration of people records
+  app.get("/api/people/search", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
+    try {
+      const queryValidation = z.object({
+        q: z.string().min(1, "Search query is required"),
+        excludeClientId: z.string().optional(),
+        limit: z.coerce.number().min(1).max(50).optional().default(20),
+      }).safeParse(req.query);
+
+      if (!queryValidation.success) {
+        return res.status(400).json({
+          message: "Invalid search parameters",
+          errors: queryValidation.error.issues
+        });
+      }
+
+      const { q, excludeClientId, limit } = queryValidation.data;
+      const searchTerm = q.toLowerCase().trim();
+
+      // Search people by name or email
+      const matchingPeople = await db.select({
+        id: people.id,
+        fullName: people.fullName,
+        primaryEmail: people.primaryEmail,
+        primaryPhone: people.primaryPhone,
+        dateOfBirth: people.dateOfBirth,
+        occupation: people.occupation,
+      })
+      .from(people)
+      .where(
+        or(
+          sql`LOWER(${people.fullName}) LIKE ${'%' + searchTerm + '%'}`,
+          sql`LOWER(${people.primaryEmail}) LIKE ${'%' + searchTerm + '%'}`,
+          sql`LOWER(${people.email2}) LIKE ${'%' + searchTerm + '%'}`
+        )
+      )
+      .limit(limit);
+
+      // If excludeClientId is provided, filter out people already linked to that client
+      let filteredPeople = matchingPeople;
+      if (excludeClientId) {
+        const existingLinks = await storage.getClientPeopleByClientId(excludeClientId);
+        const linkedPersonIds = new Set(existingLinks.map(cp => cp.personId));
+        filteredPeople = matchingPeople.filter(p => !linkedPersonIds.has(p.id));
+      }
+
+      res.status(200).json(filteredPeople);
+
+    } catch (error) {
+      console.error("Error searching people:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to search people" });
+    }
+  });
+
+  // POST /api/clients/:id/people/link - Link an existing person to a client
+  // Requires manager role to prevent unauthorized modifications
+  app.post("/api/clients/:id/people/link", isAuthenticated, resolveEffectiveUser, requireManager, async (req: any, res: any) => {
+    try {
+      const paramValidation = z.object({
+        id: z.string().min(1, "Client ID is required")
+      }).safeParse(req.params);
+
+      if (!paramValidation.success) {
+        return res.status(400).json({
+          message: "Invalid client ID format",
+          errors: paramValidation.error.issues
+        });
+      }
+
+      const bodyValidation = z.object({
+        personId: z.string().min(1, "Person ID is required"),
+        officerRole: z.string().optional(),
+        isPrimaryContact: z.boolean().optional().default(false),
+      }).safeParse(req.body);
+
+      if (!bodyValidation.success) {
+        return res.status(400).json({
+          message: "Invalid request body",
+          errors: bodyValidation.error.issues
+        });
+      }
+
+      const { id: clientId } = paramValidation.data;
+      const { personId, officerRole, isPrimaryContact } = bodyValidation.data;
+
+      // Verify client exists
+      const client = await storage.getClientById(clientId);
+      if (!client) {
+        return res.status(404).json({ message: "Client not found" });
+      }
+
+      // Verify person exists
+      const person = await storage.getPersonById(personId);
+      if (!person) {
+        return res.status(404).json({ message: "Person not found" });
+      }
+
+      // Check if already linked
+      const existingLink = await storage.getClientPerson(clientId, personId);
+      if (existingLink) {
+        return res.status(409).json({ message: "Person is already linked to this client" });
+      }
+
+      // Create the link
+      const relationshipId = `cp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const clientPersonData = {
+        id: relationshipId,
+        clientId: clientId,
+        personId: personId,
+        isPrimaryContact: isPrimaryContact,
+        officerRole: officerRole || null,
+      };
+
+      const clientPerson = await storage.createClientPerson(clientPersonData);
+
+      const result = {
+        ...clientPerson,
+        person: person
+      };
+
+      res.status(201).json(result);
+
+    } catch (error) {
+      console.error("Error linking person to client:", error instanceof Error ? error.message : error);
+      res.status(500).json({ message: "Failed to link person to client" });
+    }
+  });
 }

@@ -5,7 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building2, MapPin, Mail, ExternalLink, Plus, X, Users, Settings, FileText } from "lucide-react";
+import { Building2, MapPin, Mail, ExternalLink, Plus, X, Users, Settings, FileText, UserPlus, Link } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import TagManager from "@/components/tag-manager";
 import { RelatedPersonRow } from "../people";
 import { ClientServicesList, PersonalServicesList, ServicesDataSubTab } from "./services";
@@ -149,6 +155,7 @@ interface OverviewTabProps {
   peopleLoading: boolean;
   peopleError: Error | null;
   onAddPerson: () => void;
+  onLinkExistingPerson: () => void;
   companyConnections: CompanyConnection[];
   connectionsLoading: boolean;
   onAddCompanyConnection: () => void;
@@ -181,6 +188,7 @@ export function OverviewTab({
   peopleLoading,
   peopleError,
   onAddPerson,
+  onLinkExistingPerson,
   companyConnections,
   connectionsLoading,
   onAddCompanyConnection,
@@ -307,15 +315,28 @@ export function OverviewTab({
                   <Users className="w-5 h-5 text-primary" />
                   <h3 className="text-lg font-semibold">Related People</h3>
                 </div>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  data-testid="button-add-person"
-                  onClick={onAddPerson}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      data-testid="button-add-person-dropdown"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={onAddPerson} data-testid="menu-add-new-person">
+                      <UserPlus className="h-4 w-4 mr-2" />
+                      Create New Person
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={onLinkExistingPerson} data-testid="menu-link-existing-person">
+                      <Link className="h-4 w-4 mr-2" />
+                      Link Existing Person
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
               
               <div data-testid="section-related-people">

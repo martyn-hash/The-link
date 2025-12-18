@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EditServiceModal } from "../services";
-import { AddPersonModal } from "../people";
+import { AddPersonModal, LinkExistingPersonModal } from "../people";
 import { NewClientRequestDialog } from "../../dialogs/NewClientRequestDialog";
 import { CompanyCreationForm } from "../../forms/CompanyCreationForm";
 import type { EnhancedClientService, ClientPersonWithPerson } from "../../utils/types";
@@ -21,6 +21,8 @@ interface ServiceModalState {
 interface PersonModalState {
   isAddPersonModalOpen: boolean;
   setIsAddPersonModalOpen: (open: boolean) => void;
+  isLinkExistingPersonModalOpen: boolean;
+  setIsLinkExistingPersonModalOpen: (open: boolean) => void;
   createPersonMutation: UseMutationResult<any, any, any, any>;
 }
 
@@ -70,6 +72,8 @@ export function ClientModalsContainer({
   const {
     isAddPersonModalOpen,
     setIsAddPersonModalOpen,
+    isLinkExistingPersonModalOpen,
+    setIsLinkExistingPersonModalOpen,
     createPersonMutation,
   } = personModals;
 
@@ -133,6 +137,14 @@ export function ClientModalsContainer({
           createPersonMutation.mutate(data);
         }}
         isSaving={createPersonMutation.isPending}
+      />
+
+      {/* Link Existing Person Modal */}
+      <LinkExistingPersonModal
+        clientId={clientId}
+        isOpen={isLinkExistingPersonModalOpen}
+        onClose={() => setIsLinkExistingPersonModalOpen(false)}
+        onSuccess={() => setIsLinkExistingPersonModalOpen(false)}
       />
 
       {/* New Client Request Dialog */}
