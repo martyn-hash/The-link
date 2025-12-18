@@ -226,7 +226,7 @@ export async function tryAcquireJobLock(jobName: string): Promise<boolean> {
     if (acquired) {
       console.log(`[CronTelemetry] [${jobName}] Advisory lock ${lockId} acquired`);
     } else {
-      console.log(`[CronTelemetry] [${jobName}] Lock ${lockId} not acquired - another instance is running this job`);
+      console.warn(`[CronTelemetry] [${jobName}] WARN: Lock ${lockId} not acquired - another instance is running this job, skipping execution`);
     }
     
     return acquired;
@@ -312,7 +312,7 @@ export function endCronJob(context: JobRunContext, status: 'success' | 'error' |
   if (status === 'error') {
     console.log(`[CronTelemetry] [${context.jobName}] [${context.runId}] END (ERROR) | duration=${durationMs}ms | error=${errorMessage}`);
   } else if (status === 'skipped') {
-    console.log(`[CronTelemetry] [${context.jobName}] [${context.runId}] END (SKIPPED) | reason=${errorMessage}`);
+    console.warn(`[CronTelemetry] [${context.jobName}] [${context.runId}] WARN: END (SKIPPED) | reason=${errorMessage}`);
   } else {
     console.log(`[CronTelemetry] [${context.jobName}] [${context.runId}] END | duration=${durationMs}ms | heapDelta=${heapDelta > 0 ? '+' : ''}${heapDelta.toFixed(2)}MB`);
   }

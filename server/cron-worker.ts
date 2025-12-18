@@ -218,8 +218,8 @@ async function main() {
   
   // === Business Hours Jobs ===
   
-  // Project Message Reminders - Every 10 min (with timeout protection)
-  cron.schedule('2,12,22,32,42,52 * * * *', wrapCronHandler('ProjectMessageReminders', '2,12,22,32,42,52 * * * *', async () => {
+  // Project Message Reminders - Every 30 min (with timeout protection)
+  cron.schedule('2,32 * * * *', wrapCronHandler('ProjectMessageReminders', '2,32 * * * *', async () => {
     log('[Project Message Reminders] Starting reminder check...');
     const result = await withTimeout(
       () => sendProjectMessageReminders(),
@@ -231,11 +231,11 @@ async function main() {
       console.error('[Project Message Reminders] Errors:', result.errors);
     }
   }, { useLock: true }));
-  log('[ProjectMessageReminders] Scheduled (every 10 min)');
+  log('[ProjectMessageReminders] Scheduled (every 30 min)');
   
-  // Sent Items Detection - Every 10 min during business hours (with timeout protection)
+  // Sent Items Detection - Every 15 min during business hours (with timeout protection)
   const { sentItemsReplyDetectionService } = await import('./services/sentItemsReplyDetectionService');
-  cron.schedule('8,18,28,38,48,58 8-19 * * *', wrapCronHandler('SentItemsDetection', '8,18,28,38,48,58 8-19 * * *', async () => {
+  cron.schedule('8,23,38,53 8-19 * * *', wrapCronHandler('SentItemsDetection', '8,23,38,53 8-19 * * *', async () => {
     log('[Sent Items Detection] Starting periodic check...');
     const result = await withTimeout(
       () => sentItemsReplyDetectionService.runDetection(),
@@ -246,7 +246,7 @@ async function main() {
   }, { useLock: true, timezone: 'Europe/London' }), {
     timezone: "Europe/London"
   });
-  log('[SentItemsDetection] Scheduled (:08,:18,:28... 08:00-19:00 UK)');
+  log('[SentItemsDetection] Scheduled (:08,:23,:38,:53 08:00-19:00 UK)');
   
   // SLA Breach Detection - Every 15 min during business hours (with timeout protection)
   cron.schedule('14,29,44,59 8-18 * * *', wrapCronHandler('SLABreachDetection', '14,29,44,59 8-18 * * *', async () => {
