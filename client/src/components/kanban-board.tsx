@@ -889,7 +889,7 @@ export default function KanbanBoard({
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className={`flex flex-1 min-h-0 overflow-auto ${isCompactMode ? 'gap-1' : 'space-x-6'}`}>
+        <div className={`flex flex-1 min-h-0 overflow-x-auto ${isCompactMode ? 'gap-1' : 'space-x-6'}`}>
           {orderedStages.map(([status, config]) => {
             const rawStageProjects = projectsByStatus[status] || [];
             // Get the actual stage config from the API for schedule calculations
@@ -939,7 +939,7 @@ export default function KanbanBoard({
             return (
               <DroppableColumn key={status} id={`column-${status}`} isCompact={isCompactMode} isExpanded={isStageExpanded}>
                 <Card 
-                  className={`h-fit flex flex-col transition-all duration-300 ${config.isCompletionColumn ? 'border-2 border-dashed opacity-90' : ''} ${config.isBenchColumn ? 'border-2 border-amber-300 dark:border-amber-700' : ''} ${showCompact ? 'cursor-pointer hover:border-primary/50' : ''}`}
+                  className={`h-full flex flex-col overflow-hidden transition-all duration-300 ${config.isCompletionColumn ? 'border-2 border-dashed opacity-90' : ''} ${config.isBenchColumn ? 'border-2 border-amber-300 dark:border-amber-700' : ''} ${showCompact ? 'cursor-pointer hover:border-primary/50' : ''}`}
                   onClick={showCompact ? () => toggleStageExpanded(status) : undefined}
                 >
                   {/* Compact View Header */}
@@ -1217,7 +1217,7 @@ export default function KanbanBoard({
                         </p>
                       </CardHeader>
                       
-                      <CardContent className={`p-4 space-y-3 min-h-96 ${config.isCompletionColumn ? 'bg-muted/20' : ''} ${config.isBenchColumn ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
+                      <CardContent className={`p-4 space-y-3 flex-1 overflow-y-auto ${config.isCompletionColumn ? 'bg-muted/20' : ''} ${config.isBenchColumn ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
                         <SortableContext
                           items={stageProjects.map(p => p.id)}
                           strategy={verticalListSortingStrategy}
