@@ -1019,8 +1019,9 @@ export async function processDueNotifications(): Promise<void> {
 
   console.log(`[NotificationSender] Found ${dueNotifications.length} due notification(s)`);
 
-  // Process each notification
-  for (const notification of dueNotifications) {
+  // Process each notification with event loop yields to prevent blocking
+  for (let i = 0; i < dueNotifications.length; i++) {
+    const notification = dueNotifications[i];
     try {
       await processSingleNotification(notification, firmSettings || null);
     } catch (error) {
@@ -1035,6 +1036,11 @@ export async function processDueNotifications(): Promise<void> {
           updatedAt: new Date(),
         })
         .where(eq(scheduledNotifications.id, notification.id));
+    }
+    
+    // Yield to event loop after each notification to prevent blocking
+    if (i < dueNotifications.length - 1) {
+      await new Promise(resolve => setImmediate(resolve));
     }
   }
 

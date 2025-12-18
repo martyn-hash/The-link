@@ -16,6 +16,7 @@
 
 import { getApplicationGraphClient, isApplicationGraphConfigured, getUserEmails } from '../utils/applicationGraphClient';
 import { storage } from '../storage/index';
+import { BATCH_SIZES } from '../utils/cronBatching';
 
 // 2-minute overlap buffer for out-of-order API responses
 const OVERLAP_BUFFER_MS = 2 * 60 * 1000;
@@ -71,7 +72,9 @@ export class SentItemsReplyDetectionService {
       const inboxIds = Array.from(inboxIdSet);
 
       // For each inbox, get the linked user email and check their sent items
-      for (const inboxId of inboxIds) {
+      // Process with event loop yields between inboxes to prevent blocking
+      for (let i = 0; i < inboxIds.length; i++) {
+        const inboxId = inboxIds[i];
         let inboxHasError = false;
         const scanStartTime = new Date();
         
@@ -161,6 +164,12 @@ export class SentItemsReplyDetectionService {
           stats.errors++;
           // Ensure inboxHasError is true to prevent any timestamp update
           inboxHasError = true;
+        }
+        
+        // Yield to event loop after each inbox to prevent blocking
+        // This is especially important for inboxes with many pending conversations
+        if (i < inboxIds.length - 1) {
+          await new Promise(resolve => setImmediate(resolve));
         }
       }
 

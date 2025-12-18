@@ -169,7 +169,9 @@ async function processQueryReminders(): Promise<void> {
 
     console.log(`[QueryReminderCron] Processing ${dueReminders.length} due reminder(s)${stats.voiceRescheduled > 0 ? ` (${stats.voiceRescheduled} voice rescheduled for weekend)` : ''}`);
 
-    for (const reminder of dueReminders) {
+    // Process with event loop yields to prevent blocking
+    for (let i = 0; i < dueReminders.length; i++) {
+      const reminder = dueReminders[i];
       stats.processed++;
       
       try {
@@ -321,6 +323,11 @@ async function processQueryReminders(): Promise<void> {
           success: false,
           error: errorMessage
         });
+      }
+      
+      // Yield to event loop after each reminder to prevent blocking
+      if (i < dueReminders.length - 1) {
+        await new Promise(resolve => setImmediate(resolve));
       }
     }
   } catch (error) {

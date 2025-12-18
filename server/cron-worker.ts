@@ -16,6 +16,7 @@ process.env.PROCESS_ROLE = 'cron-worker';
 
 import cron from "node-cron";
 import { initEventLoopMonitor, wrapCronHandler, setProcessRole } from "./cron-telemetry";
+import { withTimeout, JOB_TIMEOUTS } from "./utils/cronBatching";
 import { runChSync } from "./ch-sync-service";
 import { executeScheduledRun } from "./scheduling-orchestrator";
 import { waitForDatabaseReady } from "./db";
@@ -146,10 +147,14 @@ async function main() {
   });
   log('[DashboardCacheOvernight] Scheduled (03:05 UK)');
   
-  // Dashboard Cache Hourly - HH:02 08:00-18:00 UK
+  // Dashboard Cache Hourly - HH:02 08:00-18:00 UK (with timeout protection)
   cron.schedule('2 8-18 * * *', wrapCronHandler('DashboardCacheHourly', '2 8-18 * * *', async () => {
     log('[Dashboard Cache] Starting hourly cache update...');
-    const result = await updateDashboardCache();
+    const result = await withTimeout(
+      () => updateDashboardCache(),
+      JOB_TIMEOUTS.CACHE_REBUILD,
+      'DashboardCacheHourly'
+    );
     log(`[Dashboard Cache] Hourly update completed: ${result.status} - ${result.usersUpdated}/${result.usersProcessed} users updated in ${result.executionTimeMs}ms`);
     if (result.errors.length > 0) {
       console.error('[Dashboard Cache] Hourly update errors:', result.errors);
@@ -213,10 +218,14 @@ async function main() {
   
   // === Business Hours Jobs ===
   
-  // Project Message Reminders - Every 10 min (currently, will reduce to 30 min in Phase 4)
+  // Project Message Reminders - Every 10 min (with timeout protection)
   cron.schedule('2,12,22,32,42,52 * * * *', wrapCronHandler('ProjectMessageReminders', '2,12,22,32,42,52 * * * *', async () => {
     log('[Project Message Reminders] Starting reminder check...');
-    const result = await sendProjectMessageReminders();
+    const result = await withTimeout(
+      () => sendProjectMessageReminders(),
+      JOB_TIMEOUTS.NOTIFICATION,
+      'ProjectMessageReminders'
+    );
     log(`[Project Message Reminders] Check completed: ${result.emailsSent}/${result.usersProcessed} emails sent`);
     if (result.errors.length > 0) {
       console.error('[Project Message Reminders] Errors:', result.errors);
@@ -224,26 +233,32 @@ async function main() {
   }, { useLock: true }));
   log('[ProjectMessageReminders] Scheduled (every 10 min)');
   
-  // Sent Items Detection - Every 10 min during business hours
+  // Sent Items Detection - Every 10 min during business hours (with timeout protection)
   const { sentItemsReplyDetectionService } = await import('./services/sentItemsReplyDetectionService');
   cron.schedule('8,18,28,38,48,58 8-19 * * *', wrapCronHandler('SentItemsDetection', '8,18,28,38,48,58 8-19 * * *', async () => {
     log('[Sent Items Detection] Starting periodic check...');
-    const result = await sentItemsReplyDetectionService.runDetection();
+    const result = await withTimeout(
+      () => sentItemsReplyDetectionService.runDetection(),
+      JOB_TIMEOUTS.DETECTION,
+      'SentItemsDetection'
+    );
     log(`[Sent Items Detection] Check completed: ${result.checked} checked, ${result.matched} matched, ${result.completed} completed, ${result.errors} errors`);
   }, { useLock: true, timezone: 'Europe/London' }), {
     timezone: "Europe/London"
   });
   log('[SentItemsDetection] Scheduled (:08,:18,:28... 08:00-19:00 UK)');
   
-  // SLA Breach Detection - Every 15 min during business hours
+  // SLA Breach Detection - Every 15 min during business hours (with timeout protection)
   cron.schedule('14,29,44,59 8-18 * * *', wrapCronHandler('SLABreachDetection', '14,29,44,59 8-18 * * *', async () => {
-    const { checkForSlaBreaches, markEmailsAsBreached } = await import('./services/slaService');
-    const breaches = await checkForSlaBreaches();
-    if (breaches.length > 0) {
-      const emailIds = breaches.map(b => b.emailId);
-      await markEmailsAsBreached(emailIds);
-      log(`[SLA Breach Detection] Marked ${breaches.length} email(s) as breached`);
-    }
+    await withTimeout(async () => {
+      const { checkForSlaBreaches, markEmailsAsBreached } = await import('./services/slaService');
+      const breaches = await checkForSlaBreaches();
+      if (breaches.length > 0) {
+        const emailIds = breaches.map(b => b.emailId);
+        await markEmailsAsBreached(emailIds);
+        log(`[SLA Breach Detection] Marked ${breaches.length} email(s) as breached`);
+      }
+    }, JOB_TIMEOUTS.DETECTION, 'SLABreachDetection');
   }, { useLock: true, timezone: 'Europe/London' }), {
     timezone: "Europe/London"
   });

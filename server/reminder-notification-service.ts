@@ -4,6 +4,7 @@ import { eq, and, lte, isNull, isNotNull } from "drizzle-orm";
 import { storage } from "./storage";
 import { sendPushNotificationToMultiple, type PushNotificationPayload, type PushSubscriptionData } from "./push-service";
 import { sendEmail } from "./emailService";
+import { BATCH_SIZES } from "./utils/cronBatching";
 
 interface ReminderNotificationResult {
   processed: number;
@@ -43,7 +44,9 @@ export async function processDueReminders(): Promise<ReminderNotificationResult>
 
     console.log(`[ReminderNotification] Found ${dueReminders.length} due reminder(s)`);
 
-    for (const { reminder, assignee } of dueReminders) {
+    // Process with event loop yields to prevent blocking
+    for (let i = 0; i < dueReminders.length; i++) {
+      const { reminder, assignee } = dueReminders[i];
       result.processed++;
       
       if (!assignee) {
@@ -66,7 +69,7 @@ export async function processDueReminders(): Promise<ReminderNotificationResult>
             }
           };
 
-          const subscriptionData: PushSubscriptionData[] = pushSubscriptions.map(sub => {
+          const subscriptionData: PushSubscriptionData[] = pushSubscriptions.map((sub: { endpoint: string; keys: unknown }) => {
             const keys = sub.keys as { p256dh: string; auth: string };
             return {
               endpoint: sub.endpoint,
@@ -118,6 +121,11 @@ export async function processDueReminders(): Promise<ReminderNotificationResult>
           .where(eq(internalTasks.id, reminder.id));
       } catch (updateError) {
         console.error(`[ReminderNotification] Failed to mark reminder ${reminder.id} as notified:`, updateError);
+      }
+      
+      // Yield to event loop after each reminder to prevent blocking
+      if (i < dueReminders.length - 1) {
+        await new Promise(resolve => setImmediate(resolve));
       }
     }
 
