@@ -8,6 +8,7 @@ import {
   clientProjectTaskInstances,
   clientProjectTaskResponses,
   clientProjectTaskTokens,
+  clientProjectTaskOtps,
   kanbanStages,
   changeReasons,
   projects,
@@ -698,5 +699,29 @@ export class ClientProjectTaskStorage extends BaseStorage {
     }
 
     return result;
+  }
+
+  async getRecentClientProjectTaskOtps(tokenId: string, minutesBack: number): Promise<{ id: string; createdAt: Date }[]> {
+    const cutoff = new Date(Date.now() - minutesBack * 60 * 1000);
+    const otps = await db
+      .select({
+        id: clientProjectTaskOtps.id,
+        createdAt: clientProjectTaskOtps.createdAt,
+      })
+      .from(clientProjectTaskOtps)
+      .where(
+        and(
+          eq(clientProjectTaskOtps.tokenId, tokenId),
+          sql`${clientProjectTaskOtps.createdAt} >= ${cutoff}`,
+          isNull(clientProjectTaskOtps.usedAt),
+          sql`${clientProjectTaskOtps.expiresAt} > NOW()`
+        )
+      )
+      .orderBy(desc(clientProjectTaskOtps.createdAt));
+    
+    return otps.map(o => ({
+      id: o.id,
+      createdAt: o.createdAt!,
+    }));
   }
 }

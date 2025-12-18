@@ -680,5 +680,123 @@ These don't block functionality but should be typed properly for better type saf
 
 ---
 
+## End-to-End Testing Guide
+
+Since Client Project Tasks are normally triggered via the notification system (X days before/after project start), testing the full flow without waiting can be done using the following approaches:
+
+### Testing Approach 1: Manual Task Creation via API
+
+Use the admin endpoint to manually create and send a task for any project:
+
+```bash
+# 1. Login first (get session cookie)
+# Then call the task creation endpoint:
+
+POST /api/projects/:projectId/task-instances
+Content-Type: application/json
+
+{
+  "templateId": "<template-uuid>",
+  "clientId": "<client-uuid>",
+  "recipientEmail": "test@example.com",
+  "recipientName": "Test User",
+  "expiryDays": 7
+}
+```
+
+This creates a task instance, marks it as 'sent', generates a token, and returns the token URL.
+
+### Testing Approach 2: UI-Based Manual Testing
+
+1. **Create a Task Template:**
+   - Login → Settings → Project Types → Select a project type
+   - Go to "Client Tasks" tab
+   - Click "Create Template"
+   - Add questions, configure settings
+   - Optionally enable "Email verification (OTP)"
+   - Save template
+
+2. **Attach Template to Notification:**
+   - Go to "Notifications" tab in the same project type
+   - Edit a notification (e.g., "Service Start Reminder")
+   - Select your task template in the "Attach Task Template" dropdown
+   - Save
+
+3. **Trigger Notification Manually:**
+   - Go to a client with a project of this type
+   - Open the project
+   - Go to "Tasks" or use the "Send Task" action in the project actions
+   - Select the template and send
+
+4. **Access the Client Form:**
+   - The form URL is: `/client-task/{token}`
+   - Token is returned in the API response or visible in the task instance details
+
+### Testing "Before Project Start" Scenarios
+
+To test tasks that should be sent before a project starts:
+
+1. Create a project with a future start date
+2. Use the notification system with a "X days before start" trigger, OR
+3. Manually create a task instance via API with `projectId` pointing to the future project
+
+### Testing "After Project Start" Scenarios
+
+1. Create a project with today or past start date
+2. Use the notification system with a "X days after start" trigger, OR
+3. Manually create a task instance via API immediately
+
+### Testing OTP Verification
+
+1. Create a template with "Email verification (OTP)" enabled
+2. Create a task instance using that template
+3. Access the client form URL
+4. You'll see the OTP verification screen
+5. **DEV MODE:** When no SendGrid API key is configured, OTP codes are logged to the server console:
+   ```
+   [DEV MODE] OTP code for test@example.com: 123456
+   ```
+6. Enter the 6-digit code to proceed to the form
+
+### Testing Checklist
+
+| Test Case | Steps | Expected Result |
+|-----------|-------|-----------------|
+| Template Creation | Create template with questions | Template saved, visible in list |
+| OTP Toggle | Enable OTP on template | Setting persists after save |
+| Task Creation | Create task via API | Returns token URL, status = 'sent' |
+| Form Access (no OTP) | Access form URL | Form displays immediately |
+| Form Access (with OTP) | Access form URL | OTP screen shown first |
+| OTP Verification | Enter correct code | Form displays after verification |
+| OTP Rate Limiting | Request >3 codes in 10 min | 429 error with cooldown message |
+| Form Submission | Complete and submit | Status changes to 'submitted' |
+| Stage Change | Submit with stage config | Project moves to configured stage |
+| File Upload | Upload file in form | File stored in object storage |
+| Conditional Logic | Answer trigger question | Dependent questions show/hide |
+
+### Database Verification Queries
+
+```sql
+-- View all task templates
+SELECT id, name, project_type_id, require_otp, is_active 
+FROM client_project_task_templates;
+
+-- View task instances with status
+SELECT i.id, i.status, i.sent_at, i.submitted_at, t.name as template_name
+FROM client_project_task_instances i
+JOIN client_project_task_templates t ON i.template_id = t.id;
+
+-- View tokens with expiry
+SELECT token, expires_at, recipient_email, otp_verified_at
+FROM client_project_task_tokens;
+
+-- View OTP codes (for debugging)
+SELECT token_id, code, expires_at, used_at, created_at
+FROM client_project_task_otps
+ORDER BY created_at DESC;
+```
+
+---
+
 *Document created: December 2024*
 *Last updated: December 2024*

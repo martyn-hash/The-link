@@ -1125,7 +1125,7 @@ export function registerClientProjectTaskRoutes(
   // OTP ROUTES (PUBLIC)
   // ============================================================================
 
-  // POST /api/client-task/:token/send-otp - Send OTP to recipient email
+  // POST /api/client-task/:token/send-otp - Send OTP to recipient email (rate limited)
   app.post("/api/client-task/:token/send-otp", async (req: any, res: any) => {
     try {
       const paramValidation = validateParams(paramTokenSchema, req.params);
@@ -1145,6 +1145,18 @@ export function registerClientProjectTaskRoutes(
 
       if (tokenRecord.expiresAt && new Date(tokenRecord.expiresAt) < new Date()) {
         return res.status(403).json({ message: "Token has expired" });
+      }
+
+      // Rate limiting: Check for recent OTP sends (max 3 in 10 minutes)
+      const recentOtps = await storage.getRecentClientProjectTaskOtps(tokenRecord.id, 10);
+      if (recentOtps.length >= 3) {
+        const oldestRecent = recentOtps[recentOtps.length - 1];
+        const timeSinceOldest = Date.now() - new Date(oldestRecent.createdAt).getTime();
+        const waitTimeMs = (10 * 60 * 1000) - timeSinceOldest;
+        const waitTimeMinutes = Math.max(1, Math.ceil(waitTimeMs / 1000 / 60));
+        return res.status(429).json({ 
+          message: `Too many verification code requests. Please wait ${waitTimeMinutes} minute(s) before requesting another code.` 
+        });
       }
 
       const result = await sendClientTaskOtp(token, tokenRecord.recipientEmail);

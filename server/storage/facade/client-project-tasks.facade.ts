@@ -222,5 +222,9 @@ export function applyClientProjectTasksFacade<T extends ClientProjectTasksFacade
     getPendingClientProjectTaskCountsBatch(projectIds: string[]): Promise<Map<string, { pending: number; awaitingClient: number }>> {
       return (this as any).clientProjectTaskStorage.getPendingTaskCountsBatch(projectIds);
     }
+
+    getRecentClientProjectTaskOtps(tokenId: string, minutesBack: number): Promise<{ id: string; createdAt: Date }[]> {
+      return (this as any).clientProjectTaskStorage.getRecentClientProjectTaskOtps(tokenId, minutesBack);
+    }
   } as any;
 }
