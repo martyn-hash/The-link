@@ -43,7 +43,86 @@ import {
   ArrowRight,
   Sparkles,
 } from "lucide-react";
-import type { MergedTaskQuestion, ClientProjectTaskResponse, ClientProjectTaskInstance, TaskFormSection } from "@shared/schema";
+import type { MergedTaskQuestion, ClientProjectTaskResponse, ClientProjectTaskInstance, TaskFormSection, ConditionalLogic } from "@shared/schema";
+
+function evaluateCondition(
+  condition: { questionId: string; operator: string; value?: any },
+  responses: Record<string, ResponseValue>,
+  allQuestions: MergedTaskQuestion[]
+): boolean {
+  const response = responses[condition.questionId];
+  const question = allQuestions.find(q => q.id === condition.questionId);
+  
+  const getResponseValue = (): any => {
+    if (!response) return undefined;
+    if (response.valueText !== undefined && response.valueText !== null) return response.valueText;
+    if (response.valueNumber !== undefined && response.valueNumber !== null) return response.valueNumber;
+    if (response.valueBoolean !== undefined && response.valueBoolean !== null) {
+      if (question?.questionType === 'yes_no') {
+        return response.valueBoolean ? 'yes' : 'no';
+      }
+      return response.valueBoolean;
+    }
+    if (response.valueMultiSelect && response.valueMultiSelect.length > 0) return response.valueMultiSelect;
+    if (response.valueDate) return response.valueDate;
+    return undefined;
+  };
+  
+  const responseValue = getResponseValue();
+  const isEmpty = responseValue === undefined || responseValue === null || responseValue === '' || 
+    (Array.isArray(responseValue) && responseValue.length === 0);
+  
+  switch (condition.operator) {
+    case 'equals':
+      if (Array.isArray(responseValue)) {
+        return responseValue.includes(condition.value);
+      }
+      return String(responseValue) === String(condition.value);
+    case 'not_equals':
+      if (Array.isArray(responseValue)) {
+        return !responseValue.includes(condition.value);
+      }
+      return String(responseValue) !== String(condition.value);
+    case 'contains':
+      if (Array.isArray(responseValue)) {
+        return responseValue.some(v => String(v).toLowerCase().includes(String(condition.value).toLowerCase()));
+      }
+      return String(responseValue || '').toLowerCase().includes(String(condition.value || '').toLowerCase());
+    case 'is_empty':
+      return isEmpty;
+    case 'is_not_empty':
+      return !isEmpty;
+    default:
+      return true;
+  }
+}
+
+function isQuestionVisible(
+  question: MergedTaskQuestion,
+  responses: Record<string, ResponseValue>,
+  allQuestions: MergedTaskQuestion[]
+): boolean {
+  const conditionalLogic = question.conditionalLogic as ConditionalLogic | null;
+  if (!conditionalLogic) return true;
+  
+  if (conditionalLogic.showIf) {
+    const mainConditionMet = evaluateCondition(conditionalLogic.showIf, responses, allQuestions);
+    
+    if (conditionalLogic.conditions && conditionalLogic.conditions.length > 0) {
+      const additionalResults = conditionalLogic.conditions.map(c => evaluateCondition(c, responses, allQuestions));
+      
+      if (conditionalLogic.logic === 'or') {
+        return mainConditionMet || additionalResults.some(r => r);
+      } else {
+        return mainConditionMet && additionalResults.every(r => r);
+      }
+    }
+    
+    return mainConditionMet;
+  }
+  
+  return true;
+}
 
 const CARD_BACKGROUND_COLORS = [
   'bg-blue-50/70',
@@ -630,9 +709,13 @@ export default function ClientProjectTaskFormPage() {
     debouncedSave(value.questionId, value);
   }, [debouncedSave]);
 
+  const visibleQuestions = useMemo(() => {
+    if (!data?.questions) return [];
+    return data.questions.filter(q => isQuestionVisible(q, responses, data.questions));
+  }, [data?.questions, responses]);
+
   const answeredCount = useMemo(() => {
-    if (!data?.questions) return 0;
-    return data.questions.filter(q => {
+    return visibleQuestions.filter(q => {
       const response = responses[q.id];
       if (!response) return false;
       if (response.valueText) return true;
@@ -643,11 +726,10 @@ export default function ClientProjectTaskFormPage() {
       if (response.valueFile) return true;
       return false;
     }).length;
-  }, [data?.questions, responses]);
+  }, [visibleQuestions, responses]);
 
   const requiredUnanswered = useMemo(() => {
-    if (!data?.questions) return [];
-    return data.questions.filter(q => {
+    return visibleQuestions.filter(q => {
       if (!q.isRequired) return false;
       const response = responses[q.id];
       if (!response) return true;
@@ -659,24 +741,24 @@ export default function ClientProjectTaskFormPage() {
       if (response.valueFile) return false;
       return true;
     });
-  }, [data?.questions, responses]);
+  }, [visibleQuestions, responses]);
 
   const canSubmit = requiredUnanswered.length === 0;
-  const progressPercent = data?.questions?.length ? (answeredCount / data.questions.length) * 100 : 0;
-  const totalQuestions = data?.questions?.length || 0;
-  const currentQuestion = data?.questions?.[currentQuestionIndex];
+  const progressPercent = visibleQuestions.length ? (answeredCount / visibleQuestions.length) * 100 : 0;
+  const totalQuestions = visibleQuestions.length;
+  const currentQuestion = visibleQuestions[currentQuestionIndex];
   const allQuestionsAnswered = answeredCount === totalQuestions && totalQuestions > 0;
 
   // Group questions by section for section-based navigation
   const sectionGroups = useMemo(() => {
-    if (!data?.questions) return [];
+    if (!visibleQuestions.length) return [];
     
-    const sections = data.sections || [];
+    const sections = data?.sections || [];
     const groups: { id: string | null; name: string; description: string | null; questions: MergedTaskQuestion[] }[] = [];
     
-    // Group questions by sectionId
+    // Group visible questions by sectionId
     const questionsBySection = new Map<string | null, MergedTaskQuestion[]>();
-    data.questions.forEach(q => {
+    visibleQuestions.forEach(q => {
       const sectionId = q.sectionId || null;
       if (!questionsBySection.has(sectionId)) {
         questionsBySection.set(sectionId, []);
@@ -712,7 +794,7 @@ export default function ClientProjectTaskFormPage() {
     }
     
     return groups;
-  }, [data?.questions, data?.sections]);
+  }, [visibleQuestions, data?.sections]);
 
   const totalSections = sectionGroups.length;
   // hasSections: true if any sections exist (enables section UI)
@@ -825,6 +907,13 @@ export default function ClientProjectTaskFormPage() {
       setCurrentSectionIndex(Math.max(0, totalSections - 1));
     }
   }, [totalSections, currentSectionIndex]);
+
+  // Clamp currentQuestionIndex when visible questions change
+  useEffect(() => {
+    if (totalQuestions > 0 && currentQuestionIndex >= totalQuestions) {
+      setCurrentQuestionIndex(Math.max(0, totalQuestions - 1));
+    }
+  }, [totalQuestions, currentQuestionIndex]);
 
   if (isLoading) {
     return (

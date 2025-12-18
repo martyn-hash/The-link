@@ -294,13 +294,17 @@ function QuestionEditor({
 
   const needsOptions = ["single_choice", "multi_choice", "dropdown"].includes(editedQuestion.questionType);
   
+  const getQuestionKey = (q: EditingQuestion) => q.id || `temp-${q.order}`;
+  const currentQuestionKey = getQuestionKey(editedQuestion);
+  
   const previousQuestions = allQuestions.filter(q => 
-    q.order < editedQuestion.order && q.id !== editedQuestion.id && q.label.trim()
+    q.order < editedQuestion.order && getQuestionKey(q) !== currentQuestionKey && q.label.trim()
   );
   
-  const selectedSourceQuestion = previousQuestions.find(
-    q => q.id === editedQuestion.conditionalLogic?.showIf?.questionId
-  );
+  const selectedSourceQuestion = previousQuestions.find(q => {
+    const qKey = getQuestionKey(q);
+    return qKey === editedQuestion.conditionalLogic?.showIf?.questionId;
+  });
   
   const sourceQuestionHasOptions = selectedSourceQuestion && 
     ["single_choice", "multi_choice", "dropdown", "yes_no"].includes(selectedSourceQuestion.questionType);
@@ -314,7 +318,7 @@ function QuestionEditor({
         ...prev,
         conditionalLogic: {
           showIf: {
-            questionId: previousQuestions[0].id || '',
+            questionId: getQuestionKey(previousQuestions[0]),
             operator: 'equals',
             value: '',
           },
@@ -482,11 +486,14 @@ function QuestionEditor({
                         <SelectValue placeholder="Select a question" />
                       </SelectTrigger>
                       <SelectContent>
-                        {previousQuestions.map(q => (
-                          <SelectItem key={q.id || `q-${q.order}`} value={q.id || `q-${q.order}`}>
-                            {q.label || 'Untitled question'}
-                          </SelectItem>
-                        ))}
+                        {previousQuestions.map(q => {
+                          const qKey = getQuestionKey(q);
+                          return (
+                            <SelectItem key={qKey} value={qKey}>
+                              {q.label || 'Untitled question'}
+                            </SelectItem>
+                          );
+                        })}
                       </SelectContent>
                     </Select>
                   </div>
