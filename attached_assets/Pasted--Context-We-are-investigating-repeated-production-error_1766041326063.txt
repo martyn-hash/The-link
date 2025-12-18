@@ -1,0 +1,50 @@
+### Context
+We are investigating repeated production errors related to **signed download URL generation**. These errors appeared to coincide with concerns that an overnight scheduled process did not run, but analysis of logs and request traces shows a different root cause.
+
+### What we now understand
+- The signed URL failures are **not caused by cron jobs**.
+- They are triggered by **normal Express API traffic**, specifically:
+  ```
+  GET /api/internal/project-messages/threads/:threadId
+  ```
+- These requests occur at various times (including overnight) and are most likely driven by:
+  - Active UI usage (staff loading message threads)
+  - Background polling (unread counts, queries counts)
+  - Notifications causing the UI to refresh threads
+- This aligns with usage patterns from the **Indian team**, who are active during UK overnight hours.
+
+### The core problem
+- When loading a message thread, the backend **eagerly generates signed URLs for all attachments**.
+- Some attachment records reference **object storage keys that no longer exist**.
+- The code uses `Promise.all()` when generating signed URLs.
+- A single `_ObjectNotFoundError` causes the entire batch to fail and logs an error.
+
+In short:
+> We are generating signed URLs at *read time* instead of *access time*, and treating missing files as fatal errors.
+
+### Our proposed direction (initial suggestions)
+1. **Do NOT generate signed URLs when loading threads**
+   - Thread APIs should return attachment metadata only (id, filename, key, size, mime).
+   - No signed URLs in list/read endpoints.
+
+2. **Introduce an on-demand download endpoint**
+   - Example: `POST /api/files/:attachmentId/signed-url`
+   - Generate signed URLs only when a user clicks download.
+   - Handle `_ObjectNotFoundError` gracefully (return 404 / file-missing state).
+
+3. **Make signed URL generation non-fatal**
+   - Replace `Promise.all()` with `Promise.allSettled()` or per-item try/catch.
+   - Downgrade object-not-found to WARN, not ERROR.
+
+4. **Add better observability**
+   - Log caller context for signed URL requests (route, user/system, attachmentId, key).
+   - This makes future diagnosis trivial.
+
+### What we want from you
+- Please review this analysis and:
+  - Confirm whether this matches your reading of the code paths.
+  - Suggest the **best implementation approach** given the current architecture.
+  - Flag any risks, edge cases, or alternative designs you think are better.
+- If you think parts of the above are wrong or incomplete, challenge them.
+
+We are aiming for **stability first**, then a clean refactor.

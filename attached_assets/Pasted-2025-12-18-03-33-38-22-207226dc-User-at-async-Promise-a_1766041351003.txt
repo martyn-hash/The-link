@@ -1,0 +1,164 @@
+2025-12-18 03:33:38.22
+207226dc
+User
+at async Promise.all (index 0)
+2025-12-18 03:34:09.10
+207226dc
+User
+at async Promise.all (index 0)
+2025-12-18 03:34:09.10
+207226dc
+User
+at async Promise.all (index 0)
+2025-12-18 03:34:09.10
+207226dc
+User
+at _ObjectStorageService.getSignedDownloadURL (file:///home/runner/workspace/dist/index.js:17174:17)
+2025-12-18 03:34:09.10
+207226dc
+User
+at async file:///home/runner/workspace/dist/index.js:50652:32
+2025-12-18 03:34:09.10
+207226dc
+User
+Failed to generate signed URL for /1765381199760_Allica_Statement_00554540_2025-11-01_2025-11-30.pdf: _ObjectNotFoundError: Object not found
+2025-12-18 03:34:09.10
+207226dc
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-12-18 03:34:09.10
+207226dc
+User
+at async file:///home/runner/workspace/dist/index.js:50660:33
+2025-12-18 03:34:09.10
+207226dc
+User
+at async file:///home/runner/workspace/dist/index.js:50655:41
+2025-12-18 03:34:09.10
+207226dc
+User
+Failed to generate signed URL for /1765381200713_Allica_Statement_00554540_2025-10-01_2025-10-31.pdf: _ObjectNotFoundError: Object not found
+2025-12-18 03:34:09.10
+207226dc
+User
+at async file:///home/runner/workspace/dist/index.js:50652:32
+2025-12-18 03:34:09.10
+207226dc
+User
+at _ObjectStorageService.getSignedDownloadURL (file:///home/runner/workspace/dist/index.js:17174:17)
+2025-12-18 03:34:09.10
+207226dc
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-12-18 03:34:09.10
+207226dc
+User
+at async Promise.all (index 1)
+2025-12-18 03:34:09.10
+207226dc
+User
+at async file:///home/runner/workspace/dist/index.js:50655:41
+2025-12-18 03:34:09.10
+207226dc
+User
+at async file:///home/runner/workspace/dist/index.js:50660:33
+2025-12-18 03:34:09.10
+207226dc
+User
+at async Promise.all (index 0)
+2025-12-18 03:36:32.19
+207226dc
+User
+at async Promise.all (index 1)
+2025-12-18 03:36:32.19
+207226dc
+User
+at async file:///home/runner/workspace/dist/index.js:50655:41
+2025-12-18 03:36:32.19
+207226dc
+User
+at async Promise.all (index 0)
+2025-12-18 03:36:32.19
+207226dc
+User
+Failed to generate signed URL for /1765971847578_REG_RENTAL_INVOICE.pdf: _ObjectNotFoundError: Object not found
+2025-12-18 03:36:32.19
+207226dc
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-12-18 03:36:32.19
+207226dc
+User
+at async file:///home/runner/workspace/dist/index.js:50652:32
+2025-12-18 03:36:32.19
+207226dc
+User
+at _ObjectStorageService.getSignedDownloadURL (file:///home/runner/workspace/dist/index.js:17174:17)
+2025-12-18 03:36:32.19
+207226dc
+User
+at async file:///home/runner/workspace/dist/index.js:50660:33
+2025-12-18 03:36:32.19
+207226dc
+User
+at _ObjectStorageService.getSignedDownloadURL (file:///home/runner/workspace/dist/index.js:17174:17)
+2025-12-18 03:36:32.19
+207226dc
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-12-18 03:36:32.19
+207226dc
+User
+at async file:///home/runner/workspace/dist/index.js:50660:33
+2025-12-18 03:36:32.19
+207226dc
+User
+at async file:///home/runner/workspace/dist/index.js:50652:32
+2025-12-18 03:36:32.19
+207226dc
+User
+at async Promise.all (index 0)
+2025-12-18 03:36:32.19
+207226dc
+User
+at async file:///home/runner/workspace/dist/index.js:50655:41
+2025-12-18 03:36:32.19
+207226dc
+User
+Failed to generate signed URL for /1765971839868_DD_STATEMENT.pdf: _ObjectNotFoundError: Object not found
+2025-12-18 03:36:32.19
+207226dc
+User
+at async Promise.all (index 0)
+2025-12-18 03:55:06.39
+207226dc
+User
+at async Promise.all (index 0)
+2025-12-18 03:55:06.39
+207226dc
+User
+Failed to generate signed URL for /1765784877646_Bookkeeping_checklist_for_Glasshouse_leadership.xlsx: _ObjectNotFoundError: Object not found
+2025-12-18 03:55:06.39
+207226dc
+User
+at async file:///home/runner/workspace/dist/index.js:50652:32
+2025-12-18 03:55:06.39
+207226dc
+User
+at async file:///home/runner/workspace/dist/index.js:50660:33
+2025-12-18 03:55:06.39
+207226dc
+User
+at _ObjectStorageService.getSignedDownloadURL (file:///home/runner/workspace/dist/index.js:17174:17)
+2025-12-18 03:55:06.39
+207226dc
+User
+at async file:///home/runner/workspace/dist/index.js:50655:41
+2025-12-18 03:55:06.39
+207226dc
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-12-18 03:55:06.39
+207226dc
+User
+at async Promise.all (index 0)
