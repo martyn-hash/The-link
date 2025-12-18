@@ -104,10 +104,10 @@ export function KanbanStagesTab({
 
   const handleInlineUpdate = (stageId: string, updates: Partial<Pick<StageItem, 'name' | 'color' | 'slaHours' | 'isFinal'>>) => {
     const payload: Record<string, any> = {};
-    if (updates.name !== undefined) payload.name = updates.name;
-    if (updates.color !== undefined) payload.color = updates.color;
-    if (updates.slaHours !== undefined) payload.maxInstanceTime = updates.slaHours;
-    if (updates.isFinal !== undefined) payload.canBeFinalStage = updates.isFinal;
+    if ('name' in updates) payload.name = updates.name;
+    if ('color' in updates) payload.color = updates.color;
+    if ('slaHours' in updates) payload.maxInstanceTime = updates.slaHours ?? null;
+    if ('isFinal' in updates) payload.canBeFinalStage = updates.isFinal;
     
     updateStageMutation.mutate({ id: stageId, data: payload });
   };
