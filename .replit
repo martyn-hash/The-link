@@ -9,7 +9,7 @@ packages = ["jq", "libreoffice", "vips", "python3", "pkg-config"]
 [deployment]
 deploymentTarget = "autoscale"
 build = ["npm", "run", "build"]
-run = ["npm", "run", "start"]
+run = ["sh", "-c", "NODE_ENV=production node dist/index.js & NODE_ENV=production npx tsx server/cron-worker.ts & wait"]
 
 [[ports]]
 localPort = 5000
