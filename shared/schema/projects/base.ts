@@ -49,6 +49,7 @@ export const projectTypes = pgTable("project_types", {
   serviceId: varchar("service_id"),
   active: boolean("active").default(true),
   notificationsActive: boolean("notifications_active").default(true),
+  enableClientProjectTasks: boolean("enable_client_project_tasks").default(true),
   singleProjectPerClient: boolean("single_project_per_client").default(false),
   order: integer("order").notNull(),
   dialoraSettings: jsonb("dialora_settings").$type<DialoraSettings>(),
