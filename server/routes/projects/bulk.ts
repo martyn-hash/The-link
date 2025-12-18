@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { z } from "zod";
 import { storage } from "../../storage/index";
-import { invalidateAllViewCaches } from "../../view-cache-service";
+import { markAllViewsStale } from "../../view-cache-service";
 
 const bulkMoveValidationSchema = z.object({
   projectTypeId: z.string().uuid(),
@@ -241,7 +241,7 @@ export function registerProjectBulkRoutes(
       if (updatedProjects.length > 0) {
         setImmediate(async () => {
           try {
-            await invalidateAllViewCaches();
+            await markAllViewsStale();
           } catch (cacheError) {
             console.error("[View Cache] Error invalidating caches:", cacheError);
           }

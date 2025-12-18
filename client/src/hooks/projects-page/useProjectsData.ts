@@ -23,6 +23,8 @@ interface CachedProjectsResponse {
   stageStats: Record<string, number> | null;
   fromCache: boolean;
   cachedAt: string | null;
+  isStale: boolean;
+  staleAt: string | null;
 }
 
 interface UseProjectsDataParams {
@@ -54,7 +56,12 @@ export function useProjectsData({
   const canUseCache = hasNoSpecialFilters || isSavedView;
 
   const { data: cachedProjectsData } = useQuery<CachedProjectsResponse>({
-    queryKey: ["/api/projects/cached", { viewKey }],
+    queryKey: ["/api/projects/cached", { 
+      viewKey,
+      showArchived,
+      showCompletedRegardless,
+      dueDate: serviceDueDateFilter !== "all" ? serviceDueDateFilter : undefined,
+    }],
     enabled: isAuthenticated && !!userId && canUseCache,
     retry: false,
     staleTime: Infinity,
@@ -63,6 +70,7 @@ export function useProjectsData({
 
   const { data: projects, isLoading: projectsLoading, error, isFetching: projectsFetching } = useQuery<ProjectWithRelations[]>({
     queryKey: ["/api/projects", { 
+      viewKey,
       showArchived,
       showCompletedRegardless,
       dueDate: serviceDueDateFilter !== "all" ? serviceDueDateFilter : undefined,
@@ -75,7 +83,10 @@ export function useProjectsData({
 
   const isUsingCachedData = projectsLoading && canUseCache && cachedProjectsData?.fromCache === true && cachedProjectsData?.projects !== null;
   const cachedAt = cachedProjectsData?.cachedAt;
+  const isCacheStale = cachedProjectsData?.isStale ?? false;
+  const cacheStaleAt = cachedProjectsData?.staleAt;
   const isRefreshingInBackground = projectsFetching && !projectsLoading;
+  const isSyncing = (isUsingCachedData && isCacheStale) || isRefreshingInBackground;
 
   const { data: users, isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
@@ -205,6 +216,9 @@ export function useProjectsData({
     projectsFetching,
     isUsingCachedData,
     isRefreshingInBackground,
+    isSyncing,
+    isCacheStale,
+    cacheStaleAt,
     cachedAt,
     users,
     usersLoading,

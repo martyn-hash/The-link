@@ -1,8 +1,14 @@
 import { db } from '../../db.js';
 import { projectViewCache } from '@shared/schema';
-import { eq, and, lt, sql } from 'drizzle-orm';
+import { eq, and, lt, sql, inArray } from 'drizzle-orm';
 import type { ProjectViewCache, CachedProjectView } from '@shared/schema';
 import crypto from 'crypto';
+
+export interface CachedViewResult {
+  data: CachedProjectView;
+  isStale: boolean;
+  staleAt: Date | null;
+}
 
 export class ViewCacheStorage {
   private generateFilterHash(filters: Record<string, any>): string {
@@ -12,6 +18,11 @@ export class ViewCacheStorage {
   }
 
   async getCachedView(userId: string, viewKey: string, filters?: Record<string, any>): Promise<CachedProjectView | null> {
+    const result = await this.getCachedViewWithMetadata(userId, viewKey, filters);
+    return result ? result.data : null;
+  }
+
+  async getCachedViewWithMetadata(userId: string, viewKey: string, filters?: Record<string, any>): Promise<CachedViewResult | null> {
     const filterHash = filters ? this.generateFilterHash(filters) : 'default';
     
     const cached = await db
@@ -36,7 +47,11 @@ export class ViewCacheStorage {
       return null;
     }
 
-    return entry.cachedData as CachedProjectView;
+    return {
+      data: entry.cachedData as CachedProjectView,
+      isStale: entry.isStale ?? false,
+      staleAt: entry.staleAt,
+    };
   }
 
   async setCachedView(
@@ -69,6 +84,8 @@ export class ViewCacheStorage {
           projectCount: String(data.projects?.length || 0),
           updatedAt: new Date(),
           expiresAt,
+          isStale: false,
+          staleAt: null,
         })
         .where(eq(projectViewCache.id, existing[0].id))
         .returning();
@@ -83,6 +100,7 @@ export class ViewCacheStorage {
           cachedData: data as any,
           projectCount: String(data.projects?.length || 0),
           expiresAt,
+          isStale: false,
         })
         .returning();
       return inserted[0];
@@ -110,6 +128,76 @@ export class ViewCacheStorage {
       .delete(projectViewCache)
       .returning({ id: projectViewCache.id });
     return result.length;
+  }
+
+  async markAllViewsStale(): Promise<number> {
+    const result = await db
+      .update(projectViewCache)
+      .set({
+        isStale: true,
+        staleAt: new Date(),
+      })
+      .where(eq(projectViewCache.isStale, false))
+      .returning({ id: projectViewCache.id });
+    return result.length;
+  }
+
+  async markUserViewsStale(userId: string): Promise<number> {
+    const result = await db
+      .update(projectViewCache)
+      .set({
+        isStale: true,
+        staleAt: new Date(),
+      })
+      .where(eq(projectViewCache.userId, userId))
+      .returning({ id: projectViewCache.id });
+    return result.length;
+  }
+
+  async markUsersViewsStale(userIds: string[]): Promise<number> {
+    if (userIds.length === 0) return 0;
+    const uniqueUserIds = Array.from(new Set(userIds.filter(Boolean)));
+    if (uniqueUserIds.length === 0) return 0;
+    
+    const result = await db
+      .update(projectViewCache)
+      .set({
+        isStale: true,
+        staleAt: new Date(),
+      })
+      .where(inArray(projectViewCache.userId, uniqueUserIds))
+      .returning({ id: projectViewCache.id });
+    return result.length;
+  }
+
+  async clearStaleFlag(userId: string, viewKey: string, filterHash?: string): Promise<void> {
+    const hash = filterHash || 'default';
+    await db
+      .update(projectViewCache)
+      .set({
+        isStale: false,
+        staleAt: null,
+      })
+      .where(
+        and(
+          eq(projectViewCache.userId, userId),
+          eq(projectViewCache.viewKey, viewKey),
+          eq(projectViewCache.filterHash, hash)
+        )
+      );
+  }
+
+  async getAllStaleViews(): Promise<Array<{ userId: string; viewKey: string; filterHash: string; staleAt: Date | null }>> {
+    const staleViews = await db
+      .select({
+        userId: projectViewCache.userId,
+        viewKey: projectViewCache.viewKey,
+        filterHash: projectViewCache.filterHash,
+        staleAt: projectViewCache.staleAt,
+      })
+      .from(projectViewCache)
+      .where(eq(projectViewCache.isStale, true));
+    return staleViews;
   }
 
   async cleanupExpiredCache(): Promise<number> {

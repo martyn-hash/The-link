@@ -3,7 +3,7 @@ import { z } from "zod";
 import { storage } from "../../storage/index";
 import { completeProjectSchema } from "@shared/schema";
 import { validateParams, paramUuidSchema } from "../routeHelpers";
-import { invalidateAllViewCaches } from "../../view-cache-service";
+import { markAllViewsStale } from "../../view-cache-service";
 import { invalidateDashboardCacheForUsers } from "../../dashboard-cache-invalidation";
 import type { CachedProjectView } from "@shared/schema";
 
@@ -41,13 +41,33 @@ export function registerProjectCoreRoutes(
       }
 
       const viewKey = (req.query.viewKey as string) || 'default';
+      const normalize = (v: any) => (v && v !== 'all' ? v : undefined);
       
+      // Parse runtime filter overrides from query params
+      const runtimeFilters = {
+        archived: req.query.archived === 'true' ? true : req.query.archived === 'false' ? false : undefined,
+        showArchived: req.query.showArchived === 'true' ? true : req.query.showArchived === 'false' ? false : undefined,
+        showCompletedRegardless: req.query.showCompletedRegardless === 'true' ? true : req.query.showCompletedRegardless === 'false' ? false : undefined,
+        inactive: req.query.inactive === 'true' ? true : req.query.inactive === 'false' ? false : undefined,
+        dueDate: normalize(req.query.dueDate),
+        serviceId: normalize(req.query.serviceId),
+        assigneeId: normalize(req.query.assigneeId),
+        serviceOwnerId: normalize(req.query.serviceOwnerId),
+        userId: normalize(req.query.userId),
+        dynamicDateFilter: normalize(req.query.dynamicDateFilter),
+        month: normalize(req.query.month),
+        dateFrom: normalize(req.query.dateFrom),
+        dateTo: normalize(req.query.dateTo),
+      };
+      
+      // Build canonical filters: start with defaults, apply saved view, then runtime overrides
       let filters: Record<string, any> = {
         archived: false,
         inactive: false,
         showCompletedRegardless: false,
       };
 
+      // Apply saved view filters
       if (viewKey !== 'default') {
         const userViews = await storage.getProjectViewsByUserId(effectiveUserId);
         const savedView = userViews.find(v => v.id === viewKey);
@@ -74,21 +94,45 @@ export function registerProjectCoreRoutes(
           }
         }
       }
+      
+      // Apply runtime filter overrides (matching /api/projects logic)
+      if (runtimeFilters.archived !== undefined) filters.archived = runtimeFilters.archived;
+      if (runtimeFilters.inactive !== undefined) filters.inactive = runtimeFilters.inactive;
+      if (runtimeFilters.showArchived !== undefined) filters.showArchived = runtimeFilters.showArchived;
+      if (runtimeFilters.showCompletedRegardless !== undefined) filters.showCompletedRegardless = runtimeFilters.showCompletedRegardless;
+      if (runtimeFilters.month) filters.month = runtimeFilters.month;
+      if (runtimeFilters.serviceId) filters.serviceId = runtimeFilters.serviceId;
+      if (runtimeFilters.assigneeId) filters.assigneeId = runtimeFilters.assigneeId;
+      if (runtimeFilters.serviceOwnerId) filters.serviceOwnerId = runtimeFilters.serviceOwnerId;
+      if (runtimeFilters.userId) filters.userId = runtimeFilters.userId;
+      if (runtimeFilters.dynamicDateFilter) filters.dynamicDateFilter = runtimeFilters.dynamicDateFilter;
+      if (runtimeFilters.dateFrom) filters.dateFrom = runtimeFilters.dateFrom;
+      if (runtimeFilters.dateTo) filters.dateTo = runtimeFilters.dateTo;
+      if (runtimeFilters.dueDate) filters.dueDate = runtimeFilters.dueDate;
 
-      const cachedData: CachedProjectView | null = await (storage as any).viewCacheStorage.getCachedView(
+      const cacheResult = await (storage as any).viewCacheStorage.getCachedViewWithMetadata(
         effectiveUserId,
         viewKey,
         filters
       );
 
-      if (cachedData) {
-        res.setHeader('X-Cache-Status', 'hit');
+      if (cacheResult) {
+        const { data: cachedData, isStale, staleAt } = cacheResult;
+        res.setHeader('X-Cache-Status', isStale ? 'stale' : 'hit');
         res.setHeader('X-Cache-Timestamp', cachedData.lastRefreshed || new Date().toISOString());
+        if (isStale) {
+          res.setHeader('X-Cache-Stale', 'true');
+          if (staleAt) {
+            res.setHeader('X-Cache-Stale-At', staleAt.toISOString());
+          }
+        }
         return res.json({
           projects: cachedData.projects,
           stageStats: cachedData.stageStats,
           fromCache: true,
           cachedAt: cachedData.lastRefreshed,
+          isStale,
+          staleAt: staleAt?.toISOString() || null,
         });
       }
 
@@ -98,6 +142,8 @@ export function registerProjectCoreRoutes(
         stageStats: null,
         fromCache: false,
         cachedAt: null,
+        isStale: false,
+        staleAt: null,
       });
     } catch (error) {
       console.error("Error fetching cached projects:", error instanceof Error ? error.message : error);
@@ -145,15 +191,49 @@ export function registerProjectCoreRoutes(
             stageStats[stage] = (stageStats[stage] || 0) + 1;
           }
           
-          // Normalize filters to match canonical defaults used in /api/projects/cached
-          // Base defaults match the cached endpoint exactly
-          const canonicalFilters: Record<string, any> = {
-            archived: filters.archived ?? false,
-            inactive: filters.inactive ?? false,
-            showCompletedRegardless: filters.showCompletedRegardless ?? false,
+          // Build canonical filters matching /api/projects/cached logic
+          // Start with base defaults, then apply saved view filters, then runtime overrides
+          let canonicalFilters: Record<string, any> = {
+            archived: false,
+            inactive: false,
+            showCompletedRegardless: false,
           };
-          // Add any additional filter values that were explicitly set (not undefined)
+          
+          // Apply saved view filters if viewKey points to a saved view
+          if (viewKey !== 'default') {
+            const userViews = await storage.getProjectViewsByUserId(effectiveUserId);
+            const savedView = userViews.find(v => v.id === viewKey);
+            if (savedView?.filters && typeof savedView.filters === 'object') {
+              const savedFilters = savedView.filters as Record<string, unknown>;
+              for (const key in savedFilters) {
+                if (Object.prototype.hasOwnProperty.call(savedFilters, key)) {
+                  canonicalFilters[key] = savedFilters[key];
+                }
+              }
+            }
+          } else {
+            // For default view, check user preferences
+            const preferences = await storage.getUserProjectPreferences(effectiveUserId);
+            if (preferences?.defaultViewId && preferences.defaultViewType === 'saved') {
+              const userViews = await storage.getProjectViewsByUserId(effectiveUserId);
+              const savedView = userViews.find(v => v.id === preferences.defaultViewId);
+              if (savedView?.filters && typeof savedView.filters === 'object') {
+                const savedFilters = savedView.filters as Record<string, unknown>;
+                for (const key in savedFilters) {
+                  if (Object.prototype.hasOwnProperty.call(savedFilters, key)) {
+                    canonicalFilters[key] = savedFilters[key];
+                  }
+                }
+              }
+            }
+          }
+          
+          // Apply runtime filter overrides from query params
+          // These take precedence and create unique cache entries for filtered requests
+          if (filters.archived !== undefined) canonicalFilters.archived = filters.archived;
+          if (filters.inactive !== undefined) canonicalFilters.inactive = filters.inactive;
           if (filters.showArchived !== undefined) canonicalFilters.showArchived = filters.showArchived;
+          if (filters.showCompletedRegardless !== undefined) canonicalFilters.showCompletedRegardless = filters.showCompletedRegardless;
           if (filters.month) canonicalFilters.month = filters.month;
           if (filters.serviceId) canonicalFilters.serviceId = filters.serviceId;
           if (filters.assigneeId) canonicalFilters.assigneeId = filters.assigneeId;
@@ -370,7 +450,7 @@ export function registerProjectCoreRoutes(
       
       setImmediate(async () => {
         try {
-          await invalidateAllViewCaches();
+          await markAllViewsStale();
           // Invalidate dashboard cache for affected users (old and new owners/assignees)
           const affectedUsers = [
             project.projectOwnerId, 
@@ -505,7 +585,7 @@ export function registerProjectCoreRoutes(
         }
 
         try {
-          await invalidateAllViewCaches();
+          await markAllViewsStale();
           // Invalidate dashboard cache for affected users (old and new owners/assignees)
           const affectedUsers = [
             project.projectOwnerId, 

@@ -15,7 +15,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Filter, Plus, X, Calendar as CalendarIcon, Minimize2, Maximize2, ClipboardList, FolderKanban, Bookmark, Mail, Users } from "lucide-react";
+import { Filter, Plus, X, Calendar as CalendarIcon, Minimize2, Maximize2, ClipboardList, FolderKanban, Bookmark, Mail, Users, RefreshCw } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
@@ -55,6 +55,7 @@ export interface ProjectsHeaderProps {
   currentDashboard: Dashboard | null;
   kanbanCompactMode: boolean;
   isRefreshingInBackground?: boolean;
+  isSyncing?: boolean;
   dashboardWidgets: Widget[];
   dashboardDescription: string;
   dashboardIsHomescreen: boolean;
@@ -113,6 +114,7 @@ export function ProjectsHeader({
   currentDashboard,
   kanbanCompactMode,
   isRefreshingInBackground = false,
+  isSyncing = false,
   tasksOwnershipFilter,
   tasksStatusFilter,
   tasksPriorityFilter,
@@ -160,7 +162,7 @@ export function ProjectsHeader({
       <div className="hidden md:grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-4 w-full">
         {/* Left column: context-dependent content, left-aligned */}
         <div className="flex items-center justify-start gap-3">
-          {workspaceMode === "projects" && <CurrentViewName viewName={currentSavedViewName} serviceName={currentServiceName} isRefreshing={isRefreshingInBackground} />}
+          {workspaceMode === "projects" && <CurrentViewName viewName={currentSavedViewName} serviceName={currentServiceName} isRefreshing={isRefreshingInBackground} isSyncing={isSyncing} />}
           {workspaceMode === "comms" && commsSelectedInboxId && setCommsActiveFilter && (
             <WorkflowToolbar
               stats={commsWorkflowStats}
@@ -277,9 +279,12 @@ interface CurrentViewNameProps {
   viewName: string | null;
   serviceName: string | null;
   isRefreshing?: boolean;
+  isSyncing?: boolean;
 }
 
-function CurrentViewName({ viewName, serviceName, isRefreshing = false }: CurrentViewNameProps) {
+function CurrentViewName({ viewName, serviceName, isRefreshing = false, isSyncing = false }: CurrentViewNameProps) {
+  const showSyncing = isSyncing || isRefreshing;
+  
   return (
     <div 
       className="flex items-center gap-3 flex-shrink-0"
@@ -305,13 +310,14 @@ function CurrentViewName({ viewName, serviceName, isRefreshing = false }: Curren
           </span>
         </div>
       )}
-      {isRefreshing && (
-        <span 
-          className="text-sm text-muted-foreground animate-pulse"
-          data-testid="text-syncing-indicator"
+      {showSyncing && (
+        <div 
+          className="flex items-center gap-1.5 text-sm text-muted-foreground"
+          data-testid="syncing-indicator"
         >
-          Syncing with live data...
-        </span>
+          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+          <span className="animate-pulse">Syncing...</span>
+        </div>
       )}
     </div>
   );

@@ -130,3 +130,23 @@ export async function invalidateAllViewCaches(): Promise<number> {
 export async function invalidateUserViewCache(userId: string): Promise<number> {
   return (storage as any).viewCacheStorage.invalidateUserCache(userId);
 }
+
+export async function markAllViewsStale(): Promise<number> {
+  return (storage as any).viewCacheStorage.markAllViewsStale();
+}
+
+export async function markUsersViewsStale(userIds: string[]): Promise<number> {
+  return (storage as any).viewCacheStorage.markUsersViewsStale(userIds);
+}
+
+export async function getAllStaleViews(): Promise<Array<{ userId: string; viewKey: string; filterHash: string; staleAt: Date | null }>> {
+  return (storage as any).viewCacheStorage.getAllStaleViews();
+}
+
+export async function getCachedViewWithMetadata(userId: string, viewKey: string, filters?: Record<string, any>) {
+  return (storage as any).viewCacheStorage.getCachedViewWithMetadata(userId, viewKey, filters);
+}
+
+export async function clearViewStaleFlag(userId: string, viewKey: string, filterHash?: string): Promise<void> {
+  return (storage as any).viewCacheStorage.clearStaleFlag(userId, viewKey, filterHash);
+}

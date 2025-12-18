@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   index,
   jsonb,
   pgTable,
@@ -19,9 +20,12 @@ export const projectViewCache = pgTable("project_view_cache", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   expiresAt: timestamp("expires_at"),
+  isStale: boolean("is_stale").default(false),
+  staleAt: timestamp("stale_at"),
 }, (table) => [
   index("idx_project_view_cache_user_id").on(table.userId),
   index("idx_project_view_cache_view_key").on(table.viewKey),
   index("idx_project_view_cache_user_view").on(table.userId, table.viewKey),
   index("idx_project_view_cache_expires").on(table.expiresAt),
+  index("idx_project_view_cache_stale").on(table.isStale),
 ]);

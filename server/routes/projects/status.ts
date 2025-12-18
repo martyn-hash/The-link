@@ -4,7 +4,7 @@ import { updateProjectStatusSchema } from "@shared/schema";
 import { sendStageChangeNotificationEmail } from "../../emailService";
 import { handleProjectStageChangeForNotifications } from "../../notification-scheduler";
 import { stageConfigCache } from "../../utils/ttlCache";
-import { invalidateAllViewCaches } from "../../view-cache-service";
+import { markAllViewsStale } from "../../view-cache-service";
 import { invalidateDashboardCacheForUsers } from "../../dashboard-cache-invalidation";
 
 interface StageConfigCacheEntry {
@@ -549,7 +549,7 @@ export function registerProjectStatusRoutes(
         }
 
         try {
-          await invalidateAllViewCaches();
+          await markAllViewsStale();
           // Invalidate dashboard cache for affected users (owner, new assignee, previous assignee)
           const affectedUsers = [
             project.projectOwnerId, 

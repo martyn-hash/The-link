@@ -134,6 +134,7 @@ export default function Projects() {
           currentDashboard={state.currentDashboard}
           kanbanCompactMode={state.kanbanCompactMode}
           isRefreshingInBackground={state.isRefreshingInBackground}
+          isSyncing={state.isSyncing}
           dashboardWidgets={state.dashboardWidgets}
           dashboardDescription={state.dashboardDescription}
           dashboardIsHomescreen={state.dashboardIsHomescreen}
