@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -12,8 +12,27 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Edit2, Trash2, Save, X, BookOpen, Hash, Type, ToggleLeft, Calendar, ListChecks, ListTodo } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Plus, Edit2, Trash2, Save, X, BookOpen, Hash, Type, ToggleLeft, Calendar, ListChecks, ListTodo, GripVertical, Settings2 } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  rectSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { cn } from "@/lib/utils";
 import type { ApprovalFieldLibrary } from "@shared/schema";
 
 const FIELD_TYPES = [
@@ -27,6 +46,157 @@ const FIELD_TYPES = [
 ] as const;
 
 type FieldType = typeof FIELD_TYPES[number]["value"];
+
+const FIELD_TYPE_COLORS: Record<string, string> = {
+  boolean: "#22c55e",
+  number: "#3b82f6",
+  short_text: "#8b5cf6",
+  long_text: "#a855f7",
+  single_select: "#f59e0b",
+  multi_select: "#ef4444",
+  date: "#06b6d4",
+};
+
+interface SortableFieldCardProps {
+  field: ApprovalFieldLibrary & { usageCount: number };
+  onEdit: (field: ApprovalFieldLibrary) => void;
+  onDelete: (id: string) => void;
+  getFieldTypeLabel: (type: string) => string;
+}
+
+function SortableFieldCard({ field, onEdit, onDelete, getFieldTypeLabel }: SortableFieldCardProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: field.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  const fieldType = FIELD_TYPES.find(t => t.value === field.fieldType);
+  const Icon = fieldType?.icon || Type;
+  const color = FIELD_TYPE_COLORS[field.fieldType] || "#6b7280";
+
+  return (
+    <div ref={setNodeRef} style={style} className={cn(isDragging && "z-50")}>
+      <Card
+        className={cn(
+          "group relative transition-all duration-200 h-full",
+          isDragging && "shadow-xl ring-2 ring-primary opacity-90",
+          !isDragging && "hover:shadow-md hover:border-primary/30"
+        )}
+        data-testid={`card-library-field-${field.id}`}
+      >
+        <CardHeader className="pb-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-3">
+              <button
+                className={cn(
+                  "touch-none cursor-grab p-1 rounded hover:bg-muted -ml-1",
+                  isDragging && "cursor-grabbing"
+                )}
+                {...attributes}
+                {...listeners}
+                data-testid={`drag-handle-field-${field.id}`}
+              >
+                <GripVertical className="h-4 w-4 text-muted-foreground" />
+              </button>
+              <div
+                className="h-10 w-10 rounded-lg flex items-center justify-center text-white shadow-sm"
+                style={{ backgroundColor: color }}
+              >
+                <Icon className="h-5 w-5" />
+              </div>
+            </div>
+            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => onEdit(field)}
+                      data-testid={`button-edit-field-${field.id}`}
+                    >
+                      <Settings2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Edit field</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={() => onDelete(field.id)}
+                      disabled={field.usageCount > 0}
+                      data-testid={`button-delete-field-${field.id}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {field.usageCount > 0 ? "Cannot delete - field in use" : "Delete field"}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          </div>
+          <div className="mt-2">
+            <CardTitle className="text-base leading-tight" data-testid={`text-field-name-${field.id}`}>
+              {field.fieldName}
+            </CardTitle>
+            <div className="flex items-center gap-2 mt-1.5">
+              <Badge
+                variant="secondary"
+                className="text-xs"
+                style={{ backgroundColor: `${color}15`, color: color, borderColor: `${color}30` }}
+              >
+                {getFieldTypeLabel(field.fieldType)}
+              </Badge>
+              {field.usageCount > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  {field.usageCount} use{field.usageCount !== 1 ? "s" : ""}
+                </span>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        {(field.description || (field.options && field.options.length > 0)) && (
+          <CardContent className="pt-0">
+            {field.description && (
+              <p className="text-sm text-muted-foreground mb-2 line-clamp-2">{field.description}</p>
+            )}
+            {field.options && field.options.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {field.options.slice(0, 4).map((option, i) => (
+                  <Badge key={i} variant="outline" className="text-xs">
+                    {option}
+                  </Badge>
+                ))}
+                {field.options.length > 4 && (
+                  <Badge variant="outline" className="text-xs text-muted-foreground">
+                    +{field.options.length - 4} more
+                  </Badge>
+                )}
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+    </div>
+  );
+}
 
 interface EditingField {
   id?: string;
@@ -164,15 +334,41 @@ export function FieldLibraryTab({ projectTypeId }: FieldLibraryTabProps) {
     });
   };
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const sortedFields = useMemo(() => {
+    if (!libraryFields) return [];
+    return [...libraryFields];
+  }, [libraryFields]);
+
+  const fieldIds = useMemo(() => sortedFields.map(f => f.id), [sortedFields]);
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = sortedFields.findIndex(f => f.id === active.id);
+      const newIndex = sortedFields.findIndex(f => f.id === over.id);
+      const reordered = arrayMove(sortedFields, oldIndex, newIndex);
+      
+      queryClient.setQueryData(
+        ["/api/project-types", projectTypeId, "approval-field-library"],
+        reordered.map((f, i) => ({ ...f, order: i }))
+      );
+    }
+  };
+
   const getFieldTypeLabel = (type: string) => {
     const fieldType = FIELD_TYPES.find(t => t.value === type);
     return fieldType?.label || type;
-  };
-
-  const getFieldTypeIcon = (type: string) => {
-    const fieldType = FIELD_TYPES.find(t => t.value === type);
-    const Icon = fieldType?.icon || Type;
-    return <Icon className="w-4 h-4" />;
   };
 
   return (
@@ -181,7 +377,7 @@ export function FieldLibraryTab({ projectTypeId }: FieldLibraryTabProps) {
         <div>
           <h2 className="text-xl font-semibold">Approval Field Library</h2>
           <p className="text-muted-foreground">
-            Create reusable fields for stage approvals. These can be used in standard approvals and client-specific overrides.
+            Create reusable fields for stage approvals. Drag to reorder, click to edit.
           </p>
         </div>
         <Button onClick={handleAddField} data-testid="button-add-library-field">
@@ -191,83 +387,44 @@ export function FieldLibraryTab({ projectTypeId }: FieldLibraryTabProps) {
       </div>
 
       {fieldsLoading ? (
-        <div className="grid gap-4">
-          {[...Array(3)].map((_, i) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => (
             <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-6 w-32" />
-                <Skeleton className="h-4 w-24" />
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 rounded-lg" />
+                  <div className="flex-1">
+                    <Skeleton className="h-5 w-24 mb-2" />
+                    <Skeleton className="h-4 w-16" />
+                  </div>
+                </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="pt-0">
                 <Skeleton className="h-4 w-full" />
               </CardContent>
             </Card>
           ))}
         </div>
-      ) : libraryFields && libraryFields.length > 0 ? (
-        <div className="grid gap-4">
-          {libraryFields.map((field) => (
-            <Card key={field.id} data-testid={`card-library-field-${field.id}`}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-md bg-primary/10 text-primary">
-                    {getFieldTypeIcon(field.fieldType)}
-                  </div>
-                  <div>
-                    <CardTitle className="text-base" data-testid={`text-field-name-${field.id}`}>
-                      {field.fieldName}
-                    </CardTitle>
-                    <div className="flex items-center gap-2 mt-1">
-                      <Badge variant="secondary" className="text-xs">
-                        {getFieldTypeLabel(field.fieldType)}
-                      </Badge>
-                      {field.usageCount > 0 && (
-                        <span className="text-xs text-muted-foreground">
-                          Used in {field.usageCount} approval{field.usageCount !== 1 ? "s" : ""}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleEditField(field)}
-                    data-testid={`button-edit-field-${field.id}`}
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setDeleteFieldId(field.id)}
-                    disabled={field.usageCount > 0}
-                    data-testid={`button-delete-field-${field.id}`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              </CardHeader>
-              {field.description && (
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">{field.description}</p>
-                </CardContent>
-              )}
-              {field.options && field.options.length > 0 && (
-                <CardContent className="pt-0">
-                  <div className="flex flex-wrap gap-1">
-                    {field.options.map((option, i) => (
-                      <Badge key={i} variant="outline" className="text-xs">
-                        {option}
-                      </Badge>
-                    ))}
-                  </div>
-                </CardContent>
-              )}
-            </Card>
-          ))}
-        </div>
+      ) : sortedFields.length > 0 ? (
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext items={fieldIds} strategy={rectSortingStrategy}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sortedFields.map((field) => (
+                <SortableFieldCard
+                  key={field.id}
+                  field={field}
+                  onEdit={handleEditField}
+                  onDelete={(id) => setDeleteFieldId(id)}
+                  getFieldTypeLabel={getFieldTypeLabel}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       ) : (
         <div className="text-center py-12">
           <BookOpen className="w-12 h-12 text-muted-foreground mb-4 mx-auto" />
