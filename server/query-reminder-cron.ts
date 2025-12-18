@@ -1,23 +1,67 @@
 /**
  * Query Reminder Cron Job
  * 
- * Processes scheduled query reminders every hour.
- * Checks for due reminders and sends them via the appropriate channel.
+ * Processes scheduled query reminders every hour with claim-first architecture.
  * 
  * Features:
+ * - Bounded: Max 50 reminders per run (FIFO order)
+ * - Claim-first: Batch claim before hydration to prevent race conditions
+ * - Time budget: 25 second max runtime with early exit
+ * - Send timeouts: 8s email/SMS, 10s voice
  * - Only runs 07:00-22:00 UK time
- * - Smart cessation when all queries answered
- * - Full audit trail logging
- * - Hourly monitoring email to martyn@growth.accountants
+ * - Smart cessation when all queries answered (batch pre-filter)
+ * - JSON telemetry output for monitoring
  */
 
 import cron from 'node-cron';
-import { getDueReminders, processReminder, checkAndCancelRemindersIfComplete, markReminderFailed } from './services/queryReminderService';
+import { 
+  getDueReminders, 
+  processReminder, 
+  markReminderFailed,
+  batchClaimReminders,
+  batchGetTokenStatuses,
+  batchGetProjectNames,
+  batchCancelCompletedReminders,
+  batchReleaseReminderClaims
+} from './services/queryReminderService';
 import { db } from './db';
-import { projectChronology, scheduledQueryReminders, communications, queryResponseTokens, projects, companySettings } from '@shared/schema';
+import { projectChronology, scheduledQueryReminders, communications, queryResponseTokens, projects } from '@shared/schema';
 import { eq } from 'drizzle-orm';
-import { getUncachableSendGridClient } from './lib/sendgrid';
 import { wrapCronHandler } from './cron-telemetry';
+
+// Time budget: 25 seconds max runtime
+const MAX_RUNTIME_MS = 25000;
+// External send timeouts
+const SEND_TIMEOUT_EMAIL_SMS = 8000;
+const SEND_TIMEOUT_VOICE = 10000;
+// Yield event loop every N reminders
+const YIELD_EVERY = 3;
+
+/**
+ * Wrap an async operation with a timeout
+ */
+async function withSendTimeout<T>(
+  operation: () => Promise<T>,
+  timeoutMs: number,
+  fallback: T
+): Promise<T> {
+  return Promise.race([
+    operation(),
+    new Promise<T>((_, reject) => 
+      setTimeout(() => reject(new Error(`Send timeout after ${timeoutMs}ms`)), timeoutMs)
+    )
+  ]).catch((error) => {
+    console.warn(`[QueryReminderCron] Send timeout: ${error.message}`);
+    return fallback;
+  });
+}
+
+/**
+ * Yield to event loop
+ */
+function yieldEventLoop(): Promise<void> {
+  return new Promise(resolve => setImmediate(resolve));
+}
 
 async function getProjectName(projectId: string | null): Promise<string | null> {
   if (!projectId) return null;
@@ -31,17 +75,6 @@ async function getProjectName(projectId: string | null): Promise<string | null> 
   }
 }
 
-interface ReminderProcessingResult {
-  reminderId: string;
-  channel: string;
-  recipientName: string | null;
-  recipientEmail: string | null;
-  recipientPhone: string | null;
-  projectName: string | null;
-  success: boolean;
-  error?: string;
-}
-
 interface CronRunStats {
   runTime: Date;
   withinOperatingHours: boolean;
@@ -51,7 +84,6 @@ interface CronRunStats {
   sent: number;
   cancelled: number;
   failed: number;
-  results: ReminderProcessingResult[];
 }
 
 let isRunning = false;
@@ -124,9 +156,17 @@ async function rescheduleAndFilterWeekendVoiceReminders(reminders: any[]): Promi
 }
 
 /**
- * Process all due query reminders
+ * Process due query reminders with claim-first architecture and time budget
+ * 
+ * Flow:
+ * 1. Fetch bounded candidates (max 50, FIFO order)
+ * 2. Batch claim all candidates immediately
+ * 3. Batch pre-hydrate token statuses and project names
+ * 4. Pre-filter already-complete tokens, batch cancel them
+ * 5. Process remaining with send timeouts and time budget
  */
 async function processQueryReminders(): Promise<void> {
+  const startTime = Date.now();
   const stats: CronRunStats = {
     runTime: new Date(),
     withinOperatingHours: isWithinOperatingHours(),
@@ -135,8 +175,7 @@ async function processQueryReminders(): Promise<void> {
     processed: 0,
     sent: 0,
     cancelled: 0,
-    failed: 0,
-    results: []
+    failed: 0
   };
 
   if (isRunning) {
@@ -150,15 +189,19 @@ async function processQueryReminders(): Promise<void> {
   }
 
   isRunning = true;
+  let budgetExceeded = false;
 
   try {
+    // PHASE 1: Fetch bounded candidates (max 50, FIFO)
     const allDueReminders = await getDueReminders();
     stats.totalDue = allDueReminders.length;
     
     if (allDueReminders.length === 0) {
+      console.log('[QueryReminderCron] No due reminders');
       return;
     }
 
+    // Weekend voice rescheduling (lightweight - just updates scheduledAt)
     const dueReminders = await rescheduleAndFilterWeekendVoiceReminders(allDueReminders);
     stats.voiceRescheduled = allDueReminders.length - dueReminders.length;
     
@@ -167,327 +210,205 @@ async function processQueryReminders(): Promise<void> {
       return;
     }
 
-    console.log(`[QueryReminderCron] Processing ${dueReminders.length} due reminder(s)${stats.voiceRescheduled > 0 ? ` (${stats.voiceRescheduled} voice rescheduled for weekend)` : ''}`);
+    // PHASE 2: Batch claim all candidates immediately (claim-first pattern)
+    const reminderIds = dueReminders.map(r => r.id);
+    const claimedIds = await batchClaimReminders(reminderIds);
+    const claimedSet = new Set(claimedIds);
+    
+    // Filter to only claimed reminders
+    const claimedReminders = dueReminders.filter(r => claimedSet.has(r.id));
+    const skippedCount = dueReminders.length - claimedReminders.length;
+    
+    if (claimedReminders.length === 0) {
+      console.log(`[QueryReminderCron] All ${dueReminders.length} reminders claimed by another instance`);
+      return;
+    }
+    
+    if (skippedCount > 0) {
+      console.log(`[QueryReminderCron] Skipped ${skippedCount} reminders (claimed by another instance)`);
+    }
 
-    // Process with event loop yields to prevent blocking
-    for (let i = 0; i < dueReminders.length; i++) {
-      const reminder = dueReminders[i];
+    // PHASE 3: Batch pre-hydrate token statuses and project names
+    const tokenIds = Array.from(new Set(claimedReminders.map(r => r.tokenId)));
+    const projectIds = Array.from(new Set(claimedReminders.map(r => r.projectId).filter(Boolean))) as string[];
+    
+    const [tokenStatusMap, projectNameMap] = await Promise.all([
+      batchGetTokenStatuses(tokenIds),
+      batchGetProjectNames(projectIds)
+    ]);
+
+    // PHASE 4: Pre-filter already-complete tokens, batch cancel
+    const completedReminderIds: string[] = [];
+    const toProcessReminders: typeof claimedReminders = [];
+    
+    for (const reminder of claimedReminders) {
+      const tokenStatus = tokenStatusMap.get(reminder.tokenId);
+      if (tokenStatus?.allAnswered) {
+        completedReminderIds.push(reminder.id);
+        stats.cancelled++;
+      } else {
+        toProcessReminders.push(reminder);
+      }
+    }
+    
+    if (completedReminderIds.length > 0) {
+      await batchCancelCompletedReminders(completedReminderIds);
+      console.log(`[QueryReminderCron] Pre-cancelled ${completedReminderIds.length} reminders (queries already complete)`);
+    }
+
+    console.log(`[QueryReminderCron] Processing ${toProcessReminders.length} claimed reminders (${stats.cancelled} pre-cancelled)`);
+
+    // PHASE 5: Process remaining with send timeouts and time budget
+    for (let i = 0; i < toProcessReminders.length; i++) {
+      // Check time budget BEFORE processing
+      const elapsed = Date.now() - startTime;
+      if (elapsed > MAX_RUNTIME_MS) {
+        console.log(`[QueryReminderCron] Budget exceeded at ${i}/${toProcessReminders.length} (${elapsed}ms), exiting gracefully`);
+        budgetExceeded = true;
+        
+        // Release claims for unprocessed reminders so they can be picked up next run
+        const unprocessedIds = toProcessReminders.slice(i).map(r => r.id);
+        if (unprocessedIds.length > 0) {
+          await batchReleaseReminderClaims(unprocessedIds);
+        }
+        break;
+      }
+      
+      // Yield event loop periodically
+      if (i > 0 && i % YIELD_EVERY === 0) {
+        await yieldEventLoop();
+      }
+
+      const reminder = toProcessReminders[i];
       stats.processed++;
+      const projectName = projectNameMap.get(reminder.projectId || '') || null;
       
       try {
-        const wasComplete = await checkAndCancelRemindersIfComplete(reminder.tokenId);
+        // Process reminder with timeout based on channel
+        const timeoutMs = reminder.channel === 'voice' ? SEND_TIMEOUT_VOICE : SEND_TIMEOUT_EMAIL_SMS;
         
-        if (wasComplete) {
-          console.log(`[QueryReminderCron] Skipped reminder ${reminder.id} - queries already complete`);
-          stats.cancelled++;
-          const projectName = await getProjectName(reminder.projectId);
-          stats.results.push({
-            reminderId: reminder.id,
-            channel: reminder.channel,
-            recipientName: reminder.recipientName,
-            recipientEmail: reminder.recipientEmail,
-            recipientPhone: reminder.recipientPhone,
-            projectName,
-            success: true,
-            error: 'Cancelled - queries complete'
-          });
-          continue;
-        }
-
-        const result = await processReminder(reminder);
+        const result = await withSendTimeout(
+          () => processReminder(reminder),
+          timeoutMs,
+          { success: false, error: `Send timeout after ${timeoutMs}ms` }
+        );
         
         if (result.success) {
           console.log(`[QueryReminderCron] Sent ${reminder.channel} reminder ${reminder.id}`);
           stats.sent++;
-          const projectName = await getProjectName(reminder.projectId);
-          stats.results.push({
-            reminderId: reminder.id,
-            channel: reminder.channel,
-            recipientName: reminder.recipientName,
-            recipientEmail: reminder.recipientEmail,
-            recipientPhone: reminder.recipientPhone,
-            projectName,
-            success: true
-          });
           
+          // Log chronology (non-blocking, don't fail the reminder for this)
           if (reminder.projectId) {
-            try {
-              await db.insert(projectChronology).values({
-                projectId: reminder.projectId,
-                entryType: 'communication_added',
-                toStatus: 'no_change',
-                notes: `Automated ${reminder.channel} reminder sent to ${reminder.recipientName || 'client'} for pending bookkeeping queries`,
-                changeReason: 'Query Reminder Sent'
-              });
-            } catch (chronError) {
-              console.error('[QueryReminderCron] Failed to log chronology:', chronError);
-            }
-
-            // Log to communications table for client comms history
-            try {
-              // Map channel to communication type - only process known channels
-              const channelTypeMap: Record<string, 'email_sent' | 'sms_sent' | 'phone_call'> = {
-                email: 'email_sent',
-                sms: 'sms_sent',
-                voice: 'phone_call'
-              };
-              
-              const communicationType = channelTypeMap[reminder.channel];
-              if (!communicationType) {
-                console.warn(`[QueryReminderCron] Unknown channel "${reminder.channel}" - skipping communications log`);
-              } else {
-                const tokenData = await db
-                  .select({ createdById: queryResponseTokens.createdById })
-                  .from(queryResponseTokens)
-                  .where(eq(queryResponseTokens.id, reminder.tokenId))
-                  .limit(1);
-
-                const projectData = await db
-                  .select({ clientId: projects.clientId })
-                  .from(projects)
-                  .where(eq(projects.id, reminder.projectId))
-                  .limit(1);
-
-                if (tokenData[0]?.createdById && projectData[0]?.clientId) {
-                  const channelLabels: Record<string, string> = {
-                    email: 'Email',
-                    sms: 'SMS',
-                    voice: 'Voice Call'
-                  };
-                  const channelLabel = channelLabels[reminder.channel] || reminder.channel;
-                  const queryCount = reminder.queriesRemaining || 'pending';
-                  const queryWord = (reminder.queriesRemaining === 1) ? 'query' : 'queries';
-                  
-                  // Use actual send time - the send just succeeded, so use now; sentAt may not be set yet
-                  const sentTimestamp = new Date();
-                  
-                  await db.insert(communications).values({
-                    clientId: projectData[0].clientId,
-                    projectId: reminder.projectId,
-                    userId: tokenData[0].createdById,
-                    type: communicationType,
-                    subject: `Query Reminder ${channelLabel}`,
-                    content: `Automated ${channelLabel.toLowerCase()} reminder sent to ${reminder.recipientName || 'client'} for ${queryCount} outstanding bookkeeping ${queryWord}.`,
-                    actualContactTime: sentTimestamp,
-                    isRead: true,
-                    metadata: {
-                      source: 'query_reminder',
-                      channel: reminder.channel,
-                      reminderId: reminder.id,
-                      tokenId: reminder.tokenId,
-                      recipientName: reminder.recipientName,
-                      recipientEmail: reminder.recipientEmail,
-                      recipientPhone: reminder.recipientPhone,
-                      queriesRemaining: reminder.queriesRemaining,
-                      queriesTotal: reminder.queriesTotal
-                    }
-                  });
-                  console.log(`[QueryReminderCron] Logged ${reminder.channel} reminder to communications for client ${projectData[0].clientId}`);
-                }
-              }
-            } catch (commError) {
-              console.error('[QueryReminderCron] Failed to log to communications:', commError);
-            }
+            logReminderToChronologyAndComms(reminder, projectName).catch(err => {
+              console.error('[QueryReminderCron] Failed to log chronology/comms:', err);
+            });
           }
         } else {
+          // Send failed (including timeout) - mark as failed so it doesn't strand
           console.error(`[QueryReminderCron] Failed to send reminder ${reminder.id}:`, result.error);
+          await markReminderFailed(reminder.id, result.error || 'Unknown send failure');
           stats.failed++;
-          const projectName = await getProjectName(reminder.projectId);
-          stats.results.push({
-            reminderId: reminder.id,
-            channel: reminder.channel,
-            recipientName: reminder.recipientName,
-            recipientEmail: reminder.recipientEmail,
-            recipientPhone: reminder.recipientPhone,
-            projectName,
-            success: false,
-            error: result.error
-          });
         }
       } catch (reminderError) {
         const errorMessage = reminderError instanceof Error ? reminderError.message : 'Unknown error';
         console.error(`[QueryReminderCron] Error processing reminder ${reminder.id}:`, reminderError);
         
-        // Mark reminder as failed in database so it doesn't retry indefinitely
         await markReminderFailed(reminder.id, errorMessage);
-        
         stats.failed++;
-        const projectName = await getProjectName(reminder.projectId);
-        stats.results.push({
-          reminderId: reminder.id,
-          channel: reminder.channel,
-          recipientName: reminder.recipientName,
-          recipientEmail: reminder.recipientEmail,
-          recipientPhone: reminder.recipientPhone,
-          projectName,
-          success: false,
-          error: errorMessage
-        });
-      }
-      
-      // Yield to event loop after each reminder to prevent blocking
-      if (i < dueReminders.length - 1) {
-        await new Promise(resolve => setImmediate(resolve));
       }
     }
   } catch (error) {
     console.error('[QueryReminderCron] Error in reminder processing:', error);
   } finally {
     isRunning = false;
-    await sendMonitoringEmail(stats);
+    const duration = Date.now() - startTime;
+    
+    // Emit lightweight JSON telemetry instead of HTML email
+    console.log(`[QueryReminderCron:JSON] ${JSON.stringify({
+      runTime: stats.runTime.toISOString(),
+      durationMs: duration,
+      totalDue: stats.totalDue,
+      voiceRescheduled: stats.voiceRescheduled,
+      processed: stats.processed,
+      sent: stats.sent,
+      cancelled: stats.cancelled,
+      failed: stats.failed,
+      budgetExceeded
+    })}`);
   }
 }
 
 /**
- * Send monitoring email to martyn@growth.accountants
- * Shows summary of the cron run with all reminder details
+ * Log reminder to chronology and communications (non-blocking)
  */
-async function sendMonitoringEmail(stats: CronRunStats): Promise<void> {
+async function logReminderToChronologyAndComms(
+  reminder: { id: string; channel: string; projectId: string | null; tokenId: string; recipientName: string | null; queriesRemaining?: number | null; queriesTotal?: number | null },
+  projectName: string | null
+): Promise<void> {
+  if (!reminder.projectId) return;
+  
+  // Chronology entry
   try {
-    const { client, fromEmail } = await getUncachableSendGridClient();
-    if (!client) {
-      console.log('[QueryReminderCron] SendGrid not configured, skipping monitoring email');
-      return;
-    }
-
-    const settings = await db.select().from(companySettings).limit(1);
-    const firmName = settings[0]?.firmName || 'Unknown Firm';
-
-    const ukTime = stats.runTime.toLocaleString('en-GB', { timeZone: 'Europe/London' });
-    
-    const isProduction = !!process.env.REPLIT_DEPLOYMENT;
-    const envLabel = isProduction ? 'LIVE' : 'DEV';
-    const envColor = isProduction ? '#28a745' : '#dc3545';
-    
-    const emailCount = stats.results.filter(r => r.channel === 'email').length;
-    const smsCount = stats.results.filter(r => r.channel === 'sms').length;
-    const voiceCount = stats.results.filter(r => r.channel === 'voice').length;
-    const successfullyDelivered = stats.results.filter(r => r.success && !r.error?.includes('Cancelled')).length;
-    
-    const statusEmoji = stats.failed > 0 ? '⚠️' : (stats.sent > 0 ? '✅' : '📋');
-    const subject = `[${envLabel}] ${statusEmoji} Query Reminder Cron Report - ${ukTime}`;
-
-    let resultsTableHtml = '';
-    if (stats.results.length > 0) {
-      resultsTableHtml = `
-        <h3 style="margin-top: 20px;">Reminder Details:</h3>
-        <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width: 100%; font-size: 14px;">
-          <tr style="background-color: #f0f0f0;">
-            <th>Channel</th>
-            <th>Recipient</th>
-            <th>Project</th>
-            <th>Email</th>
-            <th>Phone</th>
-            <th>Status</th>
-            <th>Error</th>
-          </tr>
-          ${stats.results.map(r => `
-            <tr style="background-color: ${r.success ? '#e8f5e9' : '#ffebee'};">
-              <td>${r.channel}</td>
-              <td>${r.recipientName || '-'}</td>
-              <td>${r.projectName || '-'}</td>
-              <td>${r.recipientEmail || '-'}</td>
-              <td>${r.recipientPhone || '-'}</td>
-              <td>${r.success ? '✅ Sent' : '❌ Failed'}</td>
-              <td>${r.error || '-'}</td>
-            </tr>
-          `).join('')}
-        </table>
-      `;
-    }
-
-    const sentReminders = stats.results.filter(r => r.success && !r.error?.includes('Cancelled'));
-    let sentListHtml = '';
-    if (sentReminders.length > 0) {
-      sentListHtml = `
-        <h3 style="margin-top: 20px;">People and Projects Sent Reminders:</h3>
-        <ul style="font-size: 14px;">
-          ${sentReminders.map(r => `<li><strong>${r.recipientName || 'Unknown'}</strong> - ${r.projectName || 'Unknown Project'} (${r.channel})</li>`).join('')}
-        </ul>
-      `;
-    }
-
-    const body = `
-      <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto; padding: 20px;">
-        <div style="background-color: #0f7b94; color: white; padding: 12px 20px; border-radius: 6px; font-size: 18px; font-weight: bold; margin-bottom: 20px;">
-          ${firmName}
-        </div>
-        <div style="display: inline-block; background-color: ${envColor}; color: white; padding: 8px 16px; border-radius: 4px; font-weight: bold; font-size: 16px; margin-bottom: 15px;">
-          ${envLabel} ENVIRONMENT
-        </div>
-        <h2>Query Reminder Cron Report</h2>
-        <p><strong>Environment:</strong> ${isProduction ? 'Production (Live)' : 'Development'}</p>
-        <p><strong>Run Time:</strong> ${ukTime}</p>
-        <p><strong>Operating Hours:</strong> ${stats.withinOperatingHours ? 'Yes (07:00-22:00 UK)' : 'No - Outside operating hours'}</p>
-        
-        <h3>Summary:</h3>
-        <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; font-size: 14px;">
-          <tr>
-            <td><strong>Total Due Reminders</strong></td>
-            <td>${stats.totalDue}</td>
-          </tr>
-          <tr>
-            <td><strong>Voice Rescheduled (Weekend)</strong></td>
-            <td>${stats.voiceRescheduled}</td>
-          </tr>
-          <tr>
-            <td><strong>Processed</strong></td>
-            <td>${stats.processed}</td>
-          </tr>
-          <tr style="background-color: #e8f5e9;">
-            <td><strong>Successfully Sent</strong></td>
-            <td>${stats.sent}</td>
-          </tr>
-          <tr>
-            <td><strong>Cancelled (queries complete)</strong></td>
-            <td>${stats.cancelled}</td>
-          </tr>
-          <tr style="background-color: ${stats.failed > 0 ? '#ffebee' : 'inherit'};">
-            <td><strong>Failed</strong></td>
-            <td>${stats.failed}</td>
-          </tr>
-        </table>
-        
-        <h3 style="margin-top: 20px;">Channel Breakdown:</h3>
-        <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; font-size: 14px;">
-          <tr>
-            <td><strong>Email Reminders</strong></td>
-            <td>${emailCount}</td>
-          </tr>
-          <tr>
-            <td><strong>SMS Reminders</strong></td>
-            <td>${smsCount}</td>
-          </tr>
-          <tr>
-            <td><strong>Voice Call Reminders</strong></td>
-            <td>${voiceCount}</td>
-          </tr>
-          <tr style="background-color: #e8f5e9;">
-            <td><strong>Successfully Delivered</strong></td>
-            <td>${successfullyDelivered}</td>
-          </tr>
-        </table>
-        
-        ${sentListHtml}
-        
-        ${resultsTableHtml}
-        
-        <p style="margin-top: 30px; color: #666; font-size: 12px;">
-          This is an automated monitoring email from the Query Reminder System (${isProduction ? 'Production' : 'Development'} environment).
-        </p>
-      </div>
-    `;
-
-    await client.send({
-      to: 'martyn@growth.accountants',
-      from: fromEmail,
-      subject,
-      html: body
+    await db.insert(projectChronology).values({
+      projectId: reminder.projectId,
+      entryType: 'communication_added',
+      toStatus: 'no_change',
+      notes: `Automated ${reminder.channel} reminder sent to ${reminder.recipientName || 'client'} for pending bookkeeping queries`,
+      changeReason: 'Query Reminder Sent'
     });
+  } catch (chronError) {
+    console.error('[QueryReminderCron] Failed to log chronology:', chronError);
+  }
 
-    console.log('[QueryReminderCron] Monitoring email sent to martyn@growth.accountants');
-  } catch (error) {
-    console.error('[QueryReminderCron] Failed to send monitoring email:', error);
+  // Communications entry
+  try {
+    const channelTypeMap: Record<string, 'email_sent' | 'sms_sent' | 'phone_call'> = {
+      email: 'email_sent',
+      sms: 'sms_sent',
+      voice: 'phone_call'
+    };
+    
+    const communicationType = channelTypeMap[reminder.channel];
+    if (!communicationType) return;
+    
+    const [tokenData, projectData] = await Promise.all([
+      db.select({ createdById: queryResponseTokens.createdById })
+        .from(queryResponseTokens)
+        .where(eq(queryResponseTokens.id, reminder.tokenId))
+        .limit(1),
+      db.select({ clientId: projects.clientId })
+        .from(projects)
+        .where(eq(projects.id, reminder.projectId))
+        .limit(1)
+    ]);
+
+    if (tokenData[0]?.createdById && projectData[0]?.clientId) {
+      const channelLabels: Record<string, string> = { email: 'Email', sms: 'SMS', voice: 'Voice Call' };
+      const channelLabel = channelLabels[reminder.channel] || reminder.channel;
+      const queryCount = reminder.queriesRemaining || 'pending';
+      const queryWord = (reminder.queriesRemaining === 1) ? 'query' : 'queries';
+      
+      await db.insert(communications).values({
+        clientId: projectData[0].clientId,
+        projectId: reminder.projectId,
+        userId: tokenData[0].createdById,
+        type: communicationType,
+        subject: `Query Reminder ${channelLabel}`,
+        content: `Automated ${channelLabel.toLowerCase()} reminder sent to ${reminder.recipientName || 'client'} for ${queryCount} outstanding bookkeeping ${queryWord}.`,
+        actualContactTime: new Date(),
+        isRead: true,
+        metadata: {
+          source: 'query_reminder',
+          channel: reminder.channel,
+          reminderId: reminder.id,
+          tokenId: reminder.tokenId,
+          queriesRemaining: reminder.queriesRemaining,
+          queriesTotal: reminder.queriesTotal
+        }
+      });
+    }
+  } catch (commError) {
+    console.error('[QueryReminderCron] Failed to log to communications:', commError);
   }
 }
 

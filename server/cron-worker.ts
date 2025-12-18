@@ -113,6 +113,19 @@ async function main() {
   });
   log('[EmailResolver] Scheduled (03:00 UTC)');
   
+  // Missed Query Reminder Cleanup - 01:00 UK daily
+  // Cancels reminders scheduled for previous days that were never processed
+  // Separated from QueryReminderCron to keep the main job lightweight
+  cron.schedule('0 1 * * *', wrapCronHandler('MissedReminderCleanup', '0 1 * * *', async () => {
+    const { cleanupMissedReminders } = await import('./services/queryReminderService');
+    log('[Missed Reminder Cleanup] Starting daily cleanup...');
+    const result = await cleanupMissedReminders();
+    log(`[Missed Reminder Cleanup] Cancelled ${result.cancelled} missed reminders from previous days`);
+  }, { useLock: true, timezone: 'Europe/London' }), {
+    timezone: "Europe/London"
+  });
+  log('[MissedReminderCleanup] Scheduled (01:00 UK daily)');
+  
   // Activity Cleanup - 04:15 UTC
   cron.schedule('15 4 * * *', wrapCronHandler('ActivityCleanup', '15 4 * * *', async () => {
     log('[Activity Cleanup] Starting cleanup job...');

@@ -179,6 +179,70 @@ async function claimReminder(reminderId: string): Promise<boolean> {
 }
 
 /**
+ * Batch claim multiple reminders for processing
+ * Claims all reminders in a single atomic UPDATE, returns IDs successfully claimed
+ * This is the "claim-first" pattern to prevent race conditions and wasted hydration work
+ */
+export async function batchClaimReminders(reminderIds: string[]): Promise<string[]> {
+  if (reminderIds.length === 0) return [];
+  
+  const processingMarker = `__PROCESSING__${Date.now()}`;
+  
+  try {
+    const claimed = await db
+      .update(scheduledQueryReminders)
+      .set({ 
+        errorMessage: processingMarker
+      })
+      .where(
+        and(
+          inArray(scheduledQueryReminders.id, reminderIds),
+          eq(scheduledQueryReminders.status, 'pending'),
+          or(
+            isNull(scheduledQueryReminders.errorMessage),
+            sql`${scheduledQueryReminders.errorMessage} NOT LIKE '__PROCESSING__%'`
+          )
+        )
+      )
+      .returning({ id: scheduledQueryReminders.id });
+    
+    const claimedIds = claimed.map(r => r.id);
+    if (claimedIds.length > 0) {
+      console.log(`[QueryReminder] Batch claimed ${claimedIds.length}/${reminderIds.length} reminders for processing`);
+    }
+    return claimedIds;
+  } catch (error) {
+    console.error(`[QueryReminder] Failed to batch claim reminders:`, error);
+    return [];
+  }
+}
+
+/**
+ * Batch release multiple reminder claims
+ * Called when budget is exceeded and we need to release unprocessed reminders
+ */
+export async function batchReleaseReminderClaims(reminderIds: string[]): Promise<void> {
+  if (reminderIds.length === 0) return;
+  
+  try {
+    await db
+      .update(scheduledQueryReminders)
+      .set({ 
+        errorMessage: null
+      })
+      .where(
+        and(
+          inArray(scheduledQueryReminders.id, reminderIds),
+          sql`${scheduledQueryReminders.errorMessage} LIKE '__PROCESSING__%'`
+        )
+      );
+    console.log(`[QueryReminder] Released claims for ${reminderIds.length} unprocessed reminders`);
+  } catch (error) {
+    console.error(`[QueryReminder] Failed to batch release claims:`, error);
+  }
+}
+
+/**
  * Release a reminder claim without marking it as failed
  * Called when we skip processing (e.g., already answered, token expired)
  * or when an unexpected error occurs before we update the final status
@@ -291,6 +355,131 @@ function formatPhoneForVoodooSMS(phone: string): string {
     return '+' + cleanPhone;
   }
   return phone.startsWith('+') ? phone : `+${cleanPhone}`;
+}
+
+/**
+ * Batch fetch token statuses for multiple tokens
+ * Returns a map of tokenId -> QueryStatus for pre-hydration
+ */
+export async function batchGetTokenStatuses(tokenIds: string[]): Promise<Map<string, QueryStatus>> {
+  const result = new Map<string, QueryStatus>();
+  if (tokenIds.length === 0) return result;
+  
+  try {
+    // Get all tokens in one query
+    const tokens = await db
+      .select({ id: queryResponseTokens.id, queryIds: queryResponseTokens.queryIds })
+      .from(queryResponseTokens)
+      .where(inArray(queryResponseTokens.id, tokenIds));
+    
+    // Collect all query IDs across all tokens
+    const allQueryIds: string[] = [];
+    const tokenQueryMap = new Map<string, string[]>();
+    
+    for (const token of tokens) {
+      const queryIds = token.queryIds || [];
+      tokenQueryMap.set(token.id, queryIds);
+      allQueryIds.push(...queryIds);
+    }
+    
+    // Fetch all query statuses in one query
+    const queryStatuses = allQueryIds.length > 0 
+      ? await db
+          .select({ id: bookkeepingQueries.id, status: bookkeepingQueries.status })
+          .from(bookkeepingQueries)
+          .where(inArray(bookkeepingQueries.id, allQueryIds))
+      : [];
+    
+    const queryStatusMap = new Map<string, string>();
+    for (const q of queryStatuses) {
+      queryStatusMap.set(q.id, q.status || 'pending');
+    }
+    
+    // Calculate status for each token
+    for (const entry of Array.from(tokenQueryMap.entries())) {
+      const [tokenId, queryIds] = entry;
+      if (queryIds.length === 0) {
+        result.set(tokenId, { totalQueries: 0, answeredQueries: 0, pendingQueries: 0, allAnswered: true });
+        continue;
+      }
+      
+      let answered = 0;
+      for (const qid of queryIds) {
+        const status = queryStatusMap.get(qid);
+        if (status === 'answered_by_client' || status === 'resolved') {
+          answered++;
+        }
+      }
+      
+      const pending = queryIds.length - answered;
+      result.set(tokenId, {
+        totalQueries: queryIds.length,
+        answeredQueries: answered,
+        pendingQueries: pending,
+        allAnswered: pending === 0
+      });
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('[QueryReminder] Error in batchGetTokenStatuses:', error);
+    return result;
+  }
+}
+
+/**
+ * Batch fetch project names for multiple project IDs
+ * Returns a map of projectId -> project name
+ */
+export async function batchGetProjectNames(projectIds: string[]): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  if (projectIds.length === 0) return result;
+  
+  try {
+    const projectData = await db
+      .select({ id: projects.id, description: projects.description, projectMonth: projects.projectMonth })
+      .from(projects)
+      .where(inArray(projects.id, projectIds));
+    
+    for (const p of projectData) {
+      const month = p.projectMonth ? ` (${p.projectMonth})` : '';
+      result.set(p.id, `${p.description}${month}`);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('[QueryReminder] Error in batchGetProjectNames:', error);
+    return result;
+  }
+}
+
+/**
+ * Batch cancel reminders for already-completed tokens
+ * Returns the IDs of reminders that were cancelled
+ */
+export async function batchCancelCompletedReminders(reminderIds: string[]): Promise<string[]> {
+  if (reminderIds.length === 0) return [];
+  
+  try {
+    const cancelled = await db
+      .update(scheduledQueryReminders)
+      .set({
+        status: 'cancelled',
+        cancelledAt: new Date(),
+        errorMessage: 'Auto-cancelled: all queries answered'
+      })
+      .where(inArray(scheduledQueryReminders.id, reminderIds))
+      .returning({ id: scheduledQueryReminders.id });
+    
+    const cancelledIds = cancelled.map(r => r.id);
+    if (cancelledIds.length > 0) {
+      console.log(`[QueryReminder] Batch cancelled ${cancelledIds.length} reminders (queries already complete)`);
+    }
+    return cancelledIds;
+  } catch (error) {
+    console.error('[QueryReminder] Error in batchCancelCompletedReminders:', error);
+    return [];
+  }
 }
 
 /**
@@ -1064,7 +1253,10 @@ export async function processReminder(reminder: ScheduledQueryReminder): Promise
 }
 
 /**
- * Get all reminders that are due for processing
+ * Get reminders that are due for processing
+ * 
+ * BOUNDED: Returns max 50 reminders per run, oldest first (FIFO)
+ * Missed reminders (from previous days) are now handled by MissedReminderCleanup daily cron
  */
 export async function getDueReminders(): Promise<ScheduledQueryReminder[]> {
   const now = new Date();
@@ -1078,44 +1270,22 @@ export async function getDueReminders(): Promise<ScheduledQueryReminder[]> {
   const ukOffset = ukNow.getTime() - now.getTime();
   const startOfTodayUTC = new Date(startOfTodayUK.getTime() - ukOffset);
   
-  const allDue = await db
+  // Bounded query: max 50 due reminders, oldest first (FIFO fairness)
+  // Only fetch reminders scheduled today or later (missed ones handled by daily cleanup)
+  const dueReminders = await db
     .select()
     .from(scheduledQueryReminders)
     .where(
       and(
         eq(scheduledQueryReminders.status, 'pending'),
-        lte(scheduledQueryReminders.scheduledAt, now)
+        lte(scheduledQueryReminders.scheduledAt, now),
+        sql`${scheduledQueryReminders.scheduledAt} >= ${startOfTodayUTC}`
       )
-    );
+    )
+    .orderBy(sql`${scheduledQueryReminders.scheduledAt} ASC`)
+    .limit(50);
   
-  // Filter out reminders scheduled before today (missed from previous days)
-  const todayOnwards = allDue.filter(r => {
-    if (!r.scheduledAt) return false;
-    return new Date(r.scheduledAt) >= startOfTodayUTC;
-  });
-  
-  // Cancel old missed reminders
-  const missedReminders = allDue.filter(r => {
-    if (!r.scheduledAt) return false;
-    return new Date(r.scheduledAt) < startOfTodayUTC;
-  });
-  
-  for (const missed of missedReminders) {
-    await db
-      .update(scheduledQueryReminders)
-      .set({
-        status: 'cancelled',
-        cancelledAt: now
-      })
-      .where(eq(scheduledQueryReminders.id, missed.id));
-    console.log(`[QueryReminder] Cancelled missed reminder ${missed.id} (scheduled ${missed.scheduledAt?.toISOString()})`);
-  }
-  
-  if (missedReminders.length > 0) {
-    console.log(`[QueryReminder] Cancelled ${missedReminders.length} missed reminder(s) from previous days`);
-  }
-  
-  return todayOnwards;
+  return dueReminders;
 }
 
 /**
@@ -1552,4 +1722,44 @@ export async function updateReminder(
     .returning();
 
   return result[0] || null;
+}
+
+/**
+ * Cleanup missed reminders from previous days
+ * Called by MissedReminderCleanup daily cron at 01:00 UK
+ * Batch cancels all pending reminders scheduled before today
+ */
+export async function cleanupMissedReminders(): Promise<{ cancelled: number }> {
+  const now = new Date();
+  
+  // Get start of today in UK time
+  const ukNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/London' }));
+  const startOfTodayUK = new Date(ukNow);
+  startOfTodayUK.setHours(0, 0, 0, 0);
+  
+  // Convert back to UTC for DB comparison
+  const ukOffset = ukNow.getTime() - now.getTime();
+  const startOfTodayUTC = new Date(startOfTodayUK.getTime() - ukOffset);
+  
+  // Batch cancel all missed reminders in a single UPDATE
+  const result = await db
+    .update(scheduledQueryReminders)
+    .set({
+      status: 'cancelled',
+      cancelledAt: now,
+      errorMessage: 'Auto-cancelled: missed from previous day'
+    })
+    .where(
+      and(
+        eq(scheduledQueryReminders.status, 'pending'),
+        lte(scheduledQueryReminders.scheduledAt, startOfTodayUTC)
+      )
+    )
+    .returning({ id: scheduledQueryReminders.id });
+  
+  if (result.length > 0) {
+    console.log(`[QueryReminder] Batch cancelled ${result.length} missed reminders from previous days`);
+  }
+  
+  return { cancelled: result.length };
 }
