@@ -159,6 +159,7 @@ export default function ProjectTypeDetail() {
     notifications,
     notificationsLoading,
     clientRequestTemplates,
+    taskTemplates,
     allStageApprovalFields,
     stageApprovalFieldsLoading,
     allStageReasonMaps,
@@ -725,6 +726,7 @@ export default function ProjectTypeDetail() {
               notifications={notifications}
               stages={stages}
               clientRequestTemplates={clientRequestTemplates}
+              taskTemplates={taskTemplates}
               isAdmin={isAdmin === true}
               isAddingProjectNotification={isAddingProjectNotification}
               setIsAddingProjectNotification={setIsAddingProjectNotification}

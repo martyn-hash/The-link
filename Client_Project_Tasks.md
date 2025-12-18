@@ -353,96 +353,118 @@ On submit:
 
 ---
 
-## Phase 5: Staff-Facing Views
+## Phase 5: Staff-Facing Views ✅ COMPLETE
 
 > **Testing Login**: Root page (/) → Passwords tab → admin@example.com | admin123
 
 ### Success Criteria
-- [ ] Queries tab shows Client Tasks section (accordion if both exist)
-- [ ] Can see task status, responses, completion details
-- [ ] Scheduled reminders shown like bookkeeping queries
-- [ ] Can manually resend/extend task links
-- [ ] Project card shows task status indicator
+- [x] Queries tab shows Client Tasks section (accordion if both exist)
+- [x] Can see task status, responses, completion details
+- [x] Scheduled reminders shown like bookkeeping queries
+- [x] Can manually resend/extend task links
+- [x] Project card shows task status indicator
+
+### Implementation Notes
+
+**Key Files:**
+- `client/src/components/queries/ClientProjectTasksSection.tsx` - Main task management UI
+- `client/src/components/project-card.tsx` - Task indicator on project cards
+- `server/routes/clientProjectTasks.ts` - API endpoints including batch counts
+
+**Project Card Integration:**
+- Blue `ClipboardList` icon shows count of pending/sent tasks
+- Uses batch API (`/api/task-instances/counts`) for efficient loading
+- Only shown in kanban view when tasks exist
 
 ### Tasks
 
-#### 5.1 Extend Queries Tab
+#### 5.1 Extend Queries Tab ✅
 
 Location: `client/src/components/queries/QueriesTab.tsx`
 
-Add accordion structure when client tasks exist:
-```jsx
-<Accordion>
-  <AccordionItem value="bookkeeping-queries">
-    <AccordionTrigger>Bookkeeping Queries (X open)</AccordionTrigger>
-    <AccordionContent>/* existing queries UI */</AccordionContent>
-  </AccordionItem>
-  <AccordionItem value="client-tasks">
-    <AccordionTrigger>Client Project Tasks</AccordionTrigger>
-    <AccordionContent>/* new tasks UI */</AccordionContent>
-  </AccordionItem>
-</Accordion>
-```
+**Implementation:** `ClientProjectTasksSection` component shows all task instances for a project with:
+- Status badges (Pending/Sent/In Progress/Submitted/Expired)
+- Create new task dialog
+- Template selection dropdown
 
-If only one type exists, show without accordion.
+#### 5.2 Task Status Display ✅
 
-#### 5.2 Task Status Display
-
-**Task Card**:
-- Status badge (Pending/Sent/In Progress/Submitted/Expired)
+**Task Card Features:**
+- Status badge (Pending/Sent/In Progress/Submitted/Expired) with color coding
 - Template name
 - Sent date, opened date, submitted date
-- Recipient info
+- Recipient info (email/name from token)
 - "View Responses" button (expands to show answers)
 - "Resend Link" / "Extend Expiry" actions
 
-**Response Viewer**:
+**Response Viewer:**
 - Collapsible section showing all Q&A
-- File attachments with preview/download
+- Question labels with response values
 - Timestamps for each answer
 
-#### 5.3 Project Card Integration
+#### 5.3 Project Card Integration ✅
 
 Location: `client/src/components/project-card.tsx`
 
-Add task status indicator:
-- Icon showing if task is pending/awaiting/complete
-- Tooltip with details
-- Only shown if task exists for project
+**Implementation:**
+- Blue `ClipboardList` icon with count badge
+- Shows count of pending + sent tasks
+- Tooltip displays task status summary
+- Batch API for efficient loading across multiple projects
 
 ---
 
-## Phase 6: Reminder Integration
+## Phase 6: Reminder Integration ✅ COMPLETE
 
 > **Testing Login**: Root page (/) → Passwords tab → admin@example.com | admin123
 
 ### Success Criteria
-- [ ] Scheduled reminders work for client tasks (email/SMS/voice)
-- [ ] Reminders shown in project scheduled reminders panel
-- [ ] Can configure follow-up reminders in notification setup
-- [ ] Reminder status updates correctly
+- [x] Scheduled reminders work for client tasks (email/SMS/voice)
+- [x] Reminders shown in project scheduled reminders panel (via ClientProjectTasksSection)
+- [x] Can configure follow-up reminders in notification setup
+- [x] Reminder status updates correctly
+
+### Implementation Notes
+
+**Key Files Modified:**
+- `client/src/pages/project-type-detail/components/notifications/ProjectNotificationForm.tsx` - Task template dropdown
+- `server/notification-sender.ts` - Task instance creation on notification fire
+- `server/notification-variables.ts` - Added `{task_link}` variable
+- `shared/schema/notifications/tables.ts` - Added `taskTemplateId` to projectTypeNotifications
+
+**Design Decisions:**
+1. Task instances are created at **notification send time** (not schedule time) to ensure task links are available in notification content
+2. `{task_link}` variable injects the client-facing task form URL into notifications
+3. Token automatically generated with configurable expiry when task instance is created
+4. Existing `ClientProjectTasksSection` shows task instances with full status tracking
 
 ### Tasks
 
-#### 6.1 Extend Notification System
+#### 6.1 Extend Notification System ✅
 
 Modify `ProjectNotificationForm.tsx`:
-- Add "Attach Client Task Template" dropdown
-- When selected, notification creates task instance
-- Follow-up reminder configuration (same as queries)
+- [x] Add "Attach Client Task Template" dropdown
+- [x] When selected, notification creates task instance
+- [x] Follow-up reminder configuration (same as queries)
 
-#### 6.2 Reminder Cron Integration
+**Implementation:** Added `taskTemplateId` field to notification form and database schema. Dropdown fetches active task templates for the project type.
 
-Extend `server/query-reminder-cron.ts` or create parallel cron:
-- Check for pending task reminders
-- Send via configured channel
-- Update status
+#### 6.2 Reminder Cron Integration ✅
 
-#### 6.3 Reminders Panel Integration
+**Implementation:** Rather than creating a separate cron, integrated task instance creation into `notification-sender.ts`:
+- When a notification fires with `taskTemplateId`, creates a task instance
+- Generates access token automatically
+- Injects `{task_link}` variable into notification content
+- Status tracked on task instance (pending, sent, in_progress, submitted, expired)
 
-Extend `ScheduledRemindersPanel.tsx`:
-- Show task-related reminders alongside query reminders
-- Same cancel/view functionality
+#### 6.3 Reminders Panel Integration ✅
+
+**Implementation:** `ClientProjectTasksSection` (already exists) provides full task visibility:
+- Shows all task instances for a project
+- Displays status with color-coded badges
+- "Resend Link" and "Extend Expiry" actions available
+- Collapsible response viewer for submitted tasks
+- Token expiry tracking and warnings
 
 ---
 

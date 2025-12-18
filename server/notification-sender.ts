@@ -8,6 +8,7 @@ import {
   companySettings,
   projects,
   projectTypes,
+  projectTypeNotifications,
   clientServices,
   services,
   users,
@@ -22,6 +23,7 @@ import {
   processNotificationVariables, 
   type NotificationVariableContext 
 } from "./notification-variables";
+import { storage } from "./storage";
 
 /**
  * Notification Sender Service
@@ -446,6 +448,103 @@ async function getRecipientInfo(notification: ScheduledNotification): Promise<{
 }
 
 /**
+ * Create a client project task instance if the notification has an attached task template
+ * Returns the task link if created, otherwise null
+ */
+async function createTaskInstanceForNotification(
+  notification: ScheduledNotification,
+  recipientEmail: string | null
+): Promise<string | null> {
+  // Only project-type notifications can have task templates
+  if (!notification.projectTypeNotificationId) {
+    return null;
+  }
+
+  // Fetch the project type notification to check for taskTemplateId
+  const [ptNotification] = await db
+    .select({
+      taskTemplateId: projectTypeNotifications.taskTemplateId,
+    })
+    .from(projectTypeNotifications)
+    .where(eq(projectTypeNotifications.id, notification.projectTypeNotificationId))
+    .limit(1);
+
+  if (!ptNotification?.taskTemplateId) {
+    return null;
+  }
+
+  // We have a task template - create the task instance
+  console.log(`[NotificationSender] Creating task instance for notification ${notification.id} with template ${ptNotification.taskTemplateId}`);
+
+  try {
+    // Check if there's a client override for this template
+    const override = notification.clientId 
+      ? await storage.clientProjectTaskStorage.getOverrideByClientAndTemplate(
+          notification.clientId, 
+          ptNotification.taskTemplateId
+        )
+      : null;
+
+    // Create the task instance
+    const instance = await storage.clientProjectTaskStorage.createInstance({
+      templateId: ptNotification.taskTemplateId,
+      clientId: notification.clientId,
+      projectId: notification.projectId || undefined,
+      overrideId: override?.id || undefined,
+      scheduledNotificationId: notification.id,
+      status: 'sent',
+      sentAt: new Date(),
+    });
+
+    console.log(`[NotificationSender] Created task instance ${instance.id}`);
+
+    // Get recipient email for token
+    const tokenEmail = recipientEmail || 'unknown@client.com';
+
+    // Get template to calculate expiry
+    const template = await storage.clientProjectTaskStorage.getTemplateById(ptNotification.taskTemplateId);
+    const expiryDays = template?.expiryDaysAfterStart || 7;
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + expiryDays);
+
+    // Need to get the user who scheduled this notification (for createdById)
+    // For now, use the project owner or fall back to system
+    let createdById = 'system';
+    if (notification.projectId) {
+      const [project] = await db
+        .select({ projectOwnerId: projects.projectOwnerId })
+        .from(projects)
+        .where(eq(projects.id, notification.projectId))
+        .limit(1);
+      if (project?.projectOwnerId) {
+        createdById = project.projectOwnerId;
+      }
+    }
+
+    // Create the access token
+    const token = await storage.clientProjectTaskStorage.createToken({
+      instanceId: instance.id,
+      expiresAt,
+      recipientEmail: tokenEmail,
+      createdById,
+    });
+
+    // Build the task link
+    const baseUrl = process.env.REPLIT_DEPLOYMENT_URL || process.env.REPL_SLUG 
+      ? `https://${process.env.REPLIT_DEPLOYMENT_URL || process.env.REPL_SLUG}.replit.app`
+      : 'https://localhost:5000';
+    const taskLink = `${baseUrl}/client-task/${token.token}`;
+
+    console.log(`[NotificationSender] Created task token, link: ${taskLink}`);
+    return taskLink;
+  } catch (error) {
+    console.error(`[NotificationSender] Failed to create task instance:`, error);
+    // Don't fail the notification just because task creation failed
+    return null;
+  }
+}
+
+/**
  * Build notification variable context by fetching all required data
  * Uses parallel queries for efficiency
  */
@@ -694,8 +793,17 @@ async function processSingleNotification(
     return;
   }
 
+  // Get recipient contact information first (needed for task instance creation)
+  const { email, phone } = await getRecipientInfo(currentNotification);
+
   // Build variable context by fetching all required data
   const variableContext = await buildNotificationVariableContext(currentNotification, firmSettings);
+  
+  // Create task instance if this notification has an attached task template
+  const taskLink = await createTaskInstanceForNotification(currentNotification, email);
+  if (taskLink) {
+    variableContext.taskLink = taskLink;
+  }
   
   // Process notification content variables
   const processedEmailTitle = currentNotification.emailTitle 
@@ -716,9 +824,6 @@ async function processSingleNotification(
 
   // Get email sender name from firm settings
   const senderName = firmSettings?.emailSenderName || "The Link Team";
-
-  // Get recipient contact information using the refreshed notification data
-  const { email, phone } = await getRecipientInfo(currentNotification);
 
   // Create a notification object with processed content for validation
   const processedNotification = {

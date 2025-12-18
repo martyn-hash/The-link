@@ -218,5 +218,9 @@ export function applyClientProjectTasksFacade<T extends ClientProjectTasksFacade
     getClientProjectTaskSectionsForInstance(instanceId: string): Promise<{ id: string; name: string; description: string | null; order: number }[]> {
       return (this as any).clientProjectTaskStorage.getSectionsForInstance(instanceId);
     }
+
+    getPendingClientProjectTaskCountsBatch(projectIds: string[]): Promise<Map<string, { pending: number; awaitingClient: number }>> {
+      return (this as any).clientProjectTaskStorage.getPendingTaskCountsBatch(projectIds);
+    }
   } as any;
 }

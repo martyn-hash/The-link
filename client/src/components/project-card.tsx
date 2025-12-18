@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { StageChangePopover } from "./stage-change-popover";
-import { GripVertical, AlertCircle, Clock, Info, MessageSquare, Check, HelpCircle } from "lucide-react";
+import { GripVertical, AlertCircle, Clock, Info, MessageSquare, Check, HelpCircle, ClipboardList } from "lucide-react";
 import type { ProjectWithRelations, KanbanStage, User } from "@shared/schema";
 import { calculateCurrentInstanceTime } from "@shared/businessTime";
 import { useAuth } from "@/hooks/useAuth";
@@ -31,6 +31,7 @@ interface ProjectCardProps extends React.HTMLAttributes<HTMLDivElement> {
   isSelected?: boolean;
   onSelectToggle?: (projectId: string) => void;
   openQueryCount?: number; // Number of open bookkeeping queries
+  taskStatus?: { pending: number; awaitingClient: number }; // Client project task status
   isPendingMove?: boolean; // True when card is being moved (modal open, awaiting confirmation)
 }
 
@@ -44,6 +45,7 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
   isSelected = false,
   onSelectToggle,
   openQueryCount = 0,
+  taskStatus,
   isPendingMove = false,
   ...props
 }, forwardedRef) => {
@@ -513,6 +515,25 @@ const ProjectCard = forwardRef<HTMLDivElement, ProjectCardProps>(({
               >
                 <HelpCircle className="w-3 h-3" />
                 {openQueryCount}
+              </span>
+            )}
+            {/* Client task indicator */}
+            {taskStatus && (taskStatus.pending > 0 || taskStatus.awaitingClient > 0) && (
+              <span 
+                className={`inline-flex items-center gap-0.5 text-xs whitespace-nowrap ${
+                  taskStatus.awaitingClient > 0 
+                    ? 'text-blue-600 dark:text-blue-400' 
+                    : 'text-gray-500 dark:text-gray-400'
+                }`}
+                title={
+                  taskStatus.awaitingClient > 0 
+                    ? `${taskStatus.awaitingClient} task${taskStatus.awaitingClient !== 1 ? 's' : ''} awaiting client response`
+                    : `${taskStatus.pending} task${taskStatus.pending !== 1 ? 's' : ''} pending`
+                }
+                data-testid={`task-status-${project.id}`}
+              >
+                <ClipboardList className="w-3 h-3" />
+                {taskStatus.awaitingClient > 0 ? taskStatus.awaitingClient : taskStatus.pending}
               </span>
             )}
           </div>

@@ -16,7 +16,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Plus, Bell, Calendar, Workflow, RefreshCcw, Loader2, Mail, MessageSquare, Smartphone, Clock, Play, Settings2, Trash2, ChevronRight, FileText, Users, Eye } from "lucide-react";
-import type { ProjectType, KanbanStage, ProjectTypeNotification, ClientRequestTemplate, PreviewCandidatesResponse } from "@shared/schema";
+import type { ProjectType, KanbanStage, ProjectTypeNotification, ClientRequestTemplate, ClientProjectTaskTemplate, PreviewCandidatesResponse } from "@shared/schema";
 import { ProjectNotificationForm, StageNotificationForm } from "../notifications";
 import { NotificationPreviewDialog } from "@/components/NotificationPreviewDialog";
 import { ClientPersonSelectionModal } from "@/components/ClientPersonSelectionModal";
@@ -343,6 +343,7 @@ interface NotificationsTabProps {
   notifications: ProjectTypeNotification[] | undefined;
   stages: KanbanStage[] | undefined;
   clientRequestTemplates: ClientRequestTemplate[] | undefined;
+  taskTemplates: ClientProjectTaskTemplate[] | undefined;
   isAdmin: boolean;
   isAddingProjectNotification: boolean;
   setIsAddingProjectNotification: (adding: boolean) => void;
@@ -359,6 +360,7 @@ export function NotificationsTab({
   notifications,
   stages,
   clientRequestTemplates,
+  taskTemplates,
   isAdmin,
   isAddingProjectNotification,
   setIsAddingProjectNotification,
@@ -436,6 +438,7 @@ export function NotificationsTab({
             onCancel={() => setIsAddingProjectNotification(false)}
             createMutation={createNotificationMutation}
             clientRequestTemplates={clientRequestTemplates || []}
+            taskTemplates={taskTemplates || []}
             stages={stages}
           />
         )}

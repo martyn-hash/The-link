@@ -7,6 +7,7 @@ import { projects, projectTypes, kanbanStages } from "../projects/tables";
 import { clientServices } from "../services/tables";
 import { clientRequestTemplates } from "../requests/tables";
 import { taskInstances } from "../tasks/tables";
+import { clientProjectTaskTemplates } from "../client-project-tasks/tables";
 
 export const pushTemplateTypeEnum = pgEnum("push_template_type", [
   "new_message_staff",
@@ -96,6 +97,7 @@ export const projectTypeNotifications = pgTable("project_type_notifications", {
   pushTitle: varchar("push_title", { length: 50 }),
   pushBody: varchar("push_body", { length: 120 }),
   clientRequestTemplateId: varchar("client_request_template_id").references(() => clientRequestTemplates.id, { onDelete: "set null" }),
+  taskTemplateId: varchar("task_template_id").references(() => clientProjectTaskTemplates.id, { onDelete: "set null" }),
   eligibleStageIds: text("eligible_stage_ids").array(),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -105,6 +107,7 @@ export const projectTypeNotifications = pgTable("project_type_notifications", {
   index("idx_project_type_notifications_stage_id").on(table.stageId),
   index("idx_project_type_notifications_category").on(table.category),
   index("idx_project_type_notifications_client_request_template_id").on(table.clientRequestTemplateId),
+  index("idx_project_type_notifications_task_template_id").on(table.taskTemplateId),
   check("check_project_notification_fields", sql`
     (category != 'project' OR (date_reference IS NOT NULL AND offset_type IS NOT NULL AND offset_days IS NOT NULL))
   `),

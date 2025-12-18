@@ -68,6 +68,9 @@ export interface NotificationVariableContext {
   
   // Stage approval data (keyed by approval name)
   stageApprovals?: Map<string, StageApprovalData>;
+  
+  // Task link for client project task forms
+  taskLink?: string;
 }
 
 /**
@@ -325,6 +328,11 @@ export function processNotificationVariables(
   processed = processed.replace(/\{portal_link\}/g, actionLinks.portalLink);
   processed = processed.replace(/\{project_link\}/g, actionLinks.projectLink);
   processed = processed.replace(/\{document_upload_link\}/g, actionLinks.documentUploadLink);
+  
+  // Task link for client project task forms
+  if (context.taskLink) {
+    processed = processed.replace(/\{task_link\}/g, context.taskLink);
+  }
   
   // Stage approval variables - pattern: {stage_approval:ApprovalName}
   // This allows templates to include approval data from specific named approvals

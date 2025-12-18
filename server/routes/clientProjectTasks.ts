@@ -1040,6 +1040,28 @@ export function registerClientProjectTaskRoutes(
     }
   });
 
+  // GET /api/task-instances/counts - Get pending task counts for all projects (batch)
+  app.get("/api/task-instances/counts", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
+    try {
+      // Get all projects for the current user context
+      const projects = await storage.getAllProjects({ archived: false });
+      const projectIds = projects.map((p: any) => p.id);
+      
+      const countsMap = await storage.getPendingClientProjectTaskCountsBatch(projectIds);
+      
+      // Convert Map to object for JSON response
+      const counts: Record<string, { pending: number; awaitingClient: number }> = {};
+      countsMap.forEach((count, projectId) => {
+        counts[projectId] = count;
+      });
+      
+      res.json(counts);
+    } catch (error) {
+      console.error("Error fetching task instance counts:", error);
+      res.status(500).json({ message: "Failed to fetch task instance counts" });
+    }
+  });
+
   // POST /api/projects/:projectId/task-instances - Create a new task instance with token
   app.post("/api/projects/:projectId/task-instances", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {

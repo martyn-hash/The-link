@@ -212,6 +212,14 @@ export default function KanbanBoard({
     refetchInterval: 60 * 1000, // Refetch every minute
   });
   
+  // Fetch task counts for all projects (batch query)
+  const { data: taskCounts = {} } = useQuery<Record<string, { pending: number; awaitingClient: number }>>({
+    queryKey: ['/api/task-instances/counts'],
+    enabled: isAuthenticated && !!authUser,
+    staleTime: 30 * 1000, // 30 seconds - refresh frequently for task counts
+    refetchInterval: 60 * 1000, // Refetch every minute
+  });
+  
   // State for stage-level filters and sorting
   const [stageFilters, setStageFilters] = useState<Record<string, StageFilterConfig>>({});
   
@@ -1229,6 +1237,7 @@ export default function KanbanBoard({
                                 isSelected={selectedProjectIds.has(project.id)}
                                 onSelectToggle={handleSelectToggle}
                                 openQueryCount={queryCounts[project.id] || 0}
+                                taskStatus={taskCounts[project.id]}
                                 isPendingMove={pendingMove?.projectId === project.id}
                               />
                             );
@@ -1262,6 +1271,7 @@ export default function KanbanBoard({
               onOpenModal={() => navigateToProject(activeProject.id)}
               isDragging
               openQueryCount={queryCounts[activeProject.id] || 0}
+              taskStatus={taskCounts[activeProject.id]}
             />
           ) : null}
         </DragOverlay>

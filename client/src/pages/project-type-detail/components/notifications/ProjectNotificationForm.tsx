@@ -11,12 +11,13 @@ import { Badge } from "@/components/ui/badge";
 import { NotificationVariableGuide } from "@/components/NotificationVariableGuide";
 import { CharacterCounter } from "../../utils/helpers";
 import { Info } from "lucide-react";
-import type { ClientRequestTemplate, KanbanStage } from "@shared/schema";
+import type { ClientRequestTemplate, KanbanStage, ClientProjectTaskTemplate } from "@shared/schema";
 
 interface ProjectNotificationFormProps {
   onCancel: () => void;
   createMutation: any;
   clientRequestTemplates: ClientRequestTemplate[];
+  taskTemplates: ClientProjectTaskTemplate[];
   stages?: KanbanStage[];
 }
 
@@ -24,6 +25,7 @@ export function ProjectNotificationForm({
   onCancel, 
   createMutation,
   clientRequestTemplates,
+  taskTemplates,
   stages = []
 }: ProjectNotificationFormProps) {
   const [notificationType, setNotificationType] = useState<"email" | "sms" | "push">("email");
@@ -36,6 +38,7 @@ export function ProjectNotificationForm({
   const [pushTitle, setPushTitle] = useState("");
   const [pushBody, setPushBody] = useState("");
   const [clientRequestTemplateId, setClientRequestTemplateId] = useState<string>("");
+  const [taskTemplateId, setTaskTemplateId] = useState<string>("");
   const [eligibleStageIds, setEligibleStageIds] = useState<string[]>([]);
   
   const sortedStages = [...stages].sort((a, b) => a.order - b.order);
@@ -64,6 +67,7 @@ export function ProjectNotificationForm({
       offsetType,
       offsetDays,
       clientRequestTemplateId: clientRequestTemplateId || null,
+      taskTemplateId: taskTemplateId || null,
       eligibleStageIds: dateReference === 'due_date' && eligibleStageIds.length > 0 
         ? eligibleStageIds 
         : null,
@@ -223,6 +227,36 @@ export function ProjectNotificationForm({
               <SelectContent>
                 <SelectItem value="none">None</SelectItem>
                 {clientRequestTemplates.filter(t => t.status === 'active').map(template => (
+                  <SelectItem key={template.id} value={template.id}>
+                    {template.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {(notificationType === 'email' || notificationType === 'push') && taskTemplates.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <Label>Attach Client Task (Optional)</Label>
+              <div className="group relative">
+                <Info className="h-4 w-4 text-muted-foreground cursor-help" />
+                <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-72 p-3 bg-popover border rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                  <p className="text-xs text-muted-foreground">
+                    When this notification fires, a task form will be created for the client to complete. 
+                    The task link will be included in the notification automatically.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <Select value={taskTemplateId || 'none'} onValueChange={(value) => setTaskTemplateId(value === 'none' ? '' : value)}>
+              <SelectTrigger data-testid="select-task-template">
+                <SelectValue placeholder="None" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                {taskTemplates.filter(t => t.isActive).map(template => (
                   <SelectItem key={template.id} value={template.id}>
                     {template.name}
                   </SelectItem>

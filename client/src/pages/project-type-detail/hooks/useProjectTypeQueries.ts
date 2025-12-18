@@ -10,6 +10,7 @@ import type {
   User,
   ProjectTypeNotification,
   ClientRequestTemplate,
+  ClientProjectTaskTemplate,
 } from "@shared/schema";
 
 interface UseProjectTypeQueriesParams {
@@ -77,6 +78,11 @@ export function useProjectTypeQueries({
     enabled: globalEnabled,
   });
 
+  const taskTemplatesQuery = useQuery<ClientProjectTaskTemplate[]>({
+    queryKey: ["/api/project-types", projectTypeId, "task-templates"],
+    enabled,
+  });
+
   const allStageApprovalFieldsQuery = useQuery<StageApprovalField[]>({
     queryKey: ["/api/config/stage-approval-fields"],
     enabled: globalEnabled,
@@ -130,6 +136,8 @@ export function useProjectTypeQueries({
     notificationsLoading: notificationsQuery.isLoading,
     
     clientRequestTemplates: clientRequestTemplatesQuery.data,
+    
+    taskTemplates: taskTemplatesQuery.data,
     
     allStageApprovalFields: allStageApprovalFieldsQuery.data,
     stageApprovalFieldsLoading: allStageApprovalFieldsQuery.isLoading,

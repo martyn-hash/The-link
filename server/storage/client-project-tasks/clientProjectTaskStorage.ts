@@ -660,4 +660,43 @@ export class ClientProjectTaskStorage extends BaseStorage {
       .where(eq(clientProjectTaskSections.templateId, instance.templateId))
       .orderBy(clientProjectTaskSections.order);
   }
+
+  async getPendingTaskCountsBatch(projectIds: string[]): Promise<Map<string, { pending: number; awaitingClient: number }>> {
+    const result = new Map<string, { pending: number; awaitingClient: number }>();
+    
+    if (projectIds.length === 0) {
+      return result;
+    }
+
+    const counts = await db
+      .select({
+        projectId: clientProjectTaskInstances.projectId,
+        status: clientProjectTaskInstances.status,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(clientProjectTaskInstances)
+      .where(
+        and(
+          inArray(clientProjectTaskInstances.projectId, projectIds),
+          inArray(clientProjectTaskInstances.status, ['pending', 'sent', 'in_progress'])
+        )
+      )
+      .groupBy(clientProjectTaskInstances.projectId, clientProjectTaskInstances.status);
+
+    for (const row of counts) {
+      if (!row.projectId) continue;
+      
+      const existing = result.get(row.projectId) || { pending: 0, awaitingClient: 0 };
+      
+      if (row.status === 'pending') {
+        existing.pending += row.count;
+      } else if (row.status === 'sent' || row.status === 'in_progress') {
+        existing.awaitingClient += row.count;
+      }
+      
+      result.set(row.projectId, existing);
+    }
+
+    return result;
+  }
 }
