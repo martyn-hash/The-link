@@ -1,0 +1,80 @@
+2025-12-18 00:59:21.48
+207226dc
+User
+[Database Pool] New connection established
+2025-12-18 00:59:21.69
+207226dc
+User
+[Database Pool] New connection established
+2025-12-18 00:59:21.77
+207226dc
+User
+12:59:21 AM [express] GET /api/project-messages/unread-count 200 in 641ms :: {"unreadCount":0}
+2025-12-18 00:59:23.69
+207226dc
+User
+12:59:23 AM [express] GET /api/queries/counts 200 in 858ms :: {"50043a2c-e0d3-478c-881a-4fe0b27bab77"…
+2025-12-18 01:00:22.34
+207226dc
+User
+[Database Pool] New connection established
+2025-12-18 01:00:22.55
+207226dc
+User
+[Database Pool] New connection established
+2025-12-18 01:00:22.63
+207226dc
+User
+1:00:22 AM [express] GET /api/project-messages/unread-count 200 in 643ms :: {"unreadCount":0}
+2025-12-18 01:00:24.72
+207226dc
+User
+1:00:24 AM [express] GET /api/queries/counts 200 in 857ms :: {"50043a2c-e0d3-478c-881a-4fe0b27bab77"…
+2025-12-18 01:01:23.21
+207226dc
+User
+[Database Pool] New connection established
+2025-12-18 01:01:23.41
+207226dc
+User
+[Database Pool] New connection established
+2025-12-18 01:01:23.49
+207226dc
+User
+1:01:23 AM [express] GET /api/project-messages/unread-count 200 in 642ms :: {"unreadCount":0}
+2025-12-18 01:01:25.94
+207226dc
+User
+1:01:25 AM [express] GET /api/queries/counts 200 in 1058ms :: {"50043a2c-e0d3-478c-881a-4fe0b27bab77…
+2025-12-18 01:02:01.04
+207226dc
+User
+[CronTelemetry:JSON] {"job_name":"ProjectMessageReminders","run_id":"JLLs7vtc","timestamp":"2025-12-18T01:02:00.747Z","drift_ms":747,"event_loop":{"p50_ms":20.14,"p95_ms":29.62,"max_ms":7801.41},"memory":{"heap_used_mb":123.29,"heap_total_mb":146.39,"rss_mb":427.29},"process_uptime_sec":78643,"concurrent_jobs":[],"status":"started"}
+2025-12-18 01:02:01.04
+207226dc
+User
+[CronTelemetry] [ProjectMessageReminders] [JLLs7vtc] START | drift=747ms | uptime=78643s | heap=123.29/146.39MB | rss=427.29MB | eventLoop: p50=20.14ms, p95=29.62ms, max=7801.41ms
+2025-12-18 01:02:01.74
+207226dc
+User
+[Database Pool] New connection established
+2025-12-18 01:02:01.94
+207226dc
+User
+[CronTelemetry] [ProjectMessageReminders] Advisory lock 1207399421 acquired
+2025-12-18 01:02:01.94
+207226dc
+User
+[Project Message Reminders] Starting reminder check...
+2025-12-18 01:02:01.94
+207226dc
+User
+1:02:01 AM [express] [Project Message Reminders] Starting reminder check...
+2025-12-18 01:02:24.03
+207226dc
+User
+[Database Pool] New connection established
+2025-12-18 01:02:24.23
+207226dc
+User
+[Database Pool] New connection established
