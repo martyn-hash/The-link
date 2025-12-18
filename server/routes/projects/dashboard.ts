@@ -135,7 +135,15 @@ export function registerProjectDashboardRoutes(
 
       const cacheData = await db.select().from(dashboardCache).where(eq(dashboardCache.userId, effectiveUserId));
 
-      if (cacheData.length === 0) {
+      // TTL check: 15 minutes staleness threshold
+      const CACHE_TTL_MS = 15 * 60 * 1000;
+      const isStale = (cache: typeof cacheData[0]) => {
+        if (!cache.lastUpdated) return true;
+        const age = Date.now() - new Date(cache.lastUpdated).getTime();
+        return age > CACHE_TTL_MS;
+      };
+
+      if (cacheData.length === 0 || isStale(cacheData[0])) {
         const { updateDashboardCache } = await import("../../dashboard-cache-service");
         await updateDashboardCache(effectiveUserId);
         

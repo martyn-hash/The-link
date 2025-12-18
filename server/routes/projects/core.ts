@@ -4,6 +4,7 @@ import { storage } from "../../storage/index";
 import { completeProjectSchema } from "@shared/schema";
 import { validateParams, paramUuidSchema } from "../routeHelpers";
 import { invalidateAllViewCaches } from "../../view-cache-service";
+import { invalidateDashboardCacheForUsers } from "../../dashboard-cache-invalidation";
 import type { CachedProjectView } from "@shared/schema";
 
 export function registerProjectCoreRoutes(
@@ -370,6 +371,14 @@ export function registerProjectCoreRoutes(
       setImmediate(async () => {
         try {
           await invalidateAllViewCaches();
+          // Invalidate dashboard cache for affected users (old and new owners/assignees)
+          const affectedUsers = [
+            project.projectOwnerId, 
+            project.currentAssigneeId,
+            updatedProject.projectOwnerId,
+            updatedProject.currentAssigneeId
+          ].filter(Boolean) as string[];
+          await invalidateDashboardCacheForUsers(affectedUsers);
         } catch (cacheError) {
           console.error("[View Cache] Error invalidating caches:", cacheError);
         }
@@ -497,6 +506,14 @@ export function registerProjectCoreRoutes(
 
         try {
           await invalidateAllViewCaches();
+          // Invalidate dashboard cache for affected users (old and new owners/assignees)
+          const affectedUsers = [
+            project.projectOwnerId, 
+            project.currentAssigneeId,
+            updatedProject.projectOwnerId,
+            updatedProject.currentAssigneeId
+          ].filter(Boolean) as string[];
+          await invalidateDashboardCacheForUsers(affectedUsers);
         } catch (cacheError) {
           console.error("[View Cache] Error invalidating caches:", cacheError);
         }

@@ -147,22 +147,11 @@ async function main() {
   });
   log('[DashboardCacheOvernight] Scheduled (03:05 UK)');
   
-  // Dashboard Cache Hourly - HH:02 08:00-18:00 UK (with timeout protection)
-  cron.schedule('2 8-18 * * *', wrapCronHandler('DashboardCacheHourly', '2 8-18 * * *', async () => {
-    log('[Dashboard Cache] Starting hourly cache update...');
-    const result = await withTimeout(
-      () => updateDashboardCache(),
-      JOB_TIMEOUTS.CACHE_REBUILD,
-      'DashboardCacheHourly'
-    );
-    log(`[Dashboard Cache] Hourly update completed: ${result.status} - ${result.usersUpdated}/${result.usersProcessed} users updated in ${result.executionTimeMs}ms`);
-    if (result.errors.length > 0) {
-      console.error('[Dashboard Cache] Hourly update errors:', result.errors);
-    }
-  }, { useLock: true, timezone: 'Europe/London' }), {
-    timezone: "Europe/London"
-  });
-  log('[DashboardCacheHourly] Scheduled (HH:02 08:00-18:00 UK)');
+  // NOTE: DashboardCacheHourly removed - now using on-demand caching with 
+  // invalidation hooks on project mutations. Dashboard cache is refreshed:
+  // 1. On-demand when cache is stale (15-minute TTL) via /api/dashboard/cache
+  // 2. Overnight via DashboardCacheOvernight to prime caches for morning logins
+  // 3. On project create/update/status-change via invalidateDashboardCacheForUsers()
   
   // View Cache - Morning 04:20 UK
   cron.schedule('20 4 * * *', wrapCronHandler('ViewCacheMorning', '20 4 * * *', async () => {

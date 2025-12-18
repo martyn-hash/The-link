@@ -132,7 +132,6 @@ All jobs are offset from :00 to avoid collisions. Heavy jobs (Dashboard Cache, V
 | **QueryReminderCron** | `10 * * * *` (HH:10) | Europe/London | Processes scheduled bookkeeping query reminders (email, SMS, voice). Only executes 07:00-22:00. |
 | **ViewCacheMidday** | `25 12 * * *` (12:25) | Europe/London | Midday view cache refresh. |
 | **ViewCacheAfternoon** | `25 15 * * *` (15:25) | Europe/London | Afternoon view cache refresh. |
-| **DashboardCacheHourly** | `2 8-18 * * *` (HH:02) | Europe/London | Hourly dashboard cache updates during business hours. |
 | **SentItemsDetection** | `8,23,38,53 8-19 * * *` | Europe/London | Scans Outlook Sent Items folders to detect replies sent directly from Outlook. Runs every 15 minutes 08:00-19:00. Uses delta scanning. |
 | **SLABreachDetection** | `14,29,44,59 8-18 * * *` | Europe/London | Detects emails that have exceeded their SLA deadline and marks them as breached. Runs every 15 minutes 08:00-18:00. |
 | **ProjectMessageReminders** | `2,32 * * * *` | Europe/London | Checks for unread project messages and sends reminder notifications. Runs every 30 minutes. |
@@ -156,9 +155,9 @@ Hour   :02  :04  :08  :10  :14  :19  :23  :25  :29  :32  :34  :38  :45  :49  :53
        │    Notification     Reminder      Notification            Notification
        │    (:04)            (:10)         (:34)                   (:49)
 07:20  │                              EngagementCron (Sun)
-08:00+ │Dashboard  │  Notif Query  SLA  Reminder Sent │    SLA  PMR  Reminder Sent  │    SLA  Reminder Sent  SLA
-       │Hourly     │  Cron  Reminder Breach      Items│    Breach    Notification Items│    Breach Notification Items Breach
-       │(:02)      │  (:08) (:10)   (:14) (:19) (:23) │    (:29) (:32) (:34)  (:38)│    (:44)  (:49)  (:53) (:59)
+08:00+ │           │  Notif Query  SLA  Reminder Sent │    SLA  PMR  Reminder Sent  │    SLA  Reminder Sent  SLA
+       │           │  Cron  Reminder Breach      Items│    Breach    Notification Items│    Breach Notification Items Breach
+       │           │  (:08) (:10)   (:14) (:19) (:23) │    (:29) (:32) (:34)  (:38)│    (:44)  (:49)  (:53) (:59)
 08:45  │                                                                    ViewCacheMidMorning
 12:25  │                                    ViewCacheMidday
 15:25  │                                    ViewCacheAfternoon
@@ -171,8 +170,8 @@ Hour   :02  :04  :08  :10  :14  :19  :23  :25  :29  :32  :34  :38  :45  :49  :53
 ### Cache & Performance
 | Job | Frequency | Lock | Timeout | Purpose |
 |-----|-----------|------|---------|---------|
-| DashboardCacheOvernight | Daily 03:05 | ✓ | 60s | Full dashboard rebuild |
-| DashboardCacheHourly | Hourly 08:02-18:02 | ✓ | 60s | Incremental dashboard updates |
+| DashboardCacheOvernight | Daily 03:05 | ✓ | 60s | Full dashboard rebuild (primes cache for morning logins) |
+| *Dashboard On-Demand* | Request-time | - | - | See "On-Demand Dashboard Caching" section below |
 | ViewCacheMorning | Daily 04:20 | ✓ | 60s | Project view pre-computation |
 | ViewCacheMidMorning | Daily 08:45 | ✓ | 60s | Mid-morning cache refresh |
 | ViewCacheMidday | Daily 12:25 | ✓ | 60s | Midday cache refresh |
@@ -207,6 +206,37 @@ Hour   :02  :04  :08  :10  :14  :19  :23  :25  :29  :32  :34  :38  :45  :49  :53
 | Job | Frequency | Lock | Timeout | Purpose |
 |-----|-----------|------|---------|---------|
 | ActivityCleanup | Daily 04:15 | ✓ | 60s | Session & login cleanup (90-day retention) |
+
+---
+
+## On-Demand Dashboard Caching
+
+**December 2024 Update:** Dashboard cache updates during business hours were moved from scheduled cron jobs to an on-demand caching strategy. This change improves responsiveness and reduces cron worker load.
+
+### How It Works
+
+1. **On-Demand Refresh:** When `/api/dashboard/cache` is called, if the cache is missing or stale (>15 minutes old), it is automatically recomputed.
+
+2. **Invalidation on Mutations:** When projects are created, updated, or change status, the dashboard cache for affected users is invalidated:
+   - Project owner
+   - Current assignee
+   - Previous assignee (on status change)
+
+3. **Overnight Pre-warming:** `DashboardCacheOvernight` (03:05 UK) still runs to prime caches for morning logins.
+
+### Benefits
+
+- **Faster response:** No waiting for next scheduled cache update
+- **Reduced cron load:** Removed hourly DashboardCacheHourly job (was running at HH:02 during 08:00-18:00)
+- **User-specific updates:** Only invalidates affected users, not all users
+- **Self-healing:** Stale cache auto-refreshes on next request
+
+### Implementation Details
+
+- **TTL:** 15 minutes (900 seconds)
+- **Invalidation service:** `server/dashboard-cache-invalidation.ts`
+- **Hooks:** Integrated into project routes (`core.ts`, `status.ts`)
+- **Endpoint:** `GET /api/dashboard/cache` - returns cached data or triggers refresh
 
 ---
 

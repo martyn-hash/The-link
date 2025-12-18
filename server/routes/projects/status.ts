@@ -5,6 +5,7 @@ import { sendStageChangeNotificationEmail } from "../../emailService";
 import { handleProjectStageChangeForNotifications } from "../../notification-scheduler";
 import { stageConfigCache } from "../../utils/ttlCache";
 import { invalidateAllViewCaches } from "../../view-cache-service";
+import { invalidateDashboardCacheForUsers } from "../../dashboard-cache-invalidation";
 
 interface StageConfigCacheEntry {
   stages: any[];
@@ -549,6 +550,13 @@ export function registerProjectStatusRoutes(
 
         try {
           await invalidateAllViewCaches();
+          // Invalidate dashboard cache for affected users (owner, new assignee, previous assignee)
+          const affectedUsers = [
+            project.projectOwnerId, 
+            updatedProject.currentAssigneeId, 
+            backgroundContext.previousAssigneeId
+          ].filter(Boolean) as string[];
+          await invalidateDashboardCacheForUsers(affectedUsers);
         } catch (cacheError) {
           console.error("[View Cache] Error invalidating caches:", cacheError);
         }
