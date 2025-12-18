@@ -466,8 +466,14 @@ export function QueriesTab({ projectId, clientId, projectTypeId, clientPeople, u
 
   // Query for project type data (to get enableClientProjectTasks setting)
   const { data: projectTypeData } = useQuery<{ enableClientProjectTasks?: boolean }>({
-    queryKey: ['/api/project-types', effectiveProjectTypeId],
-    select: (data: any) => ({ enableClientProjectTasks: data?.enableClientProjectTasks }),
+    queryKey: ['/api/config/project-types', effectiveProjectTypeId],
+    queryFn: async () => {
+      const response = await fetch('/api/config/project-types?inactive=true');
+      if (!response.ok) throw new Error('Failed to fetch project types');
+      const allTypes = await response.json();
+      const type = allTypes.find((pt: any) => pt.id === effectiveProjectTypeId);
+      return type ? { enableClientProjectTasks: type.enableClientProjectTasks } : { enableClientProjectTasks: true };
+    },
     enabled: !!effectiveProjectTypeId,
   });
   
