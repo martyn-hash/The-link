@@ -797,7 +797,7 @@ export default function KanbanBoard({
   };
 
   return (
-    <div className={`flex flex-col h-full ${isExternallyControlled ? "px-6 pb-6" : "p-6"}`} data-testid="kanban-board">
+    <div className={isExternallyControlled ? "px-6 pb-6" : "p-6"} data-testid="kanban-board">
       {/* Compact Mode Toolbar - only shown when not externally controlled */}
       {!isExternallyControlled && (
         <div className="mb-4 flex items-center justify-between" data-testid="kanban-toolbar">
@@ -889,7 +889,7 @@ export default function KanbanBoard({
         onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
       >
-        <div className={`flex flex-1 min-h-0 overflow-x-auto ${isCompactMode ? 'gap-1' : 'space-x-6'}`}>
+        <div className={`flex h-full overflow-x-auto ${isCompactMode ? 'gap-1' : 'space-x-6'}`}>
           {orderedStages.map(([status, config]) => {
             const rawStageProjects = projectsByStatus[status] || [];
             // Get the actual stage config from the API for schedule calculations
@@ -939,7 +939,7 @@ export default function KanbanBoard({
             return (
               <DroppableColumn key={status} id={`column-${status}`} isCompact={isCompactMode} isExpanded={isStageExpanded}>
                 <Card 
-                  className={`h-full flex flex-col overflow-hidden transition-all duration-300 ${config.isCompletionColumn ? 'border-2 border-dashed opacity-90' : ''} ${config.isBenchColumn ? 'border-2 border-amber-300 dark:border-amber-700' : ''} ${showCompact ? 'cursor-pointer hover:border-primary/50' : ''}`}
+                  className={`h-full transition-all duration-300 ${config.isCompletionColumn ? 'border-2 border-dashed opacity-90' : ''} ${config.isBenchColumn ? 'border-2 border-amber-300 dark:border-amber-700' : ''} ${showCompact ? 'cursor-pointer hover:border-primary/50' : ''}`}
                   onClick={showCompact ? () => toggleStageExpanded(status) : undefined}
                 >
                   {/* Compact View Header */}
@@ -1040,7 +1040,7 @@ export default function KanbanBoard({
                     /* Full View */
                     <>
                       <CardHeader 
-                        className={`sticky top-0 z-10 bg-card border-b border-border rounded-t-lg flex-shrink-0 ${config.isCompletionColumn ? 'bg-muted/50' : ''} ${config.isBenchColumn ? 'bg-amber-50 dark:bg-amber-950/30' : ''} ${isCompactMode && isStageExpanded ? 'cursor-pointer hover:bg-muted/50 transition-colors' : ''}`}
+                        className={`sticky top-0 bg-card border-b border-border rounded-t-lg ${config.isCompletionColumn ? 'bg-muted/50' : ''} ${config.isBenchColumn ? 'bg-amber-50 dark:bg-amber-950/30' : ''} ${isCompactMode && isStageExpanded ? 'cursor-pointer hover:bg-muted/50 transition-colors' : ''}`}
                         onClick={isCompactMode && isStageExpanded ? () => toggleStageExpanded(status) : undefined}
                         data-testid={isCompactMode && isStageExpanded ? `header-collapse-${status}` : undefined}
                       >
@@ -1217,7 +1217,7 @@ export default function KanbanBoard({
                         </p>
                       </CardHeader>
                       
-                      <CardContent className={`p-4 space-y-3 flex-1 overflow-y-auto ${config.isCompletionColumn ? 'bg-muted/20' : ''} ${config.isBenchColumn ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
+                      <CardContent className={`p-4 space-y-3 min-h-96 ${config.isCompletionColumn ? 'bg-muted/20' : ''} ${config.isBenchColumn ? 'bg-amber-50/50 dark:bg-amber-950/20' : ''}`}>
                         <SortableContext
                           items={stageProjects.map(p => p.id)}
                           strategy={verticalListSortingStrategy}
