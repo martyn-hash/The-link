@@ -35,6 +35,14 @@ The query reminder service (`server/services/queryReminderService.ts`) includes 
 -   **markReminderFailed()**: Marks individual reminders as failed in the database without crashing the entire cron job, allowing other reminders to proceed.
 -   **Individual error isolation**: Each reminder is processed in a try/catch block so one failure doesn't prevent other reminders from being sent.
 
+### RingCentral Token Resilience (December 2024)
+The RingCentral integration (`server/utils/userRingCentralClient.ts`) includes automatic token management to prevent expired refresh tokens:
+-   **Auto-disconnect on expiry**: When a refresh token fails with "Token is expired", the integration is automatically disconnected and the user is prompted to re-authenticate.
+-   **RingCentralReauthRequiredError**: Custom error class that triggers proper 401 responses with `reauthRequired: true` flag for frontend handling.
+-   **lastUsedAt tracking**: Token usage is tracked in integration metadata to detect potentially stale connections (not used in 7+ days).
+-   **Proactive token refresh**: Daily cron job at 03:30 UTC (`RingCentralTokenRefresh`) refreshes tokens for integrations not used in the last 5 days to prevent 7-day refresh token expiry.
+-   **Status endpoint enhancement**: `/api/ringcentral/status` now returns `mayBeStale` flag to warn users before tokens expire.
+
 ### Client Project Tasks
 The Client Project Tasks system enables service owners to send customizable pre-work checklists to clients via token-based forms. Key features:
 -   **Template Management**: Create reusable task templates at project type level with various question types (short text, long text, email, number, date, single/multiple choice, file upload).
