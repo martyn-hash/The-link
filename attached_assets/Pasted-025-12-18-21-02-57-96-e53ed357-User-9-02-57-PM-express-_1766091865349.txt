@@ -1,0 +1,44 @@
+025-12-18 21:02:57.96
+e53ed357
+User
+9:02:57 PM [express] GET /api/internal/project-messages/threads/383953c6-ee22-4483-ab4c-9bce35297032…
+2025-12-18 21:03:02.49
+70186bbe
+User
+[CronTelemetry:JSON] {"job_name":"ProjectMessageReminders","run_id":"-6uj5QnJ","timestamp":"2025-12-18T21:02:00.593Z","process_role":"cron-worker","drift_ms":593,"event_loop":{"p50_ms":20.14,"p95_ms":20.23,"max_ms":1432.35},"memory":{"heap_used_mb":63.55,"heap_total_mb":66.55,"rss_mb":189.54},"process_uptime_sec":7483,"concurrent_jobs":[],"status":"retrying","lock_acquired":true,"lock_wait_ms":700,"duration_ms":61900,"retry_count":2,"error_message":"ProjectMessageReminders exceeded 30000ms timeout"}
+2025-12-18 21:03:02.49
+70186bbe
+User
+[CronTelemetry] [ProjectMessageReminders] [-6uj5QnJ] Retry 2/2 after error: ProjectMessageReminders exceeded 30000ms timeout
+2025-12-18 21:03:02.49
+e53ed357
+User
+9:03:02 PM [express] GET /api/staff-messages/my-threads 200 in 527ms :: [{"id":"e391d89c-3edf-4d90-8…
+2025-12-18 21:03:04.49
+70186bbe
+User
+[2025-12-18T21:03:04.493Z] [cron-worker] [Project Message Reminders] Starting reminder check...
+2025-12-18 21:03:04.49
+70186bbe
+User
+[Project Message Reminders] Starting reminder check...
+2025-12-18 21:03:28.68
+e53ed357
+User
+9:03:28 PM [express] GET /api/internal/project-messages/threads/383953c6-ee22-4483-ab4c-9bce35297032…
+2025-12-18 21:03:34.49
+70186bbe
+User
+[CronTelemetry] [ProjectMessageReminders] [-6uj5QnJ] FAILED after 3 attempts: ProjectMessageReminders exceeded 30000ms timeout
+2025-12-18 21:03:34.49
+70186bbe
+User
+[CronTelemetry:JSON] {"job_name":"ProjectMessageReminders","run_id":"-6uj5QnJ","timestamp":"2025-12-18T21:02:00.593Z","process_role":"cron-worker","drift_ms":593,"event_loop":{"p50_ms":20.14,"p95_ms":20.23,"max_ms":1432.35},"memory":{"heap_used_mb":63.55,"heap_total_mb":66.55,"rss_mb":189.54},"process_uptime_sec":7483,"concurrent_jobs":[],"status":"error","lock_acquired":true,"lock_wait_ms":700,"duration_ms":93900,"retry_count":3,"error_message":"ProjectMessageReminders exceeded 30000ms timeout"}
+2025-12-18 21:03:34.69
+70186bbe
+User
+[CronTelemetry] [ProjectMessageReminders] [-6uj5QnJ] END (ERROR) | duration=93900ms | error=ProjectMessageReminders exceeded 30000ms timeout
+2025-12-18 21:03:36.29
+70186bbe
+User
+[CronTelemetry] [ProjectMessageReminders] Advisory lock 1207399421 released
