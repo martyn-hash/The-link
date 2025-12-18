@@ -1,0 +1,164 @@
+2025-12-18 18:04:29.68
+a69d00a6
+User
+_receiver: null,
+2025-12-18 18:04:29.68
+a69d00a6
+User
+at S.end (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:425:83)
+2025-12-18 18:04:29.68
+a69d00a6
+User
+at S.write (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:423:51)
+2025-12-18 18:04:29.68
+a69d00a6
+User
+[Symbol(kCapture)]: false
+2025-12-18 18:04:29.68
+a69d00a6
+User
+_protocol: '',
+2025-12-18 18:04:29.68
+a69d00a6
+User
+[Symbol(kMessage)]: 'WebSocket was closed before the connection was established'
+2025-12-18 18:04:29.68
+a69d00a6
+User
+at Timeout. (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1117:99)
+2025-12-18 18:04:29.68
+a69d00a6
+User
+_paused: false,
+2025-12-18 18:04:29.68
+a69d00a6
+User
+},
+2025-12-18 18:04:29.68
+a69d00a6
+User
+_sender: null,
+2025-12-18 18:04:29.68
+a69d00a6
+User
+_closeFrameSent: false,
+2025-12-18 18:04:29.68
+a69d00a6
+User
+[Symbol(shapeMode)]: false,
+2025-12-18 18:04:29.68
+a69d00a6
+User
+_req: [ClientRequest],
+2025-12-18 18:04:29.68
+a69d00a6
+User
+[Symbol(kError)]: Error: WebSocket was closed before the connection was established
+2025-12-18 18:04:29.68
+a69d00a6
+User
+_events: [Object: null prototype],
+2025-12-18 18:04:29.68
+a69d00a6
+User
+_closeMessage: ,
+2025-12-18 18:04:29.68
+a69d00a6
+User
+_bufferedAmount: 0,
+2025-12-18 18:04:29.68
+a69d00a6
+User
+[CronTelemetry] [ProjectMessageReminders] Error releasing lock: Error: Connection terminated due to connection timeout
+2025-12-18 18:04:29.68
+a69d00a6
+User
+at runNextTicks (node:internal/process/task_queues:64:3)
+2025-12-18 18:04:29.68
+a69d00a6
+User
+_closeFrameReceived: false,
+2025-12-18 18:04:29.68
+a69d00a6
+User
+at process.processTimers (node:internal/timers:519:7),
+2025-12-18 18:04:29.68
+a69d00a6
+User
+_readyState: 3,
+2025-12-18 18:04:29.68
+a69d00a6
+User
+at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1087:33
+2025-12-18 18:04:29.68
+a69d00a6
+User
+_socket: null,
+2025-12-18 18:04:29.68
+a69d00a6
+User
+_autoPong: true,
+2025-12-18 18:04:29.68
+a69d00a6
+User
+[Symbol(kTarget)]: WebSocket {
+2025-12-18 18:04:29.68
+a69d00a6
+User
+_closeTimer: null,
+2025-12-18 18:04:29.68
+a69d00a6
+User
+_extensions: {},
+2025-12-18 18:04:29.68
+a69d00a6
+User
+at listOnTimeout (node:internal/timers:545:9)
+2025-12-18 18:04:29.68
+a69d00a6
+User
+at async releaseJobLock (/home/runner/workspace/server/cron-telemetry.ts:332:5)
+2025-12-18 18:04:29.68
+a69d00a6
+User
+_url: 'wss://ep-red-queen-adcbnznu.c-2.us-east-1.aws.neon.tech/v2',
+2025-12-18 18:04:29.68
+a69d00a6
+User
+at async Timeout._onTimeout (/home/runner/workspace/node_modules/node-cron/src/scheduler/runner.ts:100:30) {
+2025-12-18 18:04:29.68
+a69d00a6
+User
+_redirects: 0,
+2025-12-18 18:04:29.68
+a69d00a6
+User
+at process.processTimers (node:internal/timers:519:7)
+2025-12-18 18:04:29.68
+a69d00a6
+User
+}
+2025-12-18 18:04:29.68
+a69d00a6
+User
+at processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-12-18 18:04:29.88
+a69d00a6
+User
+[CronTelemetry] [DashboardCacheHourly] [85pLFBC9] Retry 2/2 after error: DashboardCacheHourly exceeded 60000ms timeout
+2025-12-18 18:05:45.18
+a69d00a6
+User
+[CronTelemetry] [DashboardCacheHourly] [85pLFBC9] FAILED after 3 attempts: DashboardCacheHourly exceeded 60000ms timeout
+2025-12-18 18:08:11.28
+a69d00a6
+User
+[2025-12-18T18:08:11.085Z] [PID: 66] [NODE-CRON] [WARN] missed execution at Thu Dec 18 2025 18:08:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2025-12-18 18:08:12.48
+a69d00a6
+User
+[2025-12-18T18:08:12.484Z] [PID: 66] [NODE-CRON] [WARN] missed execution at Thu Dec 18 2025 18:08:00 GMT+0000 (Coordinated Universal Time)! Possible blocking IO or high CPU user at the same process used by node-cron.
+2025-12-18 18:10:01.58
+a69d00a6
+User
+[2025-12-18T18:10:01.584Z] [PID: 66] [NODE-C
