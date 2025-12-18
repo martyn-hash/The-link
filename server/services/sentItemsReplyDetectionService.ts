@@ -6,10 +6,22 @@
  * state as replied and triggers auto-completion if conditions are met.
  * 
  * This detects replies sent directly from Outlook (not through The Link).
+ * 
+ * Delta Scanning (Phase 2 optimization):
+ * - Uses lastSentItemsCheckedAt per inbox to only scan new messages since last check
+ * - Applies 2-minute overlap buffer to handle out-of-order API responses
+ * - Falls back to 24-hour window for first-time scans
+ * - Only updates timestamp on successful completion (no errors for that inbox)
  */
 
 import { getApplicationGraphClient, isApplicationGraphConfigured, getUserEmails } from '../utils/applicationGraphClient';
 import { storage } from '../storage/index';
+
+// 2-minute overlap buffer for out-of-order API responses
+const OVERLAP_BUFFER_MS = 2 * 60 * 1000;
+
+// Default fallback window for first-time scans (24 hours)
+const DEFAULT_FALLBACK_HOURS = 24;
 
 interface SentItemsCheckResult {
   checked: number;
@@ -55,11 +67,14 @@ export class SentItemsReplyDetectionService {
       }
 
       // Get unique inbox IDs from pending conversations
-      const inboxIdSet = new Set(pendingConversations.map(pc => pc.inboxId));
+      const inboxIdSet = new Set(pendingConversations.map((pc: { inboxId: string }) => pc.inboxId));
       const inboxIds = Array.from(inboxIdSet);
 
       // For each inbox, get the linked user email and check their sent items
       for (const inboxId of inboxIds) {
+        let inboxHasError = false;
+        const scanStartTime = new Date();
+        
         try {
           const inbox = await storage.getInboxById(inboxId);
           if (!inbox || !inbox.emailAddress) {
@@ -69,9 +84,20 @@ export class SentItemsReplyDetectionService {
 
           const userEmail = inbox.emailAddress;
 
-          // Get recent sent items (last 24 hours to catch any missed)
-          const sinceDate = new Date();
-          sinceDate.setHours(sinceDate.getHours() - 24);
+          // Delta scanning: Use lastSentItemsCheckedAt with overlap buffer, or fall back to 24-hour window
+          let sinceDate: Date;
+          const lastChecked = inbox.lastSentItemsCheckedAt;
+          
+          if (lastChecked) {
+            // Apply 2-minute overlap buffer to handle out-of-order API responses
+            sinceDate = new Date(lastChecked.getTime() - OVERLAP_BUFFER_MS);
+            console.log(`[Sent Items Detection] Inbox ${inbox.emailAddress}: Delta scan from ${sinceDate.toISOString()} (last checked: ${lastChecked.toISOString()})`);
+          } else {
+            // First-time scan: use 24-hour fallback window
+            sinceDate = new Date();
+            sinceDate.setHours(sinceDate.getHours() - DEFAULT_FALLBACK_HOURS);
+            console.log(`[Sent Items Detection] Inbox ${inbox.emailAddress}: First-time scan, using ${DEFAULT_FALLBACK_HOURS}-hour window`);
+          }
 
           const sentItems = await getUserEmails(userEmail, {
             folder: 'SentItems',
@@ -120,11 +146,21 @@ export class SentItemsReplyDetectionService {
             } catch (error) {
               console.error(`[Sent Items Detection] Error processing match for conversation ${sentMessage.conversationId}:`, error);
               stats.errors++;
+              inboxHasError = true;
             }
+          }
+          
+          // Only update lastSentItemsCheckedAt if no errors occurred for this inbox
+          if (!inboxHasError) {
+            await storage.updateInboxLastSentItemsCheckedAt(inboxId, scanStartTime);
+          } else {
+            console.warn(`[Sent Items Detection] Inbox ${inbox.emailAddress}: Not updating timestamp due to errors`);
           }
         } catch (error) {
           console.error(`[Sent Items Detection] Error checking inbox ${inboxId}:`, error);
           stats.errors++;
+          // Ensure inboxHasError is true to prevent any timestamp update
+          inboxHasError = true;
         }
       }
 

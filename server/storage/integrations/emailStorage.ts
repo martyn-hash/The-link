@@ -716,6 +716,16 @@ export class EmailStorage {
     return updated;
   }
 
+  async updateInboxLastSentItemsCheckedAt(id: string, timestamp: Date): Promise<void> {
+    await db
+      .update(inboxes)
+      .set({
+        lastSentItemsCheckedAt: timestamp,
+        updatedAt: new Date()
+      })
+      .where(eq(inboxes.id, id));
+  }
+
   async deleteInbox(id: string): Promise<void> {
     await db.delete(inboxes).where(eq(inboxes.id, id));
   }
