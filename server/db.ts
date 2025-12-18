@@ -23,21 +23,46 @@ const schemaWithRelations = {
   ),
 };
 
+// Pool configuration tuned for mixed web + cron workload
+// - 20 max connections to handle concurrent cron jobs + API traffic
+// - 60s idle timeout to reduce connection churn during quiet periods
+// - 15s connection timeout for slow cold starts (Neon serverless)
 export const pool = new Pool({ 
   connectionString: process.env.DATABASE_URL,
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
+  max: 20,
+  idleTimeoutMillis: 60000,
+  connectionTimeoutMillis: 15000,
   allowExitOnIdle: false,
 });
+
+// Track pool metrics for observability
+let totalConnectionsCreated = 0;
+let lastPoolLogTime = 0;
+const POOL_LOG_INTERVAL_MS = 300000; // Log pool stats every 5 minutes max
 
 pool.on('error', (err) => {
   console.error('[Database Pool] Unexpected pool error:', err.message);
 });
 
 pool.on('connect', () => {
-  console.log('[Database Pool] New connection established');
+  totalConnectionsCreated++;
+  const now = Date.now();
+  // Only log pool stats periodically to reduce log noise
+  if (now - lastPoolLogTime > POOL_LOG_INTERVAL_MS) {
+    lastPoolLogTime = now;
+    console.log(`[Database Pool] Stats: total=${pool.totalCount}, idle=${pool.idleCount}, waiting=${pool.waitingCount}, created=${totalConnectionsCreated}`);
+  }
 });
+
+// Export pool metrics for telemetry
+export function getPoolMetrics() {
+  return {
+    total: pool.totalCount,
+    idle: pool.idleCount,
+    waiting: pool.waitingCount,
+    totalCreated: totalConnectionsCreated,
+  };
+}
 
 export const db = drizzle({ client: pool, schema: schemaWithRelations });
 
