@@ -6,60 +6,42 @@ import { cn } from "@/lib/utils";
 import { GripVertical, Edit2, Trash2, Eye, Library } from "lucide-react";
 import { getFieldTypeInfo, type FieldDefinition } from "./types";
 
-interface FieldCardProps {
+interface BaseFieldCardProps {
   field: FieldDefinition;
   index: number;
   onEdit: () => void;
   onDelete: () => void;
   isViewOnly?: boolean;
   showDragHandle?: boolean;
+  isDragging?: boolean;
+  dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
 }
 
-export function FieldCard({
+export function BaseFieldCard({
   field,
   index,
   onEdit,
   onDelete,
   isViewOnly = false,
   showDragHandle = true,
-}: FieldCardProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ 
-    id: field.id || field.tempId || `temp-${field.order}`,
-    data: { type: 'field', field },
-    disabled: isViewOnly,
-  });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-
+  isDragging = false,
+  dragHandleProps,
+}: BaseFieldCardProps) {
   const typeInfo = getFieldTypeInfo(field.fieldType);
   const Icon = typeInfo.icon;
   const color = typeInfo.color;
 
   return (
     <div
-      ref={setNodeRef}
-      style={style}
       className={cn(
         "flex items-center gap-3 p-4 bg-card border rounded-lg group transition-all",
-        isDragging ? "shadow-lg ring-2 ring-primary/20" : "hover:shadow-md"
+        isDragging ? "shadow-lg ring-2 ring-primary/20 opacity-80" : "hover:shadow-md"
       )}
       data-testid={`field-card-${index}`}
     >
       {showDragHandle && !isViewOnly && (
         <div 
-          {...attributes} 
-          {...listeners}
+          {...dragHandleProps}
           className="cursor-grab hover:bg-muted rounded p-1 transition-colors"
         >
           <GripVertical className="w-4 h-4 text-muted-foreground" />
@@ -126,12 +108,65 @@ export function FieldCard({
   );
 }
 
+interface SortableFieldCardProps {
+  field: FieldDefinition;
+  index: number;
+  onEdit: () => void;
+  onDelete: () => void;
+  isViewOnly?: boolean;
+}
+
+export function SortableFieldCard({
+  field,
+  index,
+  onEdit,
+  onDelete,
+  isViewOnly = false,
+}: SortableFieldCardProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ 
+    id: field.id || field.tempId || `temp-${field.order}`,
+    data: { type: 'field', field },
+    disabled: isViewOnly,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <BaseFieldCard
+        field={field}
+        index={index}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        isViewOnly={isViewOnly}
+        showDragHandle={!isViewOnly}
+        isDragging={isDragging}
+        dragHandleProps={{ ...attributes, ...listeners }}
+      />
+    </div>
+  );
+}
+
+export function FieldCard(props: SortableFieldCardProps) {
+  return <SortableFieldCard {...props} />;
+}
+
 interface FieldCardListProps {
   fields: FieldDefinition[];
   onEditField: (index: number) => void;
   onDeleteField: (index: number) => void;
   isViewOnly?: boolean;
-  showDragHandles?: boolean;
   emptyMessage?: string;
 }
 
@@ -140,7 +175,6 @@ export function FieldCardList({
   onEditField,
   onDeleteField,
   isViewOnly = false,
-  showDragHandles = true,
   emptyMessage = "No fields added yet. Drag fields from the palette or click to add."
 }: FieldCardListProps) {
   if (fields.length === 0) {
@@ -156,14 +190,14 @@ export function FieldCardList({
   return (
     <div className="space-y-3">
       {fields.map((field, index) => (
-        <FieldCard
+        <BaseFieldCard
           key={field.id || field.tempId || `field-${index}`}
           field={field}
           index={index}
           onEdit={() => onEditField(index)}
           onDelete={() => onDeleteField(index)}
           isViewOnly={isViewOnly}
-          showDragHandle={showDragHandles}
+          showDragHandle={false}
         />
       ))}
     </div>

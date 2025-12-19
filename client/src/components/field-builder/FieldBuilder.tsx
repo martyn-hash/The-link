@@ -4,7 +4,7 @@ import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { FieldPalette } from "./FieldPalette";
 import { FieldCanvas } from "./FieldCanvas";
 import { FieldConfigModal } from "./FieldConfigModal";
-import { FieldCard } from "./FieldCard";
+import { BaseFieldCard } from "./FieldCard";
 import { createEmptyField, getFieldTypeInfo, type FieldDefinition, type SystemFieldType } from "./types";
 import { SystemFieldLibraryPicker } from "@/components/system-field-library-picker";
 import type { SystemFieldLibrary } from "@shared/schema";
@@ -177,7 +177,7 @@ export function FieldBuilder({
       <DragOverlay>
         {draggedField && (
           <div className="opacity-80">
-            <FieldCard
+            <BaseFieldCard
               field={draggedField}
               index={-1}
               onEdit={() => {}}
