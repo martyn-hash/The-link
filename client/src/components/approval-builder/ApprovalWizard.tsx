@@ -11,26 +11,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { 
   X, Save, GripVertical, Plus, Trash2, Edit2, Eye,
-  ToggleLeft, Hash, Type, FileText, Calendar, CircleDot, CheckSquare,
   ChevronRight, ChevronLeft, Library, Sparkles, ClipboardCheck, Check, Settings,
-  ImageIcon, BookOpen
+  BookOpen
 } from "lucide-react";
+import { Type } from "lucide-react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { ApprovalFieldLibrary, ProjectType, KanbanStage, SystemFieldLibrary } from "@shared/schema";
 import { SystemFieldLibraryPicker } from "@/components/system-field-library-picker";
+import { FIELD_TYPES, getFieldTypeInfo, type SystemFieldType } from "@/components/field-builder/types";
+import { stageApprovalFieldAdapter } from "@/components/field-builder/adapters";
 
-const FIELD_TYPES = [
-  { type: "boolean", label: "Yes/No", icon: ToggleLeft, color: "#84cc16" },
-  { type: "number", label: "Number", icon: Hash, color: "#22c55e" },
-  { type: "short_text", label: "Short Text", icon: Type, color: "#3b82f6" },
-  { type: "long_text", label: "Long Text", icon: FileText, color: "#8b5cf6" },
-  { type: "date", label: "Date", icon: Calendar, color: "#f59e0b" },
-  { type: "single_select", label: "Single Select", icon: CircleDot, color: "#ec4899" },
-  { type: "multi_select", label: "Multi Select", icon: CheckSquare, color: "#14b8a6" },
-  { type: "image_upload", label: "Image Upload", icon: ImageIcon, color: "#0ea5e9" },
-] as const;
+const APPROVAL_FIELD_TYPES = FIELD_TYPES.filter(ft => 
+  stageApprovalFieldAdapter.allowedFieldTypes.includes(ft.type)
+);
 
 type FieldType = typeof FIELD_TYPES[number]["type"];
 
@@ -175,9 +170,9 @@ function SortableFieldItem({
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const fieldTypeInfo = FIELD_TYPES.find(ft => ft.type === field.fieldType);
-  const Icon = fieldTypeInfo?.icon || Type;
-  const color = fieldTypeInfo?.color || "#6b7280";
+  const fieldTypeInfo = getFieldTypeInfo(field.fieldType as SystemFieldType);
+  const Icon = fieldTypeInfo.icon;
+  const color = fieldTypeInfo.color;
 
   return (
     <div
@@ -268,9 +263,9 @@ function FieldConfigModal({
   const [editedField, setEditedField] = useState<EditingApprovalField>(field);
   const [newOption, setNewOption] = useState("");
 
-  const fieldTypeInfo = FIELD_TYPES.find(ft => ft.type === editedField.fieldType);
-  const Icon = fieldTypeInfo?.icon || Type;
-  const color = fieldTypeInfo?.color || "#6b7280";
+  const fieldTypeInfo = getFieldTypeInfo(editedField.fieldType as SystemFieldType);
+  const Icon = fieldTypeInfo.icon;
+  const color = fieldTypeInfo.color;
 
   const handleAddOption = () => {
     if (newOption.trim()) {
@@ -958,14 +953,14 @@ export function ApprovalWizard({
                     </div>
                     <div className="space-y-2">
                       {libraryFields.map(lf => {
-                        const fieldTypeInfo = FIELD_TYPES.find(ft => ft.type === lf.fieldType);
+                        const fieldTypeInfo = getFieldTypeInfo(lf.fieldType as SystemFieldType);
                         return (
                           <PaletteItem
                             key={lf.id}
                             type={lf.id}
                             label={lf.fieldName}
-                            icon={fieldTypeInfo?.icon || Type}
-                            color={fieldTypeInfo?.color || "#6b7280"}
+                            icon={fieldTypeInfo.icon}
+                            color={fieldTypeInfo.color}
                             onClick={() => handleAddFieldFromLibrary(lf)}
                             isLibrary
                             disabled={isViewOnly}
@@ -982,7 +977,7 @@ export function ApprovalWizard({
                     <h4 className="text-sm font-semibold text-blue-700">Custom Fields</h4>
                   </div>
                   <div className="space-y-2">
-                    {FIELD_TYPES.map(ft => (
+                    {APPROVAL_FIELD_TYPES.map(ft => (
                       <PaletteItem
                         key={ft.type}
                         type={ft.type}
@@ -1069,19 +1064,23 @@ export function ApprovalWizard({
 
           {/* Drag Overlay */}
           <DragOverlay>
-            {activeId && activeId.toString().startsWith('palette-') && (
-              <div className="flex items-center gap-3 px-4 py-3 bg-card border-2 border-primary rounded-lg shadow-lg opacity-90">
-                <Type className="w-5 h-5 text-primary" />
-                <span className="font-medium">{FIELD_TYPES.find(ft => `palette-${ft.type}` === activeId)?.label}</span>
-              </div>
-            )}
+            {activeId && activeId.toString().startsWith('palette-') && (() => {
+              const fieldType = activeId.toString().replace('palette-', '') as SystemFieldType;
+              const fieldTypeInfo = getFieldTypeInfo(fieldType);
+              return (
+                <div className="flex items-center gap-3 px-4 py-3 bg-card border-2 border-primary rounded-lg shadow-lg opacity-90">
+                  <fieldTypeInfo.icon className="w-5 h-5 text-primary" />
+                  <span className="font-medium">{fieldTypeInfo.label}</span>
+                </div>
+              );
+            })()}
             {activeId && activeId.toString().startsWith('library-') && (() => {
               const libraryFieldId = activeId.toString().replace('library-', '');
               const libraryField = libraryFields.find(lf => lf.id === libraryFieldId);
-              const fieldTypeInfo = libraryField ? FIELD_TYPES.find(ft => ft.type === libraryField.fieldType) : null;
-              return libraryField ? (
+              const fieldTypeInfo = libraryField ? getFieldTypeInfo(libraryField.fieldType as SystemFieldType) : null;
+              return libraryField && fieldTypeInfo ? (
                 <div className="flex items-center gap-3 px-4 py-3 bg-card border-2 border-purple-500 rounded-lg shadow-lg opacity-90">
-                  {fieldTypeInfo?.icon && <fieldTypeInfo.icon className="w-5 h-5 text-purple-500" />}
+                  <fieldTypeInfo.icon className="w-5 h-5 text-purple-500" />
                   <span className="font-medium">{libraryField.fieldName}</span>
                   <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">Library</Badge>
                 </div>

@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, X, Library } from "lucide-react";
 import { getFieldTypeInfo, FIELD_TYPES, type FieldDefinition, type SystemFieldType } from "./types";
+import type { FieldCapabilities } from "./adapters";
 
 interface FieldConfigModalProps {
   field: FieldDefinition | null;
@@ -18,6 +19,7 @@ interface FieldConfigModalProps {
   isViewOnly?: boolean;
   allowedFieldTypes?: SystemFieldType[];
   showExpectedValues?: boolean;
+  capabilities?: FieldCapabilities;
 }
 
 export function FieldConfigModal({
@@ -28,7 +30,11 @@ export function FieldConfigModal({
   isViewOnly = false,
   allowedFieldTypes,
   showExpectedValues = false,
+  capabilities,
 }: FieldConfigModalProps) {
+  const supportsPlaceholder = capabilities?.supportsPlaceholder ?? true;
+  const supportsExpectedValue = capabilities?.supportsExpectedValue ?? showExpectedValues;
+  const supportsOptions = capabilities?.supportsOptions ?? true;
   const [editedField, setEditedField] = useState<FieldDefinition | null>(null);
   const [newOption, setNewOption] = useState("");
 
@@ -158,17 +164,19 @@ export function FieldConfigModal({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="field-placeholder">Placeholder (optional)</Label>
-            <Input
-              id="field-placeholder"
-              value={editedField.placeholder || ""}
-              onChange={(e) => setEditedField(prev => prev ? { ...prev, placeholder: e.target.value } : null)}
-              placeholder="e.g., Enter value here..."
-              disabled={isViewOnly}
-              data-testid="input-field-placeholder"
-            />
-          </div>
+          {supportsPlaceholder && (
+            <div className="space-y-2">
+              <Label htmlFor="field-placeholder">Placeholder (optional)</Label>
+              <Input
+                id="field-placeholder"
+                value={editedField.placeholder || ""}
+                onChange={(e) => setEditedField(prev => prev ? { ...prev, placeholder: e.target.value } : null)}
+                placeholder="e.g., Enter value here..."
+                disabled={isViewOnly}
+                data-testid="input-field-placeholder"
+              />
+            </div>
+          )}
 
           <div className="flex items-center justify-between py-2 px-3 bg-muted/50 rounded-lg">
             <div>
@@ -184,7 +192,7 @@ export function FieldConfigModal({
             />
           </div>
 
-          {needsOptions && (
+          {supportsOptions && needsOptions && (
             <div className="space-y-3">
               <Label>Options</Label>
               <div className="space-y-2">
@@ -236,7 +244,7 @@ export function FieldConfigModal({
             </div>
           )}
 
-          {showExpectedValues && editedField.fieldType === "boolean" && (
+          {supportsExpectedValue && editedField.fieldType === "boolean" && (
             <div className="space-y-2">
               <Label>Expected Value</Label>
               <Select
@@ -259,7 +267,7 @@ export function FieldConfigModal({
             </div>
           )}
 
-          {showExpectedValues && editedField.fieldType === "number" && (
+          {supportsExpectedValue && editedField.fieldType === "number" && (
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Comparison</Label>

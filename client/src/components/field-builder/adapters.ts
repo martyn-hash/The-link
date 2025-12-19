@@ -280,3 +280,207 @@ export const clientTaskQuestionAdapter: FieldAdapter<{
   
   mapToSystemFieldType: (contextType) => normalizeFieldType(contextType),
 };
+
+export const stageApprovalFieldAdapter: FieldAdapter<{
+  id?: string;
+  fieldName: string;
+  fieldType: string;
+  description?: string | null;
+  isRequired: boolean;
+  order: number;
+  options?: string[] | null;
+  libraryFieldId?: string | null;
+  expectedValueBoolean?: boolean | null;
+  expectedValueNumber?: number | null;
+  comparisonType?: "equal_to" | "less_than" | "greater_than" | null;
+}> = {
+  context: "stage_approval_field",
+  
+  capabilities: {
+    supportsExpectedValue: true,
+    supportsValidationRules: false,
+    supportsConditionalLogic: false,
+    supportsOptions: true,
+    supportsPlaceholder: false,
+    supportsHelpText: true,
+    supportsLibraryPicker: true,
+  },
+  
+  allowedFieldTypes: [
+    "boolean", "number", "short_text", "long_text", "date",
+    "single_select", "multi_select", "image_upload"
+  ],
+  
+  mapToFieldDefinition: (domainField, index) => ({
+    id: domainField.id,
+    fieldName: domainField.fieldName,
+    fieldType: normalizeFieldType(domainField.fieldType),
+    description: domainField.description || "",
+    isRequired: domainField.isRequired,
+    order: domainField.order ?? index,
+    options: domainField.options || [],
+    libraryFieldId: domainField.libraryFieldId,
+    expectedValueBoolean: domainField.expectedValueBoolean,
+    expectedValueNumber: domainField.expectedValueNumber,
+    comparisonType: domainField.comparisonType,
+  }),
+  
+  mapFromFieldDefinition: (field) => ({
+    fieldName: field.fieldName,
+    fieldType: field.fieldType,
+    description: field.description || undefined,
+    isRequired: field.isRequired,
+    order: field.order,
+    options: field.options?.length ? field.options : undefined,
+    libraryFieldId: field.libraryFieldId,
+    expectedValueBoolean: field.expectedValueBoolean,
+    expectedValueNumber: field.expectedValueNumber,
+    comparisonType: field.comparisonType,
+  }),
+};
+
+export const signatureFieldAdapter: FieldAdapter<{
+  id?: string;
+  fieldName: string;
+  fieldType: string;
+  description?: string | null;
+  isRequired: boolean;
+  order: number;
+  options?: string[] | null;
+  placeholder?: string | null;
+}> = {
+  context: "signature_field",
+  
+  capabilities: {
+    supportsExpectedValue: false,
+    supportsValidationRules: false,
+    supportsConditionalLogic: false,
+    supportsOptions: true,
+    supportsPlaceholder: true,
+    supportsHelpText: true,
+    supportsLibraryPicker: false,
+  },
+  
+  allowedFieldTypes: [
+    "short_text", "long_text", "email", "date", "single_select", "boolean"
+  ],
+  
+  mapToFieldDefinition: (domainField, index) => ({
+    id: domainField.id,
+    fieldName: domainField.fieldName,
+    fieldType: normalizeFieldType(domainField.fieldType),
+    description: domainField.description || "",
+    isRequired: domainField.isRequired,
+    order: domainField.order ?? index,
+    options: domainField.options || [],
+    placeholder: domainField.placeholder || "",
+  }),
+  
+  mapFromFieldDefinition: (field) => ({
+    fieldName: field.fieldName,
+    fieldType: field.fieldType,
+    description: field.description || undefined,
+    isRequired: field.isRequired,
+    order: field.order,
+    options: field.options?.length ? field.options : undefined,
+    placeholder: field.placeholder || undefined,
+  }),
+};
+
+export const serviceUdfAdapter: FieldAdapter<{
+  id?: string;
+  fieldName: string;
+  fieldType: string;
+  description?: string | null;
+  isRequired: boolean;
+  order: number;
+  options?: string[] | null;
+  defaultValue?: any;
+}> = {
+  context: "service_udf",
+  
+  capabilities: {
+    supportsExpectedValue: false,
+    supportsValidationRules: false,
+    supportsConditionalLogic: false,
+    supportsOptions: true,
+    supportsPlaceholder: false,
+    supportsHelpText: true,
+    supportsLibraryPicker: true,
+  },
+  
+  allowedFieldTypes: [
+    "boolean", "number", "short_text", "long_text", "date",
+    "single_select", "multi_select", "currency", "percentage"
+  ],
+  
+  mapToFieldDefinition: (domainField, index) => ({
+    id: domainField.id,
+    fieldName: domainField.fieldName,
+    fieldType: normalizeFieldType(domainField.fieldType),
+    description: domainField.description || "",
+    isRequired: domainField.isRequired,
+    order: domainField.order ?? index,
+    options: domainField.options || [],
+    defaultValue: domainField.defaultValue,
+  }),
+  
+  mapFromFieldDefinition: (field) => ({
+    fieldName: field.fieldName,
+    fieldType: field.fieldType,
+    description: field.description || undefined,
+    isRequired: field.isRequired,
+    order: field.order,
+    options: field.options?.length ? field.options : undefined,
+    defaultValue: field.defaultValue,
+  }),
+};
+
+export const campaignPageFieldAdapter: FieldAdapter<{
+  id?: string;
+  fieldName: string;
+  fieldType: string;
+  description?: string | null;
+  isRequired: boolean;
+  order: number;
+  options?: string[] | null;
+  placeholder?: string | null;
+}> = {
+  context: "campaign_page_field",
+  
+  capabilities: {
+    supportsExpectedValue: false,
+    supportsValidationRules: false,
+    supportsConditionalLogic: false,
+    supportsOptions: true,
+    supportsPlaceholder: true,
+    supportsHelpText: true,
+    supportsLibraryPicker: true,
+  },
+  
+  allowedFieldTypes: [
+    "short_text", "long_text", "email", "phone", "number", "date",
+    "single_select", "multi_select", "boolean"
+  ],
+  
+  mapToFieldDefinition: (domainField, index) => ({
+    id: domainField.id,
+    fieldName: domainField.fieldName,
+    fieldType: normalizeFieldType(domainField.fieldType),
+    description: domainField.description || "",
+    isRequired: domainField.isRequired,
+    order: domainField.order ?? index,
+    options: domainField.options || [],
+    placeholder: domainField.placeholder || "",
+  }),
+  
+  mapFromFieldDefinition: (field) => ({
+    fieldName: field.fieldName,
+    fieldType: field.fieldType,
+    description: field.description || undefined,
+    isRequired: field.isRequired,
+    order: field.order,
+    options: field.options?.length ? field.options : undefined,
+    placeholder: field.placeholder || undefined,
+  }),
+};
