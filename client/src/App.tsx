@@ -95,6 +95,7 @@ const CampaignsAdmin = lazy(() => import("@/pages/campaigns-admin"));
 const CampaignDetail = lazy(() => import("@/pages/campaign-detail"));
 const CampaignCreate = lazy(() => import("@/pages/campaign-create"));
 const CampaignWizard = lazy(() => import("@/pages/campaign-wizard/CampaignWizard"));
+const SystemFieldLibrary = lazy(() => import("@/pages/system-field-library"));
 
 function PageLoader() {
   return (
@@ -256,6 +257,7 @@ function Router() {
         <Route path="/super-admin/campaigns/:id/edit" component={CampaignWizard} />
         <Route path="/super-admin/campaigns/:id" component={CampaignDetail} />
         <Route path="/company-settings" component={CompanySettingsPage} />
+        <Route path="/system-field-library" component={SystemFieldLibrary} />
         <Route path="/page-builder/:id" component={PageBuilder} />
         
         {/* Public campaign page - no auth required */}
