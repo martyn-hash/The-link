@@ -190,10 +190,11 @@ function ClientTaskQuestionConfigModal({
 
   const availableFieldsForConditions = useMemo(() => {
     return allQuestions
+      .map((q, originalIdx) => ({ ...q, _originalIndex: originalIdx }))
       .slice(0, questionIndex)
       .filter(q => q.label.trim())
-      .map((q, idx) => ({
-        id: getQuestionKey(q, idx),
+      .map((q) => ({
+        id: getQuestionKey(q, q._originalIndex),
         label: q.label,
         fieldType: q.questionType,
         options: q.questionType === 'yes_no' ? ['yes', 'no'] : q.options,
