@@ -212,13 +212,41 @@ export default function KanbanBoard({
     refetchInterval: 60 * 1000, // Refetch every minute
   });
   
-  // Fetch task counts for all projects (batch query)
-  const { data: taskCounts = {} } = useQuery<Record<string, { pending: number; awaitingClient: number }>>({
+  // Fetch task counts for all projects (batch query) - now with caching support
+  interface TaskCountsResponse {
+    counts: Record<string, { pending: number; awaitingClient: number }>;
+    fromCache: boolean;
+    cachedAt: string | null;
+    isStale: boolean;
+    staleAt: string | null;
+  }
+  const { data: taskCountsResponse, isFetching: isRefreshingTaskCounts } = useQuery<TaskCountsResponse>({
     queryKey: ['/api/task-instances/counts'],
     enabled: isAuthenticated && !!authUser,
-    staleTime: 30 * 1000, // 30 seconds - refresh frequently for task counts
-    refetchInterval: 60 * 1000, // Refetch every minute
+    staleTime: 5 * 60 * 1000, // 5 minutes - cache is managed server-side
+    refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes (cache handles freshness)
   });
+  
+  // Extract counts from response, handling both old and new format
+  const taskCounts = useMemo(() => {
+    if (!taskCountsResponse) return {};
+    // Handle new format with counts property
+    if ('counts' in taskCountsResponse) {
+      return taskCountsResponse.counts;
+    }
+    // Handle legacy format (direct counts object)
+    return taskCountsResponse as unknown as Record<string, { pending: number; awaitingClient: number }>;
+  }, [taskCountsResponse]);
+  
+  // Check if task counts are stale (showing sync indicator needed)
+  const isTaskCountsStale = taskCountsResponse?.isStale ?? false;
+  
+  // Effect to trigger background refresh if data is stale
+  useEffect(() => {
+    if (isTaskCountsStale && !isRefreshingTaskCounts) {
+      queryClient.invalidateQueries({ queryKey: ['/api/task-instances/counts'] });
+    }
+  }, [isTaskCountsStale, isRefreshingTaskCounts, queryClient]);
   
   // State for stage-level filters and sorting
   const [stageFilters, setStageFilters] = useState<Record<string, StageFilterConfig>>({});
@@ -844,6 +872,23 @@ export default function KanbanBoard({
                 <X className="h-3 w-3" />
                 Collapse all ({expandedStages.size})
               </Button>
+            )}
+            
+            {/* Task counts sync indicator */}
+            {(isTaskCountsStale || isRefreshingTaskCounts) && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground" data-testid="task-counts-sync-indicator">
+                      <RefreshCw className={`h-3 w-3 ${isRefreshingTaskCounts ? 'animate-spin' : ''}`} />
+                      <span className="hidden sm:inline">Syncing...</span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    Refreshing task counts in the background
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
           </div>
           

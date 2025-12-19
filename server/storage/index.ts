@@ -93,6 +93,7 @@ import { ClientProjectTaskStorage } from './client-project-tasks/index.js';
 import { AIInteractionStorage } from './ai-interactions/index.js';
 import { AuditChangelogStorage } from './audit/index.js';
 import { ViewCacheStorage } from './view-cache/index.js';
+import { TaskCountsCacheStorage } from './task-counts-cache/index.js';
 
 // Import facade mixins and their dependency interfaces
 import { applyUsersFacade, type UsersFacadeDeps } from './facade/users.facade.js';
@@ -207,6 +208,7 @@ class StorageBase {
   public readonly aiInteractionStorage: AIInteractionStorage;
   public readonly auditChangelogStorage: AuditChangelogStorage;
   public readonly viewCacheStorage: ViewCacheStorage;
+  public readonly taskCountsCacheStorage: TaskCountsCacheStorage;
   public readonly clientProjectTaskStorage: ClientProjectTaskStorage;
 
   constructor() {
@@ -326,6 +328,9 @@ class StorageBase {
     
     // Initialize view cache storage
     this.viewCacheStorage = new ViewCacheStorage();
+    
+    // Initialize task counts cache storage
+    this.taskCountsCacheStorage = new TaskCountsCacheStorage();
     
     // Initialize client project tasks storage
     this.clientProjectTaskStorage = new ClientProjectTaskStorage();

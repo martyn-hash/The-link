@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { storage } from "../storage/index";
 import { z } from "zod";
 import { sendClientTaskOtp, verifyClientTaskOtp } from "../services/clientProjectTaskOtpService";
+import { getCachedTaskInstanceCounts, warmTaskInstanceCountsCache, hasAnyCachedTaskCounts, markTaskCountsStaleForProjects } from "../task-counts-cache-service";
 import {
   validateParams,
   paramUuidSchema,
@@ -664,6 +665,14 @@ export function registerClientProjectTaskRoutes(
         ...validated,
         createdById: req.user.id,
       });
+      
+      // Mark task counts cache as stale for this project
+      if (instance.projectId) {
+        markTaskCountsStaleForProjects([instance.projectId]).catch(err => {
+          console.error('[Task Counts Cache] Failed to mark stale:', err);
+        });
+      }
+      
       res.status(201).json(instance);
     } catch (error: any) {
       console.error("Error creating task instance:", error);
@@ -687,6 +696,14 @@ export function registerClientProjectTaskRoutes(
 
       const validated = updateClientProjectTaskInstanceSchema.parse(req.body);
       const instance = await storage.updateClientProjectTaskInstance(req.params.id, validated);
+      
+      // Mark task counts cache as stale for this project (status changes affect counts)
+      if (instance.projectId && validated.status) {
+        markTaskCountsStaleForProjects([instance.projectId]).catch(err => {
+          console.error('[Task Counts Cache] Failed to mark stale:', err);
+        });
+      }
+      
       res.json(instance);
     } catch (error: any) {
       console.error("Error updating task instance:", error);
@@ -719,11 +736,18 @@ export function registerClientProjectTaskRoutes(
       });
 
       // Update instance status to sent
-      await storage.updateClientProjectTaskInstance(instanceId, {
+      const updatedInstance = await storage.updateClientProjectTaskInstance(instanceId, {
         status: 'sent',
         sentAt: new Date(),
         sentById: req.user.id,
       });
+      
+      // Mark task counts cache as stale for this project
+      if (updatedInstance.projectId) {
+        markTaskCountsStaleForProjects([updatedInstance.projectId]).catch(err => {
+          console.error('[Task Counts Cache] Failed to mark stale:', err);
+        });
+      }
 
       res.status(201).json({ token: token.token, expiresAt: token.expiresAt });
     } catch (error) {
@@ -743,7 +767,19 @@ export function registerClientProjectTaskRoutes(
         });
       }
 
+      // Get the instance first to find the projectId for cache invalidation
+      const instance = await storage.getClientProjectTaskInstanceById(req.params.id);
+      const projectId = instance?.projectId;
+      
       await storage.deleteClientProjectTaskInstance(req.params.id);
+      
+      // Mark task counts cache as stale for this project
+      if (projectId) {
+        markTaskCountsStaleForProjects([projectId]).catch(err => {
+          console.error('[Task Counts Cache] Failed to mark stale:', err);
+        });
+      }
+      
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting task instance:", error);
@@ -1049,21 +1085,62 @@ export function registerClientProjectTaskRoutes(
   });
 
   // GET /api/task-instances/counts - Get pending task counts for all projects (batch)
+  // Uses caching: returns cached data instantly with isStale flag
+  // Cold cache returns empty counts with isStale=true and warms cache in background
   app.get("/api/task-instances/counts", isAuthenticated, resolveEffectiveUser, async (req: any, res: any) => {
     try {
-      // Get all projects for the current user context
-      const projects = await storage.getAllProjects({ archived: false });
-      const projectIds = projects.map((p: any) => p.id);
+      const refresh = req.query.refresh === 'true';
       
-      const countsMap = await storage.getPendingClientProjectTaskCountsBatch(projectIds);
+      // If explicit refresh is requested, warm cache synchronously (user explicitly asked)
+      if (refresh) {
+        await warmTaskInstanceCountsCache();
+        const freshResult = await getCachedTaskInstanceCounts();
+        return res.json({
+          counts: freshResult.counts,
+          fromCache: true,
+          cachedAt: freshResult.lastRefreshed,
+          isStale: false,
+          staleAt: null,
+        });
+      }
       
-      // Convert Map to object for JSON response
-      const counts: Record<string, { pending: number; awaitingClient: number }> = {};
-      countsMap.forEach((count, projectId) => {
-        counts[projectId] = count;
+      // Check if we have any cached data
+      const hasCachedData = await hasAnyCachedTaskCounts();
+      
+      if (hasCachedData) {
+        // Return cached data instantly with metadata
+        const cachedResult = await getCachedTaskInstanceCounts();
+        
+        // If stale, trigger background refresh
+        if (cachedResult.isStale) {
+          warmTaskInstanceCountsCache().catch(err => {
+            console.error('[Task Counts Cache] Background warming failed:', err);
+          });
+        }
+        
+        return res.json({
+          counts: cachedResult.counts,
+          fromCache: true,
+          cachedAt: cachedResult.lastRefreshed,
+          isStale: cachedResult.isStale,
+          staleAt: cachedResult.staleAt,
+        });
+      }
+      
+      // Cold cache - return empty counts with isStale=true immediately
+      // This ensures instant response even on first load
+      // Background warming will populate cache for next request
+      warmTaskInstanceCountsCache().catch(err => {
+        console.error('[Task Counts Cache] Background warming failed:', err);
       });
       
-      res.json(counts);
+      res.json({
+        counts: {},
+        fromCache: false,
+        cachedAt: null,
+        isStale: true,
+        staleAt: new Date().toISOString(),
+      });
     } catch (error) {
       console.error("Error fetching task instance counts:", error);
       res.status(500).json({ message: "Failed to fetch task instance counts" });
@@ -1106,6 +1183,11 @@ export function registerClientProjectTaskRoutes(
         recipientName,
         createdById: req.user.id,
         isReissued: false,
+      });
+      
+      // Mark task counts cache as stale for this project
+      markTaskCountsStaleForProjects([projectId]).catch(err => {
+        console.error('[Task Counts Cache] Failed to mark stale:', err);
       });
 
       // TODO: Send email notification to recipient
