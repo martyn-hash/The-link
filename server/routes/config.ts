@@ -541,7 +541,20 @@ export function registerConfigRoutes(
 
   app.post("/api/config/stage-approval-fields", isAuthenticated, requireAdmin, async (req, res) => {
     try {
+      console.log("[StageApprovalFields] Creating field with body:", JSON.stringify(req.body, null, 2));
       const fieldData = insertStageApprovalFieldSchema.parse(req.body);
+      console.log("[StageApprovalFields] Parsed field data:", JSON.stringify(fieldData, null, 2));
+      
+      // Validate libraryFieldId if provided - it must exist in approval_field_library
+      // If it's from system_field_library (wrong table), clear it to prevent FK violation
+      if (fieldData.libraryFieldId) {
+        const libraryField = await storage.getLibraryFieldById(fieldData.libraryFieldId);
+        if (!libraryField) {
+          console.log("[StageApprovalFields] libraryFieldId not found in approval_field_library, clearing it:", fieldData.libraryFieldId);
+          fieldData.libraryFieldId = null;
+        }
+      }
+      
       const field = await storage.createStageApprovalField(fieldData);
       
       await trackSystemFieldLibraryUsage(
@@ -554,24 +567,41 @@ export function registerConfigRoutes(
       
       invalidateStageConfigCache();
       res.json(field);
-    } catch (error) {
-      console.error("Error creating stage approval field:", error);
+    } catch (error: any) {
+      console.error("[StageApprovalFields] Error creating field:", error);
+      console.error("[StageApprovalFields] Error name:", error?.name);
+      console.error("[StageApprovalFields] Error message:", error?.message);
+      console.error("[StageApprovalFields] Request body was:", JSON.stringify(req.body, null, 2));
 
-      // Check for Zod validation errors
-      if (error instanceof Error && error.name === 'ZodError') {
+      // Check for Zod validation errors (could be ZodError or have issues array)
+      if (error?.issues || error?.name === 'ZodError') {
         return res.status(400).json({
           message: "Validation failed",
-          errors: (error as any).issues
+          errors: error.issues || [{ message: error.message }]
         });
       }
 
-      res.status(400).json({ message: "Failed to create stage approval field" });
+      // Include actual error details in response for debugging
+      res.status(400).json({ 
+        message: "Failed to create stage approval field",
+        details: error?.message || "Unknown error"
+      });
     }
   });
 
   app.patch("/api/config/stage-approval-fields/:id", isAuthenticated, requireAdmin, async (req, res) => {
     try {
       const fieldData = updateStageApprovalFieldSchema.parse(req.body);
+      
+      // Validate libraryFieldId if provided - it must exist in approval_field_library
+      if (fieldData.libraryFieldId) {
+        const libraryField = await storage.getLibraryFieldById(fieldData.libraryFieldId);
+        if (!libraryField) {
+          console.log("[StageApprovalFields] PATCH: libraryFieldId not found in approval_field_library, clearing it:", fieldData.libraryFieldId);
+          fieldData.libraryFieldId = null;
+        }
+      }
+      
       const field = await storage.updateStageApprovalField(req.params.id, fieldData);
       invalidateStageConfigCache();
       res.json(field);

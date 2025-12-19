@@ -465,7 +465,7 @@ export function ApprovalWizard({
       fieldName: systemField.fieldName,
       fieldType: mappedFieldType,
       description: systemField.description || "",
-      libraryFieldId: systemField.id,
+      libraryFieldId: null,
       options: systemField.options || [],
       isRequired: systemField.isRequired || false,
       order: editingFormData.fields.length,

@@ -199,6 +199,12 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
       
       for (let i = 0; i < data.fields.length; i++) {
         const field = data.fields[i];
+        const isSelectType = ["single_select", "multi_select"].includes(field.fieldType);
+        
+        if (isSelectType && (!field.options || field.options.length === 0)) {
+          throw new Error(`Field "${field.fieldName || 'Untitled'}" is a select field and requires at least one option.`);
+        }
+        
         await apiRequest("POST", `/api/config/stage-approval-fields`, {
           stageApprovalId: override.overrideApprovalId,
           fieldName: field.fieldName,
@@ -206,7 +212,7 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
           description: field.description || null,
           isRequired: field.isRequired,
           order: i,
-          options: field.options.length > 0 ? field.options : null,
+          options: field.options && field.options.length > 0 ? field.options : null,
           libraryFieldId: field.libraryFieldId || null,
           expectedValueBoolean: field.expectedValueBoolean,
           expectedValueNumber: field.expectedValueNumber,
@@ -243,6 +249,12 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
       
       for (let i = 0; i < data.formData.fields.length; i++) {
         const field = data.formData.fields[i];
+        const isSelectType = ["single_select", "multi_select"].includes(field.fieldType);
+        
+        if (isSelectType && (!field.options || field.options.length === 0)) {
+          throw new Error(`Field "${field.fieldName || 'Untitled'}" is a select field and requires at least one option.`);
+        }
+        
         const fieldData = {
           stageApprovalId: data.approvalId,
           fieldName: field.fieldName,
@@ -250,7 +262,7 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
           description: field.description || null,
           isRequired: field.isRequired,
           order: i,
-          options: field.options.length > 0 ? field.options : null,
+          options: field.options && field.options.length > 0 ? field.options : null,
           libraryFieldId: field.libraryFieldId || null,
           expectedValueBoolean: field.expectedValueBoolean,
           expectedValueNumber: field.expectedValueNumber,
