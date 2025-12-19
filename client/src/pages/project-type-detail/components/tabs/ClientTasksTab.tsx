@@ -1640,6 +1640,16 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
             onCancel={() => setEditingSectionIndex(null)}
           />
         )}
+
+        {/* System Field Library Picker for builder view */}
+        <SystemFieldLibraryPicker
+          open={systemLibraryPickerOpen}
+          onOpenChange={setSystemLibraryPickerOpen}
+          onSelectField={handleAddQuestionFromSystemLibrary}
+          allowedFieldTypes={ALLOWED_SYSTEM_FIELD_TYPES}
+          title="Pick from System Field Library"
+          description="Select a pre-defined field from your company's reusable field library"
+        />
       </TabsContent>
     );
   }
