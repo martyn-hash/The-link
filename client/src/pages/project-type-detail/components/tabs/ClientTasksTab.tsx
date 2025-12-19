@@ -18,7 +18,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { 
   Plus, Edit2, Trash2, Save, X, ClipboardList, GripVertical,
   Type, FileText, Mail, Hash, Calendar, CircleDot, CheckSquare, 
-  ChevronDown, ChevronRight, ToggleLeft, Upload, HelpCircle, Layers
+  ChevronDown, ChevronRight, ToggleLeft, Upload, HelpCircle, Layers, Library
 } from "lucide-react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -28,8 +28,10 @@ import type {
   ClientProjectTaskQuestion,
   ClientProjectTaskSection,
   KanbanStage,
-  ChangeReason 
+  ChangeReason,
+  SystemFieldLibrary
 } from "@shared/schema";
+import { SystemFieldLibraryPicker } from "@/components/system-field-library-picker";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { nanoid } from "nanoid";
@@ -72,6 +74,7 @@ interface EditingQuestion {
   placeholder: string;
   sectionId?: string | null;
   conditionalLogic?: ConditionalLogic | null;
+  libraryFieldId?: string | null;
 }
 
 interface EditingSection {
@@ -658,6 +661,52 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isOverDropZone, setIsOverDropZone] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  const [systemLibraryPickerOpen, setSystemLibraryPickerOpen] = useState(false);
+
+  const ALLOWED_SYSTEM_FIELD_TYPES = ["boolean", "number", "short_text", "long_text", "date", "single_select", "multi_select", "email", "file_upload"];
+
+  const mapSystemFieldTypeToQuestionType = (fieldType: string): QuestionType => {
+    const mapping: Record<string, QuestionType> = {
+      "boolean": "yes_no",
+      "number": "number",
+      "short_text": "short_text",
+      "long_text": "long_text",
+      "date": "date",
+      "single_select": "single_choice",
+      "multi_select": "multi_choice",
+      "email": "email",
+      "file_upload": "file_upload",
+      "image_upload": "file_upload",
+      "currency": "number",
+      "percentage": "number",
+      "url": "short_text",
+      "phone": "short_text",
+    };
+    return mapping[fieldType] || "short_text";
+  };
+
+  const handleAddQuestionFromSystemLibrary = (systemField: SystemFieldLibrary) => {
+    if (!editingTemplate) return;
+    
+    const mappedType = mapSystemFieldTypeToQuestionType(systemField.fieldType);
+    
+    const newQuestion: EditingQuestion = {
+      ...DEFAULT_QUESTION,
+      questionType: mappedType,
+      label: systemField.fieldName,
+      helpText: systemField.description || "",
+      isRequired: systemField.isRequired || false,
+      options: systemField.options || [],
+      order: editingTemplate.questions.length,
+    };
+    
+    setEditingTemplate(prev => prev ? {
+      ...prev,
+      questions: [...prev.questions, newQuestion]
+    } : null);
+    
+    setEditingQuestionIndex(editingTemplate.questions.length);
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -1123,6 +1172,18 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
                     onClick={() => handleAddQuestion(qt.type as QuestionType)}
                   />
                 ))}
+              </div>
+              
+              <div className="mt-6 pt-4 border-t border-border">
+                <Button
+                  variant="outline"
+                  className="w-full bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100 hover:text-purple-800"
+                  onClick={() => setSystemLibraryPickerOpen(true)}
+                  data-testid="button-open-system-library"
+                >
+                  <Library className="w-4 h-4 mr-2" />
+                  Pick from System Library
+                </Button>
               </div>
             </div>
 
@@ -1738,6 +1799,16 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* System Field Library Picker */}
+      <SystemFieldLibraryPicker
+        open={systemLibraryPickerOpen}
+        onOpenChange={setSystemLibraryPickerOpen}
+        onSelectField={handleAddQuestionFromSystemLibrary}
+        allowedFieldTypes={ALLOWED_SYSTEM_FIELD_TYPES}
+        title="Pick from System Field Library"
+        description="Select a pre-defined field from your company's reusable field library"
+      />
     </TabsContent>
   );
 }

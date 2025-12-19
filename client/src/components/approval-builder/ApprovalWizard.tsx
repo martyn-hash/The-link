@@ -13,12 +13,13 @@ import {
   X, Save, GripVertical, Plus, Trash2, Edit2, Eye,
   ToggleLeft, Hash, Type, FileText, Calendar, CircleDot, CheckSquare,
   ChevronRight, ChevronLeft, Library, Sparkles, ClipboardCheck, Check, Settings,
-  ImageIcon
+  ImageIcon, BookOpen
 } from "lucide-react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { ApprovalFieldLibrary, ProjectType, KanbanStage } from "@shared/schema";
+import type { ApprovalFieldLibrary, ProjectType, KanbanStage, SystemFieldLibrary } from "@shared/schema";
+import { SystemFieldLibraryPicker } from "@/components/system-field-library-picker";
 
 const FIELD_TYPES = [
   { type: "boolean", label: "Yes/No", icon: ToggleLeft, color: "#84cc16" },
@@ -515,8 +516,11 @@ export function ApprovalWizard({
   const [viewingFieldIndex, setViewingFieldIndex] = useState<number | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isOverDropZone, setIsOverDropZone] = useState(false);
+  const [systemLibraryPickerOpen, setSystemLibraryPickerOpen] = useState(false);
 
   const isViewOnly = mode === "view";
+
+  const ALLOWED_SYSTEM_FIELD_TYPES = ["boolean", "number", "short_text", "long_text", "date", "single_select", "multi_select", "image_upload"];
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -629,6 +633,29 @@ export function ApprovalWizard({
       description: libraryField.description || "",
       libraryFieldId: libraryField.id,
       options: libraryField.options || [],
+      order: editingFormData.fields.length,
+    };
+    setEditingFormData(prev => ({
+      ...prev,
+      fields: [...prev.fields, newField]
+    }));
+    setEditingFieldIndex(editingFormData.fields.length);
+  };
+
+  const handleAddFieldFromSystemLibrary = (systemField: SystemFieldLibrary) => {
+    if (isViewOnly) return;
+    const mappedFieldType = ALLOWED_SYSTEM_FIELD_TYPES.includes(systemField.fieldType) 
+      ? systemField.fieldType as FieldType 
+      : "short_text" as FieldType;
+    
+    const newField: EditingApprovalField = {
+      ...DEFAULT_FIELD,
+      fieldName: systemField.fieldName,
+      fieldType: mappedFieldType,
+      description: systemField.description || "",
+      libraryFieldId: systemField.id,
+      options: systemField.options || [],
+      isRequired: systemField.isRequired || false,
       order: editingFormData.fields.length,
     };
     setEditingFormData(prev => ({
@@ -905,11 +932,29 @@ export function ApprovalWizard({
               </div>
               
               <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                {!isViewOnly && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <BookOpen className="w-4 h-4 text-emerald-600" />
+                      <h4 className="text-sm font-semibold text-emerald-700">System Library</h4>
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start gap-2 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-300 text-emerald-700"
+                      onClick={() => setSystemLibraryPickerOpen(true)}
+                      data-testid="button-open-system-library"
+                    >
+                      <Library className="w-4 h-4" />
+                      Pick from System Library
+                    </Button>
+                  </div>
+                )}
+
                 {libraryFields.length > 0 && (
                   <div>
                     <div className="flex items-center gap-2 mb-3">
                       <Library className="w-4 h-4 text-purple-500" />
-                      <h4 className="text-sm font-semibold text-purple-700">Field Library</h4>
+                      <h4 className="text-sm font-semibold text-purple-700">Project Type Library</h4>
                     </div>
                     <div className="space-y-2">
                       {libraryFields.map(lf => {
@@ -1064,6 +1109,16 @@ export function ApprovalWizard({
           isViewOnly
         />
       )}
+
+      {/* System Field Library Picker */}
+      <SystemFieldLibraryPicker
+        open={systemLibraryPickerOpen}
+        onOpenChange={setSystemLibraryPickerOpen}
+        onSelectField={handleAddFieldFromSystemLibrary}
+        allowedFieldTypes={ALLOWED_SYSTEM_FIELD_TYPES}
+        title="Pick from System Field Library"
+        description="Select a pre-defined field from your company's reusable field library"
+      />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { users } from '../users/tables';
 import { projects, kanbanStages, changeReasons } from '../projects/tables';
 import { projectTypes } from '../projects/base';
 import { clients } from '../clients/tables';
+import { systemFieldLibrary } from '../system-field-library/tables';
 import { clientProjectTaskStatusEnum, taskQuestionSourceEnum, questionTypeEnum } from '../enums';
 
 export interface TaskFileAttachment {
@@ -56,6 +57,7 @@ export const clientProjectTaskQuestions = pgTable("client_project_task_questions
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   templateId: varchar("template_id").notNull().references(() => clientProjectTaskTemplates.id, { onDelete: "cascade" }),
   sectionId: varchar("section_id").references(() => clientProjectTaskSections.id, { onDelete: "set null" }),
+  libraryFieldId: varchar("library_field_id").references(() => systemFieldLibrary.id, { onDelete: "set null" }),
   questionType: questionTypeEnum("question_type").notNull(),
   label: varchar("label", { length: 500 }).notNull(),
   helpText: text("help_text"),
@@ -93,6 +95,7 @@ export const clientProjectTaskOverrides = pgTable("client_project_task_overrides
 export const clientProjectTaskOverrideQuestions = pgTable("client_project_task_override_questions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   overrideId: varchar("override_id").notNull().references(() => clientProjectTaskOverrides.id, { onDelete: "cascade" }),
+  libraryFieldId: varchar("library_field_id").references(() => systemFieldLibrary.id, { onDelete: "set null" }),
   questionType: questionTypeEnum("question_type").notNull(),
   label: varchar("label", { length: 500 }).notNull(),
   helpText: text("help_text"),

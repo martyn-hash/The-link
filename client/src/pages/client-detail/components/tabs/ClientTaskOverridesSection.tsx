@@ -57,6 +57,7 @@ import {
   ChevronDownSquare,
   Upload,
   Mail,
+  Library,
 } from "lucide-react";
 import type {
   ProjectType,
@@ -64,7 +65,9 @@ import type {
   ClientProjectTaskOverrideWithRelations,
   ClientProjectTaskQuestion,
   ClientProjectTaskOverrideQuestion,
+  SystemFieldLibrary,
 } from "@shared/schema";
+import { SystemFieldLibraryPicker } from "@/components/system-field-library-picker";
 
 interface ClientTaskOverridesSectionProps {
   clientId: string;
@@ -119,6 +122,57 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
   const [editingQuestion, setEditingQuestion] = useState<EditingQuestion | null>(null);
   const [newOption, setNewOption] = useState("");
   const [deleteQuestionId, setDeleteQuestionId] = useState<string | null>(null);
+  const [systemLibraryPickerOpen, setSystemLibraryPickerOpen] = useState(false);
+  const [currentOverrideIdForLibrary, setCurrentOverrideIdForLibrary] = useState<string | null>(null);
+
+  const ALLOWED_SYSTEM_FIELD_TYPES = ["boolean", "number", "short_text", "long_text", "date", "single_select", "multi_select", "email", "file_upload"];
+
+  const mapSystemFieldTypeToQuestionType = (fieldType: string): QuestionType => {
+    const mapping: Record<string, QuestionType> = {
+      "boolean": "yes_no",
+      "number": "number",
+      "short_text": "short_text",
+      "long_text": "long_text",
+      "date": "date",
+      "single_select": "single_choice",
+      "multi_select": "multi_choice",
+      "email": "email",
+      "file_upload": "file_upload",
+      "image_upload": "file_upload",
+      "currency": "number",
+      "percentage": "number",
+      "url": "short_text",
+      "phone": "short_text",
+    };
+    return mapping[fieldType] || "short_text";
+  };
+
+  const handleAddQuestionFromSystemLibrary = (systemField: SystemFieldLibrary) => {
+    if (!currentOverrideIdForLibrary) return;
+    
+    const override = overrides?.find(o => o.id === currentOverrideIdForLibrary);
+    if (!override) return;
+    
+    const mappedType = mapSystemFieldTypeToQuestionType(systemField.fieldType);
+    
+    setEditingQuestion({
+      ...DEFAULT_QUESTION,
+      overrideId: currentOverrideIdForLibrary,
+      questionType: mappedType,
+      label: systemField.fieldName,
+      helpText: systemField.description || "",
+      isRequired: systemField.isRequired || false,
+      options: systemField.options || [],
+      order: (override.questions?.length || 0) + 1,
+    });
+    
+    setCurrentOverrideIdForLibrary(null);
+  };
+
+  const openSystemLibraryPicker = (overrideId: string) => {
+    setCurrentOverrideIdForLibrary(overrideId);
+    setSystemLibraryPickerOpen(true);
+  };
 
   const { data: projectTypes, isLoading: projectTypesLoading } = useQuery<ProjectType[]>({
     queryKey: ["/api/config/project-types"],
@@ -511,15 +565,27 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
                             <Plus className="w-4 h-4" />
                             Additional Questions
                           </h4>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleAddQuestion(override.id, override.questions?.length || 0)}
-                            data-testid="button-add-override-question"
-                          >
-                            <Plus className="w-4 h-4 mr-2" />
-                            Add Question
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100 hover:text-purple-800"
+                              onClick={() => openSystemLibraryPicker(override.id)}
+                              data-testid="button-open-system-library-override"
+                            >
+                              <Library className="w-4 h-4 mr-2" />
+                              From Library
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleAddQuestion(override.id, override.questions?.length || 0)}
+                              data-testid="button-add-override-question"
+                            >
+                              <Plus className="w-4 h-4 mr-2" />
+                              Add Question
+                            </Button>
+                          </div>
                         </div>
                         
                         {override.questions && override.questions.length > 0 ? (
@@ -812,6 +878,16 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* System Field Library Picker */}
+      <SystemFieldLibraryPicker
+        open={systemLibraryPickerOpen}
+        onOpenChange={setSystemLibraryPickerOpen}
+        onSelectField={handleAddQuestionFromSystemLibrary}
+        allowedFieldTypes={ALLOWED_SYSTEM_FIELD_TYPES}
+        title="Pick from System Field Library"
+        description="Select a pre-defined field from your company's reusable field library"
+      />
     </div>
   );
 }

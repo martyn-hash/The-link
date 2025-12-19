@@ -23,6 +23,31 @@ import {
 } from "@shared/schema";
 import { stageConfigCache } from "../utils/ttlCache";
 
+async function trackSystemFieldLibraryUsage(
+  libraryFieldId: string | null | undefined,
+  context: "stage_approval" | "client_task" | "request_template" | "campaign_page" | "reason_custom_field" | "service_udf" | "page_template",
+  contextEntityId: string,
+  contextEntityType?: string,
+  fieldNameOverride?: string | null
+) {
+  if (!libraryFieldId) return;
+  
+  try {
+    const systemField = await storage.systemFieldLibraryStorage.getById(libraryFieldId);
+    if (systemField) {
+      await storage.systemFieldLibraryStorage.recordUsage({
+        libraryFieldId,
+        context,
+        contextEntityId,
+        contextEntityType: contextEntityType || undefined,
+        fieldNameOverride: fieldNameOverride || undefined,
+      });
+    }
+  } catch (error) {
+    console.warn("[SystemFieldLibrary] Could not track usage:", error);
+  }
+}
+
 function invalidateStageConfigCache(projectTypeId?: string) {
   if (projectTypeId) {
     stageConfigCache.invalidate(`projectType:${projectTypeId}`);
@@ -518,6 +543,15 @@ export function registerConfigRoutes(
     try {
       const fieldData = insertStageApprovalFieldSchema.parse(req.body);
       const field = await storage.createStageApprovalField(fieldData);
+      
+      await trackSystemFieldLibraryUsage(
+        fieldData.libraryFieldId,
+        "stage_approval",
+        field.id,
+        "stage_approval_field",
+        fieldData.fieldName
+      );
+      
       invalidateStageConfigCache();
       res.json(field);
     } catch (error) {
