@@ -24,6 +24,7 @@ import { sendProjectMessageReminders } from "./projectMessageReminderService";
 import { updateDashboardCache } from "./dashboard-cache-service";
 import { warmViewCache } from "./view-cache-service";
 import { warmTaskInstanceCountsCache } from "./task-counts-cache-service";
+import { warmInternalTasksCacheForAllUsers } from "./internal-tasks-cache-service";
 import { storage } from "./storage/index";
 import { startNotificationCron } from "./notification-cron";
 import { startSignatureReminderCron } from "./signature-reminder-cron";
@@ -286,6 +287,58 @@ async function main() {
     timezone: "Europe/London"
   });
   log('[TaskCountsCacheAfternoon] Scheduled (15:30 UK)');
+  
+  // Internal Tasks Cache - Early Morning 04:35 UK (after task counts cache)
+  cron.schedule('35 4 * * *', wrapCronHandler('InternalTasksCacheMorning', '35 4 * * *', async () => {
+    log('[Internal Tasks Cache] Starting early morning cache warming (04:35)...');
+    const result = await warmInternalTasksCacheForAllUsers();
+    log(`[Internal Tasks Cache] Warming completed: ${result.status} - ${result.usersProcessed} users cached in ${result.executionTimeMs}ms`);
+    if (result.errors.length > 0) {
+      console.error('[Internal Tasks Cache] Warming errors:', result.errors.slice(0, 10));
+    }
+  }, { useLock: true, timezone: 'Europe/London' }), {
+    timezone: "Europe/London"
+  });
+  log('[InternalTasksCacheMorning] Scheduled (04:35 UK)');
+  
+  // Internal Tasks Cache - Mid Morning 09:00 UK 
+  cron.schedule('0 9 * * *', wrapCronHandler('InternalTasksCacheMidMorning', '0 9 * * *', async () => {
+    log('[Internal Tasks Cache] Starting mid-morning cache warming (09:00)...');
+    const result = await warmInternalTasksCacheForAllUsers();
+    log(`[Internal Tasks Cache] Warming completed: ${result.status} - ${result.usersProcessed} users cached in ${result.executionTimeMs}ms`);
+    if (result.errors.length > 0) {
+      console.error('[Internal Tasks Cache] Warming errors:', result.errors.slice(0, 10));
+    }
+  }, { useLock: true, timezone: 'Europe/London' }), {
+    timezone: "Europe/London"
+  });
+  log('[InternalTasksCacheMidMorning] Scheduled (09:00 UK)');
+  
+  // Internal Tasks Cache - Midday 12:35 UK
+  cron.schedule('35 12 * * *', wrapCronHandler('InternalTasksCacheMidday', '35 12 * * *', async () => {
+    log('[Internal Tasks Cache] Starting midday cache warming (12:35)...');
+    const result = await warmInternalTasksCacheForAllUsers();
+    log(`[Internal Tasks Cache] Warming completed: ${result.status} - ${result.usersProcessed} users cached in ${result.executionTimeMs}ms`);
+    if (result.errors.length > 0) {
+      console.error('[Internal Tasks Cache] Warming errors:', result.errors.slice(0, 10));
+    }
+  }, { useLock: true, timezone: 'Europe/London' }), {
+    timezone: "Europe/London"
+  });
+  log('[InternalTasksCacheMidday] Scheduled (12:35 UK)');
+  
+  // Internal Tasks Cache - Afternoon 15:35 UK
+  cron.schedule('35 15 * * *', wrapCronHandler('InternalTasksCacheAfternoon', '35 15 * * *', async () => {
+    log('[Internal Tasks Cache] Starting afternoon cache warming (15:35)...');
+    const result = await warmInternalTasksCacheForAllUsers();
+    log(`[Internal Tasks Cache] Warming completed: ${result.status} - ${result.usersProcessed} users cached in ${result.executionTimeMs}ms`);
+    if (result.errors.length > 0) {
+      console.error('[Internal Tasks Cache] Warming errors:', result.errors.slice(0, 10));
+    }
+  }, { useLock: true, timezone: 'Europe/London' }), {
+    timezone: "Europe/London"
+  });
+  log('[InternalTasksCacheAfternoon] Scheduled (15:35 UK)');
   
   // === Business Hours Jobs ===
   
