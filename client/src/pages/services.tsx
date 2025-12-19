@@ -110,7 +110,7 @@ interface UDFEditorProps {
   name: string;
 }
 
-const ALLOWED_UDF_SYSTEM_FIELD_TYPES = ["boolean", "number", "short_text", "date", "single_select"];
+const ALLOWED_UDF_SYSTEM_FIELD_TYPES = ["boolean", "number", "short_text", "long_text", "date", "single_select", "multi_select", "email", "phone", "url", "currency", "percentage", "file_upload", "image_upload", "user_select"];
 
 type UDFType = "short_text" | "number" | "date" | "boolean" | "dropdown";
 
