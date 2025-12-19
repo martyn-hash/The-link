@@ -62,6 +62,7 @@ import { registerPerformanceLeagueRoutes } from "./routes/performanceLeague";
 import { registerCampaignRoutes } from "./routes/campaigns";
 import { registerPageRoutes } from "./routes/pages";
 import { registerContactPreferencesRoutes } from "./routes/contactPreferences";
+import { registerSystemFieldLibraryRoutes } from "./routes/systemFieldLibrary";
 
 /**
  * Register all application routes
@@ -169,6 +170,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerCampaignRoutes(app, isAuthenticated, resolveEffectiveUser);
   registerPageRoutes(app, isAuthenticated, resolveEffectiveUser);
   registerContactPreferencesRoutes(app, isAuthenticated, resolveEffectiveUser);
+  
+  // Register system field library routes
+  registerSystemFieldLibraryRoutes(app, isAuthenticated, resolveEffectiveUser);
 
   const httpServer = createServer(app);
   return httpServer;

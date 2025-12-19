@@ -94,6 +94,7 @@ import { AIInteractionStorage } from './ai-interactions/index.js';
 import { AuditChangelogStorage } from './audit/index.js';
 import { ViewCacheStorage } from './view-cache/index.js';
 import { TaskCountsCacheStorage } from './task-counts-cache/index.js';
+import { SystemFieldLibraryStorage } from './system-field-library/index.js';
 
 // Import facade mixins and their dependency interfaces
 import { applyUsersFacade, type UsersFacadeDeps } from './facade/users.facade.js';
@@ -210,6 +211,7 @@ class StorageBase {
   public readonly viewCacheStorage: ViewCacheStorage;
   public readonly taskCountsCacheStorage: TaskCountsCacheStorage;
   public readonly clientProjectTaskStorage: ClientProjectTaskStorage;
+  public readonly systemFieldLibraryStorage: SystemFieldLibraryStorage;
 
   constructor() {
     // Initialize all storage instances
@@ -334,6 +336,9 @@ class StorageBase {
     
     // Initialize client project tasks storage
     this.clientProjectTaskStorage = new ClientProjectTaskStorage();
+    
+    // Initialize system field library storage
+    this.systemFieldLibraryStorage = new SystemFieldLibraryStorage();
     
     // Register cross-domain helpers
     this.registerClientHelpers();
