@@ -66,6 +66,7 @@ import type {
   ClientProjectTaskQuestion,
   ClientProjectTaskOverrideQuestion,
   SystemFieldLibrary,
+  EnhancedClientService,
 } from "@shared/schema";
 import { SystemFieldLibraryPicker } from "@/components/system-field-library-picker";
 
@@ -180,6 +181,17 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
   const { data: projectTypes, isLoading: projectTypesLoading } = useQuery<ProjectType[]>({
     queryKey: ["/api/config/project-types"],
   });
+
+  const { data: clientServices, isLoading: clientServicesLoading } = useQuery<EnhancedClientService[]>({
+    queryKey: [`/api/client-services/client/${clientId}`],
+    enabled: !!clientId,
+  });
+
+  const filteredProjectTypes = useMemo(() => {
+    if (!projectTypes || !clientServices) return [];
+    const clientServiceIds = new Set(clientServices.map(cs => cs.serviceId));
+    return projectTypes.filter(pt => pt.serviceId && clientServiceIds.has(pt.serviceId));
+  }, [projectTypes, clientServices]);
 
   const { data: overrides, isLoading: overridesLoading } = useQuery<ClientProjectTaskOverrideWithRelations[]>({
     queryKey: ["/api/clients", clientId, "task-overrides"],
@@ -378,7 +390,7 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
 
   const needsOptions = editingQuestion && ["single_choice", "multi_choice", "dropdown"].includes(editingQuestion.questionType);
 
-  if (overridesLoading || projectTypesLoading) {
+  if (overridesLoading || projectTypesLoading || clientServicesLoading) {
     return (
       <div className="space-y-4">
         <Skeleton className="h-8 w-64" />
@@ -669,11 +681,17 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
                   <SelectValue placeholder="Select project type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {projectTypes?.map((pt) => (
-                    <SelectItem key={pt.id} value={pt.id}>
-                      {pt.name}
-                    </SelectItem>
-                  ))}
+                  {filteredProjectTypes.length === 0 ? (
+                    <div className="p-2 text-sm text-muted-foreground text-center">
+                      No project types match this client's services
+                    </div>
+                  ) : (
+                    filteredProjectTypes.map((pt) => (
+                      <SelectItem key={pt.id} value={pt.id}>
+                        {pt.name}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
