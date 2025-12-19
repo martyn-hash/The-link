@@ -118,6 +118,7 @@ const DEFAULT_QUESTION: EditingQuestion = {
   placeholder: "",
   sectionId: null,
   conditionalLogic: null,
+  libraryFieldId: null,
 };
 
 const CONDITION_OPERATORS = [
@@ -698,6 +699,7 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
       isRequired: systemField.isRequired || false,
       options: systemField.options || [],
       order: editingTemplate.questions.length,
+      libraryFieldId: systemField.id,
     };
     
     setEditingTemplate(prev => prev ? {
@@ -780,6 +782,7 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
           order: i,
           options: q.options.length > 0 ? q.options : null,
           placeholder: q.placeholder || null,
+          libraryFieldId: q.libraryFieldId || null,
         });
       }
       
@@ -863,6 +866,7 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
           order: i,
           options: q.options.length > 0 ? q.options : null,
           placeholder: q.placeholder || null,
+          libraryFieldId: q.libraryFieldId || null,
         };
         
         if (q.id) {

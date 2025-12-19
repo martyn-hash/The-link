@@ -85,6 +85,7 @@ interface EditingQuestion {
   order: number;
   options: string[];
   placeholder: string;
+  libraryFieldId?: string | null;
 }
 
 const QUESTION_TYPES = [
@@ -108,6 +109,7 @@ const DEFAULT_QUESTION: Omit<EditingQuestion, 'overrideId'> = {
   order: 1,
   options: [],
   placeholder: "",
+  libraryFieldId: null,
 };
 
 export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSectionProps) {
@@ -164,6 +166,7 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
       isRequired: systemField.isRequired || false,
       options: systemField.options || [],
       order: (override.questions?.length || 0) + 1,
+      libraryFieldId: systemField.id,
     });
     
     setCurrentOverrideIdForLibrary(null);

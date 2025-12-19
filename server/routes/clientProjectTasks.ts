@@ -25,6 +25,31 @@ import {
 } from "@shared/schema";
 import { nanoid } from "nanoid";
 
+async function trackSystemFieldLibraryUsage(
+  libraryFieldId: string | null | undefined,
+  context: "stage_approval" | "client_task" | "request_template" | "campaign_page" | "reason_custom_field" | "service_udf" | "page_template",
+  contextEntityId: string,
+  contextEntityType?: string,
+  fieldNameOverride?: string | null
+) {
+  if (!libraryFieldId) return;
+  
+  try {
+    const systemField = await storage.systemFieldLibraryStorage.getById(libraryFieldId);
+    if (systemField) {
+      await storage.systemFieldLibraryStorage.recordUsage({
+        libraryFieldId,
+        context,
+        contextEntityId,
+        contextEntityType: contextEntityType || undefined,
+        fieldNameOverride: fieldNameOverride || undefined,
+      });
+    }
+  } catch (error) {
+    console.warn("[SystemFieldLibrary] Could not track usage:", error);
+  }
+}
+
 const paramProjectTypeIdSchema = z.object({
   projectTypeId: z.string().uuid("Invalid project type ID format")
 });
@@ -234,6 +259,17 @@ export function registerClientProjectTaskRoutes(
       })));
 
       const questions = await storage.createClientProjectTaskQuestions(questionsData);
+      
+      for (let i = 0; i < questions.length; i++) {
+        await trackSystemFieldLibraryUsage(
+          questionsData[i].libraryFieldId,
+          "client_task",
+          questions[i].id,
+          "template_question",
+          questionsData[i].label
+        );
+      }
+      
       res.status(201).json(questions);
     } catch (error: any) {
       console.error("Error creating template questions:", error);
@@ -249,6 +285,15 @@ export function registerClientProjectTaskRoutes(
     try {
       const validated = insertClientProjectTaskQuestionSchema.parse(req.body);
       const question = await storage.createClientProjectTaskQuestion(validated);
+      
+      await trackSystemFieldLibraryUsage(
+        validated.libraryFieldId,
+        "client_task",
+        question.id,
+        "template_question",
+        validated.label
+      );
+      
       res.status(201).json(question);
     } catch (error: any) {
       console.error("Error creating template question:", error);
@@ -539,6 +584,15 @@ export function registerClientProjectTaskRoutes(
     try {
       const validated = insertClientProjectTaskOverrideQuestionSchema.parse(req.body);
       const question = await storage.createClientProjectTaskOverrideQuestion(validated);
+      
+      await trackSystemFieldLibraryUsage(
+        validated.libraryFieldId,
+        "client_task",
+        question.id,
+        "override_question",
+        validated.label
+      );
+      
       res.status(201).json(question);
     } catch (error: any) {
       console.error("Error creating override question:", error);
