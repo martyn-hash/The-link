@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -35,6 +35,9 @@ import { SystemFieldLibraryPicker } from "@/components/system-field-library-pick
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { nanoid } from "nanoid";
+import { FieldConfigModal as SharedFieldConfigModal } from "@/components/field-builder/FieldConfigModal";
+import { clientTaskQuestionAdapter } from "@/components/field-builder/adapters";
+import type { FieldDefinition } from "@/components/field-builder/types";
 
 const QUESTION_TYPES = [
   { type: "short_text", label: "Short Text", icon: Type, color: "#3b82f6" },
@@ -150,6 +153,83 @@ const DEFAULT_TEMPLATE: EditingTemplate = {
   sections: [],
   questions: [],
 };
+
+function ClientTaskQuestionConfigModal({
+  question,
+  questionIndex,
+  allQuestions,
+  isOpen,
+  onClose,
+  onSave,
+}: {
+  question: EditingQuestion;
+  questionIndex: number;
+  allQuestions: EditingQuestion[];
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (q: EditingQuestion) => void;
+}) {
+  const getQuestionKey = (q: EditingQuestion, idx: number) => q.id || `temp-${idx}`;
+  
+  const fieldDefinition = useMemo(() => {
+    const domainField = {
+      id: question.id,
+      label: question.label,
+      questionType: question.questionType,
+      helpText: question.helpText,
+      isRequired: question.isRequired,
+      order: question.order,
+      options: question.options,
+      placeholder: question.placeholder,
+      conditionalLogic: question.conditionalLogic,
+      libraryFieldId: question.libraryFieldId,
+      sectionId: question.sectionId,
+    };
+    return clientTaskQuestionAdapter.mapToFieldDefinition(domainField, questionIndex);
+  }, [question, questionIndex]);
+
+  const availableFieldsForConditions = useMemo(() => {
+    return allQuestions
+      .slice(0, questionIndex)
+      .filter(q => q.label.trim())
+      .map((q, idx) => ({
+        id: getQuestionKey(q, idx),
+        label: q.label,
+        fieldType: q.questionType,
+        options: q.questionType === 'yes_no' ? ['yes', 'no'] : q.options,
+      }));
+  }, [allQuestions, questionIndex]);
+
+  const handleSave = useCallback((savedField: FieldDefinition) => {
+    const mappedBack = clientTaskQuestionAdapter.mapFromFieldDefinition(savedField);
+    onSave({
+      id: question.id,
+      order: question.order,
+      questionType: mappedBack.questionType as QuestionType,
+      label: mappedBack.label || "",
+      helpText: mappedBack.helpText || "",
+      isRequired: mappedBack.isRequired ?? false,
+      options: mappedBack.options || [],
+      placeholder: mappedBack.placeholder || "",
+      conditionalLogic: mappedBack.conditionalLogic as ConditionalLogic | null,
+      libraryFieldId: mappedBack.libraryFieldId,
+      sectionId: mappedBack.sectionId,
+    });
+  }, [question, onSave]);
+
+  return (
+    <SharedFieldConfigModal
+      key={`question-${question.id || questionIndex}`}
+      field={fieldDefinition}
+      isOpen={isOpen}
+      onClose={onClose}
+      onSave={handleSave}
+      allowedFieldTypes={clientTaskQuestionAdapter.allowedFieldTypes}
+      capabilities={clientTaskQuestionAdapter.capabilities}
+      availableFieldsForConditions={availableFieldsForConditions}
+    />
+  );
+}
 
 interface ClientTasksTabProps {
   projectTypeId: string;
@@ -1624,12 +1704,13 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
         </div>
 
         {editingQuestionIndex !== null && editingTemplate.questions[editingQuestionIndex] && (
-          <QuestionEditor
+          <ClientTaskQuestionConfigModal
             question={editingTemplate.questions[editingQuestionIndex]}
             questionIndex={editingQuestionIndex}
             allQuestions={editingTemplate.questions}
+            isOpen={true}
+            onClose={() => setEditingQuestionIndex(null)}
             onSave={handleSaveQuestion}
-            onCancel={() => setEditingQuestionIndex(null)}
           />
         )}
 
