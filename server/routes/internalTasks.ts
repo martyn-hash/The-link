@@ -217,9 +217,14 @@ export function registerInternalTaskRoutes(
       const tasks = await storage.getInternalTasksByAssignee(requestedUserId, filters);
       const tasksWithConnections = await addConnectionsToTasks(tasks);
       
-      // Return legacy format for backwards compatibility with existing frontend
-      // or when cache conditions aren't met
-      res.json(tasksWithConnections);
+      // Always return wrapped format for consistency
+      res.json({
+        data: tasksWithConnections,
+        fromCache: false,
+        cachedAt: null,
+        isStale: false,
+        staleAt: null,
+      });
     } catch (error) {
       console.error("Error fetching assigned tasks:", error);
       res.status(500).json({ message: "Failed to fetch assigned tasks" });

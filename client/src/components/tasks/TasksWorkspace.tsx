@@ -62,6 +62,7 @@ import {
   User as UserIcon,
   AlertTriangle,
   UserCog,
+  RefreshCw,
 } from "lucide-react";
 import { isPast, startOfDay, endOfDay, isWithinInterval } from "date-fns";
 import type { InternalTask, TaskType, User, Client, Project, Person } from "@shared/schema";
@@ -85,6 +86,14 @@ interface InternalTaskWithRelations extends InternalTask {
   assignee?: User | null;
   creator?: User | null;
   connections?: TaskConnection[];
+}
+
+interface CachedTasksResponse {
+  data: InternalTaskWithRelations[];
+  fromCache: boolean;
+  cachedAt: string | null;
+  isStale: boolean;
+  staleAt: string | null;
 }
 
 const ITEMS_PER_PAGE = 10;
@@ -407,6 +416,7 @@ interface TasksSectionProps {
   showAssignee?: boolean;
   reassignMode?: boolean;
   completingIds?: string[];
+  isSyncing?: boolean;
 }
 
 function TasksSection({
@@ -429,6 +439,7 @@ function TasksSection({
   showAssignee = true,
   reassignMode = false,
   completingIds = [],
+  isSyncing = false,
 }: TasksSectionProps) {
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
   const colWidths = showAssignee ? COLUMN_WIDTHS : COLUMN_WIDTHS_NO_ASSIGNEE;
@@ -443,6 +454,12 @@ function TasksSection({
           <Badge variant="secondary" className="ml-1">
             {totalCount}
           </Badge>
+          {isSyncing && (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground" data-testid="sync-indicator">
+              <RefreshCw className="h-3 w-3 animate-spin" />
+              Syncing...
+            </span>
+          )}
         </h4>
         <div className="flex items-center gap-2">
           {/* Collapse button - only for Tasks section */}
@@ -680,7 +697,7 @@ export function TasksWorkspace({
     return params.toString();
   }, [statusFilter, priorityFilter, effectiveAssigneeFilter]);
 
-  const { data: assignedData, isLoading: isLoadingAssigned } = useQuery<InternalTaskWithRelations[]>({
+  const { data: assignedResponse, isLoading: isLoadingAssigned, isFetching: isFetchingAssigned } = useQuery<CachedTasksResponse>({
     queryKey: ['/api/internal-tasks/assigned', user?.id, statusFilter, priorityFilter],
     queryFn: async () => {
       // For "assigned" mode, build params without assignee (effectiveAssigneeFilter is already "all")
@@ -694,7 +711,18 @@ export function TasksWorkspace({
       return response.json();
     },
     enabled: !!user && ownershipFilter === "assigned",
+    refetchInterval: (query) => {
+      // If data is stale, refetch every 5 seconds until we get fresh data
+      if (query.state.data?.isStale) return 5000;
+      return false;
+    },
   });
+  
+  // Extract tasks and cache status from the wrapped response
+  const assignedData = assignedResponse?.data;
+  const isAssignedDataStale = assignedResponse?.isStale || false;
+  // Show sync indicator when data is stale (even if not actively fetching, background refresh is happening)
+  const isSyncing = isAssignedDataStale;
 
   const { data: createdData, isLoading: isLoadingCreated } = useQuery<InternalTaskWithRelations[]>({
     queryKey: ['/api/internal-tasks/created', user?.id, statusFilter, priorityFilter, effectiveAssigneeFilter],
@@ -999,6 +1027,7 @@ export function TasksWorkspace({
           showAssignee={ownershipFilter !== "assigned"}
           reassignMode={reassignMode}
           completingIds={completingIds}
+          isSyncing={ownershipFilter === "assigned" && isSyncing}
         />
 
         {/* Visual separator between Tasks and Reminders */}
@@ -1022,6 +1051,7 @@ export function TasksWorkspace({
           showAssignee={ownershipFilter !== "assigned"}
           reassignMode={reassignMode}
           completingIds={completingIds}
+          isSyncing={ownershipFilter === "assigned" && isSyncing}
         />
       </div>
 

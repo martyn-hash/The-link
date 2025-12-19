@@ -70,6 +70,14 @@ interface InternalTaskWithRelations extends InternalTask {
   connections?: TaskConnection[];
 }
 
+interface CachedTasksResponse {
+  data: InternalTaskWithRelations[];
+  fromCache: boolean;
+  cachedAt: string | null;
+  isStale: boolean;
+  staleAt: string | null;
+}
+
 function TaskRow({ task, selected, onSelect, onViewClick }: {
   task: InternalTaskWithRelations;
   selected: boolean;
@@ -307,7 +315,7 @@ export default function InternalTasks() {
     queryKey: ["/api/users"],
   });
 
-  const { data: assignedTasks, isLoading: isLoadingAssigned } = useQuery<InternalTaskWithRelations[]>({
+  const { data: assignedResponse, isLoading: isLoadingAssigned } = useQuery<CachedTasksResponse>({
     queryKey: ['/api/internal-tasks/assigned', user?.id, statusFilter, priorityFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
@@ -320,7 +328,15 @@ export default function InternalTasks() {
       return response.json();
     },
     enabled: !!user && activeTab === "assigned",
+    refetchInterval: (query) => {
+      // If data is stale, refetch every 5 seconds until we get fresh data
+      if (query.state.data?.isStale) return 5000;
+      return false;
+    },
   });
+  
+  // Extract tasks from the wrapped response
+  const assignedTasks = assignedResponse?.data;
 
   const { data: createdTasks, isLoading: isLoadingCreated } = useQuery<InternalTaskWithRelations[]>({
     queryKey: ['/api/internal-tasks/created', user?.id, statusFilter, priorityFilter],
