@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,9 +7,24 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, X, Library } from "lucide-react";
-import { getFieldTypeInfo, FIELD_TYPES, type FieldDefinition, type SystemFieldType } from "./types";
+import { Plus, X, Library, GitBranch } from "lucide-react";
+import { getFieldTypeInfo, FIELD_TYPES, type FieldDefinition, type SystemFieldType, type ConditionalLogic, type ConditionalLogicCondition } from "./types";
 import type { FieldCapabilities } from "./adapters";
+
+const CONDITION_OPERATORS = [
+  { value: 'equals', label: 'Equals' },
+  { value: 'not_equals', label: 'Does not equal' },
+  { value: 'contains', label: 'Contains' },
+  { value: 'is_empty', label: 'Is empty' },
+  { value: 'is_not_empty', label: 'Is not empty' },
+] as const;
+
+interface AvailableField {
+  id: string;
+  label: string;
+  fieldType: string;
+  options?: string[];
+}
 
 interface FieldConfigModalProps {
   field: FieldDefinition | null;
@@ -20,6 +35,7 @@ interface FieldConfigModalProps {
   allowedFieldTypes?: SystemFieldType[];
   showExpectedValues?: boolean;
   capabilities?: FieldCapabilities;
+  availableFieldsForConditions?: AvailableField[];
 }
 
 export function FieldConfigModal({
@@ -31,18 +47,63 @@ export function FieldConfigModal({
   allowedFieldTypes,
   showExpectedValues = false,
   capabilities,
+  availableFieldsForConditions = [],
 }: FieldConfigModalProps) {
   const supportsPlaceholder = capabilities?.supportsPlaceholder ?? true;
   const supportsExpectedValue = capabilities?.supportsExpectedValue ?? showExpectedValues;
   const supportsOptions = capabilities?.supportsOptions ?? true;
+  const supportsConditionalLogic = capabilities?.supportsConditionalLogic ?? false;
   const [editedField, setEditedField] = useState<FieldDefinition | null>(null);
   const [newOption, setNewOption] = useState("");
+  const [showConditionalLogic, setShowConditionalLogic] = useState(false);
+
+  const selectedSourceField = useMemo(() => {
+    if (!editedField?.conditionalLogic?.showIf?.questionId) return null;
+    return availableFieldsForConditions.find(f => f.id === editedField.conditionalLogic?.showIf?.questionId);
+  }, [editedField?.conditionalLogic?.showIf?.questionId, availableFieldsForConditions]);
+
+  const sourceFieldHasOptions = selectedSourceField?.options && selectedSourceField.options.length > 0;
 
   useEffect(() => {
     if (field) {
       setEditedField({ ...field });
+      setShowConditionalLogic(!!field.conditionalLogic?.showIf);
     }
   }, [field]);
+
+  const handleConditionalLogicToggle = (enabled: boolean) => {
+    setShowConditionalLogic(enabled);
+    if (!enabled) {
+      setEditedField(prev => prev ? { ...prev, conditionalLogic: null } : null);
+    } else if (!editedField?.conditionalLogic?.showIf && availableFieldsForConditions.length > 0) {
+      const firstField = availableFieldsForConditions[0];
+      setEditedField(prev => prev ? {
+        ...prev,
+        conditionalLogic: {
+          showIf: {
+            questionId: firstField.id,
+            operator: 'equals',
+            value: '',
+          },
+        },
+      } : null);
+    }
+  };
+
+  const handleConditionChange = (field: keyof ConditionalLogicCondition, value: any) => {
+    setEditedField(prev => prev ? ({
+      ...prev,
+      conditionalLogic: {
+        ...prev.conditionalLogic,
+        showIf: {
+          questionId: prev.conditionalLogic?.showIf?.questionId || '',
+          operator: prev.conditionalLogic?.showIf?.operator || 'equals',
+          ...prev.conditionalLogic?.showIf,
+          [field]: value,
+        },
+      },
+    }) : null);
+  };
 
   if (!editedField) return null;
 
@@ -303,6 +364,96 @@ export function FieldConfigModal({
                     disabled={isViewOnly}
                     data-testid="input-expected-number"
                   />
+                </div>
+              )}
+            </div>
+          )}
+
+          {supportsConditionalLogic && availableFieldsForConditions.length > 0 && (
+            <div className="space-y-3 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <GitBranch className="w-4 h-4 text-muted-foreground" />
+                  <div>
+                    <Label className="font-medium">Conditional Logic</Label>
+                    <p className="text-xs text-muted-foreground">Show this field based on another field's value</p>
+                  </div>
+                </div>
+                <Switch
+                  checked={showConditionalLogic}
+                  onCheckedChange={handleConditionalLogicToggle}
+                  disabled={isViewOnly}
+                  data-testid="switch-conditional-logic"
+                />
+              </div>
+              
+              {showConditionalLogic && editedField.conditionalLogic?.showIf && (
+                <div className="space-y-3 pl-4 border-l-2 border-primary/20">
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">When this field</Label>
+                    <Select
+                      value={editedField.conditionalLogic.showIf.questionId}
+                      onValueChange={(value) => handleConditionChange('questionId', value)}
+                      disabled={isViewOnly}
+                    >
+                      <SelectTrigger data-testid="select-condition-field">
+                        <SelectValue placeholder="Select a field" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableFieldsForConditions.map((f) => (
+                          <SelectItem key={f.id} value={f.id}>{f.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">Condition</Label>
+                    <Select
+                      value={editedField.conditionalLogic.showIf.operator}
+                      onValueChange={(value) => handleConditionChange('operator', value)}
+                      disabled={isViewOnly}
+                    >
+                      <SelectTrigger data-testid="select-condition-operator">
+                        <SelectValue placeholder="Select condition" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CONDITION_OPERATORS.map((op) => (
+                          <SelectItem key={op.value} value={op.value}>{op.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  {!['is_empty', 'is_not_empty'].includes(editedField.conditionalLogic.showIf.operator) && (
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">Value</Label>
+                      {sourceFieldHasOptions ? (
+                        <Select
+                          value={String(editedField.conditionalLogic.showIf.value || '')}
+                          onValueChange={(value) => handleConditionChange('value', value)}
+                          disabled={isViewOnly}
+                        >
+                          <SelectTrigger data-testid="select-condition-value">
+                            <SelectValue placeholder="Select value" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {selectedSourceField?.options?.map((opt) => (
+                              <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          value={String(editedField.conditionalLogic.showIf.value || '')}
+                          onChange={(e) => handleConditionChange('value', e.target.value)}
+                          placeholder="Enter value to match"
+                          disabled={isViewOnly}
+                          data-testid="input-condition-value"
+                        />
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
