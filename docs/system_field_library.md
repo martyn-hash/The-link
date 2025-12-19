@@ -22,6 +22,330 @@ A centralized System Field Library where:
 
 ---
 
+## Phase 0 Discovery Findings
+
+### Context Audit Summary
+
+The application has **8 distinct form-building contexts** (not 9 as originally estimated) with field definitions. Each uses different schemas, enums, and UI patterns.
+
+### 1. Stage Approvals (Staff-Facing)
+
+**Location:** `shared/schema/projects/tables.ts`
+
+| Aspect | Details |
+|--------|---------|
+| **Enum** | `stageApprovalFieldTypeEnum` |
+| **Types (8)** | `boolean`, `number`, `short_text`, `long_text`, `single_select`, `multi_select`, `date`, `image_upload` |
+| **Tables** | `stageApprovals`, `stageApprovalFields`, `stageApprovalResponses` |
+| **Library** | `approvalFieldLibrary` (project-type scoped) |
+| **Overrides** | `clientStageApprovalOverrides` (approval reassignment only, not field overrides) |
+| **Sections** | ❌ Not supported |
+| **Conditional Logic** | ❌ Not supported |
+| **Expected Values** | ✅ `expectedValueBoolean`, `expectedValueNumber`, `comparisonType`, `dateComparisonType`, `expectedDate`, `expectedDateEnd` |
+| **Current UI** | ApprovalWizard with drag-and-drop FieldCanvas |
+
+**Key Observations:**
+- Already has a `libraryFieldId` column on `stageApprovalFields` for field library linking
+- Response table has typed columns: `valueBoolean`, `valueNumber`, `valueShortText`, `valueLongText`, `valueSingleSelect`, `valueMultiSelect`, `valueDate`, `valueImageUrl`
+- Most mature form builder with 2-step wizard pattern
+
+---
+
+### 2. Client Project Tasks (Client-Facing)
+
+**Location:** `shared/schema/client-project-tasks/tables.ts`
+
+| Aspect | Details |
+|--------|---------|
+| **Enum** | `questionTypeEnum` |
+| **Types (10)** | `short_text`, `long_text`, `email`, `number`, `date`, `single_choice`, `multi_choice`, `dropdown`, `yes_no`, `file_upload` |
+| **Tables** | `clientProjectTaskTemplates`, `clientProjectTaskQuestions`, `clientProjectTaskResponses` |
+| **Sections** | ✅ `clientProjectTaskSections` (name, description, order) |
+| **Overrides** | ✅ `clientProjectTaskOverrides`, `clientProjectTaskOverrideQuestions` (full field overrides per client) |
+| **Conditional Logic** | ✅ `conditionalLogic` JSONB with operators: `equals`, `not_equals`, `contains`, `is_empty`, `is_not_empty` |
+| **File Handling** | Custom `TaskFileAttachment` interface with object storage |
+| **OTP Security** | ✅ Optional email verification |
+
+**Key Observations:**
+- Full section support with ordering
+- Rich conditional logic system
+- Client can have completely different questions via override system
+- Response table has: `valueText`, `valueNumber`, `valueDate`, `valueBoolean`, `valueMultiSelect`, `valueFile`
+- Uses `yes_no` (maps to `boolean`), `single_choice`/`multi_choice` (maps to `single_select`/`multi_select`)
+
+---
+
+### 3. Request Templates (Client-Facing)
+
+**Location:** `shared/schema/requests/tables.ts`
+
+| Aspect | Details |
+|--------|---------|
+| **Enum** | `questionTypeEnum` (shared with Client Project Tasks) |
+| **Types (10)** | Same as Client Project Tasks |
+| **Tables** | `clientRequestTemplates`, `clientRequestTemplateSections`, `clientRequestTemplateQuestions` |
+| **Sections** | ✅ Full section support with title, description, order |
+| **Overrides** | ✅ `clientCustomRequests`, `clientCustomRequestSections`, `clientCustomRequestQuestions` (per-client custom requests) |
+| **Conditional Logic** | ✅ Same schema as Client Project Tasks |
+| **Categories** | ✅ `clientRequestTemplateCategories` for organizing templates |
+
+**Key Observations:**
+- Shares `questionTypeEnum` with Client Project Tasks - good candidate for unification
+- Has `validationRules` JSONB column for custom validation
+- Categories provide organizational structure
+
+---
+
+### 4. Campaign Pages (Client-Facing)
+
+**Location:** `shared/schema/pages/schemas.ts`
+
+| Aspect | Details |
+|--------|---------|
+| **Enum** | Inline Zod schema (not database enum) |
+| **Types (7)** | `text`, `email`, `phone`, `textarea`, `select`, `checkbox`, `date` |
+| **Tables** | `pages`, `pageComponents`, `pageActions`, `pageActionLogs` |
+| **Storage** | Forms stored as JSONB in `pageComponents.content` |
+| **Sections** | ❌ Not structured (flat field list) |
+| **Conditional Logic** | ❌ Not supported |
+
+**Key Observations:**
+- Uses different type names: `text` (→ `short_text`), `textarea` (→ `long_text`), `checkbox` (→ `boolean`)
+- Forms are embedded in page components, not first-class entities
+- No field library concept - fields defined inline per form
+- Needs migration to use system field types
+
+---
+
+### 5. Reason Custom Fields (Staff-Facing)
+
+**Location:** `shared/schema/projects/tables.ts`
+
+| Aspect | Details |
+|--------|---------|
+| **Enum** | `customFieldTypeEnum` |
+| **Types (5)** | `boolean`, `number`, `short_text`, `long_text`, `multi_select` |
+| **Tables** | `reasonCustomFields`, `reasonFieldResponses` |
+| **Context** | Custom data collection when selecting a change reason for project stage transitions |
+| **Sections** | ❌ Not supported |
+| **Conditional Logic** | ❌ Not supported |
+
+**Key Observations:**
+- Subset of stage approval types (missing `single_select`, `date`, `image_upload`)
+- Tied to `changeReasons` table
+- Response table has strict check constraint ensuring only one value column is populated
+- Simple use case - could adopt system field types
+
+---
+
+### 6. Service UDFs (Staff-Facing)
+
+**Location:** `shared/schema/services/schemas.ts`
+
+| Aspect | Details |
+|--------|---------|
+| **Schema** | `udfDefinitionSchema` (Zod, stored as JSONB) |
+| **Types (6)** | `number`, `date`, `boolean`, `short_text`, `long_text`, `dropdown` |
+| **Storage** | JSONB array in `services.udfDefinitions` |
+| **Values** | JSONB in `clientServices.udfValues` |
+| **Sections** | ❌ Not supported |
+| **Validation** | ✅ Optional `regex` and `regexError` for custom validation |
+
+**Key Observations:**
+- Not database-normalized - definitions stored as JSONB
+- Uses `dropdown` type (exists in `questionTypeEnum` but not `stageApprovalFieldTypeEnum`)
+- Has `placeholder` and `options` support
+- Per-service definitions, per-client-service values
+
+---
+
+### 7. Risk Assessments (Staff-Facing)
+
+**Location:** `shared/schema/requests/tables.ts`
+
+| Aspect | Details |
+|--------|---------|
+| **Enum** | `riskResponseEnum` |
+| **Types (3)** | `yes`, `no`, `na` (hardcoded responses, not configurable field types) |
+| **Tables** | `riskAssessments`, `riskAssessmentResponses` |
+| **Fields** | Hardcoded `questionKey` values (not dynamic) |
+| **Sections** | ❌ Not supported |
+
+**Key Observations:**
+- **NOT a form builder** - predefined questions with fixed response options
+- Questions are defined in code, not database
+- May not need System Field Library integration
+- Could be enhanced to support custom questions in future
+
+---
+
+### 8. Page Templates (Admin-Facing)
+
+**Location:** `shared/schema/pages/tables.ts`
+
+| Aspect | Details |
+|--------|---------|
+| **Storage** | JSONB in `pageTemplates.componentsTemplate` and `actionsTemplate` |
+| **Purpose** | Reusable page layouts for campaigns |
+| **Forms** | Inherits from Campaign Pages schema |
+
+**Key Observations:**
+- Templates for Campaign Pages
+- Same form field limitations as Campaign Pages
+- Enhancement would cascade from Campaign Pages work
+
+---
+
+### Field Type Consolidation Matrix
+
+| Unified Type | Stage Approvals | Task Questions | Custom Fields | Service UDFs | Campaign Pages |
+|-------------|-----------------|----------------|---------------|--------------|----------------|
+| `short_text` | ✅ | ✅ | ✅ | ✅ | ✅ (`text`) |
+| `long_text` | ✅ | ✅ | ✅ | ✅ | ✅ (`textarea`) |
+| `email` | ❌ | ✅ | ❌ | ❌ | ✅ |
+| `phone` | ❌ | ❌ | ❌ | ❌ | ✅ |
+| `url` | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `number` | ✅ | ✅ | ✅ | ✅ | ❌ |
+| `currency` | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `percentage` | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `boolean` | ✅ | ✅ (`yes_no`) | ✅ | ✅ | ✅ (`checkbox`) |
+| `single_select` | ✅ | ✅ (`single_choice`) | ❌ | ❌ | ✅ (`select`) |
+| `multi_select` | ✅ | ✅ (`multi_choice`) | ✅ | ❌ | ❌ |
+| `dropdown` | ❌ | ✅ | ❌ | ✅ | ❌ |
+| `user_select` | ❌ | ❌ | ❌ | ❌ | ❌ |
+| `date` | ✅ | ✅ | ❌ | ✅ | ✅ |
+| `file_upload` | ❌ | ✅ | ❌ | ❌ | ❌ |
+| `image_upload` | ✅ | ❌ | ❌ | ❌ | ❌ |
+
+**New types to add:** `currency`, `phone`, `url`, `percentage`, `user_select`
+
+---
+
+### Common Patterns Identified
+
+#### 1. Response Storage Patterns
+
+| Pattern | Used By | Approach |
+|---------|---------|----------|
+| **Typed columns** | Stage Approvals, Reason Fields | Separate column per type (`valueBoolean`, `valueNumber`, etc.) |
+| **Generic text** | Request Templates | Single `valueText` with type coercion |
+| **JSONB** | Service UDFs | Flexible key-value storage |
+
+**Recommendation:** Typed columns provide better query performance and type safety.
+
+#### 2. Section Support
+
+| Context | Has Sections | Implementation |
+|---------|--------------|----------------|
+| Client Project Tasks | ✅ | Dedicated `clientProjectTaskSections` table |
+| Request Templates | ✅ | Dedicated `clientRequestTemplateSections` table |
+| Stage Approvals | ❌ | Needs addition |
+| Campaign Pages | ❌ | Needs addition |
+| Reason Custom Fields | ❌ | Not needed (simple use case) |
+
+#### 3. Conditional Logic
+
+| Context | Has Conditional Logic | Schema |
+|---------|----------------------|--------|
+| Client Project Tasks | ✅ | `showIf` with `questionId`, `operator`, `value` |
+| Request Templates | ✅ | Same schema |
+| Stage Approvals | ❌ | Needs addition |
+| Campaign Pages | ❌ | Needs addition |
+
+#### 4. Override Patterns
+
+| Context | Override Level | Implementation |
+|---------|---------------|----------------|
+| Stage Approvals | Client can use different approval per stage | `clientStageApprovalOverrides` |
+| Client Project Tasks | Client can add/remove questions | `clientProjectTaskOverrides` + `clientProjectTaskOverrideQuestions` |
+| Request Templates | Client can have custom requests | `clientCustomRequests` + related tables |
+
+---
+
+### Existing Field Library Analysis
+
+The `approvalFieldLibrary` table already exists and is scoped to `projectTypeId`:
+
+```typescript
+approvalFieldLibrary = pgTable("approval_field_library", {
+  id: varchar("id"),
+  projectTypeId: varchar("project_type_id"),  // Scoped to project type
+  fieldName: varchar("field_name"),
+  fieldType: stageApprovalFieldTypeEnum,
+  description: text,
+  placeholder: varchar,
+  expectedValueBoolean: boolean,
+  comparisonType: comparisonTypeEnum,
+  expectedValueNumber: integer,
+  dateComparisonType: dateComparisonTypeEnum,
+  expectedDate: timestamp,
+  expectedDateEnd: timestamp,
+  options: text[],
+  isCommonlyRequired: boolean,
+  usageHint: text,
+});
+```
+
+**Decision Required:** 
+- **Option A:** Extend `approvalFieldLibrary` to be system-wide (remove `projectTypeId` requirement)
+- **Option B:** Create new `systemFieldLibrary` table and migrate data
+- **Recommendation:** Option B - cleaner separation, allows gradual migration
+
+---
+
+### UI Component Inventory
+
+| Context | Current UI | Builder Quality | Wizard Pattern |
+|---------|-----------|-----------------|----------------|
+| Stage Approvals | ApprovalWizard | ⭐⭐⭐⭐⭐ | 2-step with drag-drop |
+| Client Project Tasks | TaskTemplateEditor | ⭐⭐⭐ | Basic form |
+| Request Templates | RequestTemplateEditor | ⭐⭐⭐ | Basic form |
+| Campaign Pages | PageBuilder | ⭐⭐⭐⭐ | Visual builder |
+| Reason Custom Fields | Inline editor | ⭐⭐ | Modal |
+| Service UDFs | ServiceForm | ⭐⭐ | Inline |
+
+**Target:** All contexts should match ApprovalWizard quality (⭐⭐⭐⭐⭐)
+
+---
+
+### Shared Fields Across Contexts
+
+Common accounting/bookkeeping fields that would benefit from library:
+
+1. **Quality Checks**
+   - Bank Reconciliation Checked
+   - Directors Approved
+   - Senior Review Completed
+   - All Queries Resolved
+
+2. **Client Information**
+   - VAT Registration Number
+   - Company UTR
+   - Accounting Reference Date
+
+3. **Document Requests**
+   - Bank Statements Required
+   - Receipts Uploaded
+   - Payroll Information
+
+---
+
+### Migration Complexity Assessment
+
+| Context | Complexity | Effort | Notes |
+|---------|-----------|--------|-------|
+| Stage Approvals | Low | 1 week | Already has `libraryFieldId` column |
+| Client Project Tasks | Medium | 1.5 weeks | Need to add `libraryFieldId`, preserve conditional logic |
+| Request Templates | Medium | 1.5 weeks | Similar to Client Project Tasks |
+| Campaign Pages | High | 2 weeks | JSONB → normalized structure |
+| Reason Custom Fields | Low | 0.5 week | Simple structure |
+| Service UDFs | Medium | 1 week | JSONB → normalized or keep hybrid |
+| Risk Assessments | Skip | - | Hardcoded, not dynamic forms |
+
+**Total estimated migration effort:** 7.5 weeks (can be parallelized)
+
+---
+
 ## Field Types
 
 ### Unified Field Type Set
