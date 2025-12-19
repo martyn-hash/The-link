@@ -39,3 +39,15 @@ The application employs a dual-process architecture for web server and cron work
 ### Frontend Libraries
 -   **UI Components**: `@radix-ui/*`, `@dnd-kit/*`, `@tiptap/*`, `react-hook-form` with `zod`, `sonner`.
 -   **Utilities**: `date-fns`, `clsx`, `tailwind-merge`, `@getaddress/autocomplete`.
+
+### Shared Components
+
+#### System Field Library Components (`client/src/components/field-builder/`)
+Reusable wizard-style form builder components providing consistent drag-and-drop UI across 9 form contexts:
+-   **types.ts**: 16 unified field types with icons and colors (boolean, short_text, single_select, multi_select, etc.)
+-   **adapters.ts**: Adapter pattern for bridging context-specific field types (yes_no, single_choice) to unified system types
+-   **FieldCard.tsx**: Split into BaseFieldCard (presentational) and SortableFieldCard (with DnD hooks)
+-   **SortableFieldList.tsx**: Standalone DnD list for field reordering
+-   **FieldBuilder.tsx**: Composite component combining palette, canvas, and config modal
+
+Adapters define capability flags (`supportsConditionalLogic`, `supportsExpectedValue`, etc.) to toggle UI features per context while maintaining consistent presentation.
