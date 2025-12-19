@@ -8,6 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -18,13 +26,19 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Plus,
   Trash2,
   ShieldCheck,
-  Settings2,
   Edit2,
   Eye,
   ClipboardCheck,
+  MoreVertical,
 } from "lucide-react";
 import type {
   ProjectType,
@@ -35,7 +49,7 @@ import type {
 } from "@shared/schema";
 import { ClientTaskOverridesSection } from "./ClientTaskOverridesSection";
 import type { EnhancedClientService } from "../../utils/types";
-import { ApprovalFieldBuilder, type ApprovalFormData, type EditingApprovalField } from "@/components/approval-builder/ApprovalFieldBuilder";
+import { ApprovalWizard, type ApprovalFormData, type EditingApprovalField } from "@/components/approval-builder/ApprovalWizard";
 
 interface ApprovalOverridesTabProps {
   clientId: string;
@@ -48,6 +62,75 @@ interface OverrideWithDetails extends ClientStageApprovalOverride {
 }
 
 type BuilderMode = null | { mode: "create"; selectedProjectTypeId?: string } | { mode: "edit"; override: OverrideWithDetails } | { mode: "view"; override: OverrideWithDetails };
+
+function OverrideRow({ 
+  override, 
+  onView, 
+  onEdit, 
+  onDelete 
+}: { 
+  override: OverrideWithDetails; 
+  onView: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <TableRow data-testid={`row-override-${override.id}`}>
+      <TableCell className="font-medium">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+            <ClipboardCheck className="w-4 h-4 text-primary" />
+          </div>
+          <span data-testid={`text-name-${override.id}`}>
+            {override.overrideApproval?.name || "Custom Approval"}
+          </span>
+        </div>
+      </TableCell>
+      <TableCell>
+        <span className="text-sm" data-testid={`text-project-type-${override.id}`}>
+          {override.projectType?.name || "-"}
+        </span>
+      </TableCell>
+      <TableCell>
+        <span className="text-sm" data-testid={`text-stage-${override.id}`}>
+          {override.stage?.name || "-"}
+        </span>
+      </TableCell>
+      <TableCell>
+        <Badge variant="secondary" className="bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+          Custom
+        </Badge>
+      </TableCell>
+      <TableCell className="text-right">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-actions-${override.id}`}>
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onView} data-testid={`button-view-${override.id}`}>
+              <Eye className="w-4 h-4 mr-2" />
+              View
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onEdit} data-testid={`button-edit-${override.id}`}>
+              <Edit2 className="w-4 h-4 mr-2" />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={onDelete} 
+              className="text-destructive focus:text-destructive"
+              data-testid={`button-delete-${override.id}`}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </TableCell>
+    </TableRow>
+  );
+}
 
 export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
   const { toast } = useToast();
@@ -317,7 +400,7 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
     }
 
     return (
-      <ApprovalFieldBuilder
+      <ApprovalWizard
         mode={builderState.mode}
         formData={getBuilderFormData()}
         projectTypes={filteredProjectTypes}
@@ -361,77 +444,29 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {enrichedOverrides.map((override) => (
-            <Card 
-              key={override.id} 
-              className="group hover:shadow-lg hover:border-primary/50 transition-all cursor-pointer"
-              onClick={() => handleOpenView(override)}
-              data-testid={`card-override-${override.id}`}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <ClipboardCheck className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-base truncate" data-testid={`text-override-name-${override.id}`}>
-                        {override.overrideApproval?.name || "Custom Approval"}
-                      </CardTitle>
-                      <CardDescription className="truncate">
-                        {override.projectType?.name} → {override.stage?.name}
-                      </CardDescription>
-                    </div>
-                  </div>
-                  <Badge variant="secondary" className="shrink-0">Custom</Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    Click to view or edit
-                  </p>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenView(override);
-                      }}
-                      data-testid={`button-view-override-${override.id}`}
-                    >
-                      <Eye className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenEdit(override);
-                      }}
-                      data-testid={`button-edit-override-${override.id}`}
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteOverrideId(override.id);
-                      }}
-                      className="text-destructive"
-                      data-testid={`button-delete-override-${override.id}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="border rounded-lg">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Project Type</TableHead>
+                <TableHead>Stage</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {enrichedOverrides.map((override) => (
+                <OverrideRow
+                  key={override.id}
+                  override={override}
+                  onView={() => handleOpenView(override)}
+                  onEdit={() => handleOpenEdit(override)}
+                  onDelete={() => setDeleteOverrideId(override.id)}
+                />
+              ))}
+            </TableBody>
+          </Table>
         </div>
       )}
 

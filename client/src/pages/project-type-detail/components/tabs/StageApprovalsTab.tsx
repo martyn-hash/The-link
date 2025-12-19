@@ -4,10 +4,18 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { showFriendlyError } from "@/lib/friendlyErrors";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,9 +26,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Edit2, Trash2, ShieldCheck, Eye, ClipboardCheck } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Plus, Edit2, Trash2, ShieldCheck, Eye, ClipboardCheck, MoreVertical } from "lucide-react";
 import type { StageApproval, StageApprovalField, ApprovalFieldLibrary, KanbanStage, ProjectType } from "@shared/schema";
-import { ApprovalFieldBuilder, type ApprovalFormData, type EditingApprovalField } from "@/components/approval-builder/ApprovalFieldBuilder";
+import { ApprovalWizard, type ApprovalFormData, type EditingApprovalField } from "@/components/approval-builder/ApprovalWizard";
 
 interface StageApprovalsTabProps {
   projectTypeId: string;
@@ -29,6 +43,72 @@ interface StageApprovalsTabProps {
 }
 
 type BuilderMode = null | { mode: "create" } | { mode: "edit"; approval: StageApproval } | { mode: "view"; approval: StageApproval };
+
+function ApprovalRow({ 
+  approval, 
+  fieldCount,
+  onView, 
+  onEdit, 
+  onDelete 
+}: { 
+  approval: StageApproval; 
+  fieldCount: number;
+  onView: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <TableRow data-testid={`row-approval-${approval.id}`}>
+      <TableCell className="font-medium">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+            <ClipboardCheck className="w-4 h-4 text-primary" />
+          </div>
+          <div>
+            <span data-testid={`text-name-${approval.id}`}>{approval.name}</span>
+            {approval.description && (
+              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                {approval.description}
+              </p>
+            )}
+          </div>
+        </div>
+      </TableCell>
+      <TableCell>
+        <Badge variant="secondary">
+          {fieldCount} {fieldCount === 1 ? 'field' : 'fields'}
+        </Badge>
+      </TableCell>
+      <TableCell className="text-right">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-actions-${approval.id}`}>
+              <MoreVertical className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={onView} data-testid={`button-view-${approval.id}`}>
+              <Eye className="w-4 h-4 mr-2" />
+              View
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onEdit} data-testid={`button-edit-${approval.id}`}>
+              <Edit2 className="w-4 h-4 mr-2" />
+              Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem 
+              onClick={onDelete} 
+              className="text-destructive focus:text-destructive"
+              data-testid={`button-delete-${approval.id}`}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </TableCell>
+    </TableRow>
+  );
+}
 
 export function StageApprovalsTab({ projectTypeId, projectType, stages = [] }: StageApprovalsTabProps) {
   const { toast } = useToast();
@@ -253,11 +333,7 @@ export function StageApprovalsTab({ projectTypeId, projectType, stages = [] }: S
           </div>
           <Skeleton className="h-10 w-32" />
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[...Array(3)].map((_, i) => (
-            <Skeleton key={i} className="h-32" />
-          ))}
-        </div>
+        <Skeleton className="h-64 w-full" />
       </TabsContent>
     );
   }
@@ -277,7 +353,7 @@ export function StageApprovalsTab({ projectTypeId, projectType, stages = [] }: S
     }
 
     return (
-      <ApprovalFieldBuilder
+      <ApprovalWizard
         mode={builderState.mode}
         formData={getBuilderFormData()}
         projectTypes={projectType ? [projectType] : []}
@@ -286,6 +362,7 @@ export function StageApprovalsTab({ projectTypeId, projectType, stages = [] }: S
         onSave={handleSaveApproval}
         onCancel={() => setBuilderState(null)}
         isSaving={createApprovalMutation.isPending || updateApprovalMutation.isPending}
+        requireStageSelection={false}
       />
     );
   }
@@ -318,81 +395,28 @@ export function StageApprovalsTab({ projectTypeId, projectType, stages = [] }: S
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredApprovals.map((approval) => (
-            <Card 
-              key={approval.id} 
-              className="group hover:shadow-lg hover:border-primary/50 transition-all cursor-pointer"
-              onClick={() => handleOpenView(approval)}
-              data-testid={`card-approval-${approval.id}`}
-            >
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <ClipboardCheck className="w-5 h-5 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-base truncate" data-testid={`text-approval-name-${approval.id}`}>
-                        {approval.name}
-                      </CardTitle>
-                      {approval.description && (
-                        <CardDescription className="truncate">
-                          {approval.description}
-                        </CardDescription>
-                      )}
-                    </div>
-                  </div>
-                  <Badge variant="secondary" className="shrink-0">
-                    {getFieldCount(approval.id)} fields
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm text-muted-foreground">
-                    Click to view or edit
-                  </p>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenView(approval);
-                      }}
-                      data-testid={`button-view-approval-${approval.id}`}
-                    >
-                      <Eye className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenEdit(approval);
-                      }}
-                      data-testid={`button-edit-approval-${approval.id}`}
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteApprovalId(approval.id);
-                      }}
-                      className="text-destructive"
-                      data-testid={`button-delete-approval-${approval.id}`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="border rounded-lg">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Fields</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredApprovals.map((approval) => (
+                <ApprovalRow
+                  key={approval.id}
+                  approval={approval}
+                  fieldCount={getFieldCount(approval.id)}
+                  onView={() => handleOpenView(approval)}
+                  onEdit={() => handleOpenEdit(approval)}
+                  onDelete={() => setDeleteApprovalId(approval.id)}
+                />
+              ))}
+            </TableBody>
+          </Table>
         </div>
       )}
 
