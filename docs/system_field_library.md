@@ -1352,6 +1352,138 @@ Response:
 
 ---
 
+## Appendix D: Manual Testing Plan
+
+### Shared Field-Builder Components Migration
+
+This testing plan verifies the System Field Library's shared UI components work correctly across migrated contexts. Complete each test and mark as Pass/Fail with notes.
+
+---
+
+### Test Environment Setup
+
+**Pre-requisites:**
+- [ ] Application running locally
+- [ ] At least one Project Type exists
+- [ ] At least one Stage Approval template exists on a Project Type
+- [ ] At least one Client Task template exists on a Project Type
+
+---
+
+### Section 1: Stage Approvals - Field Editing (ApprovalFieldConfigModal)
+
+**Navigation:** Settings → Project Types → [Select Project Type] → Approvals tab → Edit an existing approval → Edit a field
+
+| Test ID | Test Case | Steps | Expected Result | Status | Notes |
+|---------|-----------|-------|-----------------|--------|-------|
+| SA-01 | Open field editor | Click edit icon on any field in approval canvas | Modal opens with field data populated | ☐ Pass ☐ Fail | |
+| SA-02 | Field type display | Check field type dropdown | Shows all 8 allowed types: Boolean, Short Text, Long Text, Number, Single Select, Multi Select, Date, Image Upload | ☐ Pass ☐ Fail | |
+| SA-03 | Edit label | Change field label text | Label input updates, saves correctly | ☐ Pass ☐ Fail | |
+| SA-04 | Edit placeholder | Change placeholder text | Placeholder updates and saves | ☐ Pass ☐ Fail | |
+| SA-05 | Edit help text | Add/modify help text | Help text textarea visible, saves correctly | ☐ Pass ☐ Fail | |
+| SA-06 | Required toggle | Toggle "Required" switch | Switch state persists after save | ☐ Pass ☐ Fail | |
+| SA-07 | Options for select types | Select "Single Select" type, add options | Options input appears, can add/remove options | ☐ Pass ☐ Fail | |
+| SA-08 | Expected value - Boolean | Select Boolean type | Expected value dropdown shows Yes/No options | ☐ Pass ☐ Fail | |
+| SA-09 | Expected value - Number | Select Number type | Comparison type dropdown and expected value input appear | ☐ Pass ☐ Fail | |
+| SA-10 | Save and close | Click "Save Field" button | Modal closes, field updated in canvas | ☐ Pass ☐ Fail | |
+| SA-11 | Cancel discards changes | Make changes, click Cancel | Modal closes, original field unchanged | ☐ Pass ☐ Fail | |
+| SA-12 | No conditional logic UI | Check modal contents | Conditional logic section should NOT appear (not supported for Stage Approvals) | ☐ Pass ☐ Fail | |
+
+---
+
+### Section 2: Client Tasks - Question Editing (ClientTaskQuestionConfigModal)
+
+**Navigation:** Settings → Project Types → [Select Project Type] → Client Tasks tab → Edit template → Edit a question
+
+| Test ID | Test Case | Steps | Expected Result | Status | Notes |
+|---------|-----------|-------|-----------------|--------|-------|
+| CT-01 | Open question editor | Click edit icon on any question | Modal opens with question data populated | ☐ Pass ☐ Fail | |
+| CT-02 | Field type display | Check question type dropdown | Shows all 10 types: Short Text, Long Text, Email, Number, Date, Single Choice, Multi Choice, Dropdown, Yes/No, File Upload | ☐ Pass ☐ Fail | |
+| CT-03 | Edit label | Change question label | Label updates and saves | ☐ Pass ☐ Fail | |
+| CT-04 | Edit placeholder | Change placeholder | Placeholder updates and saves | ☐ Pass ☐ Fail | |
+| CT-05 | Edit help text | Add/modify help text | Help text saves correctly | ☐ Pass ☐ Fail | |
+| CT-06 | Required toggle | Toggle required switch | State persists after save | ☐ Pass ☐ Fail | |
+| CT-07 | Options for choice types | Select Multi Choice, add options | Options section appears, can add/remove | ☐ Pass ☐ Fail | |
+| CT-08 | Save and close | Click Save | Modal closes, question updated | ☐ Pass ☐ Fail | |
+| CT-09 | Cancel discards | Make changes, cancel | Original question unchanged | ☐ Pass ☐ Fail | |
+
+---
+
+### Section 3: Conditional Logic (Client Tasks Only)
+
+**Pre-requisite:** Template has at least 2 questions
+
+| Test ID | Test Case | Steps | Expected Result | Status | Notes |
+|---------|-----------|-------|-----------------|--------|-------|
+| CL-01 | Conditional logic toggle appears | Edit 2nd or later question | "Show this question only if..." toggle is visible | ☐ Pass ☐ Fail | |
+| CL-02 | First question has no toggle | Edit the first question | Conditional logic toggle should NOT appear | ☐ Pass ☐ Fail | |
+| CL-03 | Enable conditional logic | Toggle on conditional logic | Source question dropdown, operator dropdown, and value input appear | ☐ Pass ☐ Fail | |
+| CL-04 | Source question selection | Open source question dropdown | Shows all previous questions with labels | ☐ Pass ☐ Fail | |
+| CL-05 | Operator selection | Open operator dropdown | Shows: Equals, Does not equal, Contains, Is empty, Is not empty | ☐ Pass ☐ Fail | |
+| CL-06 | Value input - text source | Source is Short Text type | Free text input for value | ☐ Pass ☐ Fail | |
+| CL-07 | Value input - choice source | Source is Single Choice with options | Dropdown of source field options appears | ☐ Pass ☐ Fail | |
+| CL-08 | Value input - yes/no source | Source is Yes/No type | Dropdown shows "Yes" and "No" options | ☐ Pass ☐ Fail | |
+| CL-09 | Empty/not empty operators | Select "Is empty" operator | Value input should be hidden | ☐ Pass ☐ Fail | |
+| CL-10 | Save conditional logic | Configure and save | Conditional logic persists after reopen | ☐ Pass ☐ Fail | |
+| CL-11 | Disable conditional logic | Toggle off, save | conditionalLogic is cleared/null after save | ☐ Pass ☐ Fail | |
+| CL-12 | Unlabeled previous question | Create question without label, then create 2nd question | 2nd question's source dropdown doesn't show unlabeled question | ☐ Pass ☐ Fail | |
+| CL-13 | Stable temp IDs | Q1 (no label), Q2 (labeled), Q3 with condition on Q2 → edit Q3 | Source shows Q2 selected (temp-1 matches correctly) | ☐ Pass ☐ Fail | |
+
+---
+
+### Section 4: Field Type Icon & Color Consistency
+
+| Test ID | Test Case | Steps | Expected Result | Status | Notes |
+|---------|-----------|-------|-----------------|--------|-------|
+| IC-01 | Stage Approval field icons | View field cards in approval canvas | Each field type shows correct icon and color | ☐ Pass ☐ Fail | |
+| IC-02 | Client Task question icons | View question cards in template editor | Each question type shows correct icon and color | ☐ Pass ☐ Fail | |
+| IC-03 | Field type dropdown icons | Open type dropdown in modal | Icons appear next to each type option | ☐ Pass ☐ Fail | |
+
+---
+
+### Section 5: Edge Cases & Regression
+
+| Test ID | Test Case | Steps | Expected Result | Status | Notes |
+|---------|-----------|-------|-----------------|--------|-------|
+| EC-01 | Empty label validation | Try to save field with empty label | Save button disabled or validation error shown | ☐ Pass ☐ Fail | |
+| EC-02 | Rapid modal open/close | Quickly open and close modal multiple times | No console errors, state resets correctly each time | ☐ Pass ☐ Fail | |
+| EC-03 | Switch between field types | Change field type multiple times in one edit | Type-specific UI updates correctly each time | ☐ Pass ☐ Fail | |
+| EC-04 | Options preserved on type change | Add options to Single Select, switch to Multi Select | Options should be preserved | ☐ Pass ☐ Fail | |
+| EC-05 | Options cleared on non-select type | Add options, switch to Short Text | Options should be cleared/ignored | ☐ Pass ☐ Fail | |
+| EC-06 | Section assignment preserved | Edit question in a section | sectionId preserved after save | ☐ Pass ☐ Fail | |
+| EC-07 | LibraryFieldId preserved | Edit field linked to library | libraryFieldId preserved after save | ☐ Pass ☐ Fail | |
+
+---
+
+### Section 6: Cross-Browser Verification (Optional)
+
+| Browser | Stage Approvals Working | Client Tasks Working | Notes |
+|---------|------------------------|---------------------|-------|
+| Chrome | ☐ Yes ☐ No | ☐ Yes ☐ No | |
+| Firefox | ☐ Yes ☐ No | ☐ Yes ☐ No | |
+| Safari | ☐ Yes ☐ No | ☐ Yes ☐ No | |
+| Mobile Chrome | ☐ Yes ☐ No | ☐ Yes ☐ No | |
+
+---
+
+### Test Summary
+
+| Section | Total Tests | Passed | Failed | Blocked |
+|---------|-------------|--------|--------|---------|
+| 1. Stage Approvals | 12 | | | |
+| 2. Client Tasks | 9 | | | |
+| 3. Conditional Logic | 13 | | | |
+| 4. Icons & Colors | 3 | | | |
+| 5. Edge Cases | 7 | | | |
+| **TOTAL** | **44** | | | |
+
+**Overall Status:** ☐ Pass ☐ Fail  
+**Tested By:**  
+**Date:**  
+**Notes:**
+
+---
+
 *Document created: December 2024*  
 *Last updated: December 2024*  
 *Status: Planning*
