@@ -529,6 +529,13 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
           showFriendlyError({ error: "Please select a next due date for this client service." });
           return;
         }
+        // Target delivery date is required for non-CH services (CH services may auto-calculate or not need it)
+        const hasCHOffset = isCompaniesHouseService && (selectedService as any)?.chTargetDeliveryDaysOffset > 0;
+        if (!isCompaniesHouseService && !data.targetDeliveryDate) {
+          showFriendlyError({ error: "Please select a target delivery date for this client service." });
+          return;
+        }
+        // For CH services with offset, target should already be auto-calculated; if no offset, it's optional
         if (!data.serviceOwnerId) {
           showFriendlyError({ error: "Please select a service owner for this client service." });
           return;
@@ -755,9 +762,14 @@ export function AddServiceModal({ clientId, clientType = 'company', onSuccess }:
                   render={({ field }) => {
                     const hasCHOffset = isCompaniesHouseService && (selectedService as any)?.chTargetDeliveryDaysOffset > 0;
                     const isAutoCalculated = hasCHOffset && !!field.value;
+                    // Target is required for regular services (not personal, static, or CH services)
+                    const isTargetRequired = !isPersonalService && !isStaticService && !isCompaniesHouseService;
                     return (
                       <FormItem>
-                        <FormLabel fieldState="optional" className={isAutoCalculated ? "text-purple-600 dark:text-purple-400" : ""}>
+                        <FormLabel 
+                          fieldState={isTargetRequired ? getFieldState('targetDeliveryDate', true) : 'optional'} 
+                          className={isAutoCalculated ? "text-purple-600 dark:text-purple-400" : ""}
+                        >
                           Target Delivery Date
                           {isAutoCalculated && (
                             <span className="ml-2 text-xs font-normal">(Auto-calculated)</span>

@@ -159,6 +159,27 @@ export async function createClientServiceMapping(
       if (!finalData.frequency) {
         finalData.frequency = (existingService.frequency || 'monthly') as any;
       }
+      
+      // Validate required dates for regular (non-static, non-CH) services
+      // Use provided values or fall back to existing values
+      const effectiveNextStartDate = finalData.nextStartDate !== undefined ? finalData.nextStartDate : existingService.nextStartDate;
+      const effectiveNextDueDate = finalData.nextDueDate !== undefined ? finalData.nextDueDate : existingService.nextDueDate;
+      const effectiveTargetDeliveryDate = finalData.targetDeliveryDate !== undefined ? finalData.targetDeliveryDate : existingService.targetDeliveryDate;
+      
+      if (!effectiveNextStartDate) {
+        throw new Error('Next start date is required for this service');
+      }
+      if (!effectiveNextDueDate) {
+        throw new Error('Next due date is required for this service');
+      }
+      if (!effectiveTargetDeliveryDate) {
+        throw new Error('Target delivery date is required for this service');
+      }
+      
+      // Ensure the effective values are written back to prevent null overwrite
+      finalData.nextStartDate = effectiveNextStartDate as any;
+      finalData.nextDueDate = effectiveNextDueDate as any;
+      finalData.targetDeliveryDate = effectiveTargetDeliveryDate as any;
     }
 
     // Convert dates and update mapping
@@ -180,6 +201,18 @@ export async function createClientServiceMapping(
     // Regular services need a frequency
     if (!finalData.frequency) {
       finalData.frequency = 'monthly' as const;
+    }
+    
+    // Validate required dates for regular (non-static, non-CH) services
+    if (!finalData.nextStartDate) {
+      throw new Error('Next start date is required for this service');
+    }
+    if (!finalData.nextDueDate) {
+      throw new Error('Next due date is required for this service');
+    }
+    // Target delivery date is required for regular services
+    if (!finalData.targetDeliveryDate) {
+      throw new Error('Target delivery date is required for this service');
     }
   }
 
@@ -241,12 +274,15 @@ export async function updateClientServiceMapping(
     throw new Error(`Client service with ID '${id}' not found`);
   }
 
+  // Get the service to check its type
+  const serviceId = updateData.serviceId || existing.serviceId;
+  const service = await storage.getServiceById(serviceId);
+  if (!service) {
+    throw new Error(`Service with ID '${serviceId}' not found`);
+  }
+
   // If changing service, validate the new service
   if (updateData.serviceId) {
-    const service = await storage.getServiceById(updateData.serviceId);
-    if (!service) {
-      throw new Error(`Service with ID '${updateData.serviceId}' not found`);
-    }
     await validateServiceMapping(service, 'client');
   }
 
@@ -263,8 +299,32 @@ export async function updateClientServiceMapping(
     }
   }
 
+  // For regular services (non-static, non-CH), validate that required dates are not being cleared
+  let finalUpdateData = { ...updateData };
+  if (!service.isStaticService && !service.isCompaniesHouseConnected) {
+    // Check if dates are being explicitly set to null/empty
+    const finalNextStartDate = updateData.nextStartDate !== undefined ? updateData.nextStartDate : existing.nextStartDate;
+    const finalNextDueDate = updateData.nextDueDate !== undefined ? updateData.nextDueDate : existing.nextDueDate;
+    const finalTargetDeliveryDate = updateData.targetDeliveryDate !== undefined ? updateData.targetDeliveryDate : existing.targetDeliveryDate;
+    
+    if (!finalNextStartDate) {
+      throw new Error('Next start date is required for this service');
+    }
+    if (!finalNextDueDate) {
+      throw new Error('Next due date is required for this service');
+    }
+    if (!finalTargetDeliveryDate) {
+      throw new Error('Target delivery date is required for this service');
+    }
+    
+    // Ensure the effective values are written back to prevent null overwrite
+    finalUpdateData.nextStartDate = finalNextStartDate as any;
+    finalUpdateData.nextDueDate = finalNextDueDate as any;
+    finalUpdateData.targetDeliveryDate = finalTargetDeliveryDate as any;
+  }
+
   // Convert dates and update
-  const processedData = convertServiceDates(updateData);
+  const processedData = convertServiceDates(finalUpdateData);
   return await storage.updateClientService(id, processedData);
 }
 

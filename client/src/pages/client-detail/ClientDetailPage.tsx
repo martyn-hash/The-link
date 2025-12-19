@@ -27,6 +27,7 @@ import {
 import { useClientData, useClientMutations, useCompanyConnections } from "./hooks";
 import { ClientHeader } from "./components/ClientHeader";
 import { ClientTabNavigation } from "./components/ClientTabNavigation";
+import { ServiceConfigurationBanner } from "./components/ServiceConfigurationBanner";
 
 export default function ClientDetail() {
   const { id } = useParams();
@@ -165,6 +166,14 @@ export default function ClientDetail() {
       {user && <TopNavigation user={user} />}
       <div className="flex-1" style={{ paddingBottom: isMobile ? '4rem' : '0' }}>
         <ClientHeader client={client} people={relatedPeople} />
+
+        {/* Service Configuration Issues Banner */}
+        <div className="page-container pt-4">
+          <ServiceConfigurationBanner 
+            clientServices={clientServices} 
+            isLoading={servicesLoading} 
+          />
+        </div>
 
         {/* Main Content */}
         <div className="page-container py-6 md:py-8">
