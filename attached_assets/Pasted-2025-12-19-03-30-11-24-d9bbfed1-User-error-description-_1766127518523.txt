@@ -1,0 +1,128 @@
+2025-12-19 03:30:11.24
+d9bbfed1
+User
+"error_description" : "Token is expired",
+2025-12-19 03:30:11.24
+d9bbfed1
+User
+"errors" : [ {
+2025-12-19 03:30:11.24
+d9bbfed1
+User
+"errorCode" : "OAU-210",
+2025-12-19 03:30:11.24
+d9bbfed1
+User
+} ]
+2025-12-19 03:30:11.24
+d9bbfed1
+User
+RingCentral token refresh error: {
+2025-12-19 03:30:11.24
+d9bbfed1
+User
+}
+2025-12-19 03:30:11.24
+d9bbfed1
+User
+"message" : "Token is expired"
+2025-12-19 03:30:11.24
+d9bbfed1
+User
+"error" : "invalid_grant",
+2025-12-19 03:30:16.74
+d9bbfed1
+User
+at refreshAccessToken (/home/runner/workspace/server/utils/userRingCentralClient.ts:206:13)
+2025-12-19 03:30:16.74
+d9bbfed1
+User
+at async cron.schedule.wrapCronHandler.useLock (/home/runner/workspace/server/cron-worker.ts:122:22)
+2025-12-19 03:30:16.74
+d9bbfed1
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-12-19 03:30:16.74
+d9bbfed1
+User
+at async (/home/runner/workspace/server/cron-telemetry.ts:571:9)
+2025-12-19 03:30:16.74
+d9bbfed1
+User
+at async Timeout._onTimeout (/home/runner/workspace/node_modules/node-cron/src/scheduler/runner.ts:100:30)
+2025-12-19 03:30:16.74
+d9bbfed1
+User
+[RingCentral Token Refresh] Failed for user 37751969: RingCentralReauthRequiredError: RingCentral session expired. Please reconnect your RingCentral account.
+2025-12-19 03:30:16.74
+d9bbfed1
+User
+at async refreshAllActiveRingCentralTokens (/home/runner/workspace/server/utils/userRingCentralClient.ts:602:29)
+2025-12-19 03:30:18.94
+d9bbfed1
+User
+RingCentral token refresh error: {
+2025-12-19 03:30:18.94
+d9bbfed1
+User
+}
+2025-12-19 03:30:18.94
+d9bbfed1
+User
+"message" : "Token is expired"
+2025-12-19 03:30:18.94
+d9bbfed1
+User
+"error_description" : "Token is expired",
+2025-12-19 03:30:18.94
+d9bbfed1
+User
+"error" : "invalid_grant",
+2025-12-19 03:30:18.94
+d9bbfed1
+User
+"errorCode" : "OAU-210",
+2025-12-19 03:30:18.94
+d9bbfed1
+User
+} ]
+2025-12-19 03:30:18.94
+d9bbfed1
+User
+"errors" : [ {
+2025-12-19 03:30:19.64
+d9bbfed1
+User
+at async Timeout._onTimeout (/home/runner/workspace/node_modules/node-cron/src/scheduler/runner.ts:100:30)
+2025-12-19 03:30:19.64
+d9bbfed1
+User
+at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-12-19 03:30:19.64
+d9bbfed1
+User
+at async (/home/runner/workspace/server/cron-telemetry.ts:571:9)
+2025-12-19 03:30:19.64
+d9bbfed1
+User
+at async refreshAllActiveRingCentralTokens (/home/runner/workspace/server/utils/userRingCentralClient.ts:602:29)
+2025-12-19 03:30:19.64
+d9bbfed1
+User
+at refreshAccessToken (/home/runner/workspace/server/utils/userRingCentralClient.ts:206:13)
+2025-12-19 03:30:19.64
+d9bbfed1
+User
+at async cron.schedule.wrapCronHandler.useLock (/home/runner/workspace/server/cron-worker.ts:122:22)
+2025-12-19 03:30:19.64
+d9bbfed1
+User
+[RingCentral Token Refresh] Failed for user 1ab148f8-965f-4653-b9ee-448ceeaceba9: RingCentralReauthRequiredError: RingCentral session expired. Please reconnect your RingCentral account.
+2025-12-19 06:02:20.14
+d9bbfed1
+User
+[Project Message Reminders] Critical error in reminder service: timeout exceeded when trying to connect
+2025-12-19 06:02:20.34
+d9bbfed1
+User
+]
