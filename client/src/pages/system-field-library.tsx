@@ -68,6 +68,21 @@ const CONTEXT_LABELS: Record<string, string> = {
   page_template: "Page Templates",
 };
 
+const CURRENCY_OPTIONS = [
+  { value: "GBP", label: "£ GBP (British Pound)", symbol: "£" },
+  { value: "USD", label: "$ USD (US Dollar)", symbol: "$" },
+  { value: "EUR", label: "€ EUR (Euro)", symbol: "€" },
+  { value: "AUD", label: "$ AUD (Australian Dollar)", symbol: "$" },
+  { value: "CAD", label: "$ CAD (Canadian Dollar)", symbol: "$" },
+];
+
+const FILE_TYPE_OPTIONS = [
+  { value: "documents", label: "Documents (PDF, Word, Excel)" },
+  { value: "images", label: "Images (JPG, PNG, GIF)" },
+  { value: "spreadsheets", label: "Spreadsheets (Excel, CSV)" },
+  { value: "any", label: "Any file type" },
+];
+
 const fieldFormSchema = z.object({
   fieldName: z.string().min(1, "Field name is required").max(255),
   fieldType: z.enum([
@@ -82,6 +97,13 @@ const fieldFormSchema = z.object({
   tags: z.array(z.string()).optional(),
   options: z.array(z.string()).optional(),
   isRequired: z.boolean().default(false),
+  currencyCode: z.string().optional(),
+  minValue: z.coerce.number().optional(),
+  maxValue: z.coerce.number().optional(),
+  decimalPlaces: z.coerce.number().min(0).max(4).optional(),
+  allowedFileTypes: z.string().optional(),
+  maxFileSize: z.coerce.number().optional(),
+  allowMultipleUsers: z.boolean().optional(),
 }).refine(
   (data) => {
     if (data.fieldType === "single_select" || data.fieldType === "multi_select") {
@@ -138,12 +160,21 @@ function FieldFormModal({
       tags: [],
       options: [],
       isRequired: false,
+      currencyCode: "GBP",
+      minValue: undefined,
+      maxValue: undefined,
+      decimalPlaces: 2,
+      allowedFileTypes: "any",
+      maxFileSize: undefined,
+      allowMultipleUsers: false,
     },
   });
 
   useEffect(() => {
     if (open) {
       if (field) {
+        const validationRules = (field.validationRules as Record<string, any>) || {};
+        const displayConfig = (field.displayConfig as Record<string, any>) || {};
         form.reset({
           fieldName: field.fieldName || "",
           fieldType: (field.fieldType as any) || "short_text",
@@ -154,6 +185,13 @@ function FieldFormModal({
           tags: field.tags || [],
           options: field.options || [],
           isRequired: field.isRequired || false,
+          currencyCode: displayConfig.currencyCode || "GBP",
+          minValue: validationRules.min,
+          maxValue: validationRules.max,
+          decimalPlaces: displayConfig.decimalPlaces ?? 2,
+          allowedFileTypes: validationRules.allowedFileTypes || "any",
+          maxFileSize: validationRules.maxFileSize,
+          allowMultipleUsers: displayConfig.allowMultipleUsers || false,
         });
         setOptionsText(field.options?.join("\n") || "");
       } else {
@@ -167,6 +205,13 @@ function FieldFormModal({
           tags: [],
           options: [],
           isRequired: false,
+          currencyCode: "GBP",
+          minValue: undefined,
+          maxValue: undefined,
+          decimalPlaces: 2,
+          allowedFileTypes: "any",
+          maxFileSize: undefined,
+          allowMultipleUsers: false,
         });
         setOptionsText("");
       }
@@ -181,13 +226,47 @@ function FieldFormModal({
     form.setValue('options', parsedOptions, { shouldValidate: false });
   }, [optionsText, form]);
 
+  const buildPayload = (data: FieldFormData) => {
+    const validationRules: Record<string, any> = {};
+    const displayConfig: Record<string, any> = {};
+
+    if (data.fieldType === "currency") {
+      displayConfig.currencyCode = data.currencyCode || "GBP";
+      displayConfig.decimalPlaces = data.decimalPlaces ?? 2;
+    }
+    if (data.fieldType === "number" || data.fieldType === "percentage") {
+      if (data.minValue !== undefined && data.minValue !== null) validationRules.min = data.minValue;
+      if (data.maxValue !== undefined && data.maxValue !== null) validationRules.max = data.maxValue;
+      if (data.fieldType === "number" && data.decimalPlaces !== undefined) {
+        displayConfig.decimalPlaces = data.decimalPlaces;
+      }
+    }
+    if (data.fieldType === "file_upload" || data.fieldType === "image_upload") {
+      validationRules.allowedFileTypes = data.allowedFileTypes || "any";
+      if (data.maxFileSize) validationRules.maxFileSize = data.maxFileSize;
+    }
+    if (data.fieldType === "user_select") {
+      displayConfig.allowMultipleUsers = data.allowMultipleUsers || false;
+    }
+
+    return {
+      fieldName: data.fieldName,
+      fieldType: data.fieldType,
+      description: data.description,
+      placeholder: data.placeholder,
+      helpText: data.helpText,
+      category: data.category,
+      tags: data.tags,
+      options: showOptions ? optionsText.split("\n").filter(o => o.trim()) : undefined,
+      isRequired: data.isRequired,
+      validationRules: Object.keys(validationRules).length > 0 ? validationRules : undefined,
+      displayConfig: Object.keys(displayConfig).length > 0 ? displayConfig : undefined,
+    };
+  };
+
   const createMutation = useMutation({
     mutationFn: async (data: FieldFormData) => {
-      const payload = {
-        ...data,
-        options: showOptions ? optionsText.split("\n").filter(o => o.trim()) : undefined,
-      };
-      return apiRequest("POST", "/api/system-field-library", payload);
+      return apiRequest("POST", "/api/system-field-library", buildPayload(data));
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Field created successfully" });
@@ -204,11 +283,7 @@ function FieldFormModal({
 
   const updateMutation = useMutation({
     mutationFn: async (data: FieldFormData) => {
-      const payload = {
-        ...data,
-        options: showOptions ? optionsText.split("\n").filter(o => o.trim()) : undefined,
-      };
-      return apiRequest("PATCH", `/api/system-field-library/${field!.id}`, payload);
+      return apiRequest("PATCH", `/api/system-field-library/${field!.id}`, buildPayload(data));
     },
     onSuccess: () => {
       toast({ title: "Success", description: "Field updated successfully" });
@@ -380,6 +455,195 @@ function FieldFormModal({
                     Enter one option per line. These will be the choices available in the dropdown.
                   </FormDescription>
                 </FormItem>
+              )}
+
+              {watchedFieldType === "currency" && (
+                <>
+                  <FormField
+                    control={form.control}
+                    name="currencyCode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Currency</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || "GBP"}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-currency">
+                              <SelectValue placeholder="Select currency" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {CURRENCY_OPTIONS.map((curr) => (
+                              <SelectItem key={curr.value} value={curr.value}>
+                                {curr.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="decimalPlaces"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Decimal Places</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            min={0} 
+                            max={4} 
+                            {...field} 
+                            value={field.value ?? 2}
+                            data-testid="input-decimal-places" 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
+              )}
+
+              {(watchedFieldType === "number" || watchedFieldType === "percentage") && (
+                <>
+                  <FormField
+                    control={form.control}
+                    name="minValue"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Minimum Value</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            placeholder="No minimum" 
+                            {...field} 
+                            value={field.value ?? ""}
+                            data-testid="input-min-value" 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="maxValue"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Maximum Value</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            placeholder="No maximum" 
+                            {...field} 
+                            value={field.value ?? ""}
+                            data-testid="input-max-value" 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {watchedFieldType === "number" && (
+                    <FormField
+                      control={form.control}
+                      name="decimalPlaces"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Decimal Places</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="number" 
+                              min={0} 
+                              max={4} 
+                              {...field} 
+                              value={field.value ?? ""}
+                              placeholder="Whole numbers"
+                              data-testid="input-decimal-places" 
+                            />
+                          </FormControl>
+                          <FormDescription>Leave empty for whole numbers</FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </>
+              )}
+
+              {(watchedFieldType === "file_upload" || watchedFieldType === "image_upload") && (
+                <>
+                  <FormField
+                    control={form.control}
+                    name="allowedFileTypes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Allowed File Types</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || "any"}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-file-types">
+                              <SelectValue placeholder="Select file types" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {FILE_TYPE_OPTIONS.map((type) => (
+                              <SelectItem key={type.value} value={type.value}>
+                                {type.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="maxFileSize"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Max File Size (MB)</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            min={1} 
+                            placeholder="No limit" 
+                            {...field} 
+                            value={field.value ?? ""}
+                            data-testid="input-max-file-size" 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
+              )}
+
+              {watchedFieldType === "user_select" && (
+                <FormField
+                  control={form.control}
+                  name="allowMultipleUsers"
+                  render={({ field }) => (
+                    <FormItem className="col-span-2 flex flex-row items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base">Allow Multiple Users</FormLabel>
+                        <FormDescription>
+                          Allow selecting more than one team member
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="switch-multiple-users"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
               )}
 
               <FormField
