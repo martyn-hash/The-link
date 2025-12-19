@@ -18,6 +18,13 @@ import {
 } from "@shared/schema";
 import { sendInternalTaskAssignmentEmail } from "../emailService";
 import { sendTemplateNotification } from "../notification-template-service";
+import {
+  getCachedInternalTasksForUser,
+  hasCachedInternalTasksForUser,
+  warmInternalTasksCacheForUser,
+  markInternalTasksCacheStaleForUser,
+  markInternalTasksCacheStaleForUsers,
+} from "../internal-tasks-cache-service";
 
 // Configure multer for task document uploads (all file types allowed)
 const taskDocumentUpload = multer({
@@ -156,10 +163,62 @@ export function registerInternalTaskRoutes(
       if (req.query.status) filters.status = req.query.status as string;
       if (req.query.priority) filters.priority = req.query.priority as string;
       if (req.query.assigneeId) filters.assigneeId = req.query.assigneeId as string;
+      
+      const refresh = req.query.refresh === 'true';
+      
+      // Check if we can serve from cache:
+      // - User is viewing their own tasks
+      // - Filtering by status=open (or no status filter, defaulting to all)
+      // - No priority or assignee filters (cache only stores open tasks)
+      const canUseCache = requestedUserId === actualUserId && 
+        (filters.status === 'open' || !filters.status) &&
+        !filters.priority &&
+        !filters.assigneeId;
+      
+      if (canUseCache && !refresh) {
+        const hasCached = await hasCachedInternalTasksForUser(requestedUserId);
+        
+        if (hasCached) {
+          const cachedData = await getCachedInternalTasksForUser(requestedUserId);
+          if (cachedData) {
+            // Combine tasks and reminders for response (frontend filters them)
+            const allItems = [...cachedData.tasks, ...cachedData.reminders];
+            
+            // If stale, warm cache in background
+            if (cachedData.isStale) {
+              warmInternalTasksCacheForUser(requestedUserId).catch(err => {
+                console.error('[Internal Tasks Cache] Background warming failed:', err);
+              });
+            }
+            
+            // Return with cache metadata
+            return res.json({
+              data: allItems,
+              fromCache: true,
+              cachedAt: cachedData.lastRefreshed,
+              isStale: cachedData.isStale,
+              staleAt: cachedData.staleAt,
+            });
+          }
+        }
+        
+        // Cold cache - warm in background and serve fresh data
+        warmInternalTasksCacheForUser(requestedUserId).catch(err => {
+          console.error('[Internal Tasks Cache] Background warming failed:', err);
+        });
+      }
+      
+      // If explicit refresh, warm cache first
+      if (refresh && requestedUserId === actualUserId) {
+        await warmInternalTasksCacheForUser(requestedUserId);
+      }
 
       // Use the requested user ID to fetch their tasks (not the current user's)
       const tasks = await storage.getInternalTasksByAssignee(requestedUserId, filters);
       const tasksWithConnections = await addConnectionsToTasks(tasks);
+      
+      // Return legacy format for backwards compatibility with existing frontend
+      // or when cache conditions aren't met
       res.json(tasksWithConnections);
     } catch (error) {
       console.error("Error fetching assigned tasks:", error);
@@ -337,6 +396,17 @@ export function registerInternalTaskRoutes(
         }
       }
       
+      // Invalidate cache for the assignee (task assigned to them)
+      markInternalTasksCacheStaleForUser(created.assignedTo).catch(err => {
+        console.error('[Internal Tasks Cache] Failed to mark cache stale:', err);
+      });
+      // Also invalidate creator's cache if different
+      if (created.assignedTo !== userId) {
+        markInternalTasksCacheStaleForUser(userId).catch(err => {
+          console.error('[Internal Tasks Cache] Failed to mark cache stale:', err);
+        });
+      }
+      
       res.json(created);
     } catch (error) {
       console.error("Error creating task:", error);
@@ -436,6 +506,18 @@ export function registerInternalTaskRoutes(
         }
       }
       
+      // Invalidate cache for affected users
+      const usersToInvalidate = new Set<string>();
+      usersToInvalidate.add(updated.assignedTo);
+      if (originalTask && originalTask.assignedTo !== updated.assignedTo) {
+        usersToInvalidate.add(originalTask.assignedTo);
+      }
+      usersToInvalidate.add(updated.createdBy);
+      
+      markInternalTasksCacheStaleForUsers(Array.from(usersToInvalidate)).catch(err => {
+        console.error('[Internal Tasks Cache] Failed to mark cache stale:', err);
+      });
+      
       res.json(updated);
     } catch (error) {
       console.error("Error updating task:", error);
@@ -449,6 +531,11 @@ export function registerInternalTaskRoutes(
       const userId = req.user?.effectiveUserId || req.user?.id;
       const closed = await storage.closeInternalTask(req.params.id, closeData, userId);
       
+      // Invalidate cache for the assignee
+      markInternalTasksCacheStaleForUser(closed.assignedTo).catch(err => {
+        console.error('[Internal Tasks Cache] Failed to mark cache stale:', err);
+      });
+      
       res.json(closed);
     } catch (error) {
       console.error("Error closing task:", error);
@@ -458,7 +545,18 @@ export function registerInternalTaskRoutes(
 
   app.delete("/api/internal-tasks/:id", isAuthenticated, async (req, res) => {
     try {
+      // Get task before deletion to know which user's cache to invalidate
+      const task = await storage.getInternalTaskById(req.params.id);
+      
       await storage.deleteInternalTask(req.params.id);
+      
+      // Invalidate cache for the assignee
+      if (task) {
+        markInternalTasksCacheStaleForUser(task.assignedTo).catch(err => {
+          console.error('[Internal Tasks Cache] Failed to mark cache stale:', err);
+        });
+      }
+      
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting task:", error);
@@ -470,6 +568,12 @@ export function registerInternalTaskRoutes(
     try {
       const userId = req.user?.effectiveUserId || req.user?.id;
       const archived = await storage.archiveInternalTask(req.params.id, userId);
+      
+      // Invalidate cache for the assignee
+      markInternalTasksCacheStaleForUser(archived.assignedTo).catch(err => {
+        console.error('[Internal Tasks Cache] Failed to mark cache stale:', err);
+      });
+      
       res.json(archived);
     } catch (error) {
       console.error("Error archiving task:", error);
@@ -491,7 +595,24 @@ export function registerInternalTaskRoutes(
   app.post("/api/internal-tasks/bulk/reassign", isAuthenticated, async (req, res) => {
     try {
       const { taskIds, assignedTo } = bulkReassignTasksSchema.parse(req.body);
+      
+      // Get old assignees before reassigning to invalidate their caches
+      const usersToInvalidate = new Set<string>();
+      usersToInvalidate.add(assignedTo);
+      for (const taskId of taskIds) {
+        const task = await storage.getInternalTaskById(taskId);
+        if (task) {
+          usersToInvalidate.add(task.assignedTo);
+        }
+      }
+      
       await storage.bulkReassignTasks(taskIds, assignedTo);
+      
+      // Invalidate caches for all affected users
+      markInternalTasksCacheStaleForUsers(Array.from(usersToInvalidate)).catch(err => {
+        console.error('[Internal Tasks Cache] Failed to mark cache stale:', err);
+      });
+      
       res.json({ message: "Tasks reassigned successfully" });
     } catch (error) {
       console.error("Error bulk reassigning tasks:", error);
@@ -502,7 +623,23 @@ export function registerInternalTaskRoutes(
   app.post("/api/internal-tasks/bulk/update-status", isAuthenticated, async (req, res) => {
     try {
       const { taskIds, status } = bulkUpdateTaskStatusSchema.parse(req.body);
+      
+      // Get assignees to invalidate their caches
+      const usersToInvalidate = new Set<string>();
+      for (const taskId of taskIds) {
+        const task = await storage.getInternalTaskById(taskId);
+        if (task) {
+          usersToInvalidate.add(task.assignedTo);
+        }
+      }
+      
       await storage.bulkUpdateTaskStatus(taskIds, status);
+      
+      // Invalidate caches for all affected users
+      markInternalTasksCacheStaleForUsers(Array.from(usersToInvalidate)).catch(err => {
+        console.error('[Internal Tasks Cache] Failed to mark cache stale:', err);
+      });
+      
       res.json({ message: "Task statuses updated successfully" });
     } catch (error) {
       console.error("Error bulk updating task status:", error);
