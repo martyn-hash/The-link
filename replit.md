@@ -43,11 +43,19 @@ The application employs a dual-process architecture for web server and cron work
 ### Shared Components
 
 #### System Field Library Components (`client/src/components/field-builder/`)
-Reusable wizard-style form builder components providing consistent drag-and-drop UI across 9 form contexts:
+Reusable wizard-style form builder components providing consistent drag-and-drop UI across 12 form contexts:
 -   **types.ts**: 16 unified field types with icons and colors (boolean, short_text, single_select, multi_select, etc.)
--   **adapters.ts**: Adapter pattern for bridging context-specific field types (yes_no, single_choice) to unified system types
+-   **adapters.ts**: Adapter pattern for bridging context-specific field types to unified system types with capability flags and mapping functions
+-   **FieldConfigModal.tsx**: Shared configuration modal that accepts a capabilities object for context-specific UI feature toggling
 -   **FieldCard.tsx**: Split into BaseFieldCard (presentational) and SortableFieldCard (with DnD hooks)
 -   **SortableFieldList.tsx**: Standalone DnD list for field reordering
 -   **FieldBuilder.tsx**: Composite component combining palette, canvas, and config modal
 
-Adapters define capability flags (`supportsConditionalLogic`, `supportsExpectedValue`, etc.) to toggle UI features per context while maintaining consistent presentation.
+Adapter Architecture:
+-   Each context adapter provides `mapToFieldDefinition(field)` to convert context-specific fields to unified FieldDefinition
+-   Each context adapter provides `mapFromFieldDefinition(field)` to convert back to context-specific format with explicit defaults
+-   Capability flags (`supportsConditionalLogic`, `supportsExpectedValue`, `supportsValidationRules`, `supportsOptions`, `supportsPlaceholder`, `supportsHelpText`, `supportsLibraryPicker`) toggle UI features per context
+-   `normalizeFieldType()` handles legacy field type aliases (yes_no → boolean, single_choice → single_select) with fallback icons for unknown types
+
+Migrated Contexts:
+-   Stage Approvals: Uses ApprovalFieldConfigModal wrapper with stageApprovalFieldAdapter
