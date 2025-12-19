@@ -8,7 +8,7 @@ import TopNavigation from "@/components/top-navigation";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Settings, Layers, List, ShieldCheck, Bell, BookOpen, ClipboardList, LayoutDashboard } from "lucide-react";
+import { Settings, Layers, List, ShieldCheck, Bell, ClipboardList, LayoutDashboard } from "lucide-react";
 import { ProjectTypeOverview, type ConfigSectionStatus } from "@/components/ui/project-type-overview";
 import type { StageItem } from "@/components/ui/stage-pipeline";
 
@@ -21,7 +21,6 @@ import {
   ChangeReasonsTab, 
   StageApprovalsTab, 
   NotificationsTab,
-  FieldLibraryTab,
   ClientTasksTab,
 } from "./components/tabs";
 import { 
@@ -71,7 +70,7 @@ export default function ProjectTypeDetail() {
   const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
   
   // State for tab navigation with URL hash sync
-  const validTabs = ["overview", "stages", "reasons", "approvals", "field-library", "notifications", "client-tasks", "settings"];
+  const validTabs = ["overview", "stages", "reasons", "approvals", "notifications", "client-tasks", "settings"];
   const [activeTab, setActiveTab] = useState<string>(() => {
     if (typeof window !== "undefined") {
       const hash = window.location.hash.replace("#", "");
@@ -165,7 +164,6 @@ export default function ProjectTypeDetail() {
     allStageReasonMaps,
     allCustomFields,
     allServices,
-    approvalFieldLibrary,
   } = useProjectTypeQueries({
     projectTypeId,
     isAuthenticated,
@@ -230,9 +228,6 @@ export default function ProjectTypeDetail() {
       return (isActive && hasServiceLinked) ? "configured" : "needs-setup";
     };
 
-    // Field Library uses approvalFieldLibrary (project-type-specific)
-    const fieldLibraryCount = approvalFieldLibrary?.length || 0;
-    
     // Client Tasks uses clientRequestTemplates (global templates)
     const clientTasksCount = clientRequestTemplates?.length || 0;
 
@@ -262,14 +257,6 @@ export default function ProjectTypeDetail() {
         description: "Require sign-offs" 
       },
       { 
-        id: "field-library", 
-        label: "Field Library", 
-        icon: BookOpen, 
-        count: fieldLibraryCount, 
-        status: fieldLibraryCount > 0 ? "configured" : "empty",
-        description: "Custom data fields" 
-      },
-      { 
         id: "notifications", 
         label: "Notifications", 
         icon: Bell, 
@@ -294,7 +281,7 @@ export default function ProjectTypeDetail() {
         description: "General configuration" 
       },
     ];
-  }, [stages, reasons, stageApprovals, approvalFieldLibrary, notifications, clientRequestTemplates, projectType, allServices]);
+  }, [stages, reasons, stageApprovals, notifications, clientRequestTemplates, projectType, allServices]);
 
   // Handle section click from overview
   const handleSectionClick = (sectionId: string) => {
@@ -605,10 +592,6 @@ export default function ProjectTypeDetail() {
                   <ShieldCheck className="w-4 h-4 mr-2" />
                   Approvals
                 </TabsTrigger>
-                <TabsTrigger value="field-library" className="flex items-center" data-testid="tab-field-library">
-                  <BookOpen className="w-4 h-4 mr-2" />
-                  Field Library
-                </TabsTrigger>
                 <TabsTrigger value="notifications" className="flex items-center" data-testid="tab-notifications">
                   <Bell className="w-4 h-4 mr-2" />
                   Notifications
@@ -707,8 +690,6 @@ export default function ProjectTypeDetail() {
               projectType={projectType}
               stages={stages}
             />
-
-            <FieldLibraryTab projectTypeId={projectTypeId!} />
 
             <ClientTasksTab
               projectTypeId={projectTypeId!}

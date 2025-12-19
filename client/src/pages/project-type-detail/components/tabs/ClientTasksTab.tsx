@@ -15,10 +15,11 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { 
   Plus, Edit2, Trash2, Save, X, ClipboardList, GripVertical,
   Type, FileText, Mail, Hash, Calendar, CircleDot, CheckSquare, 
-  ChevronDown, ChevronRight, ToggleLeft, Upload, HelpCircle, Layers, Library
+  ChevronDown, ChevronRight, ToggleLeft, Upload, HelpCircle, Layers, Library, Search, BookOpen
 } from "lucide-react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -31,7 +32,6 @@ import type {
   ChangeReason,
   SystemFieldLibrary
 } from "@shared/schema";
-import { SystemFieldLibraryPicker } from "@/components/system-field-library-picker";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { nanoid } from "nanoid";
@@ -50,6 +50,17 @@ const QUESTION_TYPES = [
   { type: "dropdown", label: "Dropdown", icon: ChevronDown, color: "#6366f1" },
   { type: "yes_no", label: "Yes/No", icon: ToggleLeft, color: "#84cc16" },
   { type: "file_upload", label: "File Upload", icon: Upload, color: "#f97316" },
+] as const;
+
+const SYSTEM_FIELD_CATEGORY_OPTIONS = [
+  { value: "all", label: "All Categories" },
+  { value: "general", label: "General" },
+  { value: "contact", label: "Contact" },
+  { value: "financial", label: "Financial" },
+  { value: "compliance", label: "Compliance" },
+  { value: "documentation", label: "Documentation" },
+  { value: "scheduling", label: "Scheduling" },
+  { value: "custom", label: "Custom" },
 ] as const;
 
 type QuestionType = typeof QUESTION_TYPES[number]["type"];
@@ -743,7 +754,8 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isOverDropZone, setIsOverDropZone] = useState(false);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
-  const [systemLibraryPickerOpen, setSystemLibraryPickerOpen] = useState(false);
+  const [systemLibrarySearch, setSystemLibrarySearch] = useState("");
+  const [systemLibraryCategory, setSystemLibraryCategory] = useState<string>("all");
 
   const ALLOWED_SYSTEM_FIELD_TYPES = ["boolean", "number", "short_text", "long_text", "date", "single_select", "multi_select", "email", "file_upload"];
 
@@ -808,6 +820,40 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
   const { data: stageReasonMaps = [] } = useQuery<StageReasonMap[]>({
     queryKey: ["/api/config/stage-reason-maps"],
   });
+
+  const { data: systemFields = [] } = useQuery<SystemFieldLibrary[]>({
+    queryKey: ["/api/system-field-library"],
+  });
+
+  const filteredSystemFields = useMemo(() => {
+    return systemFields.filter(field => {
+      if (!ALLOWED_SYSTEM_FIELD_TYPES.includes(field.fieldType)) return false;
+      if (systemLibraryCategory !== "all" && field.category !== systemLibraryCategory) return false;
+      if (systemLibrarySearch) {
+        const searchLower = systemLibrarySearch.toLowerCase();
+        const matchesName = field.fieldName.toLowerCase().includes(searchLower);
+        const matchesDescription = field.description?.toLowerCase().includes(searchLower);
+        if (!matchesName && !matchesDescription) return false;
+      }
+      return true;
+    });
+  }, [systemFields, systemLibraryCategory, systemLibrarySearch, ALLOWED_SYSTEM_FIELD_TYPES]);
+
+  const getFieldTypeIcon = (fieldType: string) => {
+    const mapping: Record<string, typeof Type> = {
+      "boolean": ToggleLeft,
+      "number": Hash,
+      "short_text": Type,
+      "long_text": FileText,
+      "date": Calendar,
+      "single_select": CircleDot,
+      "multi_select": CheckSquare,
+      "email": Mail,
+      "file_upload": Upload,
+      "image_upload": Upload,
+    };
+    return mapping[fieldType] || Type;
+  };
 
   const getFilteredReasonsForStage = (stageId: string | null) => {
     if (!stageId) return [];
@@ -1236,39 +1282,105 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
             onDragEnd={handleDragEnd}
           >
           <div className="flex-1 flex overflow-hidden">
-            <div className="w-64 border-r border-border bg-muted/30 p-4 overflow-y-auto">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <HelpCircle className="w-4 h-4 text-primary" />
+            <div className="w-[400px] border-r border-border bg-muted/30 flex flex-col overflow-hidden">
+              {/* System Library Section - Top 50% */}
+              <div className="flex-1 min-h-0 border-b border-border flex flex-col">
+                <div className="p-4 border-b border-border bg-background/50">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+                      <BookOpen className="w-4 h-4 text-purple-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold">System Library</h3>
+                      <p className="text-xs text-muted-foreground">Click to add pre-defined fields</p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Select value={systemLibraryCategory} onValueChange={setSystemLibraryCategory}>
+                      <SelectTrigger className="h-8 text-xs" data-testid="select-system-field-category">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SYSTEM_FIELD_CATEGORY_OPTIONS.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                      <Input
+                        placeholder="Search fields..."
+                        value={systemLibrarySearch}
+                        onChange={(e) => setSystemLibrarySearch(e.target.value)}
+                        className="h-8 text-xs pl-8"
+                        data-testid="input-system-field-search"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-sm font-semibold">Question Types</h3>
-                  <p className="text-xs text-muted-foreground">Click or drag to add</p>
+                <ScrollArea className="flex-1">
+                  <div className="p-3 space-y-1.5">
+                    {filteredSystemFields.length === 0 ? (
+                      <p className="text-xs text-muted-foreground text-center py-4">
+                        {systemLibrarySearch || systemLibraryCategory !== "all" 
+                          ? "No matching fields found" 
+                          : "No system fields available"}
+                      </p>
+                    ) : (
+                      filteredSystemFields.map(field => {
+                        const Icon = getFieldTypeIcon(field.fieldType);
+                        return (
+                          <button
+                            key={field.id}
+                            onClick={() => handleAddQuestionFromSystemLibrary(field)}
+                            className="w-full flex items-center gap-2.5 p-2.5 rounded-md border border-purple-200 bg-purple-50/50 hover:bg-purple-100 hover:border-purple-300 transition-colors text-left group"
+                            data-testid={`system-field-${field.id}`}
+                          >
+                            <div className="w-7 h-7 rounded-md bg-purple-100 flex items-center justify-center flex-shrink-0">
+                              <Icon className="w-3.5 h-3.5 text-purple-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-medium text-foreground truncate">{field.fieldName}</div>
+                              {field.description && (
+                                <div className="text-[10px] text-muted-foreground truncate">{field.description}</div>
+                              )}
+                            </div>
+                            <Plus className="w-3.5 h-3.5 text-purple-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+
+              {/* Custom Question Types Section - Bottom 50% */}
+              <div className="flex-1 min-h-0 flex flex-col">
+                <div className="p-4 border-b border-border bg-background/50">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <HelpCircle className="w-4 h-4 text-primary" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold">Question Types</h3>
+                      <p className="text-xs text-muted-foreground">Click or drag to add</p>
+                    </div>
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-2">
-                {QUESTION_TYPES.map(qt => (
-                  <PaletteItem 
-                    key={qt.type} 
-                    type={qt.type} 
-                    label={qt.label} 
-                    icon={qt.icon}
-                    color={qt.color}
-                    onClick={() => handleAddQuestion(qt.type as QuestionType)}
-                  />
-                ))}
-              </div>
-              
-              <div className="mt-6 pt-4 border-t border-border">
-                <Button
-                  variant="outline"
-                  className="w-full bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100 hover:text-purple-800"
-                  onClick={() => setSystemLibraryPickerOpen(true)}
-                  data-testid="button-open-system-library"
-                >
-                  <Library className="w-4 h-4 mr-2" />
-                  Pick from System Library
-                </Button>
+                <ScrollArea className="flex-1">
+                  <div className="p-3 space-y-1.5">
+                    {QUESTION_TYPES.map(qt => (
+                      <PaletteItem 
+                        key={qt.type} 
+                        type={qt.type} 
+                        label={qt.label} 
+                        icon={qt.icon}
+                        color={qt.color}
+                        onClick={() => handleAddQuestion(qt.type as QuestionType)}
+                      />
+                    ))}
+                  </div>
+                </ScrollArea>
               </div>
             </div>
 
@@ -1722,16 +1834,6 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
             onCancel={() => setEditingSectionIndex(null)}
           />
         )}
-
-        {/* System Field Library Picker for builder view */}
-        <SystemFieldLibraryPicker
-          open={systemLibraryPickerOpen}
-          onOpenChange={setSystemLibraryPickerOpen}
-          onSelectField={handleAddQuestionFromSystemLibrary}
-          allowedFieldTypes={ALLOWED_SYSTEM_FIELD_TYPES}
-          title="Pick from System Field Library"
-          description="Select a pre-defined field from your company's reusable field library"
-        />
       </TabsContent>
     );
   }
@@ -1895,16 +1997,6 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* System Field Library Picker */}
-      <SystemFieldLibraryPicker
-        open={systemLibraryPickerOpen}
-        onOpenChange={setSystemLibraryPickerOpen}
-        onSelectField={handleAddQuestionFromSystemLibrary}
-        allowedFieldTypes={ALLOWED_SYSTEM_FIELD_TYPES}
-        title="Pick from System Field Library"
-        description="Select a pre-defined field from your company's reusable field library"
-      />
     </TabsContent>
   );
 }

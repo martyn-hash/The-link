@@ -242,8 +242,8 @@ function FieldFormModal({
       }
     }
     if (data.fieldType === "file_upload" || data.fieldType === "image_upload") {
-      validationRules.allowedFileTypes = data.allowedFileTypes || "any";
-      if (data.maxFileSize) validationRules.maxFileSize = data.maxFileSize;
+      validationRules.allowedFileTypes = [data.allowedFileTypes || "any"];
+      if (data.maxFileSize) validationRules.maxFileSizeMb = data.maxFileSize;
     }
     if (data.fieldType === "user_select") {
       displayConfig.allowMultipleUsers = data.allowMultipleUsers || false;

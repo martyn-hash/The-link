@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,20 +8,32 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { 
   X, Save, GripVertical, Plus, Trash2, Edit2, Eye,
   ChevronRight, ChevronLeft, Library, Sparkles, ClipboardCheck, Check, Settings,
-  BookOpen, Type
+  BookOpen, Type, Search
 } from "lucide-react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { ApprovalFieldLibrary, ProjectType, KanbanStage, SystemFieldLibrary } from "@shared/schema";
-import { SystemFieldLibraryPicker } from "@/components/system-field-library-picker";
+import type { ProjectType, KanbanStage, SystemFieldLibrary } from "@shared/schema";
 import { FIELD_TYPES, getFieldTypeInfo, type SystemFieldType, type FieldDefinition } from "@/components/field-builder/types";
 import { stageApprovalFieldAdapter, normalizeFieldType } from "@/components/field-builder/adapters";
 import { FieldConfigModal as SharedFieldConfigModal } from "@/components/field-builder/FieldConfigModal";
+
+const CATEGORY_OPTIONS = [
+  { value: "all", label: "All Categories" },
+  { value: "general", label: "General" },
+  { value: "contact", label: "Contact" },
+  { value: "financial", label: "Financial" },
+  { value: "compliance", label: "Compliance" },
+  { value: "documentation", label: "Documentation" },
+  { value: "scheduling", label: "Scheduling" },
+  { value: "custom", label: "Custom" },
+];
 
 const APPROVAL_FIELD_TYPES = FIELD_TYPES.filter(ft => 
   stageApprovalFieldAdapter.allowedFieldTypes.includes(ft.type)
@@ -56,7 +69,6 @@ interface ApprovalWizardProps {
   formData: ApprovalFormData;
   projectTypes: ProjectType[];
   stages: KanbanStage[];
-  libraryFields?: ApprovalFieldLibrary[];
   onSave: (data: ApprovalFormData) => void;
   onCancel: () => void;
   isSaving?: boolean;
@@ -322,7 +334,6 @@ export function ApprovalWizard({
   formData,
   projectTypes,
   stages,
-  libraryFields = [],
   onSave,
   onCancel,
   isSaving = false,
@@ -335,11 +346,34 @@ export function ApprovalWizard({
   const [viewingFieldIndex, setViewingFieldIndex] = useState<number | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isOverDropZone, setIsOverDropZone] = useState(false);
-  const [systemLibraryPickerOpen, setSystemLibraryPickerOpen] = useState(false);
+  const [systemCategoryFilter, setSystemCategoryFilter] = useState<string>("all");
+  const [systemSearchQuery, setSystemSearchQuery] = useState("");
 
   const isViewOnly = mode === "view";
 
   const ALLOWED_SYSTEM_FIELD_TYPES = ["boolean", "number", "short_text", "long_text", "date", "single_select", "multi_select", "image_upload"];
+
+  const { data: systemFields = [], isLoading: systemFieldsLoading } = useQuery<SystemFieldLibrary[]>({
+    queryKey: ["/api/system-field-library", { isArchived: false }],
+  });
+
+  const filteredSystemFields = useMemo(() => {
+    let result = systemFields.filter(f => ALLOWED_SYSTEM_FIELD_TYPES.includes(f.fieldType));
+    
+    if (systemCategoryFilter !== "all") {
+      result = result.filter(f => f.category === systemCategoryFilter);
+    }
+    
+    if (systemSearchQuery.trim()) {
+      const query = systemSearchQuery.toLowerCase();
+      result = result.filter(f => 
+        f.fieldName.toLowerCase().includes(query) ||
+        (f.description && f.description.toLowerCase().includes(query))
+      );
+    }
+    
+    return result;
+  }, [systemFields, systemCategoryFilter, systemSearchQuery, ALLOWED_SYSTEM_FIELD_TYPES]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -372,29 +406,6 @@ export function ApprovalWizard({
     setIsOverDropZone(false);
 
     if (!over) return;
-
-    if (active.id.toString().startsWith('library-')) {
-      if (over.id !== 'fields-drop-zone' && !over.data?.current?.type) return;
-      const libraryFieldId = active.id.toString().replace('library-', '');
-      const libraryField = libraryFields.find(lf => lf.id === libraryFieldId);
-      if (libraryField) {
-        const newField: EditingApprovalField = {
-          ...DEFAULT_FIELD,
-          fieldName: libraryField.fieldName,
-          fieldType: libraryField.fieldType as FieldType,
-          description: libraryField.description || "",
-          libraryFieldId: libraryField.id,
-          options: libraryField.options || [],
-          order: editingFormData.fields.length,
-        };
-        setEditingFormData(prev => ({
-          ...prev,
-          fields: [...prev.fields, newField]
-        }));
-        setEditingFieldIndex(editingFormData.fields.length);
-      }
-      return;
-    }
 
     if (active.id.toString().startsWith('palette-')) {
       if (over.id !== 'fields-drop-zone' && !over.data?.current?.type) return;
@@ -434,24 +445,6 @@ export function ApprovalWizard({
       ...DEFAULT_FIELD,
       fieldType,
       fieldName: "",
-      order: editingFormData.fields.length,
-    };
-    setEditingFormData(prev => ({
-      ...prev,
-      fields: [...prev.fields, newField]
-    }));
-    setEditingFieldIndex(editingFormData.fields.length);
-  };
-
-  const handleAddFieldFromLibrary = (libraryField: ApprovalFieldLibrary) => {
-    if (isViewOnly) return;
-    const newField: EditingApprovalField = {
-      ...DEFAULT_FIELD,
-      fieldName: libraryField.fieldName,
-      fieldType: libraryField.fieldType as FieldType,
-      description: libraryField.description || "",
-      libraryFieldId: libraryField.id,
-      options: libraryField.options || [],
       order: editingFormData.fields.length,
     };
     setEditingFormData(prev => ({
@@ -734,8 +727,8 @@ export function ApprovalWizard({
           onDragEnd={handleDragEnd}
         >
           <div className="flex-1 flex overflow-hidden">
-            {/* Left Palette */}
-            <div className="w-72 border-r border-border bg-muted/30 flex flex-col overflow-hidden">
+            {/* Left Palette - Wider panel with 50/50 split */}
+            <div className="w-[400px] border-r border-border bg-muted/30 flex flex-col overflow-hidden">
               <div className="p-4 border-b border-border bg-card">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
@@ -750,70 +743,112 @@ export function ApprovalWizard({
                 </div>
               </div>
               
-              <div className="flex-1 overflow-y-auto p-4 space-y-6">
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {/* System Library Section - Top 50% */}
                 {!isViewOnly && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <BookOpen className="w-4 h-4 text-emerald-600" />
-                      <h4 className="text-sm font-semibold text-emerald-700">System Library</h4>
-                    </div>
-                    <Button
-                      variant="outline"
-                      className="w-full justify-start gap-2 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-300 text-emerald-700"
-                      onClick={() => setSystemLibraryPickerOpen(true)}
-                      data-testid="button-open-system-library"
-                    >
-                      <Library className="w-4 h-4" />
-                      Pick from System Library
-                    </Button>
-                  </div>
-                )}
-
-                {libraryFields.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <Library className="w-4 h-4 text-purple-500" />
-                      <h4 className="text-sm font-semibold text-purple-700">Project Type Library</h4>
-                    </div>
-                    <div className="space-y-2">
-                      {libraryFields.map(lf => {
-                        const normalizedType = normalizeFieldType(lf.fieldType);
-                        const fieldTypeInfo = getFieldTypeInfo(normalizedType);
-                        return (
-                          <PaletteItem
-                            key={lf.id}
-                            type={lf.id}
-                            label={lf.fieldName}
-                            icon={fieldTypeInfo?.icon || Type}
-                            color={fieldTypeInfo?.color || "#6b7280"}
-                            onClick={() => handleAddFieldFromLibrary(lf)}
-                            isLibrary
-                            disabled={isViewOnly}
+                  <div className="h-1/2 flex flex-col border-b border-border">
+                    <div className="p-3 border-b border-border/50 bg-emerald-50/50 dark:bg-emerald-950/20">
+                      <div className="flex items-center gap-2 mb-2">
+                        <BookOpen className="w-4 h-4 text-emerald-600" />
+                        <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">System Library</h4>
+                        <Badge variant="secondary" className="ml-auto text-xs">
+                          {filteredSystemFields.length}
+                        </Badge>
+                      </div>
+                      <div className="flex gap-2">
+                        <div className="relative flex-1">
+                          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                          <Input
+                            placeholder="Search..."
+                            value={systemSearchQuery}
+                            onChange={(e) => setSystemSearchQuery(e.target.value)}
+                            className="h-8 pl-7 text-sm"
+                            data-testid="input-search-system-fields"
                           />
-                        );
-                      })}
+                        </div>
+                        <Select value={systemCategoryFilter} onValueChange={setSystemCategoryFilter}>
+                          <SelectTrigger className="w-[120px] h-8 text-xs" data-testid="select-category-filter">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CATEGORY_OPTIONS.map(cat => (
+                              <SelectItem key={cat.value} value={cat.value} className="text-xs">
+                                {cat.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
+                    <ScrollArea className="flex-1">
+                      <div className="p-3 space-y-1.5">
+                        {systemFieldsLoading ? (
+                          <>
+                            <Skeleton className="h-10 w-full" />
+                            <Skeleton className="h-10 w-full" />
+                            <Skeleton className="h-10 w-full" />
+                          </>
+                        ) : filteredSystemFields.length === 0 ? (
+                          <div className="text-center py-4 text-sm text-muted-foreground">
+                            <Library className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                            <p>No matching fields</p>
+                          </div>
+                        ) : (
+                          filteredSystemFields.map(sf => {
+                            const normalizedType = normalizeFieldType(sf.fieldType);
+                            const fieldTypeInfo = getFieldTypeInfo(normalizedType);
+                            return (
+                              <button
+                                key={sf.id}
+                                className="w-full flex items-center gap-2 p-2 rounded-md hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors text-left group"
+                                onClick={() => handleAddFieldFromSystemLibrary(sf)}
+                                data-testid={`button-add-system-field-${sf.id}`}
+                              >
+                                <div 
+                                  className="w-7 h-7 rounded-md flex items-center justify-center text-white shrink-0"
+                                  style={{ backgroundColor: fieldTypeInfo?.color || "#6b7280" }}
+                                >
+                                  {fieldTypeInfo?.icon ? <fieldTypeInfo.icon className="w-3.5 h-3.5" /> : <Type className="w-3.5 h-3.5" />}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">{sf.fieldName}</p>
+                                  <p className="text-xs text-muted-foreground truncate">
+                                    {fieldTypeInfo?.label || sf.fieldType}
+                                  </p>
+                                </div>
+                                <Plus className="w-4 h-4 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    </ScrollArea>
                   </div>
                 )}
 
-                <div>
-                  <div className="flex items-center gap-2 mb-3">
-                    <Plus className="w-4 h-4 text-blue-500" />
-                    <h4 className="text-sm font-semibold text-blue-700">Custom Fields</h4>
+                {/* Custom Fields Section - Bottom 50% (or full height if view only) */}
+                <div className={cn("flex flex-col", !isViewOnly ? "h-1/2" : "h-full")}>
+                  <div className="p-3 border-b border-border/50 bg-blue-50/50 dark:bg-blue-950/20">
+                    <div className="flex items-center gap-2">
+                      <Plus className="w-4 h-4 text-blue-500" />
+                      <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-400">Custom Fields</h4>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    {APPROVAL_FIELD_TYPES.map(ft => (
-                      <PaletteItem
-                        key={ft.type}
-                        type={ft.type}
-                        label={ft.label}
-                        icon={ft.icon}
-                        color={ft.color}
-                        onClick={() => handleAddFieldFromPalette(ft.type)}
-                        disabled={isViewOnly}
-                      />
-                    ))}
-                  </div>
+                  <ScrollArea className="flex-1">
+                    <div className="p-3 space-y-1.5">
+                      {APPROVAL_FIELD_TYPES.map(ft => (
+                        <PaletteItem
+                          key={ft.type}
+                          type={ft.type}
+                          label={ft.label}
+                          icon={ft.icon}
+                          color={ft.color}
+                          onClick={() => handleAddFieldFromPalette(ft.type)}
+                          disabled={isViewOnly}
+                        />
+                      ))}
+                    </div>
+                  </ScrollArea>
                 </div>
               </div>
             </div>
@@ -901,21 +936,6 @@ export function ApprovalWizard({
                 </div>
               );
             })()}
-            {activeId && activeId.toString().startsWith('library-') && (() => {
-              const libraryFieldId = activeId.toString().replace('library-', '');
-              const libraryField = libraryFields.find(lf => lf.id === libraryFieldId);
-              if (!libraryField) return null;
-              const normalizedType = normalizeFieldType(libraryField.fieldType);
-              const fieldTypeInfo = getFieldTypeInfo(normalizedType);
-              const IconComponent = fieldTypeInfo?.icon || Type;
-              return (
-                <div className="flex items-center gap-3 px-4 py-3 bg-card border-2 border-purple-500 rounded-lg shadow-lg opacity-90">
-                  <IconComponent className="w-5 h-5 text-purple-500" />
-                  <span className="font-medium">{libraryField.fieldName}</span>
-                  <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">Library</Badge>
-                </div>
-              );
-            })()}
           </DragOverlay>
         </DndContext>
       )}
@@ -943,15 +963,6 @@ export function ApprovalWizard({
         />
       )}
 
-      {/* System Field Library Picker */}
-      <SystemFieldLibraryPicker
-        open={systemLibraryPickerOpen}
-        onOpenChange={setSystemLibraryPickerOpen}
-        onSelectField={handleAddFieldFromSystemLibrary}
-        allowedFieldTypes={ALLOWED_SYSTEM_FIELD_TYPES}
-        title="Pick from System Field Library"
-        description="Select a pre-defined field from your company's reusable field library"
-      />
     </div>
   );
 }

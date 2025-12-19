@@ -45,7 +45,6 @@ import type {
   KanbanStage,
   StageApproval,
   ClientStageApprovalOverride,
-  ApprovalFieldLibrary,
 } from "@shared/schema";
 import { ClientTaskOverridesSection } from "./ClientTaskOverridesSection";
 import type { EnhancedClientService } from "../../utils/types";
@@ -172,11 +171,6 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
     : builderState?.mode === "create" 
       ? createModeProjectTypeId
       : null;
-
-  const { data: libraryFields } = useQuery<ApprovalFieldLibrary[]>({
-    queryKey: ["/api/project-types", activeProjectTypeId, "approval-field-library"],
-    enabled: !!activeProjectTypeId,
-  });
 
   const handleProjectTypeChangeInBuilder = (projectTypeId: string) => {
     setCreateModeProjectTypeId(projectTypeId);
@@ -405,7 +399,6 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
         formData={getBuilderFormData()}
         projectTypes={filteredProjectTypes}
         stages={allStages || []}
-        libraryFields={libraryFields || []}
         onSave={handleSaveApproval}
         onCancel={() => setBuilderState(null)}
         isSaving={createOverrideMutation.isPending || updateOverrideMutation.isPending}

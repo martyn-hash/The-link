@@ -33,7 +33,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Plus, Edit2, Trash2, ShieldCheck, Eye, ClipboardCheck, MoreVertical } from "lucide-react";
-import type { StageApproval, StageApprovalField, ApprovalFieldLibrary, KanbanStage, ProjectType } from "@shared/schema";
+import type { StageApproval, StageApprovalField, KanbanStage, ProjectType } from "@shared/schema";
 import { ApprovalWizard, type ApprovalFormData, type EditingApprovalField } from "@/components/approval-builder/ApprovalWizard";
 
 interface StageApprovalsTabProps {
@@ -123,11 +123,6 @@ export function StageApprovalsTab({ projectTypeId, projectType, stages = [] }: S
 
   const { data: allStageApprovalFields } = useQuery<StageApprovalField[]>({
     queryKey: ["/api/config/stage-approval-fields"],
-  });
-
-  const { data: libraryFields } = useQuery<ApprovalFieldLibrary[]>({
-    queryKey: ["/api/project-types", projectTypeId, "approval-field-library"],
-    enabled: !!projectTypeId,
   });
 
   const filteredApprovals = useMemo(() => {
@@ -358,7 +353,6 @@ export function StageApprovalsTab({ projectTypeId, projectType, stages = [] }: S
         formData={getBuilderFormData()}
         projectTypes={projectType ? [projectType] : []}
         stages={projectTypeStages}
-        libraryFields={libraryFields || []}
         onSave={handleSaveApproval}
         onCancel={() => setBuilderState(null)}
         isSaving={createApprovalMutation.isPending || updateApprovalMutation.isPending}
