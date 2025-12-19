@@ -128,6 +128,7 @@ export const stageApprovalResponses = pgTable("stage_approval_responses", {
   valueSingleSelect: varchar("value_single_select"),
   valueMultiSelect: text("value_multi_select").array(),
   valueDate: timestamp("value_date"),
+  valueImageUrl: text("value_image_url"),
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => [
   index("idx_stage_approval_responses_project_id").on(table.projectId),

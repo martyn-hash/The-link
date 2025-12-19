@@ -12,7 +12,8 @@ import { cn } from "@/lib/utils";
 import { 
   X, Save, GripVertical, Plus, Trash2, Edit2, Eye,
   ToggleLeft, Hash, Type, FileText, Calendar, CircleDot, CheckSquare,
-  ChevronRight, ChevronLeft, Library, Sparkles, ClipboardCheck, Check, Settings
+  ChevronRight, ChevronLeft, Library, Sparkles, ClipboardCheck, Check, Settings,
+  ImageIcon
 } from "lucide-react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
@@ -27,6 +28,7 @@ const FIELD_TYPES = [
   { type: "date", label: "Date", icon: Calendar, color: "#f59e0b" },
   { type: "single_select", label: "Single Select", icon: CircleDot, color: "#ec4899" },
   { type: "multi_select", label: "Multi Select", icon: CheckSquare, color: "#14b8a6" },
+  { type: "image_upload", label: "Image Upload", icon: ImageIcon, color: "#0ea5e9" },
 ] as const;
 
 type FieldType = typeof FIELD_TYPES[number]["type"];
@@ -549,6 +551,7 @@ export function ApprovalWizard({
     if (!over) return;
 
     if (active.id.toString().startsWith('library-')) {
+      if (over.id !== 'fields-drop-zone' && !over.data?.current?.type) return;
       const libraryFieldId = active.id.toString().replace('library-', '');
       const libraryField = libraryFields.find(lf => lf.id === libraryFieldId);
       if (libraryField) {
@@ -573,11 +576,10 @@ export function ApprovalWizard({
     if (active.id.toString().startsWith('palette-')) {
       if (over.id !== 'fields-drop-zone' && !over.data?.current?.type) return;
       const fieldType = active.data.current?.type as FieldType;
-      const fieldTypeInfo = FIELD_TYPES.find(ft => ft.type === fieldType);
       const newField: EditingApprovalField = {
         ...DEFAULT_FIELD,
         fieldType,
-        fieldName: fieldTypeInfo?.label || "",
+        fieldName: "",
         order: editingFormData.fields.length,
       };
       setEditingFormData(prev => ({
@@ -605,11 +607,10 @@ export function ApprovalWizard({
 
   const handleAddFieldFromPalette = (fieldType: FieldType) => {
     if (isViewOnly) return;
-    const fieldTypeInfo = FIELD_TYPES.find(ft => ft.type === fieldType);
     const newField: EditingApprovalField = {
       ...DEFAULT_FIELD,
       fieldType,
-      fieldName: fieldTypeInfo?.label || "",
+      fieldName: "",
       order: editingFormData.fields.length,
     };
     setEditingFormData(prev => ({
@@ -1029,6 +1030,18 @@ export function ApprovalWizard({
                 <span className="font-medium">{FIELD_TYPES.find(ft => `palette-${ft.type}` === activeId)?.label}</span>
               </div>
             )}
+            {activeId && activeId.toString().startsWith('library-') && (() => {
+              const libraryFieldId = activeId.toString().replace('library-', '');
+              const libraryField = libraryFields.find(lf => lf.id === libraryFieldId);
+              const fieldTypeInfo = libraryField ? FIELD_TYPES.find(ft => ft.type === libraryField.fieldType) : null;
+              return libraryField ? (
+                <div className="flex items-center gap-3 px-4 py-3 bg-card border-2 border-purple-500 rounded-lg shadow-lg opacity-90">
+                  {fieldTypeInfo?.icon && <fieldTypeInfo.icon className="w-5 h-5 text-purple-500" />}
+                  <span className="font-medium">{libraryField.fieldName}</span>
+                  <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">Library</Badge>
+                </div>
+              ) : null;
+            })()}
           </DragOverlay>
         </DndContext>
       )}
