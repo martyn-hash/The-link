@@ -65,6 +65,7 @@ import type {
   ApprovalFieldLibrary,
 } from "@shared/schema";
 import { ClientTaskOverridesSection } from "./ClientTaskOverridesSection";
+import type { EnhancedClientService } from "../../utils/types";
 
 interface ApprovalOverridesTabProps {
   clientId: string;
@@ -142,6 +143,18 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
     queryKey: ["/api/config/stages"],
   });
 
+  const { data: clientServices } = useQuery<EnhancedClientService[]>({
+    queryKey: [`/api/client-services/client/${clientId}`],
+    enabled: !!clientId,
+  });
+
+  // Filter project types by client's active services
+  const filteredProjectTypes = useMemo(() => {
+    if (!projectTypes || !clientServices) return [];
+    const clientServiceIds = new Set(clientServices.map(cs => cs.serviceId));
+    return projectTypes.filter(pt => pt.serviceId && clientServiceIds.has(pt.serviceId));
+  }, [projectTypes, clientServices]);
+
   const stages = useMemo(() => {
     if (!allStages || !selectedProjectTypeId) return [];
     return allStages.filter(s => s.projectTypeId === selectedProjectTypeId);
@@ -191,8 +204,7 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
       approvalDescription?: string;
       copyFromStandard?: boolean;
     }) => {
-      const res = await apiRequest("POST", `/api/clients/${clientId}/approval-overrides`, data);
-      return res.json();
+      return await apiRequest("POST", `/api/clients/${clientId}/approval-overrides`, data);
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "approval-overrides"] });
@@ -591,9 +603,15 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
                   <SelectValue placeholder="Select project type" />
                 </SelectTrigger>
                 <SelectContent>
-                  {projectTypes?.map((pt) => (
-                    <SelectItem key={pt.id} value={pt.id}>{pt.name}</SelectItem>
-                  ))}
+                  {filteredProjectTypes.length === 0 ? (
+                    <div className="p-2 text-sm text-muted-foreground">
+                      No project types available for this client's services
+                    </div>
+                  ) : (
+                    filteredProjectTypes.map((pt) => (
+                      <SelectItem key={pt.id} value={pt.id}>{pt.name}</SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
