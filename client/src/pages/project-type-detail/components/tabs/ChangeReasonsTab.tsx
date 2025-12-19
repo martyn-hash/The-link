@@ -14,6 +14,7 @@ import type { EditingReason } from "../../utils/types";
 import { DEFAULT_REASON } from "../../utils/constants";
 import { CustomFieldForm } from "../fields";
 import type { useReasonMutations, useCustomFieldMutations } from "../../hooks";
+import { FieldCardList, changeReasonCustomFieldAdapter } from "@/components/field-builder";
 
 interface ChangeReasonsTabProps {
   reasons: ChangeReason[] | undefined;
@@ -270,38 +271,35 @@ export function ChangeReasonsTab({
                   </Button>
                 </div>
                 
-                <div className="border rounded-md p-3 max-h-48 overflow-y-auto">
+                <div className="border rounded-md p-3 max-h-64 overflow-y-auto">
                   {editingReason?.id && allCustomFields ? (
-                    allCustomFields.filter(field => field.reasonId === editingReason.id).length > 0 ? (
-                      <div className="space-y-2">
-                        {allCustomFields
-                          .filter(field => field.reasonId === editingReason.id)
-                          .sort((a, b) => a.order - b.order)
-                          .map((field) => (
-                            <div key={field.id} className="flex items-center justify-between p-2 border rounded">
-                              <div className="flex-1">
-                                <div className="text-sm font-medium">{field.fieldName}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  Type: {field.fieldType} {field.isRequired && "(Required)"}
-                                </div>
-                              </div>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => deleteCustomFieldMutation.mutate(field.id)}
-                                data-testid={`button-delete-custom-field-${field.id}`}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          ))}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground text-center py-4">
-                        No custom fields configured for this reason
-                      </p>
-                    )
+                    (() => {
+                      const domainFields = allCustomFields
+                        .filter(field => field.reasonId === editingReason.id)
+                        .sort((a, b) => a.order - b.order);
+                      
+                      const reasonFields = domainFields.map((field, index) => 
+                        changeReasonCustomFieldAdapter.mapToFieldDefinition(field, index)
+                      );
+                      
+                      return reasonFields.length > 0 ? (
+                        <FieldCardList
+                          fields={reasonFields}
+                          onEditField={() => {}}
+                          onDeleteField={(index) => {
+                            const field = domainFields[index];
+                            if (field.id) {
+                              deleteCustomFieldMutation.mutate(field.id);
+                            }
+                          }}
+                          emptyMessage="No custom fields configured"
+                        />
+                      ) : (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          No custom fields configured for this reason
+                        </p>
+                      );
+                    })()
                   ) : (
                     <p className="text-sm text-muted-foreground text-center py-4">
                       Save the reason first to add custom fields
