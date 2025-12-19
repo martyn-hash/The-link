@@ -234,7 +234,7 @@ export function ApprovalOverridesTab({ clientId }: ApprovalOverridesTabProps) {
 
   const updateOverrideMutation = useMutation({
     mutationFn: async (data: { overrideId: string; approvalId: string; formData: ApprovalFormData; existingFieldIds: string[] }) => {
-      await apiRequest("PATCH", `/api/stage-approvals/${data.approvalId}`, {
+      await apiRequest("PATCH", `/api/config/stage-approvals/${data.approvalId}`, {
         name: data.formData.name,
         description: data.formData.description || null,
       });
