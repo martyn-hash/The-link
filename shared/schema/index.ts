@@ -46,6 +46,7 @@ export * from './ai-interactions';
 export * from './audit';
 export * from './view-cache';
 export * from './task-counts-cache';
+export * from './internal-tasks-cache';
 export * from './campaigns';
 export * from './pages';
 export * from './client-project-tasks';

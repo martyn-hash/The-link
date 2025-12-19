@@ -188,6 +188,11 @@ export {
   projectViewCache,
 } from './view-cache/tables';
 
+// Internal Tasks Cache domain tables
+export {
+  internalTasksCache,
+} from './internal-tasks-cache/tables';
+
 // Campaigns domain tables
 export {
   campaignCategoryEnum,
