@@ -6,22 +6,21 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { 
   X, Save, GripVertical, Plus, Trash2, Edit2, Eye,
   ChevronRight, ChevronLeft, Library, Sparkles, ClipboardCheck, Check, Settings,
-  BookOpen
+  BookOpen, Type
 } from "lucide-react";
-import { Type } from "lucide-react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { ApprovalFieldLibrary, ProjectType, KanbanStage, SystemFieldLibrary } from "@shared/schema";
 import { SystemFieldLibraryPicker } from "@/components/system-field-library-picker";
-import { FIELD_TYPES, getFieldTypeInfo, type SystemFieldType } from "@/components/field-builder/types";
-import { stageApprovalFieldAdapter } from "@/components/field-builder/adapters";
+import { FIELD_TYPES, getFieldTypeInfo, type SystemFieldType, type FieldDefinition } from "@/components/field-builder/types";
+import { stageApprovalFieldAdapter, normalizeFieldType } from "@/components/field-builder/adapters";
+import { FieldConfigModal as SharedFieldConfigModal } from "@/components/field-builder/FieldConfigModal";
 
 const APPROVAL_FIELD_TYPES = FIELD_TYPES.filter(ft => 
   stageApprovalFieldAdapter.allowedFieldTypes.includes(ft.type)
@@ -170,9 +169,10 @@ function SortableFieldItem({
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const fieldTypeInfo = getFieldTypeInfo(field.fieldType as SystemFieldType);
-  const Icon = fieldTypeInfo.icon;
-  const color = fieldTypeInfo.color;
+  const normalizedType = normalizeFieldType(field.fieldType);
+  const fieldTypeInfo = getFieldTypeInfo(normalizedType);
+  const Icon = fieldTypeInfo?.icon || Type;
+  const color = fieldTypeInfo?.color || "#6b7280";
 
   return (
     <div
@@ -247,229 +247,53 @@ function SortableFieldItem({
   );
 }
 
-function FieldConfigModal({
+function ApprovalFieldConfigModal({
   field,
+  index,
   isOpen,
   onClose,
   onSave,
   isViewOnly = false,
 }: {
   field: EditingApprovalField;
+  index: number;
   isOpen: boolean;
   onClose: () => void;
   onSave: (field: EditingApprovalField) => void;
   isViewOnly?: boolean;
 }) {
-  const [editedField, setEditedField] = useState<EditingApprovalField>(field);
-  const [newOption, setNewOption] = useState("");
+  const fieldDefinition = useMemo(() => 
+    stageApprovalFieldAdapter.mapToFieldDefinition(field, index),
+    [field, index]
+  );
 
-  const fieldTypeInfo = getFieldTypeInfo(editedField.fieldType as SystemFieldType);
-  const Icon = fieldTypeInfo.icon;
-  const color = fieldTypeInfo.color;
-
-  const handleAddOption = () => {
-    if (newOption.trim()) {
-      setEditedField(prev => ({
-        ...prev,
-        options: [...prev.options, newOption.trim()]
-      }));
-      setNewOption("");
-    }
-  };
-
-  const handleRemoveOption = (index: number) => {
-    setEditedField(prev => ({
-      ...prev,
-      options: prev.options.filter((_, i) => i !== index)
-    }));
-  };
+  const handleSave = useCallback((savedField: FieldDefinition) => {
+    const mappedBack = stageApprovalFieldAdapter.mapFromFieldDefinition(savedField);
+    onSave({
+      id: field.id,
+      order: field.order,
+      fieldName: mappedBack.fieldName!,
+      fieldType: mappedBack.fieldType as FieldType,
+      description: mappedBack.description || "",
+      isRequired: mappedBack.isRequired!,
+      options: mappedBack.options || [],
+      libraryFieldId: mappedBack.libraryFieldId,
+      expectedValueBoolean: mappedBack.expectedValueBoolean,
+      expectedValueNumber: mappedBack.expectedValueNumber,
+      comparisonType: mappedBack.comparisonType,
+    });
+  }, [field, onSave]);
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <div className="flex items-center gap-3">
-            <div 
-              className="w-10 h-10 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: `${color}15` }}
-            >
-              <Icon className="w-5 h-5" style={{ color }} />
-            </div>
-            <div>
-              <DialogTitle>
-                {isViewOnly ? "View Field" : field.fieldName ? "Edit Field" : "Configure Field"}
-              </DialogTitle>
-              <p className="text-sm text-muted-foreground">{fieldTypeInfo?.label} field</p>
-            </div>
-          </div>
-        </DialogHeader>
-
-        <div className="space-y-4 py-4">
-          <div className="space-y-2">
-            <Label htmlFor="field-name">Field Name *</Label>
-            <Input
-              id="field-name"
-              value={editedField.fieldName}
-              onChange={(e) => setEditedField(prev => ({ ...prev, fieldName: e.target.value }))}
-              placeholder="e.g., Has client signed off?"
-              disabled={isViewOnly}
-              data-testid="input-field-name"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="field-description">Description (optional)</Label>
-            <Textarea
-              id="field-description"
-              value={editedField.description}
-              onChange={(e) => setEditedField(prev => ({ ...prev, description: e.target.value }))}
-              placeholder="Additional context for this field..."
-              disabled={isViewOnly}
-              rows={2}
-              data-testid="input-field-description"
-            />
-          </div>
-
-          <div className="flex items-center justify-between py-2 px-3 bg-muted/50 rounded-lg">
-            <div>
-              <Label htmlFor="field-required" className="font-medium">Required field</Label>
-              <p className="text-xs text-muted-foreground">Must be completed before approval</p>
-            </div>
-            <Switch
-              id="field-required"
-              checked={editedField.isRequired}
-              onCheckedChange={(checked) => setEditedField(prev => ({ ...prev, isRequired: checked }))}
-              disabled={isViewOnly}
-              data-testid="switch-field-required"
-            />
-          </div>
-
-          {editedField.fieldType === "boolean" && (
-            <div className="space-y-2">
-              <Label>Expected Value</Label>
-              <Select
-                value={editedField.expectedValueBoolean === null ? "any" : editedField.expectedValueBoolean ? "yes" : "no"}
-                onValueChange={(value) => setEditedField(prev => ({
-                  ...prev,
-                  expectedValueBoolean: value === "any" ? null : value === "yes"
-                }))}
-                disabled={isViewOnly}
-              >
-                <SelectTrigger data-testid="select-expected-boolean">
-                  <SelectValue placeholder="Select expected value" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="any">Any value (no validation)</SelectItem>
-                  <SelectItem value="yes">Must be Yes</SelectItem>
-                  <SelectItem value="no">Must be No</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {editedField.fieldType === "number" && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Comparison</Label>
-                <Select
-                  value={editedField.comparisonType || "none"}
-                  onValueChange={(value) => setEditedField(prev => ({
-                    ...prev,
-                    comparisonType: value === "none" ? null : value as any
-                  }))}
-                  disabled={isViewOnly}
-                >
-                  <SelectTrigger data-testid="select-comparison-type">
-                    <SelectValue placeholder="Comparison type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No validation</SelectItem>
-                    <SelectItem value="equal_to">Equal to</SelectItem>
-                    <SelectItem value="less_than">Less than</SelectItem>
-                    <SelectItem value="greater_than">Greater than</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {editedField.comparisonType && (
-                <div className="space-y-2">
-                  <Label>Expected Value</Label>
-                  <Input
-                    type="number"
-                    value={editedField.expectedValueNumber ?? ""}
-                    onChange={(e) => setEditedField(prev => ({
-                      ...prev,
-                      expectedValueNumber: e.target.value ? parseFloat(e.target.value) : null
-                    }))}
-                    placeholder="0"
-                    disabled={isViewOnly}
-                    data-testid="input-expected-number"
-                  />
-                </div>
-              )}
-            </div>
-          )}
-
-          {(editedField.fieldType === "single_select" || editedField.fieldType === "multi_select") && (
-            <div className="space-y-2">
-              <Label>Options</Label>
-              <div className="space-y-2">
-                {editedField.options.map((option, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <Input value={option} disabled className="flex-1" />
-                    {!isViewOnly && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive"
-                        onClick={() => handleRemoveOption(idx)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-                {!isViewOnly && (
-                  <div className="flex items-center gap-2">
-                    <Input
-                      value={newOption}
-                      onChange={(e) => setNewOption(e.target.value)}
-                      placeholder="Add option..."
-                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleAddOption())}
-                      data-testid="input-new-option"
-                    />
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-9 w-9"
-                      onClick={handleAddOption}
-                      disabled={!newOption.trim()}
-                    >
-                      <Plus className="w-4 h-4" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} data-testid="button-cancel-field">
-            {isViewOnly ? "Close" : "Cancel"}
-          </Button>
-          {!isViewOnly && (
-            <Button 
-              onClick={() => onSave(editedField)} 
-              disabled={!editedField.fieldName.trim()}
-              data-testid="button-save-field"
-            >
-              <Save className="w-4 h-4 mr-2" />
-              Save Field
-            </Button>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <SharedFieldConfigModal
+      field={fieldDefinition}
+      isOpen={isOpen}
+      onClose={onClose}
+      onSave={handleSave}
+      isViewOnly={isViewOnly}
+      allowedFieldTypes={stageApprovalFieldAdapter.allowedFieldTypes}
+      capabilities={stageApprovalFieldAdapter.capabilities}
+    />
   );
 }
 
@@ -953,14 +777,15 @@ export function ApprovalWizard({
                     </div>
                     <div className="space-y-2">
                       {libraryFields.map(lf => {
-                        const fieldTypeInfo = getFieldTypeInfo(lf.fieldType as SystemFieldType);
+                        const normalizedType = normalizeFieldType(lf.fieldType);
+                        const fieldTypeInfo = getFieldTypeInfo(normalizedType);
                         return (
                           <PaletteItem
                             key={lf.id}
                             type={lf.id}
                             label={lf.fieldName}
-                            icon={fieldTypeInfo.icon}
-                            color={fieldTypeInfo.color}
+                            icon={fieldTypeInfo?.icon || Type}
+                            color={fieldTypeInfo?.color || "#6b7280"}
                             onClick={() => handleAddFieldFromLibrary(lf)}
                             isLibrary
                             disabled={isViewOnly}
@@ -1065,26 +890,31 @@ export function ApprovalWizard({
           {/* Drag Overlay */}
           <DragOverlay>
             {activeId && activeId.toString().startsWith('palette-') && (() => {
-              const fieldType = activeId.toString().replace('palette-', '') as SystemFieldType;
-              const fieldTypeInfo = getFieldTypeInfo(fieldType);
+              const rawFieldType = activeId.toString().replace('palette-', '');
+              const normalizedType = normalizeFieldType(rawFieldType);
+              const fieldTypeInfo = getFieldTypeInfo(normalizedType);
+              const IconComponent = fieldTypeInfo?.icon || Type;
               return (
                 <div className="flex items-center gap-3 px-4 py-3 bg-card border-2 border-primary rounded-lg shadow-lg opacity-90">
-                  <fieldTypeInfo.icon className="w-5 h-5 text-primary" />
-                  <span className="font-medium">{fieldTypeInfo.label}</span>
+                  <IconComponent className="w-5 h-5 text-primary" />
+                  <span className="font-medium">{fieldTypeInfo?.label || rawFieldType}</span>
                 </div>
               );
             })()}
             {activeId && activeId.toString().startsWith('library-') && (() => {
               const libraryFieldId = activeId.toString().replace('library-', '');
               const libraryField = libraryFields.find(lf => lf.id === libraryFieldId);
-              const fieldTypeInfo = libraryField ? getFieldTypeInfo(libraryField.fieldType as SystemFieldType) : null;
-              return libraryField && fieldTypeInfo ? (
+              if (!libraryField) return null;
+              const normalizedType = normalizeFieldType(libraryField.fieldType);
+              const fieldTypeInfo = getFieldTypeInfo(normalizedType);
+              const IconComponent = fieldTypeInfo?.icon || Type;
+              return (
                 <div className="flex items-center gap-3 px-4 py-3 bg-card border-2 border-purple-500 rounded-lg shadow-lg opacity-90">
-                  <fieldTypeInfo.icon className="w-5 h-5 text-purple-500" />
+                  <IconComponent className="w-5 h-5 text-purple-500" />
                   <span className="font-medium">{libraryField.fieldName}</span>
                   <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">Library</Badge>
                 </div>
-              ) : null;
+              );
             })()}
           </DragOverlay>
         </DndContext>
@@ -1092,16 +922,20 @@ export function ApprovalWizard({
 
       {/* Field Config Modal */}
       {editingFieldIndex !== null && (
-        <FieldConfigModal
+        <ApprovalFieldConfigModal
+          key={`edit-${editingFormData.fields[editingFieldIndex]?.id || editingFieldIndex}`}
           field={editingFormData.fields[editingFieldIndex]}
+          index={editingFieldIndex}
           isOpen={true}
           onClose={() => setEditingFieldIndex(null)}
           onSave={handleSaveField}
         />
       )}
       {viewingFieldIndex !== null && (
-        <FieldConfigModal
+        <ApprovalFieldConfigModal
+          key={`view-${editingFormData.fields[viewingFieldIndex]?.id || viewingFieldIndex}`}
           field={editingFormData.fields[viewingFieldIndex]}
+          index={viewingFieldIndex}
           isOpen={true}
           onClose={() => setViewingFieldIndex(null)}
           onSave={() => {}}

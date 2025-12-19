@@ -328,10 +328,10 @@ export const stageApprovalFieldAdapter: FieldAdapter<{
   mapFromFieldDefinition: (field) => ({
     fieldName: field.fieldName,
     fieldType: field.fieldType,
-    description: field.description || undefined,
+    description: field.description || "",
     isRequired: field.isRequired,
     order: field.order,
-    options: field.options?.length ? field.options : undefined,
+    options: field.options || [],
     libraryFieldId: field.libraryFieldId,
     expectedValueBoolean: field.expectedValueBoolean,
     expectedValueNumber: field.expectedValueNumber,
