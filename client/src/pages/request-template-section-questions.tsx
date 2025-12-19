@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Plus, Edit, Trash2, GripVertical, HelpCircle } from "lucide-react";
+import { ArrowLeft, Plus, Edit, Trash2, GripVertical, HelpCircle, Library } from "lucide-react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -18,7 +18,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { showFriendlyError } from "@/lib/friendlyErrors";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
-import type { ClientRequestTemplateQuestion, ClientRequestTemplateSection, ClientRequestTemplate } from "@shared/schema";
+import type { ClientRequestTemplateQuestion, ClientRequestTemplateSection, ClientRequestTemplate, SystemFieldLibrary } from "@shared/schema";
+import { SystemFieldLibraryPicker } from "@/components/system-field-library-picker";
 
 const QUESTION_TYPES = [
   { value: "short_text", label: "Short Text", description: "Single line text input" },
@@ -128,6 +129,44 @@ export default function TaskTemplateSectionQuestionsPage() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<ClientRequestTemplateQuestion | null>(null);
   const [deletingQuestion, setDeletingQuestion] = useState<ClientRequestTemplateQuestion | null>(null);
+  const [systemLibraryPickerOpen, setSystemLibraryPickerOpen] = useState(false);
+
+  const ALLOWED_SYSTEM_FIELD_TYPES = ["boolean", "number", "short_text", "long_text", "date", "single_select", "multi_select", "email", "file_upload"];
+
+  const mapSystemFieldTypeToQuestionType = (fieldType: string): ClientRequestTemplateQuestion["questionType"] => {
+    const typeMap: Record<string, ClientRequestTemplateQuestion["questionType"]> = {
+      boolean: "yes_no",
+      number: "number",
+      short_text: "short_text",
+      long_text: "long_text",
+      date: "date",
+      single_select: "single_choice",
+      multi_select: "multi_choice",
+      email: "email",
+      file_upload: "file_upload",
+      phone: "short_text",
+      url: "short_text",
+      currency: "number",
+      percentage: "number",
+      user_select: "dropdown",
+      image_upload: "file_upload",
+    };
+    return typeMap[fieldType] || "short_text";
+  };
+
+  const handleSelectFromLibrary = (systemField: SystemFieldLibrary) => {
+    const mappedType = mapSystemFieldTypeToQuestionType(systemField.fieldType);
+    setFormData({
+      label: systemField.fieldName,
+      helpText: systemField.description || "",
+      questionType: mappedType,
+      isRequired: systemField.isRequired || false,
+      options: systemField.options || [],
+      validationRules: {},
+    });
+    setShowAddDialog(true);
+    setSystemLibraryPickerOpen(false);
+  };
 
   // Form state for question builder
   const [formData, setFormData] = useState({
@@ -351,10 +390,21 @@ export default function TaskTemplateSectionQuestionsPage() {
           <CardHeader>
             <div className="flex justify-between items-center">
               <CardTitle>Questions ({questions.length})</CardTitle>
-              <Button onClick={openAddDialog} data-testid="button-add-question">
-                <Plus className="w-4 h-4 mr-2" />
-                Add Question
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setSystemLibraryPickerOpen(true)}
+                  className="bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100 hover:text-purple-800"
+                  data-testid="button-pick-from-library"
+                >
+                  <Library className="w-4 h-4 mr-2" />
+                  Pick from Library
+                </Button>
+                <Button onClick={openAddDialog} data-testid="button-add-question">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Question
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -656,6 +706,16 @@ export default function TaskTemplateSectionQuestionsPage() {
             </DialogContent>
           </Dialog>
         )}
+
+        {/* System Field Library Picker */}
+        <SystemFieldLibraryPicker
+          open={systemLibraryPickerOpen}
+          onOpenChange={setSystemLibraryPickerOpen}
+          onSelectField={handleSelectFromLibrary}
+          allowedFieldTypes={ALLOWED_SYSTEM_FIELD_TYPES}
+          title="Pick from System Field Library"
+          description="Select a pre-defined field from your company's reusable field library"
+        />
       </div>
     </div>
   );

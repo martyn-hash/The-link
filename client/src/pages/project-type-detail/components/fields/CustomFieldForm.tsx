@@ -5,7 +5,9 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Library } from "lucide-react";
+import { SystemFieldLibraryPicker } from "@/components/system-field-library-picker";
+import type { SystemFieldLibrary } from "@shared/schema";
 
 interface CustomFieldFormProps {
   reasonId: string;
@@ -15,6 +17,31 @@ interface CustomFieldFormProps {
   existingFields: any[];
 }
 
+const ALLOWED_SYSTEM_FIELD_TYPES = ["boolean", "number", "short_text", "long_text", "multi_select"];
+
+type CustomFieldType = "boolean" | "number" | "short_text" | "long_text" | "multi_select";
+
+const mapSystemFieldTypeToCustomFieldType = (fieldType: string): CustomFieldType => {
+  const typeMap: Record<string, CustomFieldType> = {
+    boolean: "boolean",
+    number: "number",
+    short_text: "short_text",
+    long_text: "long_text",
+    multi_select: "multi_select",
+    single_select: "multi_select",
+    email: "short_text",
+    phone: "short_text",
+    url: "short_text",
+    currency: "number",
+    percentage: "number",
+    date: "short_text",
+    file_upload: "short_text",
+    image_upload: "short_text",
+    user_select: "multi_select",
+  };
+  return typeMap[fieldType] || "short_text";
+};
+
 export function CustomFieldForm({ 
   reasonId, 
   onSuccess, 
@@ -23,11 +50,24 @@ export function CustomFieldForm({
   existingFields 
 }: CustomFieldFormProps) {
   const [fieldName, setFieldName] = useState("");
-  const [fieldType, setFieldType] = useState<"boolean" | "number" | "short_text" | "long_text" | "multi_select">("short_text");
+  const [fieldType, setFieldType] = useState<CustomFieldType>("short_text");
   const [isRequired, setIsRequired] = useState(false);
   const [placeholder, setPlaceholder] = useState("");
   const [description, setDescription] = useState("");
   const [options, setOptions] = useState<string[]>([""]);
+  const [systemLibraryPickerOpen, setSystemLibraryPickerOpen] = useState(false);
+
+  const handleSelectFromLibrary = (systemField: SystemFieldLibrary) => {
+    const mappedType = mapSystemFieldTypeToCustomFieldType(systemField.fieldType);
+    setFieldName(systemField.fieldName);
+    setFieldType(mappedType);
+    setIsRequired(systemField.isRequired || false);
+    setDescription(systemField.description || "");
+    if (systemField.options && systemField.options.length > 0) {
+      setOptions(systemField.options);
+    }
+    setSystemLibraryPickerOpen(false);
+  };
 
   const handleSubmit = () => {
     if (!fieldName.trim()) {
@@ -68,6 +108,18 @@ export function CustomFieldForm({
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-end mb-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setSystemLibraryPickerOpen(true)}
+          className="bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100 hover:text-purple-800"
+          data-testid="button-pick-from-library"
+        >
+          <Library className="w-4 h-4 mr-2" />
+          Pick from Library
+        </Button>
+      </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="field-name">Field Name</Label>
@@ -189,6 +241,15 @@ export function CustomFieldForm({
           Add Field
         </Button>
       </div>
+
+      <SystemFieldLibraryPicker
+        open={systemLibraryPickerOpen}
+        onOpenChange={setSystemLibraryPickerOpen}
+        onSelectField={handleSelectFromLibrary}
+        allowedFieldTypes={ALLOWED_SYSTEM_FIELD_TYPES}
+        title="Pick from System Field Library"
+        description="Select a pre-defined field from your company's reusable field library"
+      />
     </div>
   );
 }

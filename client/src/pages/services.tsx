@@ -56,10 +56,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Settings, Edit, Trash2, Users, Briefcase, ArrowLeft, X, Copy, Check } from "lucide-react";
+import { Plus, Settings, Edit, Trash2, Users, Briefcase, ArrowLeft, X, Copy, Check, Library } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { nanoid } from "nanoid";
+import { SystemFieldLibraryPicker } from "@/components/system-field-library-picker";
+import type { SystemFieldLibrary } from "@shared/schema";
 
 // Form schemas
 const createServiceFormSchema = baseInsertServiceSchema.extend({
@@ -108,12 +110,38 @@ interface UDFEditorProps {
   name: string;
 }
 
+const ALLOWED_UDF_SYSTEM_FIELD_TYPES = ["boolean", "number", "short_text", "date", "single_select"];
+
+type UDFType = "short_text" | "number" | "date" | "boolean" | "dropdown";
+
+const mapSystemFieldTypeToUDFType = (fieldType: string): UDFType => {
+  const typeMap: Record<string, UDFType> = {
+    boolean: "boolean",
+    number: "number",
+    short_text: "short_text",
+    long_text: "short_text",
+    date: "date",
+    single_select: "dropdown",
+    multi_select: "dropdown",
+    email: "short_text",
+    phone: "short_text",
+    url: "short_text",
+    currency: "number",
+    percentage: "number",
+    file_upload: "short_text",
+    image_upload: "short_text",
+    user_select: "dropdown",
+  };
+  return typeMap[fieldType] || "short_text";
+};
+
 function UDFEditor({ control, name }: UDFEditorProps) {
   const { fields, append, remove } = useFieldArray({
     control,
     name,
   });
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [systemLibraryPickerOpen, setSystemLibraryPickerOpen] = useState(false);
   const { toast } = useToast();
 
   const addUDF = () => {
@@ -127,6 +155,21 @@ function UDFEditor({ control, name }: UDFEditorProps) {
       regex: "",
       regexError: "",
     });
+  };
+
+  const handleAddFromLibrary = (systemField: SystemFieldLibrary) => {
+    const mappedType = mapSystemFieldTypeToUDFType(systemField.fieldType);
+    append({
+      id: nanoid(),
+      name: systemField.fieldName,
+      type: mappedType,
+      required: systemField.isRequired || false,
+      placeholder: "",
+      options: systemField.options || [],
+      regex: "",
+      regexError: "",
+    });
+    setSystemLibraryPickerOpen(false);
   };
 
   const copyFieldId = async (fieldId: string) => {
@@ -162,16 +205,29 @@ function UDFEditor({ control, name }: UDFEditorProps) {
             Define custom fields that will be available when creating clients for this service
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={addUDF}
-          data-testid="button-add-udf"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Field
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setSystemLibraryPickerOpen(true)}
+            className="bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100 hover:text-purple-800"
+            data-testid="button-pick-udf-from-library"
+          >
+            <Library className="w-4 h-4 mr-2" />
+            Pick from Library
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addUDF}
+            data-testid="button-add-udf"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Field
+          </Button>
+        </div>
       </div>
 
       {fields.length > 0 && (
@@ -385,6 +441,15 @@ function UDFEditor({ control, name }: UDFEditorProps) {
           </div>
         </Card>
       )}
+
+      <SystemFieldLibraryPicker
+        open={systemLibraryPickerOpen}
+        onOpenChange={setSystemLibraryPickerOpen}
+        onSelectField={handleAddFromLibrary}
+        allowedFieldTypes={ALLOWED_UDF_SYSTEM_FIELD_TYPES}
+        title="Pick from System Field Library"
+        description="Select a pre-defined field from your company's reusable field library"
+      />
     </div>
   );
 }
