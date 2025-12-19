@@ -26,7 +26,7 @@ A centralized System Field Library where:
 
 ### Context Audit Summary
 
-The application has **8 distinct form-building contexts** (not 9 as originally estimated) with field definitions. Each uses different schemas, enums, and UI patterns.
+The application has **9 distinct form-building contexts** with field definitions. Each uses different schemas, enums, and UI patterns. One context (Signature Fields) is specialized for document signing and may not need System Field Library integration.
 
 ### 1. Stage Approvals (Staff-Facing)
 
@@ -196,6 +196,28 @@ The application has **8 distinct form-building contexts** (not 9 as originally e
 
 ---
 
+### 9. Signature Fields (Client-Facing, Specialized)
+
+**Location:** `shared/schema/documents/tables.ts`
+
+| Aspect | Details |
+|--------|---------|
+| **Enum** | `signatureFieldTypeEnum` |
+| **Types (2)** | `signature`, `typed_name` |
+| **Tables** | `signatureRequests`, `signatureFields`, `signatures`, `signatureRequestRecipients` |
+| **Context** | Electronic document signing with positioned fields on PDF pages |
+| **Sections** | ❌ Not applicable (fields positioned on document pages) |
+| **Positioning** | `pageNumber`, `xPosition`, `yPosition`, `width`, `height` |
+
+**Key Observations:**
+- **Specialized use case** - not a general form builder
+- Fields are positioned spatially on PDF pages, not in a form layout
+- Only 2 types: drawn signature and typed name
+- UK eIDAS-compliant electronic signatures
+- **May not need System Field Library integration** - too specialized
+
+---
+
 ### Field Type Consolidation Matrix
 
 | Unified Type | Stage Approvals | Task Questions | Custom Fields | Service UDFs | Campaign Pages |
@@ -341,8 +363,17 @@ Common accounting/bookkeeping fields that would benefit from library:
 | Reason Custom Fields | Low | 0.5 week | Simple structure |
 | Service UDFs | Medium | 1 week | JSONB → normalized or keep hybrid |
 | Risk Assessments | Skip | - | Hardcoded, not dynamic forms |
+| Signature Fields | Skip | - | Specialized document signing, not general forms |
 
 **Total estimated migration effort:** 7.5 weeks (can be parallelized)
+
+---
+
+### Validated Assumptions
+
+✅ **Confirmed:** `stageApprovalFields.libraryFieldId` column exists (line 85 in `shared/schema/projects/tables.ts`)
+
+✅ **Confirmed:** No hidden form builders missed - signature fields identified as 9th context (specialized, skip integration)
 
 ---
 
