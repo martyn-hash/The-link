@@ -24,6 +24,18 @@ export const FIELD_TYPES = [
 
 export type SystemFieldType = typeof FIELD_TYPES[number]["type"];
 
+export interface ConditionalLogicCondition {
+  questionId: string;
+  operator: 'equals' | 'not_equals' | 'contains' | 'is_empty' | 'is_not_empty';
+  value?: string | number | boolean | string[];
+}
+
+export interface ConditionalLogic {
+  showIf?: ConditionalLogicCondition;
+  logic?: 'and' | 'or';
+  conditions?: ConditionalLogicCondition[];
+}
+
 export interface FieldDefinition {
   id?: string;
   tempId?: string;
@@ -41,6 +53,8 @@ export interface FieldDefinition {
   expectedValueBoolean?: boolean | null;
   expectedValueNumber?: number | null;
   comparisonType?: "equal_to" | "less_than" | "greater_than" | null;
+  conditionalLogic?: ConditionalLogic | null;
+  sectionId?: string | null;
 }
 
 export interface FormSection {

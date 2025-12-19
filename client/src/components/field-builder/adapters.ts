@@ -210,6 +210,7 @@ export const clientTaskQuestionAdapter: FieldAdapter<{
   placeholder?: string | null;
   conditionalLogic?: Record<string, any> | null;
   libraryFieldId?: string | null;
+  sectionId?: string | null;
 }> = {
   context: "client_task_question",
   
@@ -238,6 +239,8 @@ export const clientTaskQuestionAdapter: FieldAdapter<{
     options: domainField.options || [],
     placeholder: domainField.placeholder || "",
     libraryFieldId: domainField.libraryFieldId,
+    conditionalLogic: domainField.conditionalLogic as any || null,
+    sectionId: domainField.sectionId || null,
   }),
   
   mapFromFieldDefinition: (field) => ({
@@ -254,6 +257,8 @@ export const clientTaskQuestionAdapter: FieldAdapter<{
     options: field.options?.length ? field.options : undefined,
     placeholder: field.placeholder || undefined,
     libraryFieldId: field.libraryFieldId,
+    conditionalLogic: field.conditionalLogic || null,
+    sectionId: field.sectionId || null,
   }),
   
   mapSystemFieldType: (systemType) => {
