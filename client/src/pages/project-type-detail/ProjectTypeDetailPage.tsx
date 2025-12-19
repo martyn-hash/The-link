@@ -704,20 +704,8 @@ export default function ProjectTypeDetail() {
 
             <StageApprovalsTab
               projectTypeId={projectTypeId!}
-              stageApprovals={stageApprovals}
-              stageApprovalsLoading={stageApprovalsLoading}
-              allStageApprovalFields={allStageApprovalFields}
-              editingStageApproval={editingStageApproval}
-              setEditingStageApproval={setEditingStageApproval}
-              isAddingStageApproval={isAddingStageApproval}
-              setIsAddingStageApproval={setIsAddingStageApproval}
-              editingStageApprovalField={editingStageApprovalField}
-              setEditingStageApprovalField={setEditingStageApprovalField}
-              isAddingApprovalField={isAddingApprovalField}
-              setIsAddingApprovalField={setIsAddingApprovalField}
-              stageApprovalMutations={{ createStageApprovalMutation, updateStageApprovalMutation, deleteStageApprovalMutation }}
-              approvalFieldMutations={{ createApprovalFieldMutation, updateApprovalFieldMutation, deleteApprovalFieldMutation }}
-              onStageApprovalSubmit={handleStageApprovalSubmit}
+              projectType={projectType}
+              stages={stages}
             />
 
             <FieldLibraryTab projectTypeId={projectTypeId!} />
