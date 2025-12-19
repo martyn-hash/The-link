@@ -188,9 +188,12 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
   });
 
   const filteredProjectTypes = useMemo(() => {
-    if (!projectTypes || !clientServices) return [];
+    if (!projectTypes) return [];
+    if (!clientServices || clientServices.length === 0) {
+      return projectTypes;
+    }
     const clientServiceIds = new Set(clientServices.map(cs => cs.serviceId));
-    return projectTypes.filter(pt => pt.serviceId && clientServiceIds.has(pt.serviceId));
+    return projectTypes.filter(pt => !pt.serviceId || clientServiceIds.has(pt.serviceId));
   }, [projectTypes, clientServices]);
 
   const { data: overrides, isLoading: overridesLoading } = useQuery<ClientProjectTaskOverrideWithRelations[]>({
