@@ -59,3 +59,4 @@ Adapter Architecture:
 
 Migrated Contexts:
 -   Stage Approvals: Uses ApprovalFieldConfigModal wrapper with stageApprovalFieldAdapter
+-   Client Tasks: Uses ClientTaskQuestionConfigModal wrapper with clientTaskQuestionAdapter, preserving conditionalLogic and sectionId
