@@ -37,6 +37,14 @@ interface TaskConnection {
   person?: Person | null;
 }
 
+interface CachedTasksResponse {
+  data: InternalTaskWithRelations[];
+  fromCache: boolean;
+  cachedAt: string | null;
+  isStale: boolean;
+  staleAt: string | null;
+}
+
 interface InternalTaskWithRelations extends InternalTask {
   taskType?: TaskType | null;
   assignee?: User | null;
@@ -222,7 +230,7 @@ export function OverdueWorkModal({
 
   const effectiveUserId = filterUserId || user?.id;
 
-  const { data: tasks = [], isLoading: isLoadingTasks } = useQuery<InternalTaskWithRelations[]>({
+  const { data: tasksResponse, isLoading: isLoadingTasks } = useQuery<CachedTasksResponse>({
     queryKey: ['/api/internal-tasks/assigned', effectiveUserId],
     queryFn: async () => {
       const response = await fetch(`/api/internal-tasks/assigned/${effectiveUserId}`, { credentials: 'include' });
@@ -231,6 +239,9 @@ export function OverdueWorkModal({
     },
     enabled: isOpen && !!effectiveUserId,
   });
+
+  // Extract the data array from the wrapped response
+  const tasks = tasksResponse?.data ?? [];
 
   const overdueTasks = useMemo(() => 
     tasks.filter(t => 
@@ -390,7 +401,7 @@ export function TasksRemindersModal({
 
   const effectiveUserId = filterUserId || user?.id;
 
-  const { data: tasks = [], isLoading: isLoadingTasks } = useQuery<InternalTaskWithRelations[]>({
+  const { data: tasksResponse2, isLoading: isLoadingTasks } = useQuery<CachedTasksResponse>({
     queryKey: ['/api/internal-tasks/assigned', effectiveUserId],
     queryFn: async () => {
       const response = await fetch(`/api/internal-tasks/assigned/${effectiveUserId}`, { credentials: 'include' });
@@ -399,6 +410,9 @@ export function TasksRemindersModal({
     },
     enabled: isOpen && !!effectiveUserId,
   });
+
+  // Extract the data array from the wrapped response
+  const tasks = tasksResponse2?.data ?? [];
 
   const { data: projects = [], isLoading: isLoadingProjects } = useQuery<ProjectWithRelations[]>({
     queryKey: ['/api/projects', 'assigned', effectiveUserId],

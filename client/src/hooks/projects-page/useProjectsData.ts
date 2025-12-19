@@ -18,6 +18,14 @@ interface InternalTaskWithStatus {
   isQuickReminder?: boolean | null;
 }
 
+interface CachedTasksResponse {
+  data: InternalTaskWithStatus[];
+  fromCache: boolean;
+  cachedAt: string | null;
+  isStale: boolean;
+  staleAt: string | null;
+}
+
 interface CachedProjectsResponse {
   projects: ProjectWithRelations[] | null;
   stageStats: Record<string, number> | null;
@@ -157,7 +165,7 @@ export function useProjectsData({
     return map;
   }, [allStages]);
 
-  const { data: openTasksData = [] } = useQuery<InternalTaskWithStatus[]>({
+  const { data: openTasksResponse } = useQuery<CachedTasksResponse>({
     queryKey: ['/api/internal-tasks/assigned', userId, 'open'],
     queryFn: async () => {
       const url = `/api/internal-tasks/assigned/${userId}?status=open`;
@@ -169,6 +177,9 @@ export function useProjectsData({
     retry: false,
     staleTime: 30 * 1000,
   });
+
+  // Extract the data array from the wrapped response
+  const openTasksData = openTasksResponse?.data ?? [];
 
   const openTasksAndRemindersCount = useMemo(() => 
     openTasksData.filter(item => item.status === 'open' || item.status === 'in_progress').length,
