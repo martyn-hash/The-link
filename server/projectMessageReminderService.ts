@@ -2,7 +2,8 @@ import { storage } from './storage/index';
 import { sendProjectMessageReminderEmail } from './sendgridService';
 
 // Execution budget controls
-const MAX_RUNTIME_MS = 8000; // 8 second hard limit
+const MAX_RUNTIME_MS = 25000; // 25 second hard limit (relaxed now that queries are optimized)
+const PER_USER_TIMEOUT_MS = 8000; // 8 second timeout per user for email + DB updates
 const YIELD_EVERY = 5; // Yield event loop every N users to prevent blocking
 
 /**
@@ -10,6 +11,18 @@ const YIELD_EVERY = 5; // Yield event loop every N users to prevent blocking
  */
 function yieldEventLoop(): Promise<void> {
   return new Promise(resolve => setImmediate(resolve));
+}
+
+/**
+ * Helper to add timeout to a promise - prevents one slow user from blocking others
+ */
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms: ${label}`)), timeoutMs)
+    ),
+  ]);
 }
 
 export async function sendProjectMessageReminders(): Promise<{
@@ -27,7 +40,8 @@ export async function sendProjectMessageReminders(): Promise<{
     console.log('[Project Message Reminders] Starting reminder check...');
     
     // Get unread summaries for messages older than 10 minutes
-    // OPTIMIZED: Now uses bounded candidate selection (max 100) + batch hydration
+    // OPTIMIZED: Uses bounded candidate selection (max 25) + TRUE SQL batch hydration
+    // (2 indexed queries instead of N parallel connections)
     const summaries = await storage.getProjectMessageUnreadSummaries(10);
     
     console.log(`[Project Message Reminders] Found ${summaries.length} users with new unread messages older than 10 minutes`);
@@ -50,23 +64,31 @@ export async function sendProjectMessageReminders(): Promise<{
       const summary = summaries[i];
       
       try {
-        await sendProjectMessageReminderEmail(summary);
-        emailsSent++;
-        
-        // Mark that we've sent a reminder email for each thread
-        // This prevents re-sending reminders for the same unread messages
-        for (const thread of summary.threads) {
-          try {
-            await storage.updateParticipantReminderSent(thread.threadId, summary.userId);
-          } catch (updateError) {
-            console.error(`[Project Message Reminders] Failed to update reminder timestamp for thread ${thread.threadId}, user ${summary.userId}:`, updateError);
-            // Don't fail the whole process if we can't update the timestamp
-          }
-        }
+        // Wrap entire per-user processing in a timeout to prevent one slow user from blocking others
+        await withTimeout(
+          (async () => {
+            await sendProjectMessageReminderEmail(summary);
+            emailsSent++;
+            
+            // Mark that we've sent a reminder email for each thread
+            // This prevents re-sending reminders for the same unread messages
+            for (const thread of summary.threads) {
+              try {
+                await storage.updateParticipantReminderSent(thread.threadId, summary.userId);
+              } catch (updateError) {
+                console.error(`[Project Message Reminders] Failed to update reminder timestamp for thread ${thread.threadId}, user ${summary.userId}:`, updateError);
+                // Don't fail the whole process if we can't update the timestamp
+              }
+            }
+          })(),
+          PER_USER_TIMEOUT_MS,
+          `processing user ${summary.email}`
+        );
       } catch (error) {
         const errorMsg = `Failed to send reminder to ${summary.email}: ${error instanceof Error ? error.message : String(error)}`;
         console.error(`[Project Message Reminders] ${errorMsg}`);
         errors.push(errorMsg);
+        // Continue to next user - don't let one failure block others
       }
       
       usersActuallyProcessed++;

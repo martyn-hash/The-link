@@ -3,10 +3,12 @@ import {
   projectMessageParticipants,
   projectMessageThreads,
   projectMessages,
+  users,
+  projects,
   type ProjectMessageParticipant,
   type InsertProjectMessageParticipant
 } from "@shared/schema";
-import { eq, and, desc, sql, ne, or, isNull } from "drizzle-orm";
+import { eq, and, desc, sql, ne, or, isNull, inArray } from "drizzle-orm";
 
 export class ProjectMessageParticipantStorage {
   // Cross-domain helpers (injected by facade)
@@ -191,7 +193,7 @@ export class ProjectMessageParticipantStorage {
       GROUP BY pmp.user_id, pmp.thread_id, pmt.topic, pmt.project_id
       HAVING COUNT(pm.id) > 0
       ORDER BY MIN(pm.created_at) ASC
-      LIMIT 100
+      LIMIT 25
     `);
     
     if (!candidates.rows || candidates.rows.length === 0) {
@@ -229,11 +231,22 @@ export class ProjectMessageParticipantStorage {
       }>;
     }>();
     
+    let skippedDueToMissingData = 0;
     for (const row of candidates.rows as any[]) {
       const user = usersMap.get(row.user_id);
       const project = projectsMap.get(row.project_id);
       
-      if (!user || !user.email || !project) continue;
+      if (!user || !user.email || !project) {
+        skippedDueToMissingData++;
+        if (!user) {
+          console.warn(`[Project Message Reminders] Skipping candidate: user ${row.user_id} not found in batch hydration`);
+        } else if (!user.email) {
+          console.warn(`[Project Message Reminders] Skipping candidate: user ${row.user_id} has no email`);
+        } else if (!project) {
+          console.warn(`[Project Message Reminders] Skipping candidate: project ${row.project_id} not found in batch hydration`);
+        }
+        continue;
+      }
       
       if (!userMap.has(row.user_id)) {
         userMap.set(row.user_id, {
@@ -256,24 +269,34 @@ export class ProjectMessageParticipantStorage {
       });
     }
     
+    if (skippedDueToMissingData > 0) {
+      console.warn(`[Project Message Reminders] Skipped ${skippedDueToMissingData} candidates due to missing hydration data`);
+    }
+    
     return Array.from(userMap.values()).filter(u => u.threads.length > 0);
   }
 
   /**
-   * Batch fetch users by IDs - single query instead of N queries
+   * Batch fetch users by IDs - TRUE batch query using WHERE id IN (...)
+   * This is a single indexed query instead of N parallel connections
    */
   private async batchGetUsers(userIds: string[]): Promise<Map<string, { email: string; firstName: string | null; lastName: string | null }>> {
     const result = new Map<string, { email: string; firstName: string | null; lastName: string | null }>();
     if (userIds.length === 0) return result;
     
-    // Use injected helper but fetch all at once if possible, otherwise fall back to individual calls
-    // The getUser helper is injected, so we need to batch through it
-    const users = await Promise.all(userIds.map(id => this.getUser(id)));
+    const userRows = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+      })
+      .from(users)
+      .where(inArray(users.id, userIds));
     
-    for (let i = 0; i < userIds.length; i++) {
-      const user = users[i];
-      if (user && user.email) {
-        result.set(userIds[i], {
+    for (const user of userRows) {
+      if (user.email) {
+        result.set(user.id, {
           email: user.email,
           firstName: user.firstName,
           lastName: user.lastName,
@@ -285,22 +308,25 @@ export class ProjectMessageParticipantStorage {
   }
 
   /**
-   * Batch fetch projects by IDs - single query instead of N queries
+   * Batch fetch projects by IDs - TRUE batch query using WHERE id IN (...)
+   * This is a single indexed query instead of N parallel connections
    */
   private async batchGetProjects(projectIds: string[]): Promise<Map<string, { name: string }>> {
     const result = new Map<string, { name: string }>();
     if (projectIds.length === 0) return result;
     
-    // Use injected helper but fetch all at once if possible, otherwise fall back to individual calls
-    const projects = await Promise.all(projectIds.map(id => this.getProject(id)));
+    const projectRows = await db
+      .select({
+        id: projects.id,
+        description: projects.description,
+      })
+      .from(projects)
+      .where(inArray(projects.id, projectIds));
     
-    for (let i = 0; i < projectIds.length; i++) {
-      const project = projects[i];
-      if (project) {
-        result.set(projectIds[i], {
-          name: project.name || 'Unknown Project',
-        });
-      }
+    for (const project of projectRows) {
+      result.set(project.id, {
+        name: project.description || 'Unknown Project',
+      });
     }
     
     return result;
