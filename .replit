@@ -55,10 +55,6 @@ author = 37751969
 task = "shell.exec"
 args = "PROCESS_ROLE=web NODE_ENV=development tsx server/index.ts"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "PROCESS_ROLE=cron-worker NODE_ENV=development tsx server/cron-worker.ts"
-
 [objectStorage]
 defaultBucketID = "replit-objstore-fb4ebf31-d972-4a71-8d64-00fd32c62d4e"
 
@@ -68,6 +64,7 @@ defaultBucketID = "replit-objstore-fb4ebf31-d972-4a71-8d64-00fd32c62d4e"
 HMRC_VAT_VALIDATION_ENABLED = "true"
 QUICKBOOKS_REDIRECT_URI = "https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/api/oauth/callback"
 RINGCENTRAL_REDIRECT_URI = "https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/api/oauth/ringcentral/callback"
+DEV_LOGIN_TOKEN = "dev-test-token-2025"
 
 [userenv.shared]
 

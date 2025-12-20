@@ -122,9 +122,41 @@ If tests report "couldn't reach this app", follow the troubleshooting tree below
 - Clients list: `/clients`
 - Client detail: `/clients/:id`
 
-## Standard Browser Test Steps
+## Dev Login Endpoint (Fast Auth for Testing)
 
-For the testing agent, follow this sequence:
+In development mode, a special `/api/dev-login` endpoint is available that bypasses the login form.
+
+### Usage
+
+```bash
+# Login as default admin user
+curl -X POST http://127.0.0.1:$PORT/api/dev-login \
+  -H "Authorization: Bearer dev-test-token-2025" \
+  -H "Content-Type: application/json" \
+  -c cookies.txt
+
+# Login as specific user
+curl -X POST http://127.0.0.1:$PORT/api/dev-login \
+  -H "Authorization: Bearer dev-test-token-2025" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "admin@example.com"}' \
+  -c cookies.txt
+```
+
+### Security Notes
+
+- **Only available when NODE_ENV !== 'production'**
+- Requires `DEV_LOGIN_TOKEN` environment variable (or uses default)
+- All uses are logged with IP and user ID
+- The session cookies work exactly like regular login
+
+### For Browser Tests
+
+The testing agent can call this API endpoint before navigating to authenticated pages, eliminating the need to interact with the login form.
+
+## Standard Browser Test Steps (Manual Login)
+
+For situations where the dev-login endpoint cannot be used:
 
 1. **Wait for readiness**: Verify `/readyz` returns 200
 2. **Navigate to root**: Go to `/`

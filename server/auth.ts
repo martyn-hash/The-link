@@ -172,6 +172,57 @@ export async function setupAuth(app: Express) {
   app.post("/api/logout", logoutHandler);
   app.get("/api/auth/logout", logoutHandler);
 
+  // DEV-ONLY: Fast login for testing - NEVER available in production
+  // This endpoint bypasses password verification for automated testing
+  // Requires DEV_LOGIN_TOKEN in Authorization header for security
+  if (process.env.NODE_ENV !== 'production') {
+    app.post("/api/dev-login", async (req: any, res) => {
+      try {
+        // Generate a default token if not set (for convenience in dev)
+        const expectedToken = process.env.DEV_LOGIN_TOKEN || 'dev-test-token-change-me';
+        
+        // Get token from Authorization header or query param
+        const authHeader = req.headers.authorization;
+        const providedToken = authHeader?.replace('Bearer ', '') || req.query.token;
+        
+        if (!providedToken || providedToken !== expectedToken) {
+          console.warn(`[DEV-LOGIN] Unauthorized attempt from IP: ${req.ip}`);
+          return res.status(401).json({ message: "Invalid dev token" });
+        }
+        
+        // Get target email from request body, default to admin
+        const email = req.body.email || 'admin@example.com';
+        const user = await storage.getUserByEmail(email);
+        
+        if (!user) {
+          return res.status(404).json({ message: `User not found: ${email}` });
+        }
+        
+        // Log the dev login for traceability
+        console.log(`[DEV-LOGIN] Fast login for ${email} (user ID: ${user.id}) from IP: ${req.ip}`);
+        
+        // Set session (same as regular login)
+        req.session.userId = user.id;
+        req.session.userEmail = user.email;
+        req.session.isAdmin = user.isAdmin || false;
+        req.session.canSeeAdminMenu = user.canSeeAdminMenu || false;
+        
+        // Return user info (without password hash)
+        const { passwordHash, ...userResponse } = user;
+        res.json({ 
+          message: "Dev login successful", 
+          user: userResponse,
+          warning: "This endpoint is for development testing only"
+        });
+      } catch (error) {
+        console.error("[DEV-LOGIN] Error:", error);
+        res.status(500).json({ message: "Dev login failed" });
+      }
+    });
+    
+    console.log('[Auth] DEV-LOGIN endpoint registered (development mode only)');
+  }
+
   // Basic rate limiting for magic link requests (in-memory store)
   const requestCounts = new Map<string, { count: number; resetTime: number }>();
   const REQUEST_LIMIT = 5; // Max 5 requests per email per hour
