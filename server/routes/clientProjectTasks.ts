@@ -23,6 +23,7 @@ import {
   insertClientProjectTaskResponseSchema,
   insertClientProjectTaskTokenSchema,
 } from "@shared/schema";
+import type { KanbanStage } from "@shared/schema";
 import { nanoid } from "nanoid";
 
 async function trackSystemFieldLibraryUsage(
@@ -126,7 +127,7 @@ async function executeStageChangeOnTaskSubmission(instance: {
     const project = await storage.getProjectById(instance.projectId);
     if (project) {
       const stages = await storage.getKanbanStagesByProjectTypeId(project.projectTypeId);
-      const currentStage = stages.find(s => s.name === project.currentStatus);
+      const currentStage = stages.find((s: KanbanStage) => s.name === project.currentStatus);
       
       if (currentStage) {
         const matchingRule = (template.stageChangeRules as StageChangeRule[]).find(
@@ -155,7 +156,7 @@ async function executeStageChangeOnTaskSubmission(instance: {
 
     // Get all stages for this project type and find the target stage
     const stages = await storage.getKanbanStagesByProjectTypeId(project.projectTypeId);
-    const targetStage = stages.find(s => s.id === targetStageId);
+    const targetStage = stages.find((s: KanbanStage) => s.id === targetStageId);
     if (!targetStage) {
       console.log(`[ClientProjectTask] Target stage ${targetStageId} not found in project type ${project.projectTypeId}, skipping stage change`);
       return;

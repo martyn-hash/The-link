@@ -22,7 +22,8 @@ import type {
   ProjectType,
   InsertProject,
   Project,
-  InsertProjectSchedulingHistory
+  InsertProjectSchedulingHistory,
+  KanbanStage
 } from "@shared/schema";
 
 export interface DueService {
@@ -143,7 +144,7 @@ export async function resolveProjectAssignee(
       const roleAssignments = await storage.getClientServiceRoleAssignments(clientService.id);
       if (roleAssignments.length > 0) {
         // Get first active assignment
-        const activeAssignment = roleAssignments.find(a => a.isActive);
+        const activeAssignment = roleAssignments.find((a: { isActive: boolean; userId: string }) => a.isActive);
         if (activeAssignment) {
           return activeAssignment.userId;
         }
@@ -153,7 +154,7 @@ export async function resolveProjectAssignee(
 
   // 3. Try first kanban stage default assignee
   const stages = await storage.getKanbanStagesByProjectTypeId(projectType.id);
-  const firstStage = stages.sort((a, b) => a.order - b.order)[0];
+  const firstStage = stages.sort((a: KanbanStage, b: KanbanStage) => a.order - b.order)[0];
   if (firstStage?.assignedUserId) {
     return firstStage.assignedUserId;
   }
@@ -220,7 +221,7 @@ export async function buildProjectData(
   
   // Get kanban stages
   const stages = await storage.getKanbanStagesByProjectTypeId(projectType.id);
-  const sortedStages = stages.sort((a, b) => a.order - b.order);
+  const sortedStages = stages.sort((a: KanbanStage, b: KanbanStage) => a.order - b.order);
   const firstStage = sortedStages[0];
   
   // Check for pre-project tasks with a target stage
@@ -232,7 +233,7 @@ export async function buildProjectData(
     const preProjectCheck = await checkForPreProjectTasks(dueService.clientId, projectType.id);
     
     if (preProjectCheck.targetStageId) {
-      const targetStage = stages.find(s => s.id === preProjectCheck.targetStageId);
+      const targetStage = stages.find((s: KanbanStage) => s.id === preProjectCheck.targetStageId);
       if (targetStage) {
         initialStatus = targetStage.name;
         preProjectTaskInstanceId = preProjectCheck.taskInstanceId;
@@ -269,7 +270,7 @@ export async function buildProjectData(
           const bookKeeperRole = await storage.getWorkRoleByName('Bookkeeper');
           if (bookKeeperRole) {
             const bookKeeperAssignment = roleAssignments.find(
-              a => a.workRoleId === bookKeeperRole.id && a.isActive
+              (a: { workRoleId: string; isActive: boolean; userId: string }) => a.workRoleId === bookKeeperRole.id && a.isActive
             );
             if (bookKeeperAssignment) {
               bookkeeperId = bookKeeperAssignment.userId;
@@ -280,7 +281,7 @@ export async function buildProjectData(
           const clientManagerRole = await storage.getWorkRoleByName('Client Manager');
           if (clientManagerRole) {
             const clientManagerAssignment = roleAssignments.find(
-              a => a.workRoleId === clientManagerRole.id && a.isActive
+              (a: { workRoleId: string; isActive: boolean; userId: string }) => a.workRoleId === clientManagerRole.id && a.isActive
             );
             if (clientManagerAssignment) {
               clientManagerId = clientManagerAssignment.userId;
@@ -373,7 +374,7 @@ export async function createProjectFromDueService(
       
       // Create chronology entry for pre-project stage advancement
       const stages = await storage.getKanbanStagesByProjectTypeId(project.projectTypeId);
-      const firstStage = stages.sort((a, b) => a.order - b.order)[0];
+      const firstStage = stages.sort((a: KanbanStage, b: KanbanStage) => a.order - b.order)[0];
       if (firstStage && project.currentStatus !== firstStage.name) {
         await storage.createChronologyEntry({
           projectId: project.id,
@@ -397,7 +398,7 @@ export async function createProjectFromDueService(
   try {
     // Fetch all related people for the client
     const allRelatedPeople = await storage.getClientPeopleByClientId(project.clientId);
-    const peopleIds = allRelatedPeople.map(p => p.person.id);
+    const peopleIds = allRelatedPeople.map((p: { person: { id: string } }) => p.person.id);
     
     await scheduleProjectDueDateNotifications({
       projectId: project.id,

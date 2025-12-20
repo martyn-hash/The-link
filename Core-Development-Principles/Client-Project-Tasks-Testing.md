@@ -493,8 +493,10 @@ Execute these tests after any change to the Client Project Tasks feature:
 |----|------|----------|
 | R1 | Create template → Add question → Create instance → Send → Submit | Status = submitted, stage changed |
 | R2 | Create override with removed question | Merged questions excludes removed |
-| R3 | Pre-project task → Create project | Project starts at target stage |
-| R4 | Submit with invalid target stage | Task submits with warning |
+| R3 | Pre-project task → Create project | Project starts at target stage (requires scheduler or manual project creation) |
+| R4 | Template without stage config → Submit | Task submits successfully, no stage change |
+
+**Note on R4**: Invalid stage IDs are prevented at template creation time by FK constraints (correct behavior). The runtime scenario tests what happens when no stage is configured.
 
 ---
 
