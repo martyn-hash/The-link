@@ -1,0 +1,79 @@
+You are blocked from effective testing because **the external Replit testing browser cannot reach the running app**, even though the app responds with HTTP 200 **from inside the container** (`curl localhost`). This breaks your feedback loop and must be fixed as a **P1 infrastructure issue**, not worked around.
+
+### What is known (do NOT dispute these facts)
+- The app **does run internally** and returns HTTP 200 when curled inside the container.
+- The **external testing browser intermittently or consistently cannot reach the app** (“Hmm… We couldn’t reach this app”).
+- Restarting sometimes helps briefly, then fails again.
+- This is a **multi-process system** (web + cron).
+- App startup takes ~10–15 seconds.
+- The problem appears **before login**, so it is NOT auth-related.
+
+### Your task
+Diagnose and fix **why the external Replit test browser cannot reliably reach the app**, even when the app is running.
+
+### You MUST explicitly verify and report on ALL of the following (no assumptions):
+
+1. **Server binding**
+   - Confirm the web server listens on:
+     - `process.env.PORT`
+     - host `0.0.0.0`
+   - Identify the exact file where `app.listen()` (or equivalent) is defined.
+   - If it binds to `localhost` or a hard-coded port, FIX IT.
+
+2. **Port mismatch**
+   - Print and log:
+     - `process.env.PORT`
+     - the actual port the server binds to
+   - Confirm they match.
+   - Confirm Replit is exposing the same port.
+
+3. **Startup order**
+   - Confirm the web server starts accepting connections **before**:
+     - DB migrations
+     - cron workers
+     - background initialisation
+   - If not, restructure startup so `listen()` happens first.
+   - Add explicit logging timestamps.
+
+4. **Health endpoint**
+   - Add a `/healthz` endpoint that:
+     - returns 200 immediately
+     - does NOT touch the database
+   - Verify it works externally.
+
+5. **Multi-process interference**
+   - Confirm cron workers:
+     - do NOT block startup
+     - do NOT crash the node process
+     - do NOT starve the event loop or DB pool on boot
+   - If needed, defer cron startup until after web is live.
+
+6. **Crash / restart loop**
+   - Check for:
+     - silent crashes
+     - restarts
+     - port re-binding
+   - Add logging on:
+     - process start
+     - process exit
+     - unhandled rejections
+     - uncaught exceptions
+
+7. **External reachability**
+   - Confirm the **public Replit URL** is reachable once the app logs “listening”.
+   - Do NOT rely on internal curl as proof.
+
+### Deliverables (required)
+- A **clear root cause** (not “Replit flakiness” unless proven).
+- The **exact code changes** made.
+- A short explanation of **why this fixes external test reachability**.
+- Confirmation that:
+  - the app is reachable externally
+  - the testing agent can reliably load the login page.
+
+### Rules
+- Do not suggest “retry later” or “manual testing”.
+- Do not assume infra issues without evidence.
+- Treat this as a blocker to all further feature work.
+
+Fix the connectivity first. Only then resume feature testing.
