@@ -144,7 +144,7 @@ export function FieldBuilder({
             showLibraryTab={showLibraryTab}
             showSystemLibraryInline={showSystemLibraryInline}
             allowedFieldTypes={allowedFieldTypes}
-            className="w-72 shrink-0"
+            className="w-80 shrink-0"
           />
         )}
 
