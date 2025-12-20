@@ -169,11 +169,7 @@ For situations where the dev-login endpoint cannot be used:
    - Click "Passwords" tab
    - Enter: `admin@example.com` / `admin123`
    - Submit login form
-4. **Navigate to correct paths**:
-   - Project types: `/project-types`
-   - Project type settings: `/settings/project-types/:id`
-   - Clients: `/clients`
-   - Client detail: `/clients/:id`
+
 
 ## Instructions for Testing Agent (Browser Tests)
 
@@ -217,8 +213,19 @@ Only after BOTH internal AND external readiness checks pass:
 
 - **Internal readiness alone is NOT sufficient**
 - Browser tests must never be used to "probe" app availability
-- If browser tests fail with "couldn't reach this app" **after** external `/readyz` passed, retry ONCE only
 - Do not restart the workflow unless explicitly instructed
+
+### Proxy Error Retry Protocol
+
+If external `/readyz` returns 200 but the **first browser navigation** fails with a proxy error (502 / "couldn't reach this app"):
+
+1. **Wait 5–10 seconds** before retrying
+2. **Retry the browser test ONCE only**
+3. If the **second attempt also fails**:
+   - STOP testing immediately
+   - Record failure as **"Blocked: proxy instability detected"**
+   - Do NOT retry further
+   - Report the failure and stop
 
 ### Rationale
 
@@ -299,3 +306,4 @@ _This section tracks changes affecting tests. Update when making relevant change
 | 2025-12-20 | Added `/api/dev-login` endpoint | Fast auth for testing, bypasses login form |
 | 2025-12-20 | Added "Instructions for Testing Agent" section | Explicit browser test steps |
 | 2025-12-20 | Added mandatory external readiness gate | Browser tests MUST wait for public URL `/readyz` before starting |
+| 2025-12-20 | Added Proxy Error Retry Protocol | Wait 5-10s and retry once if first navigation fails after readyz passed |
