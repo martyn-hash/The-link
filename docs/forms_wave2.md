@@ -24,8 +24,13 @@ This document outlines the current progress, remaining gaps, and implementation 
 | **Shared FieldConfigModal** | `client/src/components/field-builder/FieldConfigModal.tsx` | ✅ Complete | Unified field editing with capabilities system |
 | **ConditionalLogicEditor** | `client/src/components/field-builder/ConditionalLogicEditor.tsx` | ✅ Complete | Standalone reusable component |
 | **Field Adapters** | `client/src/components/field-builder/adapters.ts` | ✅ Complete | Mapping for all contexts with capability flags |
-| **ClientTasksTab** (Project Type level) | `client/src/pages/project-type-detail/components/tabs/ClientTasksTab.tsx` | ✅ Complete | Sections, conditional logic, system library |
 | **ApprovalOverridesTab** (Client custom approvals) | `client/src/pages/client-detail/components/tabs/ApprovalOverridesTab.tsx` | ✅ Complete | Reuses ApprovalWizard |
+
+### Broken / Needs Major Work
+
+| Component | Location | Status | Issues |
+|-----------|----------|--------|--------|
+| **ClientTasksTab** (Project Type level) | `client/src/pages/project-type-detail/components/tabs/ClientTasksTab.tsx` | ❌ BROKEN | Inline builder (not wizard modal), wrong colors, broken drag-drop, inconsistent conditional logic |
 
 ### Partially Complete
 
@@ -39,7 +44,37 @@ This document outlines the current progress, remaining gaps, and implementation 
 
 ## Gap Analysis
 
-### 1. ClientTaskOverridesSection (Custom Client Project Tasks)
+### 1. ClientTasksTab (Project Type Level) - CRITICAL
+**Location:** `client/src/pages/project-type-detail/components/tabs/ClientTasksTab.tsx`
+**Path:** Settings → Project Types → [Select Type] → Client Tasks tab
+
+**Current State - BROKEN:**
+- ⚠️ Uses two-panel inline builder (NOT gold standard wizard modal)
+- ⚠️ Has duplicate `QuestionEditor` component (lines 384-683) as dead code
+- ⚠️ Uses `ClientTaskQuestionConfigModal` (shared modal wrapper) but:
+  - Wrong colors - palette items don't match ApprovalWizard colorful styling
+  - Drag and drop broken - sections/questions reordering not working properly
+  - Conditional logic inconsistent - may have issues with section-aware question references
+
+**Code Issues Identified:**
+1. **Dead Code:** `QuestionEditor` component (lines 384-683) duplicates question editing logic but isn't used
+2. **Drag-Drop:** DnD sensors defined but handlers may have issues with section-scoped reordering
+3. **Colors:** `QUESTION_TYPES` has colors defined but UI may not apply them consistently like ApprovalWizard
+4. **Layout:** Uses inline `isBuilderOpen` panel approach, not full-screen wizard modal like ApprovalWizard
+
+**Required Changes:**
+1. Remove dead `QuestionEditor` component
+2. Convert to full-screen wizard modal like ApprovalWizard
+3. Fix drag-drop to work within sections and across sections
+4. Apply consistent colorful styling from ApprovalWizard
+5. Ensure conditional logic references questions across all sections correctly
+6. Match ApprovalWizard step-by-step wizard pattern (Basic Info → Questions)
+
+**Reference:** Compare with ApprovalWizard (lines 93-96) which uses `WIZARD_STEPS` for multi-step flow
+
+---
+
+### 2. ClientTaskOverridesSection (Custom Client Project Tasks)
 **Location:** `client/src/pages/client-detail/components/tabs/ClientTaskOverridesSection.tsx`
 **Path:** Client Detail → Custom Approvals Tab → Client Project Task Overrides section
 
@@ -138,16 +173,33 @@ This document outlines the current progress, remaining gaps, and implementation 
 
 ## Implementation Phases
 
-### Phase 1: Verification & Gap Documentation (0.5 days)
-**Goal:** Confirm current implementations work and document specific gaps
+### Phase 1: ClientTasksTab Full Refactor (2 days) - HIGHEST PRIORITY
+**Goal:** Convert ClientTasksTab to gold standard wizard pattern
 
 | Task ID | Task | Priority |
 |---------|------|----------|
-| 1.1 | Test ClientTasksTab sections creation and rendering | High |
-| 1.2 | Test ClientTasksTab conditional logic (config and portal) | High |
-| 1.3 | Test request-template-edit conditional logic | High |
-| 1.4 | Test custom-request-edit conditional logic | High |
-| 1.5 | Document all failures and specific bug locations | High |
+| 1.1 | Remove dead `QuestionEditor` component (lines 384-683) | High |
+| 1.2 | Convert layout to full-screen wizard modal (like ApprovalWizard) | High |
+| 1.3 | Add wizard steps: "Basic Information" → "Questions & Sections" | High |
+| 1.4 | Fix drag-drop: section reordering, question reordering within/across sections | High |
+| 1.5 | Apply colorful field type styling matching ApprovalWizard | High |
+| 1.6 | Ensure conditional logic works with section-aware question ordering | High |
+| 1.7 | Test end-to-end: create template, add sections, add questions, save, verify | High |
+
+**Key Files to Reference:**
+- Gold standard: `client/src/components/approval-builder/ApprovalWizard.tsx`
+- Target: `client/src/pages/project-type-detail/components/tabs/ClientTasksTab.tsx`
+
+---
+
+### Phase 2: Verification of Other Components (0.5 days)
+**Goal:** Confirm existing implementations work and document remaining gaps
+
+| Task ID | Task | Priority |
+|---------|------|----------|
+| 2.1 | Test request-template-edit conditional logic | High |
+| 2.2 | Test custom-request-edit conditional logic | High |
+| 2.3 | Document all failures and specific bug locations | High |
 
 **Verification Script:**
 ```
@@ -175,7 +227,7 @@ Custom Client Project Tasks (Client Level):
 16. Attempt to add conditional logic (document if missing)
 ```
 
-### Phase 2: ClientTaskOverridesSection Fix (1 day)
+### Phase 3: ClientTaskOverridesSection Fix (1 day)
 **Goal:** Bring custom client project tasks to parity with project type level
 
 | Task ID | Task | Priority |
@@ -193,7 +245,7 @@ Custom Client Project Tasks (Client Level):
 - **Option B:** Override can have completely custom sections
 - **Recommendation:** Option A is simpler and maintains consistency
 
-### Phase 3: Request Templates Enhancement (1 day)
+### Phase 4: Request Templates Enhancement (1 day)
 **Goal:** Add System Library and verify conditional logic
 
 | Task ID | Task | Priority |
@@ -205,7 +257,7 @@ Custom Client Project Tasks (Client Level):
 | 3.5 | Apply colorful field type palette styling | Medium |
 | 3.6 | Add loading states and error handling | Medium |
 
-### Phase 4: Custom Requests Enhancement (0.5 days)
+### Phase 5: Custom Requests Enhancement (0.5 days)
 **Goal:** Match request-template-edit patterns
 
 | Task ID | Task | Priority |
@@ -214,7 +266,7 @@ Custom Client Project Tasks (Client Level):
 | 4.2 | Verify conditional logic end-to-end | High |
 | 4.3 | Apply consistent styling | Medium |
 
-### Phase 5: End-to-End Testing & Polish (0.5 days)
+### Phase 6: End-to-End Testing & Polish (0.5 days)
 **Goal:** Comprehensive verification across all flows
 
 | Task ID | Task | Priority |
@@ -230,15 +282,20 @@ Custom Client Project Tasks (Client Level):
 
 ## Success Criteria
 
-### ClientTasksTab (Project Type Level)
+### ClientTasksTab (Project Type Level) - PRIORITY 1
+- [ ] Uses full-screen wizard modal (like ApprovalWizard)
+- [ ] Has wizard steps: "Basic Information" → "Questions & Sections"
 - [ ] Can create template with multiple sections
 - [ ] Can add questions to specific sections
-- [ ] Can reorder sections via drag-drop
+- [ ] Can reorder sections via drag-drop (working!)
+- [ ] Can reorder questions within sections via drag-drop (working!)
+- [ ] Colorful field type styling matching ApprovalWizard
 - [ ] Can add conditional logic to any question (except first)
-- [ ] Can select source question from previous questions
+- [ ] Can select source question from previous questions (across all sections)
 - [ ] Conditional logic persists after save
 - [ ] Questions hidden/shown correctly on portal based on conditions
 - [ ] Can add fields from System Library
+- [ ] Dead `QuestionEditor` component removed
 
 ### ClientTaskOverridesSection (Custom Client Project Tasks)
 - [ ] Can create override from base template
@@ -393,12 +450,13 @@ Expected:
 
 | Phase | Duration | Dependencies |
 |-------|----------|--------------|
-| Phase 1: Verification | 0.5 days | None |
-| Phase 2: ClientTaskOverridesSection | 1 day | Phase 1 |
-| Phase 3: Request Templates | 1 day | Phase 1 |
-| Phase 4: Custom Requests | 0.5 days | Phase 3 |
-| Phase 5: End-to-End Testing | 0.5 days | Phases 2-4 |
-| **Total** | **3.5 days** | |
+| Phase 1: ClientTasksTab Refactor | 2 days | None (HIGHEST PRIORITY) |
+| Phase 2: Verification | 0.5 days | Phase 1 |
+| Phase 3: ClientTaskOverridesSection | 1 day | Phase 1 |
+| Phase 4: Request Templates | 1 day | Phase 2 |
+| Phase 5: Custom Requests | 0.5 days | Phase 4 |
+| Phase 6: End-to-End Testing | 0.5 days | Phases 3-5 |
+| **Total** | **5.5 days** | |
 
 ---
 
