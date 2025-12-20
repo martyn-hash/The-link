@@ -757,7 +757,7 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
   const [systemLibrarySearch, setSystemLibrarySearch] = useState("");
   const [systemLibraryCategory, setSystemLibraryCategory] = useState<string>("all");
 
-  const ALLOWED_SYSTEM_FIELD_TYPES = ["boolean", "number", "short_text", "long_text", "date", "single_select", "multi_select", "email", "file_upload"];
+  const ALLOWED_SYSTEM_FIELD_TYPES = ["boolean", "number", "short_text", "long_text", "date", "single_select", "multi_select", "dropdown", "email", "phone", "url", "currency", "percentage", "user_select", "file_upload", "image_upload"];
 
   const mapSystemFieldTypeToQuestionType = (fieldType: string): QuestionType => {
     const mapping: Record<string, QuestionType> = {

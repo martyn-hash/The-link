@@ -25,6 +25,13 @@ export interface FieldAdapter<TDomainField> {
   mapToSystemFieldType?: (contextType: string) => SystemFieldType;
 }
 
+export const ALL_SYSTEM_FIELD_TYPES: SystemFieldType[] = [
+  "boolean", "number", "short_text", "long_text", "date",
+  "single_select", "multi_select", "dropdown",
+  "email", "phone", "url", "currency", "percentage",
+  "user_select", "file_upload", "image_upload"
+];
+
 export const FIELD_TYPE_ALIASES: Record<string, SystemFieldType> = {
   yes_no: "boolean",
   single_choice: "single_select",
@@ -93,11 +100,7 @@ export const changeReasonCustomFieldAdapter: FieldAdapter<{
     supportsLibraryPicker: true,
   },
   
-  allowedFieldTypes: [
-    "boolean", "number", "short_text", "long_text", "multi_select",
-    "single_select", "date", "email", "phone", "url", "currency",
-    "percentage", "file_upload", "image_upload", "user_select"
-  ],
+  allowedFieldTypes: ALL_SYSTEM_FIELD_TYPES,
   
   mapToFieldDefinition: (domainField, index) => ({
     id: domainField.id,
@@ -143,10 +146,7 @@ export const requestTemplateQuestionAdapter: FieldAdapter<{
     supportsLibraryPicker: true,
   },
   
-  allowedFieldTypes: [
-    "short_text", "long_text", "email", "number", "date",
-    "single_select", "multi_select", "dropdown", "boolean", "file_upload"
-  ],
+  allowedFieldTypes: ALL_SYSTEM_FIELD_TYPES,
   
   mapToFieldDefinition: (domainField, index) => ({
     id: domainField.id,
@@ -224,10 +224,7 @@ export const clientTaskQuestionAdapter: FieldAdapter<{
     supportsLibraryPicker: true,
   },
   
-  allowedFieldTypes: [
-    "short_text", "long_text", "email", "number", "date",
-    "single_select", "multi_select", "dropdown", "boolean", "file_upload"
-  ],
+  allowedFieldTypes: ALL_SYSTEM_FIELD_TYPES,
   
   mapToFieldDefinition: (domainField, index) => ({
     id: domainField.id,
@@ -311,10 +308,7 @@ export const stageApprovalFieldAdapter: FieldAdapter<{
     supportsLibraryPicker: true,
   },
   
-  allowedFieldTypes: [
-    "boolean", "number", "short_text", "long_text", "date",
-    "single_select", "multi_select", "image_upload"
-  ],
+  allowedFieldTypes: ALL_SYSTEM_FIELD_TYPES,
   
   mapToFieldDefinition: (domainField, index) => ({
     id: domainField.id,
@@ -366,9 +360,7 @@ export const signatureFieldAdapter: FieldAdapter<{
     supportsLibraryPicker: false,
   },
   
-  allowedFieldTypes: [
-    "short_text", "long_text", "email", "date", "single_select", "boolean"
-  ],
+  allowedFieldTypes: ALL_SYSTEM_FIELD_TYPES,
   
   mapToFieldDefinition: (domainField, index) => ({
     id: domainField.id,
@@ -414,10 +406,7 @@ export const serviceUdfAdapter: FieldAdapter<{
     supportsLibraryPicker: true,
   },
   
-  allowedFieldTypes: [
-    "boolean", "number", "short_text", "long_text", "date",
-    "single_select", "multi_select", "currency", "percentage"
-  ],
+  allowedFieldTypes: ALL_SYSTEM_FIELD_TYPES,
   
   mapToFieldDefinition: (domainField, index) => ({
     id: domainField.id,
@@ -463,10 +452,7 @@ export const campaignPageFieldAdapter: FieldAdapter<{
     supportsLibraryPicker: true,
   },
   
-  allowedFieldTypes: [
-    "short_text", "long_text", "email", "phone", "number", "date",
-    "single_select", "multi_select", "boolean"
-  ],
+  allowedFieldTypes: ALL_SYSTEM_FIELD_TYPES,
   
   mapToFieldDefinition: (domainField, index) => ({
     id: domainField.id,

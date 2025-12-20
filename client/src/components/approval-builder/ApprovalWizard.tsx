@@ -351,7 +351,7 @@ export function ApprovalWizard({
 
   const isViewOnly = mode === "view";
 
-  const ALLOWED_SYSTEM_FIELD_TYPES = ["boolean", "number", "short_text", "long_text", "date", "single_select", "multi_select", "image_upload"];
+  const ALLOWED_SYSTEM_FIELD_TYPES = ["boolean", "number", "short_text", "long_text", "date", "single_select", "multi_select", "dropdown", "email", "phone", "url", "currency", "percentage", "user_select", "file_upload", "image_upload"];
 
   const { data: systemFields = [], isLoading: systemFieldsLoading } = useQuery<SystemFieldLibrary[]>({
     queryKey: ["/api/system-field-library", { isArchived: false }],
