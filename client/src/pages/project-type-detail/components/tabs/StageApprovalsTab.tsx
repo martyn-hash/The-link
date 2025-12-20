@@ -33,6 +33,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Plus, Edit2, Trash2, ShieldCheck, Eye, ClipboardCheck, MoreVertical } from "lucide-react";
+import { format } from "date-fns";
 import type { StageApproval, StageApprovalField, KanbanStage, ProjectType } from "@shared/schema";
 import { ApprovalWizard, type ApprovalFormData, type EditingApprovalField } from "@/components/approval-builder/ApprovalWizard";
 
@@ -43,6 +44,11 @@ interface StageApprovalsTabProps {
 }
 
 type BuilderMode = null | { mode: "create" } | { mode: "edit"; approval: StageApproval } | { mode: "view"; approval: StageApproval };
+
+function truncateText(text: string, maxLength: number): string {
+  if (!text || text.length <= maxLength) return text;
+  return text.slice(0, maxLength) + "...";
+}
 
 function ApprovalRow({ 
   approval, 
@@ -64,20 +70,31 @@ function ApprovalRow({
           <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
             <ClipboardCheck className="w-4 h-4 text-primary" />
           </div>
-          <div>
-            <span data-testid={`text-name-${approval.id}`}>{approval.name}</span>
-            {approval.description && (
-              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
-                {approval.description}
-              </p>
-            )}
-          </div>
+          <span data-testid={`text-name-${approval.id}`}>{approval.name}</span>
         </div>
+      </TableCell>
+      <TableCell className="text-muted-foreground max-w-[200px]">
+        {approval.description ? (
+          <span title={approval.description} data-testid={`text-description-${approval.id}`}>
+            {truncateText(approval.description, 50)}
+          </span>
+        ) : (
+          <span className="text-muted-foreground/50">—</span>
+        )}
       </TableCell>
       <TableCell>
         <Badge variant="secondary">
           {fieldCount} {fieldCount === 1 ? 'field' : 'fields'}
         </Badge>
+      </TableCell>
+      <TableCell className="text-muted-foreground">
+        {approval.createdAt ? (
+          <span data-testid={`text-created-${approval.id}`}>
+            {format(new Date(approval.createdAt), "dd MMM yyyy")}
+          </span>
+        ) : (
+          <span className="text-muted-foreground/50">—</span>
+        )}
       </TableCell>
       <TableCell className="text-right">
         <DropdownMenu>
@@ -406,7 +423,9 @@ export function StageApprovalsTab({ projectTypeId, projectType, stages = [] }: S
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
+                <TableHead>Description</TableHead>
                 <TableHead>Fields</TableHead>
+                <TableHead>Created</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
