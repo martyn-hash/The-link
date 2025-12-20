@@ -66,8 +66,8 @@ import type {
   ClientProjectTaskQuestion,
   ClientProjectTaskOverrideQuestion,
   SystemFieldLibrary,
-  EnhancedClientService,
 } from "@shared/schema";
+import type { EnhancedClientService } from "../../utils/types";
 import { SystemFieldLibraryPicker } from "@/components/system-field-library-picker";
 
 interface ClientTaskOverridesSectionProps {
@@ -192,10 +192,10 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
   const filteredProjectTypes = useMemo(() => {
     if (!projectTypes) return [];
     if (!clientServices || clientServices.length === 0) {
-      return projectTypes;
+      return [];
     }
     const clientServiceIds = new Set(clientServices.map(cs => cs.serviceId));
-    return projectTypes.filter(pt => !pt.serviceId || clientServiceIds.has(pt.serviceId));
+    return projectTypes.filter(pt => pt.serviceId && clientServiceIds.has(pt.serviceId));
   }, [projectTypes, clientServices]);
 
   const { data: overrides, isLoading: overridesLoading } = useQuery<ClientProjectTaskOverrideWithRelations[]>({
