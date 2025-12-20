@@ -174,17 +174,76 @@ export async function resolveProjectAssignee(
 }
 
 /**
+ * Check for pending pre-project tasks that were submitted before project creation.
+ * If found, returns the target stage and task instance for linking.
+ */
+async function checkForPreProjectTasks(
+  clientId: string,
+  projectTypeId: string
+): Promise<{ targetStageId: string | null; taskInstanceId: string | null }> {
+  try {
+    const templates = await storage.getClientProjectTaskTemplatesByProjectTypeId(projectTypeId);
+    
+    for (const template of templates) {
+      if (!template.isActive) {
+        continue;
+      }
+      
+      const pendingInstance = await storage.clientProjectTaskStorage.getPendingInstanceForClientAndTemplate(
+        clientId,
+        template.id
+      );
+      
+      if (pendingInstance && pendingInstance.preProjectTargetStageId) {
+        console.log(`[Project Creator] Found pre-project task ${pendingInstance.id} with target stage ${pendingInstance.preProjectTargetStageId}`);
+        return {
+          targetStageId: pendingInstance.preProjectTargetStageId,
+          taskInstanceId: pendingInstance.id,
+        };
+      }
+    }
+  } catch (error) {
+    console.error('[Project Creator] Error checking for pre-project tasks:', error);
+  }
+  
+  return { targetStageId: null, taskInstanceId: null };
+}
+
+/**
  * Build project data from a due service
  */
 export async function buildProjectData(
   dueService: DueService,
   assigneeId: string
-): Promise<InsertProject> {
+): Promise<{ projectData: InsertProject; preProjectTaskInstanceId: string | null }> {
   const projectType = dueService.service.projectType;
   
   // Get kanban stages
   const stages = await storage.getKanbanStagesByProjectTypeId(projectType.id);
-  const firstStage = stages.sort((a, b) => a.order - b.order)[0];
+  const sortedStages = stages.sort((a, b) => a.order - b.order);
+  const firstStage = sortedStages[0];
+  
+  // Check for pre-project tasks with a target stage
+  let initialStatus = firstStage?.name || 'Pending';
+  let initialAssigneeId = assigneeId;
+  let preProjectTaskInstanceId: string | null = null;
+  
+  if (dueService.clientId) {
+    const preProjectCheck = await checkForPreProjectTasks(dueService.clientId, projectType.id);
+    
+    if (preProjectCheck.targetStageId) {
+      const targetStage = stages.find(s => s.id === preProjectCheck.targetStageId);
+      if (targetStage) {
+        initialStatus = targetStage.name;
+        preProjectTaskInstanceId = preProjectCheck.taskInstanceId;
+        console.log(`[Project Creator] Starting project at stage "${initialStatus}" due to pre-project task completion`);
+        
+        if (targetStage.assignedUserId) {
+          initialAssigneeId = targetStage.assignedUserId;
+        }
+      }
+    }
+  }
   
   // Build description
   const projectMonth = formatProjectMonth(dueService.nextStartDate);
@@ -239,8 +298,8 @@ export async function buildProjectData(
     bookkeeperId,
     clientManagerId,
     description,
-    currentStatus: firstStage?.name || 'Pending',
-    currentAssigneeId: assigneeId,
+    currentStatus: initialStatus,
+    currentAssigneeId: initialAssigneeId,
     priority: 'medium',
     dueDate: dueService.nextDueDate,
     projectMonth,
@@ -248,7 +307,7 @@ export async function buildProjectData(
     inactive: false
   };
 
-  return projectData;
+  return { projectData, preProjectTaskInstanceId };
 }
 
 /**
@@ -296,11 +355,40 @@ export async function createProjectFromDueService(
   // 4. Resolve assignee
   const assigneeId = await resolveProjectAssignee(dueService, dueService.service.projectType);
   
-  // 5. Build project data
-  const projectData = await buildProjectData(dueService, assigneeId);
+  // 5. Build project data (includes pre-project task check)
+  const { projectData, preProjectTaskInstanceId } = await buildProjectData(dueService, assigneeId);
   
   // 6. Create the project
   const project = await storage.createProject(projectData);
+  
+  // 6a. Link pre-project task to newly created project if applicable
+  if (preProjectTaskInstanceId) {
+    try {
+      await storage.clientProjectTaskStorage.updateInstance(preProjectTaskInstanceId, {
+        projectId: project.id,
+        stageChangeCompletedAt: new Date(),
+        preProjectTargetStageId: null,
+      });
+      console.log(`[Project Creator] Linked pre-project task ${preProjectTaskInstanceId} to project ${project.id}`);
+      
+      // Create chronology entry for pre-project stage advancement
+      const stages = await storage.getKanbanStagesByProjectTypeId(project.projectTypeId);
+      const firstStage = stages.sort((a, b) => a.order - b.order)[0];
+      if (firstStage && project.currentStatus !== firstStage.name) {
+        await storage.createChronologyEntry({
+          projectId: project.id,
+          fromStatus: firstStage.name,
+          toStatus: project.currentStatus,
+          assigneeId: project.currentAssigneeId,
+          changeReason: "Client task completed before project creation",
+          notes: `Project started at advanced stage due to pre-project task completion (task instance: ${preProjectTaskInstanceId})`,
+        });
+        console.log(`[Project Creator] Created chronology entry for pre-project stage advancement`);
+      }
+    } catch (linkError) {
+      console.error(`[Project Creator] Failed to link pre-project task ${preProjectTaskInstanceId}:`, linkError);
+    }
+  }
   
   // 7. Log in scheduling history
   await logSchedulingAction(dueService, project.id, 'project_created', scheduledDate);

@@ -78,6 +78,135 @@ const paramTokenSchema = z.object({
   token: z.string().min(32, "Invalid token format")
 });
 
+import type { StageChangeRule } from "@shared/schema";
+
+/**
+ * Execute stage change when a client project task is submitted.
+ * 
+ * Logic:
+ * 1. Get template and override (if exists) for the task instance
+ * 2. Determine target stage: override.onCompletionStageId > template.onCompletionStageId > stageChangeRules
+ * 3. If project exists: execute stage change immediately with chronology entry
+ * 4. If no project (pre-project task): store target stage in preProjectTargetStageId
+ */
+async function executeStageChangeOnTaskSubmission(instance: {
+  id: string;
+  projectId: string | null;
+  clientId: string;
+  templateId: string;
+  overrideId: string | null;
+}): Promise<void> {
+  console.log(`[ClientProjectTask] Checking stage change for instance ${instance.id}`);
+
+  const template = await storage.getClientProjectTaskTemplateById(instance.templateId);
+  if (!template) {
+    console.log(`[ClientProjectTask] Template ${instance.templateId} not found, skipping stage change`);
+    return;
+  }
+
+  let targetStageId: string | null = null;
+  let targetReasonId: string | null = null;
+
+  if (instance.overrideId) {
+    const override = await storage.clientProjectTaskStorage.getOverrideById(instance.overrideId);
+    if (override?.onCompletionStageId) {
+      targetStageId = override.onCompletionStageId;
+      targetReasonId = override.onCompletionStageReasonId || null;
+      console.log(`[ClientProjectTask] Using override stage: ${targetStageId}`);
+    }
+  }
+
+  if (!targetStageId && template.onCompletionStageId) {
+    targetStageId = template.onCompletionStageId;
+    targetReasonId = template.onCompletionStageReasonId || null;
+    console.log(`[ClientProjectTask] Using template stage: ${targetStageId}`);
+  }
+
+  if (!targetStageId && template.stageChangeRules && template.stageChangeRules.length > 0 && instance.projectId) {
+    const project = await storage.getProjectById(instance.projectId);
+    if (project) {
+      const stages = await storage.getKanbanStagesByProjectTypeId(project.projectTypeId);
+      const currentStage = stages.find(s => s.name === project.currentStatus);
+      
+      if (currentStage) {
+        const matchingRule = (template.stageChangeRules as StageChangeRule[]).find(
+          rule => rule.ifStageId === currentStage.id
+        );
+        if (matchingRule) {
+          targetStageId = matchingRule.thenStageId;
+          targetReasonId = matchingRule.thenReasonId || null;
+          console.log(`[ClientProjectTask] Using stageChangeRule: ${currentStage.id} -> ${targetStageId}`);
+        }
+      }
+    }
+  }
+
+  if (!targetStageId) {
+    console.log(`[ClientProjectTask] No stage change configured for instance ${instance.id}`);
+    return;
+  }
+
+  if (instance.projectId) {
+    const project = await storage.getProjectById(instance.projectId);
+    if (!project) {
+      console.log(`[ClientProjectTask] Project ${instance.projectId} not found, skipping stage change`);
+      return;
+    }
+
+    const targetStage = await storage.getKanbanStageById(targetStageId);
+    if (!targetStage) {
+      console.log(`[ClientProjectTask] Target stage ${targetStageId} not found, skipping stage change`);
+      return;
+    }
+
+    if (project.currentStatus === targetStage.name) {
+      console.log(`[ClientProjectTask] Project already at target stage ${targetStage.name}, skipping`);
+      await storage.updateClientProjectTaskInstance(instance.id, {
+        stageChangeCompletedAt: new Date(),
+      });
+      return;
+    }
+
+    let reasonName = "Client task completed";
+    if (targetReasonId) {
+      const reason = await storage.getChangeReasonById(targetReasonId);
+      if (reason) {
+        reasonName = reason.reason;
+      }
+    }
+
+    let newAssigneeId = project.currentAssigneeId;
+    if (targetStage.assignedUserId) {
+      newAssigneeId = targetStage.assignedUserId;
+    }
+
+    await storage.updateProject(instance.projectId, {
+      currentStatus: targetStage.name,
+      currentAssigneeId: newAssigneeId,
+    });
+
+    await storage.createChronologyEntry({
+      projectId: instance.projectId,
+      fromStatus: project.currentStatus,
+      toStatus: targetStage.name,
+      assigneeId: newAssigneeId,
+      changeReason: reasonName,
+      notes: `Automatic stage change triggered by client task submission`,
+    });
+
+    await storage.updateClientProjectTaskInstance(instance.id, {
+      stageChangeCompletedAt: new Date(),
+    });
+
+    console.log(`[ClientProjectTask] Moved project ${instance.projectId} from "${project.currentStatus}" to "${targetStage.name}"`);
+  } else {
+    await storage.updateClientProjectTaskInstance(instance.id, {
+      preProjectTargetStageId: targetStageId,
+    });
+    console.log(`[ClientProjectTask] Stored pre-project target stage ${targetStageId} for instance ${instance.id}`);
+  }
+}
+
 export function registerClientProjectTaskRoutes(
   app: Express,
   isAuthenticated: any,
@@ -1036,7 +1165,22 @@ export function registerClientProjectTaskRoutes(
         completedByEmail: completedByEmail || tokenRecord.recipientEmail,
       });
 
-      // TODO: Phase 5 - Trigger stage change if configured on template
+      // Phase 5 - Trigger stage change if configured on template/override
+      let stageChangeError: Error | null = null;
+      try {
+        await executeStageChangeOnTaskSubmission(tokenRecord.instance);
+      } catch (error) {
+        stageChangeError = error instanceof Error ? error : new Error(String(error));
+        console.error("[ClientProjectTask] Stage change failed but task is submitted:", stageChangeError);
+      }
+
+      if (stageChangeError) {
+        return res.json({ 
+          success: true, 
+          message: "Task submitted successfully",
+          warning: "Task was submitted but automatic stage change could not be completed. Staff may need to manually update the project stage."
+        });
+      }
 
       res.json({ success: true, message: "Task submitted successfully" });
     } catch (error) {
