@@ -67,5 +67,10 @@ Conditional Logic Support:
 Migrated Contexts:
 -   Stage Approvals: Uses ApprovalFieldConfigModal wrapper with stageApprovalFieldAdapter
 -   Client Tasks: Uses ClientTaskQuestionConfigModal wrapper with clientTaskQuestionAdapter, preserving conditionalLogic and sectionId
--   Request Templates: Full conditional logic support in request-template-edit.tsx with centralized questions query
--   Custom Requests: Full conditional logic support in custom-request-edit.tsx with flattened questions from sections
+-   Request Templates: Full conditional logic support in request-template-edit.tsx with centralized questions query, System Library integration with collapsible section/search/filter, colorful field type icons
+-   Custom Requests: Full conditional logic support in custom-request-edit.tsx with flattened questions from sections, System Library integration with collapsible section/search/filter, colorful field type icons
+
+Field Type Color Scheme (consistent across form builders):
+-   short_text: #3b82f6 (blue), long_text: #8b5cf6 (purple), email: #06b6d4 (cyan)
+-   number: #22c55e (green), date: #f59e0b (orange), single_choice: #ec4899 (pink)
+-   multi_choice: #14b8a6 (teal), dropdown: #6366f1 (indigo), yes_no: #84cc16 (lime), file_upload: #f43f5e (rose)
