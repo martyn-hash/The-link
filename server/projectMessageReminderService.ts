@@ -2,8 +2,8 @@ import { storage } from './storage/index';
 import { sendProjectMessageReminderEmail } from './sendgridService';
 
 // Execution budget controls
-const MAX_RUNTIME_MS = 25000; // 25 second hard limit (relaxed now that queries are optimized)
-const PER_USER_TIMEOUT_MS = 8000; // 8 second timeout per user for email + DB updates
+const MAX_RUNTIME_MS = 8000; // 8 second hard limit - DO NOT INCREASE (budgets are guardrails)
+const PER_USER_TIMEOUT_MS = 5000; // 5 second timeout per user for email + DB updates
 const YIELD_EVERY = 5; // Yield event loop every N users to prevent blocking
 
 /**
