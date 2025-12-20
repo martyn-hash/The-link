@@ -139,6 +139,8 @@ const REPORT_INTERVAL_MS = 5 * 60 * 1000; // Report event loop stats every 5 min
 
 // Process role for telemetry tagging (web vs cron-worker)
 let currentProcessRole: 'web' | 'cron-worker' = 'web';
+// Instance ID for duplicate runner detection
+let cronInstanceId: string | null = null;
 
 /**
  * Set the process role for telemetry tagging
@@ -155,6 +157,22 @@ export function setProcessRole(role: 'web' | 'cron-worker'): void {
  */
 export function getProcessRole(): 'web' | 'cron-worker' {
   return currentProcessRole;
+}
+
+/**
+ * Set the cron instance ID for duplicate runner detection
+ * Call this at cron-worker boot to enable instance tracking
+ */
+export function setCronInstanceId(instanceId: string): void {
+  cronInstanceId = instanceId;
+  console.log(`[CronTelemetry] Instance ID set to: ${instanceId}`);
+}
+
+/**
+ * Get the current cron instance ID (null if not set)
+ */
+export function getCronInstanceId(): string | null {
+  return cronInstanceId;
 }
 
 /**
@@ -291,36 +309,91 @@ function hashJobName(jobName: string): number {
 }
 
 /**
+ * Result of lock acquisition attempt
+ */
+export interface LockAcquisitionResult {
+  acquired: boolean;
+  reason: 'ACQUIRED' | 'HELD_BY_OTHER' | 'DB_UNAVAILABLE';
+  attempts: number;
+  elapsedMs: number;
+  error?: string;
+}
+
+/**
  * Try to acquire an advisory lock for a job using pg_advisory_try_lock
  * This prevents multiple autoscale instances from running the same job
- * Returns true if lock acquired, false if another instance holds it
+ * 
+ * SAFETY: Uses fail-closed semantics - if DB is unreachable after retries,
+ * returns acquired=false to prevent potential duplicate execution.
+ * 
+ * Retry policy: 3 attempts with exponential backoff (250ms, 500ms, 1s) + jitter
+ * Only retries on transient DB connectivity errors, NOT on lock contention.
  */
-export async function tryAcquireJobLock(jobName: string): Promise<boolean> {
-  try {
-    const lockId = hashJobName(jobName);
-    
-    // Use raw SQL to ensure we get the boolean result correctly
-    const result = await db.execute(
-      sql`SELECT pg_try_advisory_lock(${lockId})::text as acquired`
-    );
-    
-    // Parse the result - PostgreSQL returns 't' for true, 'f' for false
-    const rows = result.rows as Array<{ acquired: string }>;
-    const acquired = rows.length > 0 && (rows[0]?.acquired === 't' || rows[0]?.acquired === 'true');
-    
-    if (acquired) {
-      console.log(`[CronTelemetry] [${jobName}] Advisory lock ${lockId} acquired`);
-    } else {
-      console.warn(`[CronTelemetry] [${jobName}] WARN: Lock ${lockId} not acquired - another instance is running this job, skipping execution`);
+export async function tryAcquireJobLock(jobName: string): Promise<LockAcquisitionResult> {
+  const lockId = hashJobName(jobName);
+  const startTime = Date.now();
+  const MAX_ATTEMPTS = 3;
+  const BASE_DELAY_MS = 250;
+  
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      // Use raw SQL to ensure we get the boolean result correctly
+      const result = await db.execute(
+        sql`SELECT pg_try_advisory_lock(${lockId})::text as acquired`
+      );
+      
+      // Parse the result - PostgreSQL returns 't' for true, 'f' for false
+      const rows = result.rows as Array<{ acquired: string }>;
+      const acquired = rows.length > 0 && (rows[0]?.acquired === 't' || rows[0]?.acquired === 'true');
+      
+      const elapsedMs = Date.now() - startTime;
+      
+      if (acquired) {
+        console.log(`[CronTelemetry] [${jobName}] Advisory lock ${lockId} acquired (attempt ${attempt}, ${elapsedMs}ms)`);
+        return { acquired: true, reason: 'ACQUIRED', attempts: attempt, elapsedMs };
+      } else {
+        // Lock is held by another instance - do NOT retry, this is expected behavior
+        console.log(`[CronTelemetry] [${jobName}] LOCK_SKIP reason=HELD_BY_OTHER lockId=${lockId} attempts=${attempt} elapsedMs=${elapsedMs}`);
+        return { acquired: false, reason: 'HELD_BY_OTHER', attempts: attempt, elapsedMs };
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const elapsedMs = Date.now() - startTime;
+      
+      // Only retry on transient connectivity errors
+      if (!isRetryableError(lastError)) {
+        console.error(`[CronTelemetry] [${jobName}] LOCK_SKIP reason=NON_RETRYABLE_ERROR lockId=${lockId} attempts=${attempt} elapsedMs=${elapsedMs} error=${lastError.message}`);
+        return { 
+          acquired: false, 
+          reason: 'DB_UNAVAILABLE', 
+          attempts: attempt, 
+          elapsedMs, 
+          error: lastError.message 
+        };
+      }
+      
+      if (attempt < MAX_ATTEMPTS) {
+        // Exponential backoff with jitter: 250ms, 500ms, 1s (+ 0-100ms jitter)
+        const delay = BASE_DELAY_MS * Math.pow(2, attempt - 1) + Math.random() * 100;
+        console.warn(`[CronTelemetry] [${jobName}] Lock acquisition failed (attempt ${attempt}/${MAX_ATTEMPTS}), retrying in ${Math.round(delay)}ms: ${lastError.message}`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
-    
-    return acquired;
-  } catch (error) {
-    console.error(`[CronTelemetry] [${jobName}] Error acquiring lock:`, error);
-    // On error, allow the job to run (fail-open for single-instance case)
-    // This ensures the job runs in development/single-instance scenarios
-    return true;
   }
+  
+  // All retries exhausted - FAIL CLOSED (do not run job)
+  const elapsedMs = Date.now() - startTime;
+  console.error(`[CronTelemetry] [${jobName}] LOCK_SKIP reason=DB_UNAVAILABLE lockId=${lockId} attempts=${MAX_ATTEMPTS} elapsedMs=${elapsedMs} error=${lastError?.message || 'unknown'}`);
+  
+  return { 
+    acquired: false, 
+    reason: 'DB_UNAVAILABLE', 
+    attempts: MAX_ATTEMPTS, 
+    elapsedMs, 
+    error: lastError?.message 
+  };
 }
 
 /**
@@ -438,6 +511,7 @@ interface WrapOptions {
 interface CronJobTelemetry {
   job_name: string;
   run_id: string;
+  instance_id?: string;
   timestamp: string;
   process_role: 'web' | 'cron-worker';
   status: 'started' | 'success' | 'error' | 'skipped' | 'retrying';
@@ -517,6 +591,7 @@ export function wrapCronHandler(
     const baseTelemetry: Omit<CronJobTelemetry, 'status' | 'duration_ms' | 'error_message' | 'retry_count'> = {
       job_name: jobName,
       run_id: ctx.runId,
+      instance_id: cronInstanceId || undefined,
       timestamp: ctx.actualStartTime.toISOString(),
       process_role: currentProcessRole,
       drift_ms: ctx.driftMs,
@@ -539,30 +614,28 @@ export function wrapCronHandler(
     
     // If distributed locking is enabled, try to acquire lock first
     if (useLock) {
-      const lockStartTime = Date.now();
-      try {
-        const acquired = await tryAcquireJobLock(jobName);
-        lockWaitMs = Date.now() - lockStartTime;
+      const lockResult = await tryAcquireJobLock(jobName);
+      lockWaitMs = lockResult.elapsedMs;
+      
+      if (!lockResult.acquired) {
+        // FAIL-CLOSED: Do not run job if lock not acquired (held by other OR DB unavailable)
+        const skipReason = lockResult.reason === 'HELD_BY_OTHER' 
+          ? 'Lock held by another instance'
+          : `DB unavailable after ${lockResult.attempts} attempt(s) (${lockResult.elapsedMs}ms): ${lockResult.error || 'unknown error'}`;
         
-        if (!acquired) {
-          const skipTelemetry: CronJobTelemetry = {
-            ...baseTelemetry,
-            status: 'skipped',
-            lock_acquired: false,
-            lock_wait_ms: lockWaitMs,
-            duration_ms: Date.now() - ctx.actualStartTime.getTime(),
-            error_message: 'Lock held by another instance',
-          };
-          emitTelemetry(skipTelemetry);
-          endCronJob(ctx, 'skipped', 'Lock held by another instance');
-          return;
-        }
-        ctx.lockAcquired = true;
-      } catch (lockError) {
-        // Lock acquisition failed - log but continue (fail-open)
-        console.error(`[CronTelemetry] [${jobName}] Lock acquisition error, proceeding anyway:`, lockError);
-        lockWaitMs = Date.now() - lockStartTime;
+        const skipTelemetry: CronJobTelemetry = {
+          ...baseTelemetry,
+          status: 'skipped',
+          lock_acquired: false,
+          lock_wait_ms: lockWaitMs,
+          duration_ms: Date.now() - ctx.actualStartTime.getTime(),
+          error_message: skipReason,
+        };
+        emitTelemetry(skipTelemetry);
+        endCronJob(ctx, 'skipped', skipReason);
+        return;
       }
+      ctx.lockAcquired = true;
     }
     
     // Execute handler with retry logic

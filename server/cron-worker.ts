@@ -15,7 +15,12 @@
 process.env.PROCESS_ROLE = 'cron-worker';
 
 import cron from "node-cron";
-import { initEventLoopMonitor, wrapCronHandler, setProcessRole } from "./cron-telemetry";
+import { nanoid } from "nanoid";
+import { initEventLoopMonitor, wrapCronHandler, setProcessRole, setCronInstanceId } from "./cron-telemetry";
+
+// Unique instance ID for this cron worker process
+// Used to detect if multiple cron workers are running (during deploys/restarts)
+const CRON_INSTANCE_ID = nanoid(12);
 import { withTimeout, JOB_TIMEOUTS } from "./utils/cronBatching";
 import { runChSync } from "./ch-sync-service";
 import { executeScheduledRun } from "./scheduling-orchestrator";
@@ -39,14 +44,17 @@ const CRONS_ENABLED = process.env.CRONS_ENABLED !== 'false';
 
 function log(message: string) {
   const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] [cron-worker] ${message}`);
+  console.log(`[${timestamp}] [cron-worker] [${CRON_INSTANCE_ID}] ${message}`);
 }
 
 async function main() {
+  // Log boot event with instance identification for duplicate detection
+  console.log(`[CRON_BOOT] pid=${process.pid} instanceId=${CRON_INSTANCE_ID} startedAt=${new Date().toISOString()}`);
   log('Starting cron worker process...');
   
-  // Set process role for telemetry tagging
+  // Set process role and instance ID for telemetry tagging
   setProcessRole('cron-worker');
+  setCronInstanceId(CRON_INSTANCE_ID);
   
   // Check kill-switch
   if (!CRONS_ENABLED) {

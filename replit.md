@@ -24,6 +24,14 @@ The application utilizes PostgreSQL (Neon) with Drizzle ORM for data persistence
 
 The application employs a dual-process architecture for web server and cron worker, separating HTTP request handling from scheduled background jobs. A comprehensive cron job telemetry system monitors job execution, detects drift and overlap, coordinates distributed execution using PostgreSQL advisory locks, and handles errors with automatic retries and structured JSON telemetry. Heavy jobs are staggered and protected by execution timeouts.
 
+Cron Lock Acquisition Resilience (Dec 2025):
+-   `tryAcquireJobLock` uses retry logic with exponential backoff (3 attempts, 250ms/500ms/1s + jitter) for transient Neon WebSocket connectivity errors
+-   Fail-closed semantics: if DB is unreachable after retries, job is SKIPPED (not run) to prevent potential duplicate execution
+-   Lock contention (lock held by another instance) is not retried - returns immediately with `HELD_BY_OTHER` reason
+-   CRON_INSTANCE_ID generated at cron-worker boot to detect duplicate runner instances during deploys/restarts
+-   Structured log markers: `[CRON_BOOT]` at startup, `LOCK_SKIP reason=DB_UNAVAILABLE` on connectivity failures
+-   All cron telemetry includes `instance_id` for correlation
+
 ## External Dependencies
 
 ### Third-Party Services
