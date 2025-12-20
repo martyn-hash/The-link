@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -46,7 +45,6 @@ import {
   Settings2,
   Undo2,
   MinusCircle,
-  X,
   Type,
   AlignLeft,
   Hash,
@@ -69,12 +67,27 @@ import type {
 } from "@shared/schema";
 import type { EnhancedClientService } from "../../utils/types";
 import { SystemFieldLibraryPicker } from "@/components/system-field-library-picker";
+import { FieldConfigModal as SharedFieldConfigModal } from "@/components/field-builder/FieldConfigModal";
+import { clientTaskQuestionAdapter } from "@/components/field-builder/adapters";
+import type { FieldDefinition } from "@/components/field-builder/types";
 
 interface ClientTaskOverridesSectionProps {
   clientId: string;
 }
 
 type QuestionType = "short_text" | "long_text" | "number" | "date" | "single_choice" | "multi_choice" | "yes_no" | "dropdown" | "file_upload" | "email";
+
+interface ConditionalLogicCondition {
+  field: string;
+  operator: "equals" | "not_equals" | "contains" | "not_contains" | "greater_than" | "less_than";
+  value: string;
+}
+
+interface ConditionalLogic {
+  action: "show" | "hide" | "require";
+  conditions: ConditionalLogicCondition[];
+  logicType: "all" | "any";
+}
 
 interface EditingQuestion {
   id?: string;
@@ -87,19 +100,20 @@ interface EditingQuestion {
   options: string[];
   placeholder: string;
   libraryFieldId?: string | null;
+  conditionalLogic: ConditionalLogic | null;
 }
 
 const QUESTION_TYPES = [
-  { type: "short_text" as QuestionType, label: "Short Text", icon: Type },
-  { type: "long_text" as QuestionType, label: "Long Text", icon: AlignLeft },
-  { type: "email" as QuestionType, label: "Email", icon: Mail },
-  { type: "number" as QuestionType, label: "Number", icon: Hash },
-  { type: "date" as QuestionType, label: "Date", icon: Calendar },
-  { type: "single_choice" as QuestionType, label: "Single Choice", icon: CheckSquare },
-  { type: "multi_choice" as QuestionType, label: "Multiple Choice", icon: List },
-  { type: "yes_no" as QuestionType, label: "Yes/No", icon: ToggleLeft },
-  { type: "dropdown" as QuestionType, label: "Dropdown", icon: ChevronDownSquare },
-  { type: "file_upload" as QuestionType, label: "File Upload", icon: Upload },
+  { type: "short_text" as QuestionType, label: "Short Text", icon: Type, color: "#3b82f6" },
+  { type: "long_text" as QuestionType, label: "Long Text", icon: AlignLeft, color: "#8b5cf6" },
+  { type: "email" as QuestionType, label: "Email", icon: Mail, color: "#f59e0b" },
+  { type: "number" as QuestionType, label: "Number", icon: Hash, color: "#22c55e" },
+  { type: "date" as QuestionType, label: "Date", icon: Calendar, color: "#ec4899" },
+  { type: "single_choice" as QuestionType, label: "Single Choice", icon: CheckSquare, color: "#14b8a6" },
+  { type: "multi_choice" as QuestionType, label: "Multiple Choice", icon: List, color: "#6366f1" },
+  { type: "yes_no" as QuestionType, label: "Yes/No", icon: ToggleLeft, color: "#f97316" },
+  { type: "dropdown" as QuestionType, label: "Dropdown", icon: ChevronDownSquare, color: "#0ea5e9" },
+  { type: "file_upload" as QuestionType, label: "File Upload", icon: Upload, color: "#10b981" },
 ];
 
 const DEFAULT_QUESTION: Omit<EditingQuestion, 'overrideId'> = {
@@ -111,7 +125,85 @@ const DEFAULT_QUESTION: Omit<EditingQuestion, 'overrideId'> = {
   options: [],
   placeholder: "",
   libraryFieldId: null,
+  conditionalLogic: null,
 };
+
+function ClientTaskOverrideQuestionConfigModal({
+  question,
+  questionIndex,
+  allQuestions,
+  isOpen,
+  onClose,
+  onSave,
+}: {
+  question: EditingQuestion;
+  questionIndex: number;
+  allQuestions: EditingQuestion[];
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (q: EditingQuestion) => void;
+}) {
+  const getQuestionKey = (q: EditingQuestion, idx: number) => q.id || `temp-${idx}`;
+  
+  const fieldDefinition = useMemo(() => {
+    const domainField = {
+      id: question.id,
+      label: question.label,
+      questionType: question.questionType,
+      helpText: question.helpText,
+      isRequired: question.isRequired,
+      order: question.order,
+      options: question.options,
+      placeholder: question.placeholder,
+      conditionalLogic: question.conditionalLogic,
+      libraryFieldId: question.libraryFieldId,
+    };
+    return clientTaskQuestionAdapter.mapToFieldDefinition(domainField, questionIndex);
+  }, [question, questionIndex]);
+
+  const availableFieldsForConditions = useMemo(() => {
+    return allQuestions
+      .map((q, originalIdx) => ({ ...q, _originalIndex: originalIdx }))
+      .slice(0, questionIndex)
+      .filter(q => q.label.trim())
+      .map((q) => ({
+        id: getQuestionKey(q, q._originalIndex),
+        label: q.label,
+        fieldType: q.questionType,
+        options: q.questionType === 'yes_no' ? ['yes', 'no'] : q.options,
+      }));
+  }, [allQuestions, questionIndex]);
+
+  const handleSave = useCallback((savedField: FieldDefinition) => {
+    const mappedBack = clientTaskQuestionAdapter.mapFromFieldDefinition(savedField);
+    onSave({
+      id: question.id,
+      overrideId: question.overrideId,
+      order: question.order,
+      questionType: mappedBack.questionType as QuestionType,
+      label: mappedBack.label || "",
+      helpText: mappedBack.helpText || "",
+      isRequired: mappedBack.isRequired ?? false,
+      options: mappedBack.options || [],
+      placeholder: mappedBack.placeholder || "",
+      conditionalLogic: mappedBack.conditionalLogic as ConditionalLogic | null,
+      libraryFieldId: mappedBack.libraryFieldId,
+    });
+  }, [question, onSave]);
+
+  return (
+    <SharedFieldConfigModal
+      key={`override-question-${question.id || questionIndex}`}
+      field={fieldDefinition}
+      isOpen={isOpen}
+      onClose={onClose}
+      onSave={handleSave}
+      allowedFieldTypes={clientTaskQuestionAdapter.allowedFieldTypes}
+      capabilities={clientTaskQuestionAdapter.capabilities}
+      availableFieldsForConditions={availableFieldsForConditions}
+    />
+  );
+}
 
 export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSectionProps) {
   const { toast } = useToast();
@@ -123,7 +215,7 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
   const [expandedOverrideId, setExpandedOverrideId] = useState<string | null>(null);
   const [deleteOverrideId, setDeleteOverrideId] = useState<string | null>(null);
   const [editingQuestion, setEditingQuestion] = useState<EditingQuestion | null>(null);
-  const [newOption, setNewOption] = useState("");
+  const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null);
   const [deleteQuestionId, setDeleteQuestionId] = useState<string | null>(null);
   const [systemLibraryPickerOpen, setSystemLibraryPickerOpen] = useState(false);
   const [currentOverrideIdForLibrary, setCurrentOverrideIdForLibrary] = useState<string | null>(null);
@@ -159,6 +251,7 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
     if (!override) return;
     
     const mappedType = mapSystemFieldTypeToQuestionType(systemField.fieldType);
+    const existingQuestionsCount = override.questions?.length || 0;
     
     setEditingQuestion({
       ...DEFAULT_QUESTION,
@@ -168,9 +261,10 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
       helpText: systemField.description || "",
       isRequired: systemField.isRequired || false,
       options: systemField.options || [],
-      order: (override.questions?.length || 0) + 1,
+      order: existingQuestionsCount + 1,
       libraryFieldId: systemField.id,
     });
+    setEditingQuestionIndex(existingQuestionsCount);
     
     setCurrentOverrideIdForLibrary(null);
   };
@@ -344,9 +438,10 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
       overrideId,
       order: existingQuestionsCount + 1,
     });
+    setEditingQuestionIndex(existingQuestionsCount);
   };
 
-  const handleEditQuestion = (question: ClientProjectTaskOverrideQuestion, overrideId: string) => {
+  const handleEditQuestion = (question: ClientProjectTaskOverrideQuestion, overrideId: string, questionIndex: number) => {
     setEditingQuestion({
       id: question.id,
       overrideId,
@@ -357,43 +452,37 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
       order: question.order,
       options: question.options || [],
       placeholder: question.placeholder || "",
+      conditionalLogic: question.conditionalLogic as ConditionalLogic | null,
     });
+    setEditingQuestionIndex(questionIndex);
   };
 
-  const handleSaveQuestion = () => {
-    if (!editingQuestion || !editingQuestion.label.trim()) {
+  const handleSaveQuestionFromModal = (updatedQuestion: EditingQuestion) => {
+    if (!updatedQuestion.label.trim()) {
       toast({ title: "Please enter a question label", variant: "destructive" });
       return;
     }
 
-    if (editingQuestion.id) {
-      const { id, overrideId, ...data } = editingQuestion;
+    if (updatedQuestion.id) {
+      const { id, overrideId, ...data } = updatedQuestion;
       updateQuestionMutation.mutate({ id, data });
     } else {
-      createQuestionMutation.mutate(editingQuestion);
+      createQuestionMutation.mutate(updatedQuestion);
     }
+    setEditingQuestion(null);
+    setEditingQuestionIndex(null);
   };
 
-  const handleAddOption = () => {
-    if (newOption.trim() && editingQuestion) {
-      setEditingQuestion({
-        ...editingQuestion,
-        options: [...editingQuestion.options, newOption.trim()]
-      });
-      setNewOption("");
-    }
-  };
-
-  const handleRemoveOption = (index: number) => {
-    if (editingQuestion) {
-      setEditingQuestion({
-        ...editingQuestion,
-        options: editingQuestion.options.filter((_, i) => i !== index)
-      });
-    }
-  };
-
-  const needsOptions = editingQuestion && ["single_choice", "multi_choice", "dropdown"].includes(editingQuestion.questionType);
+  const currentOverrideQuestions = useMemo(() => {
+    if (!editingQuestion?.overrideId) return [];
+    const override = overrides?.find(o => o.id === editingQuestion.overrideId);
+    if (!override?.questions) return [];
+    return override.questions.map((q, idx) => ({
+      ...q,
+      overrideId: editingQuestion.overrideId,
+      conditionalLogic: q.conditionalLogic as ConditionalLogic | null,
+    })) as EditingQuestion[];
+  }, [editingQuestion?.overrideId, overrides]);
 
   if (overridesLoading || projectTypesLoading || clientServicesLoading) {
     return (
@@ -522,25 +611,38 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
                               .sort((a, b) => a.order - b.order)
                               .map((question) => {
                                 const isRemoved = removedIds.includes(question.id);
+                                const questionTypeInfo = QUESTION_TYPES.find(qt => qt.type === question.questionType);
+                                const QuestionIcon = questionTypeInfo?.icon || Type;
+                                const iconColor = questionTypeInfo?.color || "#6b7280";
                                 
                                 return (
                                   <div
                                     key={question.id}
-                                    className={`flex items-center justify-between p-3 rounded-lg border ${
+                                    className={`flex items-center gap-3 p-3 rounded-lg border group ${
                                       isRemoved 
                                         ? "bg-muted/50 border-dashed" 
                                         : "bg-background"
                                     }`}
                                     data-testid={`inherited-question-${question.id}`}
                                   >
-                                    <div className={`flex-1 ${isRemoved ? "line-through text-muted-foreground" : ""}`}>
-                                      <p className="font-medium text-sm">{question.label}</p>
+                                    <div 
+                                      className={`w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0 ${isRemoved ? "opacity-50" : ""}`}
+                                      style={{ backgroundColor: `${iconColor}15` }}
+                                    >
+                                      <QuestionIcon className="w-4 h-4" style={{ color: iconColor }} />
+                                    </div>
+                                    <div className={`flex-1 min-w-0 ${isRemoved ? "line-through text-muted-foreground" : ""}`}>
+                                      <p className="font-medium text-sm truncate">{question.label}</p>
                                       <div className="flex items-center gap-2 mt-1">
-                                        <Badge variant="outline" className="text-xs">
-                                          {question.questionType}
+                                        <Badge 
+                                          variant="secondary" 
+                                          className="text-xs"
+                                          style={{ backgroundColor: isRemoved ? undefined : `${iconColor}15`, color: isRemoved ? undefined : iconColor }}
+                                        >
+                                          {questionTypeInfo?.label || question.questionType}
                                         </Badge>
                                         {question.isRequired && (
-                                          <Badge variant="secondary" className="text-xs">Required</Badge>
+                                          <Badge variant="outline" className="text-xs">Required</Badge>
                                         )}
                                       </div>
                                     </div>
@@ -559,7 +661,7 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
                                         variant="ghost"
                                         size="sm"
                                         onClick={() => handleRemoveQuestion(override, question.id)}
-                                        className="text-muted-foreground hover:text-destructive"
+                                        className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
                                         data-testid={`button-remove-question-${question.id}`}
                                       >
                                         <MinusCircle className="w-4 h-4 mr-1" />
@@ -612,41 +714,58 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
                           <div className="space-y-2">
                             {override.questions
                               .sort((a, b) => a.order - b.order)
-                              .map((question) => (
+                              .map((question, qIdx) => {
+                                const questionTypeInfo = QUESTION_TYPES.find(qt => qt.type === question.questionType);
+                                const QuestionIcon = questionTypeInfo?.icon || Type;
+                                const iconColor = questionTypeInfo?.color || "#6b7280";
+                                
+                                return (
                                 <div
                                   key={question.id}
-                                  className="flex items-center justify-between p-3 rounded-lg border bg-blue-50/50 dark:bg-blue-950/20"
+                                  className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:border-primary/50 hover:shadow-sm transition-all group"
                                   data-testid={`override-question-${question.id}`}
                                 >
                                   <div 
-                                    className="flex-1 cursor-pointer"
-                                    onClick={() => handleEditQuestion(question, override.id)}
+                                    className="w-8 h-8 rounded-md flex items-center justify-center flex-shrink-0"
+                                    style={{ backgroundColor: `${iconColor}15` }}
+                                  >
+                                    <QuestionIcon className="w-4 h-4" style={{ color: iconColor }} />
+                                  </div>
+                                  <div 
+                                    className="flex-1 cursor-pointer min-w-0"
+                                    onClick={() => handleEditQuestion(question, override.id, qIdx)}
                                   >
                                     <div className="flex items-center gap-2">
-                                      <p className="font-medium text-sm">{question.label}</p>
-                                      <Badge variant="outline" className="text-xs bg-blue-100 dark:bg-blue-900">
+                                      <p className="font-medium text-sm truncate">{question.label}</p>
+                                      <Badge variant="outline" className="text-xs bg-blue-100 dark:bg-blue-900 flex-shrink-0">
                                         Client Override
                                       </Badge>
                                     </div>
                                     <div className="flex items-center gap-2 mt-1">
-                                      <Badge variant="outline" className="text-xs">
-                                        {question.questionType}
+                                      <Badge 
+                                        variant="secondary" 
+                                        className="text-xs"
+                                        style={{ backgroundColor: `${iconColor}15`, color: iconColor }}
+                                      >
+                                        {questionTypeInfo?.label || question.questionType}
                                       </Badge>
                                       {question.isRequired && (
-                                        <Badge variant="secondary" className="text-xs">Required</Badge>
+                                        <Badge variant="outline" className="text-xs">Required</Badge>
                                       )}
                                     </div>
                                   </div>
                                   <Button
                                     variant="ghost"
                                     size="sm"
+                                    className="opacity-0 group-hover:opacity-100 transition-opacity"
                                     onClick={() => setDeleteQuestionId(question.id)}
                                     data-testid={`button-delete-override-question-${question.id}`}
                                   >
                                     <Trash2 className="w-4 h-4" />
                                   </Button>
                                 </div>
-                              ))}
+                                );
+                              })}
                           </div>
                         ) : (
                           <p className="text-sm text-muted-foreground py-4 text-center border rounded-lg border-dashed">
@@ -744,124 +863,19 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!editingQuestion} onOpenChange={() => setEditingQuestion(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editingQuestion?.id ? "Edit Question" : "Add Question"}</DialogTitle>
-          </DialogHeader>
-          
-          {editingQuestion && (
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="question-type">Question Type</Label>
-                <Select
-                  value={editingQuestion.questionType}
-                  onValueChange={(value) => setEditingQuestion({ ...editingQuestion, questionType: value as QuestionType })}
-                >
-                  <SelectTrigger id="question-type" data-testid="select-question-type">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {QUESTION_TYPES.map(qt => (
-                      <SelectItem key={qt.type} value={qt.type}>
-                        <div className="flex items-center gap-2">
-                          <qt.icon className="w-4 h-4" />
-                          {qt.label}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label htmlFor="question-label">Question Label *</Label>
-                <Input
-                  id="question-label"
-                  value={editingQuestion.label}
-                  onChange={(e) => setEditingQuestion({ ...editingQuestion, label: e.target.value })}
-                  placeholder="Enter your question here"
-                  data-testid="input-question-label"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="question-help">Help Text</Label>
-                <Textarea
-                  id="question-help"
-                  value={editingQuestion.helpText}
-                  onChange={(e) => setEditingQuestion({ ...editingQuestion, helpText: e.target.value })}
-                  placeholder="Optional help text for the client"
-                  rows={2}
-                  data-testid="input-question-help"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="question-placeholder">Placeholder</Label>
-                <Input
-                  id="question-placeholder"
-                  value={editingQuestion.placeholder}
-                  onChange={(e) => setEditingQuestion({ ...editingQuestion, placeholder: e.target.value })}
-                  placeholder="Placeholder text"
-                  data-testid="input-question-placeholder"
-                />
-              </div>
-
-              {needsOptions && (
-                <div>
-                  <Label>Options</Label>
-                  <div className="space-y-2 mt-2">
-                    {editingQuestion.options.map((opt, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        <Input value={opt} disabled className="flex-1" />
-                        <Button variant="ghost" size="sm" onClick={() => handleRemoveOption(index)}>
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ))}
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={newOption}
-                        onChange={(e) => setNewOption(e.target.value)}
-                        placeholder="Add option"
-                        onKeyDown={(e) => e.key === 'Enter' && handleAddOption()}
-                        data-testid="input-new-option"
-                      />
-                      <Button variant="outline" size="sm" onClick={handleAddOption} data-testid="button-add-option">
-                        <Plus className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex items-center gap-2">
-                <Switch
-                  id="question-required"
-                  checked={editingQuestion.isRequired}
-                  onCheckedChange={(checked) => setEditingQuestion({ ...editingQuestion, isRequired: checked })}
-                  data-testid="switch-question-required"
-                />
-                <Label htmlFor="question-required">Required</Label>
-              </div>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditingQuestion(null)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSaveQuestion}
-              disabled={createQuestionMutation.isPending || updateQuestionMutation.isPending}
-              data-testid="button-save-question"
-            >
-              {(createQuestionMutation.isPending || updateQuestionMutation.isPending) ? "Saving..." : "Save Question"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {editingQuestion && editingQuestionIndex !== null && (
+        <ClientTaskOverrideQuestionConfigModal
+          question={editingQuestion}
+          questionIndex={editingQuestionIndex}
+          allQuestions={currentOverrideQuestions}
+          isOpen={true}
+          onClose={() => {
+            setEditingQuestion(null);
+            setEditingQuestionIndex(null);
+          }}
+          onSave={handleSaveQuestionFromModal}
+        />
+      )}
 
       <AlertDialog open={!!deleteOverrideId} onOpenChange={() => setDeleteOverrideId(null)}>
         <AlertDialogContent>
