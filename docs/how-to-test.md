@@ -179,10 +179,53 @@ For situations where the dev-login endpoint cannot be used:
 
 When running browser tests via the `run_test` tool, follow these steps:
 
-### Pre-Test Setup
+### Mandatory Pre-Test Sequence (NON-NEGOTIABLE)
 
-1. **Check readiness first**: Always include an API step to verify `/readyz` returns 200 before any browser navigation
-2. **Authenticate via API**: Call `POST /api/dev-login` with header `Authorization: Bearer dev-test-token-2025` - this sets session cookies without needing to interact with the login form
+Before starting **any** browser test (`run_test`), you MUST perform the following steps **in order**:
+
+#### Step 1: Internal Readiness Check
+```bash
+curl -s http://127.0.0.1:$PORT/readyz
+```
+- Expect HTTP 200 with `{"status":"ready"}`
+- If this fails, STOP and fix the app startup
+
+#### Step 2: External (Public) Readiness Check — REQUIRED
+```bash
+# Poll the public Replit URL - retry every 2 seconds, timeout after 60 seconds
+for i in {1..30}; do
+  if curl -sf https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/readyz; then
+    echo "External readiness OK"
+    break
+  fi
+  sleep 2
+done
+```
+- Expect HTTP 200 with `{"status":"ready"}`
+- If this does NOT return 200 within 60 seconds:
+  - DO NOT start browser tests
+  - Record failure as **"Blocked: external Replit proxy not ready"**
+  - Do NOT retry browser tests automatically
+  - Report status and stop
+
+#### Step 3: Proceed with Browser Tests
+Only after BOTH internal AND external readiness checks pass:
+1. Authenticate via API: `POST /api/dev-login` with `Authorization: Bearer dev-test-token-2025`
+2. Start browser navigation and verification steps
+
+### Critical Rules
+
+- **Internal readiness alone is NOT sufficient**
+- Browser tests must never be used to "probe" app availability
+- If browser tests fail with "couldn't reach this app" **after** external `/readyz` passed, retry ONCE only
+- Do not restart the workflow unless explicitly instructed
+
+### Rationale
+
+We have confirmed repeated false failures caused by transient Replit proxy routing.
+This gate exists to separate **infrastructure availability** from **application correctness**.
+
+A browser test that starts before external `/readyz` is green is invalid by definition.
 
 ### Standard Test Plan Template
 
@@ -255,3 +298,4 @@ _This section tracks changes affecting tests. Update when making relevant change
 | 2025-12-20 | Added `scripts/wait-for-ready.sh` | Automated readiness waiting |
 | 2025-12-20 | Added `/api/dev-login` endpoint | Fast auth for testing, bypasses login form |
 | 2025-12-20 | Added "Instructions for Testing Agent" section | Explicit browser test steps |
+| 2025-12-20 | Added mandatory external readiness gate | Browser tests MUST wait for public URL `/readyz` before starting |

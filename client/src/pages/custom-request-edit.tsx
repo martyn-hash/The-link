@@ -29,8 +29,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
-import { ConditionalLogicEditor } from "@/components/field-builder/ConditionalLogicEditor";
-import type { ConditionalLogic, QuestionReference } from "@/components/field-builder/types";
+import { ConditionalLogicEditor, type QuestionReference } from "@/components/field-builder/ConditionalLogicEditor";
+import type { ConditionalLogic } from "@/components/field-builder/types";
 import type { SystemFieldLibrary } from "@shared/schema";
 
 const requestSchema = z.object({
@@ -805,6 +805,74 @@ export default function CustomRequestEdit() {
     createTaskInstanceMutation.mutate(data);
   };
 
+  // Flatten all questions from all sections for conditional logic
+  // This must be before early returns to maintain consistent hook order
+  const allQuestions = useMemo(() => {
+    const questions: any[] = [];
+    for (const section of sections) {
+      if (section.questions) {
+        questions.push(...section.questions.map((q: any) => ({ ...q, sectionId: section.id })));
+      }
+    }
+    return questions;
+  }, [sections]);
+
+  // Compute previous questions for edit (questions that come before the current one)
+  const previousQuestionsForEdit = useMemo((): QuestionReference[] => {
+    if (!editQuestionId || !allQuestions.length) return [];
+    
+    // Find the question being edited
+    let editQ: any = null;
+    for (const section of sections) {
+      const question = section.questions?.find((q: any) => q.id === editQuestionId);
+      if (question) {
+        editQ = question;
+        break;
+      }
+    }
+    if (!editQ) return [];
+    
+    const sortedQuestions = [...allQuestions].sort((a, b) => {
+      if (a.sectionId !== b.sectionId) {
+        const sectionA = sections.find(s => s.id === a.sectionId);
+        const sectionB = sections.find(s => s.id === b.sectionId);
+        return (sectionA?.order || 0) - (sectionB?.order || 0);
+      }
+      return (a.order || 0) - (b.order || 0);
+    });
+    
+    const currentIndex = sortedQuestions.findIndex(q => q.id === editQ.id);
+    if (currentIndex <= 0) return [];
+    
+    return sortedQuestions.slice(0, currentIndex).map(q => ({
+      id: q.id,
+      label: q.label,
+      questionType: q.questionType,
+      options: q.options,
+    }));
+  }, [editQuestionId, allQuestions, sections]);
+
+  // Compute previous questions for create (all existing questions in all sections)
+  const previousQuestionsForCreate = useMemo((): QuestionReference[] => {
+    if (!creatingQuestion || !allQuestions.length) return [];
+    
+    const sortedQuestions = [...allQuestions].sort((a, b) => {
+      if (a.sectionId !== b.sectionId) {
+        const sectionA = sections.find(s => s.id === a.sectionId);
+        const sectionB = sections.find(s => s.id === b.sectionId);
+        return (sectionA?.order || 0) - (sectionB?.order || 0);
+      }
+      return (a.order || 0) - (b.order || 0);
+    });
+    
+    return sortedQuestions.map(q => ({
+      id: q.id,
+      label: q.label,
+      questionType: q.questionType,
+      options: q.options,
+    }));
+  }, [creatingQuestion, allQuestions, sections]);
+
   if (!user?.isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -859,62 +927,6 @@ export default function CustomRequestEdit() {
       }
     }
   }
-
-  // Flatten all questions from all sections for conditional logic
-  const allQuestions = useMemo(() => {
-    const questions: any[] = [];
-    for (const section of sections) {
-      if (section.questions) {
-        questions.push(...section.questions.map((q: any) => ({ ...q, sectionId: section.id })));
-      }
-    }
-    return questions;
-  }, [sections]);
-
-  // Compute previous questions for edit (questions that come before the current one)
-  const previousQuestionsForEdit = useMemo((): QuestionReference[] => {
-    if (!editQuestion || !allQuestions.length) return [];
-    
-    const sortedQuestions = [...allQuestions].sort((a, b) => {
-      if (a.sectionId !== b.sectionId) {
-        const sectionA = sections.find(s => s.id === a.sectionId);
-        const sectionB = sections.find(s => s.id === b.sectionId);
-        return (sectionA?.order || 0) - (sectionB?.order || 0);
-      }
-      return (a.order || 0) - (b.order || 0);
-    });
-    
-    const currentIndex = sortedQuestions.findIndex(q => q.id === editQuestion.id);
-    if (currentIndex <= 0) return [];
-    
-    return sortedQuestions.slice(0, currentIndex).map(q => ({
-      id: q.id,
-      label: q.label,
-      questionType: q.questionType,
-      options: q.options,
-    }));
-  }, [editQuestion, allQuestions, sections]);
-
-  // Compute previous questions for create (all existing questions in all sections)
-  const previousQuestionsForCreate = useMemo((): QuestionReference[] => {
-    if (!creatingQuestion || !allQuestions.length) return [];
-    
-    const sortedQuestions = [...allQuestions].sort((a, b) => {
-      if (a.sectionId !== b.sectionId) {
-        const sectionA = sections.find(s => s.id === a.sectionId);
-        const sectionB = sections.find(s => s.id === b.sectionId);
-        return (sectionA?.order || 0) - (sectionB?.order || 0);
-      }
-      return (a.order || 0) - (b.order || 0);
-    });
-    
-    return sortedQuestions.map(q => ({
-      id: q.id,
-      label: q.label,
-      questionType: q.questionType,
-      options: q.options,
-    }));
-  }, [creatingQuestion, allQuestions, sections]);
 
   return (
     <div className="min-h-screen bg-background">
