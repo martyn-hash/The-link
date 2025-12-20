@@ -16,6 +16,9 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { MoreVertical } from "lucide-react";
 import { 
   Plus, Edit2, Trash2, Save, X, ClipboardList, GripVertical,
   Type, FileText, Mail, Hash, Calendar, CircleDot, CheckSquare, 
@@ -1244,10 +1247,36 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
   if (templatesLoading) {
     return (
       <TabsContent value="client-tasks" className="page-container py-6 space-y-6">
-        <Skeleton className="h-8 w-48" />
-        <div className="space-y-4">
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-24 w-full" />
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-64 mt-2" />
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+        <div className="border rounded-lg">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Questions</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Expiry</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[1, 2, 3].map(i => (
+                <TableRow key={i}>
+                  <TableCell><Skeleton className="h-8 w-48" /></TableCell>
+                  <TableCell><Skeleton className="h-6 w-24" /></TableCell>
+                  <TableCell><Skeleton className="h-6 w-16" /></TableCell>
+                  <TableCell><Skeleton className="h-4 w-16" /></TableCell>
+                  <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       </TabsContent>
     );
@@ -1374,16 +1403,12 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
 
               {/* Custom Question Types Section - Takes remaining space */}
               <div className="flex-1 min-h-0 flex flex-col">
-                <div className="p-4 border-b border-border bg-background/50">
+                <div className="p-3 border-b border-border/50 bg-blue-50/50 dark:bg-blue-950/20">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <HelpCircle className="w-4 h-4 text-primary" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-semibold">Question Types</h3>
-                      <p className="text-xs text-muted-foreground">Click or drag to add</p>
-                    </div>
+                    <Plus className="w-4 h-4 text-blue-500" />
+                    <h4 className="text-sm font-semibold text-blue-700 dark:text-blue-400">Custom Fields</h4>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-1">Click or drag to add</p>
                 </div>
                 <ScrollArea className="flex-1">
                   <div className="p-3 space-y-1.5">
@@ -1920,78 +1945,92 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {templates.map(template => {
-            const questionCount = template.questions?.length || 0;
-            const sectionCount = template.sections?.length || 0;
-            
-            return (
-              <Card 
-                key={template.id} 
-                className="hover:shadow-md transition-shadow cursor-pointer group"
-                onClick={() => handleEditTemplate(template)}
-              >
-                <CardContent className="py-5">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <ClipboardList className="w-6 h-6 text-primary" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold truncate" data-testid={`text-template-name-${template.id}`}>
-                          {template.name}
-                        </h3>
-                        <Badge 
-                          variant={template.isActive ? "default" : "secondary"}
-                          className="flex-shrink-0"
-                        >
-                          {template.isActive ? "Active" : "Inactive"}
-                        </Badge>
+        <div className="border rounded-lg">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Questions</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Expiry</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {templates.map(template => {
+                const questionCount = template.questions?.length || 0;
+                const sectionCount = template.sections?.length || 0;
+                
+                return (
+                  <TableRow 
+                    key={template.id} 
+                    data-testid={`row-template-${template.id}`}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => handleEditTemplate(template)}
+                  >
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                          <ClipboardList className="w-4 h-4 text-primary" />
+                        </div>
+                        <div>
+                          <span data-testid={`text-template-name-${template.id}`}>{template.name}</span>
+                          {template.description && (
+                            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1 max-w-[250px]">
+                              {template.description}
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      {template.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-1 mb-2">{template.description}</p>
-                      )}
-                      <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <FileText className="w-3 h-3" />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge variant="secondary">
                           {questionCount} {questionCount === 1 ? 'question' : 'questions'}
-                        </span>
+                        </Badge>
                         {sectionCount > 0 && (
-                          <span className="flex items-center gap-1">
-                            <Layers className="w-3 h-3" />
+                          <Badge variant="outline">
                             {sectionCount} {sectionCount === 1 ? 'section' : 'sections'}
-                          </span>
+                          </Badge>
                         )}
-                        <span className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3" />
-                          {template.expiryDaysAfterStart}d expiry
-                        </span>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        onClick={() => handleEditTemplate(template)}
-                        data-testid={`button-edit-template-${template.id}`}
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="text-destructive"
-                        onClick={() => setDeleteTemplateId(template.id)}
-                        data-testid={`button-delete-template-${template.id}`}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={template.isActive ? "default" : "secondary"}>
+                        {template.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {template.expiryDaysAfterStart} days
+                    </TableCell>
+                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-actions-${template.id}`}>
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleEditTemplate(template)} data-testid={`button-edit-template-${template.id}`}>
+                            <Edit2 className="w-4 h-4 mr-2" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem 
+                            onClick={() => setDeleteTemplateId(template.id)} 
+                            className="text-destructive focus:text-destructive"
+                            data-testid={`button-delete-template-${template.id}`}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </div>
       )}
 
