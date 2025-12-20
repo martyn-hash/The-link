@@ -12,15 +12,26 @@ import {
   servicePriorityIndicators,
 } from "./tables";
 
+export const udfFieldTypeValues = [
+  "boolean", "number", "short_text", "long_text", "date",
+  "single_select", "multi_select", "dropdown",
+  "email", "phone", "url", "currency", "percentage",
+  "user_select", "file_upload", "image_upload"
+] as const;
+
+export type UdfFieldType = typeof udfFieldTypeValues[number];
+
 export const udfDefinitionSchema = z.object({
   id: z.string(),
   name: z.string().min(1, "Field name is required"),
-  type: z.enum(["number", "date", "boolean", "short_text", "long_text", "dropdown"]),
+  type: z.enum(udfFieldTypeValues),
   required: z.boolean(),
   placeholder: z.string().optional(),
   options: z.array(z.string()).optional(),
   regex: z.string().optional(),
   regexError: z.string().optional(),
+  description: z.string().optional(),
+  helpText: z.string().optional(),
 });
 
 export type UdfDefinition = z.infer<typeof udfDefinitionSchema>;
