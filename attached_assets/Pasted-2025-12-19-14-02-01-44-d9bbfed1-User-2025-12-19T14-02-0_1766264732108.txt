@@ -1,0 +1,128 @@
+2025-12-19 14:02:01.44
+d9bbfed1
+User
+[2025-12-19T14:02:01.442Z] [cron-worker] [Project Message Reminders] Starting reminder check...
+2025-12-19 14:02:01.44
+d9bbfed1
+User
+[Project Message Reminders] Starting reminder check...
+2025-12-19 14:02:19.74
+d9bbfed1
+User
+[Project Message Reminders] Critical error in reminder service: timeout exceeded when trying to connect
+2025-12-19 14:02:21.14
+d9bbfed1
+User
+[2025-12-19T14:02:21.042Z] [cron-worker] [Project Message Reminders] Check completed: 0/0 emails sent
+2025-12-19 14:02:22.74
+d9bbfed1
+User
+[CronTelemetry:JSON] {"job_name":"ProjectMessageReminders","run_id":"74oFEYyj","timestamp":"2025-12-19T14:02:00.543Z","process_role":"cron-worker","drift_ms":543,"event_loop":{"p50_ms":20.12,"p95_ms":20.19,"max_ms":524.55},"memory":{"heap_used_mb":75.64,"heap_total_mb":78.8,"rss_mb":249.92},"process_uptime_sec":39559,"concurrent_jobs":[],"status":"success","lock_acquired":true,"lock_wait_ms":700,"duration_ms":21799,"retry_count":0}
+2025-12-19 14:02:22.74
+d9bbfed1
+User
+[Project Message Reminders] Errors: [
+2025-12-19 14:02:23.54
+d9bbfed1
+User
+[CronTelemetry] [ProjectMessageReminders] [74oFEYyj] END | duration=21799ms | heapDelta=+3.50MB
+2025-12-19 14:02:32.04
+d9bbfed1
+User
+[CronTelemetry] [ProjectMessageReminders] Advisory lock 1207399421 released
+2025-12-19 15:02:01.34
+d9bbfed1
+User
+[CronTelemetry] [ProjectMessageReminders] [_EpF1VSI] START | drift=1142ms | uptime=43160s | heap=72.51/81.55MB | rss=253.19MB | eventLoop: p50=20.12ms, p95=20.17ms, max=1060.11ms
+2025-12-19 15:02:01.34
+d9bbfed1
+User
+[CronTelemetry:JSON] {"job_name":"ProjectMessageReminders","run_id":"_EpF1VSI","timestamp":"2025-12-19T15:02:01.142Z","process_role":"cron-worker","drift_ms":1142,"event_loop":{"p50_ms":20.12,"p95_ms":20.17,"max_ms":1060.11},"memory":{"heap_used_mb":72.51,"heap_total_mb":81.55,"rss_mb":253.19},"process_uptime_sec":43160,"concurrent_jobs":[],"status":"started"}
+2025-12-19 15:02:02.58
+d9bbfed1
+User
+[Project Message Reminders] Starting reminder check...
+2025-12-19 15:02:02.58
+d9bbfed1
+User
+[CronTelemetry] [ProjectMessageReminders] Advisory lock 1207399421 acquired
+2025-12-19 15:02:02.58
+d9bbfed1
+User
+[2025-12-19T15:02:02.581Z] [cron-worker] [Project Message Reminders] Starting reminder check...
+2025-12-19 15:02:27.34
+d9bbfed1
+User
+[CronTelemetry:JSON] {"job_name":"ProjectMessageReminders","run_id":"_EpF1VSI","timestamp":"2025-12-19T15:02:01.142Z","process_role":"cron-worker","drift_ms":1142,"event_loop":{"p50_ms":20.12,"p95_ms":20.17,"max_ms":1060.11},"memory":{"heap_used_mb":72.51,"heap_total_mb":81.55,"rss_mb":253.19},"process_uptime_sec":43160,"concurrent_jobs":[],"status":"success","lock_acquired":true,"lock_wait_ms":1239,"duration_ms":26200,"retry_count":0}
+2025-12-19 15:02:27.34
+d9bbfed1
+User
+[Project Message Reminders] Found 3 users with new unread messages older than 10 minutes
+2025-12-19 15:02:27.34
+d9bbfed1
+User
+[Project Message Reminders] Budget exceeded at 0/3 users (24761ms), exiting gracefully
+2025-12-19 15:02:27.34
+d9bbfed1
+User
+[Project Message Reminders] Completed in 24761ms: 0/0 emails sent (3 candidates) (budget exceeded)
+2025-12-19 15:02:27.34
+d9bbfed1
+User
+[ProjectMessageReminders] Used 83% of execution budget (24761ms / 30000ms)
+2025-12-19 15:02:27.34
+d9bbfed1
+User
+[2025-12-19T15:02:27.342Z] [cron-worker] [Project Message Reminders] Check completed: 0/0 emails sent (budget exceeded, will continue next run)
+2025-12-19 15:02:27.44
+d9bbfed1
+User
+[CronTelemetry] [ProjectMessageReminders] [_EpF1VSI] END | duration=26200ms | heapDelta=+4.25MB
+2025-12-19 15:02:27.54
+d9bbfed1
+User
+[CronTelemetry] [ProjectMessageReminders] Advisory lock 1207399421 released
+2025-12-19 16:02:00.64
+d9bbfed1
+User
+[CronTelemetry] [ProjectMessageReminders] [HvE2uUBG] START | drift=442ms | uptime=46759s | heap=69.92/79.3MB | rss=256.74MB | eventLoop: p50=20.1ms, p95=20.17ms, max=2860.52ms
+2025-12-19 16:02:00.64
+d9bbfed1
+User
+[CronTelemetry:JSON] {"job_name":"ProjectMessageReminders","run_id":"HvE2uUBG","timestamp":"2025-12-19T16:02:00.442Z","process_role":"cron-worker","drift_ms":442,"event_loop":{"p50_ms":20.1,"p95_ms":20.17,"max_ms":2860.52},"memory":{"heap_used_mb":69.92,"heap_total_mb":79.3,"rss_mb":256.74},"process_uptime_sec":46759,"concurrent_jobs":[],"status":"started"}
+2025-12-19 16:02:01.34
+d9bbfed1
+User
+[2025-12-19T16:02:01.194Z] [cron-worker] [Project Message Reminders] Starting reminder check...
+2025-12-19 16:02:01.34
+d9bbfed1
+User
+[Project Message Reminders] Starting reminder check...
+2025-12-19 16:02:01.34
+d9bbfed1
+User
+[CronTelemetry] [ProjectMessageReminders] Advisory lock 1207399421 acquired
+2025-12-19 16:02:18.24
+d9bbfed1
+User
+[Project Message Reminders] Errors: [
+2025-12-19 16:02:18.24
+d9bbfed1
+User
+[2025-12-19T16:02:16.942Z] [cron-worker] [Project Message Reminders] Check completed: 0/0 emails sent
+2025-12-19 16:02:18.24
+d9bbfed1
+User
+[CronTelemetry] [ProjectMessageReminders] [HvE2uUBG] END | duration=17100ms | heapDelta=+3.41MB
+2025-12-19 16:02:18.24
+d9bbfed1
+User
+[CronTelemetry:JSON] {"job_name":"ProjectMessageReminders","run_id":"HvE2uUBG","timestamp":"2025-12-19T16:02:00.442Z","process_role":"cron-worker","drift_ms":442,"event_loop":{"p50_ms":20.1,"p95_ms":20.17,"max_ms":2860.52},"memory":{"heap_used_mb":69.92,"heap_total_mb":79.3,"rss_mb":256.74},"process_uptime_sec":46759,"concurrent_jobs":[],"status":"success","lock_acquired":true,"lock_wait_ms":652,"duration_ms":17100,"retry_count":0}
+2025-12-19 16:02:18.24
+d9bbfed1
+User
+[Project Message Reminders] Critical error in reminder service: timeout exceeded when trying to connect
+2025-12-19 16:02:21.04
+d9bbfed1
+User
+[CronTelemetry] [ProjectMessageReminders] Advisory lock 1207399421 released

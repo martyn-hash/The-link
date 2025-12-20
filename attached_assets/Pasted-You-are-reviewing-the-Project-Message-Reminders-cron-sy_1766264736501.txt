@@ -1,0 +1,148 @@
+You are reviewing the Project Message Reminders cron system.
+The logs below are representative of repeated behaviour over multiple runs.
+
+Observed behaviour (from logs)
+
+Cron scheduling is healthy:
+
+Drift is low (400–1100ms)
+
+Advisory lock is consistently acquired and released
+
+Cron starts and exits cleanly
+
+Node runtime is healthy:
+
+Event loop p50/p95 ≈ 20ms
+
+Memory stable, no leaks
+
+Two recurring failure modes:
+
+Hard failure
+Critical error in reminder service: timeout exceeded when trying to connect
+→ Occurs after “Starting reminder check…” and before candidates are processed
+→ Aborts the entire run
+
+Soft failure (budget exhaustion)
+
+Candidates found (e.g. 3–4 users)
+
+Budget exhausted before processing first or second user
+
+~8–12 seconds of work per candidate
+
+Zero or partial emails sent
+
+Diagnosis
+
+This is not a scheduler, lock, pool, or Node performance issue.
+
+Root problems:
+
+Reminder processing is serial, heavy per user, and time-boxed
+
+One slow user or external dependency can consume the entire execution budget
+
+External timeouts are not sufficiently isolated and can abort the whole job
+
+Advisory lock is held for the full duration, amplifying the impact of slow runs
+
+Likely causes of slowness:
+
+N+1 queries during per-user hydration
+
+Excessive per-user data loading (projects, messages, people, permissions)
+
+External calls (email, signed URLs, internal HTTP) inside the main loop
+
+This is now a pipeline design issue, not a bug-fix issue.
+
+Required architectural changes (priority order)
+🔥 1. Split “find candidates” from “process reminders”
+
+Refactor into a queue-based pipeline:
+
+Cron A – Discovery (fast, cheap)
+
+Identify users with unread messages older than threshold
+
+Insert rows into a project_message_reminder_queue
+
+No email sending
+
+No heavy joins
+
+Very short lock duration
+
+Cron B – Processor (repeatable, bounded)
+
+Process a small batch (e.g. 1–3 queue items per run)
+
+Strict per-item timeout
+
+Marks queue item as:
+
+sent
+
+failed (with reason)
+
+retryable
+
+Never aborts the whole run due to one failure
+
+Goal: partial success > total failure.
+
+🔥 2. Enforce per-user isolation
+
+Wrap each reminder in its own timeout guard (Promise.race or equivalent)
+
+One slow user must not block others
+
+Failures should be recorded per user, not per run
+
+🔥 3. Collapse N+1 queries
+
+Replace per-user hydration with:
+
+One preloading query (or minimal set)
+
+Only data required to decide + send
+
+No DB calls inside the main per-user loop unless unavoidable
+
+⚠️ 4. Contain external dependencies
+
+Any external call (email provider, HTTP, signed URLs) must:
+
+Have explicit, short timeouts
+
+Be caught and handled per reminder
+
+Never bubble up to abort the cron
+
+⚠️ 5. Reduce lock scope
+
+Advisory lock should protect:
+
+queue claiming
+
+state transitions
+
+Not long-running work or I/O
+
+Deliverables
+
+Please:
+
+Propose a queue schema (fields + statuses)
+
+Outline the two-cron flow clearly
+
+Identify current hotspots in the existing reminder code
+
+Provide a safe refactor plan (incremental, testable)
+
+Call out any external calls that need timeout / isolation hardening
+
+This refactor should prioritise stability and predictability over throughput.
