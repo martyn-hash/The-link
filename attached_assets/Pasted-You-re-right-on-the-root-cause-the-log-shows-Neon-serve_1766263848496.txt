@@ -1,0 +1,33 @@
+You’re right on the root cause: the log shows Neon serverless WebSocket dying before connect (closeCode 1006 / “closed before connection established”), and it happens inside tryAcquireJobLock() (cron-telemetry.ts:303) triggered by node-cron runner. This is transient DB connectivity, not a deterministic logic bug.
+
+Please implement the following with safety-first behaviour (avoid duplicate execution):
+
+1. Fix tryAcquireJobLock resilience
+
+* Wrap the DB call in the existing withRetry() helper from server/db.ts (3–5 attempts, exp backoff + jitter).
+* Retry ONLY on transient connectivity errors (ETIMEDOUT/ECONNRESET, “WebSocket closed before connection established”, “Connection terminated…”, close code 1006, etc.).
+* If pg_try_advisory_lock returns false (lock held), do NOT retry — just return “lock not acquired”.
+
+2. Change failure semantics: NEVER “fail open”
+
+* If retries are exhausted or DB is unreachable, return a “SKIP” outcome (i.e., treat as lock not acquired / job should not run).
+* Do not throw / crash the cron worker; log a single structured line like:
+  [CronTelemetry] [<job>] LOCK_SKIP reason=DB_UNAVAILABLE attempts=N elapsedMs=X error=...
+
+3. Optional but recommended: DB preflight
+
+* Before lock attempts, do a quick SELECT 1 with a short timeout; if it fails, skip immediately (don’t burn retries).
+
+4. Instrumentation to prove duplicates
+
+* Add CRON_INSTANCE_ID at cron-worker boot:
+  [CRON_BOOT] pid, instanceId, startedAt
+* Include instanceId in every cron run log.
+  This will definitively prove whether multiple cron workers exist during deploy/restarts.
+
+5. Dev sanity check
+
+* If cron is “disabled at startup”, confirm node-cron is not scheduling in the web process. We should NOT see any [CronTelemetry] job START logs in dev after a full restart.
+* Lots of GET /api/... in dev logs is likely front-end polling, not cron; only CronTelemetry markers prove cron is running.
+
+Deliverables: code changes in server/cron-telemetry.ts (+ cron-worker.ts for instanceId logging), plus a short note on how to verify in logs that SKIP is happening instead of crashes/duplicate runs.
