@@ -10,6 +10,7 @@ import UploadModal from "@/components/upload-modal";
 import SettingsModal from "@/components/settings-modal";
 import UserManagementModal from "@/components/user-management-modal";
 import ScheduledServicesTab from "@/components/scheduled-services-tab";
+import { NotificationTestingTab } from "@/components/NotificationTestingTab";
 import BulkVatValidation from "@/components/BulkVatValidation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -426,6 +427,7 @@ export default function Admin() {
             <TabsList className="mb-6">
               <TabsTrigger value="overview" data-testid="tab-admin-overview">Overview</TabsTrigger>
               <TabsTrigger value="scheduled-services" data-testid="tab-scheduled-services">Scheduled Services</TabsTrigger>
+              <TabsTrigger value="notification-testing" data-testid="tab-notification-testing">Notification Testing</TabsTrigger>
             </TabsList>
             
             <TabsContent value="overview" className="space-y-6">
@@ -1176,6 +1178,10 @@ export default function Admin() {
             
             <TabsContent value="scheduled-services">
               <ScheduledServicesTab />
+            </TabsContent>
+
+            <TabsContent value="notification-testing">
+              <NotificationTestingTab />
             </TabsContent>
           </Tabs>
         </main>

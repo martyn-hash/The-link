@@ -1465,6 +1465,94 @@ export function registerSuperAdminRoutes(
   // Super admin only - for testing notification flows
   // ========================================
 
+  // Generate notifications for a project type (schedules start_date notifications for all client services)
+  app.post(
+    "/api/super-admin/notifications/generate",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const { projectTypeId } = req.body;
+
+        if (!projectTypeId) {
+          return res.status(400).json({ message: "projectTypeId is required" });
+        }
+
+        const { scheduleServiceStartDateNotifications } = await import("../notification-scheduler");
+
+        // Get all services for this project type (there may be multiple)
+        const allServices = await storage.getActiveServices();
+        const servicesForType = allServices.filter((s: { projectTypeId: string }) => s.projectTypeId === projectTypeId);
+        
+        if (servicesForType.length === 0) {
+          return res.json({
+            success: true,
+            message: "No services found for this project type",
+            generated: 0,
+          });
+        }
+
+        // Gather all client services for all services of this project type
+        let allClientServices: any[] = [];
+        for (const service of servicesForType) {
+          const clientServices = await storage.getClientServicesByServiceId(service.id);
+          allClientServices = allClientServices.concat(clientServices);
+        }
+        
+        if (allClientServices.length === 0) {
+          return res.json({
+            success: true,
+            message: `Found ${servicesForType.length} service(s) but no active client services for this project type`,
+            generated: 0,
+          });
+        }
+
+        console.log(`[SuperAdmin] Generating notifications for ${allClientServices.length} client service(s) across ${servicesForType.length} service(s) by ${req.user.email}`);
+
+        let generated = 0;
+        let skippedNoDate = 0;
+        const errors: string[] = [];
+
+        for (const cs of allClientServices) {
+          if (!cs.nextStartDate) {
+            skippedNoDate++;
+            continue;
+          }
+
+          try {
+            // Get related people for this client
+            const clientPeople = await storage.getClientPeopleByClientId(cs.clientId);
+            const personIds = clientPeople.map((cp: { personId: string }) => cp.personId);
+
+            await scheduleServiceStartDateNotifications({
+              clientServiceId: cs.id,
+              clientId: cs.clientId,
+              projectTypeId,
+              nextStartDate: new Date(cs.nextStartDate),
+              relatedPeople: personIds,
+            });
+            generated++;
+          } catch (err: any) {
+            errors.push(`Service ${cs.id}: ${err.message}`);
+          }
+        }
+
+        res.json({
+          success: true,
+          message: `Generated notifications for ${generated}/${allClientServices.length} client service(s)${skippedNoDate > 0 ? ` (${skippedNoDate} skipped - no start date)` : ''}`,
+          generated,
+          total: allClientServices.length,
+          skippedNoDate,
+          errors: errors.length > 0 ? errors : undefined,
+        });
+      } catch (error: any) {
+        console.error("Error generating notifications:", error);
+        res.status(500).json({ message: error.message || "Failed to generate notifications" });
+      }
+    }
+  );
+
   // Reschedule a notification to a specific time (or immediate)
   app.post(
     "/api/super-admin/notifications/:notificationId/reschedule",
