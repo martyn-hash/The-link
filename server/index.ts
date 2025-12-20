@@ -25,15 +25,24 @@ process.on('uncaughtException', (error) => {
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error(`[${new Date().toISOString()}] [ERROR] Unhandled promise rejection:`, reason);
+  console.error(`[${new Date().toISOString()}] [FATAL] Unhandled promise rejection:`, reason);
   if (reason instanceof Error) {
-    console.error('[ERROR] Stack trace:', reason.stack);
+    console.error('[FATAL] Stack trace:', reason.stack);
   }
+  process.exit(1);
 });
+
+// Boot state tracking for debugging
+function logBootState(state: string) {
+  console.log(`[${new Date().toISOString()}] BOOT_STATE=${state}`);
+}
+
+logBootState('starting');
 
 // Log process start
 console.log(`[${new Date().toISOString()}] [Web Server] Process starting (PID: ${process.pid})`);
-console.log(`[${new Date().toISOString()}] [Web Server] PORT=${process.env.PORT || '5000 (default)'}`);
+const PORT = Number(process.env.PORT) || 5000;
+console.log(`[${new Date().toISOString()}] [Web Server] PORT=${PORT} (env.PORT=${process.env.PORT || 'unset'})`);
 
 const app = express();
 
@@ -41,6 +50,15 @@ const app = express();
 // This ensures external health checks succeed even during heavy startup operations
 // Track readiness state for /readyz endpoint
 let isReady = false;
+
+// Startup timeout - exit if not ready within 60 seconds
+const STARTUP_TIMEOUT_MS = 60000;
+setTimeout(() => {
+  if (!isReady) {
+    console.error(`[${new Date().toISOString()}] [FATAL] Startup timeout: app not ready after ${STARTUP_TIMEOUT_MS}ms`);
+    process.exit(1);
+  }
+}, STARTUP_TIMEOUT_MS);
 
 app.get('/healthz', (req, res) => {
   const uptime = Date.now() - PROCESS_START_TIME;
@@ -183,6 +201,8 @@ app.use((req, res, next) => {
   }, () => {
     // CRITICAL: The server is now accepting connections - log immediately
     const startupTime = Date.now() - PROCESS_START_TIME;
+    logBootState('web_listening');
+    console.log(`READY host=0.0.0.0 port=${port} envPORT=${process.env.PORT || 'unset'} pid=${process.pid}`);
     console.log(`[${new Date().toISOString()}] [Web Server] READY - Listening on 0.0.0.0:${port} (startup: ${startupTime}ms)`);
     log(`serving on port ${port}`);
     log('[Web Server] Cron jobs are handled by the separate cron-worker process');
@@ -191,6 +211,7 @@ app.use((req, res, next) => {
     // This ensures the server can immediately respond to health checks
     // while background initialization continues
     setImmediate(async () => {
+      logBootState('initialising_background');
       log('[Web Server] Running deferred startup tasks...');
       
       try {
@@ -249,6 +270,7 @@ app.use((req, res, next) => {
       
       // Mark app as fully ready for /readyz endpoint
       isReady = true;
+      logBootState('ready');
       log('[Web Server] All startup tasks completed - app is now READY');
     });
   });

@@ -1,0 +1,129 @@
+You are to do two things:
+
+(A) Implement final reachability + test reliability fixes
+(B) Create/maintain docs/how-to-test.md so future testing is repeatable.
+
+This project has a recurring failure mode: browser tests fail with “couldn’t reach this app” even when internal curl works. Treat this as a P1 reliability issue. Do NOT get distracted by LSP/type warnings unless you can prove they break runtime.
+
+────────────────────────────────────────────────────────────
+(A) IMPLEMENT FINAL FIXES (required)
+────────────────────────────────────────────────────────────
+
+1) Single source of truth: PORT + HOST
+- In the actual web entrypoint executed by the workflow:
+  Start Application → `PROCESS_ROLE=web NODE_ENV=development tsx server/index.ts`
+  Ensure the server binds EXACTLY to:
+  - host: "0.0.0.0"
+  - port: Number(process.env.PORT)
+- Add one definitive log line ONLY when the server is actually listening:
+  `READY host=0.0.0.0 port=<port> envPORT=<env> pid=<pid>`
+
+2) Health vs readiness endpoints (must exist)
+- Add `GET /healthz`:
+  - returns 200 immediately
+  - does NOT touch DB
+- Add `GET /readyz`:
+  - returns 200 only when app is “fully ready for UI tests”
+  - It may check DB connectivity lightly OR use a `ready` boolean that flips true after startup tasks complete
+- Log transitions:
+  BOOT_STATE=starting
+  BOOT_STATE=web_listening
+  BOOT_STATE=initialising_background
+  BOOT_STATE=ready
+
+3) Defer heavy startup work
+- Ensure heavy background tasks do NOT block the server from listening.
+- Move slow init into setImmediate() / background bootstrap.
+- Flip `ready=true` only after completion.
+
+4) Crash discipline (avoid zombie “half-up” server)
+- Add handlers:
+  - uncaughtException => log and exit(1)
+  - unhandledRejection => log and exit(1)  (Do not continue in an unknown state)
+- Add a startup timeout:
+  If ready is not achieved within e.g. 30 seconds:
+  - log fatal
+  - exit(1)
+  This prevents tests hitting a permanently “not ready” instance.
+
+5) Stop using localhost:5000 for validation
+- Replace any “is it up?” checks to use $PORT, not 5000.
+- When validating internally, use:
+  `curl -I http://127.0.0.1:$PORT/healthz`
+  `curl -I http://127.0.0.1:$PORT/readyz`
+
+6) Prove it works externally
+- Confirm that the public repl URL responds:
+  - /healthz => 200 fast
+  - /readyz => 200 after boot
+- Document how you verified this.
+
+7) (Optional but recommended) Provide a scriptable test gate
+- Add `scripts/wait-for-ready.sh` that loops until /readyz is 200 (with timeout).
+- This is used by humans and can be used by test harnesses.
+
+Deliverable for (A):
+- Commit code changes.
+- Provide a short report of what changed and where.
+- Include proof outputs (commands run + status codes) using $PORT.
+
+────────────────────────────────────────────────────────────
+(B) CREATE docs/how-to-test.md (required)
+────────────────────────────────────────────────────────────
+Create a new markdown file: `docs/how-to-test.md`
+
+It must include:
+
+1) Purpose
+- “This runbook ensures the app is reachable and ready before browser tests.”
+
+2) Preconditions
+- Workflow run commands (copy from Replit workflow):
+  - web: PROCESS_ROLE=web NODE_ENV=development tsx server/index.ts
+  - cron: PROCESS_ROLE=cron-worker NODE_ENV=development tsx server/cron-worker.ts
+- Reminder: multi-process, allow 10–15s boot
+
+3) Quick “Is it up?” checklist (internal)
+- Commands:
+  - `echo $PORT`
+  - `curl -I http://127.0.0.1:$PORT/healthz`
+  - `curl -I http://127.0.0.1:$PORT/readyz`
+- Expected results and what failures mean.
+
+4) External reachability checklist
+- Hit public URL:
+  - `/healthz` should be instant 200
+  - `/readyz` should become 200 after boot
+- Note: internal curl success alone is NOT proof of external reachability.
+
+5) Golden rule for browser tests
+- Do NOT start browser tests until /readyz is 200.
+- If tests say “couldn’t reach this app”, follow the troubleshooting tree.
+
+6) Troubleshooting tree (short and brutal)
+- If /healthz fails internally => server not listening / wrong port / crash. Check logs; confirm listen() uses env PORT.
+- If /healthz works internally but fails externally => bind/exposure/proxy issue; confirm host=0.0.0.0 and port=$PORT, confirm READY log.
+- If /healthz works externally but /readyz doesn’t => startup tasks hung; check BOOT_STATE logs; enforce startup timeout.
+- If ready is OK but UI route fails => routing issue (note current routes: /project-types, /settings/project-types/:id, NOT /admin/project-types).
+
+7) Standard browser test steps (for the agent)
+- Wait for /readyz 200
+- Navigate to root page
+- Passwords tab -> admin@example.com / admin123
+- Then correct nav paths:
+  - Project types list: /project-types
+  - Settings project type detail: /settings/project-types/:id
+  - Clients: /clients
+
+8) “What changed recently”
+- A small section where future maintainers append changes affecting tests (optional but useful).
+
+After creating it, reference it in future testing attempts: “Follow docs/how-to-test.md”.
+
+────────────────────────────────────────────────────────────
+IMPORTANT RULES
+────────────────────────────────────────────────────────────
+- Do not waste time on TypeScript “implicit any” warnings unless they cause runtime failure.
+- Do not claim “Replit is flaky” unless you have proven the app binds correctly and stays up and /healthz fails externally anyway.
+- Use $PORT, not 5000, in all checks.
+- The outcome must be: reliable readiness checks + a repeatable testing runbook.
