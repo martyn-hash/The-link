@@ -174,9 +174,10 @@ export async function setupAuth(app: Express) {
 
   // DEV-ONLY: Fast login for testing - NEVER available in production
   // This endpoint bypasses password verification for automated testing
-  // Requires DEV_LOGIN_TOKEN in Authorization header for security
+  // Requires DEV_LOGIN_TOKEN in Authorization header or query param for security
+  // Supports both GET (browser bookmark) and POST (API) methods
   if (process.env.NODE_ENV !== 'production') {
-    app.post("/api/dev-login", async (req: any, res) => {
+    const devLoginHandler = async (req: any, res: any) => {
       try {
         // Generate a default token if not set (for convenience in dev)
         const expectedToken = process.env.DEV_LOGIN_TOKEN || 'dev-test-token-change-me';
@@ -207,7 +208,15 @@ export async function setupAuth(app: Express) {
         req.session.isAdmin = user.isAdmin || false;
         req.session.canSeeAdminMenu = user.canSeeAdminMenu || false;
         
-        // Return user info (without password hash)
+        // Check if redirect is requested (defaults to dashboard)
+        const redirectTo = req.body.redirect || req.query.redirect || '/';
+        
+        // If redirect parameter is set, redirect to that URL
+        if (redirectTo && redirectTo !== 'none') {
+          return res.redirect(redirectTo);
+        }
+        
+        // Otherwise return JSON (for API-style usage)
         const { passwordHash, ...userResponse } = user;
         res.json({ 
           message: "Dev login successful", 
@@ -218,7 +227,11 @@ export async function setupAuth(app: Express) {
         console.error("[DEV-LOGIN] Error:", error);
         res.status(500).json({ message: "Dev login failed" });
       }
-    });
+    };
+    
+    // Register both GET (for browser bookmarks) and POST (for API calls)
+    app.get("/api/dev-login", devLoginHandler);
+    app.post("/api/dev-login", devLoginHandler);
     
     console.log('[Auth] DEV-LOGIN endpoint registered (development mode only)');
   }

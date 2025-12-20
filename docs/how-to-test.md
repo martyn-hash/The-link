@@ -128,18 +128,23 @@ In development mode, a special `/api/dev-login` endpoint is available that bypas
 
 ### Usage
 
-```bash
-# Login as default admin user
-curl -X POST http://127.0.0.1:$PORT/api/dev-login \
-  -H "Authorization: Bearer dev-test-token-2025" \
-  -H "Content-Type: application/json" \
-  -c cookies.txt
+**Browser URL (redirects to dashboard):**
+```
+https://YOUR-REPLIT-URL/api/dev-login?token=dev-test-token-2025
+```
 
-# Login as specific user
+Example:
+```
+https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/api/dev-login?token=dev-test-token-2025
+```
+
+**curl (API style, returns JSON):**
+```bash
+# Login and get JSON response (pass redirect=none to skip redirect)
 curl -X POST http://127.0.0.1:$PORT/api/dev-login \
   -H "Authorization: Bearer dev-test-token-2025" \
   -H "Content-Type: application/json" \
-  -d '{"email": "admin@example.com"}' \
+  -d '{"redirect": "none"}' \
   -c cookies.txt
 ```
 
