@@ -11,10 +11,42 @@ import fs from "fs";
 import path from "path";
 import cookieParser from "cookie-parser";
 
+// Track process startup time for diagnostics
+const PROCESS_START_TIME = Date.now();
+
 // Set process role for telemetry (web server, not cron worker)
 setProcessRole('web');
 
+// Global uncaught exception/rejection handlers - prevents silent crashes
+process.on('uncaughtException', (error) => {
+  console.error(`[${new Date().toISOString()}] [FATAL] Uncaught exception:`, error);
+  console.error('[FATAL] Stack trace:', error.stack);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error(`[${new Date().toISOString()}] [ERROR] Unhandled promise rejection:`, reason);
+  if (reason instanceof Error) {
+    console.error('[ERROR] Stack trace:', reason.stack);
+  }
+});
+
+// Log process start
+console.log(`[${new Date().toISOString()}] [Web Server] Process starting (PID: ${process.pid})`);
+console.log(`[${new Date().toISOString()}] [Web Server] PORT=${process.env.PORT || '5000 (default)'}`);
+
 const app = express();
+
+// CRITICAL: /healthz endpoint MUST be registered FIRST, before any middleware
+// This ensures external health checks succeed even during heavy startup operations
+app.get('/healthz', (req, res) => {
+  const uptime = Date.now() - PROCESS_START_TIME;
+  res.status(200).json({
+    status: 'ok',
+    uptime_ms: uptime,
+    timestamp: new Date().toISOString()
+  });
+});
 // Increase body size limit to 75MB for email attachments (5 files x 10MB = 50MB, + ~33% base64 encoding overhead = ~67MB)
 app.use(express.json({ limit: '75mb' }));
 app.use(express.urlencoded({ extended: false, limit: '75mb' }));
@@ -119,55 +151,81 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
+  
+  console.log(`[${new Date().toISOString()}] [Web Server] Starting to listen on 0.0.0.0:${port}...`);
+  
   server.listen({
     port,
     host: "0.0.0.0",
     reusePort: true,
-  }, async () => {
+  }, () => {
+    // CRITICAL: The server is now accepting connections - log immediately
+    const startupTime = Date.now() - PROCESS_START_TIME;
+    console.log(`[${new Date().toISOString()}] [Web Server] READY - Listening on 0.0.0.0:${port} (startup: ${startupTime}ms)`);
     log(`serving on port ${port}`);
     log('[Web Server] Cron jobs are handled by the separate cron-worker process');
     
-    // Seed initial task types
-    await seedTaskTypes();
-    
-    // Initialize default notification templates
-    await initializeDefaultNotificationTemplates();
-    
-    // Run startup catch-up to detect and execute any missed scheduling runs
-    // This ensures server restarts don't cause missed overnight scheduling
-    // Only runs if startupCatchUp setting is enabled (defaults to true)
-    // IMPORTANT: This is wrapped in a non-fatal block - scheduler failures must NEVER crash the process
-    try {
-      // DB Readiness Gate: Wait for database to be ready before attempting catch-up
-      // This prevents crash loops when the database is slow to start (e.g., Neon cold start)
-      log('[Scheduling Orchestrator] Checking database readiness before catch-up...');
-      const dbReady = await waitForDatabaseReady({ maxWaitMs: 120000 });
+    // IMPORTANT: Defer all heavy async operations to next tick
+    // This ensures the server can immediately respond to health checks
+    // while background initialization continues
+    setImmediate(async () => {
+      log('[Web Server] Running deferred startup tasks...');
       
-      if (!dbReady) {
-        console.error('[Scheduling Orchestrator] Database not ready after 2 minutes - skipping startup catch-up (will retry on next scheduled run)');
-      } else {
-        const settings = await storage.getCompanySettings();
-        const startupCatchUpEnabled = settings?.startupCatchUp !== false;
-        
-        if (startupCatchUpEnabled) {
-          log('[Scheduling Orchestrator] Running startup catch-up check...');
-          const catchupResult = await runStartupCatchup();
-          log(`[Scheduling Orchestrator] ${catchupResult.message}`);
-        } else {
-          log('[Scheduling Orchestrator] Startup catch-up check disabled via company settings');
-        }
+      try {
+        // Seed initial task types
+        await seedTaskTypes();
+        log('[Web Server] Task types seeded');
+      } catch (seedError) {
+        console.error('[Web Server] Error seeding task types (non-fatal):', seedError);
       }
-    } catch (catchupError) {
-      // NON-FATAL: Log and continue - scheduler failures must never crash the web server
-      console.error('[Scheduling Orchestrator] Error in startup catch-up (non-fatal, will retry on next scheduled run):', 
-        catchupError instanceof Error ? catchupError.message : catchupError);
-    }
-    
-    // Recover any pending transcription jobs that were interrupted by server restart
-    try {
-      await recoverPendingTranscriptions();
-    } catch (transcriptionError) {
-      console.error('[Transcription] Error recovering pending transcriptions:', transcriptionError);
-    }
+      
+      try {
+        // Initialize default notification templates
+        await initializeDefaultNotificationTemplates();
+        log('[Web Server] Notification templates initialized');
+      } catch (templateError) {
+        console.error('[Web Server] Error initializing notification templates (non-fatal):', templateError);
+      }
+      
+      // Run startup catch-up to detect and execute any missed scheduling runs
+      // This ensures server restarts don't cause missed overnight scheduling
+      // Only runs if startupCatchUp setting is enabled (defaults to true)
+      // IMPORTANT: This is wrapped in a non-fatal block - scheduler failures must NEVER crash the process
+      try {
+        // DB Readiness Gate: Wait for database to be ready before attempting catch-up
+        // This prevents crash loops when the database is slow to start (e.g., Neon cold start)
+        log('[Scheduling Orchestrator] Checking database readiness before catch-up...');
+        const dbReady = await waitForDatabaseReady({ maxWaitMs: 120000 });
+        
+        if (!dbReady) {
+          console.error('[Scheduling Orchestrator] Database not ready after 2 minutes - skipping startup catch-up (will retry on next scheduled run)');
+        } else {
+          const settings = await storage.getCompanySettings();
+          const startupCatchUpEnabled = settings?.startupCatchUp !== false;
+          
+          if (startupCatchUpEnabled) {
+            log('[Scheduling Orchestrator] Running startup catch-up check...');
+            const catchupResult = await runStartupCatchup();
+            log(`[Scheduling Orchestrator] ${catchupResult.message}`);
+          } else {
+            log('[Scheduling Orchestrator] Startup catch-up check disabled via company settings');
+          }
+        }
+      } catch (catchupError) {
+        // NON-FATAL: Log and continue - scheduler failures must never crash the web server
+        console.error('[Scheduling Orchestrator] Error in startup catch-up (non-fatal, will retry on next scheduled run):', 
+          catchupError instanceof Error ? catchupError.message : catchupError);
+      }
+      
+      // Recover any pending transcription jobs that were interrupted by server restart
+      try {
+        await recoverPendingTranscriptions();
+        log('[Web Server] Pending transcriptions recovered');
+      } catch (transcriptionError) {
+        console.error('[Transcription] Error recovering pending transcriptions (non-fatal):', transcriptionError);
+      }
+      
+      log('[Web Server] All startup tasks completed');
+    });
   });
 })();
