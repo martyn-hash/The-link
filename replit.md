@@ -32,6 +32,14 @@ Cron Lock Acquisition Resilience (Dec 2025):
 -   Structured log markers: `[CRON_BOOT]` at startup, `LOCK_SKIP reason=DB_UNAVAILABLE` on connectivity failures
 -   All cron telemetry includes `instance_id` for correlation
 
+Project Message Reminders Optimization (Dec 2025):
+-   Fixed "timeout exceeded when trying to connect" errors caused by fake batch queries (N parallel individual queries)
+-   `batchGetUsers` and `batchGetProjects` now use TRUE SQL batch queries (`WHERE id IN (...)`) - 2 indexed queries instead of N connections
+-   Candidate LIMIT reduced from 100 to 25 to minimize hydration work per run
+-   Per-user timeout isolation: 8-second timeout per user prevents one slow email from blocking others
+-   Global budget increased from 8s to 25s (appropriate since query phase is now sub-second)
+-   Hydration miss logging: warns when users/projects are skipped due to missing data for observability
+
 ## External Dependencies
 
 ### Third-Party Services
