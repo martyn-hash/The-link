@@ -139,6 +139,7 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
       "date": "date",
       "single_select": "single_choice",
       "multi_select": "multi_choice",
+      "dropdown": "dropdown",
       "email": "email",
       "file_upload": "file_upload",
       "image_upload": "file_upload",
@@ -146,6 +147,7 @@ export function ClientTaskOverridesSection({ clientId }: ClientTaskOverridesSect
       "percentage": "number",
       "url": "short_text",
       "phone": "short_text",
+      "user_select": "dropdown",
     };
     return mapping[fieldType] || "short_text";
   };

@@ -17,7 +17,7 @@ interface CustomFieldFormProps {
   existingFields: any[];
 }
 
-const ALLOWED_SYSTEM_FIELD_TYPES = ["boolean", "number", "short_text", "long_text", "date", "single_select", "multi_select", "email", "phone", "url", "currency", "percentage", "file_upload", "image_upload", "user_select"];
+const ALLOWED_SYSTEM_FIELD_TYPES = ["boolean", "number", "short_text", "long_text", "date", "single_select", "multi_select", "dropdown", "email", "phone", "url", "currency", "percentage", "user_select", "file_upload", "image_upload"];
 
 type CustomFieldType = "boolean" | "number" | "short_text" | "long_text" | "multi_select";
 
@@ -29,6 +29,7 @@ const mapSystemFieldTypeToCustomFieldType = (fieldType: string): CustomFieldType
     long_text: "long_text",
     multi_select: "multi_select",
     single_select: "multi_select",
+    dropdown: "multi_select",
     email: "short_text",
     phone: "short_text",
     url: "short_text",

@@ -131,7 +131,7 @@ export default function TaskTemplateSectionQuestionsPage() {
   const [deletingQuestion, setDeletingQuestion] = useState<ClientRequestTemplateQuestion | null>(null);
   const [systemLibraryPickerOpen, setSystemLibraryPickerOpen] = useState(false);
 
-  const ALLOWED_SYSTEM_FIELD_TYPES = ["boolean", "number", "short_text", "long_text", "date", "single_select", "multi_select", "email", "phone", "url", "currency", "percentage", "file_upload", "image_upload", "user_select"];
+  const ALLOWED_SYSTEM_FIELD_TYPES = ["boolean", "number", "short_text", "long_text", "date", "single_select", "multi_select", "dropdown", "email", "phone", "url", "currency", "percentage", "user_select", "file_upload", "image_upload"];
 
   const mapSystemFieldTypeToQuestionType = (fieldType: string): ClientRequestTemplateQuestion["questionType"] => {
     const typeMap: Record<string, ClientRequestTemplateQuestion["questionType"]> = {
@@ -142,6 +142,7 @@ export default function TaskTemplateSectionQuestionsPage() {
       date: "date",
       single_select: "single_choice",
       multi_select: "multi_choice",
+      dropdown: "dropdown",
       email: "email",
       file_upload: "file_upload",
       phone: "short_text",

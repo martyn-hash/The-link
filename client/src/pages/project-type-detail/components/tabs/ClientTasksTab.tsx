@@ -768,6 +768,7 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
       "date": "date",
       "single_select": "single_choice",
       "multi_select": "multi_choice",
+      "dropdown": "dropdown",
       "email": "email",
       "file_upload": "file_upload",
       "image_upload": "file_upload",
@@ -775,6 +776,7 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
       "percentage": "number",
       "url": "short_text",
       "phone": "short_text",
+      "user_select": "dropdown",
     };
     return mapping[fieldType] || "short_text";
   };
