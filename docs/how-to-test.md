@@ -175,6 +175,63 @@ For situations where the dev-login endpoint cannot be used:
    - Clients: `/clients`
    - Client detail: `/clients/:id`
 
+## Instructions for Testing Agent (Browser Tests)
+
+When running browser tests via the `run_test` tool, follow these steps:
+
+### Pre-Test Setup
+
+1. **Check readiness first**: Always include an API step to verify `/readyz` returns 200 before any browser navigation
+2. **Authenticate via API**: Call `POST /api/dev-login` with header `Authorization: Bearer dev-test-token-2025` - this sets session cookies without needing to interact with the login form
+
+### Standard Test Plan Template
+
+```
+1. [New Context] Create a new browser context
+
+2. [API] GET /readyz to confirm app is ready - expect 200 with status "ready"
+
+3. [API] POST /api/dev-login with header "Authorization: Bearer dev-test-token-2025" 
+   - Expect 200, session cookies will be set automatically
+
+4. [Browser] Navigate to the target page (e.g., /project-types, /clients)
+
+5. [Verify] Verify page content and take screenshots as needed
+```
+
+### Correct Route Paths (IMPORTANT)
+
+These are the actual routes - do NOT use `/admin/` prefixes:
+
+| Page | Correct Path | Wrong Path |
+|------|-------------|------------|
+| Project types list | `/project-types` | `/admin/project-types` |
+| Project type detail | `/settings/project-types/:id` | N/A |
+| Clients list | `/clients` | `/admin/clients` |
+| Client detail | `/clients/:id` | N/A |
+
+### Authentication Options
+
+**Option 1: API dev-login (preferred)**
+```
+[API] POST /api/dev-login with Authorization: Bearer dev-test-token-2025
+```
+
+**Option 2: Manual login (fallback)**
+```
+[Browser] Navigate to /
+[Browser] Click "Passwords" tab
+[Browser] Enter admin@example.com and admin123
+[Browser] Click submit
+```
+
+### Troubleshooting Test Failures
+
+If tests fail with "couldn't reach this app":
+1. Verify `/healthz` responds (server is running)
+2. Verify `/readyz` responds with 200 (app is ready)
+3. If both pass but tests still fail, it may be a transient Replit proxy issue - retry once
+
 ## Boot State Log Reference
 
 The server logs these states during startup:
@@ -196,3 +253,5 @@ _This section tracks changes affecting tests. Update when making relevant change
 | 2025-12-20 | Added `BOOT_STATE` logging | Easier debugging of startup issues |
 | 2025-12-20 | Added startup timeout (60s) | Server exits if not ready in time |
 | 2025-12-20 | Added `scripts/wait-for-ready.sh` | Automated readiness waiting |
+| 2025-12-20 | Added `/api/dev-login` endpoint | Fast auth for testing, bypasses login form |
+| 2025-12-20 | Added "Instructions for Testing Agent" section | Explicit browser test steps |
