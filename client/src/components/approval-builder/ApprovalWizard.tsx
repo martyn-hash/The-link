@@ -10,10 +10,11 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 import { 
   X, Save, GripVertical, Plus, Trash2, Edit2, Eye,
-  ChevronRight, ChevronLeft, Library, Sparkles, ClipboardCheck, Check, Settings,
+  ChevronRight, ChevronLeft, ChevronDown, Library, Sparkles, ClipboardCheck, Check, Settings,
   BookOpen, Type, Search
 } from "lucide-react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverlay, useDraggable, useDroppable } from "@dnd-kit/core";
@@ -348,6 +349,7 @@ export function ApprovalWizard({
   const [isOverDropZone, setIsOverDropZone] = useState(false);
   const [systemCategoryFilter, setSystemCategoryFilter] = useState<string>("all");
   const [systemSearchQuery, setSystemSearchQuery] = useState("");
+  const [isSystemLibraryExpanded, setIsSystemLibraryExpanded] = useState(false);
 
   const isViewOnly = mode === "view";
 
@@ -744,90 +746,117 @@ export function ApprovalWizard({
               </div>
               
               <div className="flex-1 flex flex-col overflow-hidden">
-                {/* System Library Section - Top 50% */}
+                {/* System Library Section - Collapsible */}
                 {!isViewOnly && (
-                  <div className="h-1/2 flex flex-col border-b border-border">
-                    <div className="p-3 border-b border-border/50 bg-emerald-50/50 dark:bg-emerald-950/20">
-                      <div className="flex items-center gap-2 mb-2">
-                        <BookOpen className="w-4 h-4 text-emerald-600" />
-                        <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">System Library</h4>
-                        <Badge variant="secondary" className="ml-auto text-xs">
-                          {filteredSystemFields.length}
-                        </Badge>
-                      </div>
-                      <div className="flex gap-2">
-                        <div className="relative flex-1">
-                          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                          <Input
-                            placeholder="Search..."
-                            value={systemSearchQuery}
-                            onChange={(e) => setSystemSearchQuery(e.target.value)}
-                            className="h-8 pl-7 text-sm"
-                            data-testid="input-search-system-fields"
+                  <Collapsible 
+                    open={isSystemLibraryExpanded} 
+                    onOpenChange={setIsSystemLibraryExpanded}
+                    className={cn(
+                      "flex flex-col border-b border-border transition-all",
+                      isSystemLibraryExpanded ? "h-1/2" : "h-auto"
+                    )}
+                  >
+                    <CollapsibleTrigger asChild>
+                      <button 
+                        className="w-full p-3 border-b border-border/50 bg-emerald-50/50 dark:bg-emerald-950/20 hover:bg-emerald-100/50 dark:hover:bg-emerald-950/30 transition-colors text-left"
+                        data-testid="button-toggle-system-library"
+                      >
+                        <div className="flex items-center gap-2">
+                          <BookOpen className="w-4 h-4 text-emerald-600" />
+                          <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">System Library</h4>
+                          <Badge variant="secondary" className="text-xs">
+                            {filteredSystemFields.length}
+                          </Badge>
+                          <ChevronDown 
+                            className={cn(
+                              "w-4 h-4 text-emerald-600 ml-auto transition-transform",
+                              isSystemLibraryExpanded && "rotate-180"
+                            )} 
                           />
                         </div>
-                        <Select value={systemCategoryFilter} onValueChange={setSystemCategoryFilter}>
-                          <SelectTrigger className="w-[120px] h-8 text-xs" data-testid="select-category-filter">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {CATEGORY_OPTIONS.map(cat => (
-                              <SelectItem key={cat.value} value={cat.value} className="text-xs">
-                                {cat.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-                    <ScrollArea className="flex-1">
-                      <div className="p-3 space-y-1.5">
-                        {systemFieldsLoading ? (
-                          <>
-                            <Skeleton className="h-10 w-full" />
-                            <Skeleton className="h-10 w-full" />
-                            <Skeleton className="h-10 w-full" />
-                          </>
-                        ) : filteredSystemFields.length === 0 ? (
-                          <div className="text-center py-4 text-sm text-muted-foreground">
-                            <Library className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                            <p>No matching fields</p>
-                          </div>
-                        ) : (
-                          filteredSystemFields.map(sf => {
-                            const normalizedType = normalizeFieldType(sf.fieldType);
-                            const fieldTypeInfo = getFieldTypeInfo(normalizedType);
-                            return (
-                              <button
-                                key={sf.id}
-                                className="w-full flex items-center gap-2 p-2 rounded-md hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors text-left group"
-                                onClick={() => handleAddFieldFromSystemLibrary(sf)}
-                                data-testid={`button-add-system-field-${sf.id}`}
-                              >
-                                <div 
-                                  className="w-7 h-7 rounded-md flex items-center justify-center text-white shrink-0"
-                                  style={{ backgroundColor: fieldTypeInfo?.color || "#6b7280" }}
-                                >
-                                  {fieldTypeInfo?.icon ? <fieldTypeInfo.icon className="w-3.5 h-3.5" /> : <Type className="w-3.5 h-3.5" />}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium truncate">{sf.fieldName}</p>
-                                  <p className="text-xs text-muted-foreground truncate">
-                                    {fieldTypeInfo?.label || sf.fieldType}
-                                  </p>
-                                </div>
-                                <Plus className="w-4 h-4 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                              </button>
-                            );
-                          })
+                        {!isSystemLibraryExpanded && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Click to browse reusable fields from the library
+                          </p>
                         )}
+                      </button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="flex-1 flex flex-col overflow-hidden">
+                      <div className="p-3 border-b border-border/50">
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                            <Input
+                              placeholder="Search..."
+                              value={systemSearchQuery}
+                              onChange={(e) => setSystemSearchQuery(e.target.value)}
+                              className="h-8 pl-7 text-sm"
+                              data-testid="input-search-system-fields"
+                            />
+                          </div>
+                          <Select value={systemCategoryFilter} onValueChange={setSystemCategoryFilter}>
+                            <SelectTrigger className="w-[120px] h-8 text-xs" data-testid="select-category-filter">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {CATEGORY_OPTIONS.map(cat => (
+                                <SelectItem key={cat.value} value={cat.value} className="text-xs">
+                                  {cat.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </div>
-                    </ScrollArea>
-                  </div>
+                      <ScrollArea className="flex-1">
+                        <div className="p-3 space-y-1.5">
+                          {systemFieldsLoading ? (
+                            <>
+                              <Skeleton className="h-10 w-full" />
+                              <Skeleton className="h-10 w-full" />
+                              <Skeleton className="h-10 w-full" />
+                            </>
+                          ) : filteredSystemFields.length === 0 ? (
+                            <div className="text-center py-4 text-sm text-muted-foreground">
+                              <Library className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                              <p>No matching fields</p>
+                            </div>
+                          ) : (
+                            filteredSystemFields.map(sf => {
+                              const normalizedType = normalizeFieldType(sf.fieldType);
+                              const fieldTypeInfo = getFieldTypeInfo(normalizedType);
+                              return (
+                                <button
+                                  key={sf.id}
+                                  className="w-full flex items-center gap-2 p-2 rounded-md hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors text-left group"
+                                  onClick={() => handleAddFieldFromSystemLibrary(sf)}
+                                  data-testid={`button-add-system-field-${sf.id}`}
+                                >
+                                  <div 
+                                    className="w-7 h-7 rounded-md flex items-center justify-center text-white shrink-0"
+                                    style={{ backgroundColor: fieldTypeInfo?.color || "#6b7280" }}
+                                  >
+                                    {fieldTypeInfo?.icon ? <fieldTypeInfo.icon className="w-3.5 h-3.5" /> : <Type className="w-3.5 h-3.5" />}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">{sf.fieldName}</p>
+                                    <p className="text-xs text-muted-foreground truncate">
+                                      {fieldTypeInfo?.label || sf.fieldType}
+                                    </p>
+                                  </div>
+                                  <Plus className="w-4 h-4 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </CollapsibleContent>
+                  </Collapsible>
                 )}
 
-                {/* Custom Fields Section - Bottom 50% (or full height if view only) */}
-                <div className={cn("flex flex-col", !isViewOnly ? "h-1/2" : "h-full")}>
+                {/* Custom Fields Section - Takes remaining space */}
+                <div className="flex-1 flex flex-col min-h-0">
                   <div className="p-3 border-b border-border/50 bg-blue-50/50 dark:bg-blue-950/20">
                     <div className="flex items-center gap-2">
                       <Plus className="w-4 h-4 text-blue-500" />
