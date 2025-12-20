@@ -1,0 +1,131 @@
+# Diagnosis: Cron lock failures due to DB connectivity instability (Neon serverless / WebSocket) + possible duplicate runners
+
+## What we’re seeing (from logs)
+
+* Cron job fails at/near lock acquisition: `Error acquiring lock: Connection terminated due to connection timeout`.
+* Underlying driver appears to be Neon serverless (WebSocket-based Postgres). We also saw abnormal WebSocket closure: `closeCode: 1006` (connection dropped).
+* Stack trace points into `tryAcquireJobLock` (cron telemetry / lock helper) → job never reaches its business logic; it dies before or during DB connect/lock step.
+
+## Likely root causes (ranked)
+
+1. **Transient DB connectivity / WebSocket flakiness**
+   Neon serverless uses WebSockets; in hosted environments (Replit autoscale/cold start/network jitter) you can get occasional 1006 drops, which look like “connection timeout” at the app layer.
+2. **Connection stampede / too many concurrent attempts**
+   Web server + cron ticks + bursts can create many concurrent DB connect attempts. Serverless WS drivers are sensitive to this.
+3. **More than one cron runner (or overlap during restarts)**
+   Even if run command starts one cron worker, autoscale or restarts can briefly run two. That creates lock contention + increased DB churn.
+4. **Lock acquisition too brittle**
+   If `tryAcquireJobLock` has no retry/backoff and assumes DB is always reachable, a single blip kills the run.
+
+## Goal
+
+Make cron execution resilient:
+
+* A DB blip = cron run is skipped (logged) not fatal.
+* Duplicate runners don’t cause chaos.
+* We can *prove* whether duplicates exist.
+
+---
+
+# Remedial Plan (do in this order)
+
+## A) Instrumentation to get clarity (prove “one cron runner” + isolate failures)
+
+1. **Cron instance fingerprint**
+
+   * In `server/cron-worker.ts`, create `CRON_INSTANCE_ID` at startup (uuid) and log once:
+
+     * `[CRON_BOOT] pid, instanceId, startedAt`
+   * For each cron job run log:
+
+     * `[CRON_RUN] jobName, pid, instanceId, runId`
+   * Success criteria:
+
+     * Only one `[CRON_BOOT]` per deploy.
+     * Cron runs always show the same `instanceId`.
+   * If multiple instanceIds appear → duplicates exist (during autoscale/restart).
+
+2. **Lock attempt metrics**
+
+   * In `tryAcquireJobLock`, log timing and failure modes:
+
+     * start timestamp, elapsed ms
+     * error.name/message
+     * whether failure was connect timeout vs lock contention.
+   * Add `pg_backend_pid()` logging when possible (helps identify distinct DB sessions contending).
+
+## B) Harden DB connect + lock acquisition (stop single blips from breaking cron)
+
+3. **Add retry with exponential backoff + jitter around lock acquisition**
+
+   * Retry on transient errors:
+
+     * WebSocket close 1006
+     * connection timeout
+     * ECONNRESET / ETIMEDOUT / “Connection terminated”
+   * Example policy:
+
+     * 5 attempts max
+     * delays: 250ms, 500ms, 1s, 2s, 4s (+ random 0–250ms jitter)
+   * If still failing:
+
+     * log `[CRON_SKIP] jobName, reason=DB_UNAVAILABLE`
+     * return without throwing (cron run marked “skipped” not “crashed”).
+
+4. **Add a DB preflight**
+
+   * Before trying lock:
+
+     * `SELECT 1` with a short timeout.
+   * If it fails: log and skip run.
+
+## C) Reduce connection churn / stampedes
+
+5. **Ensure DB client/pool is singleton per process**
+
+   * Do not create a new DB client per job tick.
+   * Ensure all cron jobs reuse the same pool/client object.
+   * Keep pool size conservative (serverless WS doesn’t like huge pools).
+
+6. **Stagger heavy jobs**
+
+   * If multiple crons fire on the same minute, offset them by 30–90 seconds (or random jitter) to reduce synchronized spikes.
+
+## D) Lock correctness (avoid long waits, keep it safe)
+
+7. **Make lock acquisition “fast-fail”**
+
+   * Lock attempt should have a short timeout. If lock not acquired quickly:
+
+     * treat as “another runner is working” and skip.
+   * Don’t let job sit waiting on a lock while holding resources.
+
+8. **Optional: add a “running too long” guard**
+
+   * If a job can run long, store `started_at` in a job_runs table or heartbeat.
+   * If new runner sees stale “running” beyond threshold, log anomaly.
+
+---
+
+# Deliverables / Tasks for Agent
+
+1. Add CRON_INSTANCE_ID logging in cron-worker.ts + per-job logging.
+2. Update tryAcquireJobLock:
+
+   * add retry/backoff/jitter on transient DB errors
+   * add DB preflight (SELECT 1)
+   * convert repeated failures into SKIP not crash
+   * add lock timing logs and failure classification
+3. Confirm DB client reuse (singleton) in cron worker.
+4. Optional: stagger job schedules to avoid minute-boundary spikes.
+5. After deploy, review logs for:
+
+   * multiple CRON_INSTANCE_IDs (duplicate runners)
+   * frequency of transient DB errors
+   * whether retries recover (most should)
+
+# Expected outcome
+
+* Cron failures drop sharply.
+* When Neon/WS blips happen, we see “skipped due to DB unavailable” rather than stack traces.
+* If duplicate runners exist, we’ll prove it with instance IDs and can decide whether to change deployment strategy.

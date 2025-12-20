@@ -1,0 +1,164 @@
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+_eventsCount: 4,
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+_maxListeners: undefined,
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+at async tryAcquireJobLock (/home/runner/workspace/server/cron-telemetry.ts:303:20)
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+at async Timeout._onTimeout (/home/runner/workspace/node_modules/node-cron/src/scheduler/runner.ts:100:30) {
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+_readyState: 3,
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+at process.processTimers (node:internal/timers:519:7)
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+[Symbol(kTarget)]: WebSocket {
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:426:4
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+[Symbol(kCapture)]: false
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+_errorEmitted: true,
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+_events: [Object: null prototype],
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+_closeMessage: ,
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+_sender: null,
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+_closeFrameReceived: false,
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+_bufferedAmount: 0,
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+at file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1087:33
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+[CronTelemetry] [SentItemsDetection] Error acquiring lock: Error: Connection terminated due to connection timeout
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+},
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+at S.end (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:425:83)
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+_extensions: {},
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+[Symbol(kType)]: 'error',
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+at WebSocket.close (/home/runner/workspace/node_modules/ws/lib/websocket.js:299:7)
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+_redirects: 0,
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+_closeCode: 1006,
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+at runNextTicks (node:internal/process/task_queues:64:3)
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+}
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+[cause]: ErrorEvent {
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+_closeFrameSent: false,
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+_receiver: null,
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+at process.processTimers (node:internal/timers:519:7),
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+[Symbol(shapeMode)]: false,
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+_isServer: false,
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+_url: 'wss://ep-red-queen-adcbnznu.c-2.us-east-1.aws.neon.tech/v2',
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+at Timeout. (file:///home/runner/workspace/node_modules/@neondatabase/serverless/index.mjs:1117:99)
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+[Symbol(kError)]: Error: WebSocket was closed before the connection was established
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+_binaryType: 'arraybuffer',
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+_socket: null,
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+_protocol: '',
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+at async (/home/runner/workspace/server/cron-telemetry.ts:544:26)
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+at processTicksAndRejections (node:internal/process/task_queues:95:5)
+2025-12-20 17:53:19.89
+d9bbfed1
+User
+at S.destroy (file:///home/runner/workspace/no
