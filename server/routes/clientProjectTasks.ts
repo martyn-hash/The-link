@@ -153,9 +153,11 @@ async function executeStageChangeOnTaskSubmission(instance: {
       return;
     }
 
-    const targetStage = await storage.getKanbanStageById(targetStageId);
+    // Get all stages for this project type and find the target stage
+    const stages = await storage.getKanbanStagesByProjectTypeId(project.projectTypeId);
+    const targetStage = stages.find(s => s.id === targetStageId);
     if (!targetStage) {
-      console.log(`[ClientProjectTask] Target stage ${targetStageId} not found, skipping stage change`);
+      console.log(`[ClientProjectTask] Target stage ${targetStageId} not found in project type ${project.projectTypeId}, skipping stage change`);
       return;
     }
 
