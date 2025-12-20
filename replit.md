@@ -57,6 +57,15 @@ Adapter Architecture:
 -   Capability flags (`supportsConditionalLogic`, `supportsExpectedValue`, `supportsValidationRules`, `supportsOptions`, `supportsPlaceholder`, `supportsHelpText`, `supportsLibraryPicker`) toggle UI features per context
 -   `normalizeFieldType()` handles legacy field type aliases (yes_no → boolean, single_choice → single_select) with fallback icons for unknown types
 
+Conditional Logic Support:
+-   **ConditionalLogicEditor.tsx**: Standalone reusable component for configuring question visibility based on previous answers
+-   Data structure: `{ showIf: { questionId, operator, value } }` stored as JSONB in database
+-   Operators: equals, not_equals, contains, is_empty, is_not_empty
+-   Supports cross-section question references (questions sorted by section order, then question order)
+-   Integration pattern: Render ConditionalLogicEditor when `previousQuestions.length > 0`, manage state via useState
+
 Migrated Contexts:
 -   Stage Approvals: Uses ApprovalFieldConfigModal wrapper with stageApprovalFieldAdapter
 -   Client Tasks: Uses ClientTaskQuestionConfigModal wrapper with clientTaskQuestionAdapter, preserving conditionalLogic and sectionId
+-   Request Templates: Full conditional logic support in request-template-edit.tsx with centralized questions query
+-   Custom Requests: Full conditional logic support in custom-request-edit.tsx with flattened questions from sections
