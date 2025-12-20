@@ -39,6 +39,9 @@ const app = express();
 
 // CRITICAL: /healthz endpoint MUST be registered FIRST, before any middleware
 // This ensures external health checks succeed even during heavy startup operations
+// Track readiness state for /readyz endpoint
+let isReady = false;
+
 app.get('/healthz', (req, res) => {
   const uptime = Date.now() - PROCESS_START_TIME;
   res.status(200).json({
@@ -46,6 +49,25 @@ app.get('/healthz', (req, res) => {
     uptime_ms: uptime,
     timestamp: new Date().toISOString()
   });
+});
+
+// /readyz - Readiness probe: returns 200 only when app is fully initialized
+// Use this to gate test execution until the app is ready to serve requests
+app.get('/readyz', (req, res) => {
+  const uptime = Date.now() - PROCESS_START_TIME;
+  if (isReady) {
+    res.status(200).json({
+      status: 'ready',
+      uptime_ms: uptime,
+      timestamp: new Date().toISOString()
+    });
+  } else {
+    res.status(503).json({
+      status: 'not_ready',
+      uptime_ms: uptime,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 // Increase body size limit to 75MB for email attachments (5 files x 10MB = 50MB, + ~33% base64 encoding overhead = ~67MB)
 app.use(express.json({ limit: '75mb' }));
@@ -225,7 +247,9 @@ app.use((req, res, next) => {
         console.error('[Transcription] Error recovering pending transcriptions (non-fatal):', transcriptionError);
       }
       
-      log('[Web Server] All startup tasks completed');
+      // Mark app as fully ready for /readyz endpoint
+      isReady = true;
+      log('[Web Server] All startup tasks completed - app is now READY');
     });
   });
 })();

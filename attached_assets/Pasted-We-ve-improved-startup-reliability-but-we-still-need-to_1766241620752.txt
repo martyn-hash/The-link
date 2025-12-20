@@ -1,0 +1,103 @@
+We’ve improved startup reliability, but we still need to **prove external reachability is correct and stable**. Run this final “ports + exposure” sense-check and fix anything that fails.
+
+## Goal
+Confirm the web server is reachable from **outside** Replit (the testing browser), not just from `curl localhost` inside the container.
+
+---
+
+## Step 1 — Identify the actual listening port + bind address (source of truth)
+1) Find the file that starts the HTTP server (Express/Fastify/etc).
+2) Print (and keep) a startup log that includes:
+   - `process.env.PORT`
+   - the port you pass into `listen()`
+   - the host you bind to
+
+**Requirement:** web server must bind to:
+- **port:** `process.env.PORT` (not hard-coded)
+- **host:** `"0.0.0.0"` (not `"localhost"`)
+
+Example (Express):
+```ts
+const port = Number(process.env.PORT || 5000);
+const host = "0.0.0.0";
+app.listen(port, host, () => console.log(`READY host=${host} port=${port} envPORT=${process.env.PORT}`));
+```
+
+✅ Report back: the exact code line and file path where `listen()` happens.
+
+---
+
+## Step 2 — Prove the port matches the environment
+From the Shell, run:
+- `echo $PORT`
+- `node -p "process.env.PORT"`
+- `lsof -iTCP -sTCP:LISTEN -n -P | head -n 20`  (or `ss -ltnp | head -n 20` if available)
+
+✅ Report back:
+- Which port is actually LISTENing
+- Which process PID owns it
+- Whether it matches `$PORT`
+
+If the app listens on `5000` while `$PORT` is something else, FIX it.
+
+---
+
+## Step 3 — External reachability test (must be from the public URL)
+Do NOT count `curl localhost` as proof.
+
+1) Determine the public app base URL (the same one the tester hits).
+2) Test externally:
+- `GET /healthz` should return **200 instantly**
+- `GET /` should return **200** (or expected redirect) consistently
+
+✅ Report back:
+- Is `/healthz` reachable externally every time?
+- Is `/` reachable externally every time?
+
+If `/healthz` fails externally, it’s almost certainly a bind/port/exposure issue.
+
+---
+
+## Step 4 — Port exposure / Replit config sanity
+Verify Replit is routing to the same port your app listens on.
+- Confirm the webview/preview works reliably
+- Confirm there isn’t another process binding a different port
+
+If there are multiple processes, ensure ONLY the web server binds the exposed port.
+
+---
+
+## Step 5 — Add a “ready gate” for the testing agent
+If the tester starts too early, make readiness explicit:
+
+1) Keep `/healthz` as “liveness” (instant, no DB)
+2) Add `/readyz` as “readiness” (optional DB check, returns 200 only when app is fully usable)
+
+Example:
+- `/healthz` => 200 always if server is up
+- `/readyz` => 200 only when critical init is complete
+
+✅ Then, in test flow: wait until `/readyz` returns 200 before attempting UI steps.
+
+---
+
+## Step 6 — Restart detection (prove no flapping)
+Add logs for:
+- process start (PID + timestamp)
+- `uncaughtException` and `unhandledRejection`
+- process exit
+
+✅ Report back if the web process restarts during a test run.
+
+---
+
+## Deliverable (mandatory)
+Return a short report:
+
+- Listening code location + exact listen host/port
+- `$PORT` value vs listening port
+- External results for `/healthz` and `/`
+- Any fixes applied
+- Whether tester can now load login reliably across 5 consecutive runs
+
+Do not proceed to feature work until the above is green.
