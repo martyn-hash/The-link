@@ -479,7 +479,7 @@ async function createTaskInstanceForNotification(
   try {
     // Check if there's a client override for this template
     const override = notification.clientId 
-      ? await storage.clientProjectTaskStorage.getOverrideByClientAndTemplate(
+      ? await storage.clientProjectTaskStorage.getOverrideForClientAndTemplate(
           notification.clientId, 
           ptNotification.taskTemplateId
         )
