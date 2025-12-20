@@ -248,6 +248,7 @@ function ClientTaskQuestionConfigModal({
 
 interface ClientTasksTabProps {
   projectTypeId: string;
+  projectTypeName?: string;
   stages?: KanbanStage[];
   reasons?: ChangeReason[];
   enableClientProjectTasks?: boolean;
@@ -747,7 +748,7 @@ interface StageReasonMap {
   reasonId: string;
 }
 
-export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enableClientProjectTasks = true }: ClientTasksTabProps) {
+export function ClientTasksTab({ projectTypeId, projectTypeName, stages = [], reasons = [], enableClientProjectTasks = true }: ClientTasksTabProps) {
   const { toast } = useToast();
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<EditingTemplate | null>(null);
@@ -1284,17 +1285,33 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
 
   if (isBuilderOpen && editingTemplate) {
     return (
-      <TabsContent value="client-tasks" className="h-full">
-        <div className="flex flex-col h-full">
-          <div className="border-b border-border bg-card px-6 py-4 flex items-center justify-between">
+      <>
+        {/* Hidden TabsContent to maintain tab structure */}
+        <TabsContent value="client-tasks" className="hidden" />
+        
+        {/* Full-screen modal overlay */}
+        <div className="fixed inset-0 z-50 bg-background flex flex-col">
+          {/* Header */}
+          <div className="border-b border-border bg-card px-6 py-4 flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="sm" onClick={() => { setIsBuilderOpen(false); setEditingTemplate(null); }}>
+              <Button variant="ghost" size="sm" onClick={() => { setIsBuilderOpen(false); setEditingTemplate(null); }} data-testid="button-cancel-builder">
                 <X className="w-4 h-4 mr-2" />
                 Cancel
               </Button>
-              <h2 className="text-lg font-semibold">
-                {editingTemplate.id ? "Edit Task Template" : "Create Task Template"}
-              </h2>
+              <div className="h-6 w-px bg-border" />
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <ClipboardList className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold">
+                    {editingTemplate.id ? "Edit Task Template" : "Create Task Template"}
+                  </h2>
+                  <p className="text-sm text-muted-foreground">
+                    {projectTypeName || "Project Type"} - Client Pre-Work Checklist
+                  </p>
+                </div>
+              </div>
             </div>
             <Button 
               onClick={handleSaveTemplate} 
@@ -1877,7 +1894,7 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
             onCancel={() => setEditingSectionIndex(null)}
           />
         )}
-      </TabsContent>
+      </>
     );
   }
 

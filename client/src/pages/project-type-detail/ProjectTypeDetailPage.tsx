@@ -693,6 +693,7 @@ export default function ProjectTypeDetail() {
 
             <ClientTasksTab
               projectTypeId={projectTypeId!}
+              projectTypeName={projectType?.name}
               stages={stages}
               reasons={reasons}
               enableClientProjectTasks={projectType?.enableClientProjectTasks !== false}
