@@ -62,6 +62,8 @@ import { Switch } from "@/components/ui/switch";
 import { nanoid } from "nanoid";
 import { SystemFieldLibraryPicker } from "@/components/system-field-library-picker";
 import type { SystemFieldLibrary } from "@shared/schema";
+import { ServiceWizard } from "@/components/service-wizard/ServiceWizard";
+import type { ServiceWizardFormData } from "@/components/service-wizard/types";
 
 // Form schemas
 const createServiceFormSchema = baseInsertServiceSchema.extend({
@@ -496,6 +498,11 @@ export default function Services() {
   
   // Priority indicator targets (for multi-select)
   const [priorityIndicatorTargets, setPriorityIndicatorTargets] = useState<string[]>([]);
+  
+  // Wizard state
+  const [showWizard, setShowWizard] = useState(false);
+  const [wizardMode, setWizardMode] = useState<"create" | "edit">("create");
+  const [wizardEditingService, setWizardEditingService] = useState<ServiceWithDetails | null>(null);
 
   // Forms
   const serviceForm = useForm<CreateServiceFormData>({
@@ -796,9 +803,9 @@ export default function Services() {
 
   // Navigation helpers
   const handleStartCreateService = () => {
-    serviceForm.reset();
-    setPriorityIndicatorTargets([]);
-    setViewMode('create-service');
+    setWizardMode("create");
+    setWizardEditingService(null);
+    setShowWizard(true);
   };
 
   const handleStartCreateRole = () => {
@@ -822,6 +829,80 @@ export default function Services() {
       description: role.description ?? "",
     });
     setViewMode('edit-role');
+  };
+  
+  // Wizard handlers
+  const handleOpenWizardForEdit = (service: ServiceWithDetails) => {
+    setWizardMode("edit");
+    setWizardEditingService(service);
+    setShowWizard(true);
+  };
+  
+  const handleWizardCancel = () => {
+    setShowWizard(false);
+    setWizardEditingService(null);
+  };
+  
+  const handleWizardSave = async (data: ServiceWizardFormData) => {
+    try {
+      if (wizardMode === "create") {
+        const { roleIds, priorityIndicatorTargets: targets, ...serviceData } = data;
+        const service = await apiRequest("POST", "/api/services", serviceData) as Service;
+        
+        if (roleIds.length > 0) {
+          await Promise.all(
+            roleIds.map(roleId =>
+              apiRequest("POST", `/api/services/${service.id}/roles`, { roleId })
+            )
+          );
+        }
+        
+        if (targets.length > 0) {
+          await apiRequest("PUT", `/api/services/${service.id}/priority-indicator-targets`, { 
+            targetServiceIds: targets 
+          });
+        }
+        
+        toast({ title: "Success", description: "Service created successfully" });
+      } else {
+        const { roleIds, priorityIndicatorTargets: targets, id, ...serviceData } = data;
+        
+        const validRoleIds = roleIds.filter(roleId => roleId && roleId.trim() !== "");
+        const validTargets = targets.filter(target => target && target.trim() !== "");
+        
+        await apiRequest("PATCH", `/api/services/${id}`, serviceData);
+        
+        const currentRoles = await apiRequest("GET", `/api/services/${id}/roles`) as WorkRole[];
+        const currentRoleIds = currentRoles.map(role => role.id);
+        
+        const rolesToRemove = currentRoleIds.filter(roleId => !validRoleIds.includes(roleId));
+        await Promise.all(
+          rolesToRemove.map(roleId =>
+            apiRequest("DELETE", `/api/services/${id}/roles/${roleId}`)
+          )
+        );
+        
+        const rolesToAdd = validRoleIds.filter(roleId => !currentRoleIds.includes(roleId));
+        await Promise.all(
+          rolesToAdd.map(roleId =>
+            apiRequest("POST", `/api/services/${id}/roles`, { roleId })
+          )
+        );
+        
+        await apiRequest("PUT", `/api/services/${id}/priority-indicator-targets`, { 
+          targetServiceIds: validTargets 
+        });
+        
+        toast({ title: "Success", description: "Service updated successfully" });
+      }
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/services"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/work-roles"] });
+      setShowWizard(false);
+      setWizardEditingService(null);
+    } catch (error: any) {
+      showFriendlyError({ error });
+    }
   };
 
   // Auth and error handling
@@ -1035,7 +1116,7 @@ export default function Services() {
                                   <Button
                                     variant="outline"
                                     size="icon"
-                                    onClick={() => handleEditService(service)}
+                                    onClick={() => handleOpenWizardForEdit(service)}
                                     data-testid={`button-edit-service-${service.id}`}
                                   >
                                     <Edit className="w-4 h-4" />
@@ -2109,6 +2190,16 @@ export default function Services() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Service Wizard */}
+      {showWizard && (
+        <ServiceWizard
+          mode={wizardMode}
+          initialData={wizardEditingService || undefined}
+          onSave={handleWizardSave}
+          onCancel={handleWizardCancel}
+        />
+      )}
     </div>
   );
 }
