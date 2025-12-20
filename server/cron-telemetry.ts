@@ -11,7 +11,7 @@
 
 import { monitorEventLoopDelay } from 'perf_hooks';
 import { CronExpressionParser, CronExpression } from 'cron-parser';
-import { db, pool } from './db';
+import { db, pool, isRetryableError } from './db';
 import { sql } from 'drizzle-orm';
 type EventLoopDelayMonitor = ReturnType<typeof monitorEventLoopDelay>;
 import { nanoid } from 'nanoid';

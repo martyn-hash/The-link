@@ -133,7 +133,7 @@ export async function withRetry<T>(
   throw lastError || new Error(`${operationName} failed after ${maxRetries} attempts`);
 }
 
-function isRetryableError(error: Error): boolean {
+export function isRetryableError(error: Error): boolean {
   const message = error.message.toLowerCase();
   const retryablePatterns = [
     'connection terminated',
