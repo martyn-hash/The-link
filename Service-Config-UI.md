@@ -1,5 +1,26 @@
 # Service Configuration UI Redesign
 
+---
+
+## ⚠️ CRITICAL: Browser Testing Requirements
+
+**All browser-based tests for this feature MUST follow the requirements in `Core-Development-Principles/how-to-test.md`.**
+
+Before executing ANY browser test:
+
+1. **Internal Readiness Check** - Verify `/readyz` returns 200 status
+2. **External Readiness Check** - Verify the public Replit URL `/readyz` returns 200 (proxy must be ready)
+3. **Authentication** - Use `/api/dev-login` endpoint with Bearer token authorization
+4. **Retry Protocol** - Handle 502/503 proxy errors with exponential backoff
+
+**Reference Files:**
+- `Core-Development-Principles/how-to-test.md` - Browser testing protocol (REQUIRED)
+- `Core-Development-Principles/Testing-Principles.md` - Atomic test case standards
+
+**Failure to follow how-to-test.md will result in flaky or failing browser tests due to proxy timing issues.**
+
+---
+
 ## Overview
 
 This document outlines the redesign of the Service Configuration page (`/admin/service-config`) to use a wizard-based approach for creating and editing services. The goal is to create a world-class user experience that guides users through a logical series of steps.
@@ -282,14 +303,28 @@ client/src/
 
 ## Testing Plan
 
-Following the Testing-Principles.md and how-to-test.md guidelines:
+---
 
-### Pre-Test Requirements
+### ⚠️ MANDATORY: Read `Core-Development-Principles/how-to-test.md` Before Testing
 
-Before any browser tests:
-1. Verify `/readyz` returns 200 (internal)
-2. Verify public Replit URL `/readyz` returns 200 (external)
-3. Authenticate via `/api/dev-login` with Bearer token
+**This is not optional.** Browser tests WILL FAIL without following the how-to-test.md protocol.
+
+---
+
+### Pre-Test Requirements (from how-to-test.md)
+
+**Every browser test session must complete these steps IN ORDER:**
+
+```
+1. INTERNAL CHECK:  GET /readyz → expect 200
+2. EXTERNAL CHECK:  GET https://<replit-public-url>/readyz → expect 200
+3. AUTHENTICATE:    POST /api/dev-login with Bearer token
+4. RETRY PROTOCOL:  On 502/503, wait and retry with exponential backoff
+```
+
+**Why this matters:** The Replit proxy takes time to become ready after app startup. Testing before the external readyz check passes will result in 502 errors and false test failures.
+
+See `Core-Development-Principles/how-to-test.md` for complete implementation details.
 
 ### Atomic Test Cases
 
