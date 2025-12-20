@@ -66,6 +66,11 @@ const SYSTEM_FIELD_CATEGORY_OPTIONS = [
   { value: "custom", label: "Custom" },
 ] as const;
 
+const WIZARD_STEPS = [
+  { id: 1, name: "Basic Info", description: "Name and settings" },
+  { id: 2, name: "Questions", description: "Build your form" },
+] as const;
+
 type QuestionType = typeof QUESTION_TYPES[number]["type"];
 
 interface ConditionalLogicCondition {
@@ -137,14 +142,6 @@ const DEFAULT_QUESTION: EditingQuestion = {
   conditionalLogic: null,
   libraryFieldId: null,
 };
-
-const CONDITION_OPERATORS = [
-  { value: 'equals', label: 'Equals' },
-  { value: 'not_equals', label: 'Does not equal' },
-  { value: 'contains', label: 'Contains' },
-  { value: 'is_empty', label: 'Is empty' },
-  { value: 'is_not_empty', label: 'Is not empty' },
-] as const;
 
 const DEFAULT_SECTION: EditingSection = {
   name: "",
@@ -381,308 +378,6 @@ function SortableQuestionItem({
   );
 }
 
-function QuestionEditor({
-  question,
-  questionIndex,
-  allQuestions,
-  onSave,
-  onCancel,
-}: {
-  question: EditingQuestion;
-  questionIndex: number;
-  allQuestions: EditingQuestion[];
-  onSave: (q: EditingQuestion) => void;
-  onCancel: () => void;
-}) {
-  const [editedQuestion, setEditedQuestion] = useState<EditingQuestion>(question);
-  const [newOption, setNewOption] = useState("");
-  const [showConditionalLogic, setShowConditionalLogic] = useState(!!question.conditionalLogic?.showIf);
-
-  const needsOptions = ["single_choice", "multi_choice", "dropdown"].includes(editedQuestion.questionType);
-  
-  const getQuestionKey = (q: EditingQuestion, idx: number) => q.id || `temp-${idx}`;
-  
-  const previousQuestions = allQuestions
-    .map((q, idx) => ({ ...q, _arrayIndex: idx }))
-    .filter((q, idx) => idx < questionIndex && q.label.trim());
-  
-  const selectedSourceQuestion = previousQuestions.find(q => {
-    const qKey = getQuestionKey(q, q._arrayIndex);
-    return qKey === editedQuestion.conditionalLogic?.showIf?.questionId;
-  });
-  
-  const sourceQuestionHasOptions = selectedSourceQuestion && 
-    ["single_choice", "multi_choice", "dropdown", "yes_no"].includes(selectedSourceQuestion.questionType);
-  
-  const handleConditionalLogicToggle = (enabled: boolean) => {
-    setShowConditionalLogic(enabled);
-    if (!enabled) {
-      setEditedQuestion(prev => ({ ...prev, conditionalLogic: null }));
-    } else if (!editedQuestion.conditionalLogic?.showIf && previousQuestions.length > 0) {
-      const firstPrev = previousQuestions[0];
-      setEditedQuestion(prev => ({
-        ...prev,
-        conditionalLogic: {
-          showIf: {
-            questionId: getQuestionKey(firstPrev, firstPrev._arrayIndex),
-            operator: 'equals',
-            value: '',
-          },
-        },
-      }));
-    }
-  };
-  
-  const handleConditionChange = (field: keyof ConditionalLogicCondition, value: any) => {
-    setEditedQuestion(prev => ({
-      ...prev,
-      conditionalLogic: {
-        ...prev.conditionalLogic,
-        showIf: {
-          questionId: prev.conditionalLogic?.showIf?.questionId || '',
-          operator: prev.conditionalLogic?.showIf?.operator || 'equals',
-          ...prev.conditionalLogic?.showIf,
-          [field]: value,
-        },
-      },
-    }));
-  };
-
-  const handleAddOption = () => {
-    if (newOption.trim()) {
-      setEditedQuestion(prev => ({
-        ...prev,
-        options: [...prev.options, newOption.trim()]
-      }));
-      setNewOption("");
-    }
-  };
-
-  const handleRemoveOption = (index: number) => {
-    setEditedQuestion(prev => ({
-      ...prev,
-      options: prev.options.filter((_, i) => i !== index)
-    }));
-  };
-
-  return (
-    <Dialog open={true} onOpenChange={() => onCancel()}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Edit Question</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="question-type">Question Type</Label>
-            <Select
-              value={editedQuestion.questionType}
-              onValueChange={(value) => setEditedQuestion(prev => ({ ...prev, questionType: value as QuestionType }))}
-            >
-              <SelectTrigger id="question-type" data-testid="select-question-type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {QUESTION_TYPES.map(qt => (
-                  <SelectItem key={qt.type} value={qt.type}>
-                    <div className="flex items-center gap-2">
-                      <qt.icon className="w-4 h-4" />
-                      {qt.label}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div>
-            <Label htmlFor="question-label">Question Label *</Label>
-            <Input
-              id="question-label"
-              value={editedQuestion.label}
-              onChange={(e) => setEditedQuestion(prev => ({ ...prev, label: e.target.value }))}
-              placeholder="Enter your question here"
-              data-testid="input-question-label"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="question-help">Help Text</Label>
-            <Textarea
-              id="question-help"
-              value={editedQuestion.helpText}
-              onChange={(e) => setEditedQuestion(prev => ({ ...prev, helpText: e.target.value }))}
-              placeholder="Optional help text for the client"
-              rows={2}
-              data-testid="input-question-help"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="question-placeholder">Placeholder</Label>
-            <Input
-              id="question-placeholder"
-              value={editedQuestion.placeholder}
-              onChange={(e) => setEditedQuestion(prev => ({ ...prev, placeholder: e.target.value }))}
-              placeholder="Placeholder text"
-              data-testid="input-question-placeholder"
-            />
-          </div>
-
-          {needsOptions && (
-            <div>
-              <Label>Options</Label>
-              <div className="space-y-2 mt-2">
-                {editedQuestion.options.map((opt, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <Input value={opt} disabled className="flex-1" />
-                    <Button variant="ghost" size="sm" onClick={() => handleRemoveOption(index)}>
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={newOption}
-                    onChange={(e) => setNewOption(e.target.value)}
-                    placeholder="Add option"
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddOption()}
-                    data-testid="input-new-option"
-                  />
-                  <Button variant="outline" size="sm" onClick={handleAddOption} data-testid="button-add-option">
-                    <Plus className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-center gap-2">
-            <Switch
-              id="question-required"
-              checked={editedQuestion.isRequired}
-              onCheckedChange={(checked) => setEditedQuestion(prev => ({ ...prev, isRequired: checked }))}
-              data-testid="switch-question-required"
-            />
-            <Label htmlFor="question-required">Required</Label>
-          </div>
-
-          {previousQuestions.length > 0 && (
-            <div className="border-t pt-4 mt-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Switch
-                  id="conditional-logic"
-                  checked={showConditionalLogic}
-                  onCheckedChange={handleConditionalLogicToggle}
-                  data-testid="switch-conditional-logic"
-                />
-                <Label htmlFor="conditional-logic" className="text-sm font-medium">
-                  Show this question only if...
-                </Label>
-              </div>
-              
-              {showConditionalLogic && editedQuestion.conditionalLogic?.showIf && (
-                <div className="space-y-3 pl-4 border-l-2 border-primary/20">
-                  <div>
-                    <Label className="text-xs text-muted-foreground">When this question</Label>
-                    <Select
-                      value={editedQuestion.conditionalLogic.showIf.questionId}
-                      onValueChange={(value) => handleConditionChange('questionId', value)}
-                    >
-                      <SelectTrigger className="mt-1" data-testid="select-condition-question">
-                        <SelectValue placeholder="Select a question" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {previousQuestions.map(q => {
-                          const qKey = getQuestionKey(q, q._arrayIndex);
-                          return (
-                            <SelectItem key={qKey} value={qKey}>
-                              {q.label || 'Untitled question'}
-                            </SelectItem>
-                          );
-                        })}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Condition</Label>
-                    <Select
-                      value={editedQuestion.conditionalLogic.showIf.operator}
-                      onValueChange={(value) => handleConditionChange('operator', value)}
-                    >
-                      <SelectTrigger className="mt-1" data-testid="select-condition-operator">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CONDITION_OPERATORS.map(op => (
-                          <SelectItem key={op.value} value={op.value}>
-                            {op.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  {!['is_empty', 'is_not_empty'].includes(editedQuestion.conditionalLogic.showIf.operator) && (
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Value</Label>
-                      {sourceQuestionHasOptions ? (
-                        <Select
-                          value={String(editedQuestion.conditionalLogic.showIf.value || '')}
-                          onValueChange={(value) => handleConditionChange('value', value)}
-                        >
-                          <SelectTrigger className="mt-1" data-testid="select-condition-value">
-                            <SelectValue placeholder="Select value" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {selectedSourceQuestion?.questionType === 'yes_no' ? (
-                              <>
-                                <SelectItem value="yes">Yes</SelectItem>
-                                <SelectItem value="no">No</SelectItem>
-                              </>
-                            ) : (
-                              selectedSourceQuestion?.options?.map((opt, i) => (
-                                <SelectItem key={i} value={opt}>
-                                  {opt}
-                                </SelectItem>
-                              ))
-                            )}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Input
-                          className="mt-1"
-                          value={String(editedQuestion.conditionalLogic.showIf.value || '')}
-                          onChange={(e) => handleConditionChange('value', e.target.value)}
-                          placeholder="Enter value to match"
-                          data-testid="input-condition-value"
-                        />
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={onCancel} data-testid="button-cancel-question">
-            Cancel
-          </Button>
-          <Button 
-            onClick={() => onSave(editedQuestion)} 
-            disabled={!editedQuestion.label.trim()}
-            data-testid="button-save-question"
-          >
-            Save Question
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function SectionEditor({
   section,
   onSave,
@@ -751,6 +446,7 @@ interface StageReasonMap {
 export function ClientTasksTab({ projectTypeId, projectTypeName, stages = [], reasons = [], enableClientProjectTasks = true }: ClientTasksTabProps) {
   const { toast } = useToast();
   const [isBuilderOpen, setIsBuilderOpen] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
   const [editingTemplate, setEditingTemplate] = useState<EditingTemplate | null>(null);
   const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(null);
   const [editingSectionIndex, setEditingSectionIndex] = useState<number | null>(null);
@@ -1039,6 +735,7 @@ export function ClientTasksTab({ projectTypeId, projectTypeName, stages = [], re
 
   const handleAddTemplate = () => {
     setEditingTemplate({ ...DEFAULT_TEMPLATE });
+    setCurrentStep(1);
     setIsBuilderOpen(true);
   };
 
@@ -1076,6 +773,7 @@ export function ClientTasksTab({ projectTypeId, projectTypeName, stages = [], re
         sectionId: (q as any).sectionId || null,
       })),
     });
+    setCurrentStep(1);
     setIsBuilderOpen(true);
   };
 
@@ -1313,16 +1011,211 @@ export function ClientTasksTab({ projectTypeId, projectTypeName, stages = [], re
                 </div>
               </div>
             </div>
-            <Button 
-              onClick={handleSaveTemplate} 
-              disabled={!editingTemplate.name.trim() || createTemplateMutation.isPending || updateTemplateMutation.isPending}
-              data-testid="button-save-template"
-            >
-              <Save className="w-4 h-4 mr-2" />
-              {createTemplateMutation.isPending || updateTemplateMutation.isPending ? "Saving..." : "Save Template"}
-            </Button>
+
+            {/* Step Indicator */}
+            <div className="flex items-center gap-2">
+              {WIZARD_STEPS.map((step, index) => (
+                <div key={step.id} className="flex items-center">
+                  <button
+                    onClick={() => step.id < currentStep ? setCurrentStep(step.id) : undefined}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors ${
+                      step.id === currentStep
+                        ? "bg-primary text-primary-foreground"
+                        : step.id < currentStep
+                        ? "bg-primary/20 text-primary cursor-pointer hover:bg-primary/30"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                    disabled={step.id > currentStep}
+                    data-testid={`step-${step.id}`}
+                  >
+                    <span className="w-5 h-5 rounded-full bg-background/20 flex items-center justify-center text-xs font-medium">
+                      {step.id}
+                    </span>
+                    <span className="text-sm font-medium">{step.name}</span>
+                  </button>
+                  {index < WIZARD_STEPS.length - 1 && (
+                    <ChevronRight className="w-4 h-4 mx-1 text-muted-foreground" />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {currentStep > 1 && (
+                <Button variant="outline" onClick={() => setCurrentStep(currentStep - 1)} data-testid="button-previous-step">
+                  Previous
+                </Button>
+              )}
+              {currentStep < WIZARD_STEPS.length ? (
+                <Button 
+                  onClick={() => setCurrentStep(currentStep + 1)} 
+                  disabled={!editingTemplate.name.trim()}
+                  data-testid="button-next-step"
+                >
+                  Next
+                  <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
+              ) : (
+                <Button 
+                  onClick={handleSaveTemplate} 
+                  disabled={!editingTemplate.name.trim() || createTemplateMutation.isPending || updateTemplateMutation.isPending}
+                  data-testid="button-save-template"
+                >
+                  <Save className="w-4 h-4 mr-2" />
+                  {createTemplateMutation.isPending || updateTemplateMutation.isPending ? "Saving..." : "Save Template"}
+                </Button>
+              )}
+            </div>
           </div>
 
+          {/* Step 1: Basic Information */}
+          {currentStep === 1 && (
+            <div className="flex-1 flex items-start justify-center p-8 overflow-y-auto">
+              <Card className="w-full max-w-2xl">
+                <CardHeader>
+                  <CardTitle>Template Settings</CardTitle>
+                  <CardDescription>Configure the basic settings for this client task template</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="template-name">Name *</Label>
+                    <Input
+                      id="template-name"
+                      value={editingTemplate.name}
+                      onChange={(e) => setEditingTemplate(prev => prev ? { ...prev, name: e.target.value } : null)}
+                      placeholder="e.g., Pre-Bookkeeping Checklist"
+                      data-testid="input-template-name"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="template-description">Description</Label>
+                    <Textarea
+                      id="template-description"
+                      value={editingTemplate.description}
+                      onChange={(e) => setEditingTemplate(prev => prev ? { ...prev, description: e.target.value } : null)}
+                      placeholder="Internal description of this template"
+                      rows={2}
+                      data-testid="input-template-description"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="template-instructions">Instructions for Client</Label>
+                    <Textarea
+                      id="template-instructions"
+                      value={editingTemplate.instructions}
+                      onChange={(e) => setEditingTemplate(prev => prev ? { ...prev, instructions: e.target.value } : null)}
+                      placeholder="Instructions displayed to the client at the top of the form"
+                      rows={3}
+                      data-testid="input-template-instructions"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="completion-stage">On Completion: Move to Stage</Label>
+                      <Select
+                        value={editingTemplate.onCompletionStageId || "none"}
+                        onValueChange={(value) => setEditingTemplate(prev => prev ? { 
+                          ...prev, 
+                          onCompletionStageId: value === "none" ? null : value,
+                          onCompletionStageReasonId: null
+                        } : null)}
+                      >
+                        <SelectTrigger id="completion-stage" data-testid="select-completion-stage">
+                          <SelectValue placeholder="No stage change" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No stage change</SelectItem>
+                          {stages.map(stage => (
+                            <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label htmlFor="completion-reason">With Reason</Label>
+                      <Select
+                        value={editingTemplate.onCompletionStageReasonId || "none"}
+                        onValueChange={(value) => setEditingTemplate(prev => prev ? { 
+                          ...prev, 
+                          onCompletionStageReasonId: value === "none" ? null : value 
+                        } : null)}
+                        disabled={!editingTemplate.onCompletionStageId}
+                      >
+                        <SelectTrigger id="completion-reason" data-testid="select-completion-reason">
+                          <SelectValue placeholder="No reason" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No reason</SelectItem>
+                          {getFilteredReasonsForStage(editingTemplate.onCompletionStageId).map(reason => (
+                            <SelectItem key={reason.id} value={reason.id}>{reason.reason}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="expiry-days">Link Expires After (days)</Label>
+                      <Input
+                        id="expiry-days"
+                        type="number"
+                        min={1}
+                        max={365}
+                        value={editingTemplate.expiryDaysAfterStart}
+                        onChange={(e) => setEditingTemplate(prev => prev ? { 
+                          ...prev, 
+                          expiryDaysAfterStart: parseInt(e.target.value) || 7 
+                        } : null)}
+                        data-testid="input-expiry-days"
+                      />
+                    </div>
+                    <div className="flex items-end gap-4 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id="require-all"
+                          checked={editingTemplate.requireAllQuestions}
+                          onCheckedChange={(checked) => setEditingTemplate(prev => prev ? { 
+                            ...prev, 
+                            requireAllQuestions: checked 
+                          } : null)}
+                          data-testid="switch-require-all"
+                        />
+                        <Label htmlFor="require-all" className="text-sm">Require all questions</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id="require-otp"
+                          checked={editingTemplate.requireOtp}
+                          onCheckedChange={(checked) => setEditingTemplate(prev => prev ? { 
+                            ...prev, 
+                            requireOtp: checked 
+                          } : null)}
+                          data-testid="switch-require-otp"
+                        />
+                        <Label htmlFor="require-otp" className="text-sm" title="Clients must verify their email with a one-time code">Email verification</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id="is-active"
+                          checked={editingTemplate.isActive}
+                          onCheckedChange={(checked) => setEditingTemplate(prev => prev ? { 
+                            ...prev, 
+                            isActive: checked 
+                          } : null)}
+                          data-testid="switch-is-active"
+                        />
+                        <Label htmlFor="is-active" className="text-sm">Active</Label>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Step 2: Questions & Sections Builder */}
+          {currentStep === 2 && (
           <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
@@ -1445,262 +1338,7 @@ export function ClientTasksTab({ projectTypeId, projectTypeName, stages = [], re
             </div>
 
               <div className="flex-1 p-6 overflow-y-auto">
-                <div className="max-w-2xl mx-auto space-y-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base">Template Settings</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div>
-                        <Label htmlFor="template-name">Name *</Label>
-                        <Input
-                          id="template-name"
-                          value={editingTemplate.name}
-                          onChange={(e) => setEditingTemplate(prev => prev ? { ...prev, name: e.target.value } : null)}
-                          placeholder="e.g., Pre-Bookkeeping Checklist"
-                          data-testid="input-template-name"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="template-description">Description</Label>
-                        <Textarea
-                          id="template-description"
-                          value={editingTemplate.description}
-                          onChange={(e) => setEditingTemplate(prev => prev ? { ...prev, description: e.target.value } : null)}
-                          placeholder="Internal description of this template"
-                          rows={2}
-                          data-testid="input-template-description"
-                        />
-                      </div>
-                      <div>
-                        <Label htmlFor="template-instructions">Instructions for Client</Label>
-                        <Textarea
-                          id="template-instructions"
-                          value={editingTemplate.instructions}
-                          onChange={(e) => setEditingTemplate(prev => prev ? { ...prev, instructions: e.target.value } : null)}
-                          placeholder="Instructions displayed to the client at the top of the form"
-                          rows={3}
-                          data-testid="input-template-instructions"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor="completion-stage">On Completion: Move to Stage</Label>
-                          <Select
-                            value={editingTemplate.onCompletionStageId || "none"}
-                            onValueChange={(value) => setEditingTemplate(prev => prev ? { 
-                              ...prev, 
-                              onCompletionStageId: value === "none" ? null : value,
-                              onCompletionStageReasonId: null
-                            } : null)}
-                          >
-                            <SelectTrigger id="completion-stage" data-testid="select-completion-stage">
-                              <SelectValue placeholder="No stage change" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">No stage change</SelectItem>
-                              {stages.map(stage => (
-                                <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label htmlFor="completion-reason">With Reason</Label>
-                          <Select
-                            value={editingTemplate.onCompletionStageReasonId || "none"}
-                            onValueChange={(value) => setEditingTemplate(prev => prev ? { 
-                              ...prev, 
-                              onCompletionStageReasonId: value === "none" ? null : value 
-                            } : null)}
-                            disabled={!editingTemplate.onCompletionStageId}
-                          >
-                            <SelectTrigger id="completion-reason" data-testid="select-completion-reason">
-                              <SelectValue placeholder="No reason" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="none">No reason</SelectItem>
-                              {getFilteredReasonsForStage(editingTemplate.onCompletionStageId).map(reason => (
-                                <SelectItem key={reason.id} value={reason.id}>{reason.reason}</SelectItem>
-                              ))}
-                              {editingTemplate.onCompletionStageId && getFilteredReasonsForStage(editingTemplate.onCompletionStageId).length === 0 && (
-                                <div className="px-2 py-1.5 text-xs text-muted-foreground italic">
-                                  No reasons configured for this stage
-                                </div>
-                              )}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-
-                      {/* Conditional Stage Change Rules */}
-                      <div className="border rounded-lg p-4 bg-muted/30">
-                        <div className="flex items-center justify-between mb-3">
-                          <div>
-                            <Label className="text-sm font-medium">Conditional Stage Changes</Label>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Override the default based on the project's current stage
-                            </p>
-                          </div>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => setEditingTemplate(prev => prev ? {
-                              ...prev,
-                              stageChangeRules: [...prev.stageChangeRules, { ifStageId: '', thenStageId: '', thenReasonId: null }]
-                            } : null)}
-                            data-testid="button-add-rule"
-                          >
-                            <Plus className="w-3 h-3 mr-1" />
-                            Add Rule
-                          </Button>
-                        </div>
-                        
-                        {editingTemplate.stageChangeRules.length === 0 ? (
-                          <p className="text-xs text-muted-foreground italic text-center py-2">
-                            No conditional rules. The default stage change will always apply.
-                          </p>
-                        ) : (
-                          <div className="space-y-3">
-                            {editingTemplate.stageChangeRules.map((rule, index) => (
-                              <div key={index} className="flex items-center gap-2 p-2 bg-background rounded border">
-                                <span className="text-xs text-muted-foreground whitespace-nowrap">IF stage is</span>
-                                <Select
-                                  value={rule.ifStageId || "none"}
-                                  onValueChange={(value) => {
-                                    const newRules = [...editingTemplate.stageChangeRules];
-                                    newRules[index] = { ...rule, ifStageId: value === "none" ? '' : value };
-                                    setEditingTemplate(prev => prev ? { ...prev, stageChangeRules: newRules } : null);
-                                  }}
-                                >
-                                  <SelectTrigger className="w-36 h-8 text-xs" data-testid={`select-if-stage-${index}`}>
-                                    <SelectValue placeholder="Select stage" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">Select stage</SelectItem>
-                                    {stages.map(stage => (
-                                      <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                
-                                <span className="text-xs text-muted-foreground whitespace-nowrap">THEN move to</span>
-                                <Select
-                                  value={rule.thenStageId || "none"}
-                                  onValueChange={(value) => {
-                                    const newRules = [...editingTemplate.stageChangeRules];
-                                    newRules[index] = { ...rule, thenStageId: value === "none" ? '' : value, thenReasonId: null };
-                                    setEditingTemplate(prev => prev ? { ...prev, stageChangeRules: newRules } : null);
-                                  }}
-                                >
-                                  <SelectTrigger className="w-36 h-8 text-xs" data-testid={`select-then-stage-${index}`}>
-                                    <SelectValue placeholder="Select stage" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">Select stage</SelectItem>
-                                    {stages.map(stage => (
-                                      <SelectItem key={stage.id} value={stage.id}>{stage.name}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-
-                                <span className="text-xs text-muted-foreground whitespace-nowrap">with</span>
-                                <Select
-                                  value={rule.thenReasonId || "none"}
-                                  onValueChange={(value) => {
-                                    const newRules = [...editingTemplate.stageChangeRules];
-                                    newRules[index] = { ...rule, thenReasonId: value === "none" ? null : value };
-                                    setEditingTemplate(prev => prev ? { ...prev, stageChangeRules: newRules } : null);
-                                  }}
-                                  disabled={!rule.thenStageId}
-                                >
-                                  <SelectTrigger className="w-32 h-8 text-xs" data-testid={`select-then-reason-${index}`}>
-                                    <SelectValue placeholder="No reason" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">No reason</SelectItem>
-                                    {getFilteredReasonsForStage(rule.thenStageId).map(reason => (
-                                      <SelectItem key={reason.id} value={reason.id}>{reason.reason}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0 text-destructive"
-                                  onClick={() => {
-                                    const newRules = editingTemplate.stageChangeRules.filter((_, i) => i !== index);
-                                    setEditingTemplate(prev => prev ? { ...prev, stageChangeRules: newRules } : null);
-                                  }}
-                                  data-testid={`button-delete-rule-${index}`}
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor="expiry-days">Link Expires After (days)</Label>
-                          <Input
-                            id="expiry-days"
-                            type="number"
-                            min={1}
-                            max={365}
-                            value={editingTemplate.expiryDaysAfterStart}
-                            onChange={(e) => setEditingTemplate(prev => prev ? { 
-                              ...prev, 
-                              expiryDaysAfterStart: parseInt(e.target.value) || 7 
-                            } : null)}
-                            data-testid="input-expiry-days"
-                          />
-                        </div>
-                        <div className="flex items-end gap-4 flex-wrap">
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              id="require-all"
-                              checked={editingTemplate.requireAllQuestions}
-                              onCheckedChange={(checked) => setEditingTemplate(prev => prev ? { 
-                                ...prev, 
-                                requireAllQuestions: checked 
-                              } : null)}
-                              data-testid="switch-require-all"
-                            />
-                            <Label htmlFor="require-all" className="text-sm">Require all questions</Label>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              id="require-otp"
-                              checked={editingTemplate.requireOtp}
-                              onCheckedChange={(checked) => setEditingTemplate(prev => prev ? { 
-                                ...prev, 
-                                requireOtp: checked 
-                              } : null)}
-                              data-testid="switch-require-otp"
-                            />
-                            <Label htmlFor="require-otp" className="text-sm" title="Clients must verify their email with a one-time code before accessing the form">Email verification (OTP)</Label>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Switch
-                              id="is-active"
-                              checked={editingTemplate.isActive}
-                              onCheckedChange={(checked) => setEditingTemplate(prev => prev ? { 
-                                ...prev, 
-                                isActive: checked 
-                              } : null)}
-                              data-testid="switch-is-active"
-                            />
-                            <Label htmlFor="is-active" className="text-sm">Active</Label>
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
+                <div className="max-w-3xl mx-auto space-y-6">
                   <QuestionsDropZone isOver={isOverDropZone}>
                     <Card>
                       <CardHeader className="flex flex-row items-center justify-between">
@@ -1874,6 +1512,8 @@ export function ClientTasksTab({ projectTypeId, projectTypeName, stages = [], re
               </div>
           </div>
           </DndContext>
+          )}
+
         </div>
 
         {editingQuestionIndex !== null && editingTemplate.questions[editingQuestionIndex] && (
