@@ -71,23 +71,15 @@ export function CustomFieldsStep({ formData, updateFormData }: CustomFieldsStepP
 
   return (
     <div className="flex flex-col h-full">
-      <div className="mb-4">
-        <h2 className="text-2xl font-bold" data-testid="text-step-heading">Custom Fields</h2>
-        <p className="text-muted-foreground mt-1">
-          Define custom data fields that will be collected when clients use this service
-        </p>
-      </div>
-
-      <div className="flex-1 min-h-[500px] -mx-6 border-t">
-        <FieldBuilder
-          fields={fields}
-          onFieldsChange={handleFieldsChange}
-          showLibraryTab={true}
-          canvasTitle="Service Fields"
-          canvasDescription="Drag to reorder fields. Click to edit."
-          className="h-full"
-        />
-      </div>
+      <FieldBuilder
+        fields={fields}
+        onFieldsChange={handleFieldsChange}
+        showLibraryTab={true}
+        showSystemLibraryInline={true}
+        canvasTitle="Service Fields"
+        canvasDescription="Drag to reorder fields. Click to edit."
+        className="h-full"
+      />
     </div>
   );
 }

@@ -15,6 +15,7 @@ interface FieldBuilderProps {
   isViewOnly?: boolean;
   allowedFieldTypes?: SystemFieldType[];
   showLibraryTab?: boolean;
+  showSystemLibraryInline?: boolean;
   showExpectedValues?: boolean;
   canvasTitle?: string;
   canvasDescription?: string;
@@ -27,6 +28,7 @@ export function FieldBuilder({
   isViewOnly = false,
   allowedFieldTypes,
   showLibraryTab = true,
+  showSystemLibraryInline = false,
   showExpectedValues = false,
   canvasTitle,
   canvasDescription,
@@ -138,7 +140,9 @@ export function FieldBuilder({
           <FieldPalette
             onAddField={handleAddField}
             onOpenLibraryPicker={() => setLibraryPickerOpen(true)}
+            onAddLibraryField={handleAddLibraryField}
             showLibraryTab={showLibraryTab}
+            showSystemLibraryInline={showSystemLibraryInline}
             allowedFieldTypes={allowedFieldTypes}
             className="w-72 shrink-0"
           />

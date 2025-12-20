@@ -297,11 +297,17 @@ export function ServiceWizard({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto p-6">
+      {currentStep === 5 ? (
+        <div className="flex-1 overflow-hidden">
           {renderStepContent()}
         </div>
-      </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-4xl mx-auto p-6">
+            {renderStepContent()}
+          </div>
+        </div>
+      )}
 
       <div className="border-t border-border bg-card px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
