@@ -179,11 +179,12 @@ When running browser tests via the `run_test` tool, follow these steps:
 
 Before starting **any** browser test (`run_test`), you MUST perform the following steps **in order**:
 
-#### Step 1: Internal Readiness Check
+#### Step 1: Internal Readiness Check (capture boot_id)
 ```bash
 curl -s http://127.0.0.1:$PORT/readyz
 ```
-- Expect HTTP 200 with `{"status":"ready"}`
+- Expect HTTP 200 with `{"status":"ready","boot_id":"<ID>","uptime_ms":<N>}`
+- **Capture the `boot_id` value** - you will need it later
 - If this fails, STOP and fix the app startup
 
 #### Step 2: External (Public) Readiness Check — REQUIRED
@@ -197,7 +198,8 @@ for i in {1..30}; do
   sleep 2
 done
 ```
-- Expect HTTP 200 with `{"status":"ready"}`
+- Expect HTTP 200 with `{"status":"ready","boot_id":"<ID>"}`
+- **Verify `boot_id` matches the internal check** - if different, the app restarted between checks
 - If this does NOT return 200 within 60 seconds:
   - DO NOT start browser tests
   - Record failure as **"Blocked: external Replit proxy not ready"**
@@ -205,7 +207,7 @@ done
   - Report status and stop
 
 #### Step 3: Proceed with Browser Tests
-Only after BOTH internal AND external readiness checks pass:
+Only after BOTH internal AND external readiness checks pass with matching `boot_id`:
 1. Authenticate via API: `POST /api/dev-login` with `Authorization: Bearer dev-test-token-2025`
 2. Start browser navigation and verification steps
 
@@ -233,6 +235,39 @@ We have confirmed repeated false failures caused by transient Replit proxy routi
 This gate exists to separate **infrastructure availability** from **application correctness**.
 
 A browser test that starts before external `/readyz` is green is invalid by definition.
+
+### Boot ID Stability Check (Detecting Browser-Induced Restarts)
+
+**Problem Discovered**: Opening a browser session can sometimes trigger the development server's file watcher to restart the app. This means health checks pass, but by the time the browser connects, the app is mid-restart and returns 502.
+
+**Solution**: The `/readyz` endpoint now includes a `boot_id` field - a unique identifier generated once at startup.
+
+**How to verify stability**:
+
+1. **Before browser opens**: Capture `boot_id` from `/readyz`
+2. **After browser session starts**: Check `/readyz` again
+3. **Compare**: If `boot_id` changed, the app restarted and pre-checks are invalid
+
+```bash
+# Example: Capture boot_id before and after
+BOOT1=$(curl -s http://127.0.0.1:$PORT/readyz | jq -r '.boot_id')
+# ... browser session opens ...
+BOOT2=$(curl -s http://127.0.0.1:$PORT/readyz | jq -r '.boot_id')
+
+if [ "$BOOT1" != "$BOOT2" ]; then
+  echo "WARNING: App restarted during browser launch (boot_id changed)"
+  echo "  Before: $BOOT1"
+  echo "  After:  $BOOT2"
+fi
+```
+
+**If boot_id changes**:
+- The pre-test health checks are stale
+- Wait for the new boot to complete (poll `/readyz` until 200)
+- Re-verify external `/readyz` with matching `boot_id`
+- Then proceed with browser tests
+
+This ensures health checks remain meaningful even when browser session launch triggers restarts.
 
 ### Standard Test Plan Template
 
@@ -307,3 +342,5 @@ _This section tracks changes affecting tests. Update when making relevant change
 | 2025-12-20 | Added "Instructions for Testing Agent" section | Explicit browser test steps |
 | 2025-12-20 | Added mandatory external readiness gate | Browser tests MUST wait for public URL `/readyz` before starting |
 | 2025-12-20 | Added Proxy Error Retry Protocol | Wait 5-10s and retry once if first navigation fails after readyz passed |
+| 2025-12-20 | Added `boot_id` to `/readyz` response | Detects app restarts between health checks and browser session launch |
+| 2025-12-20 | Added Boot ID Stability Check section | Documents how to verify app didn't restart during test setup |

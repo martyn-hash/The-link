@@ -14,6 +14,9 @@ import cookieParser from "cookie-parser";
 // Track process startup time for diagnostics
 const PROCESS_START_TIME = Date.now();
 
+// Unique boot ID - used to detect if app was restarted between health checks
+const BOOT_ID = `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+
 // Set process role for telemetry (web server, not cron worker)
 setProcessRole('web');
 
@@ -77,12 +80,14 @@ app.get('/readyz', (req, res) => {
     res.status(200).json({
       status: 'ready',
       uptime_ms: uptime,
+      boot_id: BOOT_ID,
       timestamp: new Date().toISOString()
     });
   } else {
     res.status(503).json({
       status: 'not_ready',
       uptime_ms: uptime,
+      boot_id: BOOT_ID,
       timestamp: new Date().toISOString()
     });
   }
