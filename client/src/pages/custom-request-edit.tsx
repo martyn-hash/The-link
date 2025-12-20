@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +26,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
+import { ConditionalLogicEditor, type ConditionalLogic, type QuestionReference } from "@/components/field-builder/ConditionalLogicEditor";
 
 const requestSchema = z.object({
   name: z.string().min(1, "Name is required").max(200, "Name too long"),
@@ -375,6 +376,8 @@ export default function CustomRequestEdit() {
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [createQuestionOptions, setCreateQuestionOptions] = useState<string[]>([]);
   const [editQuestionOptions, setEditQuestionOptions] = useState<string[]>([]);
+  const [createQuestionConditionalLogic, setCreateQuestionConditionalLogic] = useState<ConditionalLogic | null>(null);
+  const [editQuestionConditionalLogic, setEditQuestionConditionalLogic] = useState<ConditionalLogic | null>(null);
 
   // Fetch custom request with full details
   const { data: request, isLoading: requestLoading } = useQuery<any>({
@@ -520,13 +523,14 @@ export default function CustomRequestEdit() {
   });
 
   const createQuestionMutation = useMutation({
-    mutationFn: async (data: { sectionId: string; questionType: string; label: string; helpText?: string; isRequired: boolean; options?: string[] }) => {
+    mutationFn: async (data: { sectionId: string; questionType: string; label: string; helpText?: string; isRequired: boolean; options?: string[]; conditionalLogic?: ConditionalLogic | null }) => {
       const payload: any = {
         questionType: data.questionType,
         label: data.label,
         helpText: data.helpText,
         isRequired: data.isRequired,
         order: 0,
+        conditionalLogic: data.conditionalLogic || null,
       };
       
       // Include options if provided
@@ -544,6 +548,7 @@ export default function CustomRequestEdit() {
       queryClient.invalidateQueries({ queryKey: ["/api/custom-requests", id, "full"] });
       setCreatingQuestion(null);
       setCreateQuestionOptions([]);
+      setCreateQuestionConditionalLogic(null);
     },
     onError: (error) => {
       showFriendlyError({ error });
@@ -686,6 +691,7 @@ export default function CustomRequestEdit() {
       if (targetSectionId && type) {
         setCreatingQuestion({ sectionId: targetSectionId, questionType: type });
         setCreateQuestionOptions([]);
+        setCreateQuestionConditionalLogic(null);
         return;
       }
       
@@ -781,6 +787,62 @@ export default function CustomRequestEdit() {
       }
     }
   }
+
+  // Flatten all questions from all sections for conditional logic
+  const allQuestions = useMemo(() => {
+    const questions: any[] = [];
+    for (const section of sections) {
+      if (section.questions) {
+        questions.push(...section.questions.map((q: any) => ({ ...q, sectionId: section.id })));
+      }
+    }
+    return questions;
+  }, [sections]);
+
+  // Compute previous questions for edit (questions that come before the current one)
+  const previousQuestionsForEdit = useMemo((): QuestionReference[] => {
+    if (!editQuestion || !allQuestions.length) return [];
+    
+    const sortedQuestions = [...allQuestions].sort((a, b) => {
+      if (a.sectionId !== b.sectionId) {
+        const sectionA = sections.find(s => s.id === a.sectionId);
+        const sectionB = sections.find(s => s.id === b.sectionId);
+        return (sectionA?.order || 0) - (sectionB?.order || 0);
+      }
+      return (a.order || 0) - (b.order || 0);
+    });
+    
+    const currentIndex = sortedQuestions.findIndex(q => q.id === editQuestion.id);
+    if (currentIndex <= 0) return [];
+    
+    return sortedQuestions.slice(0, currentIndex).map(q => ({
+      id: q.id,
+      label: q.label,
+      questionType: q.questionType,
+      options: q.options,
+    }));
+  }, [editQuestion, allQuestions, sections]);
+
+  // Compute previous questions for create (all existing questions in all sections)
+  const previousQuestionsForCreate = useMemo((): QuestionReference[] => {
+    if (!creatingQuestion || !allQuestions.length) return [];
+    
+    const sortedQuestions = [...allQuestions].sort((a, b) => {
+      if (a.sectionId !== b.sectionId) {
+        const sectionA = sections.find(s => s.id === a.sectionId);
+        const sectionB = sections.find(s => s.id === b.sectionId);
+        return (sectionA?.order || 0) - (sectionB?.order || 0);
+      }
+      return (a.order || 0) - (b.order || 0);
+    });
+    
+    return sortedQuestions.map(q => ({
+      id: q.id,
+      label: q.label,
+      questionType: q.questionType,
+      options: q.options,
+    }));
+  }, [creatingQuestion, allQuestions, sections]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -934,11 +996,13 @@ export default function CustomRequestEdit() {
                             const sectionId = parts[parts.length - 1];
                             setCreatingQuestion({ sectionId, questionType });
                             setCreateQuestionOptions([]);
+                            setCreateQuestionConditionalLogic(null);
                           } else {
                             const question = section.questions?.find((q: any) => q.id === questionId);
                             if (question) {
                               setEditQuestionId(questionId);
                               setEditQuestionOptions(question.options || []);
+                              setEditQuestionConditionalLogic(question.conditionalLogic || null);
                             }
                           }
                         }}
@@ -1090,6 +1154,7 @@ export default function CustomRequestEdit() {
         if (!open) {
           setCreatingQuestion(null);
           setCreateQuestionOptions([]);
+          setCreateQuestionConditionalLogic(null);
         }
       }}>
         <DialogContent data-testid="dialog-create-question" className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -1177,6 +1242,16 @@ export default function CustomRequestEdit() {
                 </div>
               </div>
             )}
+
+            {/* Conditional Logic for Create */}
+            {previousQuestionsForCreate.length > 0 && (
+              <ConditionalLogicEditor
+                conditionalLogic={createQuestionConditionalLogic}
+                onChange={setCreateQuestionConditionalLogic}
+                previousQuestions={previousQuestionsForCreate}
+              />
+            )}
+
             <div className="flex justify-end space-x-2">
               <Button
                 variant="outline"
@@ -1211,6 +1286,7 @@ export default function CustomRequestEdit() {
                     label,
                     helpText: helpText || undefined,
                     isRequired: isRequired || false,
+                    conditionalLogic: createQuestionConditionalLogic || null,
                   };
 
                   // Include options if it's a choice question
@@ -1235,6 +1311,7 @@ export default function CustomRequestEdit() {
         if (!open) {
           setEditQuestionId(null);
           setEditQuestionOptions([]);
+          setEditQuestionConditionalLogic(null);
         }
       }}>
         <DialogContent data-testid="dialog-edit-question" className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -1324,6 +1401,16 @@ export default function CustomRequestEdit() {
                   </div>
                 </div>
               )}
+
+              {/* Conditional Logic for Edit */}
+              {previousQuestionsForEdit.length > 0 && (
+                <ConditionalLogicEditor
+                  conditionalLogic={editQuestionConditionalLogic}
+                  onChange={setEditQuestionConditionalLogic}
+                  previousQuestions={previousQuestionsForEdit}
+                />
+              )}
+
               <div className="flex justify-end space-x-2">
                 <Button
                   variant="outline"
@@ -1356,6 +1443,7 @@ export default function CustomRequestEdit() {
                       label,
                       helpText: helpText || undefined,
                       isRequired: isRequired || false,
+                      conditionalLogic: editQuestionConditionalLogic || null,
                     };
 
                     // Include options if it's a choice question
