@@ -756,6 +756,7 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [systemLibrarySearch, setSystemLibrarySearch] = useState("");
   const [systemLibraryCategory, setSystemLibraryCategory] = useState<string>("all");
+  const [isSystemLibraryExpanded, setIsSystemLibraryExpanded] = useState(false);
 
   const ALLOWED_SYSTEM_FIELD_TYPES = ["boolean", "number", "short_text", "long_text", "date", "single_select", "multi_select", "dropdown", "email", "phone", "url", "currency", "percentage", "user_select", "file_upload", "image_upload"];
 
@@ -1285,19 +1286,34 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
           >
           <div className="flex-1 flex overflow-hidden">
             <div className="w-[400px] border-r border-border bg-muted/30 flex flex-col overflow-hidden">
-              {/* System Library Section - Top 50% */}
-              <div className="flex-1 min-h-0 border-b border-border flex flex-col">
-                <div className="p-4 border-b border-border bg-background/50">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                      <BookOpen className="w-4 h-4 text-purple-600" />
+              {/* System Library Section - Collapsible */}
+              <Collapsible 
+                open={isSystemLibraryExpanded} 
+                onOpenChange={setIsSystemLibraryExpanded}
+                className={`flex flex-col border-b border-border transition-all ${isSystemLibraryExpanded ? "flex-1 min-h-0" : ""}`}
+              >
+                <CollapsibleTrigger asChild>
+                  <button 
+                    className="w-full p-4 border-b border-border bg-emerald-50/50 dark:bg-emerald-950/20 hover:bg-emerald-100/50 dark:hover:bg-emerald-950/30 transition-colors text-left"
+                    data-testid="button-toggle-system-library"
+                  >
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                        <BookOpen className="w-4 h-4 text-emerald-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">System Library</h3>
+                        {!isSystemLibraryExpanded && (
+                          <p className="text-xs text-muted-foreground">Click to browse reusable fields</p>
+                        )}
+                      </div>
+                      <Badge variant="secondary" className="text-xs">{filteredSystemFields.length}</Badge>
+                      <ChevronDown className={`w-4 h-4 text-emerald-600 transition-transform ${isSystemLibraryExpanded ? "rotate-180" : ""}`} />
                     </div>
-                    <div>
-                      <h3 className="text-sm font-semibold">System Library</h3>
-                      <p className="text-xs text-muted-foreground">Click to add pre-defined fields</p>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
+                  </button>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="flex-1 flex flex-col overflow-hidden">
+                  <div className="p-3 border-b border-border/50 space-y-2">
                     <Select value={systemLibraryCategory} onValueChange={setSystemLibraryCategory}>
                       <SelectTrigger className="h-8 text-xs" data-testid="select-system-field-category">
                         <SelectValue />
@@ -1319,44 +1335,44 @@ export function ClientTasksTab({ projectTypeId, stages = [], reasons = [], enabl
                       />
                     </div>
                   </div>
-                </div>
-                <ScrollArea className="flex-1">
-                  <div className="p-3 space-y-1.5">
-                    {filteredSystemFields.length === 0 ? (
-                      <p className="text-xs text-muted-foreground text-center py-4">
-                        {systemLibrarySearch || systemLibraryCategory !== "all" 
-                          ? "No matching fields found" 
-                          : "No system fields available"}
-                      </p>
-                    ) : (
-                      filteredSystemFields.map(field => {
-                        const Icon = getFieldTypeIcon(field.fieldType);
-                        return (
-                          <button
-                            key={field.id}
-                            onClick={() => handleAddQuestionFromSystemLibrary(field)}
-                            className="w-full flex items-center gap-2.5 p-2.5 rounded-md border border-purple-200 bg-purple-50/50 hover:bg-purple-100 hover:border-purple-300 transition-colors text-left group"
-                            data-testid={`system-field-${field.id}`}
-                          >
-                            <div className="w-7 h-7 rounded-md bg-purple-100 flex items-center justify-center flex-shrink-0">
-                              <Icon className="w-3.5 h-3.5 text-purple-600" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-xs font-medium text-foreground truncate">{field.fieldName}</div>
-                              {field.description && (
-                                <div className="text-[10px] text-muted-foreground truncate">{field.description}</div>
-                              )}
-                            </div>
-                            <Plus className="w-3.5 h-3.5 text-purple-500 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
-                          </button>
-                        );
-                      })
-                    )}
-                  </div>
-                </ScrollArea>
-              </div>
+                  <ScrollArea className="flex-1">
+                    <div className="p-3 space-y-1.5">
+                      {filteredSystemFields.length === 0 ? (
+                        <p className="text-xs text-muted-foreground text-center py-4">
+                          {systemLibrarySearch || systemLibraryCategory !== "all" 
+                            ? "No matching fields found" 
+                            : "No system fields available"}
+                        </p>
+                      ) : (
+                        filteredSystemFields.map(field => {
+                          const Icon = getFieldTypeIcon(field.fieldType);
+                          return (
+                            <button
+                              key={field.id}
+                              onClick={() => handleAddQuestionFromSystemLibrary(field)}
+                              className="w-full flex items-center gap-2.5 p-2.5 rounded-md hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors text-left group"
+                              data-testid={`system-field-${field.id}`}
+                            >
+                              <div className="w-7 h-7 rounded-md bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                                <Icon className="w-3.5 h-3.5 text-emerald-600" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-medium text-foreground truncate">{field.fieldName}</div>
+                                {field.description && (
+                                  <div className="text-[10px] text-muted-foreground truncate">{field.description}</div>
+                                )}
+                              </div>
+                              <Plus className="w-3.5 h-3.5 text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </ScrollArea>
+                </CollapsibleContent>
+              </Collapsible>
 
-              {/* Custom Question Types Section - Bottom 50% */}
+              {/* Custom Question Types Section - Takes remaining space */}
               <div className="flex-1 min-h-0 flex flex-col">
                 <div className="p-4 border-b border-border bg-background/50">
                   <div className="flex items-center gap-2">
