@@ -1459,4 +1459,130 @@ export function registerSuperAdminRoutes(
       }
     }
   );
+
+  // ========================================
+  // NOTIFICATION TESTING CONTROLS
+  // Super admin only - for testing notification flows
+  // ========================================
+
+  // Reschedule a notification to a specific time (or immediate)
+  app.post(
+    "/api/super-admin/notifications/:notificationId/reschedule",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const { notificationId } = req.params;
+        const { scheduledFor, immediate } = req.body;
+
+        // Calculate target time
+        let targetTime: Date;
+        if (immediate) {
+          // Schedule for 1 minute ago to ensure it's picked up immediately
+          targetTime = new Date();
+          targetTime.setMinutes(targetTime.getMinutes() - 1);
+        } else if (scheduledFor) {
+          targetTime = new Date(scheduledFor);
+          if (isNaN(targetTime.getTime())) {
+            return res.status(400).json({ message: "Invalid scheduledFor date" });
+          }
+        } else {
+          return res.status(400).json({ message: "Either 'immediate' or 'scheduledFor' is required" });
+        }
+
+        // Update the notification - reset all failure states to allow re-processing
+        const updated = await storage.updateScheduledNotification(notificationId, {
+          scheduledFor: targetTime,
+          status: 'scheduled', // Reset to scheduled in case it was in another state
+          failureReason: null, // Clear any previous failure reason
+          updatedAt: new Date(), // Bump updated timestamp
+        });
+
+        if (!updated) {
+          return res.status(404).json({ message: "Notification not found" });
+        }
+
+        console.log(`[SuperAdmin] Rescheduled notification ${notificationId} to ${targetTime.toISOString()} by ${req.user.email}`);
+
+        res.json({
+          success: true,
+          message: immediate 
+            ? `Notification rescheduled for immediate processing. Run the notification processor to send it.`
+            : `Notification rescheduled to ${targetTime.toISOString()}`,
+          notification: updated,
+        });
+      } catch (error: any) {
+        console.error("Error rescheduling notification:", error);
+        res.status(500).json({ message: error.message || "Failed to reschedule notification" });
+      }
+    }
+  );
+
+  // Manually trigger notification processing (runs the cron job)
+  app.post(
+    "/api/super-admin/notifications/process-now",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const { processDueNotifications } = await import("../notification-sender");
+        
+        console.log(`[SuperAdmin] Manual notification processing triggered by ${req.user.email}`);
+        
+        await processDueNotifications();
+
+        res.json({
+          success: true,
+          message: "Notification processing completed. Check the server logs for details.",
+        });
+      } catch (error: any) {
+        console.error("Error processing notifications:", error);
+        res.status(500).json({ message: error.message || "Failed to process notifications" });
+      }
+    }
+  );
+
+  // Get notification details for testing (includes task instance info)
+  app.get(
+    "/api/super-admin/notifications/:notificationId/details",
+    isAuthenticated,
+    resolveEffectiveUser,
+    requireSuperAdmin,
+    async (req: any, res: any) => {
+      try {
+        const { notificationId } = req.params;
+        
+        const notification = await storage.getScheduledNotificationById(notificationId);
+        if (!notification) {
+          return res.status(404).json({ message: "Notification not found" });
+        }
+
+        // Get related task instance if exists
+        let taskInstance = null;
+        if (notification.taskInstanceId) {
+          taskInstance = await storage.clientProjectTaskStorage.getInstanceById(notification.taskInstanceId);
+        }
+
+        // Get client and project info
+        const client = notification.clientId 
+          ? await storage.getClientById(notification.clientId)
+          : null;
+        const project = notification.projectId
+          ? await storage.getProjectById(notification.projectId)
+          : null;
+
+        res.json({
+          notification,
+          taskInstance,
+          client: client ? { id: client.id, name: client.name } : null,
+          project: project ? { id: project.id, description: project.description } : null,
+        });
+      } catch (error: any) {
+        console.error("Error fetching notification details:", error);
+        res.status(500).json({ message: error.message || "Failed to fetch notification details" });
+      }
+    }
+  );
 }
