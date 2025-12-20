@@ -42,10 +42,6 @@ mode = "parallel"
 task = "shell.exec"
 args = "PROCESS_ROLE=web NODE_ENV=development tsx server/index.ts"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "PROCESS_ROLE=cron-worker NODE_ENV=development tsx server/cron-worker.ts"
-
 [[workflows.workflow]]
 name = "Start Application"
 mode = "parallel"
