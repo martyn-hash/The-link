@@ -133,13 +133,15 @@ export const requestTemplateQuestionAdapter: FieldAdapter<{
   sortOrder: number;
   options?: string[] | null;
   validationRules?: Record<string, any> | null;
+  conditionalLogic?: Record<string, any> | null;
+  sectionId?: string | null;
 }> = {
   context: "request_template_question",
   
   capabilities: {
     supportsExpectedValue: false,
     supportsValidationRules: true,
-    supportsConditionalLogic: false,
+    supportsConditionalLogic: true,
     supportsOptions: true,
     supportsPlaceholder: false,
     supportsHelpText: true,
@@ -157,6 +159,8 @@ export const requestTemplateQuestionAdapter: FieldAdapter<{
     order: domainField.sortOrder ?? index,
     options: domainField.options || [],
     validationRules: domainField.validationRules || undefined,
+    conditionalLogic: domainField.conditionalLogic as any || null,
+    sectionId: domainField.sectionId || null,
   }),
   
   mapFromFieldDefinition: (field) => ({
@@ -172,6 +176,8 @@ export const requestTemplateQuestionAdapter: FieldAdapter<{
     sortOrder: field.order,
     options: field.options?.length ? field.options : undefined,
     validationRules: field.validationRules,
+    conditionalLogic: field.conditionalLogic || undefined,
+    sectionId: field.sectionId || undefined,
   }),
   
   mapSystemFieldType: (systemType) => {

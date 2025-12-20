@@ -7,3 +7,4 @@ export * from "./FieldBuilder";
 export * from "./WizardLayout";
 export * from "./SortableFieldList";
 export * from "./adapters";
+export * from "./ConditionalLogicEditor";

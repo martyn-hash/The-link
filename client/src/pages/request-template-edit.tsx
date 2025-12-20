@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -6,13 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { 
   ArrowLeft, Save, Plus, Edit, Trash2, GripVertical, FolderPlus, Settings,
   Type, FileText, Mail, Hash, Calendar, CircleDot, CheckSquare, ChevronDown, 
-  ToggleLeft, Upload, Layers
+  ToggleLeft, Upload, Layers, GitBranch
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -26,6 +28,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
+import { ConditionalLogicEditor, type QuestionReference } from "@/components/field-builder/ConditionalLogicEditor";
+import type { ConditionalLogic } from "@/components/field-builder/types";
 import type { ClientRequestTemplate, ClientRequestTemplateSection, ClientRequestTemplateCategory, InsertClientRequestTemplateSection, ClientRequestTemplateQuestion, InsertClientRequestTemplateQuestion } from "@shared/schema";
 
 const templateSchema = z.object({
@@ -545,6 +549,8 @@ export default function TaskTemplateEditPage() {
   const [editQuestionSectionId, setEditQuestionSectionId] = useState<string | null>(null);
   const [createQuestionOptions, setCreateQuestionOptions] = useState<string[]>([]);
   const [editQuestionOptions, setEditQuestionOptions] = useState<string[]>([]);
+  const [editQuestionConditionalLogic, setEditQuestionConditionalLogic] = useState<ConditionalLogic | null>(null);
+  const [createQuestionConditionalLogic, setCreateQuestionConditionalLogic] = useState<ConditionalLogic | null>(null);
 
   const { data: template, isLoading: templateLoading } = useQuery<ClientRequestTemplate>({
     queryKey: ["/api/client-request-templates", id],
@@ -562,6 +568,57 @@ export default function TaskTemplateEditPage() {
     queryFn: getQueryFn({ on401: "returnNull" }),
     enabled: !!id,
   });
+
+  const { data: allQuestionsData } = useQuery<ClientRequestTemplateQuestion[]>({
+    queryKey: ["/api/client-request-templates", id, "questions"],
+    queryFn: getQueryFn({ on401: "returnNull" }),
+    enabled: !!id,
+  });
+
+  const allQuestions = useMemo(() => allQuestionsData || [], [allQuestionsData]);
+
+  const editQuestion = useMemo(() => {
+    if (!editQuestionId) return null;
+    return allQuestions.find(q => q.id === editQuestionId) || null;
+  }, [editQuestionId, allQuestions]);
+
+  const previousQuestionsForEdit = useMemo((): QuestionReference[] => {
+    if (!editQuestion || !allQuestions.length) return [];
+    
+    const sortedQuestions = [...allQuestions].sort((a, b) => {
+      if (a.sectionId !== b.sectionId) {
+        const sectionA = sections.find(s => s.id === a.sectionId);
+        const sectionB = sections.find(s => s.id === b.sectionId);
+        return (sectionA?.order || 0) - (sectionB?.order || 0);
+      }
+      return (a.order || 0) - (b.order || 0);
+    });
+    
+    const currentIndex = sortedQuestions.findIndex(q => q.id === editQuestion.id);
+    if (currentIndex <= 0) return [];
+    
+    return sortedQuestions.slice(0, currentIndex).map(q => ({
+      id: q.id,
+      label: q.label,
+      questionType: q.questionType,
+      options: q.options,
+    }));
+  }, [editQuestion, allQuestions, sections]);
+
+  const previousQuestionsForCreate = useMemo((): QuestionReference[] => {
+    if (!creatingQuestion || !allQuestions.length) return [];
+    
+    const sectionQuestions = allQuestions
+      .filter(q => q.sectionId === creatingQuestion.sectionId)
+      .sort((a, b) => (a.order || 0) - (b.order || 0));
+    
+    return sectionQuestions.map(q => ({
+      id: q.id,
+      label: q.label,
+      questionType: q.questionType,
+      options: q.options,
+    }));
+  }, [creatingQuestion, allQuestions]);
 
   // Update local sections when data loads
   useEffect(() => {
@@ -638,7 +695,7 @@ export default function TaskTemplateEditPage() {
   });
 
   const createQuestionMutation = useMutation({
-    mutationFn: async (data: { sectionId: string; questionType: string; label: string; helpText?: string; isRequired: boolean; options?: string[] }) => {
+    mutationFn: async (data: { sectionId: string; questionType: string; label: string; helpText?: string; isRequired: boolean; options?: string[]; conditionalLogic?: ConditionalLogic | null }) => {
       const payload: any = {
         questionType: data.questionType,
         label: data.label,
@@ -652,6 +709,11 @@ export default function TaskTemplateEditPage() {
         payload.options = data.options;
       }
       
+      // Include conditional logic if provided
+      if (data.conditionalLogic) {
+        payload.conditionalLogic = data.conditionalLogic;
+      }
+      
       return apiRequest("POST", `/api/client-request-template-sections/${data.sectionId}/questions`, payload);
     },
     onSuccess: (_, variables) => {
@@ -659,9 +721,12 @@ export default function TaskTemplateEditPage() {
         title: "Success",
         description: "Question added successfully",
       });
+      // Invalidate both the all-questions and section-specific queries
+      queryClient.invalidateQueries({ queryKey: ["/api/client-request-templates", id, "questions"] });
       queryClient.invalidateQueries({ queryKey: ["/api/client-request-template-sections", variables.sectionId, "questions"] });
       setCreatingQuestion(null);
       setCreateQuestionOptions([]);
+      setCreateQuestionConditionalLogic(null);
     },
     onError: (error) => {
       showFriendlyError({ error });
@@ -678,6 +743,8 @@ export default function TaskTemplateEditPage() {
         title: "Success",
         description: "Question updated successfully",
       });
+      // Invalidate the all questions query for the template
+      queryClient.invalidateQueries({ queryKey: ["/api/client-request-templates", id, "questions"] });
       // Invalidate the specific section's questions if we know the section
       if (variables.sectionId) {
         queryClient.invalidateQueries({ queryKey: ["/api/client-request-template-sections", variables.sectionId, "questions"] });
@@ -694,6 +761,7 @@ export default function TaskTemplateEditPage() {
       }
       setEditQuestionId(null);
       setEditQuestionSectionId(null);
+      setEditQuestionConditionalLogic(null);
       setEditQuestionOptions([]);
     },
     onError: (error) => {
@@ -1065,6 +1133,7 @@ export default function TaskTemplateEditPage() {
                                     setEditQuestionId(questionId);
                                     setEditQuestionSectionId(section.id);
                                     setEditQuestionOptions(question.options || []);
+                                    setEditQuestionConditionalLogic((question.conditionalLogic as ConditionalLogic) || null);
                                   }
                                 }
                               }}
@@ -1219,6 +1288,7 @@ export default function TaskTemplateEditPage() {
           if (!open) {
             setCreatingQuestion(null);
             setCreateQuestionOptions([]);
+            setCreateQuestionConditionalLogic(null);
           }
         }}>
           <DialogContent data-testid="dialog-create-question" className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -1306,6 +1376,16 @@ export default function TaskTemplateEditPage() {
                   </div>
                 </div>
               )}
+
+              {/* Conditional Logic for Create */}
+              {previousQuestionsForCreate.length > 0 && (
+                <ConditionalLogicEditor
+                  conditionalLogic={createQuestionConditionalLogic}
+                  onChange={setCreateQuestionConditionalLogic}
+                  previousQuestions={previousQuestionsForCreate}
+                />
+              )}
+
               <div className="flex justify-end space-x-2">
                 <Button
                   variant="outline"
@@ -1340,6 +1420,7 @@ export default function TaskTemplateEditPage() {
                       label,
                       helpText: helpText || undefined,
                       isRequired: isRequired || false,
+                      conditionalLogic: createQuestionConditionalLogic || null,
                     };
 
                     // Include options if it's a choice question
@@ -1364,6 +1445,7 @@ export default function TaskTemplateEditPage() {
           if (!open) {
             setEditQuestionId(null);
             setEditQuestionOptions([]);
+            setEditQuestionConditionalLogic(null);
           }
         }}>
           <DialogContent data-testid="dialog-edit-question" className="max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -1453,6 +1535,25 @@ export default function TaskTemplateEditPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Conditional Logic */}
+                {previousQuestionsForEdit.length > 0 && (
+                  <ConditionalLogicEditor
+                    conditionalLogic={editQuestionConditionalLogic}
+                    onChange={setEditQuestionConditionalLogic}
+                    previousQuestions={previousQuestionsForEdit}
+                  />
+                )}
+
+                {previousQuestionsForEdit.length > 0 && editQuestionConditionalLogic?.showIf && (
+                  <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+                    <GitBranch className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">
+                      This question has conditional logic configured
+                    </span>
+                  </div>
+                )}
+
                 <div className="flex justify-end space-x-2">
                   <Button
                     variant="outline"
@@ -1486,6 +1587,7 @@ export default function TaskTemplateEditPage() {
                         label,
                         helpText: helpText || undefined,
                         isRequired: isRequired || false,
+                        conditionalLogic: editQuestionConditionalLogic || null,
                       };
 
                       // Include options if it's a choice question
