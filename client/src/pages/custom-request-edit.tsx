@@ -9,10 +9,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
 import { 
   ArrowLeft, Save, Plus, Edit, Trash2, GripVertical, FolderPlus, Settings,
   Type, FileText, Mail, Hash, Calendar, CircleDot, CheckSquare, ChevronDown, 
-  ToggleLeft, Upload, Layers, Send
+  ToggleLeft, Upload, Layers, Send, BookOpen, Search
 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -26,7 +29,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { getQueryFn, apiRequest, queryClient } from "@/lib/queryClient";
 import { showFriendlyError } from "@/lib/friendlyErrors";
-import { ConditionalLogicEditor, type ConditionalLogic, type QuestionReference } from "@/components/field-builder/ConditionalLogicEditor";
+import { ConditionalLogicEditor } from "@/components/field-builder/ConditionalLogicEditor";
+import type { ConditionalLogic, QuestionReference } from "@/components/field-builder/types";
+import type { SystemFieldLibrary } from "@shared/schema";
 
 const requestSchema = z.object({
   name: z.string().min(1, "Name is required").max(200, "Name too long"),
@@ -48,17 +53,35 @@ type SectionForm = z.infer<typeof sectionSchema>;
 type AssignForm = z.infer<typeof assignSchema>;
 
 const QUESTION_TYPES = [
-  { type: "short_text", label: "Short Text", icon: Type },
-  { type: "long_text", label: "Long Text", icon: FileText },
-  { type: "email", label: "Email", icon: Mail },
-  { type: "number", label: "Number", icon: Hash },
-  { type: "date", label: "Date", icon: Calendar },
-  { type: "single_choice", label: "Single Choice", icon: CircleDot },
-  { type: "multi_choice", label: "Multi Choice", icon: CheckSquare },
-  { type: "dropdown", label: "Dropdown", icon: ChevronDown },
-  { type: "yes_no", label: "Yes/No", icon: ToggleLeft },
-  { type: "file_upload", label: "File Upload", icon: Upload },
+  { type: "short_text", label: "Short Text", icon: Type, color: "#3b82f6" },
+  { type: "long_text", label: "Long Text", icon: FileText, color: "#8b5cf6" },
+  { type: "email", label: "Email", icon: Mail, color: "#06b6d4" },
+  { type: "number", label: "Number", icon: Hash, color: "#22c55e" },
+  { type: "date", label: "Date", icon: Calendar, color: "#f59e0b" },
+  { type: "single_choice", label: "Single Choice", icon: CircleDot, color: "#ec4899" },
+  { type: "multi_choice", label: "Multi Choice", icon: CheckSquare, color: "#14b8a6" },
+  { type: "dropdown", label: "Dropdown", icon: ChevronDown, color: "#6366f1" },
+  { type: "yes_no", label: "Yes/No", icon: ToggleLeft, color: "#84cc16" },
+  { type: "file_upload", label: "File Upload", icon: Upload, color: "#64748b" },
 ] as const;
+
+const SYSTEM_FIELD_CATEGORIES = [
+  { value: "all", label: "All Categories" },
+  { value: "basic", label: "Basic" },
+  { value: "contact", label: "Contact" },
+  { value: "selection", label: "Selection" },
+  { value: "numeric", label: "Numeric" },
+  { value: "files", label: "Files" },
+] as const;
+
+function getQuestionTypeInfo(questionType: string) {
+  return QUESTION_TYPES.find(qt => qt.type === questionType) || {
+    type: questionType,
+    label: questionType,
+    icon: Type,
+    color: "#6b7280"
+  };
+}
 
 function DropZone({ children }: { children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({
@@ -78,29 +101,46 @@ function DropZone({ children }: { children: React.ReactNode }) {
 function PaletteItem({ 
   label, 
   icon: Icon, 
-  type 
+  type,
+  color,
+  isLibrary = false,
+  onClick,
 }: { 
   label: string; 
   icon: React.ElementType; 
   type: string;
+  color?: string;
+  isLibrary?: boolean;
+  onClick?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `palette-${type}`,
     data: { type, label, icon: Icon },
   });
 
+  const iconColor = color || "#6b7280";
+
   return (
     <div
       ref={setNodeRef}
       {...listeners}
       {...attributes}
-      className={`flex items-center space-x-3 px-4 py-3 bg-card border rounded-lg cursor-grab hover:bg-accent hover:border-primary transition-colors ${
-        isDragging ? 'opacity-50' : ''
-      }`}
+      onClick={onClick}
+      className={`flex items-center gap-3 px-3 py-2.5 bg-card border rounded-lg transition-all text-sm group ${
+        isDragging ? 'opacity-50 scale-95' : ''
+      } cursor-pointer hover:bg-accent hover:border-primary hover:shadow-sm`}
       data-testid={`palette-item-${type}`}
     >
-      <Icon className="w-5 h-5 text-muted-foreground" />
-      <span className="text-sm font-medium">{label}</span>
+      <div 
+        className="w-8 h-8 rounded-md flex items-center justify-center transition-transform group-hover:scale-110"
+        style={{ backgroundColor: `${iconColor}15` }}
+      >
+        <Icon className="w-4 h-4" style={{ color: iconColor }} />
+      </div>
+      <span className="font-medium flex-1 truncate">{label}</span>
+      {isLibrary && (
+        <Badge variant="secondary" className="text-xs">Library</Badge>
+      )}
     </div>
   );
 }
@@ -132,14 +172,15 @@ function SortableQuestionItem({
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const questionTypeInfo = QUESTION_TYPES.find(qt => qt.type === question.questionType);
-  const QuestionIcon = questionTypeInfo?.icon || Type;
+  const typeInfo = getQuestionTypeInfo(question.questionType);
+  const QuestionIcon = typeInfo.icon;
+  const iconColor = typeInfo.color;
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      className="flex items-center justify-between px-4 py-3 bg-card border rounded-lg hover:border-primary/50 transition-colors"
+      className="flex items-center justify-between px-4 py-3 bg-card border rounded-lg hover:border-primary/50 transition-colors group"
       data-testid={`question-item-${question.id}`}
     >
       <div className="flex items-center space-x-3 flex-1">
@@ -151,7 +192,12 @@ function SortableQuestionItem({
         >
           <GripVertical className="w-4 h-4" />
         </div>
-        <QuestionIcon className="w-4 h-4 text-muted-foreground" />
+        <div 
+          className="w-7 h-7 rounded-md flex items-center justify-center"
+          style={{ backgroundColor: `${iconColor}15` }}
+        >
+          <QuestionIcon className="w-3.5 h-3.5" style={{ color: iconColor }} />
+        </div>
         <div className="flex-1">
           <p className="text-sm font-medium" data-testid={`text-question-label-${question.id}`}>
             {question.label}
@@ -378,6 +424,9 @@ export default function CustomRequestEdit() {
   const [editQuestionOptions, setEditQuestionOptions] = useState<string[]>([]);
   const [createQuestionConditionalLogic, setCreateQuestionConditionalLogic] = useState<ConditionalLogic | null>(null);
   const [editQuestionConditionalLogic, setEditQuestionConditionalLogic] = useState<ConditionalLogic | null>(null);
+  const [isSystemLibraryExpanded, setIsSystemLibraryExpanded] = useState(true);
+  const [systemSearchQuery, setSystemSearchQuery] = useState("");
+  const [systemCategoryFilter, setSystemCategoryFilter] = useState<string>("all");
 
   // Fetch custom request with full details
   const { data: request, isLoading: requestLoading } = useQuery<any>({
@@ -399,6 +448,29 @@ export default function CustomRequestEdit() {
     queryFn: getQueryFn({ on401: "throw" }),
     enabled: !!request?.clientId,
   });
+
+  // Fetch system fields for library
+  const { data: systemFields = [] } = useQuery<SystemFieldLibrary[]>({
+    queryKey: ["/api/system-field-library", { isArchived: false }],
+  });
+
+  const filteredSystemFields = useMemo(() => {
+    let result = systemFields;
+    
+    if (systemCategoryFilter !== "all") {
+      result = result.filter(f => f.category === systemCategoryFilter);
+    }
+    
+    if (systemSearchQuery.trim()) {
+      const query = systemSearchQuery.toLowerCase();
+      result = result.filter(f => 
+        f.fieldName.toLowerCase().includes(query) ||
+        (f.description && f.description.toLowerCase().includes(query))
+      );
+    }
+    
+    return result;
+  }, [systemFields, systemCategoryFilter, systemSearchQuery]);
 
   // Sync sections from request data
   useEffect(() => {
@@ -921,25 +993,136 @@ export default function CustomRequestEdit() {
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
-          <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
             {/* Palette */}
             <div className="space-y-4">
-              <Card>
-                <CardHeader>
+              <Card className="max-h-[calc(100vh-280px)] flex flex-col">
+                <CardHeader className="flex-shrink-0">
                   <CardTitle className="text-base">Add Components</CardTitle>
+                  <p className="text-sm text-muted-foreground">Click or drag to add</p>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className="flex-1 overflow-hidden flex flex-col space-y-4">
+                  {/* System Library Section - Collapsible */}
+                  <Collapsible 
+                    open={isSystemLibraryExpanded} 
+                    onOpenChange={setIsSystemLibraryExpanded}
+                    className="flex flex-col border rounded-lg overflow-hidden"
+                  >
+                    <CollapsibleTrigger asChild>
+                      <button 
+                        className="w-full p-3 bg-emerald-50/50 dark:bg-emerald-950/20 hover:bg-emerald-100/50 dark:hover:bg-emerald-950/30 transition-colors text-left"
+                        data-testid="button-toggle-system-library"
+                      >
+                        <div className="flex items-center gap-2">
+                          <BookOpen className="w-4 h-4 text-emerald-600" />
+                          <h4 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">System Library</h4>
+                          <Badge variant="secondary" className="text-xs">
+                            {filteredSystemFields.length}
+                          </Badge>
+                          <ChevronDown 
+                            className={cn(
+                              "w-4 h-4 text-emerald-600 ml-auto transition-transform",
+                              isSystemLibraryExpanded && "rotate-180"
+                            )} 
+                          />
+                        </div>
+                        {!isSystemLibraryExpanded && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Click to browse reusable fields
+                          </p>
+                        )}
+                      </button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="flex flex-col overflow-hidden">
+                      <div className="p-3 border-t border-border/50 space-y-2">
+                        <div className="relative">
+                          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                          <Input
+                            placeholder="Search..."
+                            value={systemSearchQuery}
+                            onChange={(e) => setSystemSearchQuery(e.target.value)}
+                            className="h-8 pl-7 text-sm"
+                            data-testid="input-system-library-search"
+                          />
+                        </div>
+                        <Select value={systemCategoryFilter} onValueChange={setSystemCategoryFilter}>
+                          <SelectTrigger className="h-8 text-sm" data-testid="select-system-library-category">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SYSTEM_FIELD_CATEGORIES.map(cat => (
+                              <SelectItem key={cat.value} value={cat.value}>
+                                {cat.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <ScrollArea className="max-h-40 px-3 pb-3">
+                        <div className="space-y-2">
+                          {filteredSystemFields.length === 0 ? (
+                            <p className="text-xs text-muted-foreground text-center py-4">
+                              No fields found
+                            </p>
+                          ) : (
+                            filteredSystemFields.map(field => {
+                              const typeInfo = getQuestionTypeInfo(field.fieldType);
+                              return (
+                                <div
+                                  key={field.id}
+                                  onClick={() => {
+                                    if (sections.length > 0) {
+                                      const firstSectionId = sections[0].id;
+                                      setCreatingQuestion({ 
+                                        sectionId: firstSectionId, 
+                                        questionType: field.fieldType 
+                                      });
+                                    } else {
+                                      toast({
+                                        title: "Add a section first",
+                                        description: "Create a section before adding questions",
+                                        variant: "destructive"
+                                      });
+                                    }
+                                  }}
+                                  className="flex items-center gap-3 px-3 py-2.5 bg-card border rounded-lg transition-all text-sm group cursor-pointer hover:bg-accent hover:border-primary hover:shadow-sm"
+                                  data-testid={`library-field-${field.id}`}
+                                >
+                                  <div 
+                                    className="w-8 h-8 rounded-md flex items-center justify-center transition-transform group-hover:scale-110"
+                                    style={{ backgroundColor: `${typeInfo.color}15` }}
+                                  >
+                                    <typeInfo.icon className="w-4 h-4" style={{ color: typeInfo.color }} />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <span className="font-medium text-sm truncate block">{field.fieldName}</span>
+                                    {field.description && (
+                                      <span className="text-xs text-muted-foreground truncate block">{field.description}</span>
+                                    )}
+                                  </div>
+                                  <Badge variant="secondary" className="text-xs flex-shrink-0">Library</Badge>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </ScrollArea>
+                    </CollapsibleContent>
+                  </Collapsible>
+
                   <div>
                     <p className="text-sm font-medium mb-2 text-muted-foreground">Structure</p>
-                    <PaletteItem label="Section" icon={Layers} type="section" />
+                    <PaletteItem label="Section" icon={Layers} type="section" color="#64748b" />
                   </div>
-                  <div>
+                  <div className="flex-1 overflow-hidden flex flex-col">
                     <p className="text-sm font-medium mb-2 text-muted-foreground">Question Types</p>
-                    <div className="space-y-2">
-                      {QUESTION_TYPES.map((qt) => (
-                        <PaletteItem key={qt.type} {...qt} />
-                      ))}
-                    </div>
+                    <ScrollArea className="flex-1">
+                      <div className="space-y-2 pr-2">
+                        {QUESTION_TYPES.map((qt) => (
+                          <PaletteItem key={qt.type} {...qt} />
+                        ))}
+                      </div>
+                    </ScrollArea>
                   </div>
                 </CardContent>
               </Card>
