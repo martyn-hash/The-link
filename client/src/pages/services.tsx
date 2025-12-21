@@ -56,7 +56,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Settings, Edit, Trash2, Users, Briefcase, ArrowLeft, X, Copy, Check, Library } from "lucide-react";
+import { Plus, Settings, Edit, Trash2, Users, Briefcase, ArrowLeft, X, Copy, Check, Library, Search } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { nanoid } from "nanoid";
@@ -503,6 +503,9 @@ export default function Services() {
   const [showWizard, setShowWizard] = useState(false);
   const [wizardMode, setWizardMode] = useState<"create" | "edit">("create");
   const [wizardEditingService, setWizardEditingService] = useState<ServiceWithDetails | null>(null);
+  
+  // Search state
+  const [serviceSearchTerm, setServiceSearchTerm] = useState("");
 
   // Forms
   const serviceForm = useForm<CreateServiceFormData>({
@@ -987,7 +990,7 @@ export default function Services() {
               {/* Services List View */}
               {currentTab === 'services' && viewMode === 'list' && (
                 <>
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between mb-6">
                     <div>
                       <h2 className="text-xl font-semibold">Services</h2>
                       <p className="text-muted-foreground">Manage services and their associated project types and roles</p>
@@ -1009,6 +1012,19 @@ export default function Services() {
                         Add Service
                       </Button>
                     </div>
+                  </div>
+
+                  {/* Search Bar */}
+                  <div className="relative max-w-sm mb-6">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                    <Input
+                      type="text"
+                      placeholder="Search services..."
+                      value={serviceSearchTerm}
+                      onChange={(e) => setServiceSearchTerm(e.target.value)}
+                      className="pl-10"
+                      data-testid="input-search-services"
+                    />
                   </div>
 
                   {/* Services Table */}
@@ -1038,7 +1054,16 @@ export default function Services() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {services?.map((service) => (
+                          {services?.filter((service) => {
+                            if (!serviceSearchTerm) return true;
+                            const searchLower = serviceSearchTerm.toLowerCase();
+                            return (
+                              service.name.toLowerCase().includes(searchLower) ||
+                              (service.description && service.description.toLowerCase().includes(searchLower)) ||
+                              service.roles.some(role => role?.name?.toLowerCase().includes(searchLower)) ||
+                              (service.projectType?.name && service.projectType.name.toLowerCase().includes(searchLower))
+                            );
+                          }).map((service) => (
                             <TableRow key={service.id} data-testid={`row-service-${service.id}`}>
                               <TableCell className="font-medium">{service.name}</TableCell>
                               <TableCell>{service.description || "—"}</TableCell>
@@ -1133,10 +1158,19 @@ export default function Services() {
                               </TableCell>
                             </TableRow>
                           ))}
-                          {services?.length === 0 && (
+                          {services?.filter((service) => {
+                            if (!serviceSearchTerm) return true;
+                            const searchLower = serviceSearchTerm.toLowerCase();
+                            return (
+                              service.name.toLowerCase().includes(searchLower) ||
+                              (service.description && service.description.toLowerCase().includes(searchLower)) ||
+                              service.roles.some(role => role?.name?.toLowerCase().includes(searchLower)) ||
+                              (service.projectType?.name && service.projectType.name.toLowerCase().includes(searchLower))
+                            );
+                          }).length === 0 && (
                             <TableRow>
                               <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                                No services found. Create your first service to get started.
+                                {serviceSearchTerm ? "No services match your search." : "No services found. Create your first service to get started."}
                               </TableCell>
                             </TableRow>
                           )}

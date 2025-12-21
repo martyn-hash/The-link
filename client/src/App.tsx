@@ -34,6 +34,7 @@ const ClientServiceDetail = lazy(() => import("@/pages/client-service-detail"));
 const People = lazy(() => import("@/pages/people"));
 const PersonDetail = lazy(() => import("@/pages/person-detail"));
 const Services = lazy(() => import("@/pages/services"));
+const WorkRoles = lazy(() => import("@/pages/work-roles"));
 const ServiceAssignments = lazy(() => import("@/pages/service-assignments"));
 const ScheduledServices = lazy(() => import("@/pages/scheduled-services"));
 const ChChanges = lazy(() => import("@/pages/ch-changes"));
@@ -214,6 +215,7 @@ function Router() {
         <Route path="/inbox-management" component={InboxManagement} />
         <Route path="/services" component={ServiceAssignments} />
         <Route path="/admin/service-config" component={Services} />
+        <Route path="/admin/work-roles" component={WorkRoles} />
         <Route path="/scheduled-services" component={ScheduledServices} />
         <Route path="/ch-changes" component={ChChanges} />
         <Route path="/companies" component={Companies} />

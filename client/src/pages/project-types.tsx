@@ -264,7 +264,7 @@ export default function ProjectTypes() {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="border-b border-border bg-card">
-          <div className="page-container py-6 md:py-8">
+          <div className="w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground" data-testid="text-page-title">Project Types</h1>
@@ -513,7 +513,7 @@ export default function ProjectTypes() {
         </Dialog>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto page-container py-6 md:py-8">
+        <div className="flex-1 overflow-auto w-full px-4 md:px-6 lg:px-8 py-6 md:py-8">
           {projectTypesLoading ? (
             <div className="border rounded-lg">
               <Table>

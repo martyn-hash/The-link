@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Settings, Settings2, ChevronDown, FileCheck, Tags, ClipboardList, FolderTree, MessageSquare, Library } from "lucide-react";
+import { Settings, Settings2, ChevronDown, FileCheck, Tags, ClipboardList, FolderTree, MessageSquare, Library, Users } from "lucide-react";
 import type { User } from "@shared/schema";
 
 interface AdminDropdownProps {
@@ -36,6 +36,11 @@ export default function AdminDropdown({ user }: AdminDropdownProps) {
       label: "Service Config",
       href: "/admin/service-config",
       icon: Settings2,
+    },
+    {
+      label: "Work Roles",
+      href: "/admin/work-roles",
+      icon: Users,
     },
     {
       label: "CH Changes",
