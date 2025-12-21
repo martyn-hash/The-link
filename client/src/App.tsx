@@ -20,6 +20,7 @@ const Dashboard = lazy(() => import("@/pages/dashboard"));
 const Settings = lazy(() => import("@/pages/settings"));
 const ProjectTypes = lazy(() => import("@/pages/project-types"));
 const ProjectTypeDetail = lazy(() => import("@/pages/project-type-detail"));
+const ProjectTypeSOPPage = lazy(() => import("@/pages/project-type-detail/ProjectTypeSOPPage"));
 const NotificationEditPage = lazy(() => import("@/pages/notification-edit"));
 const Users = lazy(() => import("@/pages/users"));
 const UserDetail = lazy(() => import("@/pages/user-detail"));
@@ -209,6 +210,7 @@ function Router() {
         <Route path="/project-types" component={ProjectTypes} />
         <Route path="/settings/project-types" component={ProjectTypes} />
         <Route path="/settings/project-types/:projectTypeId/notifications/:notificationId/edit" component={NotificationEditPage} />
+        <Route path="/settings/project-types/:id/sop" component={ProjectTypeSOPPage} />
         <Route path="/settings/project-types/:id" component={ProjectTypeDetail} />
         <Route path="/users" component={Users} />
         <Route path="/users/:id" component={UserDetail} />

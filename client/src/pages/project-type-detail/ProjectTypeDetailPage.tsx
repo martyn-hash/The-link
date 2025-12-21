@@ -11,6 +11,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Settings, Layers, List, ShieldCheck, Bell, ClipboardList, LayoutDashboard } from "lucide-react";
 import { ProjectTypeOverview, type ConfigSectionStatus } from "@/components/ui/project-type-overview";
 import type { StageItem } from "@/components/ui/stage-pipeline";
+import type { 
+  WorkflowStage, 
+  ClientTask, 
+  ProjectNotification as OverviewProjectNotification 
+} from "@/components/ui/workflow-visualization";
 
 import type { EditingStage, EditingReason, EditingStageApproval, EditingStageApprovalField } from "./utils/types";
 import { SYSTEM_ROLE_OPTIONS } from "./utils/constants";
@@ -203,7 +208,7 @@ export default function ProjectTypeDetail() {
     return "Unknown";
   };
 
-  // Compute stage items for the overview pipeline
+  // Compute stage items for the overview pipeline (legacy format for other uses)
   const stageItems: StageItem[] = useMemo(() => {
     if (!stages) return [];
     return stages.map(stage => ({
@@ -218,6 +223,123 @@ export default function ProjectTypeDetail() {
       hasApproval: !!stage.stageApprovalId,
     }));
   }, [stages, availableRoles, allUsers, projectType?.serviceId]);
+
+  // Compute workflow stages for the new visualization (sorted by order)
+  const workflowStages: WorkflowStage[] = useMemo(() => {
+    if (!stages) return [];
+    
+    // Sort stages by order first to ensure consistent numbering
+    const sortedStages = [...stages].sort((a, b) => a.order - b.order);
+    
+    return sortedStages.map((stage, index) => {
+      // Get reasons mapped to this stage
+      const stageReasonIds = allStageReasonMaps
+        ?.filter((map: any) => map.stageId === stage.id)
+        .map((map: any) => map.reasonId) || [];
+      
+      const stageReasons = reasons
+        ?.filter(r => stageReasonIds.includes(r.id))
+        .map(r => ({
+          id: r.id,
+          name: r.reason,
+          hasCustomFields: allCustomFields?.some((f: any) => f.reasonId === r.id) || false,
+        })) || [];
+      
+      // Get approval info for this stage
+      const approval = stage.stageApprovalId 
+        ? stageApprovals?.find(a => a.id === stage.stageApprovalId)
+        : undefined;
+      
+      const approvalFieldCount = approval 
+        ? allStageApprovalFields?.filter((f: any) => f.stageApprovalId === approval.id).length || 0
+        : 0;
+      
+      // Get active notifications for this stage
+      const stageNotifications = notifications
+        ?.filter(n => n.category === "stage" && n.stageId === stage.id && n.isActive !== false)
+        .map(n => ({
+          id: n.id,
+          type: n.notificationType as "email" | "sms" | "push",
+          trigger: n.stageTrigger as "entry" | "exit",
+          title: n.emailTitle || n.pushTitle || undefined,
+          isActive: true,
+          hasClientTask: !!n.taskTemplateId,
+          clientTaskName: n.taskTemplateId ? taskTemplates?.find(t => t.id === n.taskTemplateId)?.name : undefined,
+        })) || [];
+      
+      return {
+        id: stage.id,
+        name: stage.name,
+        color: stage.color || "#6b7280",
+        order: index, // Normalized 0-based index; visualization adds +1 for display
+        assigneeLabel: getStageRoleLabel(stage),
+        maxInstanceTimeHours: stage.maxInstanceTime || undefined,
+        maxTotalTimeHours: stage.maxTotalTime || undefined,
+        isFinal: (stage as any).canBeFinalStage || false,
+        approval: approval ? {
+          id: approval.id,
+          name: approval.name,
+          fieldCount: approvalFieldCount,
+        } : undefined,
+        reasons: stageReasons,
+        notifications: stageNotifications,
+      };
+    });
+  }, [stages, allStageReasonMaps, reasons, allCustomFields, stageApprovals, allStageApprovalFields, notifications, taskTemplates, availableRoles, allUsers, projectType?.serviceId]);
+
+  // Compute client tasks for the overview
+  const overviewClientTasks: ClientTask[] = useMemo(() => {
+    if (!taskTemplates) return [];
+    
+    return taskTemplates
+      .filter(task => task.isActive !== false) // Only show active tasks
+      .map(task => {
+        // Count questions for this task
+        const questionCount = (task as any).questionCount || 0;
+        
+        // Find completion stage name
+        const completionStage = task.onCompletionStageId 
+          ? stages?.find(s => s.id === task.onCompletionStageId)
+          : undefined;
+        
+        // Count active notifications linked to this task template (these are reminders)
+        const taskReminders = notifications?.filter(
+          n => n.taskTemplateId === task.id && n.isActive !== false
+        ) || [];
+        
+        return {
+          id: task.id,
+          name: task.name,
+          description: task.description || undefined,
+          questionCount,
+          onCompletionStageName: completionStage?.name,
+          hasReminders: taskReminders.length > 0,
+          reminderCount: taskReminders.length,
+          isActive: true,
+        };
+      });
+  }, [taskTemplates, stages, notifications]);
+
+  // Compute project-level notifications for the overview
+  // Only shows active notifications; disabled ones are filtered out
+  const overviewProjectNotifications: OverviewProjectNotification[] = useMemo(() => {
+    if (!notifications) return [];
+    
+    return notifications
+      .filter(n => n.category === "project" && n.isActive !== false) // Only active project notifications
+      .map(n => ({
+        id: n.id,
+        type: n.notificationType as "email" | "sms" | "push",
+        dateReference: n.dateReference as "start_date" | "due_date",
+        offsetType: n.offsetType as "before" | "on" | "after",
+        offsetDays: n.offsetDays || 0,
+        title: n.emailTitle || n.pushTitle || undefined,
+        isActive: true,
+        hasClientTask: !!n.taskTemplateId,
+        clientTaskName: n.taskTemplateId ? taskTemplates?.find(t => t.id === n.taskTemplateId)?.name : undefined,
+        reminderCount: 0, // Note: Requires reminders query to populate
+      }));
+  }, [notifications, taskTemplates]);
 
   // Compute configuration section statuses
   const configSections: ConfigSectionStatus[] = useMemo(() => {
@@ -624,22 +746,14 @@ export default function ProjectTypeDetail() {
                   dialoraConfigured: !!(projectType.dialoraSettings?.outboundWebhooks?.length),
                 } : null}
                 isLoading={projectTypeLoading}
-                stages={stageItems}
+                stages={workflowStages}
+                clientTasks={overviewClientTasks}
+                projectNotifications={overviewProjectNotifications}
                 configSections={configSections}
-                isActiveTogglePending={updateProjectTypeActiveMutation.isPending}
-                isSingleProjectTogglePending={updateProjectTypeSingleProjectMutation.isPending}
-                isNotificationsTogglePending={toggleNotificationsActiveMutation.isPending}
-                isClientProjectTasksTogglePending={toggleClientProjectTasksMutation.isPending}
-                isVoiceAiTogglePending={toggleVoiceAiMutation.isPending}
                 isDescriptionSaving={updateDescriptionMutation.isPending}
-                onActiveToggle={handleActiveToggle}
-                onSingleProjectToggle={handleSingleProjectToggle}
-                onNotificationsToggle={handleNotificationsToggle}
-                onClientProjectTasksToggle={handleClientProjectTasksToggle}
-                onVoiceAiToggle={handleVoiceAiToggle}
                 onDescriptionSave={handleDescriptionSave}
-                onConfigureDialora={handleConfigureDialora}
                 onSectionClick={handleSectionClick}
+                onPrintSOP={() => navigate(`/settings/project-types/${projectTypeId}/sop`)}
               />
             </TabsContent>
 
