@@ -185,8 +185,21 @@ app.use((req, res, next) => {
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
+  if (app.get("env") === "development" && !process.env.E2E) {
     await setupVite(app, server);
+  } else if (process.env.E2E) {
+    // E2E mode: serve built assets without Vite/HMR
+    // This eliminates browser-triggered server restarts during tests
+    log('[Web Server] E2E mode: serving built assets (no Vite/HMR)');
+    const e2eDistPath = path.resolve(import.meta.dirname, "..", "dist", "public");
+    if (!fs.existsSync(e2eDistPath)) {
+      console.error(`[E2E] Build not found at ${e2eDistPath}. Run 'npm run build' first.`);
+      process.exit(1);
+    }
+    app.use(express.static(e2eDistPath));
+    app.use("*", (_req, res) => {
+      res.sendFile(path.resolve(e2eDistPath, "index.html"));
+    });
   } else {
     serveStatic(app);
   }
