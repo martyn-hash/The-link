@@ -1,0 +1,108 @@
+What the agent got right (keep this)
+
+Correct root cause: Vite running inside Express in dev means the browser session triggers the whole HMR/WebSocket dance, and in your environment that’s correlating with restarts / proxy wobble / Playwright “Browser closed”.
+
+Correct fix class: E2E mode = prod-like. Cut Vite/HMR out of the equation for automated browser tests.
+
+Minimal code change: development && !process.env.E2E is a good surgical switch.
+
+This is genuinely the first “not-a-band-aid” solution you’ve been circling.
+
+What’s missing / risky in the plan (fix these)
+1) “npm run build” output path assumption
+
+The plan assumes serveStatic() serves from server/public, and npm run build puts assets there.
+
+If your build currently outputs to something like dist/ or client/dist/, your tests will quietly serve stale or missing assets and you’ll get “Not Found” / blank pages and think the agent is cursed again.
+
+Permanent fix: Ensure E2E build outputs to the exact directory serveStatic() serves.
+
+Either update build script to copy assets into server/public
+
+Or update serveStatic() to point to your actual build output directory
+
+2) The run command / workflow needs to support E2E cleanly
+
+Right now your workflow command is visible in the screenshot:
+
+PROCESS_ROLE=web NODE_ENV=development tsx server/index.ts
+
+That won’t magically set E2E=1.
+
+Permanent fix: Create a second workflow (or a test command) for E2E runs, e.g.
+
+E2E=1 NODE_ENV=development ...
+…and have the browser testing agent always use that.
+
+Otherwise, you’ll keep getting “plan is right, execution is wrong.”
+
+3) Readiness checks must change slightly
+
+Even in E2E mode, Replit’s public proxy can still throw 502s briefly.
+
+Your runbook already started moving in the right direction:
+
+internal /readyz
+
+external public /readyz
+
+Permanent fix: Make the agent’s logic:
+
+open browser session
+
+do nothing for ~10–15s
+
+poll external /readyz until 200 for N consecutive checks (e.g., 3 in a row)
+
+only then proceed
+
+That avoids “it was ready once, then proxy flapped.”
+
+4) Don’t overpromise “no restarts will occur”
+
+E2E mode removes Vite/HMR restarts — good.
+But you can still restart due to:
+
+Replit infra recycling
+
+memory pressure
+
+crashes in app code
+
+So the claim “NO restart will occur” is a bit too absolute; it’ll create false confidence.
+
+Permanent wording: “No Vite/HMR-triggered restarts. Any restart after that is a real stability issue.”
+
+5) Consider using NODE_ENV=test (optional but clean)
+
+Right now you’re using NODE_ENV=development + E2E=1.
+That’s fine, but it can still enable other dev-only behaviors.
+
+Permanent improvement: NODE_ENV=test (or APP_MODE=e2e) so you can:
+
+disable noisy background startup tasks
+
+disable dev-only logging/seeders if needed
+
+keep behavior deterministic for tests
+
+Not required on day one, but it’s a good “phase 2”.
+
+My verdict
+
+Approve the plan, with these adjustments:
+
+Verify build output path matches serveStatic()
+
+Add a dedicated E2E workflow/run command so the agent can reliably start in E2E mode
+
+Strengthen readiness: external /readyz must be stable (multiple consecutive 200s) before tests
+
+Tone down “no restart will occur” and treat any restart in E2E as a real bug, not test flakiness
+
+The key “teach the agent” principle
+
+Stop teaching it “wait X seconds and pray”.
+Teach it: “start in E2E mode; wait until external ready is stable; then test.”
+
+If you want, paste your serveStatic() implementation (or tell me where it serves from + where npm run build outputs), and I’ll tell you the single most likely thing that will bite you when you flip E2E on.
