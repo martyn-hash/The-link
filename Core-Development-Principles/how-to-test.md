@@ -175,111 +175,86 @@ For situations where the dev-login endpoint cannot be used:
 
 When running browser tests via the `run_test` tool, follow these steps:
 
-### CRITICAL: Browser Launch WILL Trigger Server Restart
+### E2E Mode: Production-Like Testing Environment
 
-**This is expected behavior, not a bug.** Opening a Playwright browser session triggers the Vite development server's file watcher to restart the application. This happens EVERY time.
+**How It Works**: When `E2E=1` is set, the server skips Vite/HMR entirely and serves pre-built static assets. This eliminates browser-triggered server restarts - the root cause of test instability.
 
-**The solution**: All health checks and test steps must happen AFTER the browser-induced restart completes. The test sequence must account for this restart.
+**Key Principle**: Don't "wait and pray" - run in E2E mode where restarts don't happen.
 
-### Mandatory Test Sequence (NON-NEGOTIABLE)
+### Pre-Test Setup (ONE TIME per test session)
 
-Follow these steps **exactly in order**. Do NOT skip any step.
+Before running any browser tests, ensure:
 
-#### Phase 1: Create Browser Context and Trigger Restart
+1. **Frontend is built**: `npm run build`
+2. **Server is running with E2E=1**: The workflow should use `E2E=1` environment variable
 
-**Step 1: Create browser context**
+If the build is missing, the server will exit with:
+```
+[E2E] Build not found at dist/public. Run 'npm run build' first.
+```
+
+### Mandatory Test Sequence
+
+#### Step 1: Create browser context
 ```
 [New Context] Create a new browser context
 ```
-- This will trigger a server restart via Vite HMR
-- Do NOT navigate anywhere yet
-- Do NOT make any API calls yet
+- Safe in E2E mode: no Vite/HMR restart will occur
 
-**Step 2: Wait for restart to complete**
+#### Step 2: Verify external readiness (3 consecutive 200s)
 ```
-[Wait] Wait 30 seconds
+[API] Poll GET /readyz until 3 consecutive 200 responses
 ```
-- This delay allows the server restart to complete
-- Do NOT navigate or make API calls during this wait
-- This is the most critical step - skipping it causes all subsequent steps to fail
+- Wait 2 seconds between checks
+- Max 30 retries (60 seconds total)
+- This guards against Replit proxy flaps
+- Capture `boot_id` from the stable response
 
-#### Phase 2: Post-Restart Health Checks
-
-**Step 3: Verify internal readiness**
-```
-[API] GET /readyz - expect 200 with status "ready"
-```
-- Capture the `boot_id` value (call it STABLE_BOOT_ID)
-- If status is "not_ready", wait 5 seconds and retry (max 12 retries = 60 seconds)
-- If still not ready after 60 seconds: STOP and report "Blocked: server failed to become ready after restart"
-
-**Step 4: Verify external readiness**
-```
-[API] GET https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/readyz
-```
-- Verify `boot_id` matches STABLE_BOOT_ID from Step 3
-- If boot_id differs, the server restarted again - go back to Step 2 (wait 30 seconds)
-- If external is not ready, wait 5 seconds and retry (max 12 retries)
-
-#### Phase 3: Authentication and Testing
-
-**Step 5: Authenticate**
+#### Step 3: Authenticate
 ```
 [API] POST /api/dev-login with header "Authorization: Bearer dev-test-token-2025"
 ```
 - Expect 200 response
 - Session cookies are now set
 
-**Step 6: Navigate and test**
+#### Step 4: Navigate and test
 ```
 [Browser] Navigate to the target page
 [Verify] Verify page content and take screenshots
 ```
-- All actual test steps happen here, AFTER the restart has completed
 
-### Failure Handling
-
-**If navigation fails with 502 or "couldn't reach this app"**:
-1. Check `/readyz` - if boot_id changed, server restarted again
-2. If restarted: wait 30 seconds, poll `/readyz` until ready, then retry navigation
-3. If boot_id unchanged but still 502: wait 10 seconds, retry ONCE
-4. If second attempt fails: STOP and report "Blocked: proxy instability"
-
-**If browser context creation fails with "Browser closed"**:
-- This is an infrastructure issue, not a test issue
-- Report "Blocked: Playwright browser unavailable" and stop
-
-### Standard Test Plan Template (UPDATED)
+### Standard Test Plan Template (E2E Mode)
 
 ```
 1. [New Context] Create a new browser context
-   - This triggers a server restart - DO NOT PANIC
+   - Safe: no Vite/HMR restart will occur in E2E mode
 
-2. [Wait] Wait 30 seconds for server restart to complete
-   - Do nothing during this wait - no navigation, no API calls
+2. [API] Poll GET /readyz until 3 consecutive 200 responses (2s apart, max 30 retries)
+   - Capture boot_id from the stable response
 
-3. [API] GET /readyz - poll until status "ready" (max 60 seconds)
-   - Capture boot_id as STABLE_BOOT_ID
-
-4. [API] GET external /readyz - verify boot_id matches STABLE_BOOT_ID
-   - If boot_id differs, go back to step 2
-
-5. [API] POST /api/dev-login with header "Authorization: Bearer dev-test-token-2025"
+3. [API] POST /api/dev-login with header "Authorization: Bearer dev-test-token-2025"
    - Expect 200, session cookies will be set
 
-6. [Browser] Navigate to the target page (e.g., /campaigns, /clients)
+4. [Browser] Navigate to the target page (e.g., /campaigns, /clients)
 
-7. [Verify] Verify page content and take screenshots as needed
+5. [Verify] Verify page content and take screenshots as needed
 ```
 
-### Why This Works
+### Failure Handling
 
-1. **Step 1** creates the browser context, which triggers Vite HMR restart
-2. **Step 2** waits for the restart to complete (this is the key insight)
-3. **Steps 3-4** verify the NEW server instance is ready (not the old one)
-4. **Steps 5-6** run against the stable, post-restart server
+| Symptom | Cause | Action |
+|---------|-------|--------|
+| "Not Found" / blank page | Build is stale | Run `npm run build` |
+| boot_id changed mid-test | Real stability bug | Investigate (not test flakiness) |
+| 502 after consecutive 200s | Replit proxy instability | Retry once, then report blocked |
+| "Browser closed" | Playwright infrastructure | Report blocked, stop testing |
 
-Previous failures happened because tests tried to use the pre-restart server state, which became invalid the moment the browser connected.
+### Key Principles
+
+1. **Any restart in E2E mode is a real bug** - not test flakiness
+2. **External /readyz must be stable** - 3 consecutive 200s, not just one
+3. **Stale build = broken test** - always verify build is current
+4. **Don't wait and pray** - E2E mode eliminates the problem at the source
 
 ### Correct Route Paths (IMPORTANT)
 
@@ -341,4 +316,4 @@ _This section tracks changes affecting tests. Update when making relevant change
 | 2025-12-20 | Added Proxy Error Retry Protocol | Wait 5-10s and retry once if first navigation fails after readyz passed |
 | 2025-12-20 | Added `boot_id` to `/readyz` response | Detects app restarts between health checks and browser session launch |
 | 2025-12-20 | Added Boot ID Stability Check section | Documents how to verify app didn't restart during test setup |
-| 2025-12-21 | **MAJOR UPDATE**: Rewrote testing agent instructions | Browser launch WILL trigger restart - tests must wait 30s after context creation, then poll /readyz before proceeding |
+| 2025-12-21 | **MAJOR UPDATE**: Added E2E mode | Set `E2E=1` to skip Vite/HMR and serve built assets - eliminates browser-triggered restarts entirely |
