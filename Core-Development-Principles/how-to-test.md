@@ -175,114 +175,111 @@ For situations where the dev-login endpoint cannot be used:
 
 When running browser tests via the `run_test` tool, follow these steps:
 
-### Mandatory Pre-Test Sequence (NON-NEGOTIABLE)
+### CRITICAL: Browser Launch WILL Trigger Server Restart
 
-Before starting **any** browser test (`run_test`), you MUST perform the following steps **in order**:
+**This is expected behavior, not a bug.** Opening a Playwright browser session triggers the Vite development server's file watcher to restart the application. This happens EVERY time.
 
-#### Step 1: Internal Readiness Check (capture boot_id)
-```bash
-curl -s http://127.0.0.1:$PORT/readyz
+**The solution**: All health checks and test steps must happen AFTER the browser-induced restart completes. The test sequence must account for this restart.
+
+### Mandatory Test Sequence (NON-NEGOTIABLE)
+
+Follow these steps **exactly in order**. Do NOT skip any step.
+
+#### Phase 1: Create Browser Context and Trigger Restart
+
+**Step 1: Create browser context**
 ```
-- Expect HTTP 200 with `{"status":"ready","boot_id":"<ID>","uptime_ms":<N>}`
-- **Capture the `boot_id` value** - you will need it later
-- If this fails, STOP and fix the app startup
-
-#### Step 2: External (Public) Readiness Check — REQUIRED
-```bash
-# Poll the public Replit URL - retry every 2 seconds, timeout after 60 seconds
-for i in {1..30}; do
-  if curl -sf https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/readyz; then
-    echo "External readiness OK"
-    break
-  fi
-  sleep 2
-done
+[New Context] Create a new browser context
 ```
-- Expect HTTP 200 with `{"status":"ready","boot_id":"<ID>"}`
-- **Verify `boot_id` matches the internal check** - if different, the app restarted between checks
-- If this does NOT return 200 within 60 seconds:
-  - DO NOT start browser tests
-  - Record failure as **"Blocked: external Replit proxy not ready"**
-  - Do NOT retry browser tests automatically
-  - Report status and stop
+- This will trigger a server restart via Vite HMR
+- Do NOT navigate anywhere yet
+- Do NOT make any API calls yet
 
-#### Step 3: Proceed with Browser Tests
-Only after BOTH internal AND external readiness checks pass with matching `boot_id`:
-1. Authenticate via API: `POST /api/dev-login` with `Authorization: Bearer dev-test-token-2025`
-2. Start browser navigation and verification steps
-
-### Critical Rules
-
-- **Internal readiness alone is NOT sufficient**
-- Browser tests must never be used to "probe" app availability
-- Do not restart the workflow unless explicitly instructed
-
-### Proxy Error Retry Protocol
-
-If external `/readyz` returns 200 but the **first browser navigation** fails with a proxy error (502 / "couldn't reach this app"):
-
-1. **Wait 5–10 seconds** before retrying
-2. **Retry the browser test ONCE only**
-3. If the **second attempt also fails**:
-   - STOP testing immediately
-   - Record failure as **"Blocked: proxy instability detected"**
-   - Do NOT retry further
-   - Report the failure and stop
-
-### Rationale
-
-We have confirmed repeated false failures caused by transient Replit proxy routing.
-This gate exists to separate **infrastructure availability** from **application correctness**.
-
-A browser test that starts before external `/readyz` is green is invalid by definition.
-
-### Boot ID Stability Check (Detecting Browser-Induced Restarts)
-
-**Problem Discovered**: Opening a browser session can sometimes trigger the development server's file watcher to restart the app. This means health checks pass, but by the time the browser connects, the app is mid-restart and returns 502.
-
-**Solution**: The `/readyz` endpoint now includes a `boot_id` field - a unique identifier generated once at startup.
-
-**How to verify stability**:
-
-1. **Before browser opens**: Capture `boot_id` from `/readyz`
-2. **After browser session starts**: Check `/readyz` again
-3. **Compare**: If `boot_id` changed, the app restarted and pre-checks are invalid
-
-```bash
-# Example: Capture boot_id before and after
-BOOT1=$(curl -s http://127.0.0.1:$PORT/readyz | jq -r '.boot_id')
-# ... browser session opens ...
-BOOT2=$(curl -s http://127.0.0.1:$PORT/readyz | jq -r '.boot_id')
-
-if [ "$BOOT1" != "$BOOT2" ]; then
-  echo "WARNING: App restarted during browser launch (boot_id changed)"
-  echo "  Before: $BOOT1"
-  echo "  After:  $BOOT2"
-fi
+**Step 2: Wait for restart to complete**
 ```
+[Wait] Wait 30 seconds
+```
+- This delay allows the server restart to complete
+- Do NOT navigate or make API calls during this wait
+- This is the most critical step - skipping it causes all subsequent steps to fail
 
-**If boot_id changes**:
-- The pre-test health checks are stale
-- Wait for the new boot to complete (poll `/readyz` until 200)
-- Re-verify external `/readyz` with matching `boot_id`
-- Then proceed with browser tests
+#### Phase 2: Post-Restart Health Checks
 
-This ensures health checks remain meaningful even when browser session launch triggers restarts.
+**Step 3: Verify internal readiness**
+```
+[API] GET /readyz - expect 200 with status "ready"
+```
+- Capture the `boot_id` value (call it STABLE_BOOT_ID)
+- If status is "not_ready", wait 5 seconds and retry (max 12 retries = 60 seconds)
+- If still not ready after 60 seconds: STOP and report "Blocked: server failed to become ready after restart"
 
-### Standard Test Plan Template
+**Step 4: Verify external readiness**
+```
+[API] GET https://4ea1c809-0dc0-4747-b1ce-5e1cf8722099-00-1hasz19tdsmu5.worf.replit.dev/readyz
+```
+- Verify `boot_id` matches STABLE_BOOT_ID from Step 3
+- If boot_id differs, the server restarted again - go back to Step 2 (wait 30 seconds)
+- If external is not ready, wait 5 seconds and retry (max 12 retries)
+
+#### Phase 3: Authentication and Testing
+
+**Step 5: Authenticate**
+```
+[API] POST /api/dev-login with header "Authorization: Bearer dev-test-token-2025"
+```
+- Expect 200 response
+- Session cookies are now set
+
+**Step 6: Navigate and test**
+```
+[Browser] Navigate to the target page
+[Verify] Verify page content and take screenshots
+```
+- All actual test steps happen here, AFTER the restart has completed
+
+### Failure Handling
+
+**If navigation fails with 502 or "couldn't reach this app"**:
+1. Check `/readyz` - if boot_id changed, server restarted again
+2. If restarted: wait 30 seconds, poll `/readyz` until ready, then retry navigation
+3. If boot_id unchanged but still 502: wait 10 seconds, retry ONCE
+4. If second attempt fails: STOP and report "Blocked: proxy instability"
+
+**If browser context creation fails with "Browser closed"**:
+- This is an infrastructure issue, not a test issue
+- Report "Blocked: Playwright browser unavailable" and stop
+
+### Standard Test Plan Template (UPDATED)
 
 ```
 1. [New Context] Create a new browser context
+   - This triggers a server restart - DO NOT PANIC
 
-2. [API] GET /readyz to confirm app is ready - expect 200 with status "ready"
+2. [Wait] Wait 30 seconds for server restart to complete
+   - Do nothing during this wait - no navigation, no API calls
 
-3. [API] POST /api/dev-login with header "Authorization: Bearer dev-test-token-2025" 
-   - Expect 200, session cookies will be set automatically
+3. [API] GET /readyz - poll until status "ready" (max 60 seconds)
+   - Capture boot_id as STABLE_BOOT_ID
 
-4. [Browser] Navigate to the target page (e.g., /project-types, /clients)
+4. [API] GET external /readyz - verify boot_id matches STABLE_BOOT_ID
+   - If boot_id differs, go back to step 2
 
-5. [Verify] Verify page content and take screenshots as needed
+5. [API] POST /api/dev-login with header "Authorization: Bearer dev-test-token-2025"
+   - Expect 200, session cookies will be set
+
+6. [Browser] Navigate to the target page (e.g., /campaigns, /clients)
+
+7. [Verify] Verify page content and take screenshots as needed
 ```
+
+### Why This Works
+
+1. **Step 1** creates the browser context, which triggers Vite HMR restart
+2. **Step 2** waits for the restart to complete (this is the key insight)
+3. **Steps 3-4** verify the NEW server instance is ready (not the old one)
+4. **Steps 5-6** run against the stable, post-restart server
+
+Previous failures happened because tests tried to use the pre-restart server state, which became invalid the moment the browser connected.
 
 ### Correct Route Paths (IMPORTANT)
 
@@ -344,3 +341,4 @@ _This section tracks changes affecting tests. Update when making relevant change
 | 2025-12-20 | Added Proxy Error Retry Protocol | Wait 5-10s and retry once if first navigation fails after readyz passed |
 | 2025-12-20 | Added `boot_id` to `/readyz` response | Detects app restarts between health checks and browser session launch |
 | 2025-12-20 | Added Boot ID Stability Check section | Documents how to verify app didn't restart during test setup |
+| 2025-12-21 | **MAJOR UPDATE**: Rewrote testing agent instructions | Browser launch WILL trigger restart - tests must wait 30s after context creation, then poll /readyz before proceeding |
