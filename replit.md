@@ -40,6 +40,16 @@ Project Message Reminders Optimization (Dec 2025):
 -   Global budget remains 8s (budgets are guardrails - DO NOT INCREASE)
 -   Hydration miss logging: warns when users/projects are skipped due to missing data for observability
 
+Campaigns & Pages Wave 2 Implementation (Dec 2025):
+-   **17+ Targeting Filters**: Fully tested atomic filter implementations covering client profile (has_tag, client_manager), services (has_service, missing_service, has_service_not_other), projects & deadlines (project_at_stage, accounts_due_range, confirmation_statement_due_range, ct_due_range, overdue), data completeness (missing_utr, missing_auth_code), and engagement tracking
+-   **Delivery Queue Processing**: Campaign messages processed via `processDeliveryQueue()` cron running every minute with 50-item batch size
+-   **Scheduled Campaign Triggering**: `processScheduledCampaigns()` automatically transitions campaigns from 'scheduled' to 'sending' when their scheduled time arrives
+-   **Sequence Progression**: Multi-step campaign sequences processed every 15 minutes during business hours (Mon-Fri 08:00-19:00 UK) plus daily 06:15 fallback
+-   **Page Grid Layout**: Full row/column CSS grid support with sectionIndex, rowIndex, columnIndex, columnSpan fields for multi-column page layouts
+-   **14 Component Types**: text_block, heading, image, table, button, form, callout, status_widget, timeline, faq_accordion, comparison_table, video_embed, document_list, spacer
+-   **Webhook Endpoints**: SendGrid (email events), VoodooSMS (SMS delivery reports), Dialora (voice call results) - all with signature verification and engagement tracking
+-   **Sequence Conditions**: no_open, no_click, no_action, action_completed, time_elapsed - triggers next step based on recipient behavior
+
 ## External Dependencies
 
 ### Third-Party Services
