@@ -16,6 +16,7 @@ interface FieldCanvasProps {
   emptyStateTitle?: string;
   emptyStateDescription?: string;
   className?: string;
+  headerContent?: React.ReactNode;
 }
 
 export function FieldCanvas({
@@ -27,7 +28,8 @@ export function FieldCanvas({
   description = "Drag and drop fields to reorder them",
   emptyStateTitle = "No fields added yet",
   emptyStateDescription = "Drag fields from the palette on the left, or click a field type to add it",
-  className
+  className,
+  headerContent
 }: FieldCanvasProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: "canvas",
@@ -57,6 +59,7 @@ export function FieldCanvas({
             isOver && "bg-primary/5"
           )}
         >
+          {headerContent}
           {fields.length === 0 ? (
             <div className={cn(
               "flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg transition-colors",

@@ -3,11 +3,20 @@ import { FieldBuilder, type FieldDefinition, type SystemFieldType } from "@/comp
 import type { ServiceWizardFormData } from "../types";
 import type { UdfDefinition } from "@shared/schema";
 import { nanoid } from "nanoid";
+import { Card, CardContent } from "@/components/ui/card";
+import { Lock, Receipt } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 interface CustomFieldsStepProps {
   formData: ServiceWizardFormData;
   updateFormData: (updates: Partial<ServiceWizardFormData>) => void;
 }
+
+const VAT_FIELDS_PREVIEW = [
+  { id: 'vat_number_auto', name: 'VAT Number', type: 'short_text', required: true },
+  { id: 'vat_company_name_auto', name: 'VAT Company Name', type: 'short_text', required: false, readOnly: true },
+  { id: 'vat_address_auto', name: 'VAT Address', type: 'long_text', required: false, readOnly: true },
+];
 
 interface UdfMetadata {
   regex?: string;
@@ -52,12 +61,16 @@ export function CustomFieldsStep({ formData, updateFormData }: CustomFieldsStepP
   
   const fields = useMemo(() => {
     idMapRef.current.clear();
-    return formData.udfDefinitions.map((udf, index) => {
-      const field = udfToFieldDefinition(udf, index);
-      const fieldKey = field.id || field.tempId || `idx-${index}`;
-      idMapRef.current.set(fieldKey, udf.id);
-      return field;
-    });
+    // Filter out VAT auto-fields from the editable list (they're shown separately)
+    const vatFieldIds = VAT_FIELDS_PREVIEW.map(f => f.id);
+    return formData.udfDefinitions
+      .filter(udf => !vatFieldIds.includes(udf.id))
+      .map((udf, index) => {
+        const field = udfToFieldDefinition(udf, index);
+        const fieldKey = field.id || field.tempId || `idx-${index}`;
+        idMapRef.current.set(fieldKey, udf.id);
+        return field;
+      });
   }, [formData.udfDefinitions]);
 
   const handleFieldsChange = useCallback((newFields: FieldDefinition[]) => {
@@ -79,6 +92,38 @@ export function CustomFieldsStep({ formData, updateFormData }: CustomFieldsStepP
         canvasTitle="Service Fields"
         canvasDescription="Drag to reorder fields. Click to edit."
         className="h-full"
+        headerContent={formData.isVatService ? (
+          <Card className="mb-4 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+            <CardContent className="py-3 px-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Receipt className="w-4 h-4 text-amber-600" />
+                <span className="font-medium text-amber-800 dark:text-amber-200">VAT Integration Fields</span>
+                <Lock className="w-3 h-3 text-amber-600 ml-auto" />
+                <span className="text-xs text-amber-600">Auto-added</span>
+              </div>
+              <div className="space-y-1.5">
+                {VAT_FIELDS_PREVIEW.map((field) => (
+                  <div key={field.id} className="flex items-center gap-2 text-sm">
+                    <span className="text-amber-700 dark:text-amber-300">{field.name}</span>
+                    {field.required && (
+                      <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-amber-300 text-amber-700">
+                        Required
+                      </Badge>
+                    )}
+                    {field.readOnly && (
+                      <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 border-amber-300 text-amber-600">
+                        Read-only
+                      </Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-amber-600 mt-2">
+                These fields are automatically added for HMRC VAT validation
+              </p>
+            </CardContent>
+          </Card>
+        ) : undefined}
       />
     </div>
   );

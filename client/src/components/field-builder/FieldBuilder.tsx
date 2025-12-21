@@ -20,6 +20,7 @@ interface FieldBuilderProps {
   canvasTitle?: string;
   canvasDescription?: string;
   className?: string;
+  headerContent?: React.ReactNode;
 }
 
 export function FieldBuilder({
@@ -32,7 +33,8 @@ export function FieldBuilder({
   showExpectedValues = false,
   canvasTitle,
   canvasDescription,
-  className
+  className,
+  headerContent
 }: FieldBuilderProps) {
   const [editingFieldIndex, setEditingFieldIndex] = useState<number | null>(null);
   const [draggedField, setDraggedField] = useState<FieldDefinition | null>(null);
@@ -156,6 +158,7 @@ export function FieldBuilder({
           title={canvasTitle}
           description={canvasDescription}
           className="flex-1"
+          headerContent={headerContent}
         />
       </div>
 
