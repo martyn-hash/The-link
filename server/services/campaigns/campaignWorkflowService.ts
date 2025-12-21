@@ -226,3 +226,43 @@ export function getStatusDisplayInfo(status: string): {
 
   return statusInfo[status] || { label: status, color: 'gray', description: '' };
 }
+
+export async function processScheduledCampaigns(): Promise<{
+  processed: number;
+  triggered: number;
+  errors: string[];
+}> {
+  const now = new Date();
+  const errors: string[] = [];
+  let triggered = 0;
+  
+  const scheduledCampaigns = await db
+    .select()
+    .from(campaigns)
+    .where(eq(campaigns.status, 'scheduled'));
+  
+  const dueCampaigns = scheduledCampaigns.filter(c => {
+    if (!c.scheduledFor) return false;
+    return new Date(c.scheduledFor) <= now;
+  });
+  
+  for (const campaign of dueCampaigns) {
+    try {
+      await campaignStorage.update(campaign.id, {
+        status: 'sending',
+        sendingStartedAt: now,
+      } as any);
+      
+      const { queueCampaignForDelivery } = await import('./campaignDeliveryService.js');
+      await queueCampaignForDelivery(campaign.id);
+      
+      triggered++;
+      console.log(`[ScheduledCampaigns] Triggered campaign ${campaign.id} "${campaign.name}"`);
+    } catch (error: any) {
+      errors.push(`Campaign ${campaign.id}: ${error.message}`);
+      console.error(`[ScheduledCampaigns] Error triggering campaign ${campaign.id}:`, error);
+    }
+  }
+  
+  return { processed: dueCampaigns.length, triggered, errors };
+}

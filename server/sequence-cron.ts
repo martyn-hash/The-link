@@ -28,14 +28,19 @@ async function runSequenceProgression(): Promise<void> {
 }
 
 export function startSequenceCron(): void {
-  // Run at 06:15 UK time (staggered from :00)
-  cron.schedule('15 6 * * *', wrapCronHandler('SequenceCron', '15 6 * * *', async () => {
+  cron.schedule('*/15 8-19 * * 1-5', wrapCronHandler('SequenceProgressionFrequent', '*/15 8-19 * * 1-5', async () => {
     await runSequenceProgression();
   }, { useLock: true, timezone: 'Europe/London' }), {
     timezone: "Europe/London"
   });
 
-  console.log('[SequenceCron] Sequence progression scheduler initialized (runs daily at 06:15 UK time)');
+  cron.schedule('15 6 * * *', wrapCronHandler('SequenceProgressionDaily', '15 6 * * *', async () => {
+    await runSequenceProgression();
+  }, { useLock: true, timezone: 'Europe/London' }), {
+    timezone: "Europe/London"
+  });
+
+  console.log('[SequenceCron] Sequence progression initialized (every 15min 08:00-19:00 UK Mon-Fri + daily 06:15 UK)');
 }
 
 export { runSequenceProgression };

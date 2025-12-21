@@ -39,6 +39,7 @@ import { startSequenceCron } from "./sequence-cron";
 import { startEngagementCron } from "./engagement-cron";
 import { startAIWeeklyAnalysisCron } from "./ai-weekly-analysis-cron";
 import { refreshAllActiveRingCentralTokens } from "./utils/userRingCentralClient";
+import { startCampaignCron } from "./campaign-cron";
 
 const CRONS_ENABLED = process.env.CRONS_ENABLED !== 'false';
 
@@ -419,6 +420,9 @@ async function main() {
   
   startAIWeeklyAnalysisCron();
   log('[AIWeeklyAnalysisCron] Started');
+  
+  startCampaignCron();
+  log('[CampaignCron] Started');
   
   log('All cron jobs scheduled successfully');
   log('Cron worker is now running. Press Ctrl+C to stop.');
