@@ -238,10 +238,8 @@ export default function CampaignPageView() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto py-8 px-4 space-y-6">
-        {page.components.map(component => (
-          <ComponentRenderer key={component.id} component={component} themeColor={themeColor} />
-        ))}
+      <main className="max-w-3xl mx-auto py-8 px-4">
+        <PageGrid components={page.components} themeColor={themeColor} />
 
         {page.actions.length > 0 && (
           <div className="flex flex-wrap gap-3 justify-center pt-6">
@@ -306,6 +304,64 @@ export default function CampaignPageView() {
           </Card>
         </div>
       )}
+    </div>
+  );
+}
+
+function PageGrid({ components, themeColor }: { components: RenderedComponent[]; themeColor: string }) {
+  const groupedBySectionAndRow = components.reduce((acc, comp) => {
+    const key = `${comp.sectionIndex}-${comp.rowIndex}`;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(comp);
+    return acc;
+  }, {} as Record<string, RenderedComponent[]>);
+
+  const rows = Object.entries(groupedBySectionAndRow)
+    .map(([key, comps]) => ({
+      key,
+      sectionIndex: comps[0].sectionIndex,
+      rowIndex: comps[0].rowIndex,
+      components: comps.sort((a, b) => a.columnIndex - b.columnIndex),
+    }))
+    .sort((a, b) => {
+      if (a.sectionIndex !== b.sectionIndex) return a.sectionIndex - b.sectionIndex;
+      return a.rowIndex - b.rowIndex;
+    });
+
+  return (
+    <div className="space-y-6">
+      {rows.map(row => {
+        const hasMultipleColumns = row.components.length > 1 || row.components.some(c => c.columnSpan > 1);
+        
+        if (!hasMultipleColumns) {
+          return row.components.map(comp => (
+            <ComponentRenderer key={comp.id} component={comp} themeColor={themeColor} />
+          ));
+        }
+
+        const maxCol = Math.max(...row.components.map(c => c.columnIndex + (c.columnSpan || 1)));
+        const gridCols = Math.max(maxCol, 2);
+
+        return (
+          <div
+            key={row.key}
+            className="grid gap-4"
+            style={{ gridTemplateColumns: `repeat(${gridCols}, 1fr)` }}
+            data-testid={`grid-row-${row.sectionIndex}-${row.rowIndex}`}
+          >
+            {row.components.map(comp => (
+              <div
+                key={comp.id}
+                style={{
+                  gridColumn: `${comp.columnIndex + 1} / span ${comp.columnSpan || 1}`,
+                }}
+              >
+                <ComponentRenderer component={comp} themeColor={themeColor} />
+              </div>
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }

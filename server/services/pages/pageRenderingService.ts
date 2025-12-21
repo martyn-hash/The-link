@@ -99,10 +99,12 @@ export async function renderPageForRecipient(
     sortOrder: action.sortOrder ?? 0,
   }));
 
-  await pageVisitStorage.update(visit.id, {
-    lastViewedAt: new Date(),
-    viewCount: (visit.viewCount ?? 1) + 1,
-  });
+  await db.update(pageVisits)
+    .set({
+      lastViewedAt: new Date(),
+      viewCount: (visit.viewCount ?? 1) + 1,
+    })
+    .where(eq(pageVisits.id, visit.id));
 
   return {
     id: page.id,

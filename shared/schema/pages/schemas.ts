@@ -54,6 +54,9 @@ export const insertPageVisitSchema = createInsertSchema(pageVisits).omit({
 export const updatePageVisitSchema = insertPageVisitSchema.partial().omit({
   pageId: true,
   visitToken: true,
+}).extend({
+  lastViewedAt: z.date().optional(),
+  viewCount: z.number().optional(),
 });
 
 export const insertPageActionLogSchema = createInsertSchema(pageActionLogs).omit({
